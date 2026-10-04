@@ -166,6 +166,7 @@ export const decodeAwsEventStream = (
       ) {
         payload = Object.fromEntries(Object.entries(parsed));
       }
+      // swallow-ok: non-JSON wire data stays verbatim for subsequent transcript inspection
     } catch {
       // Not JSON: kept as the literal payload.
     }
@@ -190,6 +191,8 @@ const abortError = () =>
 type ServeOptions = {
   /** Where every body is cut into reads; `SLICE_BYTES` apart by default. */
   chunking?: Chunking | undefined;
+  /** Retryable responses per exchange to keep on their recorded backoff. */
+  recordedRetryResponses?: number | undefined;
   /** Holds the first exchange's body open after this many bytes until the
    *  request is aborted, the way a model that stops talking does. */
   holdAfterBytes?: number | undefined;
@@ -287,6 +290,7 @@ const responseFor = (
       onAbort = () => {
         try {
           controller.error(abortError());
+          // swallow-ok: abort can race a closed controller; the stream has already exposed its terminal state
         } catch {
           // Already closed.
         }
@@ -350,10 +354,13 @@ const responseFor = (
  */
 export const installProviderWireReplay = ({
   passThroughOrigins = [],
+  retryAfterMs,
 }: {
   /** In-process services (a fake object store) whose requests go through
    *  untouched; nothing else leaves the replay. */
   passThroughOrigins?: readonly string[];
+  /** OpenAI/Anthropic retry hints; omitted to preserve recorded headers. */
+  retryAfterMs?: number | undefined;
 } = {}) => {
   const originalFetch = globalThis.fetch;
   let queue: { exchange: ProviderWireExchange; served: number }[] = [];
@@ -389,6 +396,7 @@ export const installProviderWireReplay = ({
       let body: unknown = null;
       try {
         body = JSON.parse(bodyText);
+        // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
       } catch {
         // Unreadable: the transcript check reports it.
       }
@@ -478,7 +486,7 @@ export const installProviderWireReplay = ({
       path,
       url: url.toString(),
     });
-    return responseFor(
+    const response = responseFor(
       current.entry.exchange,
       signal,
       current.index === 0 && current.entry.served === 1
@@ -486,6 +494,19 @@ export const installProviderWireReplay = ({
         : undefined,
       options.chunking,
     );
+    if (
+      retryAfterMs !== undefined &&
+      (url.hostname === "api.openai.com" ||
+        url.hostname === "api.anthropic.com") &&
+      (response.status === 408 ||
+        response.status === 409 ||
+        response.status === 429 ||
+        response.status >= 500) &&
+      current.entry.served > (options.recordedRetryResponses ?? 0)
+    ) {
+      response.headers.set("retry-after-ms", String(retryAfterMs));
+    }
+    return response;
   };
 
   globalThis.fetch = Object.assign(replayFetch, {

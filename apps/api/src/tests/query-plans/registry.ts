@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -40,6 +41,11 @@ import {
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import {
+  pendingDocumentPresenceQuery,
+  remainingDocumentCandidateQuery,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { DOCUMENT_SCAN_ROW_BUDGET } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
@@ -89,12 +95,40 @@ const withFirstParameter = (text: string, value: string): SQLWrapper => {
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
   {
+    id: "case-law.outstanding-document-candidates",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      remainingDocumentCandidateQuery({
+        tx,
+        sourceId: QUERY_PLAN_SAMPLE.caseLaw.sourceId,
+        limit: DOCUMENT_SCAN_ROW_BUDGET,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.outstanding-document-candidates"],
+  },
+  {
+    id: "case-law.outstanding-document-probe",
+    class: "point",
+    role: "root",
+    build: (tx) =>
+      pendingDocumentPresenceQuery({
+        sourceId: QUERY_PLAN_SAMPLE.caseLaw.sourceId,
+        tx,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.outstanding-document-probe"],
+  },
+  {
     id: "case-law.ecli-identity",
     class: "point",
     role: "public-law-reader",
     build: (tx) =>
       decisionIdsByIdentityQuery({
         country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        familyKey: null,
         identity: {
           type: "identifier",
           kind: "ecli",
@@ -104,6 +138,57 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["case-law.ecli-identity"],
+  },
+  {
+    // A docket reads its whole case file: every stored spelling a member can
+    // carry, as one membership test on the citation key and the identifier
+    // rows; never a pattern. A sheet names one decision, so it reads no
+    // case-file key.
+    id: "case-law.docket-family-identity",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionIdsByIdentityQuery({
+        country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        familyKey: null,
+        identity: {
+          type: "identifier",
+          kind: "docket",
+          jurisdiction: "CZE",
+          value: "12 Cdo 3456/2021-7",
+          family: "12 Cdo 3456/2021",
+          selector: { kind: "sheet", value: "7" },
+        },
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.docket-family-identity"],
+  },
+  {
+    // A bare docket also reads the members stored with a sheet by their
+    // case-file key. Planned as the owner until the reader's column grant
+    // ships; the read itself probes for that grant first.
+    id: "case-law.docket-family-key-identity",
+    class: "point",
+    role: "root",
+    build: (tx) =>
+      decisionIdsByIdentityQuery({
+        country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        familyKey:
+          docketFamilyKeyOf("12 Cdo 3456/2021", "CZE") ??
+          panic("The sample docket has no case-file key"),
+        identity: {
+          type: "identifier",
+          kind: "docket",
+          jurisdiction: "CZE",
+          value: "12 Cdo 3456/2021",
+          family: "12 Cdo 3456/2021",
+          selector: { kind: "none" },
+        },
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.docket-family-key-identity"],
   },
   {
     id: "case-law.sitemap-refresh",

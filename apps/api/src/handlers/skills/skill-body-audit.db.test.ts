@@ -8,6 +8,7 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -137,7 +138,7 @@ describe("skill body audit rows", () => {
       }),
     );
 
-    expect(events.map((event) => event.changes?.["body"])).toEqual([
+    expect(events.map((event) => auditEventChanges(event)?.["body"])).toEqual([
       expectedBodyChange,
     ]);
     expectNoBodyText(events);
@@ -167,7 +168,7 @@ describe("skill body audit rows", () => {
 
     expect(
       events
-        .map((event) => event.changes?.["body"])
+        .map((event) => auditEventChanges(event)?.["body"])
         .filter((change) => change !== undefined),
     ).toEqual([expectedBodyChange]);
     expectNoBodyText(events);
@@ -191,7 +192,7 @@ describe("skill body audit rows", () => {
       }),
     );
 
-    expect(events.map((event) => event.changes?.["body"])).toEqual([
+    expect(events.map((event) => auditEventChanges(event)?.["body"])).toEqual([
       expectedBodyChange,
     ]);
     expectNoBodyText(events);

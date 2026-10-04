@@ -8,6 +8,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { StoredAgentClientCredential } from "@/api/agent-auth/credentials";
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 
@@ -31,14 +32,10 @@ export const agentRegistration = pgTable(
     /** SHA-256 of the bearer claim token; never store the raw token. */
     claimTokenHash: text("claim_token_hash").notNull(),
     clientId: text("client_id").notNull(),
-    /**
-     * Raw secret of the first-party agent OAuth client. better-auth
-     * stores only the hash on `oauth_client`, but the server-side code
-     * exchange needs the cleartext secret. Held on this deny-stella
-     * control-plane row (same trust tier as `oauth_client`); never
-     * returned to any caller.
-     */
-    clientSecretSink: text("client_secret_sink").notNull(),
+    /** Server-side exchange value prepared by the shared storage helper. */
+    clientSecretSink: text("client_secret_sink")
+      .$type<StoredAgentClientCredential>()
+      .notNull(),
     loginHint: text("login_hint"),
     boundUserId: text("bound_user_id"),
     boundOrganizationId: text("bound_organization_id"),
@@ -73,6 +70,12 @@ export const agentRegistration = pgTable(
       .on(table.userCode)
       .where(sql`status = 'pending' AND user_code IS NOT NULL`),
     index("agent_registration_status_idx").on(table.status),
+    index("agent_registration_expiry_idx")
+      .on(table.expiresAt, table.id)
+      .where(
+        sql`status IN ('pending', 'expired') AND bound_user_id IS NULL AND authorization_code IS NULL`,
+      ),
+    index("agent_registration_client_id_idx").on(table.clientId),
     index("agent_registration_bound_user_id_idx").on(table.boundUserId),
     ...denyStellaAccessPolicies(),
   ],

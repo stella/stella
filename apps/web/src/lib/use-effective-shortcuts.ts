@@ -1,7 +1,10 @@
+import { useCallback, useSyncExternalStore } from "react";
+
 import type { Hotkey } from "@tanstack/react-hotkeys";
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
 import {
@@ -10,36 +13,34 @@ import {
 } from "@/lib/shortcut-overrides";
 import type { ShortcutOverrides } from "@/lib/shortcut-overrides";
 
-type ShortcutSessionData = {
-  user: {
-    userShortcuts?: string | null;
-  };
-};
-
-// This mirrors the auth session cache key without importing its query module.
-// Public SSR shells use the read-only shortcut hooks, so this module must not
-// statically pull the authenticated query or browser auth client into SSR.
-const SESSION_QUERY_KEY = ["session"] as const;
+const SESSION_QUERY_HASH = hashKey(rootKeys.session);
 
 /**
  * The user's shortcut rebindings, read off the shared `["session"]` query that
- * every protected route already loads. `enabled: false` makes this a pure cache
- * read: it never initiates the session request itself (so it adds no route-load
- * request, and stays safe on public pages where no session is loaded), while
+ * every protected route already loads. A cache subscription never replaces the
+ * session's fetch function or initiates a request (including on public pages), while
  * still re-rendering when the cache changes (an optimistic rebind, or the route
  * loader populating it). Returns an empty map when the user has never rebound
  * anything.
  */
 export const useShortcutOverrides = (): ShortcutOverrides => {
-  const { data: raw } = useQuery<
-    ShortcutSessionData | null,
-    Error,
-    string | null
-  >({
-    queryKey: SESSION_QUERY_KEY,
-    queryFn: skipToken,
-    select: (data) => data?.user.userShortcuts ?? null,
-  });
+  const queryClient = useQueryClient();
+  const subscribe = useCallback(
+    (onChange: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.query.queryHash === SESSION_QUERY_HASH) {
+          onChange();
+        }
+      }),
+    [queryClient],
+  );
+  const getSnapshot = useCallback(
+    () =>
+      queryClient.getQueryData(sessionOptions.queryKey)?.user.userShortcuts ??
+      null,
+    [queryClient],
+  );
+  const raw = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return parseUserShortcuts(raw);
 };
 

@@ -13,7 +13,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -245,6 +245,7 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +
@@ -252,7 +253,12 @@ const config = {
     "when an included entry has no effective rate, or when the selection " +
     "spans more than one currency, which the format cannot represent.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;

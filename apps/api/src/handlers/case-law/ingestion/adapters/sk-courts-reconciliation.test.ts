@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 /**
  * The sk-courts listing reconciliation capability.
  *
@@ -14,8 +15,6 @@
  * record, and the document walk finds its work by that column, so writing the
  * listing half alone makes the identity held and the text unreachable at once.
  */
-
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
@@ -544,9 +543,9 @@ test("failed detail fetches remain retryable and never assert publisher URL abse
     if (built.type !== "detail-unavailable") {
       throw new TypeError("Expected a retryable detail observation");
     }
-    expect(built.decision.metadata["sourceUrlStatus"]).toBe(
-      "detail-unavailable",
-    );
+    expect(
+      built.decision.metadata["sourceUrlStatus"] === "detail-unavailable",
+    ).toBe(true);
     const stored = storeDecisionTextFields({
       metadata: built.decision.metadata,
       textFields: built.decision.textFields,

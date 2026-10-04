@@ -14,7 +14,7 @@ import {
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,6 +64,7 @@ const config = {
     "someone with edit rights accepts the proposal, the comments stay " +
     "unresolved, and bundled skills are refused. Consumes AI usage.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -110,6 +111,7 @@ const createProposalFromComments = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     params,
     promptCachingEnabled,
@@ -119,6 +121,7 @@ const createProposalFromComments = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -199,6 +202,7 @@ const createProposalFromComments = createSafeRootHandler(
     );
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -217,11 +221,13 @@ const createProposalFromComments = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForRole({
+          dataClass: "customer",
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",
           serviceTier: "flex",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

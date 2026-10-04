@@ -4,7 +4,8 @@ import * as v from "valibot";
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 
@@ -23,6 +24,7 @@ export type RegisteredOAuthClient = {
 export type OAuthGrant = {
   accessToken: string;
   refreshToken: string;
+  scope: string;
 };
 
 const registrationSchema = v.looseObject({
@@ -32,6 +34,7 @@ const registrationSchema = v.looseObject({
 const redirectSchema = v.looseObject({ url: v.string() });
 
 const tokenSchema = v.looseObject({
+  scope: v.string(),
   access_token: v.pipe(v.string(), v.minLength(1)),
   refresh_token: v.pipe(v.string(), v.minLength(1)),
 });
@@ -72,13 +75,19 @@ export const readOAuthRedirect = async (response: Response): Promise<URL> =>
   new URL((await readJson(response, redirectSchema)).url);
 
 /** Register a confidential web client the way a hosted connector does. */
-export const registerOAuthClient = async (): Promise<RegisteredOAuthClient> => {
+export const registerOAuthClient = async (
+  // For suites that register from documentation addresses of their own.
+  clientAddress: string = nextClientAddress(),
+): Promise<RegisteredOAuthClient> => {
   const response = await getAuth().handler(
     new Request(getAuthEndpointUrl("oauth2/register"), {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": nextClientAddress(),
+        "x-forwarded-for": clientAddress,
+        // What the server sets once it resolved the address; the handler is
+        // called directly here, so set it as the server would.
+        [AUTH_CLIENT_ADDRESS_HEADER]: clientAddress,
       },
       body: JSON.stringify({
         application_type: "web",
@@ -134,6 +143,8 @@ type AuthorizationStart = {
 export const authorizeOAuthClient = async (
   browser: HumanBrowser,
   client: RegisteredOAuthClient,
+  // `null` sends no `scope` parameter at all.
+  scope: string | null = GRANTED_SCOPES.join(" "),
 ): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
@@ -144,7 +155,7 @@ export const authorizeOAuthClient = async (
     redirect_uri: REDIRECT_URI,
     resource: getMcpResourceUrl(),
     response_type: "code",
-    scope: GRANTED_SCOPES.join(" "),
+    ...(scope === null ? {} : { scope }),
     state: Bun.randomUUIDv7(),
   }).toString();
 
@@ -195,12 +206,32 @@ export const consentAndExchange = async ({
     redirectSchema,
   );
 
+  return await exchangeOAuthCode({
+    client,
+    codeVerifier,
+    redirect: new URL(consented.url),
+  });
+};
+
+type ExchangeOAuthCodeOptions = {
+  client: RegisteredOAuthClient;
+  codeVerifier: string;
+  /** The redirect back to the client that carries the code. */
+  redirect: URL;
+};
+
+/** Exchange the code a redirect back to the client carries. */
+export const exchangeOAuthCode = async ({
+  client,
+  codeVerifier,
+  redirect,
+}: ExchangeOAuthCodeOptions): Promise<OAuthGrant> => {
   const tokens = await readJson(
-    await auth.handler(
+    await getAuth().handler(
       formRequest("oauth2/token", {
         client_id: client.clientId,
         client_secret: client.clientSecret,
-        code: readCode(consented.url),
+        code: readCode(redirect.href),
         code_verifier: codeVerifier,
         grant_type: "authorization_code",
         redirect_uri: REDIRECT_URI,
@@ -212,6 +243,7 @@ export const consentAndExchange = async ({
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
+    scope: tokens.scope,
   };
 };
 

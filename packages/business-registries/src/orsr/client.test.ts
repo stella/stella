@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByIco, lookupFullRecordByIco, searchByName } from "./client.js";
 import { OrsrValidationError } from "./errors.js";
 import type { OrsrRawRelatedResponse } from "./types.js";
@@ -64,6 +66,8 @@ describe("lookupByIco (fixture)", () => {
     const search = await readFixture<unknown>("search-by-ico-eset.json");
     const extract = await readFixture<unknown>("extract-eset.json");
     let searchCallCount = 0;
+    let observedRequests = 0;
+    const observationErrors: unknown[] = [];
     let extractCallCount = 0;
     let lastExtractUrl = "";
     restore = installFetchStub(async (input) => {
@@ -77,7 +81,19 @@ describe("lookupByIco (fixture)", () => {
       return jsonResponse(search);
     });
 
-    const company = await lookupByIco("31333532");
+    const company = await lookupByIco("31333532", {
+      observer: {
+        onRequest: () => {
+          observedRequests += 1;
+        },
+        onError: (cause) => {
+          observationErrors.push(cause);
+        },
+      },
+    });
+    expect(observedRequests).toBe(searchCallCount + extractCallCount);
+    expect(observedRequests).toBe(2);
+    expect(observationErrors).toEqual([]);
     expect(searchCallCount).toBe(1);
     expect(extractCallCount).toBe(1);
     expect(lastExtractUrl).toContain("oddiel=Sro");
@@ -102,7 +118,7 @@ describe("lookupByIco (fixture)", () => {
       }
       return jsonResponse(url.includes("/extract") ? extract : search);
     });
-    await lookupByIco("35757442");
+    await lookupByIco("35757442", { observer: "unobserved" });
     // Volkswagen Slovakia is filed in the joint-stock register (`Sa`),
     // not the limited-liability register (`Sro`) — proves the adapter
     // wires the search-returned file reference through verbatim
@@ -150,7 +166,7 @@ describe("lookupByIco (fixture)", () => {
       }
       return jsonResponse(multi);
     });
-    await lookupByIco("31333532");
+    await lookupByIco("31333532", { observer: "unobserved" });
     expect(lastExtractUrl).toContain("vlozka=3586");
     expect(lastExtractUrl).not.toContain("vlozka=999");
   });
@@ -185,7 +201,7 @@ describe("lookupByIco (fixture)", () => {
       }
       return jsonResponse(withNameMatch);
     });
-    const company = await lookupByIco("31333532");
+    const company = await lookupByIco("31333532", { observer: "unobserved" });
     expect(lastExtractUrl).toContain("vlozka=3586");
     expect(company?.ico).toBe("31333532");
   });
@@ -208,7 +224,9 @@ describe("lookupByIco (fixture)", () => {
         ],
       });
     });
-    expect(await lookupByIco("31333532")).toBeNull();
+    expect(
+      await lookupByIco("31333532", { observer: "unobserved" }),
+    ).toBeNull();
     expect(extractCalled).toBe(false);
   });
 
@@ -221,7 +239,9 @@ describe("lookupByIco (fixture)", () => {
     restore = installFetchStub(async (input) =>
       jsonResponse(urlOf(input).includes("/extract") ? extract : search),
     );
-    expect(await lookupByIco("31333532")).toBeNull();
+    expect(
+      await lookupByIco("31333532", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
   test("ignores hits whose registration number is not a string", async () => {
@@ -242,14 +262,16 @@ describe("lookupByIco (fixture)", () => {
         ],
       });
     });
-    expect(await lookupByIco("31333532")).toBeNull();
+    expect(
+      await lookupByIco("31333532", { observer: "unobserved" }),
+    ).toBeNull();
     expect(extractCalled).toBe(false);
   });
 
   test("returns null when the search yields no hits", async () => {
     const notFound = await readFixture<unknown>("not-found.json");
     restore = installFetchStub(async () => jsonResponse(notFound));
-    const company = await lookupByIco("99999986");
+    const company = await lookupByIco("99999986", { observer: "unobserved" });
     expect(company).toBeNull();
   });
 
@@ -259,7 +281,9 @@ describe("lookupByIco (fixture)", () => {
       called = true;
       return jsonResponse({});
     });
-    expect(lookupByIco("12345678")).rejects.toBeInstanceOf(OrsrValidationError);
+    expect(
+      await rejectionOf(lookupByIco("12345678", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
     expect(called).toBe(false);
   });
 
@@ -267,7 +291,9 @@ describe("lookupByIco (fixture)", () => {
     restore = installFetchStub(async () =>
       jsonResponse({ title: "Bad request" }, 400),
     );
-    expect(lookupByIco("31333532")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "OrsrAPIError",
       httpStatus: 400,
       upstreamMessage: "Bad request",
@@ -282,7 +308,9 @@ describe("lookupByIco (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(lookupByIco("31333532")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "OrsrAPIError",
       httpStatus: 200,
       upstreamMessage: null,
@@ -302,7 +330,9 @@ describe("lookupByIco (fixture)", () => {
 
     for (const value of [null, 42, false, {}, []]) {
       malformedCourtName = value;
-      const rejection: unknown = await lookupByIco("31333532").then(
+      const rejection: unknown = await lookupByIco("31333532", {
+        observer: "unobserved",
+      }).then(
         () => null,
         (error: unknown) => error,
       );
@@ -333,7 +363,7 @@ describe("searchByName (fixture)", () => {
       lastUrl = urlOf(input);
       return jsonResponse(body);
     });
-    const results = await searchByName("Telekom");
+    const results = await searchByName("Telekom", { observer: "unobserved" });
     expect(results.length).toBeGreaterThan(0);
     expect(
       results.some((entry) => entry.name.toLowerCase().includes("telekom")),
@@ -351,7 +381,7 @@ describe("searchByName (fixture)", () => {
       lastUrl = urlOf(input);
       return jsonResponse(body);
     });
-    await searchByName("Telekom", { limit: 5000 });
+    await searchByName("Telekom", { observer: "unobserved", limit: 5000 });
     expect(lastUrl).toContain("Take=100");
   });
 
@@ -365,7 +395,10 @@ describe("searchByName (fixture)", () => {
         })),
       }),
     );
-    const results = await searchByName("Telekom", { limit: 2 });
+    const results = await searchByName("Telekom", {
+      observer: "unobserved",
+      limit: 2,
+    });
     expect(results).toHaveLength(2);
   });
 
@@ -391,7 +424,10 @@ describe("searchByName (fixture)", () => {
         ],
       }),
     );
-    const results = await searchByName("Telekom", { limit: 2 });
+    const results = await searchByName("Telekom", {
+      observer: "unobserved",
+      limit: 2,
+    });
     expect(results).toHaveLength(2);
     expect(results.map((result) => result.name)).toEqual([
       "Telekom current row",
@@ -401,9 +437,13 @@ describe("searchByName (fixture)", () => {
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(OrsrValidationError);
-    expect(searchByName("   ")).rejects.toBeInstanceOf(OrsrValidationError);
+  test("rejects empty input", async () => {
+    expect(
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
+    expect(
+      await rejectionOf(searchByName("   ", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
   });
 });
 
@@ -421,12 +461,6 @@ const installPathStub = (
     globalThis.fetch = original;
   };
 };
-
-const rejectionOf = async (pending: Promise<unknown>): Promise<unknown> =>
-  await pending.then(
-    () => null,
-    (error: unknown) => error,
-  );
 
 describe("lookupFullRecordByIco", () => {
   let restore: () => void = () => {
@@ -466,7 +500,9 @@ describe("lookupFullRecordByIco", () => {
       }
     });
 
-    const record = await lookupFullRecordByIco("31333532");
+    const record = await lookupFullRecordByIco("31333532", {
+      observer: "unobserved",
+    });
 
     expect(paths.toSorted()).toEqual([
       "/api/legal-person",
@@ -506,7 +542,9 @@ describe("lookupFullRecordByIco", () => {
       }
     });
 
-    const record = await lookupFullRecordByIco("31333532");
+    const record = await lookupFullRecordByIco("31333532", {
+      observer: "unobserved",
+    });
 
     expect(record?.company.ico).toBe("31333532");
     expect(record?.history).toEqual({
@@ -540,7 +578,9 @@ describe("lookupFullRecordByIco", () => {
       }
     });
 
-    const record = await lookupFullRecordByIco("31333532");
+    const record = await lookupFullRecordByIco("31333532", {
+      observer: "unobserved",
+    });
 
     expect(record?.company.ico).toBe("31333532");
     expect(record?.documents).toEqual({
@@ -566,7 +606,9 @@ describe("lookupFullRecordByIco", () => {
       }
     });
 
-    const record = await lookupFullRecordByIco("31333532");
+    const record = await lookupFullRecordByIco("31333532", {
+      observer: "unobserved",
+    });
 
     expect(record?.documents).toMatchObject({ status: "loaded" });
     expect(record?.related).toEqual({
@@ -583,7 +625,11 @@ describe("lookupFullRecordByIco", () => {
         : new Response("<html>Údržba</html>", { status: 200 }),
     );
 
-    expect(await rejectionOf(lookupFullRecordByIco("31333532"))).toMatchObject({
+    expect(
+      await rejectionOf(
+        lookupFullRecordByIco("31333532", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "OrsrAPIError",
       message: "ORSR 200: invalid JSON payload",
     });
@@ -611,7 +657,10 @@ describe("lookupFullRecordByIco", () => {
 
     expect(
       await rejectionOf(
-        lookupFullRecordByIco("31333532", { signal: controller.signal }),
+        lookupFullRecordByIco("31333532", {
+          observer: "unobserved",
+          signal: controller.signal,
+        }),
       ),
     ).toMatchObject({ message: "caller went away" });
   });
@@ -623,7 +672,9 @@ describe("lookupFullRecordByIco", () => {
       return jsonResponse({ filteredCount: 0, data: [] });
     });
 
-    expect(await lookupFullRecordByIco("31333532")).toBeNull();
+    expect(
+      await lookupFullRecordByIco("31333532", { observer: "unobserved" }),
+    ).toBeNull();
     expect(paths).toEqual(["/api/legal-person"]);
   });
 
@@ -634,9 +685,11 @@ describe("lookupFullRecordByIco", () => {
       return jsonResponse({});
     });
 
-    expect(await rejectionOf(lookupFullRecordByIco("12345678"))).toBeInstanceOf(
-      OrsrValidationError,
-    );
+    expect(
+      await rejectionOf(
+        lookupFullRecordByIco("12345678", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(OrsrValidationError);
     expect(called).toBe(false);
   });
 });

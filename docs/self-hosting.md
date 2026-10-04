@@ -33,6 +33,8 @@ The production Compose contract contains exactly these services:
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.
+
+Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.
 <!-- END GENERATED SELF-HOST CONTRACT -->
 
 ```bash
@@ -54,8 +56,6 @@ VITE_PUBLIC_APP_URL="https://stella.example.com"
 VITE_SELFHOST="true"
 # Optional: use when the web origin reverse-proxies /api to the API service.
 VITE_BROWSER_API_URL="https://stella.example.com/api"
-# Optional: enable "Edit in Desktop" for self-hosted DOCX editing.
-VITE_FEATURE_DESKTOP_EDITING="true"
 ```
 
 `VITE_API_URL` must point at the public API, aligned with `PUBLIC_URL` on the
@@ -98,7 +98,6 @@ docker build -f apps/web/Dockerfile \
   --build-arg PUBLIC_BROWSER_API_URL=https://stella.example.com/api \
   --build-arg PUBLIC_APP_URL=https://stella.example.com \
   --build-arg VITE_SELFHOST=true \
-  --build-arg VITE_FEATURE_DESKTOP_EDITING=true \
   -t stella-web:local .
 
 docker run --detach \
@@ -116,7 +115,15 @@ optional web build arguments are listed in `apps/web/Dockerfile` and mirror
 
 - PostgreSQL 18 or newer.
 - Redis-compatible storage for queues, rate limits, and cross-instance events.
-  Valkey works.
+  Valkey works. Configure `maxmemory-policy noeviction` for durable
+  coordination, including queues, locks, claims, counters, admission,
+  publisher reservations, budgets, and MCP read fences. API and collaboration
+  clients inspect `INFO memory` before durable operations and refresh policy
+  after reconnect and at bounded intervals. A reported evicting policy refuses
+  durable commands while caches remain available. Rate limiters retain their
+  configured fallback policies. Permit `INFO memory` for the service identities
+  when possible. If INFO is denied or omits the policy, the services warn and
+  permit operations; operators must verify `noeviction`.
 - RustFS object storage for files.
 - Gotenberg for document conversion. The Compose file runs this next to the API
   on the private Docker Compose network.
@@ -207,9 +214,7 @@ searchable text.
 ## Desktop editing
 
 Self-hosted installs can use the signed stella desktop app without rebuilding
-it. Enable `FEATURE_DESKTOP_EDITING="true"` on the API and
-`VITE_FEATURE_DESKTOP_EDITING="true"` in the web build. Users then install
-stella desktop, open **Settings → Account → Desktop** in the self-hosted web
+it and without configuration. Users install stella desktop, open **Settings → Account → Desktop** in the self-hosted web
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
 
@@ -226,6 +231,20 @@ docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml run --rm --no-deps api \
   bun /app/apps/api/src/db/migrate.js
 ```
+
+After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
+
+<!-- usage-policy-seed-command -->
+
+```bash
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml run --rm --no-deps api \
+  bun /app/seed-usage-policies.js --results /tmp/policy-results.jsonl
+```
+
+The results file stays inside the one-off API container and is removed with it by `--rm`; capture stdout to retain the printed results.
+
+The seed writes JSON Lines containing each policy key and its `inserted`, `updated`, `unchanged`, `hidden`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
 
 ## Container images
 

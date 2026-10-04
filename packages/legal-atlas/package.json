@@ -43,6 +43,10 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
+    "./provision-citation-profiles": {
+      "types": "./src/provision-citation-profiles.ts",
+      "import": "./src/provision-citation-profiles.ts"
+    },
     "./provision-extraction-admission": {
       "types": "./src/provision-extraction-admission.ts",
       "import": "./src/provision-extraction-admission.ts"
@@ -55,14 +59,27 @@
       "types": "./src/sk-provision-citation-profile.ts",
       "import": "./src/sk-provision-citation-profile.ts"
     },
+    "./document-fetch-diagnostics": {
+      "types": "./src/document-fetch-diagnostics.ts",
+      "import": "./src/document-fetch-diagnostics.ts"
+    },
+    "./document-stage-observer": {
+      "types": "./src/document-stage-observer.ts",
+      "import": "./src/document-stage-observer.ts"
+    },
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
+    },
+    "./ingestion-cycle": {
+      "types": "./src/ingestion-cycle.ts",
+      "import": "./src/ingestion-cycle.ts"
     }
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/legal-atlas",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas",
@@ -70,11 +87,14 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   }
 }

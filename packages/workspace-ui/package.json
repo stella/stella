@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.11.15",
+  "version": "0.11.18",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -60,7 +60,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/workspace-ui",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build",
-    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')"
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
     "@stll/calculations": "workspace:^",
@@ -92,8 +92,18 @@
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-table": "^9.1.2",
+    "@types/react": ">=19",
+    "@types/react-dom": ">=19",
     "react": ">=19",
     "react-dom": ">=19",
     "tailwindcss": "^4.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    },
+    "@types/react-dom": {
+      "optional": true
+    }
   }
 }

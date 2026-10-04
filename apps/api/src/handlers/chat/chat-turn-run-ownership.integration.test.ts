@@ -7,6 +7,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  bindChatTurnRunId,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
@@ -23,6 +24,7 @@ import {
   ChatTurnOwnership,
   ChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-run";
+import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -169,15 +171,17 @@ const produceUntilCut = ({
   ownerDb?: SafeDb;
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
-  persist?: () => Promise<void>;
+  persist?: () => Promise<ChatTurnStoredSettlement>;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     ownership,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -198,17 +202,22 @@ const produceUntilCut = ({
     await run.settle(
       persist ??
         (async () => {
-          stored.settlement = unwrap(
+          const outcome = cutShortOutcome(signal.reason);
+          const settlement = unwrap(
             await safeDb(
               async (tx) =>
                 await settleChatTurnOnTx({
                   assistantMessageId: null,
                   execution,
-                  outcome: cutShortOutcome(signal.reason),
+                  outcome,
                   tx,
                 }),
             ),
           );
+          stored.settlement = settlement;
+          return settlement === "not-owned"
+            ? { type: "not-owned" }
+            : { type: "stored", outcome };
         }),
     );
   };
@@ -286,8 +295,10 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,
@@ -305,7 +316,10 @@ describe("a producing run", () => {
               await settleChatTurnOnTx({
                 assistantMessageId: null,
                 execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
+                outcome: {
+                  reason: "client-disconnected",
+                  type: "interrupted",
+                },
                 tx,
               }),
           ),
@@ -313,6 +327,10 @@ describe("a producing run", () => {
         // The turn is no longer running while the settlement finishes: a
         // beat now would read it as lost.
         await Bun.sleep(30);
+        return {
+          type: "stored",
+          outcome: { reason: "client-disconnected", type: "interrupted" },
+        };
       });
       yield* [];
     };
@@ -436,9 +454,11 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,
@@ -458,11 +478,18 @@ describe("a producing run", () => {
               await settleChatTurnOnTx({
                 assistantMessageId: null,
                 execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
+                outcome: {
+                  reason: "client-disconnected",
+                  type: "interrupted",
+                },
                 tx,
               }),
           ),
         );
+        return {
+          type: "stored",
+          outcome: { reason: "client-disconnected", type: "interrupted" },
+        };
       });
       yield* [];
     };
@@ -528,9 +555,8 @@ describe("a producing run", () => {
       execution,
       heartbeat: { intervalMs: 60_000, renewEvery: 4 },
       ownership,
-      persist: async () => {
-        await Promise.reject(new Error("The database is unavailable"));
-      },
+      persist: async () =>
+        await Promise.reject(new Error("The database is unavailable")),
       threadId,
     });
 
@@ -540,6 +566,66 @@ describe("a producing run", () => {
 });
 
 describe("a run id", () => {
+  test("binding repeats for a live owner without changing its preflight expiry", async () => {
+    const first = await seedRunningTurn();
+    const second = await seedRunningTurn();
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    const before = await readTurn(first.execution.id);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(
+        unwrap(
+          await bindChatTurnRunId({
+            execution: first.execution,
+            runId,
+            safeDb,
+          }),
+        ),
+      ).toBe("owned");
+      const bound = await readTurn(first.execution.id);
+      expect(bound.runId).toBe(runId);
+      expect(bound.leaseExpiresAt).toEqual(before.leaseExpiresAt);
+    }
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: second.execution, runId, safeDb }),
+      ),
+    ).toBe("run-taken");
+    unwrap(
+      await safeDb(
+        async (tx) =>
+          await settleChatTurnOnTx({
+            assistantMessageId: null,
+            execution: first.execution,
+            outcome: { type: "interrupted", reason: "client-disconnected" },
+            tx,
+          }),
+      ),
+    );
+    expect((await readTurn(first.execution.id)).runId).toBe(runId);
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: second.execution, runId, safeDb }),
+      ),
+    ).toBe("run-taken");
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: first.execution, runId, safeDb }),
+      ),
+    ).toBe("lost");
+  });
+
+  test("concurrent bindings give a run id to exactly one owned turn", async () => {
+    const first = await seedRunningTurn();
+    const second = await seedRunningTurn();
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    const outcomes = await Promise.all(
+      [first, second].map(async ({ execution }) =>
+        unwrap(await bindChatTurnRunId({ execution, runId, safeDb })),
+      ),
+    );
+    expect(outcomes.toSorted()).toEqual(["owned", "run-taken"]);
+  });
+
   test("names one turn in its organization, and the turn keeps it once settled", async () => {
     const first = await seedRunningTurn();
     const second = await seedRunningTurn();

@@ -1,5 +1,6 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
@@ -28,18 +29,28 @@ export default createServerEntry({
     // marker is consumed here so only the status crosses the wire.
     const requestedStatus = ssrStatusFromHeader(headers.get(SSR_STATUS_HEADER));
     headers.delete(SSR_STATUS_HEADER);
-    const pathname = new URL(request.url).pathname;
+    const status = requestedStatus ?? response.status;
+    const cacheClass = headers.get(SSR_CACHE_CLASS_HEADER);
+    headers.delete(SSR_CACHE_CLASS_HEADER);
+    const isSuccessful = status >= 200 && status < 300;
+    const isHtml =
+      headers.get("Content-Type")?.split(";").at(0)?.trim().toLowerCase() ===
+      "text/html";
     if (
-      (pathname === "/knowledge" || pathname.startsWith("/knowledge/")) &&
-      headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() ===
-        "text/html"
+      cacheClass !== "public-anonymous" ||
+      !isSuccessful ||
+      isHtml ||
+      !headers.has("Cache-Control")
     ) {
       headers.set("Cache-Control", "private, no-store");
+    }
+    if (cacheClass !== "public-indexable" || !isSuccessful || !isHtml) {
+      headers.set("X-Robots-Tag", "noindex");
     }
 
     return new Response(response.body, {
       headers,
-      status: requestedStatus ?? response.status,
+      status,
       ...(requestedStatus === null && { statusText: response.statusText }),
     });
   },

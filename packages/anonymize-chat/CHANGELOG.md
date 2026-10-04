@@ -1,5 +1,17 @@
 # @stll/anonymize-chat
 
+## 0.1.6
+
+### Patch Changes
+
+- [#4472](https://github.com/stella/stella/pull/4472) [`589904e`](https://github.com/stella/stella/commit/589904e42e498fc38468d271e5c4f7f4957e70ec) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update @stll/anonymize-wasm to 3.0.4.
+
+## 0.1.5
+
+### Patch Changes
+
+- [#4420](https://github.com/stella/stella/pull/4420) [`bbfe144`](https://github.com/stella/stella/commit/bbfe1443266768f70eee1a22ec3b77caf775c252) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update @stll/anonymize-wasm to 3.0.3.
+
 ## 0.1.4
 
 ### Patch Changes

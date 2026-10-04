@@ -5,6 +5,7 @@ import { templateFills } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -17,6 +18,10 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -65,6 +70,11 @@ const resolveDocumentFileName = (
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Fill a stored template and save the result as a new document in a " +
     "matter rather than returning bytes. Same values and clauseOverrides " +
@@ -72,6 +82,7 @@ const config = {
     ".docx extension is appended when missing) and a parent folder; the " +
     "created entity is returned.",
   permissions: { template: ["use"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "covered", by: "save_filled_template" },
   params: fillToWorkspaceParamsSchema,
@@ -95,6 +106,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     params,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     recordAuditEvent,
   }) {
@@ -139,6 +151,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     // defers this, so a deterministic fill opens no metered trace.
     const aiCollaborators = () => {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -155,6 +168,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       });
       const shared = {
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         skillContext: { organizationId, safeDb, userId: user.id },
         aiAnalytics,
@@ -234,7 +248,8 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     if ("error" in filled) {
       return Result.err(
-        new HandlerError({ status: 400, message: filled.error }),
+        filled.storedTemplateError ??
+          new HandlerError({ status: 400, message: filled.error }),
       );
     }
 
@@ -285,7 +300,9 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     if (Result.isError(created)) {
       return Result.err(
-        new HandlerError({ status: 400, message: created.error.message }),
+        DocumentWriteRefusedError.is(created.error)
+          ? documentWriteRefusalHandlerError(created.error)
+          : new HandlerError({ status: 400, message: created.error.message }),
       );
     }
 
@@ -342,6 +359,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       fileName: created.value.fileName,
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
       // Fields whose AI draft failed: unfilled in the saved document, so the
       // person who filled the template has to write them.
       aiFieldErrors: filled.aiFieldErrors,

@@ -6,7 +6,7 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -45,6 +45,7 @@ export const buildPolishNarrativeMessage = ({
 
 const config = {
   permissions: { timeEntry: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "billing_ui" },
   body: polishNarrativeBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -73,20 +74,23 @@ const polishTimeEntryNarrative = createSafeHandler(
     }
 
     const organizationId = session.activeOrganizationId;
-    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
-      scopedDb(
-        async (tx) =>
-          await loadOrgAISettings(tx, { organizationId, userId: user.id }),
-      ),
-    );
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      yield* Result.await(
+        scopedDb(
+          async (tx) =>
+            await loadOrgAISettings(tx, { organizationId, userId: user.id }),
+        ),
+      );
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgAIConfig,
       role: "fast",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -106,6 +110,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal: AbortSignal.any([
               request.signal,
               AbortSignal.timeout(POLISH_TIMEOUT_MS),
@@ -129,6 +134,7 @@ const polishTimeEntryNarrative = createSafeHandler(
             finishPolicy: "require-complete",
             organizationId,
             orgAIConfig,
+            managedAIResidency,
             role: "fast",
             serviceTier: "standard",
             system: TIME_NARRATIVE_SYSTEM_PROMPT,

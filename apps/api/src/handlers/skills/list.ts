@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
 import {
   listSkillMetadata,
   listSkillResources,
@@ -14,7 +13,7 @@ import {
   AGENT_SKILL_SCOPES,
   type AgentSkillScope,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -26,6 +25,8 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 
 const listSkillsQuerySchema = t.Object({
@@ -47,9 +48,11 @@ const config = {
     "command; read one skill in full with skills.get. Also reports whether " +
     "you may manage team skills.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "agent_tool_authoring",
     consumesServices: false,
   },
@@ -95,7 +98,9 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
 const listSkills = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, memberRole, query }) {
-    const limit = query.limit ?? LIMITS.agentSkillsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.agentSkillsPageSizeDefault,
+    );
 
     const visibilityFilter = and(
       eq(agentSkills.organizationId, session.activeOrganizationId),
@@ -187,7 +192,9 @@ const listSkills = createSafeRootHandler(
     });
 
     return Result.ok({
-      canManageTeam: isOrganizationManagementRole(memberRole.role),
+      canManageTeam: hasManagementPermission(memberRole, {
+        agentSkill: ["update"],
+      }),
       builtIn: listSkillMetadata().map((skill) => ({
         id: skill.name,
         scope: "built-in" as const,

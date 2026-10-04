@@ -2,6 +2,8 @@ import { TaggedError } from "better-result";
 
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
@@ -9,7 +11,9 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
+import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
@@ -34,6 +38,9 @@ export const shouldRetryAPIRequest = (
   failureCount: number,
   error: unknown,
 ): boolean => {
+  if (APIError.is(error) && error.code === PUBLIC_COUNTRY_UNAVAILABLE_CODE) {
+    return false;
+  }
   if (APIError.is(error) && isActionAdmissionCode(error.code)) {
     return (
       failureCount < MAX_API_RETRY_COUNT &&
@@ -93,6 +100,9 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 } as const;
 
 const CODE_ERROR_KEYS = {
+  [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
+  [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
+  [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
@@ -116,6 +126,9 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.legalSourceEntityLimitReached",
   legal_source_file_property_missing:
     "errors.apiCodes.legalSourceFilePropertyMissing",
+  mcp_oauth_binding_invalid: "errors.apiCodes.mcpAuthorizationApprovalRequired",
+  mcp_authorization_approval_required:
+    "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
@@ -162,6 +175,27 @@ type LocalizeAPIErrorInput = {
 };
 
 const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
+  if (
+    code === CLAUSE_DIRECTIVES_INVALID_CODE &&
+    typeof details?.["clause"] === "object" &&
+    details["clause"] !== null
+  ) {
+    const clause = details["clause"];
+    if ("slotKey" in clause && typeof clause.slotKey === "string") {
+      const clauseName =
+        "name" in clause && typeof clause.name === "string"
+          ? clause.name
+          : clause.slotKey;
+      const key =
+        "resolution" in clause && clause.resolution === "override"
+          ? "errors.apiCodes.clauseDirectivesOverrideInvalidDetails"
+          : "errors.apiCodes.clauseDirectivesInvalidDetails";
+      return getTranslator()(key, {
+        slotName: clause.slotKey,
+        clauseName,
+      });
+    }
+  }
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }

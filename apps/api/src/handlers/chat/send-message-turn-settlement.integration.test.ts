@@ -17,6 +17,7 @@ import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
+import { ChatTurnFailureResponse } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -25,6 +26,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -86,9 +88,12 @@ const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
         .then(resolve);
     }, 0);
   });
-  return new Response("stream started", {
-    headers: { "Content-Type": "text/event-stream" },
-  });
+  return {
+    type: "streaming",
+    response: new Response("stream started", {
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  };
 });
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
@@ -199,9 +204,10 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
@@ -259,4 +265,49 @@ describe("settling a turn whose generation fails after the stream opened", () =>
     });
     expect(turns.at(0)?.settledAt).not.toBeNull();
   });
+});
+
+describe("settling a refusal before streaming", () => {
+  test.each(["unsupported-input", "internal"] as const)(
+    "retains the %s code and retryability from the response",
+    async (failureCode) => {
+      const threadId = await seedEmptyThread();
+      const status = failureCode === "internal" ? 500 : 422;
+      const rejection = new ChatTurnFailureResponse({
+        failureCode,
+        payload: { message: "Cannot start this turn" },
+        status,
+      });
+      streamChatMock.mockImplementationOnce(async () => ({
+        type: "refused",
+        response: rejection,
+      }));
+      const result = await sendMessage.handler(
+        createContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Hello", type: "text" }],
+            role: "user",
+          },
+          threadId,
+        }),
+      );
+      expect(result).toBe(rejection);
+      expect(await rejection.json()).toEqual({
+        message: "Cannot start this turn",
+      });
+      expect(
+        await testDb
+          .select({
+            failureCode: chatTurns.failureCode,
+            failureRetryable: chatTurns.failureRetryable,
+            status: chatTurns.status,
+          })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, threadId)),
+      ).toEqual([
+        { failureCode, failureRetryable: status === 500, status: "failed" },
+      ]);
+    },
+  );
 });

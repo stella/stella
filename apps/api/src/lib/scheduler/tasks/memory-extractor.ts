@@ -8,7 +8,6 @@ import {
   chatThreadCompactions,
   organizationSettings,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -28,6 +27,7 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -118,7 +118,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  if (!env.FEATURE_AI_MEMORY) {
+  if (!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY")) {
     return;
   }
 
@@ -348,7 +348,8 @@ const extractCandidates = async (
   if (Result.isError(settings)) {
     return Result.err(settings.error);
   }
-  const { orgAIConfig, promptCachingEnabled } = settings.value;
+  const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+    settings.value;
 
   let analytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
@@ -357,6 +358,7 @@ const extractCandidates = async (
   const result = await Result.tryPromise({
     try: async () => {
       analytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         feature: "memory.extractor",
         modelRole: "fast",
         orgAIConfig,
@@ -395,10 +397,12 @@ const extractCandidates = async (
       }
 
       return await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "batch",
         organizationId: compaction.threadOrganizationId,
         orgAIConfig,
+        managedAIResidency,
         tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
         analytics,
         caching: resolveCaching({

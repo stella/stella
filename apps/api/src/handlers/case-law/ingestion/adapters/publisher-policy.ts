@@ -1,3 +1,4 @@
+// parser-output-unchanged: immediate checks at the request boundary share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -15,10 +16,14 @@
  * requests rather than a total.
  */
 
+import { panic, Result } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
+  PublisherPacingStopped,
   publisherGateReserves,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
@@ -229,6 +234,9 @@ export const PUBLISHER_GATES = {
 
 export type PublisherGateId = keyof typeof PUBLISHER_GATES;
 
+const MILLISECONDS_PER_SECOND = 1000;
+const MAX_PUBLISHER_REQUESTS_PER_SECOND = 2;
+
 /**
  * Which publisher each adapter spends against.
  *
@@ -289,8 +297,7 @@ export const publisherRequestsPerDay = (gateId: PublisherGateId): number =>
 export const createPublisherSlot = (
   adapterKey: AdapterKey,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) =>
-  createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
+) => createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
 
 /**
  * The gate for a publisher this slice reaches outside a crawl — a roster
@@ -300,10 +307,32 @@ export const createPublisherSlot = (
 export const createPublisherGateSlot = (
   gateId: PublisherGateId,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) => {
-  const { publisher, intervalMs } = PUBLISHER_GATES[gateId];
+) =>
+  createPublisherGateSlotAtInterval({
+    gateId,
+    intervalMs: PUBLISHER_GATES[gateId].intervalMs,
+    ...(dependencies === undefined ? {} : { dependencies }),
+  });
+
+type CreatePublisherGateSlotWithIntervalOptions = {
+  gateId: PublisherGateId;
+  intervalMs: number;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+const createPublisherGateSlotAtInterval = ({
+  gateId,
+  intervalMs,
+  dependencies,
+}: CreatePublisherGateSlotWithIntervalOptions) => {
+  const { publisher } = PUBLISHER_GATES[gateId];
   return createPublisherRequestSlot(
-    { intervalMs, key: `case-law:publisher-gate:${gateId}`, publisher },
+    {
+      intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
+      key: gateId,
+      publisher,
+      ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
+    },
     dependencies,
   );
 };
@@ -317,24 +346,162 @@ export const createPublisherGateSlot = (
  */
 const slotsByGate = new Map<
   PublisherGateId,
-  (signal?: AbortSignal) => Promise<void>
+  ReturnType<typeof createPublisherGateSlot>
 >();
+
+type RunPublisherLimit = {
+  gateId: "cellar-eu";
+  gateSlot: ReturnType<typeof createPublisherGateSlot>;
+};
+
+const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+// Immediate mode checks the shared gate at every outbound request boundary.
+const immediateRequestGate = new AsyncLocalStorage<{
+  gateId: PublisherGateId;
+  slot: ReturnType<typeof createPublisherGateSlot>;
+}>();
+
+type WithImmediatePublisherSlotOptions<T> = {
+  adapterKey: AdapterKey;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+export type PublisherPacingOutcome = PublisherPacingStopped["status"];
+
+export type ImmediatePublisherSlotResult<T> =
+  | { status: "completed"; value: T }
+  | { status: PublisherPacingOutcome }
+  | { status: "failed"; error: unknown };
+
+export const withImmediatePublisherSlot = async <T>({
+  adapterKey,
+  operation,
+  dependencies,
+}: WithImmediatePublisherSlotOptions<T>): Promise<
+  ImmediatePublisherSlotResult<T>
+> => {
+  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
+  const slot =
+    dependencies === undefined
+      ? getPublisherGateSlot(gateId)
+      : createPublisherGateSlot(gateId, dependencies);
+  const result = await Result.tryPromise({
+    try: async () =>
+      await immediateRequestGate.run({ gateId, slot }, operation),
+    catch: (error) => error,
+  });
+  if (Result.isOk(result)) {
+    return { status: "completed", value: result.value };
+  }
+  if (PublisherPacingStopped.is(result.error)) {
+    return { status: result.error.status };
+  }
+  return { status: "failed", error: result.error };
+};
+
+const getPublisherGateSlot = (gateId: PublisherGateId) => {
+  const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
+  slotsByGate.set(gateId, slot);
+  return slot;
+};
+
+type WithPublisherRequestRateLimitOptions<T> = {
+  gateId: "cellar-eu";
+  requestsPerSecond: number;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+/**
+ * Apply a run-specific interval through the shared EU publisher gate, so
+ * retries, cooldowns, and coordination use the same reservation.
+ */
+export const withPublisherRequestRateLimit = async <T>({
+  gateId,
+  requestsPerSecond,
+  operation,
+  dependencies,
+}: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
+  if (
+    !Number.isFinite(requestsPerSecond) ||
+    requestsPerSecond <= 0 ||
+    requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
+  ) {
+    return panic(
+      `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
+    );
+  }
+
+  const requestedIntervalMs = Math.ceil(
+    MILLISECONDS_PER_SECOND / requestsPerSecond,
+  );
+  return await runPublisherLimit.run(
+    {
+      gateId,
+      gateSlot: createPublisherGateSlotAtInterval({
+        gateId,
+        intervalMs: requestedIntervalMs,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      }),
+    },
+    operation,
+  );
+};
 
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
-): Promise<void> => {
+): Promise<void> =>
   await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
-};
 
 export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
 ): Promise<void> => {
+  const immediate = immediateRequestGate.getStore();
+  if (immediate?.gateId === gateId) {
+    await immediate.slot.reserveImmediately(signal);
+    return;
+  }
+  const runLimit = runPublisherLimit.getStore();
+  if (runLimit?.gateId === gateId) {
+    await runLimit.gateSlot(signal);
+    return;
+  }
   if (!publisherGateReserves()) {
     return;
   }
-  const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
-  slotsByGate.set(gateId, reserve);
-  await reserve(signal);
+  await getPublisherGateSlot(gateId)(signal);
+};
+
+export const deferPublisherGate = async (
+  gateId: PublisherGateId,
+  durationMs: number,
+  signal?: AbortSignal,
+): Promise<number> => {
+  const runLimit = runPublisherLimit.getStore();
+  const reserve =
+    (runLimit?.gateId === gateId ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(gateId);
+  return await reserve.defer(durationMs, signal);
+};
+
+/** Shared deadline in epoch milliseconds, based on Redis TIME, not the caller clock. */
+export const readPublisherCooldown = async (
+  publisherKey: PublisherGateId,
+  dependencies?: PublisherRequestGateDependencies,
+): Promise<number | null> => {
+  if (dependencies !== undefined) {
+    return await createPublisherGateSlot(
+      publisherKey,
+      dependencies,
+    ).readCooldown();
+  }
+  const runLimit = runPublisherLimit.getStore();
+  const reserve =
+    (runLimit?.gateId === publisherKey ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(publisherKey);
+  return await reserve.readCooldown();
 };

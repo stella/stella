@@ -10,7 +10,8 @@
  * bytes that leave do not.
  */
 import { PDF, SecurityError } from "@libpdf/core";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import { parseXmlDocument, serializeToWellFormedString } from "slimdom";
 
 import {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -24,6 +25,11 @@ import type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "@stll/api-contract";
+import {
+  isOfficeCollaborationPart,
+  officeIdentityFields,
+  officeIdentityAttributePolicy,
+} from "@stll/docx-utils/office-metadata";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
@@ -624,7 +630,7 @@ const isSignedZipArchive = (
 
 type ZipPart = {
   path: string;
-  clear: (xml: string) => string;
+  clear: (xml: string) => string | Result<string, DocumentPropertiesParseError>;
   propertyEntry?: boolean;
   required?: boolean;
 };
@@ -657,7 +663,15 @@ const scrubZipArchive = async (
       }
       continue;
     }
-    archive.zip.file(part.path, part.clear(xml));
+    const cleared = part.clear(xml);
+    if (typeof cleared === "string") {
+      archive.zip.file(part.path, cleared);
+      continue;
+    }
+    if (cleared.isErr()) {
+      return { status: "unreadable" };
+    }
+    archive.zip.file(part.path, cleared.value);
   }
   await prepare?.(archive);
   return {
@@ -682,102 +696,66 @@ const scrubCustomProperties = (xml: string): string =>
     },
   );
 
-const ANONYMIZED_COLLABORATION_AUTHOR = "Author";
-const ANONYMIZED_COLLABORATION_INITIALS = "A";
+type CollaborationXmlResult = Result<string, DocumentPropertiesParseError>;
 
-type CollaborationAttributePolicies = {
-  author: {
-    replacement: typeof ANONYMIZED_COLLABORATION_AUTHOR;
-    type: "replace";
-  };
-  date: { type: "remove" };
-  initials: {
-    replacement: typeof ANONYMIZED_COLLABORATION_INITIALS;
-    type: "replace";
-  };
-  providerId: { type: "remove" };
-  userId: { type: "remove" };
-};
-
-/**
- * A closed policy keeps schema-required author attributes usable while making
- * it impossible to preserve typed or optional collaboration attributes.
- */
-const COLLABORATION_ATTRIBUTE_POLICIES = {
-  author: { replacement: ANONYMIZED_COLLABORATION_AUTHOR, type: "replace" },
-  date: { type: "remove" },
-  initials: {
-    replacement: ANONYMIZED_COLLABORATION_INITIALS,
-    type: "replace",
-  },
-  userId: { type: "remove" },
-  providerId: { type: "remove" },
-} as const satisfies CollaborationAttributePolicies;
-
-const removeNamespacedAttribute = (
+const scrubCollaborationXml = (
   xml: string,
-  element: XmlElement,
-): string => {
-  let scrubbed = xml;
-  for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `\\s${name}\\s*=\\s*(?<quote>["'])[^"']*\\k<quote>`,
-      "gu",
-    );
-    scrubbed = scrubbed.replace(regex, "");
-  }
-  return scrubbed;
-};
-
-type ReplaceNamespacedAttributeOptions = {
-  element: XmlElement;
-  replacement:
-    | typeof ANONYMIZED_COLLABORATION_AUTHOR
-    | typeof ANONYMIZED_COLLABORATION_INITIALS;
-  xml: string;
-};
-
-const replaceNamespacedAttribute = ({
-  element,
-  replacement,
-  xml,
-}: ReplaceNamespacedAttributeOptions): string => {
-  let scrubbed = xml;
-  for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(`(\\s${name}\\s*=\\s*)(["'])[^"']*\\2`, "gu");
-    scrubbed = scrubbed.replace(
-      regex,
-      (_attribute, prefix: string) => `${prefix}"${replacement}"`,
+  part: string,
+): CollaborationXmlResult => {
+  if (/<!DOCTYPE/iu.test(xml)) {
+    return Result.err(
+      new DocumentPropertiesParseError({
+        message: "Invalid office collaboration XML",
+      }),
     );
   }
-  return scrubbed;
-};
-
-const scrubCollaborationAttributes = (xml: string): string => {
-  let scrubbed = xml;
-  for (const namespace of [WORD_MAIN_NS, WORD_2012_NS]) {
-    for (const [localName, action] of Object.entries(
-      COLLABORATION_ATTRIBUTE_POLICIES,
-    )) {
-      const element = { namespace, localName };
-      switch (action.type) {
-        case "replace":
-          scrubbed = replaceNamespacedAttribute({
-            element,
-            replacement: action.replacement,
-            xml: scrubbed,
-          });
-          break;
-        case "remove":
-          scrubbed = removeNamespacedAttribute(scrubbed, element);
-          break;
-        default:
-          action satisfies never;
-          panic(`Unhandled action: ${String(action)}`);
+  const parsed = Result.try({
+    try: () => parseXmlDocument(xml),
+    catch: () =>
+      new DocumentPropertiesParseError({
+        message: "Invalid office collaboration XML",
+      }),
+  });
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  for (const identity of officeIdentityFields(parsed.value, part)) {
+    if (identity.type === "text") {
+      identity.node.textContent = "Author";
+      continue;
+    }
+    const action =
+      officeIdentityAttributePolicy(identity.node.localName) ??
+      panic("Office identity attribute has no policy");
+    switch (action.type) {
+      case "replace":
+        identity.node.value = action.replacement;
+        break;
+      case "remove":
+        (
+          identity.node.ownerElement ??
+          panic("Office identity attribute has no owner")
+        ).removeAttributeNode(identity.node);
+        break;
+      default:
+        action satisfies never;
+        return panic("Unhandled office identity attribute policy");
+    }
+  }
+  if (/^word\//iu.test(part)) {
+    for (const element of parsed.value.getElementsByTagNameNS("*", "*")) {
+      for (const attribute of [...element.attributes]) {
+        if (
+          attribute.localName === "date" &&
+          (attribute.namespaceURI === WORD_MAIN_NS ||
+            attribute.namespaceURI === WORD_2012_NS)
+        ) {
+          element.removeAttributeNode(attribute);
+        }
       }
     }
   }
-  return scrubbed;
+  return Result.ok(serializeToWellFormedString(parsed.value));
 };
 
 const scrubOoxml = async (
@@ -785,8 +763,11 @@ const scrubOoxml = async (
 ): Promise<ScrubDocumentPropertiesResult> => {
   const archive = await loadDocxArchive(bytes);
   const collaborationParts = Object.keys(archive.zip.files)
-    .filter((path) => /^word\/.*\.xml$/iu.test(path))
-    .map((path) => ({ path, clear: scrubCollaborationAttributes }));
+    .filter(isOfficeCollaborationPart)
+    .map((path) => ({
+      path,
+      clear: (xml: string) => scrubCollaborationXml(xml, path),
+    }));
   return await scrubZipArchive(bytes, [
     {
       path: "docProps/core.xml",
@@ -853,8 +834,15 @@ const removeOdfStatisticsAndUserProperties = (xml: string): string => {
 
 const scrubOdf = async (
   bytes: ArrayBuffer,
-): Promise<ScrubDocumentPropertiesResult> =>
-  await scrubZipArchive(
+): Promise<ScrubDocumentPropertiesResult> => {
+  const sourceArchive = await loadDocxArchive(bytes);
+  const collaborationParts = Object.keys(sourceArchive.zip.files)
+    .filter(isOfficeCollaborationPart)
+    .map((path) => ({
+      path,
+      clear: (xml: string) => scrubCollaborationXml(xml, path),
+    }));
+  return await scrubZipArchive(
     bytes,
     [
       {
@@ -866,6 +854,7 @@ const scrubOdf = async (
         propertyEntry: true,
         required: true,
       },
+      ...collaborationParts,
     ],
     async (archive) => {
       const firstPath = Object.keys(archive.zip.files).at(0);
@@ -878,6 +867,7 @@ const scrubOdf = async (
       archive.zip.file("mimetype", mimetype, { compression: "STORE" });
     },
   );
+};
 
 const scrubPdf = async (
   bytes: ArrayBuffer,

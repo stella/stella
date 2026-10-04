@@ -12,7 +12,9 @@ import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -176,11 +178,18 @@ const classifyAIErrorInternal = (
   error: unknown,
   seen: Set<object>,
 ): AIErrorKind => {
+  if (error instanceof ProviderCallError) {
+    return error.kind;
+  }
   if (isRecord(error)) {
     if (seen.has(error)) {
       return "unknown";
     }
     seen.add(error);
+  }
+
+  if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+    return "model_unavailable";
   }
 
   if (ChatLoopDetectedError.is(error)) {
@@ -378,7 +387,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-const AI_ERROR_KIND_FAILURE_REASON = {
+export const AI_ERROR_KIND_FAILURE_REASON = {
   quota_exhausted: "quota_exhausted",
   provider_billing: "provider_billing",
   provider_credentials_rejected: "provider_credentials_rejected",
@@ -490,7 +499,27 @@ export const aiHandlerError = (
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
   const kind = classifyAIBoundaryFailure(error);
-  const handlerError = aiKindHandlerError(kind, error, fallback);
+  const mapped = aiKindHandlerError(kind, error, fallback);
+  const handlerError =
+    error instanceof ProviderCallError
+      ? new ProviderCallError({
+          model: { provider: error.provider, keySource: error.keySource },
+          status: mapped.status,
+          code: error.code,
+          kind: error.kind,
+          requestId: error.requestId,
+          facts:
+            error.providerStatus === undefined
+              ? undefined
+              : {
+                  status: error.providerStatus,
+                  ...(isRecord(error.cause) &&
+                  typeof error.cause["isRetryable"] === "boolean"
+                    ? { isRetryable: error.cause["isRetryable"] }
+                    : {}),
+                },
+        })
+      : mapped;
   return kind === "unknown"
     ? handlerError
     : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);

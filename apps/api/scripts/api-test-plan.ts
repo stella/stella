@@ -14,6 +14,7 @@ import {
   hasModuleScopeProcessEnvMutation,
   isDbTest,
   SOLO_TEST_PATHS,
+  splitMemoryBoundedBatches,
   splitSoloTests,
   TEST_BATCH_KIND,
   type TestBatchKind,
@@ -30,7 +31,7 @@ const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
-const PROPERTY_TEST_MARKER = "fc.assert";
+const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
 // Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
 // guard once the additional handler and schema modules share one process.
 const REGULAR_TEST_BATCH_SIZE = 10;
@@ -138,6 +139,7 @@ export type ComposedTestBatches = {
 };
 
 type PlanApiTestBatchesOptions = {
+  executionMode?: "batched" | "measure-rss";
   apiRoot: string;
   propertyOnly: boolean;
   testPaths: readonly string[];
@@ -145,6 +147,7 @@ type PlanApiTestBatchesOptions = {
 
 /** Classify every test file and compose the batches the runner executes. */
 export const planApiTestBatches = async ({
+  executionMode = "batched",
   apiRoot,
   propertyOnly,
   testPaths,
@@ -191,7 +194,10 @@ export const planApiTestBatches = async ({
   const dbTests: string[] = [];
   const moduleMockTests: ModuleMockTest[] = [];
   for (const { source, testPath } of classifiedTests) {
-    if (propertyOnly && !source.includes(PROPERTY_TEST_MARKER)) {
+    if (
+      propertyOnly &&
+      !PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker))
+    ) {
       continue;
     }
 
@@ -277,9 +283,16 @@ export const planApiTestBatches = async ({
   ];
   // A solo path runs alone whatever class it lands in (a solo file that starts
   // mocking a module must not rejoin a shared batch). Splitting after
-  // composition leaves every other batch's files together.
+  // composition preserves mock compatibility; memory splitting only removes
+  // neighbours whose combined estimates exceed the composition budget.
   for (const group of composed) {
-    group.testBatches = splitSoloTests(group.testBatches, SOLO_TEST_PATHS);
+    group.testBatches =
+      executionMode === "measure-rss"
+        ? group.testBatches.flat().map((file) => [file])
+        : splitMemoryBoundedBatches({
+            batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
+            budgetMb: group.maxPeakRssMb,
+          });
   }
   return composed;
 };

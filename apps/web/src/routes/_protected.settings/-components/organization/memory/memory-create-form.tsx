@@ -17,6 +17,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   createFirmMemory,
   createMemory as createMemoryRequest,
@@ -109,7 +110,7 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
-      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 

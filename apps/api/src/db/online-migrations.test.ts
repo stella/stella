@@ -1,7 +1,10 @@
+import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
+import { BackfillHeldError } from "./backfill-runtime";
+import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -19,6 +22,9 @@ const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
+const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
+const LEGACY_DOCUMENT_DATE_INDEX =
+  "case_law_decisions_document_pending_date_idx";
 const ACCOUNT_INDEX = "account_provider_account_id_uidx";
 const LEGACY_ACCOUNT_INDEX = "account_issuer_account_id_uidx";
 const FILTER_INDEX_CUTOVER = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
@@ -32,6 +38,11 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+const CLEANUP_STALL_CONSTRAINTS = [
+  "corpus_index_projection_intents_status_values",
+  "corpus_index_projection_intents_status_shape",
+  "corpus_index_projection_intents_delete_reissues_nonnegative",
+] as const;
 
 describe("online migrations", () => {
   /**
@@ -202,6 +213,46 @@ describe("online migrations", () => {
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
     );
+  });
+
+  test("retires the broad document index only after its exact replacement validates", async () => {
+    const harness = createHarness({
+      indexStates: { [DOCUMENT_DATE_INDEX]: [undefined, true] },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    const createOffset = indexOfStatement(
+      harness.statements,
+      `${CREATE_INDEX_FRAGMENT} "${DOCUMENT_DATE_INDEX}"`,
+    );
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_DOCUMENT_DATE_INDEX}"`,
+    );
+    expect(createOffset).toBeGreaterThan(-1);
+    expect(dropOffset).toBeGreaterThan(createOffset);
+  });
+
+  test("preserves the broad document index when its replacement loses validity", async () => {
+    const harness = createHarness({
+      indexStates: { [DOCUMENT_DATE_INDEX]: [true, false] },
+    });
+
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Required migration index ${DOCUMENT_DATE_INDEX} is not ready`,
+    });
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, LEGACY_DOCUMENT_DATE_INDEX),
+    ).toBe(-1);
   });
 
   test("retires the account issuer index only after its replacement validates", async () => {
@@ -389,50 +440,258 @@ describe("online migrations", () => {
     expect(renameOffset).toBeGreaterThan(dropOffset);
   });
 
-  test("validates the decision-date constraint after the index steps, once the repair finds nothing", async () => {
+  test("defers the decision-date repair when health cannot be read", async () => {
     const harness = createHarness({
       unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
     });
-
-    await runOnlineMigrations(harness.pool);
-
-    const validateOffset = indexOfStatement(
-      harness.statements,
-      VALIDATE_CONSTRAINT_FRAGMENT,
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: expect.any(Number),
+            heldSince: expect.any(Number),
+          }),
+        }),
+      ]),
     );
-    expect(validateOffset).toBeGreaterThan(
-      indexOfStatement(
-        harness.statements,
-        `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
-      ),
-    );
-    expect(indexOfStatement(harness.statements, "UPDATE case_law_")).toBe(-1);
-    // The repair's own lock wait does not leak past it.
     expect(
-      harness.statements
-        .slice(validateOffset + 1)
-        .includes("SET lock_timeout = '1s'"),
-    ).toBe(true);
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
+    ).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBe(-1);
     expect(harness.released()).toBe(true);
   });
 
-  test("validates the delete-receipt constraint after walking the intents", async () => {
+  test("validates the cleanup-stall checks without walking the intents", async () => {
     const harness = createHarness({
-      unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
+      unvalidatedConstraints: CLEANUP_STALL_CONSTRAINTS,
     });
 
     await runOnlineMigrations(harness.pool);
+    await assertOnlineMigrationsApplied(harness.pool);
 
-    const validateOffset = indexOfStatement(
-      harness.statements,
-      VALIDATE_DELETE_RECEIPT_FRAGMENT,
-    );
-    expect(validateOffset).toBeGreaterThan(
+    for (const constraint of CLEANUP_STALL_CONSTRAINTS) {
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `VALIDATE CONSTRAINT "${constraint}"`,
+        ),
+      ).toBeGreaterThan(-1);
+    }
+    expect(
       indexOfStatement(
         harness.statements,
         'UPDATE public."corpus_index_projection_intents"',
       ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated cleanup-stall check without repairing", async () => {
+    const [constraint] = CLEANUP_STALL_CONSTRAINTS;
+    const harness = createHarness({ unvalidatedConstraints: [constraint] });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
     );
+
+    expect(rejection).toMatchObject({
+      message: `Online repair corpus-projection-cleanup-stall is not complete: constraint ${constraint} is not validated`,
+    });
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `VALIDATE CONSTRAINT "${constraint}"`,
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("defers the delete-receipt walk when health cannot be read", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
+    });
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: expect.any(Number),
+            heldSince: expect.any(Number),
+          }),
+        }),
+      ]),
+    );
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
+    ).toBe(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a migrate-phase batch statement timeout stays pending and deployment proceeds", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
+      timeoutRepairBatch: true,
+    });
+    const repair = createDecisionDateCeilingRepair({
+      readVerdict: async () => ({ kind: "normal", signals: [] }),
+      clock: () => 0,
+      log: () => undefined,
+    });
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      repairs: [repair],
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      repairs: [repair],
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          repair: repair.name,
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: null,
+            heldSince: null,
+          }),
+        }),
+      ]),
+    );
+    expect(
+      indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBeGreaterThan(-1);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a hold without a durable checkpoint remains a deployment failure", async () => {
+    const harness = createHarness();
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [
+        {
+          name: "unpersisted-hold",
+          readCompletion: async () => ({
+            type: "incomplete",
+            reason: "not attempted",
+          }),
+          repair: async () => {
+            throw new BackfillHeldError({
+              message: "held",
+              holdUntil: 1,
+              heldSince: 0,
+            });
+          },
+        },
+      ],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toContain("hold has no durable pending checkpoint");
+    expect(harness.released()).toBe(true);
+  });
+
+  test("an ordinary repair failure still fails the online phase", async () => {
+    const harness = createHarness();
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [
+        {
+          name: "failed-repair",
+          readCompletion: async () => ({
+            type: "incomplete",
+            reason: "not attempted",
+          }),
+          repair: async () => {
+            throw new TypeError("repair write failed");
+          },
+        },
+      ],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toContain("repair write failed");
+    expect(harness.released()).toBe(true);
+  });
+
+  test("validates empty fresh tables without waiting for a metric source", async () => {
+    const harness = createHarness({
+      emptyRepairTables: true,
+      unvalidatedConstraints: [
+        DECISION_DATE_CONSTRAINT,
+        DELETE_RECEIPT_CONSTRAINT,
+      ],
+    });
+    await runOnlineMigrations(harness.pool);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
+    ).toBeGreaterThan(-1);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
+    ).toBeGreaterThan(-1);
+    // Completion reads may inspect a prior checkpoint; fresh empty tables
+    // validate without opening a batch or creating checkpoint state.
+    expect(indexOfStatement(harness.statements, "BEGIN")).toBe(-1);
+    expect(
+      harness.statements.filter(
+        (statement) =>
+          statement.includes("database_backfill_states") &&
+          !statement.startsWith("SELECT"),
+      ),
+    ).toEqual([]);
     expect(harness.released()).toBe(true);
   });
 
@@ -521,6 +780,8 @@ type HarnessOptions = {
    * VALIDATE statement runs; the rest are validated from the start.
    */
   unvalidatedConstraints?: readonly string[];
+  emptyRepairTables?: boolean;
+  timeoutRepairBatch?: boolean;
   indexStates?: IndexStates;
 };
 
@@ -533,8 +794,14 @@ const createHarness = ({
   artifacts = {},
   unvalidatedConstraints = [],
   indexStates = {},
+  emptyRepairTables = false,
+  timeoutRepairBatch = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
+  const backfillStates = new Map<
+    unknown,
+    { cursor: unknown; batch: unknown }
+  >();
   const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
   const remainingArtifacts = new Map(
@@ -574,6 +841,45 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes("pg_try_advisory_lock") ||
+            query.includes("pg_advisory_unlock") ||
+            query.includes("pg_locks")
+          ) {
+            return [{ acquired: true }];
+          }
+          if (query.startsWith("SELECT set_config(")) {
+            return [];
+          }
+          if (query.startsWith("SELECT 1 FROM public.")) {
+            return emptyRepairTables ? [] : [{ present: 1 }];
+          }
+          if (query.includes("database_backfill_states")) {
+            if (query.startsWith("INSERT")) {
+              const serialized = params.at(2);
+              if (typeof serialized !== "string") {
+                throw new TypeError("Expected checkpoint JSON");
+              }
+              const batch: unknown = JSON.parse(serialized);
+              if (!backfillStates.has(params.at(0))) {
+                backfillStates.set(params.at(0), {
+                  cursor: params.at(1),
+                  batch,
+                });
+              }
+              return [];
+            }
+            if (query.startsWith("UPDATE")) {
+              const serialized = params.at(2);
+              if (typeof serialized !== "string") {
+                throw new TypeError("Expected checkpoint JSON");
+              }
+              const batch: unknown = JSON.parse(serialized);
+              backfillStates.set(params.at(0), { cursor: params.at(1), batch });
+              return [];
+            }
+            return [backfillStates.get(params.at(0))];
+          }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
             if (typeof constraintName !== "string") {
@@ -583,6 +889,15 @@ const createHarness = ({
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
+            if (timeoutRepairBatch) {
+              throw new SQL.PostgresError("repair batch statement timeout", {
+                code: "ERR_POSTGRES_SERVER_ERROR",
+                errno: "57014",
+                detail: "",
+                hint: "",
+                severity: "ERROR",
+              });
+            }
             return [];
           }
           // The delete-receipt repair's walk: no batch boundary left, so the

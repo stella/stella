@@ -10,7 +10,7 @@ import {
 import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 
 import { businessRegistryCredentials } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   bindRegistryCredential,
@@ -22,6 +22,10 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 const credentialRegistrySchema = t.UnionEnum(
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
@@ -30,6 +34,7 @@ const credentialRegistrySchema = t.UnionEnum(
 export const readBusinessRegistryCredentials = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "provider_secret" },
   },
@@ -64,6 +69,7 @@ const CREDENTIAL_PROBE_QUERIES = {
 export const saveBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.standard,
     mcp: { type: "internal", reason: "provider_secret" },
     body: t.Object(
       {
@@ -74,6 +80,10 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
     ),
   },
   async function* ({ body, safeDb, session, recordAuditEvent }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const credential = body.credential.trim();
     if (!credential || /[\r\n]/u.test(credential)) {
       return Result.err(
@@ -100,6 +110,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
       encryptRegistryCredential(session.activeOrganizationId, credential),
     );
     const probe = await executeRegistryLookup({
+      observer,
       handler: bindRegistryCredential(
         BUSINESS_REGISTRY_DISPATCH[body.registry],
         credential,
@@ -145,6 +156,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
 export const deleteBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.standard,
     mcp: { type: "internal", reason: "provider_secret" },
     query: t.Object({ registry: credentialRegistrySchema }),
   },

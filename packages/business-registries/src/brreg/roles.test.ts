@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import bankruptFixture from "./__fixtures__/roles-bankrupt.json" with { type: "json" };
 import brregFixture from "./__fixtures__/roles-brreg.json" with { type: "json" };
 import equinorFixture from "./__fixtures__/roles-equinor.json" with { type: "json" };
@@ -151,16 +153,20 @@ describe("parseRolesResponse", () => {
 });
 
 describe("lookupOfficersByOrgnr validation", () => {
-  test("throws BrregValidationError for malformed input", () => {
-    expect(lookupOfficersByOrgnr("12345678")).rejects.toBeInstanceOf(
-      BrregValidationError,
-    );
+  test("throws BrregValidationError for malformed input", async () => {
+    expect(
+      await rejectionOf(
+        lookupOfficersByOrgnr("12345678", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregValidationError);
   });
 
-  test("throws BrregValidationError for bad checksum", () => {
-    expect(lookupOfficersByOrgnr("974760674")).rejects.toBeInstanceOf(
-      BrregValidationError,
-    );
+  test("throws BrregValidationError for bad checksum", async () => {
+    expect(
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760674", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregValidationError);
   });
 });
 
@@ -179,7 +185,9 @@ describe("lookupOfficersByOrgnr fetch", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    const officers = await lookupOfficersByOrgnr("974760673");
+    const officers = await lookupOfficersByOrgnr("974760673", {
+      observer: "unobserved",
+    });
     expect(officers).toHaveLength(3);
     expect(officers.find((o) => o.role.code === "DAGL")?.person?.name).toBe(
       "Inger Lise Strøm",
@@ -188,15 +196,19 @@ describe("lookupOfficersByOrgnr fetch", () => {
 
   test("returns [] when the orgnr is unknown (404)", async () => {
     restore = installFetchStub(async () => new Response(null, { status: 404 }));
-    expect(await lookupOfficersByOrgnr("974760673")).toEqual([]);
+    expect(
+      await lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+    ).toEqual([]);
   });
 
   test("returns [] when the upstream returns 410 Gone", async () => {
     restore = installFetchStub(async () => new Response(null, { status: 410 }));
-    expect(await lookupOfficersByOrgnr("974760673")).toEqual([]);
+    expect(
+      await lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+    ).toEqual([]);
   });
 
-  test("preserves API status when non-JSON error bodies are returned", () => {
+  test("preserves API status when non-JSON error bodies are returned", async () => {
     restore = installFetchStub(
       async () =>
         new Response("<html>bad gateway</html>", {
@@ -204,14 +216,18 @@ describe("lookupOfficersByOrgnr fetch", () => {
           headers: { "Content-Type": "text/html" },
         }),
     );
-    expect(lookupOfficersByOrgnr("974760673")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "BrregAPIError",
       httpStatus: 502,
       upstreamMessage: null,
     });
   });
 
-  test("surfaces malformed 200 JSON as BrregAPIError", () => {
+  test("surfaces malformed 200 JSON as BrregAPIError", async () => {
     restore = installFetchStub(
       async () =>
         new Response("{", {
@@ -219,9 +235,11 @@ describe("lookupOfficersByOrgnr fetch", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(lookupOfficersByOrgnr("974760673")).rejects.toBeInstanceOf(
-      BrregAPIError,
-    );
+    expect(
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregAPIError);
   });
 
   test("normalises spaces and dashes before hitting the API", async () => {
@@ -233,7 +251,7 @@ describe("lookupOfficersByOrgnr fetch", () => {
         headers: { "Content-Type": "application/json" },
       });
     });
-    await lookupOfficersByOrgnr("974 760 673");
+    await lookupOfficersByOrgnr("974 760 673", { observer: "unobserved" });
     expect(observedUrl).toBe(
       "https://data.brreg.no/enhetsregisteret/api/enheter/974760673/roller",
     );

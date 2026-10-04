@@ -35,7 +35,7 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   isEffectivelyInstalled,
@@ -384,10 +384,7 @@ const CatalogueEntryRow = ({
         });
       },
       onError: (error) => {
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("catalogue.installFailed")),
-          type: "error",
-        });
+        notifyUserError(error, t("catalogue.installFailed"));
       },
     });
   };

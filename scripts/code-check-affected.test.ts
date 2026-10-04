@@ -1,13 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+} from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
@@ -15,6 +21,7 @@ import {
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
   planFullCheck,
+  planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -48,13 +55,104 @@ const plan = (
   });
 
 describe("changed-file result boundary lint", () => {
+  test.each([
+    ["README.md"],
+    ["scripts/guard.ts"],
+    ["apps/api/src/lib/client.test.ts"],
+    ["apps/api/src/lib/document-processing-queue.ts"],
+  ])("does not resolve or measure debt for %s", (file) => {
+    expect(
+      planResultBoundaryLint({
+        files: [file],
+        mergeBase: null,
+        resolveMergeBase: () => {
+          throw new Error("Unrelated files must not resolve a debt base");
+        },
+        measureDebt: () => {
+          throw new Error("Unrelated files must not measure debt");
+        },
+        report: () => {
+          throw new Error("Unrelated files must not report skipped checks");
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("reuses the affected scope's merge base when measuring candidate debt", () => {
+    const measuredBases: string[] = [];
+    const file = "apps/api/src/lib/new-client.ts";
+    expect(
+      planResultBoundaryLint({
+        files: ["README.md", file],
+        mergeBase: "planned-merge-base",
+        resolveMergeBase: () => {
+          throw new Error(
+            "Affected checks must reuse their planned merge base",
+          );
+        },
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set();
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([file], new Set()));
+    expect(measuredBases).toEqual(["planned-merge-base"]);
+  });
+
+  test("the full scope resolves a base and excludes its measured debt", () => {
+    const debtFile = "apps/api/src/lib/old-client.ts";
+    const cleanFile = "apps/api/src/lib/new-client.ts";
+    const measuredBases: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: [debtFile, cleanFile],
+        mergeBase: null,
+        resolveMergeBase: () => "full-merge-base",
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set([debtFile]);
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([cleanFile], new Set()));
+    expect(measuredBases).toEqual(["full-merge-base"]);
+  });
+
+  test("the full scope clearly skips the extra pass without a comparison base", () => {
+    const messages: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: ["apps/api/src/lib/new-client.ts"],
+        mergeBase: null,
+        resolveMergeBase: () => null,
+        measureDebt: () => {
+          throw new Error("A missing base must not measure debt");
+        },
+        report: (message) => {
+          messages.push(message);
+        },
+      }),
+    ).toBeNull();
+    expect(messages).toEqual([
+      "code-check: skipping exact result boundary lint; no merge base for origin/main (normal lint checks still run)\n",
+    ]);
+  });
+
   test("enforces the exact Oxlint rules for files without baseline debt", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/lib/new-client.ts",
-        "apps/api/src/lib/new-client.ts",
-        "packages/boe/src/new-client.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/lib/new-client.ts",
+          "apps/api/src/lib/new-client.ts",
+          "packages/boe/src/new-client.ts",
+        ],
+        new Set(),
+      ),
     ).toEqual([
       "bun",
       "--bun",
@@ -67,21 +165,29 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips baselined debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-        "apps/api/src/lib/document-processing-queue.ts",
-        "apps/api/src/lib/document-processing-queue.test.ts",
-        "apps/api/src/mcp/generated/capability-dispatch.ts",
-        "packages/start-runtime/src/runtime.ts",
-        "packages/ssr-testkit/src/assert-document.ts",
-        // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
-        // an opt-out reason, so its source is not planned for this lint.
-        "apps/landing/src/example.ts",
-        "apps/api/src/lib/new-client.ts",
-        "apps/web/src/lib/example.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "apps/api/src/lib/document-processing-queue.test.ts",
+          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+          // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
+          // an opt-out reason, so its source is not planned for this lint.
+          "apps/landing/src/example.ts",
+          "apps/api/src/lib/new-client.ts",
+          "apps/web/src/lib/example.ts",
+        ],
+        new Set([
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+        ]),
+      ),
     ).toEqual([
       "bun",
       "--bun",
@@ -182,6 +288,7 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
+    expect(commands).toContainEqual(["bun", "run", "generate"]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -423,7 +530,7 @@ describe("changed lint path selection", () => {
   test.each([
     "README.md",
     "apps/web/src/routeTree.gen.ts",
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
@@ -511,6 +618,77 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("an unexpected merge-base failure is surfaced, not read as no base", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "merge-base") {
+  process.stderr.write("fatal: injected failure\\n");
+  process.exit(128);
+}
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "git merge-base origin/main HEAD failed: fatal: injected failure",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("the full command still plans normal checks without origin/main", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(result.exitCode).toBe(0);
+      const output = result.stdout.toString();
+      expect(output).toContain(
+        "skipping exact result boundary lint; no merge base for origin/main",
+      );
+      expect(output).toContain("code-check: lint all; typecheck all");
+      expect(output).toContain("turbo run lint typecheck");
+      expect(output).not.toContain(
+        "oxlint -c oxlint.result-boundary.config.ts",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("the full check lints untracked root source files", () => {
     const file = `.claude/mcp/code-check-untracked-${process.pid}.ts`;
     expect(existsSync(file)).toBe(false);
@@ -527,7 +705,7 @@ describe("full and affected code-check parity", () => {
     } finally {
       rmSync(file);
     }
-  });
+  }, 30_000);
 
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
@@ -598,6 +776,24 @@ describe("full and affected code-check parity", () => {
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const producers = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("generate:"));
+      if (producers.length > 0) {
+        // A dedicated cached producer owns the artifact; both compiler tasks
+        // await it instead of making lint await the entire typecheck.
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining(producers),
+        );
+        for (const producer of producers) {
+          expect(
+            taskField(tasks, `${name}#${producer}`, "outputs").length,
+          ).toBeGreaterThan(0);
+        }
+        continue;
+      }
       expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
         "typecheck",
       ]);
@@ -694,3 +890,107 @@ const workspaceManifests = (): WorkspaceManifest[] =>
         };
       }),
   );
+
+describe("parallel code-quality legs", () => {
+  test("runs result consumption with the same plan scope and owner in every leg", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    for (const leg of CODE_CHECK_LEGS) {
+      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const nextJob = workflow
+        .slice(start + 1)
+        .search(/\n {2}[a-z][a-z0-9-]*:\n/u);
+      const job =
+        nextJob === -1
+          ? workflow.slice(start)
+          : workflow.slice(start, start + 1 + nextJob);
+      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    }
+  });
+
+  test("partition the unsplit workspace tasks and root commands at every scope", () => {
+    const manifests = workspaceManifests();
+    const scriptsByWorkspace = new Map(
+      manifests.map(({ workspace, scripts }) => [workspace, scripts]),
+    );
+    const workspaces = new Set([
+      ...manifests.map(({ workspace }) => workspace),
+      ...WORKSPACES,
+      "packages/new-workspace",
+    ]);
+    const plans = [
+      plan(["bun.lock"], [...WORKSPACES]),
+      plan(["apps/web/src/new.ts"], ["apps/web", "packages/ui"]),
+      plan(["scripts/new.ts"], []),
+    ];
+    for (const planned of plans) {
+      if (planned.type !== "scoped") {
+        throw new TypeError("fixture must produce a scoped plan");
+      }
+      const expand = (commands: string[][]) =>
+        commands.flatMap((command) => {
+          if (command[2] !== "turbo" || command.includes("typecheck:repo")) {
+            return [command.join(" ")];
+          }
+          const tasks = command.filter(
+            (arg) => arg === "lint" || arg === "typecheck",
+          );
+          const included = command
+            .filter((arg) => arg.startsWith("--filter=./"))
+            .map((arg) => arg.slice("--filter=./".length));
+          const excluded = new Set(
+            command
+              .filter((arg) => arg.startsWith("--filter=!./"))
+              .map((arg) => arg.slice("--filter=!./".length)),
+          );
+          return [...workspaces]
+            .filter(
+              (workspace) =>
+                (included.length === 0 || included.includes(workspace)) &&
+                !excluded.has(workspace),
+            )
+            .flatMap((workspace) =>
+              tasks
+                .filter(
+                  (task) =>
+                    !scriptsByWorkspace.has(workspace) ||
+                    typeof scriptsByWorkspace.get(workspace)?.[task] ===
+                      "string",
+                )
+                .map((task) => `${workspace}#${task}`),
+            );
+        });
+      const unsplit = expand(scopedCommands(planned));
+      const split = CODE_CHECK_LEGS.flatMap((leg) =>
+        expand(scopedCommands(planned, { leg, workspaces })),
+      );
+      expect(split.toSorted()).toEqual(unsplit.toSorted());
+      expect(new Set(split).size).toBe(split.length);
+    }
+    expect(
+      CODE_CHECK_LEGS.filter((leg) =>
+        ownsCodeCheckPath("packages/new-workspace", leg),
+      ),
+    ).toEqual(["rest"]);
+  });
+
+  test("partition exact result-boundary lint paths including root sources", () => {
+    const paths = [
+      "apps/api/src/new.ts",
+      "apps/web/src/new.ts",
+      "packages/new/src/new.ts",
+      "scripts/new.ts",
+    ];
+    for (const file of paths) {
+      expect(
+        CODE_CHECK_LEGS.filter((leg) => ownsCodeCheckPath(file, leg)),
+      ).toHaveLength(1);
+    }
+  });
+});

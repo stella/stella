@@ -2,6 +2,11 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
+import {
+  normalizeAbsoluteTestPatterns,
+  partitionRunnerArguments,
+  selectTestPaths,
+} from "./test-path-filters";
 
 type GatedTestScript = keyof typeof packageJson.ciGateTestRunners;
 
@@ -36,7 +41,7 @@ export const runGatedTests = async ({
       onlyFiles: true,
     }),
   ];
-  const testFiles = (
+  const discoveredGatedFiles = (
     await Promise.all(
       discoveredTests.map(async (testFile) => ({
         isGated: (await Bun.file(path.join(apiRoot, testFile)).text()).includes(
@@ -50,9 +55,44 @@ export const runGatedTests = async ({
     .map(({ testFile }) => testFile)
     .toSorted();
 
+  const { bunArguments, patterns } = partitionRunnerArguments(
+    Bun.argv.slice(2),
+  );
+  const selectedPaths = selectTestPaths(
+    discoveredGatedFiles,
+    normalizeAbsoluteTestPatterns(patterns, apiRoot),
+  );
+  const testFiles = discoveredGatedFiles.filter(
+    (testFile) => selectedPaths === null || selectedPaths.has(testFile),
+  );
+
   if (testFiles.length === 0) {
-    console.error(`No test files declaring ${runner.gate} were discovered.`);
+    console.error(
+      `No test files declaring ${runner.gate} matched the selection.`,
+    );
     return 1;
+  }
+
+  // The same derived sources the package `test` script generates first: the
+  // suites import the capability runtime, which is never committed.
+  for (const { generator, cwd } of [
+    {
+      generator: "codegen:runtime",
+      cwd: path.resolve(apiRoot, "../../packages/cli"),
+    },
+    { generator: "generate:capability-runtime", cwd: apiRoot },
+  ]) {
+    const generationProcess = Bun.spawn({
+      cmd: [process.execPath, "run", generator],
+      cwd,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const generationStatus = await generationProcess.exited;
+    if (generationStatus !== 0) {
+      return generationStatus;
+    }
   }
 
   console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
@@ -67,6 +107,7 @@ export const runGatedTests = async ({
         "--max-concurrency=1",
         "--preload",
         "./src/tests/setup-env.ts",
+        ...bunArguments,
       ],
       testFiles,
     }),

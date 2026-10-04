@@ -1,28 +1,35 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, isNull, like } from "drizzle-orm";
-
-import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
+import { deepEquals } from "bun";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, workspaces } from "@/api/db/schema";
-import type { entityVersions } from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
+import {
+  createSiblingNamePlan,
+  resolveSiblingNameForInsert,
+  type NamedEntityInsert,
+  type ResolvedSiblingNames,
+} from "@/api/lib/entities/sibling-name-insert";
+import {
+  lockWorkspacesForEntityCap,
+  lockWorkspacesForEntityTransfer,
+} from "@/api/lib/entity-cap-lock";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
@@ -36,9 +43,9 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -49,6 +56,7 @@ import type {
   SearchIndexOwner,
 } from "@/api/lib/search/process-extraction";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
 export type EntityFieldSnapshot = {
   id: SafeId<"field">;
@@ -147,7 +155,7 @@ export const ENTITY_SNAPSHOT_COLUMNS = {
   parentId: true,
   readOnly: true,
   currentVersionId: true,
-} as const;
+} as const satisfies Record<keyof Omit<EntitySnapshot, "versions">, true>;
 
 const VERSION_FIELDS_SELECT = {
   // Ascending field id is ascending creation order, the order
@@ -384,7 +392,7 @@ const stageAndCopyFiles = async ({
     return { ...source, targetKey, newFileId };
   });
   const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {
@@ -535,99 +543,15 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   }
 };
 
-const trailingSuffixRe = /_\d+$/u;
+export const resolveEntityName = resolveSiblingNameForInsert;
 
-type ResolveEntityNameProps = {
-  tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  parentId: SafeId<"entity"> | null;
-  name: string;
-};
-
-/**
- * Generate a unique entity name by appending `_N` suffix.
- * Splits on the last dot to preserve file extensions:
- *   "Report.pdf" → "Report_1.pdf", "Report_2.pdf", …
- *   "My Folder"  → "My Folder_1", "My Folder_2", …
- * Strips any existing `_N` suffix before computing the
- * next number so re-duplicating "Report_1" still increments
- * from the highest sibling, not from the stripped base.
- */
-export const resolveEntityName = async ({
-  tx,
-  workspaceId,
-  parentId,
-  name,
-}: ResolveEntityNameProps): Promise<string> => {
-  const lastDot = name.lastIndexOf(".");
-  const hasExt = lastDot > 0;
-  const rawBase = hasExt ? name.slice(0, lastDot) : name;
-  const ext = hasExt ? name.slice(lastDot) : "";
-
-  // Strip trailing _N to get the root name
-  const base = rawBase.replace(trailingSuffixRe, "");
-
-  const longestSuffix = `_${LIMITS.entitiesCount}`;
-  const searchPrefix = truncateEntityName(
-    base,
-    Math.max(ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length, 0),
-  );
-  const pattern = `${escapeLike(searchPrefix)}%`;
-  const parentCondition = parentId
-    ? eq(entities.parentId, parentId)
-    : isNull(entities.parentId);
-
-  const siblings = await tx
-    .select({ name: entities.name })
-    .from(entities)
-    .where(
-      and(
-        eq(entities.workspaceId, workspaceId),
-        parentCondition,
-        like(entities.name, pattern),
-      ),
-    );
-
-  // If no conflict with the original name, keep it unchanged
-  const siblingNames = new Set(siblings.map((s) => s.name));
-  if (!siblingNames.has(name)) {
-    return name;
-  }
-
-  const collisionName = (suffixNumber: number) => {
-    const suffix = `_${suffixNumber}`;
-    const boundedExtension = truncateEntityName(
-      ext,
-      ENTITY_NAME_MAX_LENGTH - suffix.length,
-    );
-    const boundedBase = truncateEntityName(
-      base,
-      ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
-    );
-    return `${boundedBase}${suffix}${boundedExtension}`;
-  };
-
-  let maxSuffixNumber = 0;
-  for (const siblingName of siblingNames) {
-    for (const match of siblingName.matchAll(/_(\d+)/gu)) {
-      const suffixNumber = Number.parseInt(match[1] ?? "", 10);
-      if (
-        suffixNumber > maxSuffixNumber &&
-        siblingName === collisionName(suffixNumber)
-      ) {
-        maxSuffixNumber = suffixNumber;
-      }
-    }
-  }
-
-  return collisionName(maxSuffixNumber + 1);
-};
-
-export const getFolderSubtree = (
-  allEntities: EntitySnapshot[],
+export const getFolderSubtree = <
+  TEntity extends Pick<EntitySnapshot, "id" | "parentId">,
+>(
+  allEntities: TEntity[],
   rootId: SafeId<"entity">,
-): EntitySnapshot[] | null => {
-  const childrenByParentId = new Map<SafeId<"entity">, EntitySnapshot[]>();
+): TEntity[] | null => {
+  const childrenByParentId = new Map<SafeId<"entity">, TEntity[]>();
 
   for (const entity of allEntities) {
     if (!entity.parentId) {
@@ -648,7 +572,7 @@ export const getFolderSubtree = (
     return null;
   }
 
-  const subtree: EntitySnapshot[] = [];
+  const subtree: TEntity[] = [];
   const queue = [root];
   // The queue grows while it is walked, so a parent cycle in the snapshot
   // would enqueue forever. A cycle cannot exist in a well-formed tree; seeing
@@ -709,7 +633,7 @@ type CopyEntitiesProps = {
   sourceEntities: WritableEntitySnapshot[];
   /** Stable root identity supplied by a replay-safe same-matter duplicate. */
   targetRootEntityId?: SafeId<"entity"> | undefined;
-  /** Caller-selected name for the root copy; descendants retain their names. */
+  /** Caller-selected root label; descendants resolve against their copied siblings. */
   targetRootName?: string | undefined;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
@@ -720,7 +644,13 @@ type CopyEntitiesProps = {
    * workspace, so only a move needs the source row locked — see the
    * lock-set comment below.
    */
-  transfer: EntityTransfer;
+  transfer:
+    | { type: "copy" }
+    | {
+        type: "move";
+        sourceWorkspaceId: SafeId<"workspace">;
+        sourceSnapshot: EntitySnapshot[];
+      };
   fieldMapping:
     | { type: "omit" }
     | { type: "single"; sourceFieldId: SafeId<"field"> };
@@ -818,7 +748,7 @@ const resolveRootCopyName = async ({
   targetParentId,
   targetRootName,
   targetWorkspaceId,
-}: ResolveRootCopyNameOptions): Promise<string | undefined> =>
+}: ResolveRootCopyNameOptions): Promise<ResolvedSiblingNames | undefined> =>
   rootSource === undefined
     ? undefined
     : await resolveEntityName({
@@ -826,6 +756,7 @@ const resolveRootCopyName = async ({
         workspaceId: targetWorkspaceId,
         parentId: targetParentId,
         name: targetRootName ?? rootSource.name,
+        kind: rootSource.kind,
       });
 
 type ValidateCopySourcesOptions = {
@@ -881,8 +812,7 @@ const validateCopySources = ({
 
 type LockCopyWorkspacesOptions = {
   tx: Transaction;
-  transfer: EntityTransfer;
-  sourceWorkspaceId: SafeId<"workspace"> | undefined;
+  transfer: CopyEntitiesProps["transfer"];
   targetWorkspaceId: SafeId<"workspace">;
 };
 
@@ -893,22 +823,269 @@ type LockCopyWorkspacesOptions = {
  * there) for no correctness benefit. Only a cross-workspace MOVE also locks the
  * source, since the caller deletes the source rows in the same transaction and
  * that must serialize with concurrent source-side inserts. Both ids go through
- * `lockWorkspacesForEntityCap`, which sorts them ascending before locking — see
- * that function for why this closes the cross-workspace ABBA between an A->B
- * and a concurrent B->A move.
+ * the shared workspace lock owner, which sorts them ascending before locking.
+ * Moves use its transfer mode so source-side FK checks can finish while the
+ * transfer waits for source rows.
  */
 const lockCopyWorkspaces = async ({
   tx,
   transfer,
-  sourceWorkspaceId,
   targetWorkspaceId,
 }: LockCopyWorkspacesOptions): Promise<void> => {
-  await lockWorkspacesForEntityCap(
-    tx,
-    sourceWorkspaceId && transfer.type === "move"
-      ? [sourceWorkspaceId, targetWorkspaceId]
-      : [targetWorkspaceId],
+  if (transfer.type === "move") {
+    await lockWorkspacesForEntityTransfer(tx, [
+      transfer.sourceWorkspaceId,
+      targetWorkspaceId,
+    ]);
+    return;
+  }
+  await lockWorkspacesForEntityCap(tx, [targetWorkspaceId]);
+};
+
+const orderedSourceSnapshot = (snapshot: EntitySnapshot[]) =>
+  snapshot
+    .map(({ readOnly = false, versions, ...entity }) => ({
+      ...entity,
+      readOnly,
+      versions: versions
+        .map(({ fields: versionFields, ...version }) => ({
+          ...version,
+          fields: versionFields.toSorted(
+            (left, right) =>
+              Number(left.id > right.id) - Number(left.id < right.id),
+          ),
+        }))
+        .toSorted(
+          (left, right) =>
+            Number(left.id > right.id) - Number(left.id < right.id),
+        ),
+    }))
+    .toSorted(
+      (left, right) => Number(left.id > right.id) - Number(left.id < right.id),
+    );
+
+/** Row order is incidental; every carried column and row identity is not. */
+export const sourceSnapshotsMatch = (
+  expected: EntitySnapshot[],
+  current: EntitySnapshot[],
+): boolean =>
+  deepEquals(orderedSourceSnapshot(expected), orderedSourceSnapshot(current));
+
+type ValidateMoveSourceOptions = {
+  tx: Transaction;
+  sourceEntityId: SafeId<"entity">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  sourceSnapshot: EntitySnapshot[];
+};
+
+export const validateMoveSourceReadLimits = async ({
+  tx,
+  sourceWorkspaceId,
+  sourceSnapshot,
+}: Omit<ValidateMoveSourceOptions, "sourceEntityId">): Promise<
+  Result<void, HandlerError>
+> => {
+  const sourceIds = sourceSnapshot.map(({ id }) => id);
+  const overVersionLimit = await tx
+    .select({ entityId: entityVersions.entityId })
+    .from(entityVersions)
+    .where(
+      and(
+        eq(entityVersions.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .groupBy(entityVersions.entityId)
+    .having(sql`${count()} > ${LIMITS.versionsPerEntity}`)
+    .limit(1);
+  const overFieldLimit = await tx
+    .select({ entityVersionId: fields.entityVersionId })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .where(
+      and(
+        eq(fields.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .groupBy(fields.entityVersionId)
+    .having(sql`${count()} > ${LIMITS.propertiesCount}`)
+    .limit(1);
+  if (overVersionLimit.length === 0 && overFieldLimit.length === 0) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      status: 409,
+      code: "entity_transfer_source_limit",
+      retryable: false,
+      message: "The source has too many versions or fields to move.",
+    }),
   );
+};
+
+/** A failed NOWAIT must roll back its savepoint before returning a refusal. */
+const validateMoveSource = async (
+  options: ValidateMoveSourceOptions,
+): Promise<Result<void, HandlerError>> => {
+  const checked = await Result.tryPromise(
+    async () =>
+      await options.tx.transaction(
+        async (tx) => await validateMoveSourceRows({ ...options, tx }),
+      ),
+  );
+  if (Result.isOk(checked)) {
+    return checked.value;
+  }
+  if (getPgErrorCode(checked.error) !== PG_ERROR.LOCK_NOT_AVAILABLE) {
+    return Result.err(
+      new HandlerError({
+        cause: checked.error,
+        status: 500,
+        message: "Failed to validate the entity transfer source",
+      }),
+    );
+  }
+  return Result.err(
+    new HandlerError({
+      cause: checked.error,
+      status: 409,
+      code: "entity_transfer_source_changed",
+      retryable: true,
+      message: "The source changed or is busy. Try moving it again.",
+    }),
+  );
+};
+
+/** The unremapped snapshot is the exact state a move is allowed to remove. */
+const validateMoveSourceRows = async ({
+  tx,
+  sourceEntityId,
+  sourceWorkspaceId,
+  sourceSnapshot,
+}: ValidateMoveSourceOptions): Promise<Result<void, HandlerError>> => {
+  const sourceIds = sourceSnapshot.map(({ id }) => id);
+  const expectedVersionIds = new Set(
+    sourceSnapshot.flatMap(({ versions }) => versions.map(({ id }) => id)),
+  );
+  const expectedFieldIds = new Set(
+    sourceSnapshot.flatMap(({ versions }) =>
+      versions.flatMap(({ fields: versionFields }) =>
+        versionFields.map(({ id }) => id),
+      ),
+    ),
+  );
+  await tx
+    .select({ id: entities.id })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.workspaceId, sourceWorkspaceId),
+        inArray(entities.id, sourceIds),
+      ),
+    )
+    .orderBy(asc(entities.id))
+    .limit(sourceIds.length)
+    .for("update", { noWait: true });
+  // Annotations and derived field content can change without an entity write.
+  // Lock those owners as well before reading the full carried state.
+  const liveVersions = await tx
+    .select({ id: entityVersions.id })
+    .from(entityVersions)
+    .where(
+      and(
+        eq(entityVersions.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .orderBy(asc(entityVersions.id))
+    .limit(expectedVersionIds.size + 1)
+    .for("update", { noWait: true });
+  const liveFields = await tx
+    .select({ id: fields.id })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .where(
+      and(
+        eq(fields.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .orderBy(asc(fields.id))
+    .limit(expectedFieldIds.size + 1)
+    .for("update", { of: fields, noWait: true });
+
+  // Activity may have started during the object copy. Source locks keep new
+  // dependent inserts from passing their foreign-key checks before deletion.
+  const removal = await validateEntityRemovalState({
+    tx,
+    workspaceId: sourceWorkspaceId,
+    entityIds: sourceIds,
+    operation: "move",
+    now: new Date(),
+  });
+  if (Result.isError(removal)) {
+    return removal;
+  }
+  const limits = await validateMoveSourceReadLimits({
+    tx,
+    sourceWorkspaceId,
+    sourceSnapshot,
+  });
+  if (Result.isError(limits)) {
+    return limits;
+  }
+
+  // Read full history only for the source set, never for the entire matter.
+  const currentEntities = await tx.query.entities.findMany({
+    where: {
+      workspaceId: { eq: sourceWorkspaceId },
+      id: { in: sourceIds },
+    },
+    columns: ENTITY_SNAPSHOT_COLUMNS,
+    with: EVERY_LIVE_VERSION_SELECT,
+    limit: sourceIds.length,
+  });
+  let membershipMatches = true;
+  if (
+    sourceSnapshot.find(({ id }) => id === sourceEntityId)?.kind === "folder"
+  ) {
+    // Workspace locks exclude inserts; source entity locks exclude moving a
+    // child out, and the folder-parent locks exclude moving a child in.
+    const workspaceEntities = await tx.query.entities.findMany({
+      where: { workspaceId: { eq: sourceWorkspaceId } },
+      columns: ENTITY_SNAPSHOT_COLUMNS,
+      limit: LIMITS.entitiesCount,
+    });
+    const currentSubtree = getFolderSubtree(workspaceEntities, sourceEntityId);
+    const expectedIds = new Set(sourceIds);
+    membershipMatches =
+      currentSubtree !== null &&
+      currentSubtree.length === expectedIds.size &&
+      currentSubtree.every(({ id }) => expectedIds.has(id));
+  }
+  if (
+    !membershipMatches ||
+    liveVersions.length !== expectedVersionIds.size ||
+    liveVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
+    liveFields.length !== expectedFieldIds.size ||
+    liveFields.some(({ id }) => !expectedFieldIds.has(id)) ||
+    !sourceSnapshotsMatch(sourceSnapshot, currentEntities)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "entity_transfer_source_changed",
+        retryable: true,
+        message: "The source changed. Try moving it again.",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 type ValidateCopyTargetOptions = {
@@ -994,7 +1171,7 @@ type CopyScope = Pick<
 
 /** Every row and result a copy produces, built before the first insert. */
 type CopyRows = {
-  entityRows: (typeof entities.$inferInsert)[];
+  entityRows: NamedEntityInsert[];
   versionRows: ReturnType<typeof targetVersionValues>[];
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
@@ -1012,32 +1189,35 @@ type CopyPlan = CopyRows & { rootEntityId: SafeId<"entity"> };
 type CopyTarget = {
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | null;
-  name: string;
+  name: ResolvedSiblingNames["name"];
+  fileName: ResolvedSiblingNames["fileName"];
 };
 
 type ResolveCopyTargetOptions = {
   scope: CopyScope;
   source: WritableEntitySnapshot;
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
   targetIdBySourceId: ReadonlyMap<SafeId<"entity">, SafeId<"entity">>;
+  resolvePlannedName: Awaited<ReturnType<typeof createSiblingNamePlan>>;
 };
 
 /**
  * The root takes the caller's parent and resolved name, and the caller's id
- * when a replay-safe duplicate supplies one. Every descendant keeps its name
- * under the copy of its parent.
+ * when a replay-safe duplicate supplies one. Descendants reserve their names
+ * among the siblings planned under each copied parent.
  */
 const resolveCopyTarget = ({
   scope: { sourceEntityId, targetParentId, targetRootEntityId },
   source,
   rootCopyName,
   targetIdBySourceId,
+  resolvePlannedName,
 }: ResolveCopyTargetOptions): CopyTarget => {
   if (source.id === sourceEntityId) {
     return {
       entityId: targetRootEntityId ?? createSafeId<"entity">(),
       parentId: targetParentId,
-      name: rootCopyName ?? panic("Copy root name was not resolved"),
+      ...(rootCopyName ?? panic("Copy root name was not resolved")),
     };
   }
 
@@ -1047,7 +1227,15 @@ const resolveCopyTarget = ({
   if (parentId === undefined) {
     panic("Copy source parent order was not validated");
   }
-  return { entityId: createSafeId<"entity">(), parentId, name: source.name };
+  return {
+    entityId: createSafeId<"entity">(),
+    parentId,
+    ...resolvePlannedName({
+      name: source.name,
+      kind: source.kind,
+      parentId,
+    }),
+  };
 };
 
 type AppendVersionRowsOptions = {
@@ -1114,16 +1302,13 @@ type AppendFieldRowsOptions = {
  */
 const appendFieldRows = ({
   rows,
-  scope: { sourceEntityId, targetRootName, targetWorkspaceId, fieldMapping },
+  scope: { targetWorkspaceId, fieldMapping },
   source,
   target,
   currentVersion,
   targetVersionIds,
 }: AppendFieldRowsOptions): CopiedFieldInsert[] => {
-  const renamedRootFileFieldId =
-    source.id === sourceEntityId && targetRootName !== undefined
-      ? currentVersion.fields.find(({ content }) => content.type === "file")?.id
-      : undefined;
+  const primaryFile = findExtractionFileFieldRow(currentVersion.fields);
 
   const currentFieldRows: CopiedFieldInsert[] = [];
   for (const version of source.versions) {
@@ -1159,10 +1344,10 @@ const appendFieldRows = ({
       }
 
       const content =
-        field.id === renamedRootFileFieldId && field.content.type === "file"
+        isCurrentVersion && primaryFile !== null && field.id === primaryFile.id
           ? {
-              ...field.content,
-              fileName: sanitizeFilename(target.name),
+              ...primaryFile.content,
+              fileName: target.fileName,
             }
           : field.content;
       const fieldRow = {
@@ -1269,10 +1454,11 @@ const appendCopiedEntity = ({
 };
 
 type PlanEntityCopiesOptions = {
+  tx: Transaction;
   scope: CopyScope;
   sourceEntities: WritableEntitySnapshot[];
   documentStamps: EntityStamp[];
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
 };
 
 /**
@@ -1280,12 +1466,17 @@ type PlanEntityCopiesOptions = {
  * writes them in one batch. Sources arrive parents first, so every parent
  * resolves from the ids already minted.
  */
-const planEntityCopies = ({
+const planEntityCopies = async ({
+  tx,
   scope,
   sourceEntities,
   documentStamps,
   rootCopyName,
-}: PlanEntityCopiesOptions): CopyPlan => {
+}: PlanEntityCopiesOptions): Promise<CopyPlan> => {
+  const resolvePlannedName = await createSiblingNamePlan({
+    tx,
+    workspaceId: scope.targetWorkspaceId,
+  });
   const rows: CopyRows = {
     entityRows: [],
     versionRows: [],
@@ -1310,6 +1501,7 @@ const planEntityCopies = ({
 
   for (const source of sourceEntities) {
     const target = resolveCopyTarget({
+      resolvePlannedName,
       scope,
       source,
       rootCopyName,
@@ -1413,19 +1605,34 @@ export const copyEntities = async ({
   recordAuditEvent,
   sourceEntityId,
   sourceEntities,
-  sourceWorkspaceId,
+  sourceWorkspaceId: copySourceWorkspaceId,
   targetRootEntityId,
   targetRootName,
   transfer,
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<Result<CopyEntitiesResult, HandlerError>> => {
+  const sourceWorkspaceId =
+    transfer.type === "move"
+      ? transfer.sourceWorkspaceId
+      : copySourceWorkspaceId;
   await lockCopyWorkspaces({
     tx,
     transfer,
-    sourceWorkspaceId,
     targetWorkspaceId,
   });
+
+  if (transfer.type === "move") {
+    const sourceValidated = await validateMoveSource({
+      tx,
+      sourceEntityId,
+      sourceWorkspaceId: transfer.sourceWorkspaceId,
+      sourceSnapshot: transfer.sourceSnapshot,
+    });
+    if (Result.isError(sourceValidated)) {
+      return sourceValidated;
+    }
+  }
 
   const targetValidated = await validateCopyTarget({
     tx,
@@ -1460,7 +1667,8 @@ export const copyEntities = async ({
     targetWorkspaceId,
   });
 
-  const plan = planEntityCopies({
+  const plan = await planEntityCopies({
+    tx,
     scope: {
       organizationId,
       targetWorkspaceId,

@@ -10,7 +10,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -31,6 +31,9 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -210,6 +213,30 @@ type MetadataResult = {
 };
 
 export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
+  const metaTable = $("#box-table-a");
+  // Domino also escapes value separators, including inside complaint cells.
+  // Restore only breaks; parsing the whole decoded value would eat quoted text.
+  metaTable
+    .find("*")
+    .contents()
+    .each((_, node) => {
+      if (!isText(node)) {
+        return;
+      }
+      const parts = node.data.split(/<br\s*\/?>/iu);
+      if (parts.length === 1) {
+        return;
+      }
+      const nodes: AnyNode[] = [];
+      for (const [index, part] of parts.entries()) {
+        if (index > 0) {
+          nodes.push(new Element("br", {}));
+        }
+        nodes.push(new Text(part));
+      }
+      $(node).replaceWith(nodes);
+    });
+
   const canonical: DocumentAstMetadata = {
     caseNumber: null,
     ecli: null,
@@ -224,54 +251,60 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
     ($(td).html() ?? "").split(/<br\s*\/?>/iu).flatMap((s) => {
-      const trimmed = cheerio.load(s).text().trim();
+      const trimmed = visibleHtmlText(cheerio.load(s).root()).trim();
       return trimmed ? [trimmed] : [];
     });
 
-  const metaTable = $("#box-table-a");
+  const metadataCellText = (cell: cheerio.Cheerio<AnyNode>) => {
+    const copy = cell.clone();
+    // Cheerio's text() omits breaks; keep boundaries without changing the DOM
+    // used by the structured value splitter and complaint table walker.
+    copy.find("br").each((_, br) => {
+      $(br).replaceWith(new Text("\n"));
+    });
+    return visibleHtmlText(copy).trim();
+  };
+
   const metadataTable: SourceMetadataTable = {
     captions: metaTable
       .children("caption")
       .toArray()
-      .map((caption) => $(caption).text().trim()),
+      .map((caption) => visibleHtmlText($(caption)).trim()),
     rows: [],
   };
   source["metadataTable"] = metadataTable;
-  metaTable.find("> tbody > tr, > tr").each((_, tr) => {
+  ownTableRows(metaTable).each((_, tr) => {
     const tds = $(tr).children("td, th");
     metadataTable.rows.push(
       tds.toArray().map((cell) => ({
         type: $(cell).is("th") ? "header" : "data",
-        text: $(cell).text().trim(),
+        text: metadataCellText($(cell)),
       })),
     );
     if (tds.length < 2) {
       const singleTd = tds;
       if (
         singleTd.length === 1 &&
-        singleTd.text().includes("ústavní stížnost")
+        visibleHtmlText(singleTd).includes("ústavní stížnost")
       ) {
         const nestedTable = singleTd.find("table");
         if (nestedTable.length > 0) {
           const rows: TableCell[][] = [];
-          nestedTable
-            .first()
-            .find("> tbody > tr, > tr")
-            .each((__, innerTr) => {
-              const row: TableCell[] = [];
-              $(innerTr)
-                .children("td, th")
-                .each((___, td) => {
-                  const inlines = walkInlines($, $(td));
-                  row.push({
-                    inlines,
-                    plainText: inlinesToPlainText(inlines),
-                  });
+          ownTableRows(nestedTable.first()).each((__, innerTr) => {
+            const row: TableCell[] = [];
+            $(innerTr)
+              .children("td, th")
+              .each((___, td) => {
+                const inlines = walkInlines($, $(td));
+                row.push({
+                  inlines,
+                  plainText: inlinesToPlainText(inlines),
                 });
-              if (row.length > 0) {
-                rows.push(row);
-              }
-            });
+              });
+            if (row.length > 0) {
+              rows.push(row);
+            }
+          });
           relatedProceedingsTable = rows.length > 0 ? rows : null;
 
           if (rows.length > 1) {
@@ -296,8 +329,8 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       return;
     }
 
-    const labelText = $(tds[0]).text().trim();
-    const valueText = $(tds[1]).text().trim();
+    const labelText = metadataCellText(tds.eq(0));
+    const valueText = metadataCellText(tds.eq(1));
 
     if (!valueText) {
       return;
@@ -311,7 +344,10 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       canonical.decisionDate = parseDominoDate(valueText) ?? valueText;
       return;
     }
-    if (labelText.includes("Spisová značka")) {
+    if (
+      labelText.includes("Spisová značka") ||
+      labelText.includes("Senátní značka")
+    ) {
       canonical.caseNumber = valueText;
       return;
     }
@@ -455,7 +491,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
 
   const processNode = (node: AnyNode, parentCentered: boolean) => {
     if (isText(node)) {
-      const text = $(node).text();
+      const text = node.data;
       if (text.trim()) {
         appendToBuffer([{ type: "text", text }], parentCentered);
       }
@@ -469,7 +505,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     const tag = node.tagName.toLowerCase();
     const $node = $(node);
 
-    if (tag === "style" || tag === "script" || tag === "input") {
+    if (isExcludedHtmlTag(tag) || tag === "input") {
       return;
     }
 
@@ -480,7 +516,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
         flushInlines(walkInlines($, $(caption)), false);
       });
       const rows: TableCell[][] = [];
-      $node.find("tr").each((_, tr) => {
+      ownTableRows($node).each((_, tr) => {
         const row: TableCell[] = [];
         $(tr)
           .children("td, th")

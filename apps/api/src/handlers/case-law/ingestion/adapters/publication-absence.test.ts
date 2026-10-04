@@ -11,6 +11,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
   parseDecisionTextAbsence,
+  type SkUsEcliAvailability,
 } from "@stll/api-contract/case-law-text-field";
 
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -19,8 +20,22 @@ import {
   splitStoredDecisionTextMetadata,
   storeDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { isRecord } from "@/api/lib/type-guards";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { TYPED_ABSENCE_DEBT } from "@/api/tests/helpers/case-law-publication-absence-debt";
+
+const isStoredEcliAvailability = (
+  value: unknown,
+): value is SkUsEcliAvailability =>
+  isRecord(value) &&
+  Object.keys(value).length === 1 &&
+  SK_US_ECLI_AVAILABILITY_STATUSES.some((status) => status === value["status"]);
+
+/** The stored ECLI availability, compared as its contract shape. */
+const storedEcliAvailability = (
+  value: unknown,
+): SkUsEcliAvailability | undefined =>
+  isStoredEcliAvailability(value) ? value : undefined;
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -138,9 +153,9 @@ for (const { key } of listSourceRegistrations()) {
       }
       expect(debt).toBeDefined();
       if (debt?.condition === "not_stated") {
-        expect(decision.metadata["ecliAvailability"]).toEqual({
-          status: "not_stated",
-        });
+        expect(
+          storedEcliAvailability(decision.metadata["ecliAvailability"]),
+        ).toEqual({ status: "not_stated" });
       }
     }
   });

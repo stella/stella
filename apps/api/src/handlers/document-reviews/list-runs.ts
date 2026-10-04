@@ -30,7 +30,7 @@ import {
   documentReviewRuns,
   fields,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
@@ -46,6 +46,7 @@ import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-
 import type { PlaybookPinProvenance } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 
 const RUNS_PAGE_SIZE_DEFAULT = 20;
@@ -100,6 +101,7 @@ const config = {
   description:
     "List review runs for one document in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),
@@ -118,7 +120,9 @@ const config = {
 const listDocumentReviewRuns = createSafeHandler(
   config,
   async function* ({ query, safeDb, session, workspaceId }) {
-    const limit = query.limit ?? RUNS_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? RUNS_PAGE_SIZE_DEFAULT,
+    );
     const cursorCondition = yield* runHistoryCursorCondition(query.cursor);
 
     const rows = yield* Result.await(

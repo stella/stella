@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  resolvePublishedExport,
 } from "./published-export-guards";
 
 describe("published export artifact guard", () => {
@@ -52,20 +56,20 @@ describe("published export resolution guard", () => {
   });
 
   test("requires copied assets to resolve to their declared path", () => {
-    const entry = "./capability-catalog.json";
+    const entry = "./contract.json";
 
     expect(
       isExpectedPublishedExportResolution({
         entry,
         packageDir,
-        resolved: "/repo/packages/example/capability-catalog.json",
+        resolved: "/repo/packages/example/contract.json",
       }),
     ).toBe(true);
     expect(
       isExpectedPublishedExportResolution({
         entry,
         packageDir,
-        resolved: "/repo/packages/example/dist/capability-catalog.json",
+        resolved: "/repo/packages/example/dist/contract.json",
       }),
     ).toBe(false);
   });
@@ -122,5 +126,44 @@ describe("Node load failure attribution", () => {
           "ERR_MODULE_NOT_FOUND: Cannot find package 'bun' imported from /repo/packages/example/dist/runtime.js",
       }),
     ).toBe(false);
+  });
+});
+
+describe("published export resolution precedence", () => {
+  test("keeps the repoRoot result when the isolated consumer points elsewhere", async () => {
+    const root = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "published-export-precedence-")),
+    );
+    const name = "@stll/export-precedence-fixture";
+    const consumerDir = path.join(root, "consumer");
+    const consumerPackageDir = path.join(consumerDir, "node_modules", name);
+    const linkedDir = path.join(root, "node_modules", name);
+    const manifest = JSON.stringify({
+      name,
+      type: "module",
+      exports: { ".": "./entry.js" },
+    });
+    try {
+      for (const directory of [consumerPackageDir, linkedDir]) {
+        await Bun.write(path.join(directory, "package.json"), manifest);
+        await Bun.write(
+          path.join(directory, "entry.js"),
+          "export const value = 1;",
+        );
+      }
+      const fromConsumer = Bun.resolveSync(name, consumerDir);
+      const fromRoot = Bun.resolveSync(name, root);
+      expect(fromConsumer).toBe(path.join(consumerPackageDir, "entry.js"));
+      expect(fromRoot).toBe(path.join(linkedDir, "entry.js"));
+      expect(
+        resolvePublishedExport({
+          specifier: name,
+          repoRoot: root,
+          consumerDir,
+        }),
+      ).toBe(fromRoot);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

@@ -40,6 +40,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedInvoiceId,
@@ -48,7 +49,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -646,7 +650,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: input.cursor });
     }
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
   const canReview = hasEffectiveAuthority(context, {
     timeEntry: ["approve"],
   });
@@ -962,7 +966,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         organizationId: context.organizationId,
         workspaceId,
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
         recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
         body: {
           ...(input.entity_id === undefined
@@ -1021,7 +1025,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
       workspaceId,
       actor: {
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
       },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: {
@@ -1117,7 +1121,7 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
       workspaceId,
       actor: {
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
       },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { id: timeEntryId },
@@ -1399,7 +1403,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined && cursor === null) {
     return invalidCursorResult({ cursor: input.cursor });
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
 
   const rows = await context.scopedDb((tx) =>
     tx
@@ -1518,6 +1522,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1556,11 +1561,13 @@ export const BILLING_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ timeEntry: ["create"] }, { timeEntry: ["update"] }],
+      reason: "time_entry_id selects update; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
-      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
     name: "save_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1580,11 +1587,10 @@ export const BILLING_TOOL_DEFINITIONS = [
       "reverted. Returns whether the entry was hard-deleted.",
     inputSchema: deleteTimeEntryArgsSchema,
     access: "write",
+    permissions: { type: "all", permissions: { timeEntry: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
     name: "delete_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1604,6 +1610,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
     isVisibleToMemberRole: (memberRole) =>
@@ -1634,6 +1641,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1662,6 +1670,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
     isVisibleToMemberRole: (memberRole) =>

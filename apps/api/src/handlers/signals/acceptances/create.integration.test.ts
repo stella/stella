@@ -23,6 +23,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -85,9 +86,10 @@ const accept = async (signalId: SafeId<"signal">) => {
       getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
       getActiveWorkspaceIds: async () => [ids.wsA1],
       getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       params: { signalId },
       promptCachingEnabled: false,
       recordAuditEvent,

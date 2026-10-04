@@ -39,11 +39,11 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
@@ -69,6 +69,7 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -157,6 +158,7 @@ type RunChatThreadCompactionOptions = {
   extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
   reasoningEffort?: ReasoningEffort | undefined;
@@ -680,6 +682,7 @@ const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
     await generateTanStackTextForRole({
+      dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,
       caching: resolveCaching({
@@ -691,6 +694,7 @@ const createModelSummarizer =
       modelId: options.modelId,
       organizationId: options.organizationId,
       orgAIConfig: options.orgAIConfig,
+      managedAIResidency: options.managedAIResidency,
       reasoningEffort: options.reasoningEffort,
       prompt: renderIncrementalCompactionPrompt(prompt),
       role: "chat",
@@ -772,7 +776,8 @@ const advanceCheckpointOnTx = async ({
 
   const memoryEligibility = resolveCheckpointMemoryEligibility({
     extractionFeatureEnabled:
-      options.extractionFeatureEnabled ?? env.FEATURE_AI_MEMORY,
+      options.extractionFeatureEnabled ??
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });

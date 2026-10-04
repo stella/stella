@@ -33,6 +33,10 @@ process.env["REDIS_URL"] = UNREACHABLE_REDIS_URL;
 // what keeps this suite out of any process where another file has mocked
 // `createRedisClient` and replaced the very failure under test.
 const { createRedisClient } = await import("@/api/lib/redis-client");
+const { chargeMcpReadBytes, closeMcpReadFenceRedis } =
+  await import("@/api/lib/rate-limit/mcp-read-fence");
+const { toSafeId } = await import("@/api/lib/branded-types");
+const { Result } = await import("better-result");
 const { RedisRateLimitContext } =
   await import("@/api/lib/rate-limit/redis-context");
 const { createAuthRateLimitStorage } =
@@ -111,8 +115,11 @@ describe("the outage under test", () => {
     expect(envBase.REDIS_URL).toBe(UNREACHABLE_REDIS_URL);
 
     const client = createRedisClient({
-      connectionTimeout: 500,
-      enableOfflineQueue: false,
+      storeClass: "cache",
+      overrides: {
+        connectionTimeout: 500,
+        enableOfflineQueue: false,
+      },
     });
     const result = await settle(client.send("PING", []));
     expect(result.status).toBe("error");
@@ -322,3 +329,35 @@ describe("SSE fan-out during a Valkey outage", () => {
     ).toBe(true);
   });
 });
+
+test(
+  "authenticated tenant and public reads fail closed during a real store outage",
+  async () => {
+    const policy = {
+      windowMs: 701,
+      maxEntries: 7,
+      tenant: { organizationBytes: 31, userBytes: 19 },
+      public: { organizationBytes: 61, userBytes: 37 },
+    };
+    try {
+      for (const readClass of ["tenant", "public", "both"] as const) {
+        const outcome = await chargeMcpReadBytes({
+          organizationId: toSafeId<"organization">("outage_read_org"),
+          userId: toSafeId<"user">("outage_read_user"),
+          bytes: 11,
+          readClass,
+          enabled: true,
+          policy,
+        });
+        expect(Result.isError(outcome)).toBe(true);
+        if (Result.isError(outcome)) {
+          expect(outcome.error.code).toBe("action_admission_unavailable");
+        }
+        closeMcpReadFenceRedis();
+      }
+    } finally {
+      closeMcpReadFenceRedis();
+    }
+  },
+  SETTLE_BUDGET_MS,
+);

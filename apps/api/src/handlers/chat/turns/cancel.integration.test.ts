@@ -46,6 +46,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -247,7 +248,7 @@ const stop = async ({
   const set = { headers: {}, status: 200 };
   const answer: unknown = await cancelTurn.handler(
     asTestRaw<CancelCtx>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { threadId, turnId },
       request: new Request(
         `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
@@ -326,8 +327,10 @@ const produceUntilCut = ({
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -347,6 +350,7 @@ const produceUntilCut = ({
     await run.settle(async () => {
       unwrap(
         await persistInterruptedChatTurn({
+          indexThread: async () => await Promise.resolve(),
           execution,
           recordAuditEvent: noAudit,
           safeDb,
@@ -355,6 +359,10 @@ const produceUntilCut = ({
           workspaceId: ids.wsA1,
         }),
       );
+      return {
+        type: "stored",
+        outcome: { reason: "client-disconnected", type: "interrupted" },
+      };
     });
   };
   const response = run.produce(output());
@@ -596,6 +604,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "fails before streaming",
     settle: async ({ execution, threadId }) =>
       await persistFailedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         code: "internal",
         execution,
         recordAuditEvent: noAudit,
@@ -610,6 +619,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "is disconnected before streaming",
     settle: async ({ execution, threadId }) =>
       await persistInterruptedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         execution,
         recordAuditEvent: noAudit,
         safeDb,

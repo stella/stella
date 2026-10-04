@@ -174,11 +174,13 @@ export const createPlaybookStore = (
           await Promise.resolve({
             orgAIConfig: null,
             orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+            managedAIResidency: "eu",
             promptCachingEnabled: false,
           }),
       },
       safeDb: toSafeDbMock(scopedDb),
       scopedDb,
+      userEmail: "playbook-eval@example.test",
       userId: toSafeId<"user">("user_eval"),
     },
     playbooks: () => [...rows.values()],

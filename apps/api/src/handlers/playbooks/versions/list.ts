@@ -4,10 +4,11 @@ import { t } from "elysia";
 
 import { playbookDefinitionVersions } from "@/api/db/schema";
 import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   description:
@@ -16,8 +17,10 @@ const config = {
     "by whom. A version is only written when a playbook is approved, so the " +
     "list is capped rather than cursor-paginated.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "knowledge_library_admin",
     consumesServices: false,
   },
@@ -65,7 +68,9 @@ const listPlaybookVersions = createSafeRootHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.playbookDefinitionVersionsPerPlaybook;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.playbookDefinitionVersionsPerPlaybook,
+    );
 
     const rows = yield* Result.await(
       safeDb((tx) =>

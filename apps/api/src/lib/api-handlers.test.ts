@@ -1,8 +1,9 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -11,6 +12,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
   createSafeRootHandler,
@@ -19,12 +21,22 @@ import {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
 import {
   DatabaseError,
   DatabaseRlsError,
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import {
+  instanceWireErrorModel,
+  providerCallErrorCassettes,
+  providerCallErrorSentinel,
+} from "@/api/tests/helpers/provider-call-error-wire";
+import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -44,6 +56,7 @@ describe("createSafeHandler workspace audit binding", () => {
     const endpoint = createSafeHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* ({ recordAuditEvent }) {
@@ -67,7 +80,7 @@ describe("createSafeHandler workspace audit binding", () => {
           "019e7000-0000-7000-8000-000000000002",
         ),
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       safeDb,
       scopedDb: async () => {
         throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -78,6 +91,7 @@ describe("createSafeHandler workspace audit binding", () => {
       pinServerValidatedWorkspaceId: () => false,
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       recordAuditEvent: noopAuditRecorder,
       createAuditRecorder: (options?: {
@@ -134,6 +148,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -172,6 +187,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -206,6 +222,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", modelRole: "fast" },
         },
@@ -259,7 +276,7 @@ const createContext = (
         "019e7000-0000-7000-8000-000000000002",
       ),
     },
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     safeDb,
     scopedDb: async () => {
       throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -269,6 +286,7 @@ const createContext = (
     getWorkspaceAccess: async () => null,
     orgAIConfig,
     orgAIConfigStatus,
+    managedAIResidency: "eu",
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
@@ -300,6 +318,7 @@ describe("createSafeRootHandler member AI access", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", laneRouting: true },
         },
@@ -333,6 +352,7 @@ describe("createSafeRootHandler member AI access", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -356,6 +376,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -388,6 +409,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -415,6 +437,7 @@ describe("request.failed severity", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         async function* () {
@@ -503,6 +526,7 @@ describe("a mapped status survives the transport wrapper", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         body,
@@ -516,6 +540,79 @@ describe("a mapped status survives the transport wrapper", () => {
       analytics.restore();
     }
   };
+
+  test("raw and wrapped admission outcomes survive returned and thrown safe handlers", async () => {
+    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
+    try {
+      for (const reason of [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const) {
+        const refusal = new ActionAdmissionError({
+          reason,
+          message: "Private coordination detail",
+        });
+        const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+        for (const wrapped of [
+          refusal,
+          new UnhandledException({ cause: refusal }),
+          new HandlerError({
+            status: 500,
+            message: "Request failed",
+            cause: refusal,
+          }),
+        ]) {
+          for (const mode of ["return", "throw"] as const) {
+            const response = await runEndpoint(async function* () {
+              if (mode === "throw") {
+                throw wrapped;
+              }
+              return Result.err(wrapped);
+            });
+            expect(response).toMatchObject({
+              code: metadata.status,
+              response: {
+                code: refusal.code,
+                message: metadata.message,
+                retryable: metadata.retryable,
+                ...(metadata.status === 403
+                  ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
+                  : {}),
+              },
+            });
+          }
+        }
+      }
+    } finally {
+      env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("unavailable wrapper causes still produce the sanitized boundary response", async () => {
+    const error = Object.defineProperty(new Error("Request failed"), "cause", {
+      get: () => {
+        throw new Error("Cause unavailable");
+      },
+    });
+    for (const mode of ["return", "throw"] as const) {
+      const response = await runEndpoint(async function* () {
+        if (mode === "throw") {
+          throw error;
+        }
+        return Result.err(new UnhandledException({ cause: error }));
+      });
+      expect(response).toMatchObject({
+        code: 500,
+        response: {
+          code: "internal_server_error",
+          message: "Internal server error",
+        },
+      });
+    }
+  });
 
   const upstreamRefusal = () =>
     new HandlerError({
@@ -553,6 +650,34 @@ describe("a mapped status survives the transport wrapper", () => {
       message: "File rejected by a security rule",
       hint: "Remove the attached template link and upload again.",
       issues,
+    });
+  });
+
+  test("clause directive refusals preserve linked identity at the HTTP boundary", async () => {
+    const clause = { slotKey: "@clause:Terms", id: "cls_1", name: "Terms" };
+    const response = await runEndpoint(async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: "clause_directives_invalid",
+          retryable: false,
+          message:
+            "Clause Terms (cls_1) in slot @clause:Terms has invalid directives.",
+          hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
+          clause,
+          issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+        }),
+      );
+    });
+    expect(response).toMatchObject({
+      code: 422,
+      response: {
+        code: "clause_directives_invalid",
+        retryable: false,
+        clause,
+        hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
+        issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+      },
     });
   });
 
@@ -820,4 +945,76 @@ describe("assertRunSizeConfirmedForHandler", () => {
       expect(outcome).toBeNull();
     });
   });
+});
+
+describe("provider failure HTTP response", () => {
+  for (const cassette of providerCallErrorCassettes()) {
+    test(`provider failure returns a fixed HTTP message with ${cassette.scenario}/${cassette.variant ?? "base"}`, async () => {
+      const replay = installProviderWireReplay({ retryAfterMs: 1 });
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      const previousMockAI = env.USE_MOCK_AI;
+      env.USE_MOCK_AI = false;
+      try {
+        replay.serve(cassette);
+        const model = instanceWireErrorModel(cassette.model);
+        const endpoint = createSafeRootHandler(
+          {
+            permissions: { workspace: ["read"] },
+            accountAccess: ACCOUNT_ACCESS.sandbox,
+            mcp: { type: "internal", reason: "health_infra" },
+          },
+          async function* () {
+            const generated = await Result.tryPromise(async () =>
+              generateTanStackTextForRole({
+                tenantWorkspaceIds: [],
+                caching: { enabled: false, reason: "org-disabled" },
+                serviceTier: "standard",
+                orgAIConfig: null,
+                dataClass: "public_corpus",
+                role: "chat",
+                organizationId: null,
+                prompt: "Draft a memo",
+                finishPolicy: "require-complete",
+                resolveTextModel: async () => model,
+              }),
+            );
+            if (Result.isError(generated)) {
+              if (!(generated.error.cause instanceof HandlerError)) {
+                throw generated.error;
+              }
+              return Result.err(generated.error.cause);
+            }
+            return Result.ok({ text: generated.value });
+          },
+        );
+        const safeDb: SafeDb = async <T>() =>
+          Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+        const response = await endpoint.handler(
+          createContext(endpoint, safeDb),
+        );
+        if (!("code" in response)) {
+          throw new TypeError("The fixture returns a status response");
+        }
+        expect(response.code).toBe(502);
+        expect(response.response).toMatchObject({
+          message: PROVIDER_CALL_ERROR_MESSAGE,
+        });
+        expect(replay.requests().length).toBeGreaterThan(0);
+        expect(logs.records.length).toBeGreaterThan(0);
+        expect(
+          JSON.stringify({
+            response,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(providerCallErrorSentinel(cassette));
+      } finally {
+        env.USE_MOCK_AI = previousMockAI;
+        logs.restore();
+        analytics.restore();
+        replay.restore();
+      }
+    });
+  }
 });

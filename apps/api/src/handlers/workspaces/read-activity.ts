@@ -14,7 +14,7 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
@@ -24,9 +24,11 @@ import {
 } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({
@@ -94,7 +96,9 @@ type WorkspaceActivity =
 const readWorkspaceActivity = createSafeHandler(
   config,
   async function* ({ memberRole, query, safeDb, session, user, workspaceId }) {
-    const limit = query.limit ?? LIMITS.workspaceActivityPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.workspaceActivityPageSizeDefault,
+    );
     const cursor = decodeWorkspaceActivityCursor(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
       return Result.err(

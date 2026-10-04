@@ -16,7 +16,13 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -44,6 +50,7 @@ import {
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
@@ -411,6 +418,13 @@ describe("applyChatModelChange", () => {
   });
 });
 
+const EMPTY_THREAD_CONTEXT = {
+  fileCount: 0,
+  files: [],
+  matterCount: 0,
+  matters: [],
+};
+
 describe("mergeGroupedChatThreadPages", () => {
   test("deduplicates threads while appending workspace groups across pages", () => {
     const result = mergeGroupedChatThreadPages([
@@ -423,6 +437,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global A",
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
         ],
         nextCursor: "page-2",
@@ -438,6 +453,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace A",
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },
@@ -452,6 +468,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global A duplicate",
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -460,6 +477,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global B",
             updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
         ],
         nextCursor: null,
@@ -475,6 +493,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace A duplicate",
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -483,6 +502,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace B",
                 updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },
@@ -497,6 +517,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace D",
                 updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -505,6 +526,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace C",
                 updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },
@@ -2457,6 +2479,201 @@ describe("chat runtime", () => {
     expectSupersededSend(sent);
   });
 
+  // The server holds a run's RUN_FINISHED, which carries the interrupt an
+  // answer resolves, until it has stored the turn. The card is on screen and
+  // answerable before that, so an answer can arrive while the request is still
+  // open and the page does not know the interrupt yet. That answer must still
+  // continue the turn once the run hands the interrupt over, not stay on the
+  // card with nothing sent.
+  const earlyAnswerCases = [
+    {
+      kind: "an ask-user card",
+      interruptFor: createClientToolInterrupt,
+      toolCall: {
+        id: "tool-ask",
+        input: { question: "Which position titles should the playbook cover?" },
+        name: "ask-user",
+      },
+      answer: async (runtime: ReturnType<typeof createChatRuntime>) => {
+        await runtime.addToolResult({
+          tool: "ask-user",
+          toolCallId: "tool-ask",
+          output: {
+            answers: [
+              {
+                question: "Which position titles should the playbook cover?",
+                answer: "Engineer and Counsel",
+              },
+            ],
+          },
+        });
+      },
+      resume: {
+        interruptId: "client_tool_tool-ask",
+        payload: {
+          answers: [
+            {
+              question: "Which position titles should the playbook cover?",
+              answer: "Engineer and Counsel",
+            },
+          ],
+        },
+        status: "resolved",
+      },
+    },
+    {
+      kind: "a tool approval",
+      interruptFor: createApprovalInterrupt,
+      toolCall: {
+        id: "tool-save",
+        input: { name: "Employment terms" },
+        name: "save_playbook",
+      },
+      answer: async (runtime: ReturnType<typeof createChatRuntime>) => {
+        await runtime.resolveToolApproval({
+          approved: true,
+          id: "approval_tool-save",
+        });
+      },
+      resume: {
+        interruptId: "approval_tool-save",
+        payload: { approved: true },
+        status: "resolved",
+      },
+    },
+  ] as const;
+
+  for (const answerCase of earlyAnswerCases) {
+    test(`continues the turn when ${answerCase.kind} is answered before its run finishes`, async () => {
+      const threadId = toChatThreadId(`thread-early-${answerCase.toolCall.id}`);
+      const encoder = new TextEncoder();
+      const requests: unknown[] = [];
+      let pushFirstStream: (
+        chunks: readonly Record<string, unknown>[],
+      ) => void = () => {
+        throw new Error("The first request was not made");
+      };
+      let closeFirstStream: () => void = () => {
+        throw new Error("The first request was not made");
+      };
+      let markContinuationRequested: () => void = () => {
+        throw new Error("The continuation promise was not created");
+      };
+      const continuationRequested = new Promise<void>((resolve) => {
+        markContinuationRequested = resolve;
+      });
+      let markFirstRequestMade: (runId: string) => void = () => {
+        throw new Error("The first request promise was not created");
+      };
+      const firstRequestMade = new Promise<string>((resolve) => {
+        markFirstRequestMade = resolve;
+      });
+
+      globalThis.fetch = createFetchMock(async (_input, init) => {
+        const runId = parseChatRequestRunId(init);
+        requests.push(parseJsonRequestBody(init));
+        if (requests.length === 1) {
+          const body = new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              pushFirstStream = (chunks) => {
+                for (const chunk of chunks) {
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
+                  );
+                }
+              };
+              closeFirstStream = () => {
+                controller.close();
+              };
+            },
+          });
+          markFirstRequestMade(runId);
+          return new Response(body, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }
+        markContinuationRequested();
+        return createSseResponse([
+          { type: "RUN_STARTED", threadId, runId },
+          {
+            type: "RUN_FINISHED",
+            threadId,
+            runId,
+            finishReason: "stop",
+            outcome: { type: "success" },
+          },
+        ]);
+      });
+      const runtime = createChatRuntime({
+        activeTurnId: null,
+        context: undefined,
+        initialMessages: [],
+        key: { scope: "global", threadId },
+        onError: (error) => {
+          throw error;
+        },
+        onFinish: () => {},
+        reloadThread: () => {},
+      });
+
+      const hasCompleteToolCall = () =>
+        runtime
+          .getSnapshot()
+          .messages.some((message) =>
+            message.parts.some(
+              (part) =>
+                part.type === "tool-call" &&
+                part.id === answerCase.toolCall.id &&
+                part.state === "input-complete",
+            ),
+          );
+      const toolCallShown = new Promise<void>((resolve) => {
+        const unsubscribe = runtime.subscribe(() => {
+          if (hasCompleteToolCall()) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+      const sent = sendThreadChatMessage(
+        runtime,
+        createOutgoingMessage(
+          "22222222-2222-4222-8222-222222222401",
+          "Save the playbook",
+        ),
+      );
+      const firstRunId = await firstRequestMade;
+      const chunks = createPendingInterruptChunks({
+        interrupt: answerCase.interruptFor(firstRunId),
+        runId: firstRunId,
+        threadId,
+        toolCall: answerCase.toolCall,
+      });
+      pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
+      await toolCallShown;
+      // The answer leaves while the run that asked is still open, and before
+      // the page has seen the interrupt it resolves.
+      expect(runtime.getSnapshot().isLoading).toBe(true);
+      expect(
+        chunks.filter((chunk) => chunk.type === "RUN_FINISHED"),
+      ).toHaveLength(1);
+
+      const answered = answerCase.answer(runtime);
+      pushFirstStream(chunks.filter((chunk) => chunk.type === "RUN_FINISHED"));
+      closeFirstStream();
+      await sent;
+      await answered;
+      await continuationRequested;
+
+      expect(requests).toHaveLength(2);
+      expect(requests.at(1)).toMatchObject({
+        parentRunId: firstRunId,
+        resume: [answerCase.resume],
+        threadId,
+      });
+    });
+  }
+
   // An answer to one card of a batch waits for the rest of the batch before
   // it is submitted. A message that supersedes the batch withdraws what the
   // answer waited for; the answer concludes then, it does not wait forever.
@@ -2675,6 +2892,69 @@ describe("chat runtime", () => {
     });
   });
 
+  test("native chat admission refusals render identically over HTTP, stream and reload", async () => {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const metadata = ACTION_ADMISSION_REFUSALS[code];
+      const refusal = {
+        code,
+        ...metadata,
+        contactUrl: "https://example.test/contact",
+      };
+      const stored = {
+        id: assistantMessageId,
+        role: "assistant",
+        parts: [],
+        metadata: {
+          turnOutcome: { type: "failed", error: "unknown", refusal },
+        },
+      } satisfies PersistedChatMessage;
+      const expected = actionAdmissionOutcome(
+        getChatAssistantTurnError(stored),
+      );
+      for (const transport of ["http", "stream"] as const) {
+        const threadId = toChatThreadId(`thread-${code}-${transport}`);
+        globalThis.fetch = createFetchMock(async () =>
+          transport === "http"
+            ? new Response(JSON.stringify(refusal), {
+                headers: { "Content-Type": "application/json" },
+                status: metadata.status,
+              })
+            : createSseResponse([
+                { type: "RUN_STARTED", threadId, runId: "run-refused" },
+                {
+                  type: "RUN_ERROR",
+                  code,
+                  message: metadata.message,
+                  rawEvent: refusal,
+                },
+              ]),
+        );
+        const reported: Error[] = [];
+        const runtime = createChatRuntime({
+          activeTurnId: null,
+          context: undefined,
+          initialMessages: [],
+          key: { scope: "global", threadId },
+          onError: (error) => {
+            reported.push(error);
+          },
+          onFinish: () => {},
+          reloadThread: () => {},
+        });
+        await sendThreadChatMessage(
+          runtime,
+          createOutgoingMessage("22222222-2222-4222-8222-222222222204"),
+        );
+        expect(reported).toHaveLength(1);
+        expect(actionAdmissionOutcome(reported.at(0))).toEqual(expected);
+        expect(actionAdmissionOutcome(runtime.getSnapshot().error)).toEqual(
+          expected,
+        );
+        expect(runtime.getSnapshot().status).toBe("error");
+      }
+    }
+  });
+
   // A refused chat request must not reach the user as the connection
   // adapter's opaque `HTTP error! status: 400`. chatFetchClient reads the body
   // while the response is whole and rejects with an APIError; TanStack wraps
@@ -2775,11 +3055,16 @@ describe("chat runtime identity across query refetch", () => {
     // is the corruption `chatThreadOptions`' `structuralSharing: false` avoids
     // by handing the registered runtime back verbatim.
     expect(
-      sendThreadChatMessage(
-        shared.chat,
-        createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
+      await rejectionOf(
+        sendThreadChatMessage(
+          shared.chat,
+          createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
+        ),
       ),
-    ).rejects.toThrow("Missing thread send capability");
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("Missing thread send capability"),
+    );
   });
 
   test("chatThreadOptions opts out of structural sharing", () => {

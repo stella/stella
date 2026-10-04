@@ -12,6 +12,11 @@
  * package manager's lockfile fails outright. `ALLOWLIST` exempts a lockfile
  * that must stay as it is, with the reason why.
  *
+ * Every tracked bunfig.toml must also set `[install] auto = "disable"`. Bun
+ * reads only the bunfig.toml of the directory a process starts in, and
+ * without that setting it installs a missing import at run time instead of
+ * failing.
+ *
  * Needs no dependency install: node builtins and Bun APIs only.
  *
  * Run: `bun scripts/check-standalone-lockfiles.ts`
@@ -28,6 +33,8 @@ import {
 const SCRIPT_PATH = "scripts/check-standalone-lockfiles.ts";
 const ROOT_LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
+/** The `[install] auto` value that makes a missing import fail. */
+export const AUTO_INSTALL_DISABLED = "disable";
 const DEPENDABOT = ".github/dependabot.yml";
 const TEXT_BUN_LOCKFILE = "bun.lock";
 /** Binary: its packages cannot be read, so the excludes net cannot be checked. */
@@ -38,6 +45,32 @@ const FOREIGN_LOCKFILES = new Set([
   "pnpm-lock.yaml",
   "yarn.lock",
 ]);
+export const isTrackedLockfile = (file: string): boolean => {
+  const base = path.posix.basename(file);
+  return (
+    base === TEXT_BUN_LOCKFILE ||
+    base === BINARY_BUN_LOCKFILE ||
+    FOREIGN_LOCKFILES.has(base)
+  );
+};
+
+export const requiresMalwareScan = (files: readonly string[]): boolean =>
+  files.some(
+    (file) =>
+      isTrackedLockfile(file) ||
+      path.posix.basename(file) === "package.json" ||
+      file === ".github/workflows/ci.yml" ||
+      file === ".github/workflows/dependency-malware-nightly.yml" ||
+      file.startsWith(".github/actions/safe-chain/") ||
+      file.startsWith(".github/actions/osv-scanner/") ||
+      file.startsWith("scripts/scan-dependency-malware") ||
+      file.startsWith("scripts/test-malware-scanners") ||
+      file.startsWith("scripts/osv-malware-gate") ||
+      file.startsWith("scripts/check-osv-malware") ||
+      file.startsWith("scripts/fixtures/dependency-malware/") ||
+      file.startsWith("scripts/check-standalone-lockfiles"),
+  );
+
 const SECONDS_PER_DAY = 86_400;
 
 export type AllowlistEntry = {
@@ -454,6 +487,20 @@ export const checkStandaloneLockfiles = ({
     }
   }
 
+  for (const file of files) {
+    if (path.posix.basename(file) !== BUNFIG) {
+      continue;
+    }
+    const { autoInstall } = readInstallPolicy(
+      readFileSync(path.join(root, file), "utf-8"),
+    );
+    if (autoInstall !== AUTO_INSTALL_DISABLED) {
+      errors.push(
+        `${file} must set [install] auto = "${AUTO_INSTALL_DISABLED}": Bun reads it for every process started in ${path.posix.dirname(file) === "." ? "the repository root" : path.posix.dirname(file)}, and otherwise installs a missing import at run time instead of failing.`,
+      );
+    }
+  }
+
   const rootPolicy = readInstallPolicy(
     readFileSync(path.join(root, BUNFIG), "utf-8"),
   );
@@ -476,6 +523,9 @@ export const checkStandaloneLockfiles = ({
   const covered: string[] = [];
 
   for (const file of files) {
+    if (!isTrackedLockfile(file)) {
+      continue;
+    }
     const base = path.posix.basename(file);
     const dir =
       path.posix.dirname(file) === "." ? "" : path.posix.dirname(file);
@@ -540,6 +590,10 @@ export const checkStandaloneLockfiles = ({
 };
 
 const main = () => {
+  if (Bun.argv[2] === "--requires-malware-scan") {
+    console.log(requiresMalwareScan(Bun.argv.slice(3)));
+    return;
+  }
   const root = path.resolve(import.meta.dir, "..");
   // Runs before any dependency install, so it reports and exits instead of
   // throwing through better-result.
@@ -548,10 +602,12 @@ const main = () => {
     console.error(`git ls-files failed: ${listed.stderr.toString()}`);
     process.exit(1);
   }
-  const result = checkStandaloneLockfiles({
-    root,
-    trackedFiles: listed.stdout.toString().split("\0").filter(Boolean),
-  });
+  const trackedFiles = listed.stdout.toString().split("\0").filter(Boolean);
+  if (Bun.argv[2] === "--list-lockfiles") {
+    console.log(trackedFiles.filter(isTrackedLockfile).join("\n"));
+    return;
+  }
+  const result = checkStandaloneLockfiles({ root, trackedFiles });
   if (result.errors.length > 0) {
     console.error(result.errors.join("\n\n"));
     process.exit(1);

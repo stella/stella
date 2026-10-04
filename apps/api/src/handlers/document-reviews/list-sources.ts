@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -17,6 +17,7 @@ import {
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Bounded reference-document picker page size. */
@@ -46,7 +47,9 @@ const listSourcesHandler = async function* ({
   workspaceId,
   query,
 }: ListSourcesArgs) {
-  const limit = query.limit ?? SOURCES_PAGE_SIZE_DEFAULT;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? SOURCES_PAGE_SIZE_DEFAULT,
+  );
   const search = query.q?.trim() ?? "";
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);
@@ -131,6 +134,7 @@ const listSourcesHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   query: listSourcesQuerySchema,

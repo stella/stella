@@ -19,6 +19,7 @@ import {
   splitStoredDecisionTextMetadata,
   storeDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -77,7 +78,7 @@ for (const { key } of listSourceRegistrations()) {
     const legacyEntries = absence.entries.filter(
       ({ reason }) => reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED,
     );
-    const legacyMetadata = Object.fromEntries(
+    const legacyMetadata: Record<string, unknown> = Object.fromEntries(
       Object.entries(normalized.metadata).filter(
         ([metadataKey]) =>
           metadataKey !== DECISION_TEXT_ABSENCE_METADATA_KEY &&
@@ -94,7 +95,10 @@ for (const { key } of listSourceRegistrations()) {
       normalized.metadata[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY],
     ).toBe(DECISION_TEXT_ABSENCE_SCHEMA_VERSION);
     expect(
-      caseLawCanonicalPayload({ ...normalized, metadata: legacyMetadata }),
+      caseLawCanonicalPayload({
+        ...normalized,
+        metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
+      }),
     ).toEqual(caseLawCanonicalPayload(normalized));
     expect(
       shouldSkipRefresh({

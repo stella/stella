@@ -1,7 +1,7 @@
 import { session } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { sessionCookieName } from "@/api/lib/auth-cookie-name";
+import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
@@ -56,6 +56,7 @@ export const mintDevSeedSession = async ({
   await rootDb.insert(session).values({
     id: `dev-seed-session-${token}`,
     token,
+    refreshMode: "fixed",
     userId,
     activeOrganizationId: organizationId,
     expiresAt: new Date(now.getTime() + DEV_SEED_SESSION_LIFETIME_MS),

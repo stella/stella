@@ -12,7 +12,10 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
-import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import type {
+  ChatSendRequest,
+  IncomingUserContext,
+} from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -28,12 +31,14 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
+import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -41,8 +46,10 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import {
   findLiveViewViolations,
   findUnservedSnapshotMessages,
@@ -88,6 +95,7 @@ import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-t
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -197,6 +205,9 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
 /** The HTTP answer a route's status response makes (a refusal, or a Stop's
  *  answer), as the browser sees it. */
 const statusResponse = (answer: unknown): Response => {
+  if (answer instanceof Response) {
+    return answer;
+  }
   const status: unknown =
     typeof answer === "object" && answer !== null
       ? Reflect.get(answer, "code")
@@ -228,6 +239,8 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  beforeTurnSettles,
+  boundaryAnonymizer,
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -236,9 +249,34 @@ export const createApprovalHarness = ({
   scopedDb,
   sources = {},
   testDb,
+  user,
   withDirectRefTool = false,
 }: {
+  /**
+   * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
+   * test can make it fail. The real pipeline by default.
+   */
+  boundaryAnonymizer?: typeof anonymizeTextFields | undefined;
+  /**
+   * Runs once a turn's stream has ended and before the send stores its
+   * outcome, with the outcome the run proposes: what a stop or another owner
+   * does there races the turn's own settlement.
+   */
+  beforeTurnSettles?:
+    | ((props: {
+        outcome: StreamChatFinishEvent["outcome"];
+        threadId: SafeId<"chatThread">;
+      }) => Promise<void>)
+    | undefined;
   ids: TestIds;
+  /**
+   * Who sends, and the profile their page sends with each message
+   * (`userContext`); the organization's first member, with none, by default.
+   * `safeDb` and `scopedDb` must be scoped to the same user.
+   */
+  user?:
+    | { context?: IncomingUserContext | undefined; id: SafeId<"user"> }
+    | undefined;
   /**
    * What a turn can draw on beyond Stella's own tools: the matters in its
    * context, the organization's web search and URL fetcher, and the
@@ -266,6 +304,10 @@ export const createApprovalHarness = ({
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  const userId = user?.id ?? ids.userA1;
+  // Every database access of a turn goes to the test database; one that
+  // reaches the shared pools escaped it, and fails the test at `close`.
+  const rootPoolConnectionsAtStart = rootPoolConnectionCount();
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
@@ -307,6 +349,10 @@ export const createApprovalHarness = ({
   });
   const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
+    // An approved write reads the member's role again when it runs; read it
+    // from this test's database, not the shared pools.
+    resolveCurrentMembership: async (lookup) =>
+      await resolveMemberAuthorization(lookup, testDb),
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
@@ -330,7 +376,32 @@ export const createApprovalHarness = ({
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
-    streamResponse: streamChat,
+    streamResponse:
+      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
+        ? streamChat
+        : async (props) =>
+            await streamChat({
+              ...props,
+              ...(beforeTurnSettles === undefined
+                ? {}
+                : {
+                    onFinish: async (event) => {
+                      await beforeTurnSettles({
+                        outcome: event.outcome,
+                        threadId: props.threadId,
+                      });
+                      return await props.onFinish(event);
+                    },
+                  }),
+              thirdPartyBoundary:
+                boundaryAnonymizer !== undefined &&
+                props.thirdPartyBoundary.type === "anonymized"
+                  ? {
+                      ...props.thirdPartyBoundary,
+                      anonymizeFields: boundaryAnonymizer,
+                    }
+                  : props.thirdPartyBoundary,
+            }),
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */
@@ -373,6 +444,14 @@ export const createApprovalHarness = ({
       Object.assign(body.forwardedProps, { contextMatterIds });
       Object.assign(body.data, { contextMatterIds });
     }
+    if (user?.context !== undefined) {
+      // The profile the page sends with every message.
+      const userContext = { ...user.context };
+      Object.assign(body.forwardedProps, { userContext });
+      if (typeof body.data === "object") {
+        Object.assign(body.data, { userContext });
+      }
+    }
     const ctx = asTestRaw<SendMessageCtx>({
       body,
       // A recorder reads the request it is built for.
@@ -388,9 +467,10 @@ export const createApprovalHarness = ({
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
       getWorkspaceAccess: async () => await Promise.resolve(null),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
@@ -399,7 +479,7 @@ export const createApprovalHarness = ({
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
+      user: { id: userId },
     });
     bodyByContext.set(ctx, body);
     requestByContext.set(ctx, request);
@@ -544,9 +624,9 @@ export const createApprovalHarness = ({
   };
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadView({ safeDb, threadId, userId: ids.userA1 });
+    await loadReloadView({ safeDb, threadId, userId });
   const reloadPage = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadPage({ safeDb, threadId, userId: ids.userA1 });
+    await loadReloadPage({ safeDb, threadId, userId });
 
   type CancelTurnCtx = Parameters<typeof cancelTurn.handler>[0];
 
@@ -562,7 +642,7 @@ export const createApprovalHarness = ({
     const set = { headers: {}, status: 200 };
     const answer: unknown = await cancelTurn.handler(
       asTestRaw<CancelTurnCtx>({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: {
           threadId: toSafeId<"chatThread">(threadId),
           turnId: toSafeId<"chatTurn">(turnId),
@@ -575,7 +655,7 @@ export const createApprovalHarness = ({
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
-        user: { id: ids.userA1 },
+        user: { id: userId },
       }),
     );
     // A refusal is a status response; an answer is the body, with the status
@@ -862,7 +942,7 @@ export const createApprovalHarness = ({
     const page = await loadChatMessagePage({
       safeDb,
       threadId,
-      userId: ids.userA1,
+      userId,
       before,
     });
     if (Result.isError(page)) {
@@ -1395,6 +1475,12 @@ export const createApprovalHarness = ({
         globalThis.fetch = originalFetch;
         provider.restore();
       }
+      const rootPoolConnections = rootPoolConnectionCount();
+      if (rootPoolConnections !== rootPoolConnectionsAtStart) {
+        panic(
+          "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
+        );
+      }
     },
     /** Drops the connection of `threadId`'s response still streaming. */
     dropConnection: (threadId: SafeId<"chatThread">) => {
@@ -1426,6 +1512,11 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /** A compaction checkpoint landed on `threadId`: its next model call
+     *  starts from the summary rather than extending the calls before it. */
+    compacted: (threadId: SafeId<"chatThread">) => {
+      provider.promptLedgerOf(threadId).compacted();
     },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>

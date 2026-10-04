@@ -8,6 +8,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterparty-check-tools";
+import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import {
   chatToolNamesForSkills,
@@ -19,6 +20,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">(
@@ -44,9 +46,10 @@ const chatContext = (
   docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   organizationId,
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
   pinServerValidatedWorkspaceId: () => true,
   recordAuditEvent: noopAuditRecorder,
@@ -65,6 +68,7 @@ const chatContext = (
     pinnedIds: [],
   }),
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { urlFetcher: null, webSearchProvider: null },
   workspaceId: null,
@@ -90,9 +94,11 @@ describe("chat skill availability", () => {
 
   test("a role without template access cannot fill templates", () => {
     expect(availabilityIn("fill_template")).toEqual({ status: "available" });
-    expect(availabilityIn("fill_template", { memberRole: "external" })).toEqual(
-      { status: "unavailable", missingTools: ["fill_template"] },
-    );
+    expect(
+      availabilityIn("fill_template", {
+        memberRole: sessionMemberRole("external"),
+      }),
+    ).toEqual({ status: "unavailable", missingTools: ["fill_template"] });
   });
 
   test("anonymized mode drops the tools it cannot redact", () => {
@@ -123,5 +129,16 @@ describe("chat skill availability", () => {
     expect(availabilityIn("list_playbooks ask-user")).toEqual({
       status: "available",
     });
+  });
+
+  test("a direct-only read is offered exactly where its direct tool is", () => {
+    const offered = chatToolNamesForSkills(chatContext());
+    const directTools = Object.values(DIRECT_ONLY_CHAT_READ_TOOLS);
+    expect(directTools.some((tool) => offered.has(tool))).toBe(true);
+    for (const [read, directTool] of Object.entries(
+      DIRECT_ONLY_CHAT_READ_TOOLS,
+    )) {
+      expect(offered.has(read)).toBe(offered.has(directTool));
+    }
   });
 });

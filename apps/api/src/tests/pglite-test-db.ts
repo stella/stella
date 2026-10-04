@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteDecisionAliases,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -25,8 +26,10 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
+  installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
@@ -206,6 +209,10 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "reported_total_origin",
   "stored_total",
   "stored_total_as_of",
+  "stored_total_attempted_at",
+  "stored_total_next_refresh_at",
+  "stored_total_held_since",
+  "stored_total_warned_slot",
 ] as const;
 
 /**
@@ -263,10 +270,22 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
+/**
+ * Reader columns this release declares `permitted` but no migration grants
+ * yet: the grant lands in a later release, so running readers accept it. The
+ * harness mirrors the migrations, so it leaves them ungranted too.
+ */
+const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
+  new Set(["case_law_decisions.docket_family_key"]);
+
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
+  `,
+  `
+    REVOKE DELETE ON TABLE "time_daily_targets" FROM stella
   `,
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
@@ -293,6 +312,30 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
+  `,
+  // Exact-key cleanup intents: the request role inserts and deletes its own
+  // rows and reaches only the id, the state and the retry schedule.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "buffer_object_cleanup_intents" FROM stella
+  `,
+  `
+    GRANT INSERT, DELETE ON TABLE "buffer_object_cleanup_intents" TO stella
+  `,
+  `
+    GRANT SELECT ("id", "status") ON TABLE "buffer_object_cleanup_intents"
+      TO stella
+  `,
+  `
+    GRANT UPDATE ("status", "attempt_count", "next_attempt_at")
+      ON TABLE "buffer_object_cleanup_intents" TO stella
+  `,
+  // List item provenance is frozen apart from its verification fields.
+  `
+    REVOKE UPDATE, DELETE ON TABLE "legal_list_item_sources" FROM stella
+  `,
+  `
+    GRANT UPDATE ("verification_status", "verified_by", "verified_at", "updated_at")
+      ON TABLE "legal_list_item_sources" TO stella
   `,
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
@@ -443,6 +486,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
       "case_law_decision_source_identities",
+      "case_law_decision_aliases",
       "case_law_raw_sweeps",
       "case_law_decision_supplements",
       "case_law_citation_reviews"
@@ -605,13 +649,26 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-    ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
+  // Alias reader grants land only after the release declaring them optional.
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
+    .filter(
+      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+    )
+    .map(
+      ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns)
+        .filter(
+          (column) =>
+            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+              `${relation}.${column}`,
+            ),
+        )
+        .map(quoteSqlIdentifier)
+        .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-  ),
+    ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -687,6 +744,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
@@ -697,11 +755,13 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteSchedulerJobPauseLog(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPglitePlaybookDocumentTypeKey(db);
 
   return client;
 };

@@ -10,7 +10,7 @@ import {
   inboxEntityCondition,
   inboxSignalCondition,
 } from "@/api/handlers/entity-views/rows/inbox-view";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -28,6 +28,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import {
   canTriageSignals,
@@ -47,6 +48,7 @@ const config = {
     "by the same sorts under one cursor, and limits tasks to the view's " +
     "lifecycle slice. Task rows carry their governed-work risk as of `asOf`.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: t.Object({
@@ -127,7 +129,9 @@ const listRows = createSafeRootHandler(
     if (Result.isError(groupCondition)) {
       return Result.err(groupCondition.error);
     }
-    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      body.limit ?? LIMITS.entitiesWindowSizeDefault,
+    );
     const organizationId = session.activeOrganizationId;
     // One instant for the window and the signal hydration, so a snooze that
     // lapses between the two reads cannot drop a row from the page.

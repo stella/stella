@@ -545,6 +545,29 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "numberSeries": {
+      "add": "Add number series";
+      "advance": "Advance";
+      "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
+      "creditNote": "Credit note";
+      "default": "Default series";
+      "description": "Manage numbering for invoices, advances and credit notes.";
+      "documentType": "Document type";
+      "edit": "Edit number series";
+      "editRestriction": "The template and sequence digits cannot change after a number has been allocated.";
+      "empty": "No number series.";
+      "invoice": "Invoice";
+      "issueDate": "Issue date";
+      "name": "Series name";
+      "padding": "Sequence digits";
+      "pattern": "Number template";
+      "patternHelp": "Use a sequence token with optional year or month tokens to set the period.";
+      "preview": "Next number";
+      "previewAllocated": "This number is already allocated.";
+      "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "setDefault": "Make default series";
+      "title": "Number series";
+    };
     "quickEntry": {
       "entrySaved": "Time entry saved";
       "expenseSaved": "Expense saved";
@@ -639,6 +662,27 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
+    "vatRates": {
+      "add": "Add VAT rate";
+      "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.";
+      "code": "Rate code";
+      "current": "Current rate";
+      "description": "Manage rates and their validity periods.";
+      "edit": "Edit VAT rate";
+      "empty": "No VAT rates.";
+      "future": "Upcoming rate";
+      "invalidPeriod": "Choose valid dates with the end after the start.";
+      "invalidRate": "Enter a non-negative percentage with at most two decimal places.";
+      "name": "Rate label";
+      "openEnded": "No end date";
+      "overlap": "Validity periods for the same rate code cannot overlap.";
+      "past": "Past rate";
+      "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.";
+      "rate": "VAT percentage";
+      "title": "VAT rates";
+      "validFrom": "Valid since";
+      "validTo": "Valid until";
+    };
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -872,6 +916,7 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
@@ -1097,6 +1142,7 @@ type Messages = {
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "forkFromHere": "Start a new chat from here";
+    "forkInSidePanel": "Start a new chat from here in the side panel";
     "forkedFrom": "Created from <bdi>{title}</bdi>";
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
@@ -1104,6 +1150,10 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "historyContext": {
+      "overflow": "+{count, number}";
+      "unnamed": "{count, plural, one {and # more} other {and # more}}";
+    };
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1156,6 +1206,7 @@ type Messages = {
       "viaProvider": "via {provider}";
     };
     "newChat": "New chat";
+    "newChatInSidePanel": "The new chat is available in the side panel";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
     "officeCitationUnavailable": "This citation is no longer available.";
@@ -1203,6 +1254,12 @@ type Messages = {
     "richContentLoading": "Loading interactive content…";
     "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
+    "selection": {
+      "askInNewChat": "Ask in new chat";
+      "quoteInReply": "Quote in reply";
+      "quotedText": "“{quote}”";
+      "toolbarLabel": "Selected text";
+    };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
@@ -1398,6 +1455,7 @@ type Messages = {
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
     "descriptionPlaceholder": "Brief description of the clause";
+    "directivesInvalid": "Correct the clause directives before saving a version.";
     "editClause": "Edit clause";
     "editVariant": "Edit variant";
     "export": "Export";
@@ -1409,8 +1467,11 @@ type Messages = {
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
     "importing": "Importing…";
+    "keepMyText": "Keep my text";
     "languagePlaceholder": "e.g. en";
+    "leaveAndDiscard": "Leave and discard unsaved changes";
     "leaveWithoutVersion": "Leave without a version";
+    "legacyDirectiveWarning": "Legacy directive markers were preserved in clause {clauseName}{version, select, none {} other { (version {version})}}.";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
     "linkFailed": "Failed to link clause";
@@ -1427,8 +1488,13 @@ type Messages = {
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
+    "reviewBeforeBodyAction": "Finish reviewing the suggested changes before restoring or promoting a clause.";
+    "reviewBeforeLeaving": "The reviewed text has not been saved yet. You can keep editing or leave and discard unsaved changes.";
     "saveAsVersion": "Save as new version";
+    "saveConflictDescription": "Choose which text to keep. Your edits are still here.";
+    "saveConflictTitle": "This clause changed elsewhere";
     "saveFailed": "Failed to save";
+    "saveFailedLeaveDescription": "Your changes could not be saved. Keep editing or leave and discard them.";
     "saveVersionAndLeave": "Save version & leave";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
@@ -1444,6 +1510,7 @@ type Messages = {
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
     "syncedAllResult": "{count, plural, =0 {Already up to date} one {# clause synced} other {# clauses synced}}";
+    "takeTheirText": "Use the saved text";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
     "unlinkClause": "Unlink";
@@ -1468,6 +1535,7 @@ type Messages = {
     "variantUpdated": "Variant updated";
     "variants": "Variants";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "versionLimitReached": "Version limit reached for this clause";
     "versionRestored": "Version restored";
   };
   "common": {
@@ -1501,6 +1569,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "approve": "Approve";
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";
@@ -1542,6 +1611,15 @@ type Messages = {
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
+    "datePicker": {
+      "label": "Date picker";
+      "nextDecade": "Next decade";
+      "nextMonth": "Next month";
+      "nextYear": "Next year";
+      "previousDecade": "Previous decade";
+      "previousMonth": "Previous month";
+      "previousYear": "Previous year";
+    };
     "decisions": "Decisions";
     "decline": "Decline";
     "delete": "Delete";
@@ -1601,6 +1679,7 @@ type Messages = {
     };
     "fact": "Fact";
     "failed": "Failed";
+    "files": "Files";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -1689,6 +1768,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "page": "Page {page}";
+    "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";
@@ -1782,12 +1862,14 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "appIdentity": "App identity";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "redirectDestination": "Redirect destination";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1809,6 +1891,7 @@ type Messages = {
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
     "title": "Authorize access";
+    "unverifiedApp": "Unverified app";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -2165,6 +2248,7 @@ type Messages = {
       "forbidden": "You do not have permission to do this.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
+      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";
@@ -2184,6 +2268,9 @@ type Messages = {
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.";
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.";
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
+      "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.";
+      "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.";
+      "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
@@ -2191,6 +2278,7 @@ type Messages = {
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
@@ -3265,7 +3353,6 @@ type Messages = {
       "editSkill": "Edit skill";
       "enableSkill": "Enable skill";
       "fileExists": "A file with this path already exists";
-      "filesHeading": "Files";
       "howItRuns": "How it runs";
       "importFailureFetch": "The skill source could not be loaded.";
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
@@ -3323,6 +3410,8 @@ type Messages = {
         "none": "No auth";
         "oauth2": "OAuth 2.0";
       };
+      "authorizationReviewDescription": "Review the authorization server and endpoint origins before approving.";
+      "authorizationServer": "Authorization server";
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
@@ -3333,9 +3422,11 @@ type Messages = {
       "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.";
       "emptyTitle": "No integrations yet";
       "enable": "Enable";
+      "endpointOrigins": "Endpoint origins";
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
+      "needsReapproval": "Needs re-approval";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
@@ -4202,7 +4293,6 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
-      "desktopAutoConnectHint": "Open stella desktop after installing. It connects to this account on its own.";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
@@ -4810,6 +4900,7 @@ type Messages = {
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
     "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
+    "conditionPreviewIncomplete": "Condition preview is incomplete because the linked clauses exceed the preview limit.";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
     "conditionWhen": "When";
@@ -5209,6 +5300,10 @@ type Messages = {
       "noOtherMatters": "No other Matters available";
       "operation": "Operation";
       "rootFolder": "(Root folder)";
+      "sourceChanged": "The item changed while it was being moved. Try again.";
+      "sourceInUse": "The item is currently in use. Finish processing, editing, collaboration, or signing, then try again.";
+      "sourceReferenced": "This item is linked to time entries or expenses and cannot be moved.";
+      "sourceVersionLimit": "This item has too many versions or field values to move.";
       "targetFolder": "Target folder (optional)";
       "targetMatter": "Target Matter";
       "title": "Copy to Matter";
@@ -5991,6 +6086,7 @@ type Messages = {
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";
+        "withoutAiSummaries": "Export without AI summaries";
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";

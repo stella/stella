@@ -159,6 +159,8 @@ test("a docket resolves by its citation key however the reader spaces it", async
       kind: "docket",
       jurisdiction: "CZE",
       value: "Pl. ÚS 24/10",
+      family: "Pl. ÚS 24/10",
+      selector: { kind: "none" },
     },
   });
   expect(spaced).toEqual([plenaryId]);
@@ -171,6 +173,8 @@ test("a docket resolves by its citation key however the reader spaces it", async
       kind: "docket",
       jurisdiction: "CZE",
       value: "23 Cdo 1572/2012",
+      family: "23 Cdo 1572/2012",
+      selector: { kind: "none" },
     },
   });
   expect(unscoped).toEqual([supremeId]);
@@ -211,6 +215,8 @@ test("an identifier nobody holds, or held in another jurisdiction, resolves to n
       kind: "docket",
       jurisdiction: "CZE",
       value: "22 Cdo 1/2026",
+      family: "22 Cdo 1/2026",
+      selector: { kind: "none" },
     },
   });
   expect(unknown).toEqual([]);
@@ -223,6 +229,8 @@ test("an identifier nobody holds, or held in another jurisdiction, resolves to n
       kind: "docket",
       jurisdiction: "CZE",
       value: "Pl. ÚS 24/10",
+      family: "Pl. ÚS 24/10",
+      selector: { kind: "none" },
     },
   });
   expect(elsewhere).toEqual([]);
@@ -237,6 +245,8 @@ test("a docket or ECLI held in both the row and its identifiers is one hit", asy
       kind: "docket",
       jurisdiction: "CZE",
       value: "23 Cdo 1572/2012",
+      family: "23 Cdo 1572/2012",
+      selector: { kind: "none" },
     },
   });
   expect(byDocket).toEqual([supremeId]);

@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -210,9 +211,10 @@ const baseContext = (userId: SafeId<"user">) => ({
   getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
   createAuditRecorder: () => async () => {},
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   params: { workspaceId: ids.wsA1 },
   promptCachingEnabled: false,
   recordAuditEvent: async () => {},

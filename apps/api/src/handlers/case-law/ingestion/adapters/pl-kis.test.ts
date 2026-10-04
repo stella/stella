@@ -1,12 +1,4 @@
-/**
- * pl-kis against payloads eureka.mf.gov.pl served.
- *
- * One listing page and one detail per ingested category are captured verbatim
- * with provenance sidecars. Paging, resuming and the tip are driven through a
- * stubbed transport, because the behaviour under test is the cursor's.
- */
-
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -15,6 +7,13 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
+/**
+ * pl-kis against payloads eureka.mf.gov.pl served.
+ *
+ * One listing page and one detail per ingested category are captured verbatim
+ * with provenance sidecars. Paging, resuming and the tip are driven through a
+ * stubbed transport, because the behaviour under test is the cursor's.
+ */
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlKisDecision,
@@ -41,9 +40,15 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -326,8 +331,8 @@ describe("every ingested category, as the service served it", () => {
       const { decision, row } = await builtFrom(category.slug);
       expect(decision.sourceDocumentId).toBe(plKisDocumentIdOf(row));
       expect(decision.sourceDocumentId).toMatch(/^\d+$/u);
-      expect(decision.decisionType).toBe(category.decisionType);
-      expect(decision.caseNumber).toBe(String(row["SYG"]).trim());
+      expect(decision.decisionType === category.decisionType).toBe(true);
+      expect(decision.caseNumber === String(row["SYG"]).trim()).toBe(true);
       expect(decision.court.length).toBeGreaterThan(0);
       expect(decision.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
       expect(decision.fulltext?.length ?? 0).toBeGreaterThan(100);
@@ -387,14 +392,16 @@ describe("every ingested category, as the service served it", () => {
 
   test("a tax chamber's interpretation names its chamber as the authority", async () => {
     const { decision } = await builtFrom("01-ind-2008");
-    expect(decision.court).toBe("Dyrektor Izby Skarbowej w Bydgoszczy");
-    expect(decision.caseNumber).toBe("ITPB1/415-778/07/MR");
+    expect(decision.court === "Dyrektor Izby Skarbowej w Bydgoszczy").toBe(
+      true,
+    );
+    expect(decision.caseNumber === "ITPB1/415-778/07/MR").toBe(true);
   });
 
   test("a superseded interpretation says so", async () => {
     const { decision } = await builtFrom("01-ind-superseded");
-    expect(decision.metadata["status"]).toBe("superseded");
-    expect(decision.metadata["statusId"]).toBe("29");
+    expect(decision.metadata["status"] === "superseded").toBe(true);
+    expect(decision.metadata["statusId"] === "29").toBe(true);
   });
 
   test("an amendment names the document it amends", async () => {
@@ -403,6 +410,24 @@ describe("every ingested category, as the service served it", () => {
       ? decision.metadata["relatedDocuments"]
       : [];
     expect(relation).toMatchObject({ relation: "amends" });
+    const repeated = toPlainTextIngestionResult(
+      decision,
+      PL_KIS_METADATA_URL_SCHEMA,
+    ).unwrap().metadata;
+    const serializedMetadata = JSON.stringify(decision.metadata);
+    const restored = toPlainTextMetadataObject(
+      rehydrateMetadataUrls(
+        JSON.parse(serializedMetadata),
+        PL_KIS_METADATA_URL_SCHEMA,
+      ),
+      PL_KIS_METADATA_URL_SCHEMA,
+    ).unwrap();
+    expect(repeated["relatedDocuments"]).toEqual(
+      decision.metadata["relatedDocuments"],
+    );
+    expect(restored["relatedDocuments"]).toEqual(
+      decision.metadata["relatedDocuments"],
+    );
   });
 
   test("a detail without its HTML is read from the PDF rendition", async () => {
@@ -439,7 +464,7 @@ describe("every ingested category, as the service served it", () => {
     });
     expect(built.type).toBe("built");
     if (built.type === "built") {
-      expect(built.decision.metadata["documentFrom"]).toBe("pdf");
+      expect(built.decision.metadata["documentFrom"] === "pdf").toBe(true);
       expect(built.decision.fulltext).toContain("waloryzacji");
       expect(built.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
         pdfBytes,
@@ -514,9 +539,10 @@ describe("every ingested category, as the service served it", () => {
       rawParts: plKisRawPartsOf(row, undefined),
       detailStatus: "detail-gone",
     });
-    expect(built.decision.decisionType).toBe(
-      "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
-    );
+    expect(
+      built.decision.decisionType ===
+        "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
+    ).toBe(true);
     expect(built.decision.metadata["category"]).toMatchObject({
       id: 74_593,
       disposition: "included",
@@ -530,6 +556,35 @@ describe("every ingested category, as the service served it", () => {
       ({ id }) => plKisCategoryById(id) === undefined,
     );
     expect(undecided).toEqual([]);
+  });
+});
+
+describe("pl-kis nested tables", () => {
+  test("a nested table row appears once in the parsed decision", () => {
+    const parsed = parsePlKisDocumentHtml({
+      caseNumber: "0114-KDIP2-1.4010.1.2024.1.KS",
+      court: "Dyrektor Krajowej Informacji Skarbowej",
+      decisionDate: "2024-01-01",
+      decisionType: "Interpretacja indywidualna",
+      sourceUrl: "https://eureka.mf.gov.pl/",
+      documentUrl: "https://eureka.mf.gov.pl/",
+      documentId: "nested-table-fixture",
+      keywords: [],
+      statutes: [],
+      html: [
+        "<p>WYROK</p>",
+        "<table><tbody><tr><td><p>Outer cell</p>",
+        "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
+        "</td></tr></tbody></table>",
+      ].join(""),
+    });
+
+    expect(parsed.fulltext.split("Nested cell")).toHaveLength(2);
+    const tables = parsed.documentAst.blocks.filter(
+      (block) => block.type === "table",
+    );
+    expect(tables).toHaveLength(1);
+    expect(tables.at(0)?.rows).toHaveLength(1);
   });
 });
 
@@ -567,7 +622,9 @@ describe("identity", () => {
     });
     expect(built.type).toBe("detail-unavailable");
     if (built.type === "detail-unavailable") {
-      expect(built.decision.metadata["detailStatus"]).toBe("detail-unreadable");
+      expect(
+        built.decision.metadata["detailStatus"] === "detail-unreadable",
+      ).toBe(true);
     }
   });
 
@@ -601,7 +658,7 @@ describe("the issuing authority", () => {
         JSON.stringify(detailFor("700020", "<p>Treść interpretacji.</p>")),
       ),
     });
-    expect(built.decision.court).toBe("");
+    expect(built.decision.court === "").toBe(true);
     expect(built.decision.metadata["authorities"]).toEqual([]);
   });
 });
@@ -673,10 +730,12 @@ describe("the unmapped-field guard", () => {
     });
     expect(built.type).toBe("built");
     if (built.type === "built") {
-      expect(built.decision.metadata["unmappedSourceFields"]).toEqual([
-        "NOWA_KOLUMNA",
-        "informacja/nowyKlucz",
-      ]);
+      expect(
+        Bun.deepEquals(built.decision.metadata["unmappedSourceFields"], [
+          "NOWA_KOLUMNA",
+          "informacja/nowyKlucz",
+        ]),
+      ).toBe(true);
       const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
       expect(parts?.["listing"]).toContain("NOWA_KOLUMNA");
     }
@@ -740,8 +799,12 @@ describe("reading fields", () => {
       rawParts: plKisRawPartsOf(row, undefined),
       detailStatus: "detail-gone",
     });
-    expect(fromDetail.decision.metadata["publishedAt"]).toBe("2026-06-19");
-    expect(fromListing.decision.metadata["publishedAt"]).toBe("2026-06-19");
+    expect(fromDetail.decision.metadata["publishedAt"] === "2026-06-19").toBe(
+      true,
+    );
+    expect(fromListing.decision.metadata["publishedAt"] === "2026-06-19").toBe(
+      true,
+    );
   });
 
   test("an instant is the calendar day in Warsaw", () => {
@@ -942,9 +1005,9 @@ describe("the crawl", () => {
       expect(decision?.sourceDocumentId).toBe(plKisQuarantineId(withoutId));
       expect(decision?.sourceDocumentId).toStartWith("eureka-quarantine:");
       expect(decision?.isListingOnly).toBe(true);
-      expect(decision?.metadata["detailStatus"]).toBe(
-        "publisher-id-unavailable",
-      );
+      expect(
+        decision?.metadata["detailStatus"] === "publisher-id-unavailable",
+      ).toBe(true);
       // Its verbatim row is what the stored envelope holds.
       expect(
         decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["listing"],
@@ -975,6 +1038,46 @@ describe("the crawl", () => {
     ]);
   });
 
+  test.each(["<p></p>", String.raw`{\rtf1 poisoned}`])(
+    "a rejected summary %s is quarantined while the rest of the page advances",
+    async (label) => {
+      const poison = { ...rowFor(600_001), TEZA: label };
+      const stub = stubPublisher((call) =>
+        isSearch(call)
+          ? json({
+              results: [rowFor(600_000), poison, rowFor(600_002)],
+              totalHits: 3,
+            })
+          : json({}, 404),
+      );
+      try {
+        const page = (
+          await plKisAdapter.fetchPage("sweep|700000|2010-03|0", {})
+        ).unwrap();
+        expect(
+          page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+        ).toEqual(["600000", "600001", "600002"]);
+        expect(page.itemBuildFailures).toEqual({
+          type: "item_build_failed",
+          count: 1,
+        });
+        expect(page.nextCursor).toBe("sweep|700000|2010-04|0");
+        const rejected = page.decisions.find(
+          ({ sourceDocumentId }) => sourceDocumentId === "600001",
+        );
+        expect(rejected?.isListingOnly).toBe(true);
+        expect(rejected?.metadata["detailStatus"] === "item_build_failed").toBe(
+          true,
+        );
+        expect(
+          decodeSourceRawEnvelope(rejected?.sourceRaw ?? "")?.["listing"],
+        ).toBe(JSON.stringify(poison));
+      } finally {
+        stub.restore();
+      }
+    },
+  );
+
   test("a detail the service no longer serves keeps the row without a document", async () => {
     const stub = stubPublisher((call) =>
       isSearch(call)
@@ -987,7 +1090,7 @@ describe("the crawl", () => {
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
       expect(decision?.sourceDocumentId).toBe("600000");
       expect(decision?.isListingOnly).toBe(true);
-      expect(decision?.metadata["detailStatus"]).toBe("detail-gone");
+      expect(decision?.metadata["detailStatus"] === "detail-gone").toBe(true);
       // A gone detail is permanent; the PDF of it is not asked for.
       expect(
         stub.calls.filter((call) => call.url.endsWith("/eksport/PDF")),
@@ -1230,4 +1333,77 @@ describe("the reconciliation listing", () => {
       stub.restore();
     }
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(entry.input, async () => {
+      const { input } = entry;
+      const recorded =
+        (await readListingFixture("01-ind")).at(0) ??
+        panic("No recorded KIS row");
+      const row = { ...recorded, INN_ZROD: input };
+      const built = await assemblePlKisDecision({
+        row,
+        rawParts: plKisRawPartsOf(row, await readDetailFixture("01-ind")),
+      });
+      const decision =
+        built.type === "built"
+          ? built.decision
+          : panic("URL regression payload built no decision");
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_KIS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_KIS_METADATA_URL_SCHEMA,
+        ),
+        PL_KIS_METADATA_URL_SCHEMA,
+      ).unwrap();
+      const addresses = ["otherSourceUrl"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual({
+            entries: expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+            overflowCount: 0,
+          });
+        }
+      }
+    });
+  }
 });

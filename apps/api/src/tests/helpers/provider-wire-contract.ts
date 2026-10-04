@@ -11,10 +11,8 @@ import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 
-import {
-  chatAttemptRequestOptions,
-  classifyRunErrorChunk,
-} from "@/api/handlers/chat/stream-chat";
+import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
+import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
@@ -183,7 +181,7 @@ const prepareWireRequest = ({
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { organizationId: null },
+    { dataClass: "public_corpus", organizationId: null },
   );
   // The chat attempt's own request options, so each cassette pins the
   // request a chat turn sends (its system prompt aside: the scenarios send
@@ -198,9 +196,11 @@ const prepareWireRequest = ({
         ? resolved
         : {
             ...resolved,
-            adapter: createTanStackTextAdapterFactory({ apiKey, provider })(
-              model,
-            ),
+            adapter: createTanStackTextAdapterFactory({
+              dataClass: "public_corpus",
+              apiKey,
+              provider,
+            })(model),
           },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
     role: "chat",
@@ -833,16 +833,20 @@ export const replayWireScenario = async ({
   cancelAfterFirstDelta,
   cassette,
   chunking,
+  recordedRetryResponses,
   replay,
 }: {
   cancelAfterFirstDelta?: boolean | undefined;
   cassette: ProviderWireCassette;
   /** Where the bodies are cut into reads; the replay's default otherwise. */
   chunking?: Chunking | undefined;
+  /** Keep these responses on the SDK's recorded backoff before the hint. */
+  recordedRetryResponses?: number | undefined;
   replay: ProviderWireReplay;
 }) => {
   replay.serve(cassette, {
     chunking,
+    recordedRetryResponses,
     ...(cancelAfterFirstDelta === true
       ? { holdAfterBytes: holdPoint(cassette) }
       : {}),

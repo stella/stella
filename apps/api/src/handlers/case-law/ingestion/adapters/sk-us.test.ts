@@ -591,12 +591,9 @@ describe("sk-us listSlicePage", () => {
    */
   const SPLIT_REQUEST_BOUND = 2 * Math.ceil(Math.log2(100)) + 1 + 1;
 
-  /**
-   * What a window that serves nothing costs: one halving per level down the
-   * spine, plus the two one-record windows at the bottom that establish it,
-   * each of which is asked twice before it counts as refused.
-   */
-  const OUTAGE_REQUEST_COUNT = Math.ceil(Math.log2(100)) + 2 * 2;
+  // The split budget permits 28 child requests and at most 15 singleton
+  // confirmations, plus the initial request, even when every record refuses.
+  const OUTAGE_REQUEST_BOUND = 44;
 
   /** A DMS document for result index `index`, keyed the way the real ones are. */
   const documentAt = (index: number) => ({
@@ -634,10 +631,8 @@ describe("sk-us listSlicePage", () => {
     expect(rejection instanceof Error ? rejection.message : "").toContain(
       "no body",
     );
-    // A window that serves nothing however narrowly it is cut is the endpoint
-    // being down, and is established by walking one spine of the halving
-    // rather than by subdividing the whole page.
-    expect(stub.calls()).toBe(OUTAGE_REQUEST_COUNT);
+    expect(stub.calls()).toBeGreaterThan(1);
+    expect(stub.calls()).toBeLessThanOrEqual(OUTAGE_REQUEST_BOUND);
   }, 30_000);
 
   test("a record the DMS refuses is isolated, not allowed to refuse its page", async () => {
@@ -850,7 +845,7 @@ describe("sk-us buildDecision", () => {
     if (outcome.type !== "built") {
       return;
     }
-    expect(outcome.decision.caseNumber).toBe("PL. ÚS 4/2020");
+    expect(outcome.decision.caseNumber === "PL. ÚS 4/2020").toBe(true);
     expect(outcome.decision.language).toBe("sk");
     expect(outcome.decision.country).toBe("SVK");
     expect(outcome.decision.decisionDate).toBe("2020-03-12");
@@ -903,10 +898,12 @@ describe("sk-us buildDecision", () => {
     }
     const { decision } = built;
     expect(decision.sourceDocumentId).toBe(PLENARY_OPINION.documentId);
-    expect(decision.textFields.legalSentence).toEqual({
-      type: "present",
-      text: entry.mkClauseText,
-    });
+    expect(
+      Bun.deepEquals(decision.textFields.legalSentence, {
+        type: "present",
+        text: entry.mkClauseText,
+      }),
+    ).toBe(true);
     expect(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["collection-listing"],
     ).toBe(collectionJson);
@@ -984,10 +981,12 @@ describe("sk-us buildDecision", () => {
           if (built.type !== "built") {
             throw new Error(`expected a built decision, got ${built.type}`);
           }
-          expect(built.decision.metadata["publishedInCollection"]).toEqual({
-            status: publicationStatus,
-            reason: "unavailable",
-          });
+          expect(
+            Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
+              status: publicationStatus,
+              reason: "unavailable",
+            }),
+          ).toBe(true);
           expect(
             decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
               "collection-listing"
@@ -1037,10 +1036,12 @@ describe("sk-us buildDecision", () => {
     }
     // The rapporteur is a field on the row; the dissenter is an index field
     // the row never carries and the facet query is the only statement of.
-    expect(outcome.decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Ivan Fiačan" },
-      { role: "dissenting", nameAsPrinted: "Peter Straka" },
-    ]);
+    expect(
+      Bun.deepEquals(outcome.decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Ivan Fiačan" },
+        { role: "dissenting", nameAsPrinted: "Peter Straka" },
+      ]),
+    ).toBe(true);
   });
 
   test("a separate opinion's kind is the value the court sends, not its letters", async () => {
@@ -1056,9 +1057,10 @@ describe("sk-us buildDecision", () => {
     // The field is one value of a three-entry vocabulary. Read as a list it
     // deduplicates into the set of its own characters, which is what every
     // separate opinion ingested before this carried.
-    expect(outcome.decision.metadata["dissentingOpinion"]).toBe(
-      "Odlišné stanovisko iné",
-    );
+    expect(
+      outcome.decision.metadata["dissentingOpinion"] ===
+        "Odlišné stanovisko iné",
+    ).toBe(true);
   });
 
   test("a petitioner kind reads the same whether the court sends one or several", async () => {
@@ -1075,13 +1077,17 @@ describe("sk-us buildDecision", () => {
     if (single.type !== "built" || several.type !== "built") {
       throw new Error("expected both decisions to build");
     }
-    expect(single.decision.metadata["typeOfProposer"]).toEqual([
-      "Fyzická osoba",
-    ]);
-    expect(several.decision.metadata["typeOfProposer"]).toEqual([
-      "Iná",
-      "Skupina poslancov NR SR",
-    ]);
+    expect(
+      Bun.deepEquals(single.decision.metadata["typeOfProposer"], [
+        "Fyzická osoba",
+      ]),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(several.decision.metadata["typeOfProposer"], [
+        "Iná",
+        "Skupina poslancov NR SR",
+      ]),
+    ).toBe(true);
   });
 
   test("the docket file answers what the decision row leaves empty", async () => {
@@ -1093,8 +1099,10 @@ describe("sk-us buildDecision", () => {
     }
     // Neither is on a decision row: the date the petition reached the court
     // and the files it refers to are stated on the docket file alone.
-    expect(outcome.decision.metadata["entryDate"]).toBe("2020-06-30");
-    expect(outcome.decision.metadata["references"]).toEqual(["2196/2020"]);
+    expect(outcome.decision.metadata["entryDate"] === "2020-06-30").toBe(true);
+    expect(
+      Bun.deepEquals(outcome.decision.metadata["references"], ["2196/2020"]),
+    ).toBe(true);
   });
 
   test("a decision the supplementary surfaces answer nothing for still builds", async () => {
@@ -1246,14 +1254,17 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     // The crawl's cursor moves past this document either way, so it stores
     // what the listing proves — flagged, so a later refresh cannot overwrite
     // detail a successful fetch recovered.
-    expect(built.decision.caseNumber).toBe("I. ÚS 132/93");
-    expect(built.decision.decisionType).toBe(
-      CHAMBER_RESOLUTION.mkFormOfDecision,
+    expect(built.decision.caseNumber === "I. ÚS 132/93").toBe(true);
+    expect(
+      built.decision.decisionType === CHAMBER_RESOLUTION.mkFormOfDecision,
+    ).toBe(true);
+    expect(
+      built.decision.metadata["decisionType"] ===
+        CHAMBER_RESOLUTION.mkFormOfDecision,
+    ).toBe(true);
+    expect(built.decision.metadata["decisionTypeKey"] === "uznesenie").toBe(
+      true,
     );
-    expect(built.decision.metadata["decisionType"]).toBe(
-      CHAMBER_RESOLUTION.mkFormOfDecision,
-    );
-    expect(built.decision.metadata["decisionTypeKey"]).toBe("uznesenie");
     expect(built.decision.isListingOnly).toBe(true);
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1387,7 +1398,7 @@ describe("sk-us rows as the court sends them", () => {
     ...Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value])),
   });
 
-  test("stated lists survive beside trimmed Unicode-normalized derived lists", async () => {
+  test("plain source lists survive beside Unicode-normalized derived lists", async () => {
     mockFetch({ search: [] });
     const values = [
       " Ústavná sťažnosť ",
@@ -1403,8 +1414,18 @@ describe("sk-us rows as the court sends them", () => {
     if (outcome.type !== "built") {
       throw new TypeError("the metadata fixture must build");
     }
-    expect(outcome.decision.metadata["proceedingSubject"]).toEqual(values);
-    expect(outcome.decision.metadata["challengedLegislation"]).toEqual(values);
+    expect(
+      Bun.deepEquals(
+        outcome.decision.metadata["proceedingSubject"],
+        values.map((value) => value.trim()),
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(
+        outcome.decision.metadata["challengedLegislation"],
+        values.map((value) => value.trim()),
+      ),
+    ).toBe(true);
     expect(outcome.decision.metadata["normalizedValues"]).toMatchObject({
       proceedingSubject: ["Ústavná sťažnosť", "Iné"],
       challengedLegislation: ["Ústavná sťažnosť", "Iné"],
@@ -1459,8 +1480,12 @@ describe("sk-us rows as the court sends them", () => {
       throw new Error("expected both paths to build");
     }
     for (const [, stored] of LIST_FIELDS) {
-      expect(built.decision.metadata[stored]).toEqual(expected);
-      expect(reconciled.decision.metadata[stored]).toEqual(expected);
+      expect(Bun.deepEquals(built.decision.metadata[stored], expected)).toBe(
+        true,
+      );
+      expect(
+        Bun.deepEquals(reconciled.decision.metadata[stored], expected),
+      ).toBe(true);
     }
   });
 
@@ -1542,6 +1567,107 @@ describe("the sk-us steady-state frontier", () => {
     }
     return result.unwrap();
   };
+
+  test.each([
+    { cursor: "2025:120", nextCursor: "2026:0" },
+    { cursor: PARKED_CURSOR, nextCursor: `${PARKED_CURSOR}:refused` },
+  ])(
+    "a wholly refused crawl window checkpoints $cursor as $nextCursor",
+    async ({ cursor, nextCursor }) => {
+      const stub = mockFetch({ search: [{ type: "status", status: 204 }] });
+      const page = await fetchPageAt(cursor);
+      expect(stub.calls()).toBeLessThanOrEqual(30);
+      expect(stub.downloads()).toBe(0);
+      expect(page.decisions).toEqual([]);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 10,
+      });
+      expect(page.nextCursor).toBe(nextCursor);
+    },
+  );
+
+  test("a refused current frontier polls once and resumes its plain cursor when served", async () => {
+    const refusedCursor = `${PARKED_CURSOR}:refused`;
+    const refused = mockFetch({ search: [{ type: "status", status: 204 }] });
+    const waiting = await fetchPageAt(refusedCursor);
+    expect(refused.calls()).toBe(1);
+    expect(refused.downloads()).toBe(0);
+    expect(waiting.nextCursor).toBe(refusedCursor);
+    expect(waiting.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 10,
+    });
+
+    const served = mockFetch({
+      search: [
+        { type: "page", documents: NEW_DOCUMENTS, numFound: YEAR_NUM_FOUND },
+      ],
+    });
+    const recovered = await fetchPageAt(waiting.nextCursor);
+    expect(served.calls()).toBe(1);
+    expect(served.downloads()).toBe(NEW_DOCUMENTS.length);
+    expect(recovered.decisions).toHaveLength(NEW_DOCUMENTS.length);
+    expect(recovered.nextCursor).toBe(`2026:${YEAR_NUM_FOUND}`);
+  });
+
+  test.each(
+    [[0], [4], [9], [3, 4], [4, 5]].map((poisonIndices) => ({ poisonIndices })),
+  )(
+    "deterministic refusals at page indices %j are counted while every other record is collected",
+    async ({ poisonIndices }) => {
+      const documents = Array.from({ length: 10 }, (_, index) =>
+        newDocument(index),
+      );
+      const poisonOffsets = poisonIndices.map((index) => PARKED_OFFSET + index);
+      let confirmations = 0;
+      const stub = mockFetch({
+        search: [],
+        searchFor: ({ start, pageSize }) => {
+          if (
+            poisonOffsets.some(
+              (poisonOffset) =>
+                start <= poisonOffset && poisonOffset < start + pageSize,
+            )
+          ) {
+            if (pageSize === 1) {
+              confirmations++;
+            }
+            return { type: "status", status: 204 };
+          }
+          return {
+            type: "page",
+            documents: documents.slice(
+              start - PARKED_OFFSET,
+              start - PARKED_OFFSET + pageSize,
+            ),
+            numFound: PARKED_OFFSET + documents.length,
+          };
+        },
+      });
+
+      const page = await fetchPageAt(PARKED_CURSOR);
+
+      expect(confirmations).toBe(2 * poisonIndices.length);
+      expect(
+        page.decisions.map(({ caseNumber }) => String(caseNumber)),
+      ).toEqual(
+        documents
+          .filter((_, index) => !poisonIndices.includes(index))
+          .map(({ mkRSAPNumberOfFile }) => mkRSAPNumberOfFile),
+      );
+      expect(stub.downloads()).toBe(documents.length - poisonIndices.length);
+      expect(stub.calls()).toBeLessThanOrEqual(
+        poisonIndices.length * (2 * Math.ceil(Math.log2(10)) + 1) + 1,
+      );
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: poisonIndices.length,
+      });
+      expect(page.nextCursor).toBe(`2026:${PARKED_OFFSET + documents.length}`);
+    },
+    30_000,
+  );
 
   test("a cycle the court added nothing to costs one search and no downloads", async () => {
     const starts: number[] = [];

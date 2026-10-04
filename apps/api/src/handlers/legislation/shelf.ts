@@ -6,6 +6,8 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import type { legislationShelfSuccessResponseSchema } from "@/api/handlers/legislation/catalog-response";
+import { projectLegislationShelf } from "@/api/handlers/legislation/catalog-response";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -40,25 +42,10 @@ export const legislationShelfQuerySchema = t.Object({
 
 type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
 
-export type LegislationShelfItem = {
-  id: string;
-  eli: string;
-  slug: string | null;
-  title: string;
-  country: string;
-  language: string;
-  documentType: string | null;
-  status: string;
-  versionValidFrom: string | null;
-};
-
-export type LegislationShelf = {
-  country: string;
-  /** Current consolidations whose window opened within the past window. */
-  recentlyInForce: LegislationShelfItem[];
-  /** The next consolidation of each work opening within the coming window. */
-  enteringIntoForce: LegislationShelfItem[];
-};
+export type LegislationShelf = Static<
+  typeof legislationShelfSuccessResponseSchema
+>;
+export type LegislationShelfItem = LegislationShelf["recentlyInForce"][number];
 
 class LegislationShelfError extends TaggedError("LegislationShelfError")<{
   message: string;
@@ -204,6 +191,9 @@ export const readLegislationShelfHandler = async (
   const countryRead = readPublicLawCountry(country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
@@ -238,5 +228,5 @@ export const readLegislationShelfHandler = async (
     });
     return empty;
   }
-  return result.value;
+  return projectLegislationShelf(result.value);
 };

@@ -27,14 +27,17 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // (defaults below). Skipped contexts: test files / fixtures,
 // configured via oxlint.config.ts overrides.
 
+import { factoriesWhere } from "../apps/api/src/lib/safe-handler-factories.ts";
 import { getPropertyName as getIdentifierName } from "./utils.ts";
 
 const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);
 
-const SAFE_HANDLER_FACTORIES = new Set([
-  "createSafeHandler",
-  "createSafeRootHandler",
-]);
+// A handler passed straight to a factory whose context the framework
+// authenticated receives that context's branded ids. Token and public
+// handlers get no such context, so their parameters stay checked.
+const AUTHENTICATED_HANDLER_FACTORIES = new Set<string>(
+  factoriesWhere(({ context }) => context === "authenticated"),
+);
 
 const CONTEXT_TYPED_PROPERTY_NAMES = new Set(["execute"]);
 
@@ -92,7 +95,7 @@ const isKnownValidatedContextParam = (functionNode) => {
 
   if (
     parent.type === "CallExpression" &&
-    SAFE_HANDLER_FACTORIES.has(calleeTerminalName(parent.callee))
+    AUTHENTICATED_HANDLER_FACTORIES.has(calleeTerminalName(parent.callee))
   ) {
     return true;
   }

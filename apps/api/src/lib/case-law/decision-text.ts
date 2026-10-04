@@ -1,5 +1,5 @@
-import { panic } from "better-result";
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
+import { panic } from "better-result";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
@@ -32,6 +32,12 @@ import {
 } from "@/api/lib/case-law/decision-headnote";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+  META_URL_DIAGNOSTICS,
+  type MetadataUrlSchema,
+} from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { DECISION_TEXT_FIELD, TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE };
@@ -187,22 +193,65 @@ type StoreDecisionTextFieldsOptions = {
   textFields: DecisionTextFields;
 };
 
-export const checkedDecisionMetadata = (
-  metadata: Record<string, unknown>,
-): Record<string, unknown> => {
+const checkDecisionTextMetadata = (metadata: Record<string, unknown>): void => {
   for (const key of DECISION_TEXT_METADATA_KEYS) {
     if (Object.hasOwn(metadata, key)) {
       return panic(`Decision text must use the textFields contract: ${key}`);
     }
   }
-  return metadata;
 };
+
+type StoredDecisionMetadataProjectionOptions = {
+  type: "stored";
+  schema: unknown;
+};
+
+const isStoredMetadataProjection = (
+  value: unknown,
+): value is StoredDecisionMetadataProjectionOptions =>
+  isRecord(value) &&
+  value["type"] === "stored" &&
+  Object.hasOwn(value, "schema");
+
+export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
+  metadata: Value,
+): Value;
+export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
+  metadata: Value,
+  schema: NoInfer<MetadataUrlSchema<Value>>,
+): Record<string, unknown>;
+export function checkedDecisionMetadata(
+  metadata: Record<string, unknown>,
+  options: StoredDecisionMetadataProjectionOptions,
+): Record<string, unknown>;
+export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
+  metadata: Value,
+  schema?:
+    | NoInfer<MetadataUrlSchema<Value>>
+    | StoredDecisionMetadataProjectionOptions,
+): Value | Record<string, unknown> {
+  checkDecisionTextMetadata(metadata);
+  if (isStoredMetadataProjection(schema)) {
+    return rehydrateMetadataUrls(metadata, schema.schema);
+  }
+  if (Object.hasOwn(metadata, META_URL_DIAGNOSTICS)) {
+    return panic(
+      `Publisher metadata cannot use the reserved key: ${META_URL_DIAGNOSTICS}`,
+    );
+  }
+  return schema === undefined
+    ? metadata
+    : approveMetadataUrls(metadata, schema);
+}
 
 export const storeDecisionTextFields = ({
   metadata,
   textFields,
 }: StoreDecisionTextFieldsOptions): Record<string, unknown> => {
-  const stored = { ...checkedDecisionMetadata(metadata) };
+  // URL diagnostics are generated before the internal text-field projection;
+  // publisher keys are reserved by checkedDecisionMetadata at the producer.
+  checkDecisionTextMetadata(metadata);
+  const stored = { ...metadata };
   stored[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY] =
     DECISION_TEXT_ABSENCE_SCHEMA_VERSION;
   const absent: DecisionTextAbsenceEntry[] = [];
@@ -455,5 +504,14 @@ export const preserveStoredTextAfterParseFailure = ({
 
 export const readDecisionTextMetadata = (
   storedMetadata: Record<string, unknown> | null,
-): SplitStoredDecisionTextMetadataResult =>
-  splitStoredDecisionTextMetadata(storedMetadata ?? {});
+): SplitStoredDecisionTextMetadataResult => {
+  const { metadata, textFields } = splitStoredDecisionTextMetadata(
+    storedMetadata ?? {},
+  );
+  return {
+    metadata: Object.fromEntries(
+      Object.entries(metadata).filter(([key]) => key !== META_URL_DIAGNOSTICS),
+    ),
+    textFields,
+  };
+};

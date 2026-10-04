@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 // Type-only, so the decision reader's component graph never loads here.
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { publicToolCrawlPaths } from "@/public-crawl-policy";
 
 /** Whether an AI-mode branch carries the authenticated availability gate. */
 type CarriesAvailabilityGate<TMode> = "ensureAIAvailable" extends keyof TMode
@@ -25,6 +28,7 @@ const {
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
+const { ssrCacheClassHeaders } = await import("@/route-response-policy");
 const { isWorkspaceDocumentRoutePath } =
   await import("@/components/workspaces/entity-utils");
 
@@ -169,16 +173,21 @@ describe("public law sitemap", () => {
     };
 
     expect(
-      fetchPublicSitemapDecisions({
-        fetchImpl,
-        shard: {
-          bucket: "all",
-          country: "xaa",
-          month: "01",
-          year: "2026",
-        },
-      }),
-    ).rejects.toThrow("The case-law sitemap shard is not published");
+      await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: {
+            bucket: "all",
+            country: "xaa",
+            month: "01",
+            year: "2026",
+          },
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("The case-law sitemap shard is not published"),
+    );
     expect(requested).toBe(false);
   });
 
@@ -418,6 +427,7 @@ describe("public law sitemap", () => {
 
   test("sitemap XML responses are publicly cacheable", () => {
     expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
+      ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control":
         "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
       "Content-Type": "application/xml; charset=utf-8",
@@ -520,7 +530,9 @@ describe("public law sitemap", () => {
       .split("\n")
       .filter((line) => line.startsWith("Allow:"));
 
-    expect(allowLines).toEqual(["Allow: /tools/", "Allow: /tools$"]);
+    expect(allowLines).toEqual(
+      publicToolCrawlPaths("/tools").map((path) => `Allow: ${path}$`),
+    );
     expect(robots).toContain("Disallow: /");
   });
 

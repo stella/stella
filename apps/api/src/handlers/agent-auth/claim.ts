@@ -4,7 +4,10 @@ import { t } from "elysia";
 import { env } from "@/api/env";
 import { startAnonymousUpgrade } from "@/api/lib/agent-auth";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -12,6 +15,7 @@ const config = {
     claim_token: t.String({ minLength: 1, maxLength: 256 }),
     email: t.String({ format: "email", maxLength: 320 }),
   }),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
@@ -27,6 +31,9 @@ const agentClaimHandler = createSafePublicHandler(
     // A bad/expired/non-anonymous claim token returns the same shape a
     // valid one would, so a caller cannot probe registration state.
     if (Result.isError(result)) {
+      if (HandlerError.is(result.error)) {
+        return Result.err(result.error);
+      }
       return Result.err(
         new HandlerError({
           status: 400,

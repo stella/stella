@@ -16,8 +16,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -609,16 +611,20 @@ export const uploadFileEntitiesBatched = async (
           },
         });
       } else {
-        stellaToast.update(toastId, {
-          type: "error",
-          title: labels.uploadFailed,
-          description: formatFailedFiles(failedNames),
-          timeout: 0,
-          actionProps: {
-            children: labels.retryFailed(failedCount),
-            onClick: () => queue.retryFailed(),
+        notifyUserError(
+          failed.find(({ error }) => !actionAdmissionOutcome(error))?.error ??
+            failed.at(0)?.error,
+          labels.uploadFailed,
+          {
+            toastId,
+            description: formatFailedFiles(failedNames),
+            timeout: 0,
+            actionProps: {
+              children: labels.retryFailed(failedCount),
+              onClick: () => queue.retryFailed(),
+            },
           },
-        });
+        );
       }
 
       if (renamedCount > 0) {

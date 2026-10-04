@@ -24,6 +24,7 @@ import { createFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
 import { MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS } from "@/api/lib/matter-reference";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -169,9 +170,10 @@ const createContext = ({
     body: { includeContent },
     safeDb,
     scopedDb,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     request: recorderBindings.request,
     route: "/v1/workspaces/:workspaceId/duplicate",
     session: {

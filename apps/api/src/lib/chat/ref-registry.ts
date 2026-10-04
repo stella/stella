@@ -679,6 +679,7 @@ export const createChatRefRegistry = (
               ),
             })}`;
           case RESOURCE_TYPE.CASE_LAW_DECISION:
+          case RESOURCE_TYPE.USER:
             return href;
           default:
             target satisfies never;
@@ -716,6 +717,7 @@ export const createChatRefRegistry = (
               ),
             })}`;
           case RESOURCE_TYPE.CASE_LAW_DECISION:
+          case RESOURCE_TYPE.USER:
             return href;
           default:
             target satisfies never;

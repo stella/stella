@@ -38,6 +38,7 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -801,9 +802,10 @@ const contextFor = <TContext>(
     getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
     body,
     createAuditRecorder: () => recordAuditEvent,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params,
     promptCachingEnabled: false,
     recordAuditEvent,

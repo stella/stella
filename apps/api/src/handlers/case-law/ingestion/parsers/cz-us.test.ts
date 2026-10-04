@@ -872,6 +872,47 @@ describe("embedded RTF text destinations", () => {
     expect(fulltext).toBe("Before  After");
   });
 
+  test("keeps an unknown publisher literal as ordinary text", () => {
+    const rtf = String.raw`{\rtf1 fe&ion;}`;
+    const { fulltext } = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+    );
+
+    expect(fulltext).toContain("fe&ion;");
+    expect(markupResidueIn(fulltext)).toBeUndefined();
+  });
+
+  test("still reports recognized references left in RTF text", () => {
+    for (const { encoded, reference } of [
+      { encoded: "&amp;amp;", reference: "&amp;" },
+      { encoded: "&amp;eacute;", reference: "&eacute;" },
+    ]) {
+      const rtf = String.raw`{\rtf1 ${encoded}}`;
+      const { fulltext } = parseUsDecisionHtml(
+        baseInput(`<input id="docContentHidden" value="${rtf}" />`),
+      );
+
+      expect(fulltext).toContain(reference);
+      expect(markupResidueIn(fulltext)).toMatchObject({
+        rule: "entity",
+        excerpt: reference,
+      });
+    }
+  });
+
+  test("keeps the parser's existing HTML character decoding", () => {
+    const { fulltext } = parseUsDecisionHtml(
+      baseInput(`<html><body>
+        <span id="lblDecisionForm">USNESENÍ</span>
+        <input id="docContentHidden" value="" />
+        <div class="DocContent">Text A &amp; B, &eacute;.</div>
+      </body></html>`),
+    );
+
+    expect(fulltext).toContain("A & B, é.");
+    expect(fulltext).not.toContain("&amp;");
+  });
+
   test("skips binary object bytes without losing the visible result", () => {
     const rtf = String.raw`{\rtf1 Before {\object{\*\objdata\bin3 }{} }{\result Box}} After\par}`;
     const { documentAst } = parseUsDecisionHtml(
@@ -883,3 +924,54 @@ describe("embedded RTF text destinations", () => {
     ]);
   });
 });
+
+test("excludes scripts and styles from the HTML fallback", () => {
+  for (const container of ["div class='DocContent'", "section"]) {
+    const tag = container.replace(/ .*$/u, "");
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<span id="lblDecisionForm">NÁLEZ</span><${container}>Visible<script>scriptqzexcluded</script><style>styleqzexcluded</style></${tag}>`,
+      ),
+    );
+    expect(parsed.fulltext).toContain("Visible");
+    expect(parsed.fulltext).not.toContain("scriptqzexcluded");
+    expect(parsed.fulltext).not.toContain("styleqzexcluded");
+  }
+});
+
+test("excludes all RTF header and footer destinations", () => {
+  for (const destination of [
+    "header",
+    "headerf",
+    "headerl",
+    "headerr",
+    "footer",
+    "footerf",
+    "footerl",
+    "footerr",
+  ]) {
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<input id="docContentHidden" value="{\\rtf1{\\${destination} furnitureqzexcluded}Visible\\par}">`,
+      ),
+    );
+    expect(parsed.fulltext).toBe("Visible");
+  }
+});
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text in decision form and cross references`, () => {
+    const clean = `<html><body><span id="lblDecisionForm">Nález</span>
+      <div class="DocContent"><p>Rozhodnutí soudu obsahuje odkaz na
+      <a href="GetRegSignDecisions.aspx?sz=II.US.200.25">II.ÚS 200/25</a>.</p></div>
+    </body></html>`;
+    const hidden = `<${tag}>qzmetadataHidden</${tag}>`;
+    const injected = clean
+      .replace("Nález</span>", () => `Nález${hidden}</span>`)
+      .replace("II.ÚS 200/25</a>", () => `II.ÚS 200/25${hidden}</a>`);
+    expect(injected).not.toBe(clean);
+    expect(parseUsDecisionHtml(baseInput(injected))).toEqual(
+      parseUsDecisionHtml(baseInput(clean)),
+    );
+  });
+}

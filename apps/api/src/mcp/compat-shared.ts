@@ -1,9 +1,22 @@
 import { panic } from "better-result";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
+import {
+  CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import {
+  getTenantActionSizePolicy,
+  normalizeTenantPageLimit as normalizePage,
+} from "@/api/lib/rate-limit/action-size-limits";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
@@ -54,6 +67,37 @@ export const encodeCompatSearchCursor = ({
   matter: string | null;
 }): string =>
   encodePaginationCursor([matter, corpus.decisions, corpus.statutes]);
+
+// Base64 sub-cursors need no JSON escaping. Running the actual wrapper over
+// their bounds includes country keys, separators and base64url framing exactly.
+const maximumCorpusCursors = {
+  decisions: Object.fromEntries(
+    PUBLIC_CASE_LAW_COUNTRIES.map((country) => [
+      country,
+      "a".repeat(CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH),
+    ]),
+  ),
+  statutes: Object.fromEntries(
+    PUBLIC_LEGISLATION_COUNTRIES.map((country) => [
+      country,
+      "a".repeat(CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH),
+    ]),
+  ),
+};
+
+export const LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH = encodeCompatSearchCursor({
+  matter: null,
+  corpus: maximumCorpusCursors,
+}).length;
+
+export const COMPAT_SEARCH_CURSOR_MAX_LENGTH = encodeCompatSearchCursor({
+  // The knowledge provider emits a finite score and an entity UUID.
+  matter: encodeCursor(
+    -0.0000012345678901234567,
+    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+  ),
+  corpus: maximumCorpusCursors,
+}).length;
 
 const readSubCursors = (value: unknown): CorpusSubCursors | null => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -167,4 +211,30 @@ export const compatCorpusFetchResponse = async <TData>({
       read satisfies never;
       return panic("Unhandled compat corpus read");
   }
+};
+
+// The shared corpus cursor advances every fetched country page. Refuse a
+// budget that cannot emit those pages whole rather than dropping cursor hits.
+export const compatSearchPageLimitResult = (audience: "tenant" | "law") => {
+  const policy = getTenantActionSizePolicy();
+  if (policy === undefined) {
+    return null;
+  }
+  const matterLimit =
+    audience === "tenant"
+      ? normalizePage(LIMITS.mcpCompatSearchPageSizeDefault)
+      : 0;
+  const combinedLimit =
+    matterLimit +
+    LIMITS.mcpCompatDecisionPageSizeDefault +
+    LIMITS.mcpCompatStatutePageSizeDefault;
+  if (combinedLimit <= policy.pageSize) {
+    return null;
+  }
+  return structuredErrorResult({
+    code: "validation_error",
+    message:
+      "The configured page limit cannot include the combined search page",
+    hint: "Use search_case_law or search_legislation with an explicit smaller limit; search matters separately with search_across_matters.",
+  });
 };

@@ -15,9 +15,10 @@ import type {
 } from "@/api/handlers/templates/prefill-fields";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
@@ -25,7 +26,7 @@ import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -125,6 +126,7 @@ const extractFieldValues = async ({
   targets,
   sources,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   aiAnalytics,
   timezone,
@@ -132,13 +134,16 @@ const extractFieldValues = async ({
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForRole({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
     // Root-scoped handler: sources may span multiple accessible workspaces,
     // no single workspace id to scope to.
@@ -162,6 +167,11 @@ const extractFieldValues = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Suggest values for one stored template's fields from source material: " +
     "an uploaded DOCX or PDF, pasted text, or the stored extracted text of " +
@@ -171,6 +181,7 @@ const config = {
     "dates are anchored to your calendar day rather than the server's. " +
     "Consumes AI usage.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -215,12 +226,14 @@ const prefillTemplate = createSafeRootHandler(
     params,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     user,
   }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -409,6 +422,7 @@ const prefillTemplate = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -431,6 +445,7 @@ const prefillTemplate = createSafeRootHandler(
             targets,
             sources: boundedSources,
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             aiAnalytics,
             timezone: body.timezone ?? "UTC",

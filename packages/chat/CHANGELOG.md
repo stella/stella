@@ -1,5 +1,34 @@
 # @stll/chat
 
+## 0.1.35
+
+### Patch Changes
+
+- [#4505](https://github.com/stella/stella/pull/4505) [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare React type packages as optional peers so isolated and global-store installs resolve React types.
+- Updated dependencies [[`7511562`](https://github.com/stella/stella/commit/75115627f781b29b63f3dc7cd92ae82506a89367), [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5)]:
+  - @stll/ui@0.40.2
+
+## 0.1.34
+
+### Patch Changes
+
+- Updated dependencies [[`e3a70d4`](https://github.com/stella/stella/commit/e3a70d437b3332129691e62eedd406df59781dfa)]:
+  - @stll/ai-catalog@0.4.0
+
+## 0.1.33
+
+### Patch Changes
+
+- Updated dependencies [[`96a31ab`](https://github.com/stella/stella/commit/96a31abbb7f6ddae0aa4c1ea857559b714190ff1)]:
+  - @stll/ui@0.40.0
+
+## 0.1.32
+
+### Patch Changes
+
+- Updated dependencies [[`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61), [`deb3ce4`](https://github.com/stella/stella/commit/deb3ce49c36f89c6371731d6706e777ad8fbed3b)]:
+  - @stll/ui@0.39.0
+
 ## 0.1.31
 
 ### Patch Changes

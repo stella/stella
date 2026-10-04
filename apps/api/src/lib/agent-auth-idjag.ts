@@ -18,6 +18,7 @@ import {
   AGENT_AUTH_POLL_INTERVAL_SECONDS,
   AGENT_AUTH_SERVICE_SCOPES,
 } from "@/api/agent-auth/constants";
+import { prepareAgentClientCredential } from "@/api/agent-auth/credentials";
 import { IdJagValidationError, validateIdJag } from "@/api/agent-auth/id-jag";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -28,13 +29,15 @@ import {
   hashClaimToken,
   issueAuthorizationCode,
   mintInternalSessionCookieHeader,
+  readRegistrationClientCredential,
   startServiceAuthRegistration,
 } from "@/api/lib/agent-auth";
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -92,7 +95,7 @@ export type IdJagRegistrationResult = {
 export type IdJagIdentityOutcome =
   | { kind: "ready"; result: IdJagRegistrationResult }
   | { kind: "interaction_required"; ceremony: ServiceAuthCeremony }
-  | { kind: "rejected"; error: IdJagValidationError };
+  | { kind: "rejected"; error: IdJagValidationError | HandlerError };
 
 type ResolvedPrincipal = {
   userId: SafeId<"user">;
@@ -142,14 +145,13 @@ const autoProvision = async (
   const provisioned = await Result.tryPromise(async () => {
     const ctx = await auth.$context;
     const localPart = email.split("@").at(0)?.trim() ?? "";
-    const createdUser = await ctx.internalAdapter.createUser(
-      {
+    const createdUser = await auth.api.createAgentUser({
+      body: {
         email,
         name: localPart.length > 0 ? localPart : email,
         emailVerified: true,
       },
-      { method: "agent-idjag" },
-    );
+    });
 
     // If org bootstrap fails the user is already persisted; delete it so a
     // failed provision never leaves an orgless, unreachable account behind.
@@ -159,7 +161,7 @@ const autoProvision = async (
           body: {
             name:
               localPart.length > 0 ? `${localPart}'s workspace` : "Workspace",
-            slug: `agent-${Bun.randomUUIDv7().slice(0, 12)}`,
+            slug: `agent-${Bun.randomUUIDv7()}`,
             userId: createdUser.id,
             keepCurrentActiveOrganization: true,
           },
@@ -263,14 +265,25 @@ export const verifyServiceAssertion = async (
  */
 const issueRegistrationForPrincipal = async (
   principal: ResolvedPrincipal,
-): Promise<Result<IdJagRegistrationResult, AgentTokenError>> => {
+): Promise<Result<IdJagRegistrationResult, AgentTokenError | HandlerError>> => {
   const registrationId = createSafeId<"mcpOAuthClient">();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "identity_assertion",
     registrationId,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
+
+  const storedCredential = await prepareAgentClientCredential(
+    credentials.clientSecret,
+  );
+  if (Result.isError(storedCredential)) {
+    return Result.err(storedCredential.error);
+  }
 
   const sessionCookieHeader = await mintInternalSessionCookieHeader({
     userId: principal.userId,
@@ -298,7 +311,7 @@ const issueRegistrationForPrincipal = async (
     // notNull constraint holds and a claim-grant poll never resolves it.
     claimTokenHash: hashClaimToken(generateOpaqueToken()),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: storedCredential.value,
     boundUserId: principal.userId,
     boundOrganizationId: principal.organizationId,
     grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
@@ -324,10 +337,12 @@ const finishReady = async (
   if (Result.isError(result)) {
     return {
       kind: "rejected",
-      error: new IdJagValidationError(
-        "invalid_assertion",
-        "Could not issue an agent registration.",
-      ),
+      error: HandlerError.is(result.error)
+        ? result.error
+        : new IdJagValidationError(
+            "invalid_assertion",
+            "Could not issue an agent registration.",
+          ),
     };
   }
   return { kind: "ready", result: result.value };
@@ -379,12 +394,18 @@ export const resolveIdJagIdentity = async (
   const existingUserId = await findAccountIdByEmail(email);
   if (existingUserId !== undefined) {
     const ceremony = await startServiceAuthRegistration(email);
+    if (Result.isError(ceremony)) {
+      return {
+        kind: "rejected",
+        error: ceremony.error,
+      };
+    }
     await bindCeremonyToIssuer({
-      registrationId: ceremony.registrationId,
+      registrationId: ceremony.value.registrationId,
       iss,
       sub,
     });
-    return { kind: "interaction_required", ceremony };
+    return { kind: "interaction_required", ceremony: ceremony.value };
   }
 
   const provisioned = await autoProvision(email);
@@ -492,9 +513,17 @@ export const loadIdJagExchangeContext = async (
     .set({ authorizationCode: null })
     .where(eq(agentRegistration.id, registrationId));
 
+  const credential = await readRegistrationClientCredential({
+    id: registrationId,
+    clientId: registration.clientId,
+    clientSecretSink: registration.clientSecretSink,
+  });
+  if (Result.isError(credential)) {
+    return Result.err(new AgentTokenError("token_mint_failed"));
+  }
   return Result.ok({
     clientId: registration.clientId,
-    clientSecret: registration.clientSecretSink,
+    clientSecret: credential.value,
     authorizationCode: registration.authorizationCode,
   });
 };

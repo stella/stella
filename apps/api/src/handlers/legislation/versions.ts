@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { legislationDocuments } from "@/api/db/schema";
+import { projectStatuteVersion } from "@/api/handlers/legislation/reader-response";
 import {
   selectDefaultVersionId,
   selectWorkKey,
@@ -29,6 +30,7 @@ import {
   isUuidPaginationCursorPart,
   isDateOnlyPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 export const listStatuteVersionsParamsSchema = t.Object({
@@ -87,7 +89,9 @@ export const listStatuteVersionsHandler = async ({
   query,
   legislationDb,
 }: ListStatuteVersionsOptions) => {
-  const limit = query.limit ?? LIMITS.legislationVersionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.legislationVersionsPageSizeDefault,
+  );
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {
@@ -140,7 +144,7 @@ export const listStatuteVersionsHandler = async ({
       .limit(limit + 1);
 
     return page.map((row) =>
-      Object.assign(row, { isDefault: row.id === defaultId }),
+      projectStatuteVersion({ ...row, isDefault: row.id === defaultId }),
     );
   });
 

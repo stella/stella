@@ -1,15 +1,19 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import {
   AGENT_AUTH_CLAIM_PATH,
@@ -22,16 +26,24 @@ import {
 } from "@/api/agent-auth/constants";
 import {
   agentDelegation,
+  agentRegistration,
   agentTrustedIssuer,
 } from "@/api/db/agent-auth-schema";
-import { user } from "@/api/db/auth-schema";
+import { oauthClient, organization, user } from "@/api/db/auth-schema";
+import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+  type LogRecord,
+} from "@/api/lib/observability/logger";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
@@ -45,6 +57,15 @@ import {
 // stubbed `globalThis.fetch` for the issuer's well-known URL. A
 // trusted-issuer row is inserted so the (empty-by-default) allow-list
 // accepts it; every other issuer stays rejected.
+
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
 
 type Json = Record<string, unknown>;
 
@@ -217,6 +238,126 @@ const createHumanSession = async (email: string) =>
     orgSlugPrefix: "existing",
   });
 
+describe("agent-auth registration admission", () => {
+  test("applies daily admission to every identity registration path", async () => {
+    enableFeature();
+    await trustIssuer();
+    const existing = {
+      email: `idjag-admission-${Bun.randomUUIDv7()}@external.test`,
+      sub: `sub-admission-${Bun.randomUUIDv7()}`,
+    };
+    expect(
+      (await postIdentity(identityAssertionBody(await mintIdJag(existing))))
+        .status,
+    ).toBe(200);
+    const stepUp = {
+      email: `idjag-admission-${Bun.randomUUIDv7()}@stella.dev`,
+      sub: `sub-admission-${Bun.randomUUIDv7()}`,
+    };
+    await createHumanSession(stepUp.email);
+    const day = new Date(Math.floor(Date.now() / DAY_IN_MS) * DAY_IN_MS);
+    const condition = and(
+      eq(registrationDailyBudget.day, day),
+      eq(registrationDailyBudget.kind, "agent"),
+    );
+    const previous = (
+      await rootDb
+        .select()
+        .from(registrationDailyBudget)
+        .where(condition)
+        .limit(1)
+    ).at(0);
+    await rootDb
+      .insert(registrationDailyBudget)
+      .values({ day, kind: "agent", count: env.AGENT_REGISTRATION_DAILY_LIMIT })
+      .onConflictDoUpdate({
+        target: [registrationDailyBudget.day, registrationDailyBudget.kind],
+        set: { count: env.AGENT_REGISTRATION_DAILY_LIMIT },
+      });
+    const registrationsBefore = await rootDb
+      .select({ count: count() })
+      .from(agentRegistration);
+    const clientsBefore = await rootDb
+      .select({ count: count() })
+      .from(oauthClient);
+    try {
+      for (const identity of [existing, {}, stepUp]) {
+        const response = await postIdentity(
+          identityAssertionBody(await mintIdJag(identity)),
+        );
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe(
+          "Registration is temporarily unavailable.",
+        );
+        expect(body["registration_id"]).toBeUndefined();
+        expect(body["identity_assertion"]).toBeUndefined();
+        expect(body["claim_token"]).toBeUndefined();
+      }
+      expect(
+        await rootDb.select({ count: count() }).from(agentRegistration),
+      ).toEqual(registrationsBefore);
+      expect(await rootDb.select({ count: count() }).from(oauthClient)).toEqual(
+        clientsBefore,
+      );
+      expect(
+        (
+          await rootDb
+            .select()
+            .from(registrationDailyBudget)
+            .where(condition)
+            .limit(1)
+        ).at(0)?.count,
+      ).toBe(env.AGENT_REGISTRATION_DAILY_LIMIT);
+    } finally {
+      if (previous) {
+        await rootDb
+          .update(registrationDailyBudget)
+          .set({ count: previous.count })
+          .where(condition);
+      } else {
+        await rootDb.delete(registrationDailyBudget).where(condition);
+      }
+    }
+  });
+});
+
+describe("agent-auth ID-JAG storage configuration", () => {
+  test("retains the service error for ready and step-up registrations", async () => {
+    enableFeature();
+    await trustIssuer();
+    const readyIdentity = {
+      email: `idjag-ready-${Bun.randomUUIDv7()}@external.test`,
+      sub: `sub-ready-${Bun.randomUUIDv7()}`,
+    };
+    const ready = await postIdentity(
+      identityAssertionBody(await mintIdJag(readyIdentity)),
+    );
+    expect(ready.status).toBe(200);
+    const stepUpIdentity = {
+      email: `idjag-stepup-${Bun.randomUUIDv7()}@stella.dev`,
+      sub: `sub-stepup-${Bun.randomUUIDv7()}`,
+    };
+    await createHumanSession(stepUpIdentity.email);
+    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
+    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    try {
+      for (const identity of [readyIdentity, stepUpIdentity]) {
+        const response = await postIdentity(
+          identityAssertionBody(await mintIdJag(identity)),
+        );
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe("Could not secure agent credentials");
+        expect(body["identity_assertion"]).toBeUndefined();
+        expect(body["claim_token"]).toBeUndefined();
+      }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+    }
+  });
+});
+
 describe("agent-auth ID-JAG dark-launch gate", () => {
   test("identity_assertion is rejected when the feature flag is off", async () => {
     disableFeature();
@@ -292,7 +433,20 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
       .limit(1);
     expect(delegations.length).toBe(1);
     expect(delegations.at(0)?.userId).toBe(String(users.at(0)?.id));
-    expect(typeof delegations.at(0)?.organizationId).toBe("string");
+    const delegation = delegations.at(0);
+    if (!delegation) {
+      panic("Expected the created delegation");
+    }
+    const createdOrganization = (
+      await rootDb
+        .select({ slug: organization.slug })
+        .from(organization)
+        .where(eq(organization.id, delegation.organizationId))
+        .limit(1)
+    ).at(0);
+    expect(createdOrganization?.slug).toMatch(
+      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
   });
 });
 
@@ -433,6 +587,84 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
 });
 
 describe("agent-auth ID-JAG full exchange", () => {
+  test("completes an exchange when a stored-value update is deferred", async () => {
+    enableFeature();
+    await trustIssuer();
+    for (const mode of ["error", "no_change"] as const) {
+      env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+      const assertion = await mintIdJag({
+        email: `idjag-deferred-${Bun.randomUUIDv7()}@external.test`,
+        sub: `sub-deferred-${Bun.randomUUIDv7()}`,
+      });
+      const identity = await postIdentity(identityAssertionBody(assertion));
+      expect(identity.status).toBe(200);
+      const identityBody = await readJson(identity);
+      const registrationId = String(identityBody["registration_id"]);
+      const beforeRows = await rootDb
+        .select({
+          credential: agentRegistration.clientSecretSink,
+          code: agentRegistration.authorizationCode,
+        })
+        .from(agentRegistration)
+        .where(eq(agentRegistration.id, registrationId));
+      const before =
+        beforeRows.at(0) ?? panic("Registration fixture was not found");
+      expect(before.credential).toMatch(/^[a-f0-9]{64}$/u);
+      expect(before.code).toBeString();
+      const identifier = sql.identifier(
+        `agent_value_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+      );
+      const body =
+        mode === "error"
+          ? sql`RAISE EXCEPTION 'Agent value update unavailable';`
+          : sql`RETURN NULL;`;
+      await rootDb.execute(
+        sql`CREATE FUNCTION ${identifier}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${body} END $$`,
+      );
+      await rootDb.execute(
+        sql`CREATE TRIGGER ${identifier} BEFORE UPDATE OF client_secret_sink ON agent_registration FOR EACH ROW EXECUTE FUNCTION ${identifier}()`,
+      );
+      const records: LogRecord[] = [];
+      setLogSinkForTesting((record) => {
+        records.push(record);
+      });
+      try {
+        env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+        const token = await postToken({
+          grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
+          assertion: String(identityBody["identity_assertion"]),
+        });
+        expect(token.status).toBe(200);
+        const tokenBody = await readJson(token);
+        expect(tokenBody["access_token"]).toBeString();
+        expect(JSON.stringify(tokenBody)).not.toContain(before.credential);
+        const afterRows = await rootDb
+          .select({
+            credential: agentRegistration.clientSecretSink,
+            code: agentRegistration.authorizationCode,
+          })
+          .from(agentRegistration)
+          .where(eq(agentRegistration.id, registrationId));
+        const after =
+          afterRows.at(0) ?? panic("Registration fixture was not found");
+        expect(after.credential).toBe(before.credential);
+        expect(after.code).toBeNull();
+        expect(
+          records.filter(
+            ({ message }) => message === "agent.credentials.upgrade_deferred",
+          ),
+        ).toHaveLength(1);
+        expect(JSON.stringify(records)).not.toContain(before.credential);
+      } finally {
+        resetLogSinkForTesting();
+        await rootDb.execute(
+          sql`DROP TRIGGER ${identifier} ON agent_registration`,
+        );
+        await rootDb.execute(sql`DROP FUNCTION ${identifier}()`);
+      }
+    }
+  });
+
   test("a clean match exchanges the service assertion for a bound JWT", async () => {
     enableFeature();
     await trustIssuer();
@@ -444,6 +676,20 @@ describe("agent-auth ID-JAG full exchange", () => {
     expect(idRes.status).toBe(200);
     const idBody = await readJson(idRes);
     const serviceAssertion = String(idBody["identity_assertion"]);
+    expect(Object.keys(idBody).toSorted()).toEqual([
+      "assertion_expires",
+      "identity_assertion",
+      "registration_id",
+      "registration_type",
+      "scopes",
+    ]);
+    const registrationId = String(decodeJwt(serviceAssertion)["sub"]);
+    expect(registrationId).toBe(String(idBody["registration_id"]));
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, registrationId));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
 
     const tokenRes = await postToken({
       grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
@@ -451,6 +697,12 @@ describe("agent-auth ID-JAG full exchange", () => {
     });
     expect(tokenRes.status).toBe(200);
     const tokenBody = await readJson(tokenRes);
+    expect(Object.keys(tokenBody).toSorted()).toEqual([
+      "access_token",
+      "expires_in",
+      "scope",
+      "token_type",
+    ]);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
       "stella:read",

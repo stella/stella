@@ -23,6 +23,13 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Prepare content encryption key
+      shell: bash
+      run: |
+        content_encryption_key=$(openssl rand -hex 32)
+        echo "::add-mask::$content_encryption_key"
+        echo "CONTENT_ENCRYPTION_KEY=$content_encryption_key" >> "$GITHUB_ENV"
+
     - name: Check Docker Hub credentials
       id: dockerhub
       # Keep Docker Hub credentials scoped to this trusted inline check and
@@ -109,6 +116,9 @@ runs:
       # only diffs the declarative schema, which references `stella_ingestion`
       # as `existing()` and then fails when later policy creates target it.
       shell: bash
+      env:
+        NODE_ENV: development
+        STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:migrate
 
     - name: Seed test user

@@ -7,7 +7,6 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   predictBulkReviewed,
@@ -25,7 +24,7 @@ import type {
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 type ClaimId = VerificationClaim["id"];
@@ -101,11 +100,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
       );
     }
     analytics.captureError(error);
-    stellaToast.add({
-      type: "error",
-      title: t("avt.save.failedTitle"),
-      description: userErrorFromThrown(error, t("common.unexpectedError")),
-    });
+    notifyUserError(error, t("avt.save.failedTitle"));
   };
 
   const now = () => Temporal.Now.instant().toString();

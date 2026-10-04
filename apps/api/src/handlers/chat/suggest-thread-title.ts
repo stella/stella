@@ -17,6 +17,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   admitFiniteAction,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
@@ -36,6 +37,7 @@ const config = {
   // cannot rename cannot spend metered model calls proposing a title they
   // have no way to apply.
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
@@ -59,6 +61,7 @@ export const createSuggestThreadTitle = ({
     const {
       getWorkspaceAccess,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       params: { threadId },
       promptCachingEnabled,
@@ -136,6 +139,7 @@ export const createSuggestThreadTitle = ({
     }
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -163,6 +167,7 @@ export const createSuggestThreadTitle = ({
     }));
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -191,6 +196,7 @@ export const createSuggestThreadTitle = ({
               Result.tryPromise({
                 try: async () =>
                   await generateTextForRole({
+                    dataClass: "customer",
                     abortSignal: AbortSignal.any([
                       actionSignal ?? request.signal,
                       AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
@@ -205,6 +211,7 @@ export const createSuggestThreadTitle = ({
                     maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
                     organizationId: session.activeOrganizationId,
                     orgAIConfig,
+                    managedAIResidency,
                     prompt: buildThreadTitlePrompt(titleMessages),
                     role: "fast",
                     serviceTier: "standard",

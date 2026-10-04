@@ -1,6 +1,13 @@
+// parser-output-unchanged: query reference lookup; stored title derivation is unchanged
+import { panic } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
+import {
+  readStatuteQueryReferences,
+  type StatuteQueryReference,
+} from "@stll/api-contract/statute-query-intent";
 import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
@@ -14,6 +21,8 @@ import {
 } from "@/api/db/schema";
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";
+import { redistributableLegislationVersion } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
@@ -451,6 +460,30 @@ export const citedKeysQuery = (
     .groupBy(legislationWorkNames.country, legislationWorkNames.citedKey)
     .limit(CITED_KEY_LIMIT);
 
+/**
+ * Act identities the query names in its jurisdiction. Without a jurisdiction,
+ * or in one with no act grammar, there are none and only titles are matched.
+ */
+const statuteQueryReferences = (
+  query: string,
+  country: string | undefined,
+): StatuteQueryReference[] => {
+  if (country === undefined) {
+    return [];
+  }
+  const scope = readStatuteQueryScope(country.toLowerCase());
+  switch (scope.type) {
+    case "supported":
+      return readStatuteQueryReferences(scope.country, query);
+    case "unsupported":
+      return [];
+    default: {
+      scope satisfies never;
+      return panic(`Unhandled statute query scope: ${String(scope)}`);
+    }
+  }
+};
+
 type ReadNamedLegislationWorksOptions = {
   query: string;
   /** Narrows the lookup to one jurisdiction's names. */
@@ -458,19 +491,74 @@ type ReadNamedLegislationWorksOptions = {
 };
 
 /**
- * The Works a query names: the query, as a whole, equals a name some stored
- * title states for them. A name a citation elsewhere attaches to a Work
- * corroborates it: when any named Work is corroborated, only the
+ * Explicit citations and aliases address Works by act identity. Otherwise
+ * the whole query is compared with names stored titles state. A name a
+ * citation elsewhere attaches to a Work corroborates it: when any named Work is corroborated, only the
  * corroborated ones are returned, because an amending act's own title can
  * carry the amended act's name without being that act.
  *
- * Two index lookups on the match key and one read of the named versions'
- * Work keys, each bounded.
+ * Identity lookups use the ELI trigram index; title lookups use the match-key
+ * index. Every read is bounded.
  */
 export const readNamedLegislationWorks = async (
   tx: LegislationReadTransaction,
   { query, country }: ReadNamedLegislationWorksOptions,
 ): Promise<NamedLegislationWork[]> => {
+  // Explicit act identities outrank titles of amendments that mention them.
+  const references = statuteQueryReferences(query, country);
+  if (references.length > 0) {
+    const versions = await tx
+      .select({
+        sourceId: legislationDocuments.sourceId,
+        eli: legislationDocuments.eli,
+        language: legislationDocuments.language,
+      })
+      .from(legislationDocuments)
+      .where(
+        and(
+          redistributableLegislationVersion,
+          or(
+            ...references.map((reference) => {
+              const actCondition = actNumberCondition({
+                number: `${reference.number}/${reference.year}`,
+                collection: reference.collection ?? undefined,
+              });
+              if (actCondition === null) {
+                return panic(
+                  "Parsed statute reference has no act-number condition",
+                );
+              }
+              return and(
+                eq(
+                  legislationDocuments.country,
+                  reference.country.toUpperCase(),
+                ),
+                actCondition,
+              );
+            }),
+          ),
+        ),
+      )
+      .groupBy(
+        legislationDocuments.sourceId,
+        legislationDocuments.eli,
+        legislationDocuments.language,
+      )
+      .orderBy(
+        legislationDocuments.sourceId,
+        legislationDocuments.eli,
+        legislationDocuments.language,
+      )
+      .limit(NAMED_VERSION_LIMIT);
+    if (versions.length > 0) {
+      return versions.map(({ sourceId, eli, language }) => ({
+        sourceId,
+        eli,
+        language,
+        fromCitation: true,
+      }));
+    }
+  }
   const matchKey = legislationNameMatchKey(query);
   if (matchKey === null) {
     return [];

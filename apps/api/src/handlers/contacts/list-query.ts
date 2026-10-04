@@ -18,6 +18,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
 
 type ContactRow = typeof contacts.$inferSelect;
@@ -73,7 +74,7 @@ type DecodedCursor = {
   id: SafeId<"contact">;
 };
 
-const CONTACT_DISPLAY_NAME_MAX_LENGTH = 512;
+export const CONTACT_DISPLAY_NAME_MAX_LENGTH = 512;
 const MAX_JSON_ESCAPE_LENGTH = 6;
 const UUID_LENGTH = 36;
 const JSON_TUPLE_OVERHEAD = 7;
@@ -202,9 +203,11 @@ export const listContactsPage = async ({
   query: ListContactsQuery;
 }) => {
   const result = await safeDb(async (tx) => {
-    const limit = Math.min(
-      query.limit ?? LIMITS.contactsPageSizeDefault,
-      LIMITS.contactsPageSizeMax,
+    const limit = normalizeTenantPageLimit(
+      Math.min(
+        query.limit ?? LIMITS.contactsPageSizeDefault,
+        LIMITS.contactsPageSizeMax,
+      ),
     );
     const conditions = [eq(contacts.organizationId, organizationId)];
 

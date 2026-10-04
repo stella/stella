@@ -151,6 +151,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
 // by the source row's cascading foreign key, never the request role.
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
+  "time_daily_targets",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
@@ -168,10 +169,13 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Maintenance checkpoints belong to the database owner, never request roles.
+  "database_backfill_states",
   "action_cost_records",
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
+  "registration_daily_budget",
   "agent_registration",
   "agent_trusted_issuer",
   "agent_delegation",
@@ -199,6 +203,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  // UUID retirement is ingestion-owned; request transactions cannot access it.
+  "case_law_decision_aliases",
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",

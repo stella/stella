@@ -9,6 +9,7 @@ import {
 } from "react";
 import type React from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -51,9 +52,17 @@ import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
   insertPastedTextChip,
   PastedText,
+  pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
+import {
+  mountedEditorFor,
+  mountEditor,
+} from "@/components/mounted-editors.logic";
+import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
+import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -146,6 +155,7 @@ type RegisteredExtension = {
 type ActiveChatEditorHandle = {
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
+  insertPastedText: (attrs: PastedTextAttrs) => void;
   threadKey: string;
 };
 
@@ -205,6 +215,12 @@ type ChatEditorManagerContextValue = {
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
+  ) => void;
+  /** A pasted-text chip (a quote) at the caret of the thread's live
+   *  composer, or at the end of its stored draft when none is live. */
+  insertPastedTextIntoThread: (
+    threadRef: ChatThreadRef,
+    attrs: PastedTextAttrs,
   ) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
   registerExtension: (
@@ -274,7 +290,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef<Map<string, RegisteredExtension> | null>(
     null,
   );
-  const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
+  // Every live composer, by thread (see `mounted-editors.logic`).
+  const mountedEditorsRef =
+    useRef<MountedEditors<ActiveChatEditorHandle> | null>(null);
   const [extensionVersion, setExtensionVersion] = useState(0);
 
   const getMentionItems = useCallback(async () => {
@@ -372,24 +390,21 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
-  const registerActiveEditor = useCallback((handle: ActiveChatEditorHandle) => {
-    activeEditorRef.current = handle;
-
-    return () => {
-      if (activeEditorRef.current?.threadKey !== handle.threadKey) {
-        return;
-      }
-
-      activeEditorRef.current = null;
-    };
-  }, []);
+  const registerActiveEditor = useCallback(
+    (handle: ActiveChatEditorHandle) =>
+      mountEditor(getOrCreateMap(mountedEditorsRef), handle.threadKey, handle),
+    [],
+  );
 
   const insertMentionIntoThread = useCallback(
     (threadRef: ChatThreadRef, mention: ChatMentionOption) => {
       const threadKey = getChatThreadKey(threadRef);
-      const activeEditor = activeEditorRef.current;
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
 
-      if (activeEditor?.threadKey === threadKey) {
+      if (activeEditor !== null) {
         activeEditor.insertMention(mention);
         return;
       }
@@ -399,15 +414,31 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const insertPastedTextIntoThread = useCallback(
+    (threadRef: ChatThreadRef, attrs: PastedTextAttrs) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
+
+      if (activeEditor !== null) {
+        activeEditor.insertPastedText(attrs);
+        return;
+      }
+
+      useChatDraftStore
+        .getState()
+        .insertInlineContent(threadKey, pastedTextChipContent(attrs));
+    },
+    [],
+  );
+
   const focusThread = useCallback((threadRef: ChatThreadRef) => {
-    const threadKey = getChatThreadKey(threadRef);
-    const activeEditor = activeEditorRef.current;
-
-    if (activeEditor?.threadKey !== threadKey) {
-      return;
-    }
-
-    activeEditor.focus();
+    mountedEditorFor(
+      mountedEditorsRef.current,
+      getChatThreadKey(threadRef),
+    )?.focus();
   }, []);
 
   const contextValue = useMemo<ChatEditorManagerContextValue>(
@@ -416,6 +447,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -425,6 +457,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -559,6 +592,7 @@ export const useChatEditor = ({
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
     ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
@@ -1127,14 +1161,27 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  const insertPastedText = useCallback(
+    (attrs: PastedTextAttrs) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      insertPastedTextChip(editor, attrs);
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
         focus,
         insertMention,
+        insertPastedText,
         threadKey,
       }),
-    [focus, insertMention, registerActiveEditor, threadKey],
+    [focus, insertMention, insertPastedText, registerActiveEditor, threadKey],
   );
 
   const updateAttachments = useCallback(
@@ -1268,6 +1315,10 @@ export const useChatEditor = ({
         return;
       }
 
+      // The persisted message keeps only each mention's identity; keep what
+      // the composer chip already showed so the sent chip looks the same.
+      seedReferenceHints(queryClient, doc);
+
       // A pending mirror write must not resurrect the draft this submit is
       // about to clear.
       debouncedPersistEditorDraft.cancel();
@@ -1307,6 +1358,7 @@ export const useChatEditor = ({
       clearDraft,
       debouncedPersistEditorDraft,
       editor,
+      queryClient,
       setDraft,
       threadKey,
     ],

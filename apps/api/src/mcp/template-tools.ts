@@ -7,7 +7,10 @@ import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadManagedAIResidency,
+  loadOrgAIConfig,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
@@ -21,6 +24,7 @@ import {
   LIST_TEMPLATES_PROJECTION,
   type TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { clauseDirectiveWarningSchema } from "@/api/lib/clauses/clause-directives";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -38,6 +42,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
@@ -60,12 +65,16 @@ import {
 } from "@/api/lib/templates/configure-field-input";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import {
+  recordTemplateExecution,
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
-import { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import {
+  templateConditionPreviewSchema,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
@@ -602,6 +611,11 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [{ template: ["create"] }, { template: ["update"] }],
+    reason: "template_id selects update; without it the call creates.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "create_template",
   scope: "stella:templates",
@@ -644,6 +658,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
@@ -688,6 +703,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "configure_template_fields",
   scope: "stella:templates",
@@ -732,6 +748,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
@@ -798,6 +815,7 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "fill_template",
   scope: "stella:templates",
@@ -865,6 +883,15 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { template: ["use"], entity: ["create"] },
+      { template: ["use"], entity: ["update"] },
+    ],
+    reason:
+      "action selects saving into a new document or a new version of an existing one.",
+  },
   additionalScopes: ["stella:templates"],
   anonymized: { exposure: "excluded", reason: "write" },
   name: "save_filled_template",
@@ -1084,6 +1111,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     docxBase64: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.array(clauseDirectiveWarningSchema),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
     decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
@@ -1097,6 +1125,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     truncated: v.boolean(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.array(clauseDirectiveWarningSchema),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
     decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
@@ -1107,6 +1136,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
  *  condition, in the shape `fill_template` reports its own decisions in, plus
  *  the versioned model that answered (null when none could). */
 const PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA = v.strictObject({
+  preview: v.optional(templateConditionPreviewSchema),
   conditions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
   model: v.nullable(v.string()),
 });
@@ -1119,6 +1149,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
   }),
   v.strictObject({
@@ -1128,6 +1159,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
     versionNumber: v.pipe(v.number(), v.integer()),
   }),
@@ -1307,8 +1339,17 @@ const handleFillTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,
@@ -1351,6 +1392,7 @@ const handleFillTemplateTool: McpToolHandler<
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     requiredFields: "enforce",
+    useRecording: "caller",
     assertUsageAvailable,
     aiCollaborators,
   });
@@ -1380,28 +1422,29 @@ const handleFillTemplateTool: McpToolHandler<
     });
   }
 
-  // Record the execution (fill row + EXECUTE audit) like the REST fill routes,
-  // so agent-driven fills appear in the audit trail. Best-effort: a successful
-  // render is not discarded if the bookkeeping write fails (it is captured).
-  await context
-    .scopedDb(
-      async (tx) =>
-        await (
-          context.testDependencies?.recordTemplateFill ?? recordTemplateFill
-        )({
-          tx,
-          templateId: brandPersistedTemplateId(parsed.output.template_id),
-          organizationId: context.organizationId,
-          userId: context.userId,
-          format: "docx",
-          unmatchedCount: filled.unmatchedPlaceholders.length,
-          aiFieldErrorCount: filled.aiFieldErrors.length,
-          unusedCount: filled.unusedValues.length,
-          structureErrors: filled.structureErrors,
-          recordAuditEvent: context.recordAuditEvent,
-        }),
-    )
-    .catch(captureError);
+  // The rendered text reaches the agent only once the fill is recorded (use
+  // count, fill row, EXECUTE audit); a recording failure fails the call.
+  const recorded = await recordTemplateExecution({
+    scopedDb: context.scopedDb,
+    recorders: {
+      recordTemplateUse:
+        context.testDependencies?.recordTemplateUse ?? recordTemplateUse,
+      recordTemplateFill:
+        context.testDependencies?.recordTemplateFill ?? recordTemplateFill,
+    },
+    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    organizationId: context.organizationId,
+    userId: context.userId,
+    format: "docx",
+    unmatchedCount: filled.unmatchedPlaceholders.length,
+    aiFieldErrorCount: filled.aiFieldErrors.length,
+    unusedCount: filled.unusedValues.length,
+    structureErrors: filled.structureErrors,
+    recordAuditEvent: context.recordAuditEvent,
+  });
+  if (Result.isError(recorded)) {
+    return internalFailureResult(recorded.error);
+  }
 
   const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
@@ -1425,6 +1468,7 @@ const handleFillTemplateTool: McpToolHandler<
       docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
       structureErrors: filled.structureErrors,
       aiFieldErrors: filled.aiFieldErrors.map((error) => ({
         field: error.valuePath,
@@ -1467,6 +1511,7 @@ const handleFillTemplateTool: McpToolHandler<
     truncated,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    clauseWarnings: filled.clauseWarnings,
     structureErrors: filled.structureErrors,
     // Fields whose AI draft failed: they are unfilled in the document above,
     // so an agent must supply them itself rather than treat the fill as done.
@@ -1750,6 +1795,14 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       skillContext: {
         organizationId: context.organizationId,
@@ -1757,6 +1810,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         userId: context.userId,
       },
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,
@@ -1920,6 +1974,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
               fileName: persisted.fileName,
               unmatchedPlaceholders: filled.unmatchedPlaceholders,
               unusedValues: filled.unusedValues,
+              clauseWarnings: filled.clauseWarnings,
               ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             };
             await recordPersistedFill(tx, result);
@@ -1961,6 +2016,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             fileName,
             unmatchedPlaceholders: filled.unmatchedPlaceholders,
             unusedValues: filled.unusedValues,
+            clauseWarnings: filled.clauseWarnings,
             ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             versionNumber: persisted.versionNumber,
           };
@@ -2192,7 +2248,7 @@ const readCreateTemplateDocx = async ({
     };
   }
 
-  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
+  const validation = await validateDocxBuffer(buffer);
   if (!validation.valid) {
     return {
       status: "error",
@@ -2213,6 +2269,7 @@ const readCreateTemplateDocx = async ({
   });
   if (Result.isError(scanned)) {
     const scanError = scanned.error;
+    observeScanFailures(scanError);
     if (!FileScanRejectedError.is(scanError)) {
       return {
         status: "error",
@@ -2819,6 +2876,7 @@ const storedTemplateFailureResult = (
         message: error.message,
         hint: error.hint,
         issues: error.issues,
+        retryable: error.retryable,
       });
     case 503:
       return structuredErrorResult({
@@ -2898,6 +2956,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const payload = {
     conditions: decided.value.conditions.map(toPreviewConditionDecision),
     model: decided.value.model,
+    preview: decided.value.preview,
   };
   const textFields = runTextFieldSpecs(
     buildPreviewConditionsTextFieldSpecs(context.organizationId),

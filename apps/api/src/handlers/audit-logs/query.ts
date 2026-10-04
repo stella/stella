@@ -14,7 +14,7 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { auditDetailsForResource } from "@/api/lib/audit-log-details";
+import { auditChangesForResource } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -25,6 +25,7 @@ import {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const auditLogCursor = createTimestampIdCursorCodec({
@@ -204,7 +205,9 @@ export const queryAuditLogPage = async function* ({
   recordAuditEvent: AuditRecorder;
   query: AuditLogFilter;
 }) {
-  const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.auditLogPageSizeDefault,
+  );
 
   const conditions = toAuditLogConditions({ organizationId, filter: query });
 
@@ -261,7 +264,7 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          changes: auditDetailsForResource(row.resourceType, row.changes),
+          changes: auditChangesForResource(row.resourceType, row.changes),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,

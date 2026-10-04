@@ -25,8 +25,15 @@ import {
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
+import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
+import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -35,6 +42,7 @@ import {
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
   McpGatewayLoadError,
@@ -53,8 +61,12 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
+const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
+  Result.ok(undefined),
+);
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
 const resolveMcpSessionContextMock = mock();
@@ -73,7 +85,8 @@ const listMcpToolsMock = mock(
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
-const handleMcpHttpRequest = createMcpHttpRequestHandler({
+const mcpHandlerDependencies = {
+  actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
   captureError: (error, context) => {
     captureErrorMock(error, context);
@@ -89,7 +102,11 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
   // per test through the module's own seam.
   recordMcpSessionInitialized,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
-});
+} satisfies Parameters<typeof createMcpHttpRequestHandler>[0];
+
+const handleMcpHttpRequest = createMcpHttpRequestHandler(
+  mcpHandlerDependencies,
+);
 
 const createMcpRequest = (body: unknown) =>
   new Request("http://localhost/mcp", {
@@ -134,6 +151,9 @@ const createModernMcpRequest = ({
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "mcp-method": method,
+      ...(typeof params["name"] === "string"
+        ? { "mcp-name": params["name"] }
+        : {}),
       "mcp-protocol-version": MODERN_PROTOCOL_VERSION,
     },
     method: "POST",
@@ -182,6 +202,8 @@ type McpJsonRpcError = {
 
 describe("handleMcpHttpRequest", () => {
   beforeEach(() => {
+    actionSizePolicyMock.mockReset();
+    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     getMcpToolDefinitionMock.mockReset();
@@ -236,19 +258,8 @@ describe("handleMcpHttpRequest", () => {
           inputSchema: { type: "object", properties: {} },
         });
         const handler = createMcpHttpRequestHandler({
+          ...mcpHandlerDependencies,
           admitAction: async () => Result.err(refusalError),
-          authenticateMcpRequest: authenticateMcpRequestMock,
-          captureError: (error, context) => {
-            captureErrorMock(error, context);
-          },
-          getMcpToolDefinition: getMcpToolDefinitionMock,
-          getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
-          handleMcpToolCall: handleMcpToolCallMock,
-          listMcpResources: listMcpResourcesMock,
-          listMcpTools: listMcpToolsMock,
-          readMcpResource: readMcpResourceMock,
-          recordMcpSessionInitialized,
-          resolveMcpSessionContext: resolveMcpSessionContextMock,
         });
         const response = await runWithRequestId(
           "req_admission",
@@ -289,6 +300,89 @@ describe("handleMcpHttpRequest", () => {
     } finally {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("flags off still count the demo account's tool calls", async () => {
+    const previous = {
+      FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+      FEATURE_ACTION_COST_RECORDS: env.FEATURE_ACTION_COST_RECORDS,
+    };
+    Object.assign(env, {
+      FEATURE_ACTION_ADMISSION: false,
+      FEATURE_ACTION_COST_RECORDS: false,
+    });
+    try {
+      const demo = createTestDemoActionBudget({
+        demoUserId: toSafeId<"user">("user_1"),
+        nowMs: Date.UTC(2026, 0, 15),
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "get_document",
+        scope: "stella:read",
+        access: "read",
+        description: "Read a document",
+        inputSchema: { type: "object", properties: {} },
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "served" }],
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            demoActionBudget: demo.budget,
+          }),
+      });
+      const callTool = async () =>
+        await readTestJson<McpJsonResponse<CallToolResult>>(
+          await handler(
+            createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: "get_document", arguments: {} },
+            }),
+          ),
+        );
+
+      expect((await callTool()).result.isError).toBeFalsy();
+      expect(demo.count()).toBe(1);
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+
+      for (
+        let index = 1;
+        index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max;
+        index++
+      ) {
+        await withActionAdmission({
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          demoActionBudget: demo.budget,
+          run: async () => await Promise.resolve(undefined),
+        });
+      }
+      const refused = await callTool();
+      const item = refused.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(refused.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({ code: "action_period_exhausted" });
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+      expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
+    } finally {
+      Object.assign(env, previous);
     }
   });
 
@@ -355,6 +449,53 @@ describe("handleMcpHttpRequest", () => {
       },
       { clientIp: null, request: mcpRequest },
     );
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("returns a policy 403 for an authenticated account refusal", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    resolveMcpSessionContextMock.mockImplementation(
+      async (session, options) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () => ({
+            memberId: "member_one",
+            email: "limited@example.test",
+            role: "owner",
+            workspace: null,
+          }),
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    );
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {},
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.get("WWW-Authenticate")).not.toContain(
+      'error="invalid_token"',
+    );
+    expect(await readTestJson<McpJsonRpcError>(response)).toMatchObject({
+      error: { code: -32_001, message: "Forbidden" },
+    });
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
@@ -1373,6 +1514,8 @@ describe("handleMcpHttpRequest", () => {
 
 describe("MCP transport conformance", () => {
   beforeEach(() => {
+    actionSizePolicyMock.mockReset();
+    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     listMcpToolsMock.mockReset();
@@ -1544,6 +1687,142 @@ describe("MCP transport conformance", () => {
     // and this endpoint reads bearer tokens, never cookies.
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  test("refuses actual oversized frames before authentication even with a smaller declared length", async () => {
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({
+        pageSize: 10,
+        requestBytes: 32,
+        responseBytes: 512,
+      }),
+    );
+    const oversized = "é".repeat(20);
+    for (const declaredLength of [undefined, "1"]) {
+      const headers = new Headers({
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      });
+      if (declaredLength !== undefined) {
+        headers.set("content-length", declaredLength);
+      }
+      const response = await handleMcpHttpRequest(
+        new Request("http://localhost/mcp", {
+          body: oversized,
+          headers,
+          method: "POST",
+        }),
+      );
+      expect(response.status).toBe(413);
+      expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+      expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
+    }
+  });
+
+  test("bounds serialized UTF-8 JSON-RPC envelopes on modern and legacy transports", async () => {
+    authenticateSession();
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({
+        pageSize: 10,
+        requestBytes: 2000,
+        responseBytes: 512,
+      }),
+    );
+    const tools = [
+      {
+        description: "😀".repeat(100),
+        inputSchema: { properties: {}, type: "object" },
+        name: "list_matters",
+      },
+    ] as const satisfies McpTool[];
+    const serialized = JSON.stringify({
+      id: 1,
+      jsonrpc: "2.0",
+      result: { tools },
+    });
+    expect(serialized.length).toBeLessThan(512);
+    expect(new TextEncoder().encode(serialized).length).toBeGreaterThan(512);
+    listMcpToolsMock.mockResolvedValue(tools);
+    for (const protocolVersion of [undefined, MODERN_PROTOCOL_VERSION]) {
+      const request =
+        protocolVersion === undefined
+          ? toolsListRequest()
+          : createModernMcpRequest({ id: 1, method: "tools/list" });
+      const response = await handleMcpHttpRequest(request);
+      expect(response.status).toBe(413);
+      expect((await response.arrayBuffer()).byteLength).toBeLessThanOrEqual(
+        512,
+      );
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    }
+  });
+
+  test("bounds tool results by declared read intent while preserving applied mutations on both transports", async () => {
+    authenticateSession();
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({ pageSize: 10, requestBytes: 2000, responseBytes: 512 }),
+    );
+    const payload = {
+      content: [{ type: "text", text: "é".repeat(400) }],
+      structuredContent: { result: "é".repeat(400) },
+    };
+    const definition = listStaticMcpToolDefinitions("default").find(
+      (tool) => tool.scope === "stella:read" && tool.annotations.readOnlyHint,
+    );
+    if (definition === undefined) {
+      panic("Missing read tool fixture");
+    }
+    for (const intent of ["read", "write", "unannotated"] as const) {
+      getMcpToolDefinitionMock.mockResolvedValue({
+        ...definition,
+        annotations:
+          intent === "unannotated"
+            ? undefined
+            : { ...definition.annotations, readOnlyHint: intent === "read" },
+      });
+      for (const protocol of ["legacy", "modern"] as const) {
+        handleMcpToolCallMock.mockClear();
+        handleMcpToolCallMock.mockResolvedValue(payload);
+        const params = { name: definition.name, arguments: {} };
+        const request =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/call", params })
+            : createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/call",
+                params,
+              });
+        const response = await handleMcpHttpRequest(request);
+        const encoded = await response.text();
+        expect({
+          status: response.status,
+          body: response.status === 200 ? undefined : encoded,
+        }).toEqual({ status: 200, body: undefined });
+        expect(Buffer.byteLength(encoded, "utf-8")).toBeLessThanOrEqual(512);
+        const envelope: McpJsonResponse<CallToolResult> = JSON.parse(encoded);
+        expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+        if (intent === "read") {
+          expect(envelope.result.isError).toBe(true);
+          expect(envelope.result.content).toEqual([
+            {
+              type: "text",
+              text: expect.stringContaining('"code":"result_too_large"'),
+            },
+          ]);
+          continue;
+        }
+        expect(envelope.result.isError).toBe(false);
+        expect(envelope.result.structuredContent).toEqual({
+          applied: true,
+          resultOmitted: true,
+          reason: "result_too_large",
+        });
+        expect(envelope.result.content).toEqual([
+          { type: "text", text: expect.stringContaining("Action applied.") },
+        ]);
+      }
+    }
   });
 
   test("refuses an oversized declared body before authenticating or parsing", async () => {

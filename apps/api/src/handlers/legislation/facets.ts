@@ -6,6 +6,10 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
+  projectLegislationFacets,
+} from "@/api/handlers/legislation/catalog-response";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -49,13 +53,6 @@ const FACETS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FACETS_CACHE_MAX_ENTRIES = 16;
 
 /**
- * The publishers' vocabulary of act kinds is small (about 400 spellings in
- * each of the Czech and Slovak corpora, most of them historical), so the cap
- * only guards against a feed that writes free text into the column.
- */
-const DOCUMENT_TYPE_BUCKET_LIMIT = 1000;
-
-/**
  * Each Work is counted by the row the listing shows for it today
  * (`isLatestOpenedVersionOfWorkAt`), so a bucket's count is the length of the
  * list narrowed to it: a Work that only opens in the future is not offered,
@@ -97,7 +94,7 @@ export const buildLegislationFacetsQuery = (
     )
     .groupBy(legislationDocuments.documentType)
     .orderBy(sql`count(*) DESC`, legislationDocuments.documentType)
-    .limit(DOCUMENT_TYPE_BUCKET_LIMIT);
+    .limit(LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT);
 
 type LegislationFacetsLoad = {
   legislationDb: LegislationReadDb;
@@ -132,6 +129,9 @@ export const readLegislationFacetsHandler = async (
   const countryRead = readPublicLawCountry(country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
@@ -157,5 +157,5 @@ export const readLegislationFacetsHandler = async (
     });
     return NO_FACETS;
   }
-  return result.value;
+  return projectLegislationFacets(result.value);
 };

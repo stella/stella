@@ -17,8 +17,7 @@ on:
       - "bunfig.toml"
       - "package.json"
       - "patches/**"
-      - "scripts/dependency-audit.ts"
-      - "scripts/dependency-audit-baseline.json"
+      - "scripts/dependency-audit*"
       - "scripts/dependency-diff.ts"
       - "scripts/check-trusted-dependencies.ts"
       - ".github/workflows/dependency-audit.yml"
@@ -50,8 +49,12 @@ jobs:
         with:
           bun-version-file: "package.json"
 
-      # `bun audit` reads bun.lock against the npm advisory database; no
-      # dependency install is required.
+      # The audit script loads installed packages; lifecycle scripts stay off.
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
       - name: Audit dependencies
         run: bun scripts/dependency-audit.ts --check
 

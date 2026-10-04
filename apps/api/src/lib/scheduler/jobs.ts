@@ -6,13 +6,17 @@ import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { logger } from "@/api/lib/observability/logger";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
+import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
@@ -36,6 +40,7 @@ import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/d
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -43,6 +48,7 @@ import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
+import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -53,6 +59,7 @@ import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/t
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 type SchedulerJobDefinition = {
   id: string;
@@ -64,17 +71,26 @@ type SchedulerJobDefinition = {
   enabled?: boolean;
 };
 
-export const ensureSchedulerJob = async ({
-  description,
-  enabled = true,
-  id,
-  payload = null,
-  payloadUpdate = "replace",
-  schedule,
-  task,
-}: SchedulerJobDefinition): Promise<void> => {
+export const ensureSchedulerJob = async (
+  definition: SchedulerJobDefinition,
+): Promise<void> => {
+  await upsertSchedulerJob(definition, rootDb);
+};
+
+export const upsertSchedulerJob = async (
+  {
+    description,
+    enabled = true,
+    id,
+    payload = null,
+    payloadUpdate = "replace",
+    schedule,
+    task,
+  }: SchedulerJobDefinition,
+  db: SchedulerDb,
+): Promise<void> => {
   const nextRunAt = computeNextRunAt(schedule);
-  const [existingJob] = await rootDb
+  const [existingJob] = await db
     .select({
       schedule: schedulerJobs.schedule,
       task: schedulerJobs.task,
@@ -87,7 +103,7 @@ export const ensureSchedulerJob = async ({
     existingJob.task !== task ||
     !sameSchedule(existingJob.schedule, schedule);
 
-  await rootDb
+  await db
     .insert(schedulerJobs)
     .values({
       description,
@@ -288,9 +304,19 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   },
   {
+    description: "Move stored agent client values to the shared envelope",
+    enabled: env.AGENT_CLIENT_STORAGE_V1_ENABLED,
+    id: "agentClients.backfillStorage.minutely",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { paused: false, completed: false },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+  },
+  {
     description:
       "Backfill provision-citation scopes and state, then validate the provision-row CHECKs",
-    id: "caseLaw.backfillProvisionState.minutely",
+    id: SCHEDULER_BACKFILL_IDS.provisionState,
     mode: "recurring",
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
@@ -299,11 +325,18 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Attach publisher expression ids to legislation rows stored without one",
-    id: "legislation.backfillExpressionIds.fiveMinute",
+    id: SCHEDULER_BACKFILL_IDS.expressionIds,
     mode: "recurring",
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+  },
+  {
+    description: "Emit persisted backfill health gauges",
+    id: "backfill.heartbeat.minutely",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_HEARTBEAT_TASK,
   },
   {
     description:
@@ -369,13 +402,28 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REAP_OWNERLESS_CHAT_TURNS_TASK,
   },
   {
+    description: "Delete expired unused registrations",
+    id: "auth.sweepRegistrations.hour",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: SWEEP_REGISTRATIONS_TASK,
+  },
+  {
+    description: "Redact expired completed provider event details",
+    id: "usage.redactWebhookEvents.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+    enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
+  },
+  {
     description: "Delete expired action cost observations",
     id: "actions.sweepCosts.minute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_ACTION_COSTS_TASK,
     enabled:
-      env.FEATURE_ACTION_COST_RECORDS &&
+      isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
   },
   {
@@ -466,7 +514,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -480,7 +528,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {
@@ -512,6 +560,11 @@ export const DECLARED_SCHEDULER_JOBS = [
  * registered" loud instead of silent.
  */
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
+  if (env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS === undefined) {
+    logger.info("scheduler.provider_event_retention_disabled", {
+      reason: "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS is unset",
+    });
+  }
   for (const { mode, ...definition } of DECLARED_SCHEDULER_JOBS) {
     // Sequential on purpose: each upsert is a read followed by a write, so
     // issuing all of them at once puts more concurrent statements in flight
@@ -542,7 +595,7 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   // declared. The registry is the discriminator, not the declared list, so
   // dynamically registered jobs (scheduled flows) are untouched. Disable
   // rather than delete: the row remains as an audit record, and a
-  // rollback's own registration re-enables it (the upsert sets `enabled`).
+  // rollback requires an explicit operator re-enable.
   // One guarded update, so a concurrent change to a row's task or enabled
   // state cannot be overwritten from a stale read; only rows the update
   // actually changed are logged.

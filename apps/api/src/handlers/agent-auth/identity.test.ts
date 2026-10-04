@@ -1,6 +1,16 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { and, count, eq } from "drizzle-orm";
 import * as v from "valibot";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
@@ -10,7 +20,11 @@ import {
   AGENT_AUTH_TOKEN_PATH,
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
+import { oauthClient } from "@/api/db/auth-schema";
+import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
+import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { isAgentAuthRateLimitedPath } from "@/api/handlers/agent-auth/rate-limit";
 import {
   agentAuthConfirmRoute,
@@ -29,6 +43,15 @@ import {
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
 // mint exercises the real authorization-code + JWT path.
+
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
 
 type Json = Record<string, unknown>;
 
@@ -104,7 +127,116 @@ const createHumanSession = async () =>
 /** Hint for ceremonies whose confirm step no human in the test completes. */
 const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
 
+describe("agent registration configuration", () => {
+  test("daily registration admission returns a service response before creating rows", async () => {
+    const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
+    const day = new Date(Math.floor(Date.now() / DAY_IN_MS) * DAY_IN_MS);
+    const condition = and(
+      eq(registrationDailyBudget.day, day),
+      eq(registrationDailyBudget.kind, "agent"),
+    );
+    const previous = (
+      await rootDb
+        .select()
+        .from(registrationDailyBudget)
+        .where(condition)
+        .limit(1)
+    ).at(0);
+    await rootDb
+      .insert(registrationDailyBudget)
+      .values({ day, kind: "agent", count: env.AGENT_REGISTRATION_DAILY_LIMIT })
+      .onConflictDoUpdate({
+        target: [registrationDailyBudget.day, registrationDailyBudget.kind],
+        set: { count: env.AGENT_REGISTRATION_DAILY_LIMIT },
+      });
+    const before = await rootDb
+      .select({ count: count() })
+      .from(agentRegistration);
+    const clientsBefore = await rootDb
+      .select({ count: count() })
+      .from(oauthClient);
+    try {
+      for (const body of [
+        { type: "anonymous" },
+        { type: "service_auth", login_hint: "member@example.test" },
+      ]) {
+        expect((await postIdentity(body)).status).toBe(503);
+      }
+      const upgrade = await postClaim({
+        claim_token: String(anonymous["claim_token"]),
+        email: unclaimedHint(),
+      });
+      expect(upgrade.status).toBe(503);
+      expect((await readJson(upgrade))["message"]).toBe(
+        "Registration is temporarily unavailable.",
+      );
+      expect(
+        await rootDb.select({ count: count() }).from(agentRegistration),
+      ).toEqual(before);
+      expect(await rootDb.select({ count: count() }).from(oauthClient)).toEqual(
+        clientsBefore,
+      );
+    } finally {
+      if (previous) {
+        await rootDb
+          .update(registrationDailyBudget)
+          .set({ count: previous.count })
+          .where(condition);
+      } else {
+        await rootDb.delete(registrationDailyBudget).where(condition);
+      }
+    }
+  });
+
+  test("returns a service error when the selected storage format is unavailable", async () => {
+    const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
+    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
+    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    try {
+      const responses = [
+        await postIdentity({
+          type: "service_auth",
+          login_hint: unclaimedHint(),
+        }),
+        await postIdentity({ type: "anonymous" }),
+        await postClaim({
+          claim_token: String(anonymous["claim_token"]),
+          email: unclaimedHint(),
+        }),
+      ];
+      for (const response of responses) {
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe("Could not secure agent credentials");
+        expect(body["access_token"]).toBeUndefined();
+        expect(body["registration_id"]).toBeUndefined();
+      }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+    }
+  });
+});
+
 describe("agent-auth service_auth flow", () => {
+  test("registration retains the initial stored format before activation", async () => {
+    env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+    const response = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
+    expect(response.status).toBe(200);
+    const body = await readJson(response);
+    const rows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    const stored = rows.at(0)?.credential;
+    expect(stored).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(body)).not.toContain(
+      stored ?? "missing stored fixture",
+    );
+  });
+
   test("registration returns an RFC 8628 ceremony shape", async () => {
     const response = await postIdentity({
       type: "service_auth",
@@ -114,6 +246,20 @@ describe("agent-auth service_auth flow", () => {
     const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("service_auth");
+    expect(Object.keys(body).toSorted()).toEqual([
+      "claim",
+      "claim_token",
+      "claim_token_expires",
+      "claim_url",
+      "post_claim_scopes",
+      "registration_id",
+      "registration_type",
+    ]);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     expect(typeof body["registration_id"]).toBe("string");
     // Top-level handoff fields per the auth.md service guide. `claim_url` is
     // the claim ceremony endpoint, not the token grant the agent later polls.
@@ -225,6 +371,12 @@ describe("agent-auth service_auth flow", () => {
     const claimToken = String(reg["claim_token"]);
     const userCode = String(asJson(reg["claim"])["user_code"]);
 
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(reg["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
+
     // Confirm before any poll, so the first post-confirm poll is not
     // throttled by the server-side interval guard.
     const confirmRes = await postConfirm(
@@ -243,6 +395,12 @@ describe("agent-auth service_auth flow", () => {
     // OAuth §5.1: the bearer-token response must not be cached.
     expect(tokenRes.headers.get("cache-control")).toBe("private, no-store");
     const tokenBody = await readJson(tokenRes);
+    expect(Object.keys(tokenBody).toSorted()).toEqual([
+      "access_token",
+      "expires_in",
+      "scope",
+      "token_type",
+    ]);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);
     expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
@@ -361,6 +519,21 @@ describe("agent-auth anonymous flow", () => {
     const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("anonymous");
+    expect(Object.keys(body).toSorted()).toEqual([
+      "access_token",
+      "claim_token",
+      "claim_uri",
+      "expires_in",
+      "registration_id",
+      "registration_type",
+      "scope",
+      "token_type",
+    ]);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     expect(typeof body["claim_token"]).toBe("string");
     expect(body["token_type"]).toBe("Bearer");
     // The upgrade endpoint the agent posts claim_token + email to — the public
@@ -396,6 +569,11 @@ describe("agent-auth anonymous flow", () => {
     });
     expect(first.status).toBe(200);
     const firstBody = await readJson(first);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(anon["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     // A client needs the user-facing URL to hand the human the returned code.
     expect(String(firstBody["verification_uri"])).toContain("/agent-claim");
     expect(String(firstBody["verification_uri_complete"])).toContain(

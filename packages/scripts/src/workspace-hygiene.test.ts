@@ -58,6 +58,73 @@ describe("workspace hygiene", () => {
     ]);
   });
 
+  test("rejects bun --cwd <dir> run, which exits 0 without running", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "2.10.3",
+        },
+        scripts: { generate: "bun --cwd apps/web run generate:route-tree" },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+        scripts: { typecheck: "bun --cwd ../.. run generate && tsc" },
+      },
+    });
+
+    mkdirSync(path.join(rootDir, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, "scripts/check.sh"),
+      "set -e\nbun  --cwd\tapps/web run build\n",
+    );
+    mkdirSync(path.join(rootDir, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, ".github/workflows/ci.yml"),
+      "run: bun --cwd apps/web run test\n",
+    );
+    writeFileSync(
+      path.join(rootDir, "apps/web/README.md"),
+      "```sh\nbun --cwd apps/web run dev\n```\n",
+    );
+
+    const message =
+      "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`";
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL)
+        .filter((issue) => issue.message === message)
+        .map((issue) => issue.path)
+        .toSorted(),
+    ).toEqual([
+      ".github/workflows/ci.yml:1",
+      "apps/web/README.md:2",
+      "apps/web/package.json:1",
+      "package.json:1",
+      "scripts/check.sh:2",
+    ]);
+  });
+
+  test("accepts bun run --cwd and bun --cwd=<dir> run", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "2.10.3",
+        },
+        scripts: {
+          generate: "bun run --cwd apps/web generate:route-tree",
+          codegen: "bun --cwd=packages/cli run codegen:runtime",
+          docs: "bun --cwd .claude/mcp test",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+  });
+
   test("accepts turbo installs derived from the root package version", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -434,7 +501,10 @@ const createWorkspaceRoot = ({
     JSON.stringify({
       devDependencies: { "@astrojs/check": "^0.9.9" },
       name: "@stll/landing",
-      scripts: { typecheck: "bun --bun astro check" },
+      scripts: {
+        typecheck:
+          "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+      },
     }),
   );
   writeFileSync(

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -28,6 +29,7 @@ import type {
   HandlerOutputsMatchByName,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -92,6 +94,42 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
+const REGISTRY_WRITE_ACCOUNT_POLICY = {
+  save_matter: "sandbox",
+  delete_matter: "sandbox",
+  save_contact: "sandbox",
+  delete_contact: "sandbox",
+  save_task: "sandbox",
+  delete_task: "sandbox",
+  link_matter_contact: "sandbox",
+  save_document: "sandbox",
+  upload_document_version: "sandbox",
+  open_document_version_upload: "sandbox",
+  delete_document: "sandbox",
+  compare_documents: "sandbox",
+  prepare_file_comparison: "sandbox",
+  prepare_file_comparison_from_links: "sandbox",
+  open_file_comparison: "sandbox",
+  set_field_value: "sandbox",
+  save_time_entry: "sandbox",
+  delete_time_entry: "sandbox",
+  save_clause: "sandbox",
+  save_playbook: "sandbox",
+  delete_clause: "sandbox",
+  run_playbook: "sandbox",
+  create_reader_annotation: "sandbox",
+  update_reader_annotation: "sandbox",
+  delete_reader_annotation: "sandbox",
+  manage_organization: "restricted",
+  set_practice_jurisdictions: "restricted",
+  fill_template: "sandbox",
+  save_filled_template: "sandbox",
+  create_template: "sandbox",
+  configure_template_fields: "sandbox",
+  invoke_capability: "sandbox",
+  submit_feedback: "sandbox",
+} as const satisfies Record<RegistryWriteToolName, "restricted" | "sandbox">;
+
 type ProjectableRegistryWriteToolName = ChatProjectableToolName<
   typeof WRITE_TOOL_REF_FIELD_MAP
 >;
@@ -129,6 +167,7 @@ export type RunRegistryWriteToolProps = {
 
 export type RunRegistryWriteToolDependencies = {
   isMcpToolFeatureEnabled: typeof isMcpToolFeatureEnabled;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const defaultRunRegistryWriteToolDependencies = {
@@ -159,9 +198,10 @@ export const applyChatApprovalConfirmation = ({
  *   `context.recordAuditEvent`. Chat threads its real audit recorder into
  *   `buildMcpContextFromChat`, so a projected write leaves the same audit trail
  *   an MCP or REST write would; there is no separate audit step here.
- * - Role and workspace-status gating are the handler's own (`roles[...]
- *   .authorize`, `ensureActiveWorkspace`), exactly as MCP dispatch relies on;
- *   this orchestrator adds only the feature-flag gate MCP dispatch also applies.
+ * - The definition's declared write permissions are enforced here exactly as
+ *   MCP dispatch enforces them; the handler keeps its input-specific role and
+ *   workspace-status checks (`ensureActiveWorkspace`). This orchestrator also
+ *   applies the feature-flag gate MCP dispatch applies.
  * - Approval is enforced upstream by the chat tool policy (`mutation` ->
  *   `needsApproval`), not here. Because the MCP handler re-validates existence
  *   and access against current state at execution time, a stale approval (the
@@ -183,6 +223,19 @@ export const runRegistryWriteTool = async (
         message: `Tool ${toolName} is not available in chat.`,
       }),
     );
+  }
+  if (REGISTRY_WRITE_ACCOUNT_POLICY[toolName] === "restricted") {
+    const accountOperation = (
+      dependencies.checkAccountOperation ?? checkDemoAccountOperation
+    )(context.userEmail);
+    if (Result.isError(accountOperation)) {
+      return Result.err(
+        new ChatToolError({
+          kind: "unavailable",
+          message: accountOperation.error.message,
+        }),
+      );
+    }
   }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
@@ -207,6 +260,16 @@ export const runRegistryWriteTool = async (
       new ChatToolError({
         kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
+      }),
+    );
+  }
+  // Registration already withholds the tool from a member without its
+  // declared permissions; this keeps the refusal on the execution path.
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }

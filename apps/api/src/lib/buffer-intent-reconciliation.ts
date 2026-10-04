@@ -293,8 +293,34 @@ export const lockObjectCleanupIntentsForWriter = async (
 
 export type ObjectWriterSettlement =
   | "cleanup-required"
+  | "cleanup-claimed"
   | "object-deleted"
   | "write-uncertain";
+
+/** Claim cleanup before touching bytes: atomic publication retires this row. */
+const claimObjectCleanupIntentForCleanup = async ({
+  intentId,
+  safeDb,
+}: {
+  intentId: SafeId<"pendingUpload">;
+  safeDb: SafeDb;
+}): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const rows = await tx
+      .select({ id: bufferObjectCleanupIntents.id })
+      .from(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.id, intentId))
+      .for("update");
+    if (rows.length === 0) {
+      return false;
+    }
+    await settleObjectCleanupIntentsAfterWriterInTransaction({
+      tx,
+      intentIds: [intentId],
+      objectState: "cleanup-claimed",
+    });
+    return true;
+  });
 
 export const objectWriterSettlementAfterCleanup = ({
   cleanupSucceeded,
@@ -311,6 +337,7 @@ export const objectWriterSettlementAfterCleanup = ({
 
 const UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS = {
   "cleanup-required": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+  "cleanup-claimed": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
   "write-uncertain": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
 } as const satisfies Record<
   Exclude<ObjectWriterSettlement, "object-deleted">,
@@ -361,16 +388,27 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
   }
   // audit: skip; exact-key cleanup still needs durable recovery, either because
   // deletion failed or because a timed-out PUT may still complete later.
-  const stateUpdate =
-    objectState === "write-uncertain"
-      ? {
+  const stateUpdate = (() => {
+    const status = UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState];
+    switch (objectState) {
+      case "cleanup-claimed":
+        return {
           attemptCount: 0,
-          nextAttemptAt: new Date(),
-          status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState],
-        }
-      : {
-          status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState],
+          nextAttemptAt: new Date(
+            Temporal.Now.instant().epochMilliseconds +
+              OBJECT_WRITE_RECOVERY_DELAY_MS,
+          ),
+          status,
         };
+      case "write-uncertain":
+        return { attemptCount: 0, nextAttemptAt: new Date(), status };
+      case "cleanup-required":
+        return { status };
+      default:
+        objectState satisfies never;
+        return panic("Unknown object writer settlement state");
+    }
+  })();
   const updated = await tx
     .update(bufferObjectCleanupIntents)
     .set(stateUpdate)
@@ -379,7 +417,12 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
         inArray(bufferObjectCleanupIntents.id, uniqueIntentIds),
         inArray(
           bufferObjectCleanupIntents.status,
-          OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES,
+          objectState === "cleanup-claimed"
+            ? [
+                ...OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES,
+                BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+              ]
+            : OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES,
         ),
       ),
     )
@@ -430,6 +473,44 @@ export const settleObjectCleanupIntentsAfterWriter = async ({
         tx,
       }),
   );
+};
+
+/** Cleanup can only begin after publication has relinquished its row lock. */
+export const cleanupObjectAfterWriter = async ({
+  deleteObject,
+  intentId,
+  safeDb,
+  writeState,
+}: {
+  deleteObject: () => Promise<boolean>;
+  intentId: SafeId<"pendingUpload">;
+  safeDb: SafeDb;
+  writeState: S3ObjectWriteCertainty | "never-written";
+}): Promise<Result<void, SafeDbError>> => {
+  const claim = await claimObjectCleanupIntentForCleanup({ intentId, safeDb });
+  if (Result.isError(claim)) {
+    return Result.err(claim.error);
+  }
+  if (!claim.value) {
+    return Result.ok(undefined);
+  }
+  const deleted = await Result.tryPromise(async () =>
+    writeState === "never-written" ? true : await deleteObject(),
+  );
+  if (Result.isError(deleted)) {
+    return Result.err(deleted.error);
+  }
+  return await settleObjectCleanupIntentsAfterWriter({
+    intentIds: [intentId],
+    objectState:
+      writeState === "never-written"
+        ? "object-deleted"
+        : objectWriterSettlementAfterCleanup({
+            cleanupSucceeded: deleted.value,
+            writeState,
+          }),
+    safeDb,
+  });
 };
 
 type ReleaseObjectCleanupIntentScope =

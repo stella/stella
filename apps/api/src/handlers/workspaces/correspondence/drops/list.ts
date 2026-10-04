@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { correspondenceDropLogs } from "@/api/db/schema";
 import {
+  ACCOUNT_ACCESS,
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
@@ -15,6 +16,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCorrespondenceDropId } from "@/api/lib/safe-id-boundaries";
 
 type CorrespondenceDropRow = typeof correspondenceDropLogs.$inferSelect;
@@ -52,6 +54,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 });
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   query: t.Object({
@@ -63,7 +66,7 @@ const config = {
 export default createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId, session }) {
-    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const limit = normalizeTenantPageLimit(query.limit ?? DEFAULT_PAGE_SIZE);
     const cursor =
       query.cursor === undefined ? null : cursorCodec.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {

@@ -5,6 +5,7 @@ import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { drainFanOut } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
@@ -41,6 +42,14 @@ import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
+  BACKGROUND_ACTION_KIND,
+  QUEUED_ACTION_KIND,
+} from "@/api/lib/rate-limit/action-kinds";
+import {
+  runBackgroundJob,
+  runQueuedKickoff,
+} from "@/api/lib/rate-limit/queued-action-admission";
+import {
   createBullMqConnection,
   isRecoverableRedisPollError,
   isTransientRedisConnectionError,
@@ -48,6 +57,7 @@ import {
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
+  brandPersistedOrganizationId,
   brandPersistedExtractionRunId,
   brandPersistedEntityId,
   brandPersistedPropertyId,
@@ -160,7 +170,9 @@ const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   return queueConnection;
 };
 
@@ -268,6 +280,8 @@ type StartWorkflowArgs = {
    * starts is recorded on the connection the worker was handed.
    */
   extractionRunStore: ExtractionRunStartStore;
+  kickoff?: typeof runQueuedKickoff;
+  queue?: WorkflowEntityQueue;
 };
 
 /**
@@ -417,59 +431,35 @@ const filterPlanByPropertyIds = (
   return filteredPlan;
 };
 
-/**
- * Start a workflow: build execution plan, enqueue entity jobs.
- */
-export const startWorkflow = async ({
-  workspaceId,
-  organizationId,
-  userId,
-  scopedDb,
-  entityIds: inputEntityIds,
-  entityIdsOrder: inputOrder,
-  propertyIds: inputPropertyIds,
-  serviceTier = "standard",
-  runStateStore = getRootWorkflowRunStateStore(),
-  extractionRunStore,
-}: StartWorkflowArgs): Promise<StartWorkflowResult> => {
-  const requestId = createSafeId<"extractionRun">();
-  const runKey = { id: requestId, organizationId, workspaceId };
+type PlanAndEnqueueWorkflowOptions = Omit<
+  StartWorkflowArgs,
+  "kickoff" | "runStateStore" | "serviceTier"
+> & {
+  requestId: SafeId<"extractionRun">;
+  runStateStore: ReturnType<typeof getRootWorkflowRunStateStore>;
+  serviceTier: AIRequestServiceTier;
+  releaseClaimAndFail: (cause: unknown) => Promise<StartWorkflowResult>;
+};
 
-  // Check if already running (atomic check-and-set). The TTL is the
-  // safety net for an uncleanly-killed worker; tuned tight enough that
-  // a recovered workspace doesn't sit blocked for hours.
-  const wasSet = await runStateStore.tryClaim({
-    requestId,
-    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+const planAndEnqueueWorkflow = async (
+  {
     workspaceId,
-  });
-  if (!wasSet) {
-    return { status: "already-running" };
-  }
-
-  // Between the claim above and the try below, a throw would escape holding a
-  // lock nobody owns: the caller sees an exception, and its retry is answered
-  // `already-running` by the claim it orphaned, which reads as a run in
-  // flight. Report the same in-band failure the rest of the start path
-  // reports instead, releasing the claim first. Releasing is best-effort by
-  // necessity — the release travels the connection that just failed — and the
-  // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
-  const releaseClaimAndFail = async (
-    cause: unknown,
-  ): Promise<StartWorkflowResult> => {
-    // Compare-and-delete on this request's own id: the release runs after a
-    // failure, so by the time it lands the claim's TTL may have lapsed and a
-    // replacement run may hold the workspace. Releasing that one would hand a
-    // third caller a workspace two runs believe they own.
-    await runStateStore
-      .releaseClaim({ requestId, workspaceId })
-      .catch((releaseError: unknown) =>
-        captureError(releaseError, { workspaceId }),
-      );
-    captureError(cause, { workspaceId });
-    return { status: "failed" };
-  };
-
+    organizationId,
+    userId,
+    scopedDb,
+    entityIds: inputEntityIds,
+    entityIdsOrder: inputOrder,
+    propertyIds: inputPropertyIds,
+    serviceTier,
+    runStateStore,
+    extractionRunStore,
+    queue,
+    requestId,
+    releaseClaimAndFail,
+  }: PlanAndEnqueueWorkflowOptions,
+  signal?: AbortSignal,
+): Promise<StartWorkflowResult> => {
+  const runKey = { id: requestId, organizationId, workspaceId };
   const requestIdSet = await Result.tryPromise({
     try: async () =>
       await runStateStore.setRequestId({
@@ -502,7 +492,9 @@ export const startWorkflow = async ({
   }
 
   try {
+    signal?.throwIfAborted();
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
+    signal?.throwIfAborted();
 
     // Property-status freshness is an optimization for full-workspace
     // runs ("nothing changed, skip"). It must be bypassed when the
@@ -619,7 +611,8 @@ export const startWorkflow = async ({
     // Select once for the whole workflow. The same queue instance owns every
     // chunk and any partial-enqueue cleanup, so one request cannot straddle
     // queue classes even during a rolling routing change.
-    const q = getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
+    const q =
+      queue ?? getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
     const queuedJobIds: string[] = [];
     try {
       for (const chunk of chunked(
@@ -630,6 +623,7 @@ export const startWorkflow = async ({
           workflowEntityJobId({ entityId, requestId }),
         );
         queuedJobIds.push(...chunkJobIds);
+        signal?.throwIfAborted();
         await enqueueEntityJobs({
           entityIds: chunk,
           executionPlan,
@@ -662,6 +656,96 @@ export const startWorkflow = async ({
     captureError(error, { workspaceId });
     return { status: "failed" };
   }
+};
+
+/**
+ * Start a workflow: build execution plan, enqueue entity jobs.
+ */
+export const startWorkflow = async ({
+  workspaceId,
+  organizationId,
+  userId,
+  scopedDb,
+  entityIds: inputEntityIds,
+  entityIdsOrder: inputOrder,
+  propertyIds: inputPropertyIds,
+  serviceTier = "standard",
+  runStateStore = getRootWorkflowRunStateStore(),
+  extractionRunStore,
+  kickoff = runQueuedKickoff,
+  queue,
+}: StartWorkflowArgs): Promise<StartWorkflowResult> => {
+  const requestId = createSafeId<"extractionRun">();
+
+  // Check if already running (atomic check-and-set). The TTL is the
+  // safety net for an uncleanly-killed worker; tuned tight enough that
+  // a recovered workspace doesn't sit blocked for hours.
+  const wasSet = await runStateStore.tryClaim({
+    requestId,
+    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+    workspaceId,
+  });
+  if (!wasSet) {
+    return { status: "already-running" };
+  }
+
+  // Recording a claimed run can fail before planning starts. Release only
+  // this request's claim and report the same in-band failure as enqueueing.
+  // Release is best-effort on a failed connection; the claim TTL and orphan
+  // reconciliation remain the backstop.
+  const releaseClaimAndFail = async (
+    cause: unknown,
+  ): Promise<StartWorkflowResult> => {
+    // Compare-and-delete on this request's own id: the release runs after a
+    // failure, so by the time it lands the claim's TTL may have lapsed and a
+    // replacement run may hold the workspace. Releasing that one would hand a
+    // third caller a workspace two runs believe they own.
+    await runStateStore
+      .releaseClaim({ requestId, workspaceId })
+      .catch((releaseError: unknown) =>
+        captureError(releaseError, { workspaceId }),
+      );
+    captureError(cause, { workspaceId });
+    return { status: "failed" };
+  };
+
+  const planAndEnqueue = async (signal?: AbortSignal) =>
+    await planAndEnqueueWorkflow(
+      {
+        workspaceId,
+        organizationId,
+        userId,
+        scopedDb,
+        serviceTier,
+        runStateStore,
+        extractionRunStore,
+        requestId,
+        releaseClaimAndFail,
+        ...(inputEntityIds !== undefined && { entityIds: inputEntityIds }),
+        ...(inputOrder !== undefined && { entityIdsOrder: inputOrder }),
+        ...(inputPropertyIds !== undefined && {
+          propertyIds: inputPropertyIds,
+        }),
+        ...(queue !== undefined && { queue }),
+      },
+      signal,
+    );
+  const started = await Result.tryPromise({
+    try: async () =>
+      await kickoff({
+        organizationId,
+        userId,
+        organizationStateDb: scopedDb,
+        actionKind: QUEUED_ACTION_KIND.extraction,
+        logicalPhaseId: requestId,
+        run: planAndEnqueue,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(started)) {
+    return started.value;
+  }
+  return await releaseClaimAndFail(started.error);
 };
 
 // ── Orphan reconciliation ──────────────────────────────
@@ -965,7 +1049,15 @@ const processWorkflowJob = async (
     );
   }, jobTimeoutMs);
   try {
-    await processEntityJob(job.data, controller.signal, extractionRuns);
+    await runBackgroundJob({
+      actionKind: BACKGROUND_ACTION_KIND.extraction,
+      organizationId: brandPersistedOrganizationId(job.data.organizationId),
+      userId: brandPersistedUserId(job.data.userId),
+      job,
+      signal: controller.signal,
+      run: async (signal) =>
+        await processEntityJob(job.data, signal, extractionRuns),
+    });
     controller.signal.throwIfAborted();
   } finally {
     clearTimeout(timeoutHandle);
@@ -1076,7 +1168,9 @@ const createWorkflowWorker = (
       await processWorkflowJob(job, extractionRuns);
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency,
       lockDuration: LOCK_DURATION_MS,
       stalledInterval: STALLED_INTERVAL_MS,
@@ -1347,26 +1441,28 @@ const processEntityJob = async (
 
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
-    // db-await-in-loop: levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
-    await Promise.all(
-      batches.map(
-        async (batch) =>
-          await processOneBatch({
-            workspaceId: branded.workspaceId,
-            organizationId: branded.organizationId,
-            entityId: brandedEntityId,
-            batch,
-            level,
-            scopedDb,
-            safeDb,
-            requestId,
-            signal,
-            serviceTier,
-            userId,
-            forcedPropertyIds,
-          }),
-      ),
-    );
+    const drained = await drainFanOut({
+      items: batches,
+      signal,
+      operation: async (batch, batchSignal) =>
+        await processOneBatch({
+          workspaceId: branded.workspaceId,
+          organizationId: branded.organizationId,
+          entityId: brandedEntityId,
+          batch,
+          level,
+          scopedDb,
+          safeDb,
+          requestId,
+          signal: batchSignal,
+          serviceTier,
+          userId,
+          forcedPropertyIds,
+        }),
+    });
+    if (Result.isError(drained)) {
+      throw drained.error;
+    }
   }
 
   // Final checkpoint — if abort fired between the last batch and
@@ -1593,7 +1689,8 @@ const processOneBatch = async ({
     if (Result.isError(settings)) {
       throw settings.error;
     }
-    const { orgAIConfig, promptCachingEnabled } = settings.value;
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      settings.value;
     const generateFn = getBatchGenerator();
 
     // Dispatch on tool type: ai-model columns run the LLM extraction; verdict
@@ -1646,6 +1743,7 @@ const processOneBatch = async ({
             workspaceId,
             scopedDb,
             orgAIConfig,
+            managedAIResidency,
             promptCachingEnabled,
             serviceTier,
             usageMetering,
@@ -1699,6 +1797,7 @@ const processOneBatch = async ({
         verdictProperties,
         inputPropertyIds: batch.inputs,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering,

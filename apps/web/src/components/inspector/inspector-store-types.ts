@@ -405,8 +405,16 @@ export type InspectorTabsActions = {
     options?: { pulse?: boolean },
   ) => void;
   updateLabel: (tabId: string, label: string) => void;
+  updateFileMetadata: (
+    tabId: string,
+    metadata: Pick<FileTab, "label" | "fileName">,
+  ) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus | null) => void;
+  /** Asks the tab's rail entry to flash once. The request waits for the
+   *  entry to render, so a tab opened in the same update still flashes. */
   flashTab: (tabId: string) => void;
+  /** The rail entry flashed; a later remount must not flash it again. */
+  clearTabFlash: (tabId: string) => void;
   setMinimized: (minimized: boolean) => void;
   toggleMinimized: () => void;
 };

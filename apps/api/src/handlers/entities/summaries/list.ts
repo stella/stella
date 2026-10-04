@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -12,6 +12,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const entityCreatedAtCursor = createTimestampIdCursorCodec({
@@ -55,8 +56,9 @@ const readEntitySummariesHandler = async function* ({
   safeDb,
   workspaceId,
   cursor,
-  limit,
+  limit: requestedLimit,
 }: ReadEntitySummariesHandlerProps) {
+  const limit = normalizeTenantPageLimit(requestedLimit);
   const cursorResult = parseSummaryCursor(cursor);
   if (Result.isError(cursorResult)) {
     return Result.err(cursorResult.error);
@@ -110,6 +112,7 @@ const config = {
     "entities.summaries.count for the total and entities.list when you " +
     "need column values or filtering.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: readEntitySummariesQuerySchema,

@@ -27,10 +27,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/sheet";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import Tooltip from "@/components/tooltip";
 import {
   ChatTitleRename,
   ChatTitleSuggestButton,
@@ -49,8 +49,12 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+
+import { ThreadContextLine, ThreadContextTooltip } from "./thread-context-line";
+import { layoutThreadContext } from "./thread-context-line.logic";
 
 type ThreadsSheetProps = {
   icon?: ReactNode;
@@ -261,11 +265,8 @@ const DeleteThreadButton = ({
         workspaceId: variables.workspaceId,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async (_data, variables) => {
       if (activeThreadRef?.threadId === variables.threadId) {
@@ -385,6 +386,7 @@ const ThreadRow = ({
           scope: thread.scope,
           threadId: toChatThreadId(thread.id),
         };
+  const hasContext = layoutThreadContext(thread.context).hasContext;
   const committedTitle = isPlaceholderThreadTitle(thread.title)
     ? ""
     : thread.title;
@@ -411,36 +413,48 @@ const ThreadRow = ({
           startEditingWithSuggestion,
         }) => (
           <>
-            <Link
-              className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
-              onClick={() => onOpenChange(false)}
-              {...(threadRef.scope === "global"
-                ? {
-                    to: "/chat/$threadId",
-                    params: { threadId: threadRef.threadId },
-                  }
-                : {
-                    to: "/chat/workspaces/$workspaceId/$threadId",
-                    params: {
-                      threadId: threadRef.threadId,
-                      workspaceId: threadRef.workspaceId,
-                    },
-                  })}
+            {/* The link owns the context tooltip, so hovering the row and
+                focusing it with the keyboard both reveal the full list. */}
+            <Tooltip
+              content={
+                hasContext ? (
+                  <ThreadContextTooltip context={thread.context} />
+                ) : null
+              }
+              render={
+                <Link
+                  className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
+                  onClick={() => onOpenChange(false)}
+                  {...(threadRef.scope === "global"
+                    ? {
+                        to: "/chat/$threadId",
+                        params: { threadId: threadRef.threadId },
+                      }
+                    : {
+                        to: "/chat/workspaces/$workspaceId/$threadId",
+                        params: {
+                          threadId: threadRef.threadId,
+                          workspaceId: threadRef.workspaceId,
+                        },
+                      })}
+                />
+              }
             >
               <BidiText as="span" className="truncate text-sm font-medium">
                 {displayTitle}
               </BidiText>
-              <span className="text-muted-foreground text-xs">
+              {/* One line that never wraps: provenance, the matters and files
+                  the chat drew on (chips truncate, the rest fold into "+N"),
+                  then the date, which always stays visible. A matter chat's
+                  own matter leads the context, so it is not repeated. */}
+              <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs whitespace-nowrap">
                 <ChatThreadOriginPrefix origin={thread.origin} />
-                {thread.scope === "workspace" ? (
-                  <>
-                    <BidiText as="span">{thread.workspaceName}</BidiText>
-                    {" · "}
-                  </>
-                ) : null}
-                {format.dateTime(new Date(thread.updatedAt).getTime())}
+                <ThreadContextLine context={thread.context} />
+                <span className="shrink-0 tabular-nums">
+                  {format.dateTime(new Date(thread.updatedAt).getTime())}
+                </span>
               </span>
-            </Link>
+            </Tooltip>
             <ChatTitleSuggestButton
               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               hasMessages
