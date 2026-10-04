@@ -1639,13 +1639,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/tasks/flow-run.ts::runScheduledFlow",
-    "writes": {
-      "delete:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseFailed",
     "writes": {
       "update:infoSoudTrackedCases": 1

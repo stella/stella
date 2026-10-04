@@ -98,7 +98,12 @@ import {
   isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } from "@/api/mcp/tools";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOCX_MIME_TYPE,
+  PDF_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -6903,6 +6908,59 @@ describe("OpenAI-compatible MCP tools", () => {
         sourceVersionId: "entity_version_1",
       },
     });
+  });
+
+  test("read_document reports an encrypted Office file exactly like an encrypted PDF", async () => {
+    const payloads: unknown[] = [];
+    for (const mimeType of [
+      PDF_MIME_TYPE,
+      DOCX_MIME_TYPE,
+      XLSX_MIME_TYPE,
+      PPTX_MIME_TYPE,
+    ]) {
+      const result = await handleMcpToolCall({
+        args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
+        context: createContext({
+          scopedDb: createScopedDb(
+            [],
+            null,
+            [
+              {
+                encrypted: true,
+                fileName: "locked",
+                id: "file_1",
+                mimeType,
+                pdfFileId: null,
+                sha256Hex: "a".repeat(64),
+                sizeBytes: 128,
+                type: "file",
+                version: 1,
+              },
+            ],
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              kind: "document",
+              name: "Locked Agreement",
+              workspaceId: WORKSPACE_ID,
+            },
+          ),
+        }),
+        toolName: "read_document",
+      });
+      payloads.push(parseToolPayload(result));
+    }
+
+    expect(payloads).toEqual(
+      Array.from({ length: 4 }, () =>
+        expect.objectContaining({
+          contentState: {
+            status: "unsupported",
+            sourceVersionId: "entity_version_1",
+            reason: "Encrypted document content cannot be extracted.",
+          },
+        }),
+      ),
+    );
   });
 
   test("read_document does not advertise a failed DOCX source as readable", async () => {
