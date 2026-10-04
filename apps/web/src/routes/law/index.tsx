@@ -20,6 +20,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   parseStatuteQuery,
   type StatuteQueryIntent,
@@ -84,9 +85,6 @@ import {
   type LawHomeScope,
   LawScopePicker,
 } from "@/routes/law/-law-home/law-scope-picker";
-
-/** What the box accepts, and therefore what the results route may receive. */
-const MAX_QUERY_LENGTH = 256;
 
 /** Decisions per court in the top-courts column: a sample, not a list. */
 const DECISIONS_PER_COURT = 2;
@@ -410,7 +408,7 @@ function LawHome() {
                 query: entry,
               })
             }
-            maxLength={MAX_QUERY_LENGTH}
+            maxLength={SEARCH_QUERY_MAX_LENGTH}
             onQueryChange={setQueryInput}
             onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
             pickers={
