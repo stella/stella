@@ -28,7 +28,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -52,6 +51,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -143,7 +143,7 @@ function LegalListsPage() {
     setCreatingList(false);
     if (result.isErr()) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     setNewListName("");
@@ -280,7 +280,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     setCreating(false);
     if (result.isErr()) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     setName("");
@@ -298,7 +298,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         decision: "verified",
       });
     if (response.error) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
     }
     await queryClient.invalidateQueries({
@@ -318,7 +318,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         name: nextSectionName,
       });
     if (response.error) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
     }
     setSectionName("");
@@ -338,7 +338,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         propertyId: toSafeId<"property">(selectedPropertyId),
       });
     if (response.error) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
     }
     setSelectedPropertyId(NO_COLUMN_VALUE);
@@ -381,7 +381,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     setDecidingCandidateId(null);
     if (result.isErr()) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     await Promise.all([
@@ -832,7 +832,7 @@ const ItemSourcesPanel = ({
         status: "verified",
       });
     if (response.error) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
     }
     await Promise.all([

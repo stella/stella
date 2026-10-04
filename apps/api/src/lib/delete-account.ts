@@ -16,7 +16,7 @@ import {
   collectUserOrganizationAndWorkspaceIds,
   deleteChatThreadsAndFileLinks,
   deleteDesktopEditSessionsAndHandoffs,
-  deleteMcpCredentialsAndOAuthState,
+  deleteConnectedCredentialsAndOAuthState,
   deleteFileComparisonUploads,
   deletePdfSigningSessions,
   deletePendingUploads,
@@ -314,7 +314,7 @@ export const verifyAndDeleteUser = async (
           email,
         });
         await revokeOAuthTokensAndGrants(tx, currentUserId);
-        await deleteMcpCredentialsAndOAuthState(tx, currentUserId);
+        await deleteConnectedCredentialsAndOAuthState(tx, currentUserId);
         await clearWorkspaceLeadRole(tx, currentUserId);
         await resetFolioCollabUserState(tx, currentUserId);
 

@@ -19,7 +19,6 @@ import {
   MenuItem,
   MenuSeparator,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { useLatest } from "@stll/ui/use-latest";
 
 import {
@@ -38,6 +37,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata } from "@/lib/types";
@@ -546,10 +546,8 @@ export const useCellMetadataFlags = ({
     onError: (error) => {
       lastSentRef.current = null;
       clearOverride(key);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
+      notifyUserError(error, t("errors.actionFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
       });
     },
   });

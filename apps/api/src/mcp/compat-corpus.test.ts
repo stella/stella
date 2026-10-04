@@ -451,9 +451,11 @@ describe("the corpus page cap split across countries", () => {
           0,
         );
 
-      expect(askedFor(searchDecisionsHandlerMock.mock.calls)).toBe(
-        LIMITS.mcpCompatDecisionPageSizeDefault,
-      );
+      expect(
+        askedFor(
+          searchDecisionsHandlerMock.mock.calls.map(([{ body }]) => [body]),
+        ),
+      ).toBe(LIMITS.mcpCompatDecisionPageSizeDefault);
       expect(askedFor(searchLegislationHandlerMock.mock.calls)).toBe(
         LIMITS.mcpCompatStatutePageSizeDefault,
       );
@@ -596,7 +598,7 @@ describe("compat search reaching the public corpus", () => {
         ]);
         expect(
           searchDecisionsHandlerMock.mock.calls.map(
-            ([input]) => asTestRaw<{ country: string }>(input).country,
+            ([{ body }]) => asTestRaw<{ country: string }>(body).country,
           ),
         ).toEqual([...PUBLIC_CASE_LAW_COUNTRIES]);
         expect(
@@ -671,8 +673,8 @@ describe("compat search reaching the public corpus", () => {
       });
       // First page: no sub-cursor is passed for a country the cursor never
       // named, so nothing is skipped.
-      for (const [input] of searchDecisionsHandlerMock.mock.calls) {
-        expect(asTestRaw<{ cursor?: string }>(input).cursor).toBeUndefined();
+      for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+        expect(asTestRaw<{ cursor?: string }>(body).cursor).toBeUndefined();
       }
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(
         PUBLIC_CASE_LAW_COUNTRIES.length,
@@ -720,7 +722,7 @@ describe("compat search reaching the public corpus", () => {
         cursor: "matter-2",
       });
       expect(searchDecisionsHandlerMock.mock.calls.at(0)?.[0]).toMatchObject({
-        cursor: "decisions-2",
+        body: { cursor: "decisions-2" },
       });
       // Statutes ended on the first page, so they are not asked again.
       expect(searchLegislationHandlerMock).not.toHaveBeenCalled();

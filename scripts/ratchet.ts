@@ -4757,7 +4757,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "security-guards/require-secure-document-response": 0,
   "mcp-security/no-direct-oauth-client-join": 0,
   "mcp-security/redact-oauth-registration-response": 0,
-  "auth-lifecycle/after-remove-member-revokes-artifacts": 0,
+  "auth-lifecycle/member-removal-revokes-artifacts": 0,
   "auth-lifecycle/no-direct-auth-artifact-delete": 0,
   "no-unowned-file-version-write/no-unowned-file-version-write": 0,
   "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,

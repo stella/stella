@@ -14,8 +14,8 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
@@ -92,7 +92,7 @@ const convertView = createSafeHandler(
           tx,
           workspaceId,
           layout: newLayout,
-          legalListsEnabled: legalListsDeployed(),
+          legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
         });
         if (rejection !== null) {
           return rejection;

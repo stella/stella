@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -27,6 +28,23 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
+  const name = "AdmissionStoreEvictionPolicyRefused";
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: name, Unit: "Count" }],
+        },
+      ],
+    },
+    [name]: refused ? 1 : 0,
+  });
+};
 
 // Test seam, like the logger's: when set, every EMF line goes here instead of
 // stdout, whatever the environment, so a test reads the line CloudWatch would
@@ -482,6 +500,30 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+
+type PublicCorpusAdmissionMetric = {
+  class: Exclude<PublicCorpusClass, "browse">;
+  outcome: "refused";
+};
+
+export const emitPublicCorpusAdmissionMetric = (
+  input: PublicCorpusAdmissionMetric,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["class", "outcome"]],
+          Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
+        },
+      ],
+    },
+    ...input,
+    PublicCorpusAdmissions: 1,
+  });
+};
 
 export const emitActionResponseOversizeMetric = (
   transport: "http" | "mcp",

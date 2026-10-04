@@ -13,7 +13,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Beta", runs: [{ text: "Beta", italic: true }] },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "Alpha", bold: true }] },
         { runs: [{ text: "Beta", italic: true }] },
@@ -21,22 +26,70 @@ describe("clauseBodyToRichPatch", () => {
     });
   });
 
+  test("directive resolution preserves explicit false run formatting", () => {
+    const body: ClauseBody = [
+      { text: "{% if enabled %}" },
+      {
+        text: "{{ name }}",
+        runs: [{ text: "{{ name }}", bold: false, italic: false }],
+      },
+      { text: "{% endif %}" },
+    ];
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { enabled: true, name: "Plain" },
+        slotKey: "Terms",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [{ runs: [{ text: "Plain", bold: false, italic: false }] }],
+    });
+  });
+
+  test("stored legacy clauses retain literal markers without evaluating their branches", () => {
+    const body: ClauseBody = [
+      { text: "{% if enabled %}" },
+      { text: '{{ num("section") }}' },
+    ];
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: {},
+        slotKey: "Terms",
+        source: "stored",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [
+        { runs: [{ text: "{% if enabled %}" }] },
+        { runs: [{ text: '{{ num("section") }}' }] },
+      ],
+    });
+  });
+
   test("falls back to a single text run when a paragraph has no runs", () => {
     const body: ClauseBody = [{ text: "Plain" }];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "Plain" }] }],
     });
   });
 
-  test("drops block-directive paragraphs from the fill value", () => {
+  test("resolves a selected branch without directive markers", () => {
     const body: ClauseBody = [
       { text: "{% if x %}", isDirective: true, directiveKind: "if" },
       { text: "Conditional" },
       { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "Conditional" }] }],
     });
   });
@@ -46,7 +99,12 @@ describe("clauseBodyToRichPatch", () => {
     // the paragraph (it has a w:r) rather than dropping it as a stray fragment.
     const body: ClauseBody = [{ text: "" }];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "" }] }],
     });
   });
@@ -57,7 +115,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Second", listKind: "bullet", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "• First" }] },
         { runs: [{ text: "• Second" }] },
@@ -76,7 +139,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Second", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. First", bold: true }] },
         { runs: [{ text: "2. Second" }] },
@@ -92,7 +160,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Top2", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. Top" }] },
         { runs: [{ text: "    a. Sub" }] },
@@ -109,7 +182,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Fresh one", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. One" }] },
         { runs: [{ text: "Break" }] },
@@ -129,4 +207,74 @@ describe("clauseBodyToPlainText", () => {
 
     expect(clauseBodyToPlainText(body)).toBe("{% if x %}\nBody\n{% endif %}");
   });
+});
+
+test("loop placeholders spanning formatted runs resolve in the shared engine", () => {
+  const body: ClauseBody = [
+    { text: "{% for row in rows %}", isDirective: true },
+    {
+      text: "Name: {{ row.name }}",
+      runs: [
+        { text: "Name: ", italic: true },
+        { text: "{{ row.", bold: true },
+        { text: "name }}", bold: true },
+      ],
+    },
+    { text: "{% endfor %}", isDirective: true },
+  ];
+  const patch = clauseBodyToRichPatch(body, {
+    values: { rows: [{ name: "Alpha" }, { name: "Beta" }] },
+    slotKey: "@clause:Terms",
+  }).unwrap();
+  if (typeof patch === "string") {
+    throw new TypeError("expected a rich clause patch");
+  }
+  expect(patch).toEqual({
+    paragraphs: [
+      {
+        runs: [
+          { text: "Name: ", italic: true },
+          { text: "Alpha", bold: true },
+        ],
+      },
+      {
+        runs: [
+          { text: "Name: ", italic: true },
+          { text: "Beta", bold: true },
+        ],
+      },
+    ],
+  });
+});
+
+test.each([false, true])(
+  "substitutes a clause placeholder with block presence %j",
+  (withBlock) => {
+    const body: ClauseBody = [{ text: "Buyer: {{ buyer }}" }];
+    if (withBlock) {
+      body.unshift({ text: "{% if include %}", isDirective: true });
+      body.push({ text: "{% endif %}", isDirective: true });
+    }
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { buyer: "ACME", include: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [{ runs: [{ text: "Buyer: " }, { text: "ACME" }] }],
+    });
+  },
+);
+
+test("placeholder-only clauses substitute markers split between opening braces", () => {
+  const patch = clauseBodyToRichPatch(
+    [
+      {
+        text: "{{ buyer }}",
+        runs: [{ text: "{" }, { text: "{ buyer }}", bold: true }],
+      },
+    ],
+    { values: { buyer: "ACME" }, slotKey: "@clause:Terms" },
+  ).unwrap();
+  expect(patch).toEqual({ paragraphs: [{ runs: [{ text: "ACME" }] }] });
 });

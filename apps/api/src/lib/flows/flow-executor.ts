@@ -163,6 +163,7 @@ export const executeFlowStep = async (
     createEntity = createEntityFromBuffer,
     loadAIConfig = loadOrgAIConfig,
     taskFeatures = deployedTaskFeatures(),
+    flushSearchRepairs = flushEntitySearchRepairs,
   }: {
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
@@ -176,6 +177,7 @@ export const executeFlowStep = async (
     loadAIConfig?: typeof loadOrgAIConfig | undefined;
     /** Which task features the deployment enables; tests pin it. */
     taskFeatures?: TaskDeploymentFeatures | undefined;
+    flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
   },
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
@@ -265,6 +267,7 @@ export const executeFlowStep = async (
         scopedDb,
         broadcastUpdate,
         taskFeatures,
+        flushSearchRepairs,
       });
       return;
     case "ai": {
@@ -1060,6 +1063,7 @@ const pauseAtReviewGate = async ({
   scopedDb,
   broadcastUpdate,
   taskFeatures,
+  flushSearchRepairs,
 }: {
   run: LoadedRun;
   stepIndex: number;
@@ -1069,6 +1073,7 @@ const pauseAtReviewGate = async ({
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   taskFeatures: TaskDeploymentFeatures;
+  flushSearchRepairs: typeof flushEntitySearchRepairs;
 }): Promise<void> => {
   const runId = run.id;
   const workspaceId = run.workspaceId;
@@ -1146,7 +1151,7 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushEntitySearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(captureError);
 };
 
 const readRunProgress = async (

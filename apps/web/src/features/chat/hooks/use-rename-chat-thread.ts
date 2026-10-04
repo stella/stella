@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import {
   chatThreadTitleOptions,
   groupedChatThreadsOptions,
@@ -14,6 +12,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -101,7 +100,7 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
         queryClient.removeQueries({ queryKey: titleKey, exact: true });
       }
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: () => {
       detached(

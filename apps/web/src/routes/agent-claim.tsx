@@ -17,11 +17,11 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
-import { stellaToast } from "@stll/ui/toast";
 
 import { browserApiRootUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -86,7 +86,7 @@ function AgentClaimPage() {
 
     if (Result.isError(result)) {
       setStatus("idle");
-      stellaToast.add({ title: t("agentClaim.error"), type: "error" });
+      notifyUserError(result.error, t("agentClaim.error"));
       return;
     }
 
@@ -97,14 +97,14 @@ function AgentClaimPage() {
 
     setStatus("idle");
     if (result.value.status === "not_found") {
-      stellaToast.add({ title: t("agentClaim.errorNotFound"), type: "error" });
+      notifyUserError(undefined, t("agentClaim.errorNotFound"));
       return;
     }
     if (result.value.status === "expired") {
-      stellaToast.add({ title: t("agentClaim.errorExpired"), type: "error" });
+      notifyUserError(undefined, t("agentClaim.errorExpired"));
       return;
     }
-    stellaToast.add({ title: t("agentClaim.errorInvalid"), type: "error" });
+    notifyUserError(undefined, t("agentClaim.errorInvalid"));
   };
 
   if (status === "claimed") {

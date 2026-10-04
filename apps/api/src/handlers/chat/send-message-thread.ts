@@ -362,7 +362,7 @@ const loadThreadAttempt = async ({
               resourceId: threadId,
               workspaceId,
               changes: {
-                title: { old: thread.title, new: title },
+                titleChanged: { old: false, new: true },
               },
             });
           }),
