@@ -6,8 +6,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const describePostgres =
-  databaseUrl && runPostgresTests ? describe : describe.skip;
+const describePostgres = describe.skipIf(!runPostgresTests);
 const validationSql = readFileSync(
   path.resolve(
     import.meta.dir,
