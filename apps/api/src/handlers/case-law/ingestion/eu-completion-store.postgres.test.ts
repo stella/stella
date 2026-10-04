@@ -15,6 +15,7 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   euCompletionRequestHours,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -879,6 +880,19 @@ if (!databaseUrl || !enabled) {
       expect(
         (await state.store.loadSourceGateState(state.sourceId)).holdCount,
       ).toBe(0);
+      const completionRuns = async () =>
+        await db
+          .select()
+          .from(systemAuditRuns)
+          .where(eq(systemAuditRuns.actor, "system:eu-corpus-completion"));
+      const runsBefore = (await completionRuns()).length;
+      const idle = {
+        attempted: 0,
+        applied: 0,
+        unchanged: 0,
+        reviewRequired: 0,
+        failed: 0,
+      };
       expect(
         (
           await state.store.recordTick({
@@ -886,18 +900,29 @@ if (!databaseUrl || !enabled) {
             mode: "dry-run",
             healthyCompleted: 0,
             intentionallyHeld: false,
+            counts: idle,
           })
         ).ticksWithoutProgress,
       ).toBe(0);
+      // An idle tick records no system audit run.
+      expect(await completionRuns()).toHaveLength(runsBefore);
       for (const mode of ["dry-run", "apply"] as const) {
         const progress = await state.store.recordTick({
           sourceId: state.sourceId,
           mode,
           healthyCompleted: 1,
           intentionallyHeld: false,
+          counts: { ...idle, attempted: 1, applied: 1 },
         });
         expect(progress.ticksWithoutProgress).toBe(0);
       }
+      const runs = await completionRuns();
+      expect(runs).toHaveLength(runsBefore + 2);
+      expect(runs.at(-1)?.counts).toEqual({
+        ...idle,
+        attempted: 1,
+        applied: 1,
+      });
     });
     test("terminal current hash and parser receipts quiesce across sweep wrap", async () => {
       const state = await fixture();

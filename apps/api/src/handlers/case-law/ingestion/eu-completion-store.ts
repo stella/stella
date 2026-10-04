@@ -37,7 +37,10 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export type EuCompletionReceipt = typeof euCompletionReceipts.$inferSelect;
 export type EuCompletionMode = EuCompletionReceipt["mode"];
@@ -381,7 +384,6 @@ const recordCompletionProgressTx = async (
       status === "review-required" ||
       status === "publisher-gone" ||
       status === "too-large");
-  // audit: skip — public case-law corpus bookkeeping, no workspace data
   await tx
     .insert(euCompletionControls)
     .values({
@@ -438,7 +440,6 @@ const retireCompletedReceiptsTx = async (
     )
     .orderBy(asc(euCompletionReceipts.createdAt), asc(euCompletionReceipts.id))
     .limit(EU_COMPLETION_STORE_LIMITS.maxRows);
-  // audit: skip — public case-law corpus bookkeeping, no workspace data
   await tx
     .update(euCompletionReceipts)
     .set({
@@ -479,7 +480,6 @@ const holdPublisherRefusalTx = async (
     ),
     holdCount: batch.holdCount + 1,
   };
-  // audit: skip — public case-law corpus bookkeeping, no workspace data
   await tx
     .insert(euCompletionControls)
     .values({
@@ -666,7 +666,6 @@ const createWriteMarkerOperations = ({ now }: StoreContext) => {
         "Completion canonical write requires its persisted hash and parser stamp",
       );
     }
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     await tx
       .update(euCompletionReceipts)
       .set({
@@ -765,7 +764,6 @@ const createSettlementOperations = ({
         .limit(1)
     ).at(0);
     assertCompletionRetryTime({ retrying, retryAt, now });
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     const settled =
       (
         await tx
@@ -1020,7 +1018,6 @@ const readmitSettledMirrorsTx = async (
       sourceHash === receipt.writtenSourceHash;
     // A canonical repair may advance observation order without changing bytes.
     // Reclassify against its current claim, rather than replaying the old write.
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     readmitted.push(
       ...(await tx
         .update(euCompletionReceipts)
@@ -1066,7 +1063,6 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
     }
     return await transaction(async (tx) => {
       const name = checkpointName(options);
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .insert(databaseBackfillStates)
         .values({ name, batch: initialBatchState() })
@@ -1145,7 +1141,6 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
       // Event identity remains stable across recovery; distinct target attempts
       // retain distinct identities even before their target can be classified.
       const eligible = page.filter((row) => row.eligible);
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       const rows =
         eligible.length === 0
           ? []
@@ -1166,7 +1161,6 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
                 })),
               )
               .returning();
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       const advanced = await tx
         .update(databaseBackfillStates)
         .set({
@@ -1234,7 +1228,6 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
         ) {
           return null;
         }
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         return (
           (
             await tx
@@ -1296,7 +1289,6 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
         ? EU_COMPLETION_STORE_LIMITS.readmissionDays * DAY_IN_MS
         : retryDelay(attempts + 1);
       const nextRetryAt = withdrawn ? null : new Date(now() + retryDuration);
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .update(euCompletionReceipts)
         .set({
@@ -1384,7 +1376,6 @@ const createFailureOperations = (
               holdCount: batch.holdCount + 1,
             }
           : batch;
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .update(euCompletionReceipts)
         .set({
@@ -1407,7 +1398,6 @@ const createFailureOperations = (
           updatedAt: new Date(now()),
         })
         .where(eq(euCompletionReceipts.id, receipt.id));
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .insert(euCompletionControls)
         .values({
@@ -1448,7 +1438,6 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
     }
     return await transaction(
       async (tx) =>
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         (
           await tx
             .insert(euCompletionRequestHours)
@@ -1507,14 +1496,12 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
         )
         .orderBy(asc(euCompletionRequestHours.hour))
         .limit(limit);
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .delete(euCompletionRequestHours)
         .where(inArray(euCompletionRequestHours.hour, expiredHours));
       if (old.length === 0) {
         return 0;
       }
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       return (
         await tx
           .delete(euCompletionReceipts)
@@ -1597,7 +1584,6 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
               }),
             );
           }
-          // audit: skip — public case-law corpus bookkeeping, no workspace data
           const rows = await tx
             .insert(euCompletionApprovals)
             .values({
@@ -1644,7 +1630,6 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
       panic("Completion control requires explicit operator attribution");
     }
     return await transaction(async (tx) => {
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .insert(euCompletionControls)
         .values({
@@ -1694,7 +1679,6 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
     });
   const savePreflightGateState = async (batch: BatchState) =>
     await cleanup(async (tx) => {
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .insert(euCompletionControls)
         .values({ key: GLOBAL_CONTROL, batch })
@@ -1708,18 +1692,25 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
     mode,
     healthyCompleted,
     intentionallyHeld,
+    counts,
   }: {
     sourceId: EuCompletionReceipt["sourceId"];
     mode: EuCompletionMode;
     healthyCompleted: number;
     intentionallyHeld: boolean;
+    counts: SystemAuditCounts<"system:eu-corpus-completion">;
   }) =>
     await cleanup(async (tx) => {
+      // This module's writes are attributed to the completion actor's run:
+      // one system audit row per tick that changed anything.
+      await recordSystemAudit(tx, "system:eu-corpus-completion", {
+        subject: createSafeId<"systemScriptRun">(),
+        counts,
+      });
       const madeProgress = healthyCompleted > 0;
       const shouldProgress = mode === "apply" && !intentionallyHeld;
       // Only verified settlement increments completedRows; caller metrics cannot
       // manufacture healthy evidence for systemic-failure isolation.
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       const row = (
         await tx
           .insert(euCompletionControls)

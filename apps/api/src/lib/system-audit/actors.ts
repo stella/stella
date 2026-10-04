@@ -47,6 +47,13 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "blocked",
     "failed",
   ],
+  "system:eu-corpus-completion": [
+    "attempted",
+    "applied",
+    "unchanged",
+    "reviewRequired",
+    "failed",
+  ],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
 export type SystemRunActor = keyof typeof SYSTEM_RUN_ACTOR_COUNTS;

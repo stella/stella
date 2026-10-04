@@ -316,6 +316,13 @@ export const runEuCompletionTick = async ({
         report.status === "request-budget" ||
         report.status === "byte-budget" ||
         eligibleAttempts === 0,
+      counts: {
+        attempted: report.attempted,
+        applied: report.applied,
+        unchanged: report.unchanged,
+        reviewRequired: report.reviewRequired,
+        failed: report.failed,
+      },
     });
     report.noProgress = progress.ticksWithoutProgress;
     return report;
