@@ -19,3 +19,10 @@ export const validAccountDeletionReassignments = ({
       )
     );
   });
+
+/** Active tasks with no selected member lose their assignee on deletion. */
+export const accountDeletionLeavesTasksUnassigned = ({
+  tasks,
+  reassignments,
+}: Omit<AccountDeletionReassignmentsOptions, "members">) =>
+  tasks.some(({ entityId }) => !reassignments[entityId]);

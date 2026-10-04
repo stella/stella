@@ -73,7 +73,10 @@ import { SessionsCard } from "@/routes/_protected.settings/-components/account/s
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-import { validAccountDeletionReassignments } from "./-components/account/deletion-reassignments.logic";
+import {
+  accountDeletionLeavesTasksUnassigned,
+  validAccountDeletionReassignments,
+} from "./-components/account/deletion-reassignments.logic";
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   component: ProfilePage,
@@ -405,6 +408,10 @@ function ProfilePageBody() {
     members: activeTaskMembers,
     reassignments,
   });
+  const tasksLeftUnassigned = accountDeletionLeavesTasksUnassigned({
+    tasks: activeTasks,
+    reassignments,
+  });
   let dialogStep:
     | "loading"
     | "tasks"
@@ -657,6 +664,11 @@ function ProfilePageBody() {
                   <p className="text-muted-foreground text-sm">
                     {t("settings.account.deleteAccountTasksDescription")}
                   </p>
+                  {tasksLeftUnassigned && (
+                    <p className="text-sm" role="status">
+                      {t("settings.account.deleteAccountTasksUnassignedNotice")}
+                    </p>
+                  )}
                   <div className="flex max-h-[280px] flex-col gap-3 overflow-y-auto pe-1">
                     {activeTaskGroups.map((group) => (
                       <div

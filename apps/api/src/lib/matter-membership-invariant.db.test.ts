@@ -2,6 +2,8 @@ import type { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
@@ -19,6 +21,14 @@ afterAll(async () => {
 });
 
 const CONSTRAINT = "workspace_members_organization_member";
+
+const VALIDATION_MIGRATION_SQL = readFileSync(
+  nodePath.resolve(
+    import.meta.dir,
+    "../../drizzle/20261004001100_validate_matter_membership_organization_membership/migration.sql",
+  ),
+  "utf-8",
+).replaceAll("--> statement-breakpoint", "");
 
 const observeFailure = async (operation: Promise<unknown>) =>
   (
@@ -206,6 +216,94 @@ describe("matter membership requires organization membership", () => {
       ).toMatchObject({ code: "23503", constraint: CONSTRAINT });
       expect(await data.matterMembers()).toEqual([
         { workspaceId: data.matters[0], userId },
+      ]);
+    } finally {
+      await data.cleanUp();
+    }
+  });
+
+  test("validation removes and audits memberships an earlier state left without an organization membership", async () => {
+    const data = await fixture();
+    try {
+      const [leaverId, colleagueId] = data.users;
+      if (!leaverId || !colleagueId) {
+        throw new Error("fixture users");
+      }
+      for (const userId of [leaverId, colleagueId]) {
+        await data.addMember(data.organizations[0], userId);
+        await data.addMatterMember(data.matters[0], userId);
+      }
+      // A database from before the reference: the organization membership
+      // went away without its matter membership.
+      await client.exec(`SET session_replication_role = replica`);
+      await client.query(
+        `DELETE FROM member WHERE organization_id = $1 AND user_id = $2`,
+        [data.organizations[0], leaverId],
+      );
+      await client.exec(`SET session_replication_role = origin`);
+      expect(await data.orphans()).toBe(1);
+      const [orphan] = (
+        await client.query<{ id: string }>(
+          `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+          [data.matters[0], leaverId],
+        )
+      ).rows;
+      if (!orphan) {
+        throw new Error("fixture orphan");
+      }
+
+      await client.exec(VALIDATION_MIGRATION_SQL);
+      await client.exec(`COMMIT`);
+      await client.exec(`RESET lock_timeout; RESET statement_timeout`);
+
+      expect(await data.orphans()).toBe(0);
+      expect(await data.matterMembers()).toEqual([
+        { workspaceId: data.matters[0], userId: colleagueId },
+      ]);
+      const audits = await client.query<{
+        organizationId: string;
+        workspaceId: string;
+        action: string;
+        resourceType: string;
+        changes: unknown;
+        metadata: unknown;
+        performerType: string;
+        triggerType: string;
+        triggerSourceId: string;
+        activityCategory: string;
+      }>(
+        `SELECT organization_id AS "organizationId",
+                workspace_id AS "workspaceId",
+                action,
+                resource_type AS "resourceType",
+                changes,
+                metadata,
+                performer_type AS "performerType",
+                trigger_type AS "triggerType",
+                trigger_source_id AS "triggerSourceId",
+                activity_category AS "activityCategory"
+         FROM audit_logs WHERE resource_id = $1`,
+        [orphan.id],
+      );
+      expect(audits.rows).toEqual([
+        {
+          organizationId: data.organizations[0],
+          workspaceId: data.matters[0],
+          action: "delete",
+          resourceType: "workspace_member",
+          changes: {
+            deleted: {
+              old: { userId: leaverId, workspaceId: data.matters[0] },
+              new: null,
+            },
+          },
+          metadata: { cause: "organization_membership_missing" },
+          performerType: "service",
+          triggerType: "system",
+          triggerSourceId:
+            "20261004001100_validate_matter_membership_organization_membership",
+          activityCategory: "team",
+        },
       ]);
     } finally {
       await data.cleanUp();

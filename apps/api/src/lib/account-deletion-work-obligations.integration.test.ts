@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,18 +9,27 @@ import {
 } from "bun:test";
 import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   contacts,
   entities,
   taskAssignees,
+  timeEntries,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { selectMemberCleanupWorkspaceIds } from "@/api/lib/member-assignment-offboarding";
+import { cents } from "@/api/lib/money";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -284,6 +294,9 @@ test("account erasure unassigns open tasks, keeps finished work's assignee and a
       expect(count).toBe(0);
       expect(await tx.$count(entities, inArray(entities.id, taskIds))).toBe(2);
       const [openTaskId, doneTaskId] = taskIds;
+      if (!openTaskId || !doneTaskId) {
+        throw new Error("fixture tasks");
+      }
       // Finished work keeps its former assignee as history.
       expect(
         await tx
@@ -331,4 +344,123 @@ test("account erasure unassigns open tasks, keeps finished work's assignee and a
       throw error;
     }
   }
+});
+
+type FixtureTransaction = Parameters<
+  Parameters<TestDatabase["transaction"]>[0]
+>[0];
+
+const rollingBack = async (body: (tx: FixtureTransaction) => Promise<void>) => {
+  try {
+    await testDb.transaction(async (tx) => {
+      await body(tx);
+      tx.rollback();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
+};
+
+describe("account erasure spans every organization", () => {
+  test("pending approvals in an organization the user already left are cleared and audited there", async () => {
+    await rollingBack(async (tx) => {
+      // The user left organization B earlier; its draft approval stayed.
+      await tx.delete(member).where(eq(member.id, ids.memberA1orgB));
+      const leftEntryId = createSafeId<"timeEntry">();
+      const currentEntryId = createSafeId<"timeEntry">();
+      const entry = {
+        approverUserId: ids.userA1,
+        dateWorked: new Date().toISOString().slice(0, 10),
+        timezoneId: "UTC",
+        durationMinutes: 30,
+        billedMinutes: 30,
+        rateAtEntry: cents(10_000),
+        currency: "EUR",
+        narrative: "Reviewed the file",
+      };
+      await tx.insert(timeEntries).values([
+        {
+          ...entry,
+          id: leftEntryId,
+          organizationId: ids.orgB,
+          workspaceId: ids.wsB1,
+          userId: ids.userB1,
+        },
+        {
+          ...entry,
+          id: currentEntryId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA2,
+          userId: ids.userA2,
+        },
+      ]);
+
+      await reassignActiveTaskAssignmentsAndDropMemberships({
+        tx: asTestRaw<Transaction>(tx),
+        currentUserId: ids.userA1,
+        deletionRequestId: createSafeId<"accountDeletionRequest">(),
+        reassignments: [],
+      });
+
+      expect(
+        await tx
+          .select({
+            id: timeEntries.id,
+            approverUserId: timeEntries.approverUserId,
+          })
+          .from(timeEntries)
+          .where(inArray(timeEntries.id, [leftEntryId, currentEntryId]))
+          .orderBy(timeEntries.id),
+      ).toEqual(
+        [leftEntryId, currentEntryId]
+          .toSorted()
+          .map((id) => ({ id, approverUserId: null })),
+      );
+      expect(
+        await tx
+          .select({
+            organizationId: auditLogs.organizationId,
+            changes: auditLogs.changes,
+          })
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, leftEntryId)),
+      ).toEqual([
+        {
+          organizationId: ids.orgB,
+          changes: { approverUserId: { old: ids.userA1, new: null } },
+        },
+      ]);
+    });
+  });
+
+  test("the matter bound is the per-organization cap once per organization involved", async () => {
+    await rollingBack(async (tx) => {
+      const raw = asTestRaw<Transaction>(tx);
+      // Three matter memberships across two organizations, cap two each.
+      expect(
+        await selectMemberCleanupWorkspaceIds({
+          tx: raw,
+          userId: brandPersistedUserId(ids.userA1),
+          workspacesPerOrganization: 2,
+        }),
+      ).toEqual([ids.wsA1, ids.wsA2, ids.wsB1].toSorted());
+      // One organization still refuses more matters than its cap.
+      const refused = await Result.tryPromise({
+        try: async () =>
+          await selectMemberCleanupWorkspaceIds({
+            tx: raw,
+            userId: brandPersistedUserId(ids.userA1),
+            organizationId: brandPersistedOrganizationId(ids.orgA),
+            workspacesPerOrganization: 1,
+          }),
+        catch: (error) => error,
+      });
+      expect(Result.isError(refused)).toBe(true);
+      if (Result.isError(refused)) {
+        expect(refused.error).toBeInstanceOf(HandlerError);
+      }
+    });
+  });
 });

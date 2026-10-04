@@ -1,6 +1,6 @@
 {
   "metric": "no-db-await-in-loop-suppressions",
   "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-  "delta": 26,
-  "reason": "Removal drains each kind of member-owned row in bounded, audited batches and takes matter locks one at a time in ascending id order; each awaited statement depends on the locks or rows of the previous one."
+  "delta": 27,
+  "reason": "Removal drains each kind of member-owned row in bounded, audited batches and takes matter locks one at a time in ascending id order; account erasure reads the organizations involved once per kind of row to size its bound; each awaited statement depends on the locks or rows of the previous one."
 }

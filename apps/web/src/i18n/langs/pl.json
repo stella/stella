@@ -4277,6 +4277,7 @@
       "deleteAccountTaskReassignPlaceholder": "Wybierz członka...",
       "deleteAccountTasksDescription": "Masz przypisane aktywne zadania. Przenieś je do innych członków obszaru roboczego, aby praca mogła trwać dalej.",
       "deleteAccountTasksTitle": "Przenieś aktywne zadania",
+      "deleteAccountTasksUnassignedNotice": "Zadania bez wybranego członka pozostaną w obszarze roboczym bez przypisanej osoby.",
       "deleteAccountWarning": "Usunięcie jest nieodwracalne. Dane logowania i prywatne dane konta zostaną usunięte.",
       "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Ukończona historia obszarów roboczych pozostanie przypisana do usuniętego konta.",
       "desktop": "Aplikacja na komputer",

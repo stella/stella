@@ -4277,6 +4277,7 @@
       "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
       "deleteAccountTasksDescription": "Tiene tareas activas asignadas. Transfiéralas a otros miembros del espacio de trabajo para que el trabajo continúe.",
       "deleteAccountTasksTitle": "Transferir tareas activas",
+      "deleteAccountTasksUnassignedNotice": "Las tareas sin un miembro seleccionado permanecerán en su espacio de trabajo sin persona asignada.",
       "deleteAccountWarning": "La eliminación es irreversible. Se eliminarán sus datos de inicio de sesión y los datos privados de la cuenta.",
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",

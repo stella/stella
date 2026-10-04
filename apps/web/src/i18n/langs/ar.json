@@ -4277,6 +4277,7 @@
       "deleteAccountTaskReassignPlaceholder": "اختر عضوًا...",
       "deleteAccountTasksDescription": "لديك مهام نشطة مسندة إليك. انقلها إلى أعضاء آخرين في مساحة العمل حتى يستمر العمل.",
       "deleteAccountTasksTitle": "نقل المهام النشطة",
+      "deleteAccountTasksUnassignedNotice": "ستبقى المهام التي لم يُحدَّد لها عضو في مساحة العمل دون مسؤول عنها.",
       "deleteAccountWarning": "الحذف إجراء لا رجعة فيه. ستُزال بيانات تسجيل الدخول وبيانات الحساب الخاصة.",
       "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. سيبقى سجل مساحات العمل المكتمل منسوبًا إلى حسابك المحذوف.",
       "desktop": "سطح المكتب",

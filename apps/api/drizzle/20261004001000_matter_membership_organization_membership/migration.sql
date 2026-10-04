@@ -14,6 +14,15 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  -- Share-lock the matter first, so a concurrent change of its organization
+  -- waits for this write or this write waits for it and then reads the new
+  -- organization. Every writer of matter memberships already holds the matter
+  -- row (or created it), so this adds no wait to them; the lock order stays
+  -- matter, then organization membership.
+  PERFORM 1
+  FROM public.workspaces w
+  WHERE w.id = NEW.workspace_id
+  FOR SHARE OF w;
   -- Key-share the referenced membership, as a foreign key check does, so a
   -- concurrent deletion of it waits for this write or this write waits for it.
   PERFORM 1
@@ -75,6 +84,19 @@ BEGIN
   IF NEW.organization_id = OLD.organization_id THEN
     RETURN NULL;
   END IF;
+  -- Key-share the new organization's memberships of this matter's members, as
+  -- a foreign key check does, so a concurrent departure waits for the move
+  -- (and its cascade then sees the moved matter) or the move waits for the
+  -- departure and the check below sees it. The update already holds the
+  -- matter row, so the order matches grants: matter, then membership.
+  PERFORM 1
+  FROM public.workspace_members wm
+  JOIN public.member m
+    ON m.organization_id = NEW.organization_id
+   AND m.user_id = wm.user_id
+  WHERE wm.workspace_id = NEW.id
+  ORDER BY m.id
+  FOR KEY SHARE OF m;
   IF EXISTS (
     SELECT 1
     FROM public.workspace_members wm

@@ -684,3 +684,239 @@ describeLocks("matter creation against organization removal (postgres)", () => {
     });
   }
 });
+
+/**
+ * A second organization and a matter of the fixture organization with no
+ * members yet, for races against a change of the matter's organization.
+ */
+const movableMatter = async (db: GatedTestDb, data: Fixture) => {
+  const targetOrganizationId = mintAuthProviderId<"organization">();
+  const workspaceId = createSafeId<"workspace">();
+  await db.insert(organization).values({
+    id: targetOrganizationId,
+    name: "Target",
+    slug: targetOrganizationId,
+    createdAt: new Date(),
+  });
+  await db.insert(workspaces).values({
+    id: workspaceId,
+    organizationId: data.organizationId,
+    name: "Movable matter",
+    reference: workspaceId,
+  });
+  return {
+    targetOrganizationId,
+    workspaceId,
+    organizationOf: async () =>
+      (
+        await db
+          .select({ organizationId: workspaces.organizationId })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+      ).at(0)?.organizationId,
+    orphans: async () =>
+      (
+        await db.execute<{ count: number }>(sql`
+          SELECT count(*)::int AS count
+          FROM workspace_members wm
+          JOIN workspaces w ON w.id = wm.workspace_id
+          WHERE wm.workspace_id = ${workspaceId}
+            AND NOT EXISTS (
+              SELECT 1 FROM member m
+              WHERE m.organization_id = w.organization_id
+                AND m.user_id = wm.user_id
+            )`)
+      ).at(0)?.count,
+    cleanUp: async () => {
+      await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+      await db
+        .delete(organization)
+        .where(eq(organization.id, targetOrganizationId));
+    },
+  };
+};
+
+const expectReferenceRefusal = (outcome: Result<unknown, unknown>) => {
+  expect(Result.isError(outcome)).toBe(true);
+  if (Result.isError(outcome)) {
+    expect(
+      isPgConstraintError(
+        outcome.error,
+        PG_ERROR.FOREIGN_KEY_VIOLATION,
+        "workspace_members_organization_member",
+      ),
+    ).toBe(true);
+  }
+};
+
+describeLocks(
+  "matter membership against a change of the matter's organization (postgres)",
+  () => {
+    for (const first of ["grant", "move"] as const) {
+      test(`${first} first: the matter never keeps a member of another organization`, async () => {
+        if (!databaseUrl) {
+          throw new Error("DATABASE_URL");
+        }
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const { db: grantDb } = openClient();
+          const { db: moveDb } = openClient();
+          const data = await fixture(db);
+          const matter = await movableMatter(db, data);
+          const holderPid = Promise.withResolvers<number>();
+          const release = Promise.withResolvers<undefined>();
+          const grant = async (hold: boolean) =>
+            await grantDb.transaction(async (tx) => {
+              await tx.insert(workspaceMembers).values({
+                workspaceId: matter.workspaceId,
+                userId: data.colleagueId,
+              });
+              if (hold) {
+                holderPid.resolve(await backendPid(tx));
+                await release.promise;
+              }
+            });
+          const move = async (hold: boolean) =>
+            await moveDb.transaction(async (tx) => {
+              await tx
+                .update(workspaces)
+                .set({ organizationId: matter.targetOrganizationId })
+                .where(eq(workspaces.id, matter.workspaceId));
+              if (hold) {
+                holderPid.resolve(await backendPid(tx));
+                await release.promise;
+              }
+            });
+          try {
+            const firstRun = Result.tryPromise({
+              try: async () =>
+                first === "grant" ? await grant(true) : await move(true),
+              catch: (error) => error,
+            });
+            const pid = await holderPid.promise;
+            const secondRun = Result.tryPromise({
+              try: async () =>
+                first === "grant" ? await move(false) : await grant(false),
+              catch: (error) => error,
+            });
+            await waitUntilHolding(db, pid);
+            release.resolve(undefined);
+            expect(Result.isOk(await firstRun)).toBe(true);
+            // The second writer waited, then saw the first one's commit.
+            expectReferenceRefusal(await secondRun);
+            expect(await matter.organizationOf()).toBe(
+              first === "grant"
+                ? data.organizationId
+                : matter.targetOrganizationId,
+            );
+            expect(
+              await db.$count(
+                workspaceMembers,
+                eq(workspaceMembers.workspaceId, matter.workspaceId),
+              ),
+            ).toBe(first === "grant" ? 1 : 0);
+            expect(await matter.orphans()).toBe(0);
+          } finally {
+            release.resolve(undefined);
+            await matter.cleanUp();
+            await data.cleanUp();
+          }
+        });
+      });
+    }
+
+    for (const first of ["move", "departure"] as const) {
+      test(`${first} first: a departure from the target organization never leaves the moved matter's member behind`, async () => {
+        if (!databaseUrl) {
+          throw new Error("DATABASE_URL");
+        }
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const { db: moveDb } = openClient();
+          const { db: departureDb } = openClient();
+          const data = await fixture(db);
+          const matter = await movableMatter(db, data);
+          const targetMemberId = Bun.randomUUIDv7();
+          await db.insert(member).values({
+            id: targetMemberId,
+            organizationId: matter.targetOrganizationId,
+            userId: data.colleagueId,
+            role: "member",
+            createdAt: new Date(),
+          });
+          await db.insert(workspaceMembers).values({
+            workspaceId: matter.workspaceId,
+            userId: data.colleagueId,
+          });
+          const holderPid = Promise.withResolvers<number>();
+          const release = Promise.withResolvers<undefined>();
+          const move = async (hold: boolean) =>
+            await moveDb.transaction(async (tx) => {
+              await tx
+                .update(workspaces)
+                .set({ organizationId: matter.targetOrganizationId })
+                .where(eq(workspaces.id, matter.workspaceId));
+              if (hold) {
+                holderPid.resolve(await backendPid(tx));
+                await release.promise;
+              }
+            });
+          const departure = async (hold: boolean) =>
+            await departureDb.transaction(async (tx) => {
+              await tx.delete(member).where(eq(member.id, targetMemberId));
+              if (hold) {
+                holderPid.resolve(await backendPid(tx));
+                await release.promise;
+              }
+            });
+          try {
+            const firstRun = Result.tryPromise({
+              try: async () =>
+                first === "move" ? await move(true) : await departure(true),
+              catch: (error) => error,
+            });
+            const pid = await holderPid.promise;
+            const secondRun = Result.tryPromise({
+              try: async () =>
+                first === "move" ? await departure(false) : await move(false),
+              catch: (error) => error,
+            });
+            await waitUntilHolding(db, pid);
+            release.resolve(undefined);
+            expect(Result.isOk(await firstRun)).toBe(true);
+            const second = await secondRun;
+            if (first === "move") {
+              // The departure waited for the move, then cascaded to the
+              // moved matter's membership.
+              expect(Result.isOk(second)).toBe(true);
+              expect(await matter.organizationOf()).toBe(
+                matter.targetOrganizationId,
+              );
+              expect(
+                await db.$count(
+                  workspaceMembers,
+                  eq(workspaceMembers.workspaceId, matter.workspaceId),
+                ),
+              ).toBe(0);
+            } else {
+              // The move waited for the departure, then found its member gone.
+              expectReferenceRefusal(second);
+              expect(await matter.organizationOf()).toBe(data.organizationId);
+              expect(
+                await db.$count(
+                  workspaceMembers,
+                  eq(workspaceMembers.workspaceId, matter.workspaceId),
+                ),
+              ).toBe(1);
+            }
+            expect(await matter.orphans()).toBe(0);
+          } finally {
+            release.resolve(undefined);
+            await matter.cleanUp();
+            await data.cleanUp();
+          }
+        });
+      });
+    }
+  },
+);

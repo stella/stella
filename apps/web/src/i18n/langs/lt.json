@@ -4277,6 +4277,7 @@
       "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
       "deleteAccountTasksDescription": "Jums priskirtos aktyvios užduotys. Perleiskite jas kitiems darbo srities nariams, kad darbas tęstųsi.",
       "deleteAccountTasksTitle": "Perleisti aktyvias užduotis",
+      "deleteAccountTasksUnassignedNotice": "Užduotys be pasirinkto nario liks darbo srityje be atsakingo asmens.",
       "deleteAccountWarning": "Ištrynimas yra negrįžtamas. Prisijungimo duomenys ir privatūs paskyros duomenys bus pašalinti.",
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Užbaigta darbo sričių istorija liks priskirta jūsų ištrintai paskyrai.",
       "desktop": "Darbalaukis",

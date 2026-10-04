@@ -12,6 +12,7 @@ import {
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
+  organization,
   session,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -519,25 +520,19 @@ const clearMemberContactAssignments = async ({
   }
 };
 
-const timeEntryApprovalScope = (
-  tx: Transaction,
-  scope: AssignmentScope,
-  userId: SafeId<"user">,
-) => {
+const timeEntryApprovalScope = (tx: Transaction, scope: AssignmentScope) => {
   if (scope.type === "workspace") {
     return eq(timeEntries.workspaceId, scope.workspaceId);
   }
   if (scope.type === "organization") {
     return eq(timeEntries.organizationId, scope.organizationId);
   }
-  // Account erasure: bound by the user's organizations so the approval-queue
-  // index serves the read; memberships are deleted only after this cleanup.
+  // Account erasure clears every pending approval naming the user, including
+  // ones in organizations the user already left. Probing the approval-queue
+  // index once per organization keeps the read off a time-entry scan.
   return inArray(
     timeEntries.organizationId,
-    tx
-      .select({ id: member.organizationId })
-      .from(member)
-      .where(eq(member.userId, userId)),
+    tx.select({ id: organization.id }).from(organization),
   );
 };
 
@@ -566,7 +561,7 @@ const clearMemberTimeEntryApprovals = async ({
           .from(timeEntries)
           .where(
             and(
-              timeEntryApprovalScope(tx, scope, userId),
+              timeEntryApprovalScope(tx, scope),
               eq(timeEntries.approverUserId, userId),
               eq(timeEntries.status, BILLING_STATUS.DRAFT),
             ),
@@ -646,6 +641,8 @@ type MemberCleanupWorkspaceOptions = {
   userId: SafeId<"user">;
   /** Absent for account erasure, which spans every organization. */
   organizationId?: SafeId<"organization">;
+  /** The per-organization matter cap; tests lower it to reach the bound. */
+  workspacesPerOrganization?: number;
 };
 
 /**
@@ -658,6 +655,7 @@ export const selectMemberCleanupWorkspaceIds = async ({
   tx,
   userId,
   organizationId,
+  workspacesPerOrganization = LIMITS.workspacesCount,
 }: MemberCleanupWorkspaceOptions): Promise<SafeId<"workspace">[]> => {
   const organizationWorkspaces = organizationId
     ? tx
@@ -679,11 +677,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
       ? inArray(column, organizationWorkspaces)
       : undefined;
   const now = new Date();
-  const bound = LIMITS.workspacesCount + 1;
-  const ids = new Set<SafeId<"workspace">>();
   const sources = [
-    async () =>
-      await tx
+    () =>
+      tx
         .select({ id: workspaceMembers.workspaceId })
         .from(workspaceMembers)
         .where(
@@ -691,10 +687,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
             eq(workspaceMembers.userId, userId),
             inOrganization(workspaceMembers.workspaceId),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .selectDistinct({ id: taskAssignees.workspaceId })
         .from(taskAssignees)
         .where(
@@ -702,10 +697,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
             eq(taskAssignees.userId, userId),
             inOrganization(taskAssignees.workspaceId),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .selectDistinct({ id: workObligations.workspaceId })
         .from(workObligations)
         .where(
@@ -717,10 +711,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
             ]),
             inOrganization(workObligations.workspaceId),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .select({ id: workspaces.id })
         .from(workspaces)
         .where(
@@ -730,46 +723,39 @@ export const selectMemberCleanupWorkspaceIds = async ({
               ? eq(workspaces.organizationId, organizationId)
               : undefined,
           ),
-        )
-        .limit(bound),
-    async () =>
-      (
-        await tx
-          .selectDistinct({ id: timeEntries.workspaceId })
-          .from(timeEntries)
-          .where(
-            and(
-              organizationId
-                ? eq(timeEntries.organizationId, organizationId)
-                : undefined,
-              eq(timeEntries.approverUserId, userId),
-              eq(timeEntries.status, BILLING_STATUS.DRAFT),
-              isNotNull(timeEntries.workspaceId),
-            ),
-          )
-          .limit(bound)
-      ).flatMap(({ id }) => (id === null ? [] : [{ id }])),
+        ),
+    () =>
+      tx
+        .selectDistinct({ id: timeEntries.workspaceId })
+        .from(timeEntries)
+        .where(
+          and(
+            organizationId
+              ? eq(timeEntries.organizationId, organizationId)
+              : undefined,
+            eq(timeEntries.approverUserId, userId),
+            eq(timeEntries.status, BILLING_STATUS.DRAFT),
+            isNotNull(timeEntries.workspaceId),
+          ),
+        ),
     // The running timer offboarding closes locks its matter too.
-    async () =>
-      (
-        await tx
-          .selectDistinct({ id: timeEntries.workspaceId })
-          .from(timeEntries)
-          .where(
-            and(
-              organizationId
-                ? eq(timeEntries.organizationId, organizationId)
-                : undefined,
-              eq(timeEntries.userId, userId),
-              isNotNull(timeEntries.timerStartedAt),
-              isNull(timeEntries.timerStoppedAt),
-              isNotNull(timeEntries.workspaceId),
-            ),
-          )
-          .limit(bound)
-      ).flatMap(({ id }) => (id === null ? [] : [{ id }])),
-    async () =>
-      await tx
+    () =>
+      tx
+        .selectDistinct({ id: timeEntries.workspaceId })
+        .from(timeEntries)
+        .where(
+          and(
+            organizationId
+              ? eq(timeEntries.organizationId, organizationId)
+              : undefined,
+            eq(timeEntries.userId, userId),
+            isNotNull(timeEntries.timerStartedAt),
+            isNull(timeEntries.timerStoppedAt),
+            isNotNull(timeEntries.workspaceId),
+          ),
+        ),
+    () =>
+      tx
         .selectDistinct({ id: flowRuns.workspaceId })
         .from(flowRuns)
         .leftJoin(
@@ -788,10 +774,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
               ),
             ),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .selectDistinct({ id: desktopEditSessions.workspaceId })
         .from(desktopEditSessions)
         .where(
@@ -803,10 +788,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
             eq(desktopEditSessions.status, "open"),
             inOrganization(desktopEditSessions.workspaceId),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .selectDistinct({ id: desktopEditHandoffs.workspaceId })
         .from(desktopEditHandoffs)
         .where(
@@ -815,10 +799,9 @@ export const selectMemberCleanupWorkspaceIds = async ({
             sql`${desktopEditHandoffs.expiresAt} > ${now}`,
             inOrganization(desktopEditHandoffs.workspaceId),
           ),
-        )
-        .limit(bound),
-    async () =>
-      await tx
+        ),
+    () =>
+      tx
         .selectDistinct({ id: pdfSigningSessions.workspaceId })
         .from(pdfSigningSessions)
         .where(
@@ -827,16 +810,36 @@ export const selectMemberCleanupWorkspaceIds = async ({
             eq(pdfSigningSessions.status, "open"),
             inOrganization(pdfSigningSessions.workspaceId),
           ),
-        )
-        .limit(bound),
+        ),
   ];
-  for (const source of sources) {
-    // db-await-in-loop: one indexed read per kind of row removal changes.
-    for (const { id } of await source()) {
-      ids.add(id);
+  // Every organization holds at most its matter cap, so the bound is that cap
+  // once per organization whose matters this cleanup changes: one for
+  // organization removal, every such organization (current or already left)
+  // for account erasure.
+  const organizationIds = new Set<string>();
+  if (!organizationId) {
+    for (const source of sources) {
+      // db-await-in-loop: one distinct-organization read per kind of row.
+      const rows = await tx
+        .selectDistinct({ id: workspaces.organizationId })
+        .from(workspaces)
+        .where(inArray(workspaces.id, source()));
+      for (const { id } of rows) {
+        organizationIds.add(id);
+      }
     }
   }
-  if (ids.size > LIMITS.workspacesCount) {
+  const bound = workspacesPerOrganization * Math.max(organizationIds.size, 1);
+  const ids = new Set<SafeId<"workspace">>();
+  for (const source of sources) {
+    // db-await-in-loop: one indexed read per kind of row removal changes.
+    for (const { id } of await source().limit(bound + 1)) {
+      if (id !== null) {
+        ids.add(id);
+      }
+    }
+  }
+  if (ids.size > bound) {
     throw new HandlerError({
       status: 400,
       message: "Workspaces limit reached",

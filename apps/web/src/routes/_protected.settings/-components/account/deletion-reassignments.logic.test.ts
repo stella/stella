@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { validAccountDeletionReassignments } from "./deletion-reassignments.logic";
+import {
+  accountDeletionLeavesTasksUnassigned,
+  validAccountDeletionReassignments,
+} from "./deletion-reassignments.logic";
 
 const tasks = [
   { entityId: "task", workspaceId: "matter" },
@@ -43,5 +46,25 @@ test("an explicit handoff must name a current member of that matter", () => {
       members,
       reassignments: { task: "departed" },
     }),
+  ).toBe(false);
+});
+test("the unassigned notice shows while any active task has no handoff", () => {
+  expect(
+    accountDeletionLeavesTasksUnassigned({ tasks, reassignments: {} }),
+  ).toBe(true);
+  expect(
+    accountDeletionLeavesTasksUnassigned({
+      tasks,
+      reassignments: { task: "member", second: "" },
+    }),
+  ).toBe(true);
+  expect(
+    accountDeletionLeavesTasksUnassigned({
+      tasks,
+      reassignments: { task: "member", second: "member" },
+    }),
+  ).toBe(false);
+  expect(
+    accountDeletionLeavesTasksUnassigned({ tasks: [], reassignments: {} }),
   ).toBe(false);
 });
