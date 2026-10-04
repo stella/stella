@@ -128,8 +128,9 @@ type ConfirmationOtpConsumeDb = {
  * Test-only seam for {@link verifyConfirmationOtp}. Runs the atomic
  * consume-and-verify against the supplied *root* database handle so a test can
  * inject its PGlite instance. Production code must call
- * `verifyConfirmationOtp`, which binds this to the module-level `rootDb` pool;
- * do not call this with a caller transaction (see the class note below).
+ * `verifyConfirmationOtp`, which binds this to the module-level `rootDb` pool,
+ * or `runConfirmedTransaction`, which commits a refused code's burn itself; do
+ * not call this with any other caller transaction (see the class note below).
  */
 export const consumeConfirmationOtp = async (
   db: ConfirmationOtpConsumeDb,
