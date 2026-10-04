@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -231,12 +232,10 @@ describe("template discover", () => {
       organizationId: fakeOrgId,
       body: { file },
     });
-    if (result instanceof Response) {
-      throw new TypeError("Expected discover data, got a Response");
-    }
-    expect(result.conditions).toHaveLength(1);
-    expect(result.conditions[0]?.name).toBe("hasGuarantor");
-    expect(result.conditions[0]?.expression).toBe("has_guarantor");
+    const discovered = result.unwrap();
+    expect(discovered.conditions).toHaveLength(1);
+    expect(discovered.conditions[0]?.name).toBe("hasGuarantor");
+    expect(discovered.conditions[0]?.expression).toBe("has_guarantor");
   });
 
   test("discovers placeholders in headers", async () => {
@@ -430,13 +429,11 @@ describe("handler MIME validation", () => {
       body: { file: pdfFile },
     });
 
-    if (!(result instanceof Response)) {
-      throw new Error("Expected a Response");
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toContain("DOCX");
     }
-    const resp = result;
-    expect(resp.status).toBe(400);
-    const body = await readTestJson<{ error: string }>(resp);
-    expect(body.error).toContain("DOCX");
   });
 
   test("fill rejects non-DOCX file", async () => {

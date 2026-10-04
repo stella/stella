@@ -37,6 +37,7 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -142,7 +143,7 @@ const orgContext = () => ({
     workspaceId === ids.wsA1
       ? { id: ids.wsA1, status: "active" as const }
       : null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   managedAIResidency: "eu" as const,
@@ -198,6 +199,7 @@ const readPlaybook = async (playbookId: SafeId<"playbookDefinition">) => {
     .select({
       name: playbookDefinitions.name,
       scope: playbookDefinitions.scope,
+      documentTypeKey: playbookDefinitions.documentTypeKey,
       status: playbookDefinitions.status,
       positions: playbookDefinitions.positions,
     })
@@ -267,6 +269,7 @@ describe("save a completed review run as a playbook", () => {
     expect(playbook?.status).toBe("draft");
     // Purchaser is a sale side by definition, so the scope perspective is pinned.
     expect(playbook?.scope).toEqual({ perspective: "buyer" });
+    expect(playbook?.documentTypeKey).toBeNull();
     // The position id survives: findings key on it, so a decision already taken
     // in the run stays attached to the position in the saved playbook.
     expect(playbook?.positions.items.map((item) => item.sourceId)).toEqual([
@@ -297,6 +300,7 @@ describe("save a completed review run as a playbook", () => {
     // Guessing buyer or seller here would invert every favourable/unfavourable
     // judgment a later run makes, so nothing is guessed.
     expect(playbook?.scope).toBeNull();
+    expect(playbook?.documentTypeKey).toBeNull();
   });
 
   test("the saved playbook carries the decisions already taken on its positions", async () => {

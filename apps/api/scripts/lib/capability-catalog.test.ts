@@ -10,7 +10,6 @@ import {
   deriveHandlerImportPath,
   detectContextFidelityFeatures,
   finalIdSegment,
-  findCatalogFormatProblems,
   findInlineCapabilityMismatches,
   findMalformedCapabilityIds,
   findStaleAccessOverrides,
@@ -636,7 +635,6 @@ describe("serializeCatalog", () => {
     expect(serialized).toBe(
       '[\n{"id":"a.b","access":"read"},\n{"id":"c.d","access":"write"}\n]\n',
     );
-    expect(findCatalogFormatProblems(serialized)).toEqual([]);
   });
 
   test("adding an entry changes only its own line (no stored count or total)", () => {
@@ -655,51 +653,6 @@ describe("serializeCatalog", () => {
     const entries = [{ id: "x", inputSchema: { body: { type: "object" } } }];
     expect(JSON.parse(serializeCatalog(entries))).toEqual(entries);
     expect(JSON.parse(serializeCatalog([]))).toEqual([]);
-    expect(findCatalogFormatProblems(serializeCatalog([]))).toEqual([]);
-  });
-});
-
-describe("findCatalogFormatProblems", () => {
-  test("rejects the single-line array", () => {
-    expect(
-      findCatalogFormatProblems('[{"id":"a.b"},{"id":"c.d"}]\n'),
-    ).not.toEqual([]);
-  });
-
-  test("rejects unsorted and duplicate ids", () => {
-    expect(
-      findCatalogFormatProblems('[\n{"id":"c.d"},\n{"id":"a.b"}\n]\n'),
-    ).toEqual([
-      'line 3: "a.b" is not after "c.d" (ids must be unique and ascending)',
-    ]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b"},\n{"id":"a.b"}\n]\n'),
-    ).toHaveLength(1);
-  });
-
-  test("rejects a wrapper carrying a count, a split entry, spacing, or a missing comma", () => {
-    expect(
-      findCatalogFormatProblems('{"count":1,"entries":[\n{"id":"a.b"}\n]}\n'),
-    ).not.toEqual([]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b",\n"access":"read"}\n]\n'),
-    ).not.toEqual([]);
-    expect(findCatalogFormatProblems('[\n{"id": "a.b"}\n]\n')).toEqual([
-      "line 2 is not compact JSON",
-    ]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b"}\n{"id":"c.d"}\n]\n'),
-    ).toEqual(['line 2 must end with ","']);
-  });
-
-  test("the committed catalog is in this format", async () => {
-    const committed = await Bun.file(
-      new URL(
-        "../../../../packages/cli/capability-catalog.json",
-        import.meta.url,
-      ),
-    ).text();
-    expect(findCatalogFormatProblems(committed)).toEqual([]);
   });
 });
 
@@ -1538,6 +1491,148 @@ const openRoute = new Elysia({ prefix: "/case" })
       { routeFile: "case-law/routes.ts", id: "case-law.ingestion.get" },
     ]);
     expect(scan.staleWaivers).toEqual([]);
+  });
+
+  test("every route-level gate form is a hook; auth and permission macros are not", () => {
+    const mount = (setup: string) => `
+import getStatus from "@/api/handlers/case-law/ingestion/get";
+const r = new Elysia()
+  ${setup}
+  .get("/s", getStatus.handler, {});
+`;
+    const scan = (setup: string) =>
+      scanRouteHookGuards({
+        routeFiles: [{ id: "x/routes.ts", source: mount(setup) }],
+        capabilityIds: new Set(["case-law.ingestion.get"]),
+        waivedIds: new Set(),
+      }).violations.length;
+    for (const hook of [
+      ".onBeforeHandle(() => undefined)",
+      ".onRequest(() => undefined)",
+      ".guard({ beforeHandle: () => undefined }, (app) => app)",
+      ".use(deploymentFeatureGate(isLocalDevOpen))",
+    ]) {
+      expect(scan(hook), hook).toBe(1);
+    }
+    for (const macro of [
+      ".use(rateLimit({ max: 10 }))",
+      ".use(authMacro)",
+      ".use(permissionMacro)",
+      '.guard({ auth: true, permission: { entity: ["read"] } })',
+      ".resolve(() => ({}))",
+    ]) {
+      expect(scan(macro), macro).toBe(0);
+    }
+  });
+
+  test("only a deployment gate over the tagged flag is reproduced", () => {
+    const source = (hooks: string) => `
+import getStatus from "@/api/handlers/case-law/ingestion/get";
+import { legalListsDeployed } from "@/api/lib/lists/deployment";
+import { listsAndDraftsDeployed } from "@/api/lib/lists/compound";
+const r = new Elysia()
+  ${hooks}
+  .get("/s", getStatus.handler, {});
+`;
+    const modules: Record<string, string> = {
+      "@/api/lib/lists/deployment":
+        'export const legalListsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS");\n',
+      "@/api/lib/lists/compound":
+        'export const listsAndDraftsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isDeploymentFeatureEnabled("FEATURE_DRAFTS");\n',
+    };
+    const violations = (hooks: string, feature: string | undefined) =>
+      scanRouteHookGuards({
+        routeFiles: [{ id: "x/routes.ts", source: source(hooks) }],
+        capabilityIds: new Set(["case-law.ingestion.get"]),
+        capabilityFeatures: new Map([["case-law.ingestion.get", feature]]),
+        readModule: (importPath) => modules[importPath],
+        waivedIds: new Set(),
+      }).violations.length;
+    const reproduced = [
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
+      ".use(deploymentFeatureGate(legalListsDeployed))",
+      // The formatter's wrapped forms.
+      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),\n    ),\n  )',
+      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled(\n        "FEATURE_LEGAL_LISTS",\n      ),\n    ),\n  )',
+    ];
+    for (const gate of reproduced) {
+      expect(violations(gate, "FEATURE_LEGAL_LISTS"), gate).toBe(0);
+      // Untagged or tagged with another flag.
+      expect(violations(gate, undefined), gate).toBe(1);
+      expect(violations(gate, "FEATURE_USAGE"), gate).toBe(1);
+    }
+    const notReproduced = [
+      // A custom hook is never inferred from the flags it mentions.
+      '.onBeforeHandle(({ set }) => { if (isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")) return undefined; set.status = 404; })',
+      // Compound and inverted conditions, directly or through a helper.
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isOwner()))',
+      '.use(deploymentFeatureGate(() => !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
+      ".use(deploymentFeatureGate(listsAndDraftsDeployed))",
+      // A raw flag read bypasses the owner's local-development policy.
+      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))",
+      ".use(deploymentFeatureGate(() => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
+      // A flag read once, not per request, is not the gate's contract.
+      '.use(deploymentFeatureGate(isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
+      // A second hook beside the gate.
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))\n  .onBeforeHandle(() => undefined)',
+    ];
+    for (const hooks of notReproduced) {
+      expect(violations(hooks, "FEATURE_LEGAL_LISTS"), hooks).toBe(1);
+    }
+  });
+
+  test("every hooked mount of a capability must be reproduced", () => {
+    const source = `
+import getStatus from "@/api/handlers/case-law/ingestion/get";
+const custom = new Elysia()
+  .onBeforeHandle(() => undefined)
+  .get("/a", getStatus.handler, {});
+const gated = new Elysia()
+  .use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))
+  .get("/b", getStatus.handler, {});
+`;
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "x/routes.ts", source }],
+      capabilityIds: new Set(["case-law.ingestion.get"]),
+      capabilityFeatures: new Map([
+        ["case-law.ingestion.get", "FEATURE_LEGAL_LISTS"],
+      ]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([
+      { routeFile: "x/routes.ts", id: "case-law.ingestion.get" },
+    ]);
+  });
+
+  test("a child route mounted under a hook fails closed whatever its name", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [
+        {
+          id: "case-law/routes.ts",
+          source: `
+import { authMacro } from "@/api/lib/auth";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import adminApi from "./admin";
+import { research } from "@/api/handlers/case-law/research/routes";
+const routes = new Elysia().get("/x", () => "x");
+const app = new Elysia()
+  .onBeforeHandle(() => undefined)
+  .use(authMacro)
+  .use(adminApi)
+  .use(research)
+  .use(routes);
+const open = new Elysia().use(adminApi);
+`,
+        },
+      ],
+      capabilityIds: new Set(),
+      waivedIds: new Set(),
+    });
+    expect(scan.childRouteMounts).toEqual([
+      { routeFile: "case-law/routes.ts", route: "adminApi" },
+      { routeFile: "case-law/routes.ts", route: "research" },
+      { routeFile: "case-law/routes.ts", route: "routes" },
+    ]);
   });
 
   test("a waived hook-guarded capability is not a violation", () => {

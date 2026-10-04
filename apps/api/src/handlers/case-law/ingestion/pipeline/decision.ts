@@ -35,6 +35,8 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -132,6 +134,7 @@ const settleRowWriteStatus = async ({
  * contention the caller reconciles by running the attempt again.
  */
 const runDecisionAttempt = async ({
+  metadataUrlSchema,
   input,
   judges,
   sourceId,
@@ -143,7 +146,7 @@ const runDecisionAttempt = async ({
   corpusBatch,
   polarityRules,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
-  const observation = observeDecision({ input, sourceId });
+  const observation = observeDecision({ input, sourceId, metadataUrlSchema });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -174,10 +177,11 @@ const runDecisionAttempt = async ({
 
   const composedSupplements =
     composition === null ? [] : composition.supplements;
-  const result = composeDecisionWithSupplements(
-    observation.observed,
-    composedSupplements,
-  );
+  const result = composeDecisionWithSupplements({
+    judgment: observation.observed,
+    supplements: composedSupplements,
+    metadataUrlSchema,
+  });
   const shape = classifyObservation({ result, existing });
 
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
@@ -216,6 +220,7 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
+        metadataUrlSchema,
         result,
         existing,
         decisionId,
@@ -344,16 +349,24 @@ const processDecisionAttempt = async (
   });
 };
 
-export const processDecision = async ({
-  refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-  judges = CASE_LAW_JUDGE_DEPENDENCIES,
-  ...options
-}: ProcessDecisionOptions): Promise<ProcessResult> =>
-  await processDecisionAttempt({
+export const processDecision = async (
+  {
+    refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus = CASE_LAW_CORPUS_DEPENDENCIES,
+    judges = CASE_LAW_JUDGE_DEPENDENCIES,
+    ...options
+  }: ProcessDecisionOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+    options.scopedDb,
+  ),
+): Promise<ProcessResult> => {
+  const metadataUrlSchema = await resolveMetadataUrlSchema(options.sourceId);
+  return await processDecisionAttempt({
     ...options,
+    metadataUrlSchema,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,
     judges,
   });
+};

@@ -17,10 +17,8 @@ import {
   splitMemoryBoundedBatches,
   splitSoloTests,
   TEST_BATCH_KIND,
-  TEST_BATCH_RSS_HEADROOM_RATIO,
   type TestBatchKind,
 } from "./test-batch-plan";
-import peakRssMb from "./test-peak-rss.json";
 
 // Every directory of this package that holds test files. `evals/` carries
 // only its own colocated unit tests (e.g. `evals/lib/model-turn.test.ts`),
@@ -141,6 +139,7 @@ export type ComposedTestBatches = {
 };
 
 type PlanApiTestBatchesOptions = {
+  executionMode?: "batched" | "measure-rss";
   apiRoot: string;
   propertyOnly: boolean;
   testPaths: readonly string[];
@@ -148,6 +147,7 @@ type PlanApiTestBatchesOptions = {
 
 /** Classify every test file and compose the batches the runner executes. */
 export const planApiTestBatches = async ({
+  executionMode = "batched",
   apiRoot,
   propertyOnly,
   testPaths,
@@ -286,11 +286,13 @@ export const planApiTestBatches = async ({
   // composition preserves mock compatibility; memory splitting only removes
   // neighbours whose combined estimates exceed the composition budget.
   for (const group of composed) {
-    group.testBatches = splitMemoryBoundedBatches({
-      batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
-      peakRssMb,
-      budgetMb: group.maxPeakRssMb * TEST_BATCH_RSS_HEADROOM_RATIO,
-    });
+    group.testBatches =
+      executionMode === "measure-rss"
+        ? group.testBatches.flat().map((file) => [file])
+        : splitMemoryBoundedBatches({
+            batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
+            budgetMb: group.maxPeakRssMb,
+          });
   }
   return composed;
 };

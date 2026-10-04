@@ -218,6 +218,7 @@ const createHarness = ({
               new FileScanRejectedError({
                 message: rejection.message,
                 rejection,
+                inspectionFailures: [],
               }),
             ),
       );

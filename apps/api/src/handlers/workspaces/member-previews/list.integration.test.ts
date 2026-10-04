@@ -15,6 +15,7 @@ import { workspaceMembers } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -83,7 +84,7 @@ const listPreviewsAs = async ({
 }): Promise<Preview[]> => {
   const result = await listWorkspaceMemberPreviews.handler(
     asTestRaw<Parameters<typeof listWorkspaceMemberPreviews.handler>[0]>({
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       safeDb: createMembershipSafeDb(testDb, {
         organizationId,
         serverValidatedWorkspaceIds: [],

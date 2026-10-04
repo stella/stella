@@ -6,7 +6,7 @@ import {
   LOOKUP_FORMAT_PREFERENCE,
   templateLookupFormats,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -17,6 +17,7 @@ const config = {
   description:
     "Choose or clear the default company specification format for a business registry in the active organization.",
   permissions: { template: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

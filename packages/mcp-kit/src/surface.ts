@@ -99,6 +99,18 @@ export type ToolFailureObserver = (
 export type ToolSurfaceOptions<Context> = {
   readonly tools: readonly ToolDefinition<Context>[];
   readonly onError?: ToolFailureObserver;
+  /** Bounded invocation skeleton by default; outline returns a type map and bare example. */
+  readonly discovery?: { readonly type: "bounded" | "outline" };
+  /** Full discovery uses the canonical input schema by default. */
+  readonly fullSchema?: "input" | "described";
+  /** Successful capability invocation wraps its payload in result by default. */
+  readonly capabilityResult?: "wrapped" | "payload";
+  /** Validate-only returns a reading receipt by default, or normalized input on request. */
+  readonly validationResult?: "receipt" | "input";
+  /** Detailed list DTO by default; minimal omits paging limit and false destructive flags. */
+  readonly capabilityList?: "detailed" | "minimal";
+  /** Fixed discovery descriptions by default, or descriptions enumerating lazy names. */
+  readonly metaDescriptions?: "fixed" | "enumerated";
 };
 
 /** MCP listing and call handlers bound to a registry. */
@@ -143,9 +155,11 @@ const describeCompact = <Context>(tool: ToolDefinition<Context>) => {
   const parameters: ParameterOutline[] = [];
   let description = "";
   let summaryLength = 0;
+  const guidance =
+    tool.brief === undefined ? tool.summary : `${tool.summary}\n${tool.brief}`;
   const segments = new Intl.Segmenter(undefined, {
     granularity: "grapheme",
-  }).segment(tool.summary);
+  }).segment(guidance);
   for (const { segment } of segments) {
     const candidate = description + segment;
     if (summaryLength === 120 || jsonBytes(candidate) > 720) {
@@ -185,6 +199,111 @@ const describeCompact = <Context>(tool: ToolDefinition<Context>) => {
     }
   }
   return outline;
+};
+
+/** One property as a short type: `string`, `object[]`, `"a" | "b"`. */
+const typeOutline = (schema: unknown): string => {
+  if (!isRecord(schema)) {
+    return "any";
+  }
+  if (Array.isArray(schema["enum"])) {
+    return schema["enum"].map((value) => JSON.stringify(value)).join(" | ");
+  }
+  const type = schema["type"];
+  if (type === "array") {
+    return `${typeOutline(schema["items"])}[]`;
+  }
+  if (typeof type === "string") {
+    return type;
+  }
+  if (Array.isArray(type)) {
+    return type.join(" | ");
+  }
+  const variants = schema["oneOf"] ?? schema["anyOf"];
+  if (Array.isArray(variants)) {
+    return [...new Set(variants.map(typeOutline))].join(" | ");
+  }
+  return "any";
+};
+
+/** Each parameter's type, required ones marked: what a compact description shows. */
+const parameterOutline = (schema: McpJsonSchema): Record<string, string> => {
+  const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
+  const required = new Set(
+    Array.isArray(schema["required"]) ? schema["required"] : [],
+  );
+  return Object.fromEntries(
+    Object.entries(properties).map(([key, property]) => [
+      key,
+      `${typeOutline(property)}${required.has(key) ? " (required)" : ""}`,
+    ]),
+  );
+};
+
+const describeOutline = <Context>(tool: ToolDefinition<Context>) => ({
+  id: tool.name,
+  description:
+    tool.brief === undefined ? tool.summary : `${tool.summary}\n${tool.brief}`,
+  access: tool.access,
+  destructive: destructiveOf(tool),
+  parameters: parameterOutline(tool.inputSchema),
+  ...(tool.exampleInput !== undefined && { example: tool.exampleInput }),
+  more: 'detail: "full" returns the full input schema.',
+});
+
+type DescribeDefinitionOptions<Context> = {
+  tool: ToolDefinition<Context>;
+  detail: unknown;
+  discovery: "bounded" | "outline";
+  fullSchema: "input" | "described";
+};
+
+const describeDefinition = <Context>({
+  tool,
+  detail,
+  discovery,
+  fullSchema,
+}: DescribeDefinitionOptions<Context>): ToolOutcome => {
+  if (detail !== "full") {
+    return jsonSuccess(
+      discovery === "outline" ? describeOutline(tool) : describeCompact(tool),
+    );
+  }
+  return jsonSuccess({
+    id: tool.name,
+    description:
+      tool.guide === undefined
+        ? tool.summary
+        : `${tool.summary}\n${tool.guide}`,
+    access: tool.access,
+    destructive: destructiveOf(tool),
+    ...(discovery === "bounded" && {
+      domain: tool.domain ?? tool.name.split(".").at(0),
+    }),
+    inputSchema:
+      fullSchema === "described"
+        ? (tool.describedSchema ?? tool.inputSchema)
+        : tool.inputSchema,
+  });
+};
+
+const capabilityListItem = <Context>(
+  tool: ToolDefinition<Context>,
+  capabilityList: "detailed" | "minimal",
+) => {
+  const item = {
+    id: tool.name,
+    summary: tool.summary,
+    access: tool.access,
+  };
+  if (capabilityList === "detailed") {
+    return {
+      ...item,
+      description: null,
+      destructive: destructiveOf(tool),
+    };
+  }
+  return { ...item, ...(destructiveOf(tool) && { destructive: true }) };
 };
 
 const encodeCursor = (id: string): string => {
@@ -307,6 +426,8 @@ type RunToolOptions<Context> = {
   invocation?: "direct" | "capability";
   validateOnly?: boolean;
   onError: ToolFailureObserver | undefined;
+  capabilityResult?: "wrapped" | "payload";
+  validationResult?: "receipt" | "input";
 };
 
 const runTool = async <Context>({
@@ -316,6 +437,8 @@ const runTool = async <Context>({
   invocation = "direct",
   validateOnly = false,
   onError,
+  capabilityResult = "wrapped",
+  validationResult = "receipt",
 }: RunToolOptions<Context>): Promise<ToolCallResult> => {
   const read = readToolInput({
     schema: tool.inputSchema,
@@ -328,12 +451,11 @@ const runTool = async <Context>({
   }
   if (validateOnly) {
     return toCallResult(
-      success({
-        result: {
-          status: "arguments_read",
-          capability: tool.name,
-        },
-      }),
+      jsonSuccess(
+        validationResult === "input"
+          ? { valid: true, input: read.value }
+          : { result: { status: "arguments_read", capability: tool.name } },
+      ),
       read.notes,
     );
   }
@@ -353,7 +475,7 @@ const runTool = async <Context>({
   });
   const outcome = execution.isOk() ? execution.value : execution.error;
   return toCallResult(
-    outcome.ok && invocation === "capability"
+    outcome.ok && invocation === "capability" && capabilityResult === "wrapped"
       ? success({ result: outcome.value })
       : outcome,
     read.notes,
@@ -407,6 +529,12 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
 export const createToolSurface = <Context>({
   tools,
   onError,
+  discovery = { type: "bounded" },
+  fullSchema = "input",
+  capabilityResult = "wrapped",
+  validationResult = "receipt",
+  capabilityList = "detailed",
+  metaDescriptions = "fixed",
 }: ToolSurfaceOptions<Context>): ToolSurface<Context> => {
   const byName = buildRegistry(tools);
   const lazy = tools
@@ -453,14 +581,8 @@ export const createToolSurface = <Context>({
     const page = matching.slice(0, limit);
     const last = page.at(-1);
     return jsonSuccess({
-      limit,
-      items: page.map((tool) => ({
-        id: tool.name,
-        summary: tool.summary,
-        access: tool.access,
-        description: null,
-        destructive: destructiveOf(tool),
-      })),
+      ...(capabilityList === "detailed" && { limit }),
+      items: page.map((tool) => capabilityListItem(tool, capabilityList)),
       nextCursor:
         last !== undefined && matching.length > page.length
           ? encodeCursor(last.name)
@@ -482,19 +604,11 @@ export const createToolSurface = <Context>({
     if (tool === undefined) {
       return unknownCapability(id);
     }
-    if (read.args["detail"] !== "full") {
-      return jsonSuccess(describeCompact(tool));
-    }
-    return jsonSuccess({
-      id: tool.name,
-      description:
-        tool.guide === undefined
-          ? tool.summary
-          : `${tool.summary}\n${tool.guide}`,
-      access: tool.access,
-      destructive: destructiveOf(tool),
-      domain: tool.domain ?? tool.name.split(".").at(0),
-      inputSchema: tool.inputSchema,
+    return describeDefinition({
+      tool,
+      detail: read.args["detail"],
+      discovery: discovery.type,
+      fullSchema,
     });
   };
 
@@ -520,6 +634,8 @@ export const createToolSurface = <Context>({
       value: read.args["input"] ?? {},
       context,
       invocation: "capability",
+      capabilityResult,
+      validationResult,
       onError,
       validateOnly: read.args["validate_only"] === true,
     });
@@ -550,14 +666,18 @@ export const createToolSurface = <Context>({
       {
         name: CAPABILITY_TOOL_NAMES.list,
         description:
-          "Browse capabilities by domain and access, with pagination.",
+          metaDescriptions === "enumerated"
+            ? `List tools not shown here (${lazy.map(({ name }) => name).join(", ")}).`
+            : "Browse capabilities by domain and access, with pagination.",
         inputSchema: listedSchema(LIST_SCHEMA),
         annotations: READ_ONLY,
       },
       {
         name: CAPABILITY_TOOL_NAMES.describe,
         description:
-          'Compact parameters and an invocation skeleton; detail="full" returns the full schema.',
+          metaDescriptions === "enumerated"
+            ? 'Parameters, guidance and an example for any tool, by id; detail: "full" for the whole schema.'
+            : 'Compact parameters and an invocation skeleton; detail="full" returns the full schema.',
         inputSchema: listedSchema(DESCRIBE_SCHEMA),
         annotations: READ_ONLY,
       },

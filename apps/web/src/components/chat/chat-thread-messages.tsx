@@ -16,7 +16,6 @@ import {
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -101,6 +100,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
@@ -783,7 +783,7 @@ const downloadDataAttachment = ({
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
     getAnalytics().captureError(decoded.error);
-    stellaToast.add({ title: errorTitle, type: "error" });
+    notifyUserError(decoded.error, errorTitle);
     return;
   }
 
@@ -1703,9 +1703,6 @@ const AssistantMessageParts = ({
   };
   return (
     <>
-      {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
-        <AssistantReasoningTokenSummary count={reasoningTokenCount} />
-      )}
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
           return renderEntry(group.entry, group.index);
@@ -1837,19 +1834,6 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     }
   }
   return false;
-};
-
-const AssistantReasoningTokenSummary = ({ count }: { count: number }) => {
-  const t = useTranslations();
-  return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-      <span>{t("chat.reasoning")}</span>
-      <span aria-hidden="true" className="text-foreground-placeholder">
-        ·
-      </span>
-      <ReasoningTokenCount count={count} />
-    </div>
-  );
 };
 
 const ReasoningTokenCount = ({ count }: { count: number }) => {

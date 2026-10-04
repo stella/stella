@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "Session query options split from auth-queries so the tools surface can read the session key without importing auth-queries."
+}

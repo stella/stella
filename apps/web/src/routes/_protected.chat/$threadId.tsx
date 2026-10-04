@@ -8,7 +8,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
       // before warming this manager-only endpoint.
       await prefetchRouteQuery(queryClient, roleOptions, onPrefetchError);
       const role = queryClient.getQueryData(roleOptions.queryKey);
-      if (role === undefined || !managementRoles.includes(role)) {
+      if (!hasOrganizationManagementAccess(role)) {
         return;
       }
       await prefetchRouteQuery(

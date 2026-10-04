@@ -17,7 +17,6 @@ import {
   justifications,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -171,7 +170,9 @@ const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   return queueConnection;
 };
 
@@ -729,9 +730,6 @@ export const startWorkflow = async ({
       },
       signal,
     );
-  if (!env.FEATURE_ACTION_ADMISSION) {
-    return await planAndEnqueue();
-  }
   const started = await Result.tryPromise({
     try: async () =>
       await kickoff({
@@ -1170,7 +1168,9 @@ const createWorkflowWorker = (
       await processWorkflowJob(job, extractionRuns);
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency,
       lockDuration: LOCK_DURATION_MS,
       stalledInterval: STALLED_INTERVAL_MS,

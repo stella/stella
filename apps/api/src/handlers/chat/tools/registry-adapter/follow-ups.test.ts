@@ -7,6 +7,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { toSafeId } from "@/api/lib/branded-types";
 import { containsRawUuid } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -41,7 +42,7 @@ const INV_UUID = "66666666-6666-4666-8666-666666666666";
 const buildContext = (tx: unknown): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
   return buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: toSafeId<"organization">("org_1"),
     safeDb,
     scopedDb,

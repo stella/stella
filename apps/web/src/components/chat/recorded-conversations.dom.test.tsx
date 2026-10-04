@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -753,23 +754,28 @@ const performAction = async ({
   container,
   live,
   server,
+  pendingActions,
 }: {
   action: RecordedAction;
   container: HTMLElement;
   live: Awaited<ReturnType<typeof openPage>>;
   server: ReturnType<typeof createRecordedServer>;
+  pendingActions: Promise<Result<void, unknown>>[];
 }) => {
   switch (action.type) {
     case "send": {
       // What the composer hands the session on submit.
       await act(async () => {
-        void live
-          .session()
-          .sendMessage({
-            content: action.text,
-            id: toSafeId<"chatMessage">(action.messageId),
-          })
-          .catch(() => undefined);
+        pendingActions.push(
+          Result.tryPromise({
+            try: async () =>
+              await live.session().sendMessage({
+                content: action.text,
+                id: toSafeId<"chatMessage">(action.messageId),
+              }),
+            catch: (cause: unknown) => cause,
+          }),
+        );
         await sleep(0);
       });
       return;
@@ -800,10 +806,12 @@ const performAction = async ({
     case "retry": {
       // The latest answer's Retry.
       await act(async () => {
-        void live
-          .session()
-          .resendLatestMessage()
-          .catch(() => undefined);
+        pendingActions.push(
+          Result.tryPromise({
+            try: async () => await live.session().resendLatestMessage(),
+            catch: (cause: unknown) => cause,
+          }),
+        );
         await sleep(0);
       });
       return;
@@ -871,6 +879,7 @@ const replay = async (scenario: string) => {
   let live = await openPage(recording);
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
+  const pendingActions: Promise<Result<void, unknown>>[] = [];
   for (const [index, { action, exchanges }] of recording.steps.entries()) {
     const expectedPosts = recording.steps
       .slice(0, index + 1)
@@ -883,7 +892,7 @@ const replay = async (scenario: string) => {
       live = await openPage(recording);
     }
     const container = live.view.container;
-    await performAction({ action, container, live, server });
+    await performAction({ action, container, live, server, pendingActions });
     const next = recording.steps[index + 1];
     if (next !== undefined && isAutomatic(next.action)) {
       // The page answers on its own; the check comes once it has.
@@ -944,6 +953,9 @@ const replay = async (scenario: string) => {
       reloadedCards,
       finding(RENDER_ORACLE.reloadMatchesLive, where),
     ).toEqual(liveCards);
+  }
+  for (const outcome of await Promise.all(pendingActions)) {
+    expect(outcome, scenario).toEqual(Result.ok(undefined));
   }
   // The page posted what the recorded page posted, request for request.
   expect(

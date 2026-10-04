@@ -2,10 +2,8 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { roles } from "@stll/permissions";
-
 import { aiMemories } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -13,10 +11,12 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ memoryId: tSafeId("aiMemory") }),
   body: t.Object({
@@ -92,18 +92,16 @@ const updateMemory = createSafeRootHandler(
 
       // Firm memory is governance-gated. The row's scope is only known after
       // the locked fetch, so this permission cannot be static in `config`.
-      if (row.scope === "organization") {
-        const allowed = roles[memberRole.role].authorize({
-          firmMemory: ["update"],
-        });
-        if (!allowed.success) {
-          return { type: "forbidden" } as const;
-        }
+      if (
+        row.scope === "organization" &&
+        !hasMemberPermission(memberRole, { firmMemory: ["update"] })
+      ) {
+        return { type: "forbidden" } as const;
       }
 
       if (
         row.scope === "workspace" &&
-        (!roles[memberRole.role].authorize({ workspace: ["update"] }).success ||
+        (!hasMemberPermission(memberRole, { workspace: ["update"] }) ||
           !accessibleWorkspaces.some(
             ({ id, status }) => id === row.workspaceId && status === "active",
           ))

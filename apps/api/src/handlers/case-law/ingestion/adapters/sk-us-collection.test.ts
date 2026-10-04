@@ -113,24 +113,32 @@ describe("ÚS collection identity and publication", () => {
     };
     const result = await replay({ listing: withoutClauses, entries: [entry] });
     expect(result.sourceDocumentId).toBe(documentId);
-    expect(result.ecli).toBe(ecli);
-    expect(result.textFields.headnote).toEqual({
-      type: "present",
-      text: headnote,
-    });
-    expect(result.textFields.legalSentence).toEqual({
-      type: "present",
-      text: legalSentence,
-    });
-    expect(result.metadata["includeToZnaU"]).toBe(listing["mkIncludeToZnaU"]);
-    expect(result.metadata["publishedInCollection"]).toEqual({
-      status: "published",
-      documentId: entry["documentId"],
-      number: entry["mkLawReportsNumber"],
-      volume: entry["mkVolumeOfLawReports"],
-      year: entry["mkYearOfLawReports"],
-      period: entry["mkTimePeriodZNaU"],
-    });
+    expect(result.ecli === ecli).toBe(true);
+    expect(
+      Bun.deepEquals(result.textFields.headnote, {
+        type: "present",
+        text: headnote,
+      }),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(result.textFields.legalSentence, {
+        type: "present",
+        text: legalSentence,
+      }),
+    ).toBe(true);
+    expect(
+      result.metadata["includeToZnaU"] === listing["mkIncludeToZnaU"],
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(result.metadata["publishedInCollection"], {
+        status: "published",
+        documentId: entry["documentId"],
+        number: entry["mkLawReportsNumber"],
+        volume: entry["mkVolumeOfLawReports"],
+        year: entry["mkYearOfLawReports"],
+        period: entry["mkTimePeriodZNaU"],
+      }),
+    ).toBe(true);
     expect(await replay({ listing: withoutClauses, entries: [entry] })).toEqual(
       result,
     );
@@ -158,10 +166,12 @@ describe("ÚS collection identity and publication", () => {
     ]) {
       const result = await replay({ listing: withoutClauses, entries });
       expect(result.textFields.headnote.type).toBe("absent");
-      expect(result.metadata["publishedInCollection"]).toEqual({
-        status: "not_stated",
-        reason: "ambiguous_identity",
-      });
+      expect(
+        Bun.deepEquals(result.metadata["publishedInCollection"], {
+          status: "not_stated",
+          reason: "ambiguous_identity",
+        }),
+      ).toBe(true);
     }
     for (const siblings of [
       [withoutClauses, otherDecision],
@@ -173,10 +183,12 @@ describe("ÚS collection identity and publication", () => {
         siblings,
       });
       expect(result.textFields.legalSentence.type).toBe("absent");
-      expect(result.metadata["publishedInCollection"]).toEqual({
-        status: "not_stated",
-        reason: "ambiguous_identity",
-      });
+      expect(
+        Bun.deepEquals(result.metadata["publishedInCollection"], {
+          status: "not_stated",
+          reason: "ambiguous_identity",
+        }),
+      ).toBe(true);
     }
   });
 
@@ -201,20 +213,24 @@ describe("ÚS collection identity and publication", () => {
         listing: withoutClauses,
         entries: [changed],
       });
-      expect(result.metadata["publishedInCollection"]).toEqual({
-        status: "not_stated",
-        reason: "no_matching_entry",
-      });
+      expect(
+        Bun.deepEquals(result.metadata["publishedInCollection"], {
+          status: "not_stated",
+          reason: "no_matching_entry",
+        }),
+      ).toBe(true);
     }
     const truncated = await replay({
       listing: withoutClauses,
       entries: [entry],
       collectionTotal: 2,
     });
-    expect(truncated.metadata["publishedInCollection"]).toEqual({
-      status: "not_stated",
-      reason: "incomplete_listing",
-    });
+    expect(
+      Bun.deepEquals(truncated.metadata["publishedInCollection"], {
+        status: "not_stated",
+        reason: "incomplete_listing",
+      }),
+    ).toBe(true);
   });
 
   test("keeps absence, selection and publisher placeholders distinct without inventing ECLI", async () => {
@@ -228,9 +244,11 @@ describe("ÚS collection identity and publication", () => {
     };
     const absent = await replay({ listing: unpublished, entries: [] });
     expect(absent.ecli).toBeUndefined();
-    expect(absent.metadata["ecliAvailability"]).toEqual({
-      status: "not_published",
-    });
+    expect(
+      Bun.deepEquals(absent.metadata["ecliAvailability"], {
+        status: "not_published",
+      }),
+    ).toBe(true);
     expect(absent.textFields.legalSentence).toEqual({
       type: "absent",
       reason: "not_published",
@@ -239,10 +257,12 @@ describe("ÚS collection identity and publication", () => {
       listing: { ...unpublished, mkIncludeToZnaU: true },
       entries: [],
     });
-    expect(selected.metadata["publishedInCollection"]).toEqual({
-      status: "selected",
-      reason: "no_matching_entry",
-    });
+    expect(
+      Bun.deepEquals(selected.metadata["publishedInCollection"], {
+        status: "selected",
+        reason: "no_matching_entry",
+      }),
+    ).toBe(true);
     const placeholder = await replay({
       listing: { ...unpublished, mkClauseText: "- bez právnej vety -" },
       entries: [{ ...entry, mkClauseText: null }],
@@ -276,10 +296,12 @@ describe("ÚS collection identity and publication", () => {
         listing: withoutClauses,
         entries: [changed],
       });
-      expect(result.metadata["publishedInCollection"]).toEqual({
-        status: "not_stated",
-        reason: "invalid_listing",
-      });
+      expect(
+        Bun.deepEquals(result.metadata["publishedInCollection"], {
+          status: "not_stated",
+          reason: "invalid_listing",
+        }),
+      ).toBe(true);
       expect(result.textFields.headnote).toEqual({
         type: "absent",
         reason: "not_published",
@@ -297,16 +319,20 @@ describe("ÚS collection identity and publication", () => {
     delete missing["mkECLI"];
     expect(Object.hasOwn(missing, "mkECLI")).toBe(false);
     const absentKey = await replay({ listing: missing, entries: [] });
-    expect(absentKey.metadata["ecliAvailability"]).toEqual({
-      status: "not_stated",
-    });
+    expect(
+      Bun.deepEquals(absentKey.metadata["ecliAvailability"], {
+        status: "not_stated",
+      }),
+    ).toBe(true);
     const statedNull = await replay({
       listing: { ...missing, mkECLI: null },
       entries: [],
     });
-    expect(statedNull.metadata["ecliAvailability"]).toEqual({
-      status: "not_published",
-    });
+    expect(
+      Bun.deepEquals(statedNull.metadata["ecliAvailability"], {
+        status: "not_published",
+      }),
+    ).toBe(true);
   });
 
   test("keeps collection-loss reasons for every publisher inclusion state", async () => {
@@ -319,10 +345,12 @@ describe("ÚS collection identity and publication", () => {
       const result = await replay({
         listing: { ...listing, mkIncludeToZnaU: includeToZnaU },
       });
-      expect(result.metadata["publishedInCollection"]).toEqual({
-        status,
-        reason: "unavailable",
-      });
+      expect(
+        Bun.deepEquals(result.metadata["publishedInCollection"], {
+          status,
+          reason: "unavailable",
+        }),
+      ).toBe(true);
     }
   });
 });

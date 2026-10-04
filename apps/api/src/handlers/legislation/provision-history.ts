@@ -7,6 +7,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { projectProvisionHistoryItem } from "@/api/handlers/legislation/reader-response";
 import {
   selectWorkKey,
   workKeyConditions,
@@ -199,12 +200,18 @@ export const readProvisionHistoryHandler = async ({
   });
 
   const items = page.items.flatMap(({ text, ...item }) =>
-    text === null ? [] : [{ ...item, text }],
+    text === null ? [] : [projectProvisionHistoryItem({ ...item, text })],
   );
 
-  // No consolidation of the Work carried the anchor and there is nothing
-  // older to look at, so the anchor addresses no provision of this Work.
-  if (items.length === 0 && page.nextCursor === null) {
+  // Only a first page can establish that no consolidation of the Work carries
+  // the anchor. A continuation page sees the older tail alone: versions that
+  // predate the provision end a walk that already returned it, so that page
+  // is an empty last page, not a missing provision.
+  if (
+    query.cursor === undefined &&
+    items.length === 0 &&
+    page.nextCursor === null
+  ) {
     return status(404, { message: "Provision not found" });
   }
 

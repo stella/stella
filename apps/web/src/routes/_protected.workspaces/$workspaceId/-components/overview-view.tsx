@@ -18,7 +18,6 @@ import {
   CalendarClockIcon,
   ClockIcon,
   FolderTreeIcon,
-  MailIcon,
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
@@ -71,7 +70,8 @@ import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
@@ -209,10 +209,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       });
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        taskError ? toAPIError(taskError) : undefined,
+        t("errors.actionFailed"),
+      );
       return;
     }
     stellaToast.add({
@@ -259,11 +259,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         }),
       ]);
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -546,22 +543,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             });
           })}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-muted-foreground text-sm font-medium">
-              {t("workspaces.overview.upcomingTasks")}
-            </h2>
-            <Button
-              className="h-7"
-              onClick={() => {
-                detached(handleCreateTask(), "overview-view.create-task");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <PlusIcon className="size-3" />
-              {t("common.add")}
-            </Button>
-          </div>
+          <OverviewSectionHeader
+            actionLabel={t("common.add")}
+            icon={<SquareCheckIcon />}
+            onAction={() => {
+              detached(handleCreateTask(), "overview-view.create-task");
+            }}
+            title={t("workspaces.overview.upcomingTasks")}
+          />
           {(() => {
             if (tasks.length > 0) {
               return (
@@ -630,9 +619,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               );
             }
             return (
-              <div className="text-muted-foreground flex flex-1 items-center justify-center rounded-lg border px-3 py-6 text-center text-sm">
-                {t("common.noResults")}
-              </div>
+              <button
+                className="text-muted-foreground hover:bg-muted/50 hover:text-foreground flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-6 text-center text-sm"
+                onClick={() => {
+                  detached(handleCreateTask(), "overview-view.create-task");
+                }}
+                type="button"
+              >
+                <PlusIcon className="size-3.5" />
+                {t("tasks.newTask")}
+              </button>
             );
           })()}
           <Menu
@@ -739,29 +735,20 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
         {timeBillingEnabled && canReviewTimeEntries ? (
           <section className="flex min-w-0 flex-col">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
-                <ClockIcon className="me-1.5 inline size-3.5" />
-                {t("workspaces.overview.timeAndTeam")}
-              </h2>
-              <Button
-                className="min-h-11 shrink-0"
-                onClick={() => {
-                  detached(
-                    navigate({
-                      to: "/workspaces/$workspaceId/timesheets",
-                      params: { workspaceId },
-                    }),
-                    "overview-view.navigate",
-                  );
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                <PlusIcon className="size-3" />
-                {t("common.logTime")}
-              </Button>
-            </div>
+            <OverviewSectionHeader
+              actionLabel={t("common.logTime")}
+              icon={<ClockIcon />}
+              onAction={() => {
+                detached(
+                  navigate({
+                    to: "/workspaces/$workspaceId/timesheets",
+                    params: { workspaceId },
+                  }),
+                  "overview-view.navigate",
+                );
+              }}
+              title={t("workspaces.overview.timeAndTeam")}
+            />
             <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
               <div
                 className={cn(
@@ -910,29 +897,20 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           /* Personal time */
           timeBillingEnabled && (
             <section className="flex min-w-0 flex-col">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
-                  <ClockIcon className="me-1.5 inline size-3.5" />
-                  {t("workspaces.overview.timeThisWeek")}
-                </h2>
-                <Button
-                  className="min-h-11 shrink-0"
-                  onClick={() => {
-                    detached(
-                      navigate({
-                        to: "/workspaces/$workspaceId/timesheets",
-                        params: { workspaceId },
-                      }),
-                      "overview-view.navigate",
-                    );
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <PlusIcon className="size-3" />
-                  {t("common.logTime")}
-                </Button>
-              </div>
+              <OverviewSectionHeader
+                actionLabel={t("common.logTime")}
+                icon={<ClockIcon />}
+                onAction={() => {
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId/timesheets",
+                      params: { workspaceId },
+                    }),
+                    "overview-view.navigate",
+                  );
+                }}
+                title={t("workspaces.overview.timeThisWeek")}
+              />
               <div
                 className={cn(
                   OVERVIEW_PANEL_CLASS,
@@ -986,37 +964,41 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
       )}
 
-      {hasActivity && (
-        <div className="flex justify-end">
-          <Button onClick={openUploadPicker} size="sm" variant="outline">
-            <UploadIcon className="size-4" />
-            {tWorkspaces("uploadDocuments")}
-          </Button>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <Button
-          onClick={() =>
-            detached(
-              navigate({
-                to: "/workspaces/$workspaceId/correspondence",
-                params: { workspaceId },
-              }),
-              "overview-view.open-correspondence",
-            )
-          }
-          size="sm"
-          variant="outline"
-        >
-          <MailIcon className="size-4" />
-          {t("correspondence.title")}
-        </Button>
-      </div>
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
     </div>
   );
 };
+
+type OverviewSectionHeaderProps = {
+  icon: React.ReactNode;
+  title: string;
+  actionLabel: string;
+  onAction: () => void;
+};
+
+/** One header anatomy for every overview panel so side-by-side panels line up. */
+const OverviewSectionHeader = ({
+  icon,
+  title,
+  actionLabel,
+  onAction,
+}: OverviewSectionHeaderProps) => (
+  <div className="mb-3 flex h-7 items-center justify-between gap-3">
+    <h2 className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm font-medium [&_svg]:size-3.5 [&_svg]:shrink-0">
+      {icon}
+      <span className="truncate">{title}</span>
+    </h2>
+    <Button
+      className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"
+      onClick={onAction}
+      size="sm"
+      variant="ghost"
+    >
+      <PlusIcon className="size-3" />
+      {actionLabel}
+    </Button>
+  </div>
+);
 
 type StatCardProps = {
   icon: React.ReactNode;

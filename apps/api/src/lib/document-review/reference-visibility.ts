@@ -6,11 +6,12 @@
  * the standard side of the delta, the comparison prose, the recommendation and
  * the proposed fix all restate them. The passages themselves are served per
  * reader by `reference-passages.ts`; this module applies the same rule to the
- * rest of the finding and to the run's reference list. A reader who can open
- * every matter a position's passages came from sees the finding as graded;
- * otherwise the finding keeps its verdict, target citations and passage ids,
- * and drops the other reference-derived fields; the run's reference list keeps
- * ids but not names or content digests.
+ * rest of the finding and to the run's pinned basis. A reader who can open
+ * every matter a position's passages came from sees the finding and the
+ * position as written; otherwise the finding keeps its verdict, target
+ * citations and passage ids, the position keeps its identity, issue and
+ * passage ids, and both drop the other reference-derived fields; the run's
+ * reference list keeps ids but not names or content digests.
  *
  * Every endpoint that returns findings or a run basis goes through here.
  *
@@ -27,9 +28,11 @@ import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
   DocumentReviewRunBasis,
+  PinnedPlaybook,
   PinnedReference,
 } from "@/api/lib/document-review/run-contract";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 
 /** The matters each reference position's passages came from, by `sourceId`. */
 export const referenceWorkspacesByPosition = (
@@ -111,6 +114,91 @@ export const referencesForReader = (
       ? reference
       : { ...reference, workspaceName: null, name: null, contentSha256: null },
   );
+
+type BasisPosition = PlaybookPositions["items"][number];
+
+export type ReaderPosition = BasisPosition & {
+  /** Set when the reference-derived fields were left out for this reader. */
+  referenceDetail?: "withheld";
+};
+
+/**
+ * One pinned position for this reader. A reference position's prose (purpose,
+ * guidance, negotiation notes, a derived question or check) was written from
+ * the reference's terms, so a reader who cannot open every matter its passages
+ * came from gets the position's identity, issue, severity and passage ids only,
+ * as `findingForReader` does for its finding.
+ */
+const positionForReader = (
+  position: BasisPosition,
+  readable: ReadonlySet<string>,
+): ReaderPosition => {
+  if (
+    position.mode !== "graded" ||
+    position.standard.source !== "reference" ||
+    position.standard.passages.every((passage) =>
+      readable.has(passage.workspaceId),
+    )
+  ) {
+    return position;
+  }
+  return {
+    mode: position.mode,
+    sourceId: position.sourceId,
+    issue: position.issue,
+    severity: position.severity,
+    standard: position.standard,
+    ask: { mode: "auto" },
+    enabled: position.enabled,
+    referenceDetail: "withheld",
+  };
+};
+
+/** The run basis as one reader sees it. */
+export type ReaderBasis = {
+  playbook: Omit<PinnedPlaybook, "definitionSnapshot"> & {
+    definitionSnapshot: {
+      name: string;
+      positions: Omit<PlaybookPositions, "items"> & {
+        items: ReaderPosition[];
+      };
+    };
+  };
+  references: ReaderReference[];
+  perspective: DocumentReviewRunBasis["perspective"];
+};
+
+/**
+ * The pinned basis for this reader: every position through
+ * {@link positionForReader} and the reference list through
+ * {@link referencesForReader}. Every response that carries a run basis
+ * returns this, never the stored basis.
+ */
+export const basisForReader = (
+  basis: DocumentReviewRunBasis,
+  readable: ReadonlySet<string>,
+): ReaderBasis => {
+  const { playbook } = basis;
+  const { definitionSnapshot } = playbook;
+  return {
+    playbook: {
+      definitionId: playbook.definitionId,
+      versionId: playbook.versionId,
+      provenance: playbook.provenance,
+      definitionSnapshot: {
+        name: definitionSnapshot.name,
+        positions: {
+          version: definitionSnapshot.positions.version,
+          items: definitionSnapshot.positions.items.map((position) =>
+            positionForReader(position, readable),
+          ),
+        },
+      },
+    },
+    references: referencesForReader(basis.references, readable),
+    perspective: basis.perspective,
+  };
+};
 
 export type ReaderFinding = ReviewFinding & {
   /** Set when the reference-derived fields were left out for this reader. */

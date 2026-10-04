@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import {
   extractStamp,
@@ -340,7 +342,9 @@ describe("injectStamp", () => {
       ].join("\n"),
     });
 
-    expect(injectStamp(docx, stamp, code, baseUrl)).rejects.toMatchObject({
+    expect(
+      await rejectionOf(injectStamp(docx, stamp, code, baseUrl)),
+    ).toMatchObject({
       _tag: "DocxStampError",
       reason: "too-many-footer-parts",
     });

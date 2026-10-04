@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   isEmailAttachmentPreviewable,
@@ -30,6 +31,7 @@ const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   query: t.Object({
@@ -119,27 +121,28 @@ export default createSafeHandler(
       mimeType: attachmentMimeType,
     });
     const fileName = sanitizeFilename(attachment.fileName);
-    if (disposition === "download") {
-      yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await scopedDb(
-              async (tx) =>
-                await recordAuditEvent(tx, {
-                  action: AUDIT_ACTION.DOWNLOAD,
-                  resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-                  resourceId: attachment.sourceEntityId,
-                  metadata: {
-                    attachmentId,
-                    fieldId,
-                    mimeType: attachmentMimeType ?? "application/octet-stream",
-                    sizeBytes: attachment.bytes.byteLength,
-                  },
-                }),
-            ),
-        ),
-      );
-    }
+    const recordedDisposition =
+      disposition === "download" ? "attachment" : "inline";
+    yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await scopedDb(
+            async (tx) =>
+              await recordAuditEvent(tx, {
+                action: CONTENT_DELIVERY_AUDIT_ACTION[recordedDisposition],
+                resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                resourceId: attachment.sourceEntityId,
+                metadata: {
+                  attachmentId,
+                  disposition: recordedDisposition,
+                  fieldId,
+                  mimeType: attachmentMimeType ?? "application/octet-stream",
+                  sizeBytes: responseBytes.byteLength,
+                },
+              }),
+          ),
+      ),
+    );
     return Result.ok(
       secureDocumentResponse({
         body: new Uint8Array(responseBytes),

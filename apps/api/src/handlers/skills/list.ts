@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
 import {
   listSkillMetadata,
   listSkillResources,
@@ -18,7 +17,7 @@ import {
   type AgentSkillScope,
 } from "@/api/db/schema";
 import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -30,6 +29,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -56,6 +56,7 @@ const config = {
     "writes and former members. Also reports " +
     "whether you may manage team skills.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
@@ -304,7 +305,9 @@ const listSkills = createSafeRootHandler(
     });
 
     return Result.ok({
-      canManageTeam: isOrganizationManagementRole(memberRole.role),
+      canManageTeam: hasManagementPermission(memberRole, {
+        agentSkill: ["update"],
+      }),
       builtIn: listSkillMetadata().map((skill) => ({
         id: skill.name,
         scope: "built-in" as const,

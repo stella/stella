@@ -84,7 +84,7 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -134,7 +134,7 @@ export const ChatThreadPage = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const canManageOrganization =
-    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
+    hasOrganizationManagementAccess(currentUserRole);
 
   // Local copy of the persisted contextMatterIds, seeded from the
   // server and re-seeded whenever the page navigates to a different
@@ -206,7 +206,7 @@ export const ChatThreadPage = ({
   // rendering while the entitlement state loads.
   const { data: usageEntitlementData } = useQuery({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
-    enabled: canManageOrganization,
+    enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:

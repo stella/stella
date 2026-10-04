@@ -7,8 +7,12 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import {
@@ -38,6 +42,7 @@ export default createSafeHandler(
       "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "document_processing",
@@ -123,10 +128,14 @@ const toHandlerError = (
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" }
+    | DocumentWriteRefusedError
     | OrganizationFileUsageError,
 ): HandlerError => {
   if (error instanceof OrganizationFileUsageError) {
     return organizationFileUsageHandlerError(error);
+  }
+  if (DocumentWriteRefusedError.is(error)) {
+    return documentWriteRefusalHandlerError(error);
   }
   switch (error._tag) {
     case "DocumentTooLargeError":

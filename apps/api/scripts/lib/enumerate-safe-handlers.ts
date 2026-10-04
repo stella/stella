@@ -19,6 +19,11 @@ import {
 // and is never threaded into the route wiring, so the composed app cannot see
 // it. An endpoint's identifier is its repo-relative module path for the default
 // export, or `path#exportName` for a named export.
+import {
+  type HandlerKind,
+  SAFE_HANDLER_FACTORIES,
+  SAFE_HANDLER_FACTORY_NAMES,
+} from "../../src/lib/safe-handler-factories";
 import type { McpReadClass } from "../../src/mcp/tool-types";
 
 // Repo root resolved from this file's location so identifiers are stable
@@ -41,46 +46,29 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
  * mentions (imports, re-exports) and only matches a call or generic
  * instantiation, so an `import { createSafeHandler }` line is never counted.
  */
-export const SAFE_HANDLER_CALL_PATTERN =
-  /createSafe(?:Root|Session|Token|Public|PublicSubject|PublicSubjectFollowUp)?Handler[<(]/gu;
+export const SAFE_HANDLER_CALL_PATTERN = new RegExp(
+  `(?:${SAFE_HANDLER_FACTORY_NAMES.join("|")})[<(]`,
+  "gu",
+);
 
 /**
- * The handler-scope kinds, keyed by the factory that produces them. Detection
- * is textual (per file, which factories are called) because the scope is a
- * property of the factory, not something the runtime config carries.
+ * Detection is textual (per file, which factories are called) because the
+ * scope is a property of the factory, not something the runtime config
+ * carries.
  */
-export const HANDLER_KINDS = [
-  "workspace",
-  "root",
-  "session",
-  "token",
-  "public",
-] as const;
-export type HandlerKind = (typeof HANDLER_KINDS)[number];
-
-const FACTORY_KIND_PATTERNS: { kind: HandlerKind; pattern: RegExp }[] = [
-  { kind: "root", pattern: /createSafeRootHandler[<(]/u },
-  { kind: "session", pattern: /createSafeSessionHandler[<(]/u },
-  { kind: "token", pattern: /createSafeTokenHandler[<(]/u },
-  { kind: "public", pattern: /createSafePublicHandler[<(]/u },
-  // The subject-gated public factories (case-law decisions) wrap the public
-  // one; the follow-up variant runs a phase after the gated transaction.
-  { kind: "public", pattern: /createSafePublicSubjectFollowUpHandler[<(]/u },
-  { kind: "public", pattern: /createSafePublicSubjectHandler[<(]/u },
-  // Must run last: `createSafeHandler` is a substring of none of the above once
-  // the specific factories are matched, but keep it terminal for clarity.
-  { kind: "workspace", pattern: /createSafeHandler[<(]/u },
-];
+const FACTORY_KIND_PATTERNS = Object.entries(SAFE_HANDLER_FACTORIES).map(
+  ([name, { kind }]) => ({ kind, pattern: new RegExp(`${name}[<(]`, "u") }),
+);
 
 /** The distinct factory kinds a file's source textually calls. */
 export const detectHandlerKinds = (source: string): HandlerKind[] => {
-  const kinds: HandlerKind[] = [];
+  const kinds = new Set<HandlerKind>();
   for (const { kind, pattern } of FACTORY_KIND_PATTERNS) {
     if (pattern.test(source)) {
-      kinds.push(kind);
+      kinds.add(kind);
     }
   }
-  return kinds;
+  return [...kinds];
 };
 
 export type ParsedExposure =
@@ -246,9 +234,16 @@ export type DiscoveredFile = {
   kinds: HandlerKind[];
 };
 
+const ELYSIA_INSTANCE_PATTERN = /\bnew Elysia\s*\(/u;
+
 export type SafeHandlerDiscovery = {
   endpoints: DiscoveredEndpoint[];
   files: DiscoveredFile[];
+  /**
+   * Every handler-tree file that builds an Elysia instance, whatever its name
+   * and whether or not it defines handlers itself: route hooks live there.
+   */
+  routeFiles: { id: string; source: string }[];
   importErrors: { id: string; message: string }[];
 };
 
@@ -268,6 +263,7 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
 
   const endpoints: DiscoveredEndpoint[] = [];
   const files: DiscoveredFile[] = [];
+  const routeFiles: { id: string; source: string }[] = [];
   const importErrors: { id: string; message: string }[] = [];
 
   for await (const abs of glob.scan({ cwd: REPO_ROOT, absolute: true })) {
@@ -275,11 +271,14 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
       continue;
     }
     const source = await Bun.file(abs).text();
+    const id = toEndpointIdentifier(abs, REPO_ROOT);
+    if (ELYSIA_INSTANCE_PATTERN.test(source)) {
+      routeFiles.push({ id, source });
+    }
     const callCount = (source.match(SAFE_HANDLER_CALL_PATTERN) ?? []).length;
     if (callCount === 0) {
       continue;
     }
-    const id = toEndpointIdentifier(abs, REPO_ROOT);
     let mod: unknown;
     try {
       mod = await import(abs);
@@ -308,5 +307,6 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
 
   endpoints.sort((a, b) => a.id.localeCompare(b.id));
   files.sort((a, b) => a.id.localeCompare(b.id));
-  return { endpoints, files, importErrors };
+  routeFiles.sort((a, b) => a.id.localeCompare(b.id));
+  return { endpoints, files, routeFiles, importErrors };
 };

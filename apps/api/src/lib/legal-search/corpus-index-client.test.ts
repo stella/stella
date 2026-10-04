@@ -14,6 +14,7 @@ import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   type CorpusIndexDeleteSettlementRead,
+  type CorpusIndexSettlementSplit,
   corpusIndexScoredSearchRequest,
   getCorpusIndexClient,
   parseCorpusIndexScoredSearchResponse,
@@ -24,6 +25,8 @@ import {
   CORPUS_INDEX_MANIFESTS,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { judgeCorpusProjectionCleanupSettlement } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
@@ -600,6 +603,9 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
+      groups: candidates.map((candidate) =>
+        corpusSearchGroupToken(candidate.id),
+      ),
       ranked: candidates.map((candidate) => ({
         id: candidate.id,
         score: candidate.score,
@@ -761,7 +767,28 @@ test("delete-by-query rejects a response without a usable opstamp", async () => 
   }
 });
 
+const MATURE = { type: "mature" } as const;
+
 const publishedSplit = ({
+  id,
+  deleteOpstamp,
+  publishedAtSeconds = DELETE_TASK_SECONDS - 60,
+  maturity = MATURE,
+}: {
+  id: string;
+  deleteOpstamp: number;
+  publishedAtSeconds?: number;
+  maturity?: Record<string, unknown>;
+}) => ({
+  split_id: id,
+  split_state: "Published",
+  delete_opstamp: deleteOpstamp,
+  publish_timestamp: publishedAtSeconds,
+  create_timestamp: publishedAtSeconds - 1,
+  maturity,
+});
+
+const settlementSplit = ({
   id,
   deleteOpstamp,
   publishedAtSeconds = DELETE_TASK_SECONDS - 60,
@@ -769,11 +796,14 @@ const publishedSplit = ({
   id: string;
   deleteOpstamp: number;
   publishedAtSeconds?: number;
-}) => ({
-  split_id: id,
-  split_state: "Published",
-  delete_opstamp: deleteOpstamp,
-  publish_timestamp: publishedAtSeconds,
+}): CorpusIndexSettlementSplit => ({
+  splitId: id,
+  state: "Published",
+  appliedOpstamp: deleteOpstamp,
+  publishedAt: Temporal.Instant.fromEpochMilliseconds(
+    publishedAtSeconds * 1000,
+  ),
+  maturity: MATURE,
 });
 
 type SettlementTask = {
@@ -831,6 +861,10 @@ test("delete settlement compares every proving split with the retained task", as
       laggingSplits: 1,
       minAppliedOpstamp: 41,
       settled: false,
+      laggingProvingSplits: [
+        settlementSplit({ id: "split-41", deleteOpstamp: 41 }),
+      ],
+      laggingExcludedSplits: [],
     });
   }
   expect(requests.at(0)?.path).toBe(
@@ -866,6 +900,16 @@ test("delete settlement excludes a split published after the delete task", async
       laggingSplits: 0,
       minAppliedOpstamp: 42,
       settled: true,
+      // Outside the proof, and still below the task: the exact count decides
+      // whether it holds anything the task targeted.
+      laggingExcludedSplits: [
+        settlementSplit({
+          id: "split-later",
+          deleteOpstamp: 41,
+          publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+        }),
+      ],
+      laggingProvingSplits: [],
     });
   }
 });
@@ -900,6 +944,8 @@ test("delete settlement holds a staged split inside the proof", async () => {
         split_state: "Staged",
         delete_opstamp: 41,
         publish_timestamp: null,
+        create_timestamp: DELETE_TASK_SECONDS - 1,
+        maturity: MATURE,
       },
     ],
   };
@@ -968,7 +1014,9 @@ test("delete settlement rejects an invalid required opstamp", async () => {
 
 test("delete settlement rejects a split without a usable delete opstamp", async () => {
   responseBody = {
-    splits: [{ split_id: "split-1", split_state: "Published" }],
+    splits: [
+      { split_id: "split-1", split_state: "Published", maturity: MATURE },
+    ],
   };
 
   const result = await readSettlement(42);
@@ -987,6 +1035,7 @@ test("delete settlement rejects a split with an unusable publish timestamp", asy
         split_state: "Published",
         delete_opstamp: 42,
         publish_timestamp: "2026-08-25T12:00:00Z",
+        maturity: MATURE,
       },
     ],
   };
@@ -996,6 +1045,113 @@ test("delete settlement rejects a split with an unusable publish timestamp", asy
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("invalid response");
+  }
+});
+
+test("delete settlement reports when an immature lagging split matures", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({ id: "split-caught-up", deleteOpstamp: 42 }),
+      // A merge output published after the task: it carries the lowest
+      // opstamp of its inputs, so it is still below the task, and it can hold
+      // documents from before it.
+      {
+        split_id: "split-merged-later",
+        split_state: "Published",
+        delete_opstamp: 37,
+        publish_timestamp: DELETE_TASK_SECONDS + 30,
+        create_timestamp: DELETE_TASK_SECONDS + 20,
+        // The engine adds whole seconds of the period.
+        maturity: { type: "immature", maturation_period_millis: 14_400_999 },
+      },
+    ],
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.settled).toBe(true);
+    expect(result.value.laggingProvingSplits).toEqual([]);
+    expect(result.value.laggingExcludedSplits).toEqual([
+      {
+        splitId: "split-merged-later",
+        state: "Published",
+        appliedOpstamp: 37,
+        publishedAt: Temporal.Instant.fromEpochMilliseconds(
+          (DELETE_TASK_SECONDS + 30) * 1000,
+        ),
+        maturity: {
+          type: "immature",
+          maturesAt: Temporal.Instant.fromEpochMilliseconds(
+            (DELETE_TASK_SECONDS + 20 + 14_400) * 1000,
+          ),
+        },
+      },
+    ]);
+  }
+});
+
+test("delete settlement keeps an excluded split an offset shift hid from the last pass", async () => {
+  let pageReads = 0;
+  responseBodyForUrl = () => {
+    pageReads += 1;
+    return {
+      splits: [
+        publishedSplit({ id: "split-proving", deleteOpstamp: 42 }),
+        // Read in the first pass only; the second pass decides stability, and
+        // must not read as if the delete had nothing left to reach.
+        ...(pageReads === 1
+          ? [
+              publishedSplit({
+                id: "split-later",
+                deleteOpstamp: 41,
+                publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+              }),
+            ]
+          : []),
+      ],
+    };
+  };
+
+  const result = await readSettlement(42);
+
+  expect(pageReads).toBe(2);
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.excludedSplits).toBe(0);
+    expect(
+      result.value.laggingExcludedSplits.map(({ splitId }) => splitId),
+    ).toEqual(["split-later"]);
+  }
+});
+
+test("delete settlement rejects a split without a usable maturity", async () => {
+  for (const maturity of [
+    undefined,
+    { type: "ripe" },
+    { type: "immature" },
+    { type: "immature", maturation_period_millis: -1 },
+  ]) {
+    responseBody = {
+      splits: [
+        {
+          split_id: "split-1",
+          split_state: "Published",
+          delete_opstamp: 42,
+          publish_timestamp: DELETE_TASK_SECONDS - 60,
+          create_timestamp: DELETE_TASK_SECONDS - 61,
+          maturity,
+        },
+      ],
+    };
+
+    const result = await readSettlement(42);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain("invalid response");
+    }
   }
 });
 
@@ -1099,6 +1255,8 @@ test("delete settlement reads each split's opstamp from the pass that stabilized
       laggingSplits: 0,
       minAppliedOpstamp: 42,
       settled: true,
+      laggingProvingSplits: [],
+      laggingExcludedSplits: [],
     });
   }
 });
@@ -1184,6 +1342,10 @@ type PropertySplit = {
   split_state: "Published" | "Staged";
   delete_opstamp: number;
   publish_timestamp: number | null;
+  create_timestamp: number;
+  maturity:
+    | { type: "mature" }
+    | { type: "immature"; maturation_period_millis: number };
 };
 
 const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({
@@ -1196,6 +1358,17 @@ const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({
       max: DELETE_TASK_SECONDS + METASTORE_SECONDS_SPREAD,
     }),
     { nil: null },
+  ),
+  create_timestamp: fc.integer({
+    min: DELETE_TASK_SECONDS - METASTORE_SECONDS_SPREAD,
+    max: DELETE_TASK_SECONDS + METASTORE_SECONDS_SPREAD,
+  }),
+  maturity: fc.oneof(
+    fc.constant({ type: "mature" as const }),
+    fc.record({
+      type: fc.constant("immature" as const),
+      maturation_period_millis: fc.integer({ min: 0, max: 10_000 }),
+    }),
   ),
 });
 
@@ -1221,12 +1394,21 @@ const propertyPassesArb = fc
         repeat
           ? previous.map(
               (
-                { split_id, split_state, delete_opstamp, publish_timestamp },
+                {
+                  split_id,
+                  split_state,
+                  delete_opstamp,
+                  publish_timestamp,
+                  create_timestamp,
+                  maturity,
+                },
                 index,
               ) => ({
                 split_id,
                 split_state,
                 publish_timestamp,
+                create_timestamp,
+                maturity,
                 delete_opstamp: Math.max(
                   delete_opstamp,
                   churned.at(index)?.delete_opstamp ?? delete_opstamp,
@@ -1267,6 +1449,9 @@ type SettlementVerdict =
       laggingSplits: number;
       minAppliedOpstamp: number | null;
       settled: boolean;
+      /** `id@opstamp`, sorted. */
+      laggingProving: string[];
+      laggingExcluded: string[];
     }
   | { status: "invalid-opstamp" }
   | { status: "unstable" };
@@ -1277,11 +1462,21 @@ type OracleVerdict = {
   passesRead: number;
 };
 
+const laggingKeys = (
+  readings: ReadonlyMap<string, number>,
+  requiredOpstamp: number,
+): string[] =>
+  [...readings]
+    .filter(([, opstamp]) => opstamp < requiredOpstamp)
+    .map(([id, opstamp]) => `${id}@${opstamp}`)
+    .toSorted();
+
 /**
  * One task proved alone against the same sequence of split-list passes: read
  * a pass, keep the splits not published after the task's second, and accept
  * the first pass whose proving identities equal the previous pass's (an empty
- * set before the first); give up after three passes.
+ * set before the first); give up after three passes. A split outside the proof
+ * counts with its latest pass's lowest reading.
  */
 const proveTaskAlone = (
   passes: readonly (readonly PropertySplit[])[],
@@ -1295,8 +1490,10 @@ const proveTaskAlone = (
       ? null
       : Math.floor(deleteCreatedAt.epochMilliseconds / 1000);
   let previousIds = JSON.stringify([]);
+  const excludedLatest = new Map<string, number>();
   for (const [index, pass] of passes.slice(0, 3).entries()) {
     const proving = new Map<string, number>();
+    const excludedHere = new Map<string, number>();
     let excludedSplits = 0;
     for (const split of pass) {
       if (
@@ -1305,6 +1502,13 @@ const proveTaskAlone = (
         split.publish_timestamp > cutoff
       ) {
         excludedSplits += 1;
+        excludedHere.set(
+          split.split_id,
+          Math.min(
+            excludedHere.get(split.split_id) ?? split.delete_opstamp,
+            split.delete_opstamp,
+          ),
+        );
         continue;
       }
       proving.set(
@@ -1314,6 +1518,9 @@ const proveTaskAlone = (
           split.delete_opstamp,
         ),
       );
+    }
+    for (const [id, opstamp] of excludedHere) {
+      excludedLatest.set(id, opstamp);
     }
     const ids = JSON.stringify([...proving.keys()].toSorted());
     if (ids === previousIds) {
@@ -1331,6 +1538,8 @@ const proveTaskAlone = (
           minAppliedOpstamp:
             opstamps.length === 0 ? null : Math.min(...opstamps),
           settled: laggingSplits === 0,
+          laggingProving: laggingKeys(proving, requiredOpstamp),
+          laggingExcluded: laggingKeys(excludedLatest, requiredOpstamp),
         },
         passesRead: index + 1,
       };
@@ -1344,7 +1553,18 @@ const verdictOf = (
   read: CorpusIndexDeleteSettlementRead,
 ): SettlementVerdict => {
   if (read.isOk()) {
-    return { status: "settlement", ...read.value };
+    const { laggingProvingSplits, laggingExcludedSplits, ...counts } =
+      read.value;
+    const keys = (splits: readonly CorpusIndexSettlementSplit[]) =>
+      splits
+        .map(({ splitId, appliedOpstamp }) => `${splitId}@${appliedOpstamp}`)
+        .toSorted();
+    return {
+      status: "settlement",
+      ...counts,
+      laggingProving: keys(laggingProvingSplits),
+      laggingExcluded: keys(laggingExcludedSplits),
+    };
   }
   if (read.error.message.includes("invalid opstamp")) {
     return { status: "invalid-opstamp" };
@@ -1386,6 +1606,76 @@ test("delete settlements judged together match each task judged alone", async ()
         expect(requests).toHaveLength(
           Math.max(0, ...alone.map(({ passesRead }) => passesRead)),
         );
+      },
+    ),
+  );
+});
+
+const SURVIVOR_CONFIRMED_LONG_AGO = Temporal.Instant.fromEpochMilliseconds(0);
+
+/**
+ * Tasks inside the generated opstamp range with a retained instant: the
+ * region where some splits crossed the task and some did not, on both sides
+ * of the exclusion instant.
+ */
+const straddlingTaskArb: fc.Arbitrary<SettlementTask> = fc
+  .record({
+    requiredOpstamp: fc.integer({ min: 41, max: 44 }),
+    createdAtMs: fc.integer({
+      min: (DELETE_TASK_SECONDS - METASTORE_SECONDS_SPREAD) * 1000,
+      max: (DELETE_TASK_SECONDS + METASTORE_SECONDS_SPREAD) * 1000 + 999,
+    }),
+  })
+  .map(({ requiredOpstamp, createdAtMs }) => ({
+    requiredOpstamp,
+    deleteCreatedAt: Temporal.Instant.fromEpochMilliseconds(createdAtMs),
+  }));
+
+test("a survivor is declared only when every split the settling pass read crossed the opstamp", async () => {
+  await assertProperty(
+    "a survivor is declared only when every split the settling pass read crossed the opstamp",
+    fc.asyncProperty(
+      propertyPassesArb,
+      fc.oneof(straddlingTaskArb, propertyTaskArb),
+      async (passes, task) => {
+        let passesServed = 0;
+        responseBodyForUrl = () => {
+          passesServed += 1;
+          return { splits: passes.at(passesServed - 1) ?? [] };
+        };
+
+        const read = await readSettlements([task]);
+
+        if (read.isErr()) {
+          throw read.error;
+        }
+        const settlement = read.value.at(0);
+        if (settlement === undefined || settlement.isErr()) {
+          return;
+        }
+        const judgement = judgeCorpusProjectionCleanupSettlement({
+          settlement: settlement.value,
+          // Something of the revisions is still in the index.
+          remainingRevisionCount: 1,
+          now: DELETE_TASK_CREATED_AT,
+          survivorConfirmableAt: SURVIVOR_CONFIRMED_LONG_AGO,
+        });
+        const declared =
+          judgement.type === "pending" &&
+          judgement.pending.reason === "survivor";
+        const { passesRead } = proveTaskAlone(passes, task);
+        const crossed = (pass: readonly PropertySplit[]) =>
+          pass.every(
+            ({ delete_opstamp }) => delete_opstamp >= task.requiredOpstamp,
+          );
+        // Every split any read pass held crossed the opstamp, so nothing the
+        // delete can still reach holds what the count found.
+        if (passes.slice(0, passesRead).every(crossed)) {
+          expect(declared).toBe(true);
+        }
+        if (declared) {
+          expect(crossed(passes.at(passesRead - 1) ?? [])).toBe(true);
+        }
       },
     ),
   );

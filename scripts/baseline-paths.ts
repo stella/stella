@@ -17,20 +17,24 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
+  /** scripts/check-oxlint-rule-coverage.ts */
+  oxlintRuleCoverage: "scripts/oxlint-rule-coverage-baseline.json",
   /** scripts/bundle-baseline.ts */
   bundle: "scripts/bundle-baseline.json",
   /** scripts/dependency-audit.ts */
   dependencyAudit: "scripts/dependency-audit-baseline.json",
   /** scripts/knip-exports-ratchet.ts */
   knipExports: "scripts/knip-exports-baseline.json",
-  /** scripts/ratchet.ts */
-  ratchet: "scripts/ratchet-baseline.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
+  /** scripts/failure-as-empty-baseline.ts */
+  failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
+  /** scripts/source-fingerprint-baseline.ts */
+  sourceFingerprint: "scripts/source-fingerprint-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
@@ -46,8 +50,18 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
   caseLawSilentDrop:
     "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
+  /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
+  caseLawReadFault:
+    "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
+  /** apps/api/src/handlers/legislation/statute-recall.contract.test.ts */
+  statuteRecall:
+    "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
+  /** scripts/queue-authority.ts */
+  queueAuthority: "scripts/queue-authority-baseline.json",
+  /** scripts/queue-authority.ts */
+  schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
   // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
   // messages directory it is given, so the package holds the file name and
   // each app contributes the directory. Both committed pairs are listed.

@@ -67,6 +67,16 @@ A file over the ceiling is refused, naming the limit; send such a document from
 an MCP host that can attach it to the tool's file reference rather than
 re-exporting it to fit.
 
+## Legislation search
+
+`stella legislation search --json` reports each hit's `match.type` as `strict`
+or `relaxed`. A short, exhausted first corpus page can append matches ranked
+by content-term coverage; strict matches appear first. Citations and known
+act aliases inside the query pin the act they identify.
+
+Continue with the returned cursor and the same query and filters. A cursor
+rejected as invalid requires restarting the search.
+
 ## Timers
 
 Use `time-timers.start` to create a timer before choosing a matter, then

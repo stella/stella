@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "Two request-boundary 400 rejections in apps/api/src/lib/legal-search/corpus-index-pagination.ts of a cursor that does not match the ranking mode it is replayed under (a BM25 cursor outside window zero, or a cursor over a tied cutoff that has no stable universe), using the same HandlerError path as the file's existing invalid-cursor rejection."
+}

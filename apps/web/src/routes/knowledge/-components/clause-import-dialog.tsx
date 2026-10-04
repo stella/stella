@@ -19,7 +19,9 @@ import { stellaToast } from "@stll/ui/toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import { getClauseImportPreviewCount } from "./clause-import-dialog.logic";
 
@@ -75,9 +77,7 @@ export const ClauseImportDialog = ({
     setImporting(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.importFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.importFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -88,10 +88,7 @@ export const ClauseImportDialog = ({
 
     const data = response.data;
     if (data instanceof Response) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.importFailed"),
-      });
+      notifyUserError(undefined, t("clauses.importFailed"));
       return;
     }
 

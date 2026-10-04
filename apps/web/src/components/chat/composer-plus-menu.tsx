@@ -38,7 +38,6 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -81,11 +80,14 @@ import {
 } from "@/components/chat/chat-model-options-menu";
 import {
   charBeforeCaret,
+  chooseShortcutPopupSide,
   COMPOSER_MENU_SHORTCUT_CHAR,
   contextMentionSearchKey,
   resolveComposerMenuShortcut,
+  SHORTCUT_POPUP_SIDE,
   shouldDrainSkillPages,
   type ComposerMenuShortcut,
+  type ShortcutPopupSide,
 } from "@/components/chat/composer-plus-menu.logic";
 import {
   ComposerSubmenuSearch,
@@ -106,6 +108,7 @@ import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
@@ -212,9 +215,8 @@ export const ComposerPlusMenu = ({
   );
   // Set together with `shortcutMenu` but never cleared, so a closing popup
   // animates out where it opened instead of jumping to the (+) button.
-  const [shortcutAnchor, setShortcutAnchor] = useState<ShortcutAnchor | null>(
-    null,
-  );
+  const [shortcutPlacement, setShortcutPlacement] =
+    useState<ShortcutPlacement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const shortcutEditor = skills?.editor ?? context?.editor ?? null;
   const hasSkillsShortcut = skills !== undefined;
@@ -248,7 +250,7 @@ export const ComposerPlusMenu = ({
 
       event.preventDefault();
       event.stopImmediatePropagation();
-      setShortcutAnchor(createCaretAnchor(shortcutEditor, triggerRef));
+      setShortcutPlacement(createCaretPlacement(shortcutEditor, triggerRef));
       setShortcutMenu(shortcut);
     };
 
@@ -268,7 +270,8 @@ export const ComposerPlusMenu = ({
       shortcutEditor.commands.focus();
     }
   };
-  const popupAnchor = shortcutAnchor ?? triggerRef;
+  const popupAnchor = shortcutPlacement?.anchor ?? triggerRef;
+  const popupSide = shortcutPlacement?.side ?? SHORTCUT_POPUP_SIDE.above;
   const submenuHost = { kind: "submenu", guideAnchorsEnabled } as const;
 
   return (
@@ -357,6 +360,7 @@ export const ComposerPlusMenu = ({
             anchor: popupAnchor,
             open: shortcutMenu === "skills",
             onClose: closeShortcutMenu,
+            side: popupSide,
           }}
           skills={skills}
         />
@@ -370,6 +374,7 @@ export const ComposerPlusMenu = ({
             anchor: popupAnchor,
             open: shortcutMenu === "context",
             onClose: closeShortcutMenu,
+            side: popupSide,
           }}
         />
       )}
@@ -379,29 +384,51 @@ export const ComposerPlusMenu = ({
 
 type ShortcutAnchor = NonNullable<ComponentProps<typeof MenuPopup>["anchor"]>;
 
+type ShortcutPlacement = { anchor: ShortcutAnchor; side: ShortcutPopupSide };
+
+// The side is fixed by `chooseShortcutPopupSide` when the popup opens; Base
+// UI's default flip would re-decide it on every change in the list's height.
+const SHORTCUT_POPUP_COLLISION_AVOIDANCE = {
+  side: "none",
+  align: "shift",
+  fallbackAxisSide: "none",
+} as const satisfies NonNullable<
+  ComponentProps<typeof MenuPopup>["collisionAvoidance"]
+>;
+
 /**
- * A virtual anchor at the caret a shortcut was typed at. The position is read
- * once, so the anchor keeps one identity while its popup is open; the rect is
- * re-measured on each layout so it follows scrolling, falling back to the (+)
- * button once the caret can no longer be measured.
+ * A virtual anchor at the caret a shortcut was typed at, and the side its
+ * popup opens on. The position is read once, so the anchor keeps one identity
+ * while its popup is open; the rect is re-measured on each layout so it
+ * follows scrolling, falling back to the (+) button once the caret can no
+ * longer be measured.
  */
-const createCaretAnchor = (
+const createCaretPlacement = (
   editor: Editor,
   fallback: RefObject<HTMLButtonElement | null>,
-): ShortcutAnchor => {
+): ShortcutPlacement => {
   const caret = editor.state.selection.from;
-  return {
-    contextElement: editor.view.dom,
-    getBoundingClientRect: () => {
-      if (!editor.isDestroyed) {
-        const coords = Result.try(() => editor.view.coordsAtPos(caret));
-        if (!Result.isError(coords)) {
-          const { bottom, left, top } = coords.value;
-          return new DOMRect(left, top, 0, bottom - top);
-        }
+  const measureCaret = () => {
+    if (!editor.isDestroyed) {
+      const coords = Result.try(() => editor.view.coordsAtPos(caret));
+      if (!Result.isError(coords)) {
+        const { bottom, left, top } = coords.value;
+        return new DOMRect(left, top, 0, bottom - top);
       }
-      return fallback.current?.getBoundingClientRect() ?? new DOMRect();
+    }
+    return fallback.current?.getBoundingClientRect() ?? new DOMRect();
+  };
+  const opening = measureCaret();
+  return {
+    anchor: {
+      contextElement: editor.view.dom,
+      getBoundingClientRect: measureCaret,
     },
+    side: chooseShortcutPopupSide({
+      caretBottom: opening.bottom,
+      caretTop: opening.top,
+      viewportHeight: window.innerHeight,
+    }),
   };
 };
 
@@ -417,6 +444,7 @@ type ComposerListHost =
       anchor: ShortcutAnchor;
       open: boolean;
       onClose: () => void;
+      side: ShortcutPopupSide;
     };
 
 /** The shortcut popup's search leads with the trigger the user typed; the
@@ -809,6 +837,7 @@ const ComposerSkillsMenu = ({
         label={label}
         onOpenChange={handleOpenChange}
         open={open}
+        side={host.side}
       >
         {content}
       </ComposerShortcutPopup>
@@ -837,12 +866,14 @@ const ComposerShortcutPopup = ({
   label,
   onOpenChange,
   open,
+  side,
 }: {
   anchor: ShortcutAnchor;
   children: React.ReactNode;
   label: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
     <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
@@ -851,8 +882,9 @@ const ComposerShortcutPopup = ({
       anchor={anchor}
       aria-label={label}
       className="w-72"
+      collisionAvoidance={SHORTCUT_POPUP_COLLISION_AVOIDANCE}
       onKeyDown={pickHighlightedItemOnTab}
-      side="top"
+      side={side}
     >
       {children}
     </MenuPopup>
@@ -1004,6 +1036,7 @@ const ComposerContextMenu = ({
         label={label}
         onOpenChange={handleOpenChange}
         open={open}
+        side={host.side}
       >
         {content}
       </ComposerShortcutPopup>
@@ -1367,7 +1400,7 @@ const ComposerMcpSubmenu = ({
       return unwrapEden(response);
     });
     if (Result.isError(result)) {
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }
     detached(

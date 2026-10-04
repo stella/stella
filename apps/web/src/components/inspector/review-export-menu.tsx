@@ -16,7 +16,6 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
@@ -25,6 +24,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExportFileName } from "@/lib/export-download";
 import { downloadFile } from "@/lib/utils";
 
@@ -142,10 +142,7 @@ export const ReviewExportMenu = ({
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: t("workspaces.views.exportFailed"),
-        type: "error",
-      });
+      notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }
     downloadFile(result.value.blob, result.value.fileName);
@@ -164,12 +161,12 @@ export const ReviewExportMenu = ({
       // document's version can be handed over with its reference.
       variant: "original",
       workspaceId,
-      onError: (message) => {
-        stellaToast.add({
-          title: t("inspector.review.export.counterpartyFailed"),
-          description: message,
-          type: "error",
-        });
+      onError: (message, error) => {
+        notifyUserError(
+          error,
+          t("inspector.review.export.counterpartyFailed"),
+          { description: message },
+        );
       },
     });
     setPending(null);

@@ -16,6 +16,7 @@ import updateVatRate from "@/api/handlers/vat-rates/update";
 import { resolveVatRate } from "@/api/lib/billing/vat-rates";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -54,7 +55,7 @@ const requestContext = () => ({
   route: "/v1/vat-rates",
   safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
   session: { activeOrganizationId: ids.orgA },
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   user: { id: ids.userA1 },
   recordAuditEvent: async () => {},
 });

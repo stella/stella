@@ -15,7 +15,6 @@ import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/toast";
 
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
@@ -25,6 +24,7 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
@@ -34,6 +34,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { MatterUploadAction } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-upload-action";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 import { loadWorkspaceRouteQueries } from "@/routes/_protected.workspaces/$workspaceId/-route-loader.logic";
@@ -125,10 +126,7 @@ const loadWorkspaceOrRedirect = async (
       // below reaches the route error boundary, which captures already.
       getAnalytics().captureError(error);
       const t = getTranslator();
-      stellaToast.add({
-        title: t("errors.matterNotFound"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.matterNotFound"));
       throw redirect({ to: "/workspaces", replace: true });
     }
 
@@ -234,15 +232,17 @@ function RouteComponent() {
     shouldThrow: false,
   });
   const correspondenceMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/correspondence",
+    from: "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
     shouldThrow: false,
   });
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.
-  // Timesheets, invoices, and correspondence bypass the
+  // Timesheets, invoices, and a correspondence message bypass the
   // WorkspaceDropZone (they have their own layouts), but the inspector
-  // pane is still available everywhere inside a workspace.
+  // pane is still available everywhere inside a workspace. The matter's
+  // correspondence list is a view, so it sits in the drop zone like the
+  // other views.
   const content =
     timesheetsMatch || invoicesMatch || correspondenceMatch ? (
       <Outlet />
@@ -260,6 +260,7 @@ function RouteComponent() {
         previewClearTimers={previewClearTimers}
       />
       <ReportExportTracker workspaceId={workspaceId} />
+      <MatterUploadAction workspaceId={workspaceId} />
       <WorkflowServiceTierPromptProvider>
         {content}
       </WorkflowServiceTierPromptProvider>

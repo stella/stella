@@ -1,3 +1,4 @@
+import { beforeAll, describe, expect, test } from "bun:test";
 /**
  * A metadata-first source refreshes a decision long before it has the
  * document, and keeps refreshing it afterwards: the list endpoint's
@@ -20,8 +21,6 @@
  *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
-
-import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -40,6 +39,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -153,32 +153,32 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     /** What the adapter returns for a decision it has no document for. */
-    const metadataOnlyResult = (caseNumber: string): IngestionResult => ({
-      caseNumber,
-      court: "Okresný súd",
-      country: "SVK",
-      language: "sk",
-      decisionType: "rozsudok",
-      documentUrl: "https://example.test/refresh.pdf",
-      metadata: { judge: "New Judge" },
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: "hash-after",
-      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-      documentAst: EMPTY_AST,
-      documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-    });
+    const metadataOnlyResult = (caseNumber: string): IngestionResult =>
+      plainTextIngestionResult({
+        caseNumber,
+        court: "Okresný súd",
+        country: "SVK",
+        language: "sk",
+        decisionType: "rozsudok",
+        documentUrl: "https://example.test/refresh.pdf",
+        metadata: { judge: "New Judge" },
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: "hash-after",
+        parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+        documentAst: EMPTY_AST,
+        documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
+      });
 
     /** The same, from a source that fetches the document with the decision. */
-    const inlineResultWithoutDocument = (
-      caseNumber: string,
-    ): IngestionResult => ({
-      ...metadataOnlyResult(caseNumber),
-      documentDelivery: DOCUMENT_DELIVERY.INLINE,
-    });
+    const inlineResultWithoutDocument = (caseNumber: string): IngestionResult =>
+      plainTextIngestionResult({
+        ...metadataOnlyResult(caseNumber),
+        documentDelivery: DOCUMENT_DELIVERY.INLINE,
+      });
 
     const isUnpublished = async (id: SafeId<"caseLawDecision">) =>
       partialObservationFromMetadata((await readDecision(id))?.metadata)
-        .isListingOnly;
+        .detail === "listing-only";
 
     const readDecision = async (id: SafeId<"caseLawDecision">) =>
       await db.query.caseLawDecisions.findFirst({
@@ -278,11 +278,10 @@ if (!databaseUrl || !runPostgresTests) {
         let transactions = 0;
         const racingDb: ScopedDb = async (callback) => {
           transactions += 1;
-          // Transactions in order: the decision lookup, the check for a
-          // stored document, then the row write. Injecting as the third
-          // opens exactly the window the guard closes — the check has
-          // already answered "no document", and the write is next.
-          if (transactions === 3) {
+          // One schema lookup starts this standalone run; then come the identity
+          // lookup, document check, and row write. Inject before the fourth
+          // transaction so the document check has answered and the write is next.
+          if (transactions === 4) {
             await db
               .update(caseLawDecisions)
               .set({
@@ -298,7 +297,10 @@ if (!databaseUrl || !runPostgresTests) {
         };
 
         await processDecision({
-          input: { ...metadataOnlyResult(caseNumber), documentDelivery },
+          input: plainTextIngestionResult({
+            ...metadataOnlyResult(caseNumber),
+            documentDelivery,
+          }),
           observationOrder: 1n,
           sourceId,
           scopedDb: racingDb,
@@ -307,7 +309,7 @@ if (!databaseUrl || !runPostgresTests) {
 
         // If the sequence ever changes, the injection no longer lands in
         // the window and this test would pass without exercising it.
-        expect(transactions).toBe(3);
+        expect(transactions).toBe(4);
 
         const row = await readDecision(id);
         expect(row?.fulltext).toBe(STORED_TEXT);
@@ -360,11 +362,11 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await isUnpublished(stored.id)).toBe(true);
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...inlineResultWithoutDocument(caseNumber),
           fulltext: STORED_TEXT,
           rawHash: "hash-with-document",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -383,10 +385,10 @@ if (!databaseUrl || !runPostgresTests) {
 
       const observe = async (observationOrder: bigint) =>
         await processDecision({
-          input: {
+          input: plainTextIngestionResult({
             ...inlineResultWithoutDocument(caseNumber),
             rawHash: "hash-before",
-          },
+          }),
           observationOrder,
           sourceId,
           scopedDb,
@@ -425,10 +427,10 @@ if (!databaseUrl || !runPostgresTests) {
       const id = await insertHydratedDecision(caseNumber);
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...metadataOnlyResult(caseNumber),
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nRevidovaný text.",
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,

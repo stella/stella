@@ -17,7 +17,11 @@ import {
 import { resolveIdJagIdentity } from "@/api/lib/agent-auth-idjag";
 import type { IdJagIdentityOutcome } from "@/api/lib/agent-auth-idjag";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
@@ -45,6 +49,7 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
@@ -177,7 +182,7 @@ const agentIdentityHandler = createSafePublicHandler(
       // Dark-launch gate: even when on, the trusted-issuer allow-list
       // ships empty, so this still rejects every assertion until an
       // operator explicitly trusts an issuer.
-      if (!env.FEATURE_AGENT_ID_JAG) {
+      if (!isDeploymentFeatureEnabled("FEATURE_AGENT_ID_JAG")) {
         return Result.err(
           new HandlerError({
             status: 403,

@@ -1,3 +1,11 @@
+import {
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 /**
  * FileChatOverlay
  *
@@ -12,15 +20,6 @@
  * proposes edits via a `propose-suggestion` tool, the frontend
  * extracts and renders accept/reject cards). That work is Phase E.
  */
-
-import {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import {
@@ -203,6 +202,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
 import {
   matchReservedChatCommand,
@@ -568,10 +568,10 @@ const persistQueuedSuggestions = async ({
     getAnalytics().captureError(result.error.cause);
     switch (result.error.type) {
       case CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit:
-        stellaToast.add({
-          title: getTranslator()("docxReview.pendingLimitReached"),
-          type: "error",
-        });
+        notifyUserError(
+          result.error,
+          getTranslator()("docxReview.pendingLimitReached"),
+        );
         return;
       case CREATE_DOCX_SUGGESTIONS_ERROR.failed:
         return;
@@ -653,10 +653,10 @@ const persistQueuedSuggestions = async ({
   });
   if (!replayResults.includes("failed")) {
     if (replayResults.includes("pending-limit")) {
-      stellaToast.add({
-        title: getTranslator()("docxReview.pendingLimitReached"),
-        type: "error",
-      });
+      notifyUserError(
+        undefined,
+        getTranslator()("docxReview.pendingLimitReached"),
+      );
     }
     return;
   }
@@ -664,10 +664,7 @@ const persistQueuedSuggestions = async ({
   getAnalytics().captureError(
     new Error("DOCX suggestion resolution replay failed to persist"),
   );
-  stellaToast.add({
-    title: getTranslator()("docxReview.persistFailed"),
-    type: "error",
-  });
+  notifyUserError(undefined, getTranslator()("docxReview.persistFailed"));
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -1196,10 +1193,7 @@ const FileChatOverlayInner = ({
         return;
       }
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
   );
@@ -2314,10 +2308,7 @@ const FileChatOverlayInner = ({
       });
       if (Result.isError(rejected)) {
         getAnalytics().captureError(rejected.error);
-        stellaToast.add({
-          title: t("docxReview.persistFailed"),
-          type: "error",
-        });
+        notifyUserError(rejected.error, t("docxReview.persistFailed"));
         return false;
       }
     }
