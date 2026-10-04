@@ -49,6 +49,8 @@ export const BASELINE_PATHS = {
     "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
+  /** scripts/queue-authority.ts */
+  queueAuthority: "scripts/queue-authority-baseline.json",
   // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
   // messages directory it is given, so the package holds the file name and
   // each app contributes the directory. Both committed pairs are listed.

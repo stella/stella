@@ -14,7 +14,7 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
@@ -28,6 +28,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 
 const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({

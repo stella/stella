@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { asc, eq } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -13,6 +13,7 @@ const config = {
     "seeded when the organization is created, so this only ever reads. The " +
     "list is bounded and returned whole rather than paginated.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

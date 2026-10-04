@@ -8,7 +8,7 @@ import {
   InfoSoudRequestError,
 } from "@stll/infosoud";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -48,6 +48,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "read",
 } satisfies WorkspaceHandlerConfig;

@@ -2,7 +2,15 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_GRAMMARS,
+  type DecisionDocketJurisdiction,
+} from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_IDENTITY_FIXTURES,
+  DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
+  DOCKET_IDENTITY_PART_NUMERAL,
+} from "@stll/api-contract/decision-docket-identity.fixtures";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { propertyConfig } from "@stll/property-testing";
 
@@ -153,3 +161,122 @@ describe("the docket a query reads is keyed as the stored docket", () => {
     }
   });
 });
+
+/**
+ * Whether every reader spelling of a grammar's fixture file is read under the
+ * filed docket's own `citation_key`. Where it is not, a bare docket still
+ * reaches the file by its case-file key, which the docket-family identity
+ * scenario holds per grammar; an entry with a selector reads by the
+ * spellings alone.
+ */
+const READER_SPELLING_CITATION_KEYS = {
+  AUT: { type: "supported" },
+  CZE: { type: "supported" },
+  EU: {
+    type: "unsupported",
+    reason:
+      "A lead word (`case`, `Rechtssache`) stays in the reader's family and in its key.",
+  },
+  HUN: { type: "supported" },
+  POL: {
+    type: "unsupported",
+    reason:
+      "A lower-case division (`ii csk`) keys apart from the docket `II CSK`.",
+  },
+  SVK: { type: "supported" },
+  USA: {
+    type: "unsupported",
+    reason: "A `No.` lead stays in the reader's family and in its key.",
+  },
+} as const satisfies Record<
+  DecisionDocketJurisdiction,
+  | { readonly type: "supported" }
+  | { readonly type: "unsupported"; readonly reason: string }
+>;
+
+describe.each(
+  Object.values(DECISION_DOCKET_GRAMMARS).map(
+    ({ jurisdiction }) => jurisdiction,
+  ),
+)(
+  "a %s docket is read under the keys its file is stored with",
+  (jurisdiction) => {
+    const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+    const fixture = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
+    const { sheet } = fixture;
+    const parity = READER_SPELLING_CITATION_KEYS[jurisdiction];
+    const n = DOCKET_IDENTITY_FIXTURE_NUMBER_MAX;
+    const docket = fixture.filed(n);
+    const part = DOCKET_IDENTITY_PART_NUMERAL;
+
+    const familyIn = (entry: string) => {
+      const intent = parseDecisionQuery(entry, { grammar });
+      return intent.type === "identifier" && intent.kind === "docket"
+        ? intent
+        : panic(`Not a ${jurisdiction} docket: ${entry}`);
+    };
+
+    test("the filed docket is read under its own citation key", () => {
+      expect(docketFamilyCitationKeys(familyIn(docket))).toContain(
+        keyOf(docket),
+      );
+    });
+
+    switch (parity.type) {
+      case "supported":
+        test("every reader spelling is read under the filed docket's citation key", () => {
+          for (const entry of fixture.readerSpellings(n)) {
+            const intent = familyIn(entry);
+            expect(docketFamilyCitationKeys(intent), entry).toContain(
+              keyOf(docket),
+            );
+            expect(keyOf(intent.family), entry).toBe(keyOf(docket));
+          }
+        });
+        break;
+      case "unsupported":
+        test("some reader spelling keys apart from the filed docket, as declared", () => {
+          // Once every spelling is read under the docket key, the declaration
+          // has to become `supported`.
+          const apart = fixture
+            .readerSpellings(n)
+            .filter(
+              (entry) =>
+                !docketFamilyCitationKeys(familyIn(entry)).includes(
+                  keyOf(docket),
+                ),
+            );
+          expect(apart).not.toEqual([]);
+        });
+        break;
+      default: {
+        parity satisfies never;
+        panic("Unhandled citation-key parity");
+      }
+    }
+
+    test("a member stored with a part numeral is read under its file's keys", () => {
+      const keys = docketFamilyCitationKeys(familyIn(docket));
+      for (const separator of ["- ", " - ", "/", ", "]) {
+        const stored = `${docket}${separator}${part}.`;
+        expect(keyOf(stored), stored).not.toBe(keyOf(docket));
+        expect(keys, stored).toContain(keyOf(stored));
+      }
+    });
+
+    if (sheet.type === "supported") {
+      test("a member stored with its sheet is read under its own key, and no other sheet's", () => {
+        const keys = docketFamilyCitationKeys(
+          familyIn(`${docket}-${sheet.held}`),
+        );
+        expect(keys).toContain(keyOf(docket));
+        for (const dash of ["-", " - ", " – "]) {
+          const stored = `${docket}${dash}${sheet.held}`;
+          expect(keys, stored).toContain(keyOf(stored));
+        }
+        expect(keys).not.toContain(keyOf(`${docket} - ${sheet.unheld}`));
+        expect(keys).not.toContain(keyOf(fixture.filed(n + 1)));
+      });
+    }
+  },
+);

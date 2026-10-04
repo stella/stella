@@ -1,4 +1,5 @@
 import { apiKey } from "@better-auth/api-key";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization, twoFactor } from "better-auth/plugins";
@@ -39,6 +40,12 @@ const createAccount = async ({
       teamMember: [],
       organizationRole: [],
       apikey: [],
+      oauthClient: [],
+      oauthClientResource: [],
+      oauthResource: [],
+      oauthConsent: [],
+      oauthAccessToken: [],
+      oauthRefreshToken: [],
     }),
     emailAndPassword: { enabled: true },
     session: {
@@ -64,6 +71,13 @@ const createAccount = async ({
         requireEmailVerificationOnInvitation: false,
       }),
       apiKey(),
+      oauthProvider({
+        loginPage: "/sign-in",
+        consentPage: "/consent",
+        disableJwtPlugin: true,
+        resourceSeedMode: "none",
+        allowDynamicClientRegistration: true,
+      }),
     ],
   });
   const signedIn = await auth.api.signUpEmail({
@@ -275,6 +289,73 @@ describe("account authentication operations", () => {
       expect(await key.json()).not.toMatchObject({
         code: "account_access_unavailable",
       });
+    },
+  );
+
+  test.each([undefined, organizationId])(
+    "limits OAuth authorization and consent with binding %s",
+    async (binding) => {
+      const authorizeQuery = new URLSearchParams({
+        response_type: "code",
+        client_id: "sample-client",
+        redirect_uri: "https://client.example.test/callback",
+        scope: "openid",
+        state: "sample-state",
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGzSMMMgu8",
+        code_challenge_method: "S256",
+      });
+      const requests = [
+        {
+          method: "GET",
+          path: `/oauth2/authorize?${authorizeQuery.toString()}`,
+          body: undefined,
+        },
+        { method: "POST", path: "/oauth2/consent", body: { accept: true } },
+        {
+          method: "POST",
+          path: "/oauth2/register",
+          body: {
+            client_name: "Sample client",
+            redirect_uris: ["https://client.example.test/callback"],
+            token_endpoint_auth_method: "none",
+            grant_types: ["authorization_code"],
+            response_types: ["code"],
+          },
+        },
+      ] as const;
+
+      for (const accountEmail of [email, "standard@example.test"]) {
+        const { auth, headers } = await createAccount({
+          accountEmail,
+          binding,
+          activeOrganizationId: binding,
+        });
+        for (const request of requests) {
+          const response = await auth.handler(
+            new Request(`http://localhost:3001/api/auth${request.path}`, {
+              method: request.method,
+              headers: {
+                ...headers,
+                "content-type": "application/json",
+                origin: "http://localhost:3001",
+              },
+              body:
+                request.body === undefined
+                  ? undefined
+                  : JSON.stringify(request.body),
+            }),
+          );
+          const text = await response.text();
+          if (accountEmail === email) {
+            expect(response.status).toBe(403);
+            expect(JSON.parse(text)).toMatchObject({
+              code: "account_access_unavailable",
+            });
+          } else {
+            expect(text).not.toContain("account_access_unavailable");
+          }
+        }
+      }
     },
   );
 });
