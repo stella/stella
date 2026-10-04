@@ -361,6 +361,7 @@ export const runEuCompletionTick = async ({
           : "failed";
       break;
     }
+    // db-await-in-loop: Each row is picked up just before its paced publisher request; rows are processed one at a time at 1 request per second, bounded by maxRows.
     const pickedUp = await dependencies.store.pickup(receipt.id);
     if (pickedUp === "waiting") {
       continue;
@@ -386,9 +387,11 @@ export const runEuCompletionTick = async ({
       const stopped =
         result.error instanceof EuCompletionStop ? result.error : null;
       if (stopped !== null && stopped.reason !== "publisher-refused") {
+        // db-await-in-loop: A stopped row is released before the walk ends; the paced walk is bounded by maxRows.
         await dependencies.store.releaseBenign(receipt.id);
         outcome = { type: "stopped", reason: stopped.reason };
       } else {
+        // db-await-in-loop: A failed row settles before the next paced request so its hold applies to that request; bounded by maxRows.
         const settlement = await dependencies.store.recordFailure(receipt, {
           scope: "systemic",
           code: "unexpected",

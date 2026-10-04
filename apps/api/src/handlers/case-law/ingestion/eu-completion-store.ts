@@ -1005,52 +1005,83 @@ const readmitSettledMirrorsTx = async (
     .orderBy(asc(euCompletionReceipts.id))
     .limit(limit)
     .for("update", { of: euCompletionReceipts });
-  const readmitted: EuCompletionReceipt[] = [];
-  for (const {
+  const markerCurrent = ({
     receipt,
     sourceHash,
     observationOrder,
     documentParserVersion,
-  } of repaired) {
-    const markerCurrent =
-      observationOrder === receipt.writtenObservationOrder &&
-      documentParserVersion === receipt.writtenParserVersion &&
-      sourceHash === receipt.writtenSourceHash;
-    // A canonical repair may advance observation order without changing bytes.
-    // Reclassify against its current claim, rather than replaying the old write.
-    readmitted.push(
-      ...(await tx
-        .update(euCompletionReceipts)
-        .set({
-          status: markerCurrent ? "fetched" : "pending",
-          detail: null,
-          attemptState: "idle",
-          completedAt: null,
-          completionSourceHash: null,
-          retryAt: null,
-          ...(markerCurrent
-            ? {}
-            : {
-                claimedSourceHash: sourceHash,
-                claimedObservationOrder: observationOrder,
-                claimedFingerprint: null,
-                payload: null,
-                payloadHash: null,
-                provenance: null,
-                target: null,
-                writtenAt: null,
-                writtenSourceHash: null,
-                writtenObservationOrder: null,
-                writtenParserVersion: null,
-                attempts: 0,
-                mirrorWaits: 0,
-              }),
-          updatedAt: new Date(now()),
-        })
-        .where(eq(euCompletionReceipts.id, receipt.id))
-        .returning()),
-    );
-  }
+  }: (typeof repaired)[number]) =>
+    observationOrder === receipt.writtenObservationOrder &&
+    documentParserVersion === receipt.writtenParserVersion &&
+    sourceHash === receipt.writtenSourceHash;
+  const current = repaired.filter(markerCurrent);
+  const reclaimed = repaired.filter((row) => !markerCurrent(row));
+  const readmission = {
+    detail: null,
+    attemptState: "idle",
+    completedAt: null,
+    completionSourceHash: null,
+    retryAt: null,
+    updatedAt: new Date(now()),
+  } as const;
+  // A canonical repair may advance observation order without changing bytes.
+  // Rows whose written marker still matches replay that write; the rest
+  // reclassify against their current claim, each from the values read above.
+  const replayed =
+    current.length === 0
+      ? []
+      : await tx
+          .update(euCompletionReceipts)
+          .set({ ...readmission, status: "fetched" })
+          .where(
+            inArray(
+              euCompletionReceipts.id,
+              current.map(({ receipt }) => receipt.id),
+            ),
+          )
+          .returning();
+  const claims = sql.join(
+    reclaimed.map(
+      ({ receipt, sourceHash, observationOrder }) =>
+        sql`(${receipt.id}::text, ${sourceHash}::text, ${observationOrder}::bigint)`,
+    ),
+    sql`, `,
+  );
+  const restarted =
+    reclaimed.length === 0
+      ? []
+      : await tx
+          .update(euCompletionReceipts)
+          .set({
+            ...readmission,
+            status: "pending",
+            claimedSourceHash: sql`claim.source_hash`,
+            claimedObservationOrder: sql`claim.observation_order`,
+            claimedFingerprint: null,
+            payload: null,
+            payloadHash: null,
+            provenance: null,
+            target: null,
+            writtenAt: null,
+            writtenSourceHash: null,
+            writtenObservationOrder: null,
+            writtenParserVersion: null,
+            attempts: 0,
+            mirrorWaits: 0,
+          })
+          .from(
+            sql`(VALUES ${claims}) AS claim(id, source_hash, observation_order)`,
+          )
+          .where(eq(euCompletionReceipts.id, sql`claim.id`))
+          .returning();
+  // Keep the selection's order: callers process readmitted rows in it.
+  const updated = new Map(
+    [...replayed, ...restarted].map((receipt) => [receipt.id, receipt]),
+  );
+  const readmitted = repaired.map(
+    ({ receipt }) =>
+      updated.get(receipt.id) ?? panic("Readmitted receipt was not updated"),
+  );
   return readmitted;
 };
 
