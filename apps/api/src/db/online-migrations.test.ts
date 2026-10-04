@@ -145,7 +145,7 @@ describe("online migrations", () => {
 
   test("creates a missing index online and verifies completion", async () => {
     const harness = createHarness({
-      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, undefined, true] },
+      missingIndexes: [REPORT_EXPORT_INDEX],
     });
 
     await runOnlineMigrations(harness.pool);
@@ -491,7 +491,7 @@ describe("online migrations", () => {
 
   test("retires the broad document index only after its exact replacement validates", async () => {
     const harness = createHarness({
-      indexStates: { [DOCUMENT_DATE_INDEX]: [undefined, true] },
+      missingIndexes: [DOCUMENT_DATE_INDEX],
     });
 
     await runOnlineMigrations(harness.pool);
@@ -1058,6 +1058,8 @@ type HarnessOptions = {
   emptyRepairTables?: boolean;
   timeoutRepairBatch?: boolean;
   indexStates?: IndexStates;
+  /** Missing until their CREATE statement completes, independent of reads. */
+  missingIndexes?: readonly string[];
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -1069,6 +1071,7 @@ const createHarness = ({
   artifacts = {},
   unvalidatedConstraints = [],
   indexStates = {},
+  missingIndexes = [],
   emptyRepairTables = false,
   timeoutRepairBatch = false,
 }: HarnessOptions = {}) => {
@@ -1079,6 +1082,7 @@ const createHarness = ({
   >();
   const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
+  const pendingIndexes = new Set(missingIndexes);
   const remainingArtifacts = new Map(
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
@@ -1096,6 +1100,11 @@ const createHarness = ({
       reserve: async () => ({
         execute: async (query: string) => {
           statements.push(query);
+          for (const { name, createSql } of managedIndexes) {
+            if (query === createSql) {
+              pendingIndexes.delete(name);
+            }
+          }
           for (const constraint of pendingConstraints) {
             if (query.includes(`VALIDATE CONSTRAINT "${constraint}"`)) {
               pendingConstraints.delete(constraint);
@@ -1227,6 +1236,9 @@ const createHarness = ({
           const index = managedIndexes.find(({ name }) => name === indexName);
           if (!index) {
             throw new TypeError("Expected managed index name");
+          }
+          if (pendingIndexes.has(indexName)) {
+            return [];
           }
           const offset = indexOffsets.get(indexName) ?? 0;
           const states = indexStates[indexName];
