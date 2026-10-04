@@ -71,6 +71,26 @@ const readBaseLedger = ({
   return parseLedger(result.stdout.toString(), `${baseRef}:${ledgerRel}`);
 };
 
+const isReasonedEntry = (
+  entry: unknown,
+): entry is { id: string; reason: string } =>
+  typeof entry === "object" &&
+  entry !== null &&
+  "id" in entry &&
+  typeof entry.id === "string" &&
+  "reason" in entry &&
+  typeof entry.reason === "string" &&
+  entry.reason.trim().length > 0;
+
+/** The ids of a `[{ id, reason }]` ledger whose every reason is non-blank. */
+export const parseReasonedLedger = (text: string, label: string): string[] => {
+  const parsed: unknown = JSON.parse(text);
+  if (!Array.isArray(parsed) || !parsed.every(isReasonedEntry)) {
+    panic(`${label} must be a reasoned ledger`);
+  }
+  return parsed.map((entry) => entry.id);
+};
+
 export const addedEntries = (
   current: readonly string[],
   base: readonly string[] | null,

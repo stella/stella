@@ -24,7 +24,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -1019,12 +1018,6 @@ export const admitFiniteAction = async function* <
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")
-  ) {
-    return yield* handler(ctx);
-  }
   return yield* runAdmittedFiniteHandler({
     actionKind,
     ctx,
@@ -1105,11 +1098,7 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
-    if (
-      admission === undefined ||
-      (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS"))
-    ) {
+    if (admission === undefined) {
       return await runSafeHandler(ctx, handler);
     }
 

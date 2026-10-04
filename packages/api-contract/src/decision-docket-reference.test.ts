@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -13,6 +13,7 @@ import {
   DECISION_DOCKET_IDENTITY_FIXTURES,
   DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
   DOCKET_IDENTITY_PART_NUMERAL,
+  docketReaderEntryArbitrary,
 } from "./decision-docket-identity.fixtures";
 import {
   DECISION_DOCKETS_STORED_WITH_SHEETS,
@@ -955,6 +956,49 @@ const FIXTURE_NUMBERS = [1, DOCKET_IDENTITY_FIXTURE_NUMBER_MAX] as const;
 
 /** A trailing number no sheetless grammar may read as a sheet. */
 const PROBE_SHEET = "33";
+
+test("a reader entry reads as its file, in a spelling its grammar keeps", () => {
+  // The family is what the lookup keys like a stored docket: the grammar's
+  // format of it is a fixed point, under the filed docket's case-file key,
+  // with or without a part after it.
+  const part = DOCKET_IDENTITY_PART_NUMERAL;
+  assertProperty(
+    "a reader entry reads as its file, in a spelling its grammar keeps",
+    fc.property(
+      docketReaderEntryArbitrary,
+      fc.boolean(),
+      ({ entry, filed: stored, jurisdiction }, withPart) => {
+        const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+        const label = `${jurisdiction}: ${entry}`;
+        const canonicalOf = (docket: string) =>
+          readDecisionDocketReference(docket, { grammar })?.family.canonical;
+        expect(
+          parseDecisionDocket(stored, { grammar })?.formatted,
+          `${jurisdiction}: ${stored}`,
+        ).toBe(stored);
+        const read = parseDecisionQuery(
+          withPart ? `${entry} - ${part}.` : entry,
+          { grammar },
+        );
+        const intent =
+          read.type === "identifier" && read.kind === "docket"
+            ? read
+            : panic(`Not a docket: ${label}`);
+        expect(intent.jurisdiction, label).toBe(jurisdiction);
+        expect(intent.selector, label).toEqual(
+          withPart ? { kind: "part", value: part } : { kind: "none" },
+        );
+        expect(canonicalOf(intent.family), label).toBe(canonicalOf(stored));
+        expect(canonicalOf(stored), label).toBeDefined();
+        expect(
+          parseDecisionDocket(intent.family, { grammar })?.formatted,
+          label,
+        ).toBe(intent.family);
+      },
+    ),
+    propertyConfig(),
+  );
+});
 
 describe.each(
   Object.values(DECISION_DOCKET_GRAMMARS).map(
