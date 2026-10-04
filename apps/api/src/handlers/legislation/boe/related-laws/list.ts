@@ -5,7 +5,7 @@ import { RELATION_TYPES } from "@stll/boe";
 import type { RelationType } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
@@ -32,6 +32,7 @@ const boeRelatedLaws = createSafeRootHandler(
       "relationType: modifies, modifiedBy, derogates, derogatedBy, or all " +
       "(the default).",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,

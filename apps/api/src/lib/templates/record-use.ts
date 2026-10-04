@@ -1,11 +1,14 @@
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateFills, templates } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
+import { templateFillStatus } from "@/api/lib/templates/template-fill-completion";
+import type { FillDiagnostics } from "@/api/lib/templates/template-fill-completion";
 
 type RecordTemplateUseOptions = {
   tx: Transaction;
@@ -44,10 +47,9 @@ type RecordTemplateFillOptions = {
   entityVersionId?: SafeId<"entityVersion"> | undefined;
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
-  unmatchedCount: number;
-  aiFieldErrorCount: number;
-  unusedCount: number;
-  structureErrors?: TemplateStructureError[] | undefined;
+  /** The fill's diagnostics: the recorded status is their completion
+   *  decision, and the recorded counts are read from them. */
+  diagnostics: FillDiagnostics;
   /** Records the `EXECUTE` audit event when present (chat tools may run without
    *  one); the fill row is always written. */
   recordAuditEvent?: AuditRecorder | undefined;
@@ -57,9 +59,7 @@ type RecordTemplateFillOptions = {
  * Persist a template fill the way the REST fill routes do: a `template_fills`
  * row plus an `EXECUTE` audit event. The shared fill service records template
  * *use* (the counter) but, by design, leaves the fill row + audit to the
- * calling handler, so the chat and MCP `fill_template` tools call this to keep
- * agent-driven executions in the audit trail. Run inside the caller's
- * RLS-scoped transaction.
+ * calling handler. Run inside the caller's RLS-scoped transaction.
  */
 export const recordTemplateFill = async ({
   tx,
@@ -70,14 +70,11 @@ export const recordTemplateFill = async ({
   entityId,
   entityVersionId,
   format,
-  unmatchedCount,
-  aiFieldErrorCount,
-  unusedCount,
-  structureErrors,
+  diagnostics,
   recordAuditEvent,
 }: RecordTemplateFillOptions): Promise<void> => {
-  const status =
-    unmatchedCount > 0 || aiFieldErrorCount > 0 ? "partial" : "success";
+  const status = templateFillStatus(diagnostics);
+  const unmatchedCount = diagnostics.unmatchedPlaceholders.length;
   await tx.insert(templateFills).values({
     organizationId,
     templateId,
@@ -85,10 +82,10 @@ export const recordTemplateFill = async ({
     format,
     status,
     unmatchedCount,
-    unusedCount,
+    unusedCount: diagnostics.unusedValues.length,
     structureErrors:
-      structureErrors !== undefined && structureErrors.length > 0
-        ? structureErrors
+      diagnostics.structureErrors.length > 0
+        ? [...diagnostics.structureErrors]
         : null,
   });
   await recordAuditEvent?.(tx, {
@@ -100,9 +97,46 @@ export const recordTemplateFill = async ({
       format,
       status,
       unmatchedCount,
-      aiFieldErrorCount,
+      aiFieldErrorCount: diagnostics.aiFieldErrors.length,
+      undecidedConditionCount: diagnostics.undecidedConditions.length,
       ...(entityId !== undefined && { entityId }),
       ...(entityVersionId !== undefined && { entityVersionId }),
     },
   });
 };
+
+type TemplateExecutionRecorders = {
+  recordTemplateUse: typeof recordTemplateUse;
+  recordTemplateFill: typeof recordTemplateFill;
+};
+
+const defaultTemplateExecutionRecorders = {
+  recordTemplateUse,
+  recordTemplateFill,
+} satisfies TemplateExecutionRecorders;
+
+type RecordTemplateExecutionOptions = Omit<RecordTemplateFillOptions, "tx"> & {
+  scopedDb: ScopedDb;
+  recorders?: TemplateExecutionRecorders | undefined;
+};
+
+/**
+ * Record a transient fill (one returned as text, not persisted) in one
+ * transaction: the use-count bump, the fill row and the `EXECUTE` audit event.
+ * The chat and MCP `fill_template` tools fill with `useRecording: "caller"` and
+ * return the rendered text only once this commits, so an agent never receives
+ * a fill the audit trail lacks; on failure nothing is written and the caller
+ * returns an error instead of the text.
+ */
+export const recordTemplateExecution = async ({
+  scopedDb,
+  recorders = defaultTemplateExecutionRecorders,
+  ...fill
+}: RecordTemplateExecutionOptions) =>
+  await Result.tryPromise(
+    async () =>
+      await scopedDb(async (tx) => {
+        await recorders.recordTemplateUse({ tx, templateId: fill.templateId });
+        await recorders.recordTemplateFill({ tx, ...fill });
+      }),
+  );

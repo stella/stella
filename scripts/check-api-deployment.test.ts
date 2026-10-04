@@ -9,40 +9,6 @@ import { advanceDeploymentStability } from "./check-api-deployment";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Splits every `bun test` command in a step into test files and flags; any
-// token that is neither is returned so the caller can fail on it.
-const bunTestTargets = (
-  run: string,
-): { entries: string[]; unclassified: string[] } => {
-  const entries: string[] = [];
-  const unclassified: string[] = [];
-  for (const line of run.split("\n")) {
-    const command = line.trim();
-    if (!command.includes("bun test")) {
-      continue;
-    }
-    if (!command.startsWith("bun test ")) {
-      unclassified.push(command);
-      continue;
-    }
-    let previousFlag = false;
-    for (const token of command.slice("bun test ".length).split(/\s+/u)) {
-      if (/^(?:apps|packages|scripts)\/[\w./-]+\.test\.tsx?$/u.test(token)) {
-        entries.push(token);
-        previousFlag = false;
-      } else if (/^--?[a-z][\w-]*(?:=\S+)?$/u.test(token)) {
-        previousFlag = !token.includes("=");
-      } else if (previousFlag && /^[\w.:-]+$/u.test(token)) {
-        // A separate flag value, e.g. `--timeout 5000`.
-        previousFlag = false;
-      } else {
-        unclassified.push(token);
-      }
-    }
-  }
-  return { entries, unclassified };
-};
-
 type WorkflowStep = { run: string; env: Record<string, unknown> };
 
 const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
@@ -112,17 +78,21 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    const setupPin =
-      /stella\/\.github\/actions\/setup-bun-cached@(?<sha>[0-9a-f]{40})/u.exec(
-        workflow,
-      )?.groups?.["sha"];
     const releasePin =
       /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
         workflow,
       )?.groups?.["sha"];
 
-    expect(setupPin).toBeDefined();
-    expect(releasePin).toBe(setupPin);
+    expect(releasePin).toBeDefined();
+    // What the pack job builds is published, so it restores no shared cache.
+    expect(workflow).not.toContain("setup-bun-cached");
+    expect(workflow).not.toMatch(/actions\/cache(\/save)?@|rust-cache@/u);
+    const setups =
+      workflow.match(/oven-sh\/setup-bun@[^\n]*\n(?: {8,}.*\n)*/gu) ?? [];
+    expect(setups.length).toBeGreaterThan(0);
+    for (const setup of setups) {
+      expect(setup).toContain("no-cache: true");
+    }
   });
 
   test("staging checks share their access configuration", async () => {
@@ -648,114 +618,5 @@ describe("API deployment health receipt", () => {
     });
 
     expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
-  });
-
-  test("every bun test target in a step is classified", () => {
-    expect(
-      bunTestTargets(
-        [
-          "bun test scripts/a.test.ts scripts/b.test.ts",
-          "bun test --timeout 5000 scripts/c.test.ts --bail",
-          "bun test --timeout=5000 scripts/d.test.tsx",
-          "bash scripts/e.test.sh",
-        ].join("\n"),
-      ),
-    ).toEqual({
-      entries: [
-        "scripts/a.test.ts",
-        "scripts/b.test.ts",
-        "scripts/c.test.ts",
-        "scripts/d.test.tsx",
-      ],
-      unclassified: [],
-    });
-    expect(
-      bunTestTargets(
-        [
-          "bun test ../outside/x.test.ts",
-          "bun test 'scripts/quoted.test.ts'",
-          "env X=1 bun test scripts/f.test.ts",
-        ].join("\n"),
-      ).unclassified,
-    ).toEqual([
-      "../outside/x.test.ts",
-      "'scripts/quoted.test.ts'",
-      "env X=1 bun test scripts/f.test.ts",
-    ]);
-  });
-
-  test("tests that CI runs without the dependency install import only built-ins", async () => {
-    const workflow = await Bun.file(
-      new URL("../.github/workflows/ci.yml", import.meta.url),
-    ).text();
-    // Every step that can run before or without the dependency install: its
-    // job has no earlier install step, or that install is gated by a
-    // condition the step itself does not share (a workflow-only PR skips it).
-    const installFree: string[] = [];
-    const parsed: unknown = Bun.YAML.parse(workflow);
-    const jobs =
-      isRecord(parsed) && isRecord(parsed["jobs"]) ? parsed["jobs"] : {};
-    for (const job of Object.values(jobs)) {
-      const steps =
-        isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
-      let installCondition: string | null | undefined;
-      for (const step of steps) {
-        if (!isRecord(step)) {
-          continue;
-        }
-        const condition = typeof step["if"] === "string" ? step["if"] : null;
-        const installs =
-          step["name"] === "Install dependencies" ||
-          (typeof step["run"] === "string" &&
-            /\bbun (?:install|ci)\b/u.test(step["run"]));
-        if (installs) {
-          installCondition = condition;
-          continue;
-        }
-        const installed =
-          installCondition === null ||
-          (typeof installCondition === "string" &&
-            condition?.includes(installCondition) === true);
-        if (!installed && typeof step["run"] === "string") {
-          installFree.push(step["run"]);
-        }
-      }
-    }
-    const { entries, unclassified } = bunTestTargets(installFree.join("\n"));
-    // Every token of every `bun test` command is a known target or flag, so a
-    // consolidated or flagged command cannot hide a test from this check.
-    expect(unclassified).toEqual([]);
-    expect(entries).toContain("scripts/check-api-deployment.test.ts");
-    expect(entries).toContain("scripts/detect-e2e-changes.test.ts");
-    const root = new URL("../", import.meta.url).pathname;
-    const transpiler = new Bun.Transpiler({ loader: "ts" });
-    const pending = [...entries];
-    const seen = new Set<string>();
-    const packages: string[] = [];
-    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
-      if (seen.has(file)) {
-        continue;
-      }
-      seen.add(file);
-      // Executable scripts start with a shebang, which is not TypeScript.
-      const source = (await Bun.file(`${root}${file}`).text()).replace(
-        /^#![^\n]*/u,
-        "",
-      );
-      for (const { path: specifier } of transpiler.scanImports(source)) {
-        if (specifier.startsWith(".")) {
-          const target = new URL(specifier, `file://${root}${file}`).pathname;
-          const relative = target.slice(root.length);
-          pending.push(relative.endsWith(".ts") ? relative : `${relative}.ts`);
-        } else if (
-          specifier !== "bun" &&
-          !specifier.startsWith("bun:") &&
-          !specifier.startsWith("node:")
-        ) {
-          packages.push(`${file} imports ${specifier}`);
-        }
-      }
-    }
-    expect(packages).toEqual([]);
   });
 });

@@ -24,6 +24,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { polishTimeEntryNarrative } from "@/lib/workspaces/time-entries-api";
 
 type LanguagePick = { code: string; label: string };
@@ -91,9 +92,7 @@ export const TimeEntryNarrativeField = ({
 
     if (Result.isError(requestResult)) {
       analytics.captureError(requestResult.error);
-      stellaToast.add({
-        type: "error",
-        title: tAi("editWithAI"),
+      notifyUserError(requestResult.error, tAi("editWithAI"), {
         description: userErrorFromThrown(
           requestResult.error,
           tCommon("unexpectedError"),

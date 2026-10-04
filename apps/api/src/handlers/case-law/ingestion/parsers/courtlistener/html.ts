@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
  * `html_lawbox`, `html_columbia`, `html_anon_2020`, `html`, and the
@@ -21,6 +22,7 @@ import {
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
+import { isExcludedHtmlTag } from "../shared-inlines";
 import {
   type BodyVocabulary,
   conservesText,
@@ -376,7 +378,7 @@ const captionElements = (root: ParentNode): WeakSet<Element> => {
         continue;
       }
       const name = nameOf(child);
-      if (["script", "style", "template", "title"].includes(name)) {
+      if (isExcludedHtmlTag(name) || ["template", "title"].includes(name)) {
         continue;
       }
       const caption =

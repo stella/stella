@@ -13,7 +13,10 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -263,10 +266,11 @@ describe("an owner's credential managing another author's proposal or comment", 
     asTestRaw<SafeDb>(
       createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
     );
-  const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole => ({
-    role: "owner",
-    credential: { type: "attenuated", permissions },
-  });
+  const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole =>
+    authorizedMemberRole({
+      role: "owner",
+      credential: { type: "attenuated", permissions },
+    });
   const asOwner = (memberRole: AuthorizedMemberRole) => ({
     memberRole,
     session: { activeOrganizationId: ids.orgA },

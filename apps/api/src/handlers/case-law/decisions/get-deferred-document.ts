@@ -141,6 +141,7 @@ const hydrate = async (
   }
 
   const document = await readThroughDeferredDocument({
+    adapterKey: decision.source.adapterKey,
     decision: {
       id: decision.id,
       caseNumber: decision.caseNumber,

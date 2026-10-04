@@ -1,9 +1,25 @@
 import type { Context } from "elysia";
 
 import {
+  CHAT_TURN_ID_HEADER,
+  CLAUSE_WARNINGS_HEADER,
+  REQUEST_ID_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
+} from "@stll/api-contract";
+
+import {
   normalizeResponseStatus,
   resolveResponseStatus,
 } from "@/api/lib/observability/response-status";
+
+export const CORS_EXPOSED_HEADERS = [
+  "Content-Disposition",
+  "X-Ai-Field-Errors",
+  CLAUSE_WARNINGS_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
+  REQUEST_ID_HEADER,
+  CHAT_TURN_ID_HEADER,
+];
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
@@ -50,8 +66,19 @@ export const applyResponseCachePolicy = ({
           ?.toString();
   const isEventStream =
     contentType?.split(";").at(0)?.trim().toLowerCase() === SSE_MEDIA_TYPE;
+  const setsCookie =
+    (response instanceof Response && response.headers.has("set-cookie")) ||
+    (set.headers instanceof Headers
+      ? set.headers.has("set-cookie")
+      : Object.entries(set.headers).some(
+          ([name, value]) =>
+            name.toLowerCase() === "set-cookie" &&
+            (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+        )) ||
+    Object.keys(set.cookie ?? {}).length > 0;
   const cacheControl =
     cache.kind === "public" &&
+    !setsCookie &&
     !privateResponses.has(set) &&
     status >= 200 &&
     status < 300

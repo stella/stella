@@ -55,6 +55,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByValue } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
@@ -888,6 +889,24 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  accountAccess: "standard",
+  permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
+    "action",
+    {
+      add_member: {
+        operation: "add_member",
+        permissions: { workspace: ["update"] },
+      },
+      remove_member: {
+        operation: "remove_member",
+        permissions: { workspace: ["update"] },
+      },
+      update_org_settings: {
+        operation: "update_org_settings",
+        permissions: { organizationSettings: ["update"] },
+      },
+    },
+  ),
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: {
     type: "input-discriminator",

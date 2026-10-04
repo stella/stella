@@ -21,14 +21,13 @@ const copyJsonValue = (value: unknown): unknown => {
     return value.map((item: unknown) => copyJsonValue(item));
   }
   if (typeof value === "object" && value !== null) {
-    const copied: Record<string, unknown> = {};
-    for (const [key, nested] of Object.entries(value)) {
-      if (key === AGENT_INPUT_NORMALIZATION_KEY) {
-        continue;
-      }
-      copied[key] = copyJsonValue(nested);
-    }
-    return copied;
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([key, nested]) =>
+        key === AGENT_INPUT_NORMALIZATION_KEY
+          ? []
+          : [[key, copyJsonValue(nested)] as const],
+      ),
+    );
   }
   return value;
 };
@@ -37,10 +36,9 @@ export const toToolInputSchema = (
   schema: McpToolInputSchema,
   excludedTopLevelProperties?: readonly string[],
 ): JSONSchema => {
-  const converted: JSONSchema = {};
-  for (const [key, value] of Object.entries(schema)) {
-    converted[key] = copyJsonValue(value);
-  }
+  const converted: JSONSchema = Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [key, copyJsonValue(value)]),
+  );
   if (excludedTopLevelProperties === undefined) {
     return converted;
   }

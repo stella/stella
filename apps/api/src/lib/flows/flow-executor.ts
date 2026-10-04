@@ -1,5 +1,12 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  lt,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
@@ -7,9 +14,11 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
+  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
@@ -31,8 +40,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -153,6 +164,7 @@ export const executeFlowStep = async (
     createEntity = createEntityFromBuffer,
     loadAIConfig = loadOrgAIConfig,
     taskFeatures = deployedTaskFeatures(),
+    flushSearchRepairs = flushEntitySearchRepairs,
   }: {
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
@@ -166,6 +178,7 @@ export const executeFlowStep = async (
     loadAIConfig?: typeof loadOrgAIConfig | undefined;
     /** Which task features the deployment enables; tests pin it. */
     taskFeatures?: TaskDeploymentFeatures | undefined;
+    flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
   },
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
@@ -213,6 +226,20 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
+    const current = await lockRunAndCurrentStep(tx, {
+      workspaceId: run.workspaceId,
+      runId,
+    });
+    if (
+      current === undefined ||
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status === "completed" ||
+      current.step?.status === "skipped" ||
+      current.step?.status === "awaiting_review"
+    ) {
+      return null;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt: new Date() })
@@ -225,6 +252,9 @@ export const executeFlowStep = async (
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
+  if (startedPayload === null) {
+    return;
+  }
   broadcastUpdate(run.workspaceId, startedPayload);
 
   switch (stepDef.kind) {
@@ -238,6 +268,7 @@ export const executeFlowStep = async (
         scopedDb,
         broadcastUpdate,
         taskFeatures,
+        flushSearchRepairs,
       });
       return;
     case "ai": {
@@ -273,7 +304,7 @@ export const executeFlowStep = async (
       return;
     }
     case "create-document": {
-      const output = await runCreateDocumentStep({
+      await runCreateDocumentStep({
         stepDef,
         stepIndex,
         run,
@@ -281,17 +312,6 @@ export const executeFlowStep = async (
         actorUserId,
         scopedDb,
         createEntity,
-      });
-      await completeStepAndAdvance({
-        runId,
-        stepIndex,
-        stepCount: run.definitionSnapshot.steps.length,
-        output,
-        workspaceId: run.workspaceId,
-        organizationId: scope.organizationId,
-        actorUserId,
-        flowName: run.definitionSnapshot.name,
-        scopedDb,
         broadcastUpdate,
         enqueueStep,
       });
@@ -746,6 +766,8 @@ type RunCreateDocumentArgs = {
   actorUserId: SafeId<"user">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   createEntity: typeof createEntityFromBuffer;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
+  enqueueStep: typeof enqueueFlowStep;
 };
 
 const runCreateDocumentStep = async ({
@@ -756,7 +778,9 @@ const runCreateDocumentStep = async ({
   actorUserId,
   scopedDb,
   createEntity,
-}: RunCreateDocumentArgs): Promise<FlowStepOutput> => {
+  broadcastUpdate,
+  enqueueStep,
+}: RunCreateDocumentArgs): Promise<void> => {
   const priorMarkdown = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
@@ -779,28 +803,68 @@ const runCreateDocumentStep = async ({
     actorUserId,
   });
 
-  const created = await createEntity({
-    scopedDb,
-    organizationId,
+  const completion: {
+    result: Awaited<ReturnType<typeof completeStepInTransaction>> | undefined;
+  } = { result: undefined };
+  const completionArgs = {
+    runId: run.id,
+    stepIndex,
+    stepCount: run.definitionSnapshot.steps.length,
     workspaceId: run.workspaceId,
-    userId: actorUserId,
-    recordAuditEvent,
-    buffer: docx,
-    // Pass the raw title: `createEntityFromBuffer` sanitizes with
-    // `sanitizeFilenamePreservingExtension`, which truncates the base name
-    // rather than the extension. Pre-sanitizing with the plain
-    // `sanitizeFilename` here would drop the `.docx` for near-max-length titles
-    // before the extension-preserving pass could protect it.
-    fileName: `${stepDef.documentTitle}.docx`,
-    mimeType: DOCX_MIME_TYPE,
+    organizationId,
+    actorUserId,
+    flowName: run.definitionSnapshot.name,
+    scopedDb,
+    broadcastUpdate,
+    enqueueStep,
+  };
+  const created = await Result.tryPromise({
+    try: async () =>
+      await createEntity({
+        scopedDb,
+        organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        recordAuditEvent,
+        buffer: docx,
+        // Pass the raw title: `createEntityFromBuffer` sanitizes with
+        // `sanitizeFilenamePreservingExtension`, which truncates the base name
+        // rather than the extension. Pre-sanitizing with the plain
+        // `sanitizeFilename` here would drop the `.docx` for near-max-length titles
+        // before the extension-preserving pass could protect it.
+        fileName: `${stepDef.documentTitle}.docx`,
+        mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
+        afterCreate: async (tx, document) => {
+          // The entity creator holds the workspace cap lock before this run lock.
+          // Keep the artifact and its owning step in the same commit: cancellation
+          // or another worker winning the run lock rolls both back.
+          completion.result = await completeStepInTransaction(tx, {
+            ...completionArgs,
+            output: { kind: "create-document", entityId: document.entityId },
+          });
+          if (completion.result === null) {
+            tx.rollback();
+          }
+        },
+      }),
+    catch: (cause) => cause,
   });
-
-  const document = unwrapOrFlowStepError(
-    created,
+  if (
+    completion.result === null &&
+    created.isErr() &&
+    created.error instanceof TransactionRollbackError
+  ) {
+    return;
+  }
+  unwrapOrFlowStepError(
+    Result.flatten(created),
     "The document could not be created for this workspace (entity limit reached or missing file property).",
   );
-
-  return { kind: "create-document", entityId: document.entityId };
+  if (completion.result === null || completion.result === undefined) {
+    panic("Created flow document without its owning step completion");
+  }
+  await publishCompletedStep(completionArgs, completion.result);
 };
 
 // ── Shared transition writers ───────────────────────────
@@ -819,66 +883,100 @@ type CompleteStepArgs = {
   enqueueStep: typeof enqueueFlowStep;
 };
 
-const completeStepAndAdvance = async ({
-  runId,
-  stepIndex,
-  stepCount,
-  output,
-  workspaceId,
-  organizationId,
-  actorUserId,
-  flowName,
-  scopedDb,
-  broadcastUpdate,
-  enqueueStep,
-}: CompleteStepArgs): Promise<void> => {
+const completeStepInTransaction = async (
+  tx: Transaction,
+  {
+    runId,
+    stepIndex,
+    stepCount,
+    output,
+    workspaceId,
+    organizationId,
+    actorUserId,
+    flowName,
+  }: CompleteStepArgs,
+) => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
-  const { payload, pings } = await scopedDb(async (tx) => {
-    await tx
-      .update(flowRunSteps)
-      .set({ status: "completed", output, finishedAt: now })
-      .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
-      );
+  const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+  if (
+    current === undefined ||
+    isTerminalFlowRunStatus(current.run.status) ||
+    current.run.currentStepIndex !== stepIndex ||
+    current.step?.status !== "running"
+  ) {
+    return null;
+  }
+  await tx
+    .update(flowRunSteps)
+    .set({ status: "completed", output, finishedAt: now })
+    .where(
+      and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+    );
 
-    if (advance.kind !== "finish") {
-      await tx
-        .update(flowRuns)
-        .set({ status: "running", currentStepIndex: advance.nextStepIndex })
-        .where(eq(flowRuns.id, runId));
-      return { payload: await readRunProgress(tx, runId), pings: [] };
-    }
-
+  if (advance.kind !== "finish") {
     await tx
       .update(flowRuns)
-      .set({ status: "completed", finishedAt: now })
+      .set({ status: "running", currentStepIndex: advance.nextStepIndex })
       .where(eq(flowRuns.id, runId));
-    // Filed in the same transaction as the terminal status, so the badge and
-    // the run can never disagree, and keyed on the run so a redelivered
-    // worker job cannot raise it twice.
-    const runPings = await createNotificationsInTransaction(
-      [
-        flowRunCompletedNotification({
-          actorUserId,
-          flowName,
-          organizationId,
-          runId,
-          workspaceId,
-        }),
-      ],
-      tx,
-    );
-    return { payload: await readRunProgress(tx, runId), pings: runPings };
-  });
+    return { payload: await readRunProgress(tx, runId), pings: [] };
+  }
 
+  await tx
+    .update(flowRuns)
+    .set({ status: "completed", finishedAt: now })
+    .where(eq(flowRuns.id, runId));
+  // Filed in the same transaction as the terminal status, so the badge and
+  // the run can never disagree, and keyed on the run so a redelivered
+  // worker job cannot raise it twice.
+  const runPings = await createNotificationsInTransaction(
+    [
+      flowRunCompletedNotification({
+        actorUserId,
+        flowName,
+        organizationId,
+        runId,
+        workspaceId,
+      }),
+    ],
+    tx,
+  );
+  return { payload: await readRunProgress(tx, runId), pings: runPings };
+};
+
+const publishCompletedStep = async (
+  {
+    stepCount,
+    stepIndex,
+    workspaceId,
+    runId,
+    broadcastUpdate,
+    enqueueStep,
+  }: Omit<CompleteStepArgs, "output">,
+  completed: Awaited<ReturnType<typeof completeStepInTransaction>>,
+): Promise<void> => {
+  const advance = advanceAfterStep({ stepIndex, stepCount });
+
+  if (completed === null) {
+    return;
+  }
+  const { payload, pings } = completed;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
 
   if (advance.kind === "advance") {
     await enqueueStep({ runId, stepIndex: advance.nextStepIndex });
   }
+};
+
+const completeStepAndAdvance = async (
+  args: CompleteStepArgs,
+): Promise<void> => {
+  const completed = await args.scopedDb(
+    async (tx) => await completeStepInTransaction(tx, args),
+  );
+  await publishCompletedStep(args, completed);
 };
 
 /**
@@ -967,6 +1065,7 @@ const pauseAtReviewGate = async ({
   scopedDb,
   broadcastUpdate,
   taskFeatures,
+  flushSearchRepairs,
 }: {
   run: LoadedRun;
   stepIndex: number;
@@ -976,6 +1075,7 @@ const pauseAtReviewGate = async ({
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   taskFeatures: TaskDeploymentFeatures;
+  flushSearchRepairs: typeof flushEntitySearchRepairs;
 }): Promise<void> => {
   const runId = run.id;
   const workspaceId = run.workspaceId;
@@ -986,7 +1086,17 @@ const pauseAtReviewGate = async ({
     actorUserId,
   });
   const features = taskFeatures;
-  const { payload, pings, taskEntityId } = await scopedDb(async (tx) => {
+  const paused = await scopedDb(async (tx) => {
+    await lockWorkspacesForEntityCap(tx, [workspaceId]);
+    const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+    if (
+      current === undefined ||
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status !== "running"
+    ) {
+      return null;
+    }
     // A redelivered job must not raise a second task: the step keeps the one
     // it already raised and only the status writes below are repeated.
     const stepRows = await tx
@@ -1037,9 +1147,13 @@ const pauseAtReviewGate = async ({
       taskEntityId: reviewTaskEntityId,
     };
   });
+  if (paused === null) {
+    return;
+  }
+  const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushEntitySearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(captureError);
 };
 
 const readRunProgress = async (
@@ -1108,7 +1222,23 @@ export const failFlowRunFromWorker = async (
 
   const writeFailure = async (
     tx: Transaction,
-  ): Promise<{ payload: FlowRunUpdatePayload; pings: NotificationPing[] }> => {
+  ): Promise<{
+    payload: FlowRunUpdatePayload;
+    pings: NotificationPing[];
+  } | null> => {
+    const current = await lockRunAndCurrentStep(tx, {
+      workspaceId: run.workspaceId,
+      runId,
+    });
+    if (
+      current === undefined ||
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.run.status === "awaiting_review" ||
+      current.step?.status === "awaiting_review"
+    ) {
+      return null;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "failed", error: message, finishedAt: now })
@@ -1144,7 +1274,7 @@ export const failFlowRunFromWorker = async (
   // A null actor (automated run whose author was deleted) has no RLS-scoped
   // handle to write through; write on the worker's own connection so the run
   // still finalizes instead of being stranded non-terminal.
-  const { payload, pings } =
+  const failed =
     scope.actorUserId === null
       ? await database.transaction(writeFailure)
       : await makeScopedDb({
@@ -1152,6 +1282,10 @@ export const failFlowRunFromWorker = async (
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
+  if (failed === null) {
+    return;
+  }
+  const { payload, pings } = failed;
   broadcastUpdate(run.workspaceId, payload);
   pingNotificationRecipients(pings);
 };
@@ -1181,11 +1315,59 @@ export type ResolveFlowReviewGateOptions = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   runId: SafeId<"flowRun">;
+  reviewTaskEntityId?: SafeId<"entity">;
   userId: SafeId<"user">;
   decision: FlowReviewDecision;
   note: string | null;
   /** Records the review task's settlement as the reviewer's own act. */
   recordAuditEvent: AuditRecorder;
+};
+
+type LockRunAndCurrentStepOptions = {
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"flowRun">;
+};
+
+/**
+ * Existing workflow rows lock workspace → run → current step → obligation →
+ * entity. Taking the workspace FK lock first also covers repeated entity
+ * updates and field inserts inside an outer Kanban transaction. KEY SHARE
+ * allows independent runs in one workspace to progress concurrently; creators
+ * already hold the stronger workspace cap lock before entering this helper.
+ */
+const lockRunAndCurrentStep = async (
+  tx: Transaction,
+  { workspaceId, runId }: LockRunAndCurrentStepOptions,
+) => {
+  await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("key share");
+  const runs = await tx
+    .select()
+    .from(flowRuns)
+    .where(and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, workspaceId)))
+    .limit(1)
+    .for("update");
+  const run = runs.at(0);
+  if (!run) {
+    return undefined;
+  }
+  const steps = await tx
+    .select()
+    .from(flowRunSteps)
+    .where(
+      and(
+        eq(flowRunSteps.runId, runId),
+        eq(flowRunSteps.workspaceId, workspaceId),
+        eq(flowRunSteps.index, run.currentStepIndex),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return { run, step: steps.at(0) };
 };
 
 /**
@@ -1199,6 +1381,7 @@ export const resolveFlowReviewGate = async (
     workspaceId,
     organizationId,
     runId,
+    reviewTaskEntityId,
     userId,
     decision,
     note,
@@ -1214,77 +1397,61 @@ export const resolveFlowReviewGate = async (
     /**
      * Files the completion pointer for the run's actor, who is usually not the
      * reviewer: a cross-user operation the caller's scope cannot perform.
+     * An enclosing transaction collects the notice and files it after commit.
      */
-    notifyRunCompleted?: typeof notifyFlowRunActorOfCompletion;
+    notifyRunCompleted?: (
+      notice: Parameters<typeof notifyFlowRunActorOfCompletion>[0],
+    ) => void | Promise<void>;
   } = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
-    const run = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.flowRuns.findFirst({
-          where: { id: { eq: runId }, workspaceId: { eq: workspaceId } },
-          columns: {
-            id: true,
-            status: true,
-            currentStepIndex: true,
-            definitionId: true,
-            triggerSource: true,
-            definitionSnapshot: true,
-          },
-        }),
-      ),
-    );
-    if (!run) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Flow run not found" }),
-      );
-    }
-    if (!canReviewFlowRun(run.status)) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This run is not awaiting review.",
-        }),
-      );
-    }
-
-    const stepIndex = run.currentStepIndex;
-    const step = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.flowRunSteps.findFirst({
-          where: { runId: { eq: runId }, index: { eq: stepIndex } },
-          columns: { kind: true, status: true, reviewTaskEntityId: true },
-        }),
-      ),
-    );
-    if (
-      !step ||
-      step.kind !== "review-gate" ||
-      step.status !== "awaiting_review"
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This run has no open review gate.",
-        }),
-      );
-    }
-
-    const resolution = resolveReviewGateTransition({
-      decision,
-      stepIndex,
-      stepCount: run.definitionSnapshot.steps.length,
-    });
-    const output: FlowStepOutput = {
-      kind: "review-gate",
-      decision,
-      userId,
-      note,
-    };
-    const now = new Date();
-
     const result = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
+        const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+        if (current === undefined) {
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Flow run not found",
+            }),
+          );
+        }
+        const { run, step } = current;
+        if (!canReviewFlowRun(run.status)) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run is not awaiting review.",
+            }),
+          );
+        }
+        if (
+          !step ||
+          step.kind !== "review-gate" ||
+          step.status !== "awaiting_review" ||
+          (reviewTaskEntityId !== undefined &&
+            step.reviewTaskEntityId !== reviewTaskEntityId)
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run has no open review gate.",
+            }),
+          );
+        }
+        const stepIndex = run.currentStepIndex;
+        const resolution = resolveReviewGateTransition({
+          decision,
+          stepIndex,
+          stepCount: run.definitionSnapshot.steps.length,
+        });
+        const output: FlowStepOutput = {
+          kind: "review-gate",
+          decision,
+          userId,
+          note,
+        };
+        const now = new Date();
         await tx
           .update(flowRunSteps)
           .set({ status: "completed", output, finishedAt: now })
@@ -1321,11 +1488,8 @@ export const resolveFlowReviewGate = async (
           })
           .where(eq(flowRuns.id, runId));
 
-        // A rejected gate makes the run terminal without advancing, so any
-        // later step rows stay `pending` and no worker ever enqueues them.
-        // Mirror `cancelFlowRun`: mark the abandoned non-terminal steps
-        // `skipped` so the run history reflects what actually happened. The
-        // just-resolved gate is already `completed` above, so it is excluded.
+        // Mark abandoned steps skipped when the decision is terminal. The
+        // just-resolved gate is completed above and therefore excluded.
         if (resolution.kind !== "advance") {
           await tx
             .update(flowRunSteps)
@@ -1349,13 +1513,16 @@ export const resolveFlowReviewGate = async (
           changes: { review: { old: null, new: { decision } } },
         });
 
-        return {
+        return Result.ok({
+          run,
+          resolution,
           nextStatus,
           payload: await readRunProgress(tx, runId),
-        };
+        });
       }),
     );
 
+    const { run, resolution } = result;
     broadcastUpdate(workspaceId, result.payload);
 
     // Approving the last gate is the run's other terminal path: the worker
@@ -1364,7 +1531,8 @@ export const resolveFlowReviewGate = async (
     // the run's actor, who is usually not the reviewer, so it cannot be
     // written under the reviewer's own scope; the run-derived key makes it a
     // no-op if `completeStepAndAdvance` also reaches it. The review and its
-    // audit event have committed by now, so a notice that cannot be filed is
+    // audit event commit before the notice is filed (an outer transaction
+    // defers its callback until commit), so a notice that cannot be filed is
     // observed and the reviewer still gets the completed run: failing here
     // would answer an error for a decision that stands, and a retry would find
     // the run no longer awaiting review.
@@ -1443,7 +1611,7 @@ export const cancelFlowRun = async ({
       safeDb((tx) =>
         tx.query.flowRuns.findFirst({
           where: { id: { eq: runId }, workspaceId: { eq: workspaceId } },
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, currentStepIndex: true },
         }),
       ),
     );
@@ -1463,7 +1631,30 @@ export const cancelFlowRun = async ({
 
     const now = new Date();
     const payload = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
+        const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+        if (current === undefined) {
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Flow run not found",
+            }),
+          );
+        }
+        // Progressing work remains cancellable. A request that observed an
+        // open gate cannot replace a decision committed while it waited.
+        if (
+          isTerminalFlowRunStatus(current.run.status) ||
+          (run.status === "awaiting_review" &&
+            current.run.status !== "awaiting_review")
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run changed before it could be cancelled.",
+            }),
+          );
+        }
         await tx
           .update(flowRuns)
           .set({ status: "cancelled", finishedAt: now })
@@ -1499,7 +1690,7 @@ export const cancelFlowRun = async ({
             recordAuditEvent,
           });
         }
-        return await readRunProgress(tx, runId);
+        return Result.ok(await readRunProgress(tx, runId));
       }),
     );
 

@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { BOE_SEARCH_PAGE_LIMITS, BoeValidationError } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -84,6 +84,7 @@ const boeSearch = createSafeRootHandler(
       "BOE service live; use the search_legislation tool to search the " +
       "stella legislation corpus instead.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search_boe_legislation" },
     access: "read",
     query: querySchema,

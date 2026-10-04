@@ -1,10 +1,9 @@
+import { Result } from "better-result";
 /**
  * `templates.fills.download`'s fill logic, factored out of the endpoint module
  * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
-
-import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
@@ -17,8 +16,13 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
+import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -111,16 +115,18 @@ export const fillByIdLogic = async function* ({
     return Result.err(result.usageRejection);
   }
   if ("error" in result) {
-    return Result.err(new HandlerError({ status: 400, message: result.error }));
+    return Result.err(
+      result.storedTemplateError ??
+        new HandlerError({ status: 400, message: result.error }),
+    );
   }
 
   const { unusedValues } = result;
-  // A failed AI draft leaves its field unfilled, so it counts against the
-  // fill the same way an unmatched placeholder does.
-  const fillStatus =
-    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
-      ? "partial"
-      : "success";
+  const diagnostics = fillDiagnosticsOf(result);
+  // The completion decision over every diagnostic: a failed AI draft, an
+  // undecided AI condition or an unresolved clause counts against the fill
+  // the same way an unmatched placeholder does.
+  const fillStatus = templateFillStatus(diagnostics);
 
   yield* Result.await(
     Result.tryPromise({
@@ -162,13 +168,7 @@ export const fillByIdLogic = async function* ({
 
   const baseName = result.fileName;
 
-  const additionalHeaders = new Headers();
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
+  const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -209,26 +209,6 @@ export const fillByIdLogic = async function* ({
     } satisfies SecureDocumentResponseOptions);
   }
 
-  if (result.unmatchedPlaceholders.length > 0) {
-    additionalHeaders.set(
-      "X-Unmatched-Placeholders",
-      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
-      // so the diagnostic lists travel URI-encoded.
-      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
-    );
-  }
-  if (unusedValues.length > 0) {
-    additionalHeaders.set(
-      "X-Unused-Values",
-      encodeURIComponent(unusedValues.join(",")),
-    );
-  }
-  if (result.structureErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Structure-Errors",
-      JSON.stringify(result.structureErrors),
-    );
-  }
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),

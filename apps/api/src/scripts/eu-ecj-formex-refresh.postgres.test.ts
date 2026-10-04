@@ -12,7 +12,6 @@ import {
   EMPTY_AST,
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -21,6 +20,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   parseEcjFormexRefreshIds,
   runEcjFormexRefresh as runRefresh,
@@ -120,7 +120,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(other).not.toBeNull();
         await other?.release();
       };
-      const decision = {
+      const decision = toPlainTextIngestionResult({
         caseNumber: "C-1/20",
         sourceDocumentId: "62020CJ0001:cs",
         country: "EU",
@@ -132,7 +132,7 @@ if (!databaseUrl || !runPostgresTests) {
         rawHash: "test-hash",
         sourceRaw: "archive-current",
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      } satisfies IngestionResult;
+      }).unwrap();
       outcomes.push({
         type: "refreshed",
         decision,

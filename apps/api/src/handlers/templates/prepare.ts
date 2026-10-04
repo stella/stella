@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
@@ -27,6 +27,7 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

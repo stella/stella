@@ -23,16 +23,18 @@ import {
   remapFileIds,
   rollbackS3Copies,
   snapshotOfCurrentVersion,
+  validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -430,6 +432,31 @@ const copyToWorkspaceHandler = async function* ({
     sourceEntities = subtree;
   }
 
+  if (transfer.type === "move") {
+    const preflight = yield* Result.await(
+      safeDb(async (tx) => {
+        const removal = await validateEntityRemovalState({
+          tx,
+          workspaceId: sourceWorkspaceId,
+          entityIds: sourceEntities.map(({ id }) => id),
+          operation: "move",
+          now: new Date(),
+        });
+        if (Result.isError(removal)) {
+          return removal;
+        }
+        return await validateMoveSourceReadLimits({
+          tx,
+          sourceWorkspaceId,
+          sourceSnapshot: sourceEntities,
+        });
+      }),
+    );
+    if (Result.isError(preflight)) {
+      return preflight;
+    }
+  }
+
   // Build property map before copying S3 objects. Fields whose
   // properties do not exist in the target workspace are dropped, so
   // their files must not be copied either.
@@ -536,7 +563,9 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntityId,
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
-      transfer,
+      transfer: deleteSource
+        ? { type: "move", sourceWorkspaceId, sourceSnapshot: sourceEntities }
+        : { type: "copy" },
       fieldMapping:
         sourceFieldId === undefined
           ? { type: "omit" }
@@ -665,6 +694,11 @@ const copyToWorkspaceHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy a document or folder subtree into another matter, or move it with " +
     "deleteSource, which permanently deletes the source documents and their " +
@@ -674,6 +708,7 @@ const config = {
     "are dropped rather than remapped, so a move can lose column values; " +
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

@@ -3,15 +3,16 @@ import { panic, Result } from "better-result";
  * The single template fill pipeline. Every fill boundary — the REST routes
  * (raw upload, by-id download, live preview, fill-to-workspace), the chat and
  * MCP tools, and the report exporter — resolves its source through here and
- * runs exactly one sequence: required-fields gate → clause slots → AI usage
+ * runs exactly one sequence: required-fields gate → AI usage
  * preflight → manifest fill steps (lookups, composites, formulas, dependent
- * selects) → AI drafting/adaptation → substitution. Route-specific concerns
- * (request parsing, usage metering wiring, response shaping, audit rows, S3
+ * selects) → AI drafting/adaptation → clause slots → substitution.
+ * Route-specific concerns (request parsing, usage metering wiring, response shaping, audit rows, S3
  * writes) stay with the caller; only genuinely different fill semantics are
  * options here (see `requiredFields`).
  */
 
 import { compareCodeUnit } from "@stll/collation";
+import { replaceOutputMarkers } from "@stll/template-conditions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -21,18 +22,22 @@ import {
   getOrganizationRegistryAvailability,
   getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
-import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
+import {
+  validateClauseBodyDirectives,
+  inspectLegacyClauseDirectives,
+} from "@/api/lib/clauses/clause-directives";
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
+import {
+  discoverTemplateWithClauses,
+  clauseBodyToRichPatch,
+} from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
-import {
-  deriveManifest,
-  deriveManifestFromDocx,
-} from "@/api/lib/docx/derived-manifest";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   documentTextForAiFields,
   extractDocxDocument,
@@ -56,13 +61,14 @@ import {
   type AiFieldGenerator,
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
-import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
+import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
 import type {
+  ClauseProvenance,
   DiscoveredField,
   DiscoveredTemplate,
   FieldDateFormat,
@@ -72,6 +78,7 @@ import type {
   InputType,
   LookupRegistry,
   TemplateManifest,
+  TemplateData,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -119,7 +126,7 @@ type TemplateInputRejection = {
 };
 
 type FillRejection<TUsageRejection> =
-  | { error: string }
+  | TemplateServiceError
   | { inputRejection: TemplateInputRejection }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TUsageRejection };
@@ -441,8 +448,11 @@ export const describeStoredTemplate = async ({
   }
   const loaded = load.value;
 
-  const discovered = await discoverTemplate(loaded.file);
-  const manifest = deriveManifest(discovered);
+  const { discovered, manifest } = await discoverTemplateSource({
+    source: loaded,
+    scopedDb,
+    organizationId,
+  });
   const arrays = collectDescribedArrayGroups(discovered.fields);
   // Formula fields are derived at fill time, never user-submitted, so they
   // are reported as computed values rather than fillable fields. A boolean
@@ -552,8 +562,9 @@ type FillServiceOptions<TRejection = never> = {
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
   assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
-  /** The persistence owner may defer use-count recording into its own atomic
-   *  transaction. All ordinary fill callers retain the after-fill default. */
+  /** A caller that records the fill itself (document persistence, or an agent
+   *  tool returning the text) defers use-count recording into its own atomic
+   *  transaction. Other fill callers retain the after-fill default. */
   useRecording?: TemplateUseRecording | undefined;
   /** The matter being filled into. When set and the manifest declares any
    *  data-bound field ({@link FieldMeta.source}), the matter's client, parties,
@@ -563,7 +574,73 @@ type FillServiceOptions<TRejection = never> = {
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
-type FilledDocx = {
+type DiscoverTemplateSourceOptions = {
+  source: FillTemplateSource;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  clauseOverrides?: Record<string, ClauseBody> | undefined;
+};
+
+/** Discover exactly the content a fill consumes, including versioned links
+ * and per-fill edits. Description, strict input validation and condition
+ * preview share this owner rather than treating slots as opaque values. */
+export const discoverTemplateSource = async ({
+  source,
+  scopedDb,
+  organizationId,
+  clauseOverrides,
+}: DiscoverTemplateSourceOptions) => {
+  const slots =
+    source.templateId === undefined
+      ? []
+      : await discoverClauseSlots(source.file);
+  const bodyByKey = new Map<string, ClauseBody>();
+  const clauseByKey = new Map<string, ClauseProvenance>();
+  if (source.templateId !== undefined && slots.length > 0) {
+    const resolved = await resolveClauseSlotSources(
+      source.templateId,
+      slots,
+      scopedDb,
+      organizationId,
+    );
+    for (const [key, entry] of resolved) {
+      bodyByKey.set(key, entry.body);
+      clauseByKey.set(key, entry.clause);
+    }
+  }
+  for (const slot of slots) {
+    const override = clauseOverrides?.[slot.patchKey];
+    if (override !== undefined) {
+      bodyByKey.set(slot.patchKey, override);
+      clauseByKey.set(slot.patchKey, {
+        slotKey: slot.patchKey,
+        resolution: "override",
+      });
+    }
+  }
+  const bodies = Object.fromEntries(bodyByKey);
+  const clauses = Object.fromEntries(clauseByKey);
+  const discovered = await discoverTemplateWithClauses({
+    file: source.file,
+    bodies,
+    clauses,
+  });
+  return {
+    slots,
+    bodies,
+    clauses,
+    discovered,
+    manifest: deriveManifest(discovered),
+  };
+};
+
+/** The members of a {@link FilledDocx} that are the document itself. Every
+ *  other member is a diagnostic: the completion decision reads them all
+ *  (`FillDiagnosticSources` is the rest of this type), so a new member must
+ *  either be listed here or be graded there. */
+export type FilledDocumentMember = "templateName" | "fileName" | "file";
+
+export type FilledDocx = {
   templateName: string;
   fileName: string;
   /** The filled document, derived from the scanned template. */
@@ -580,6 +657,7 @@ type FilledDocx = {
    *  the rendered text, which a caller cannot tell from a block the template
    *  never carried. */
   conditionDecisions: ResolvedAiCondition[];
+  clauseWarnings: ClauseDirectiveWarning[];
 };
 
 /** A fill without a permit cannot ask a register for a lookup field. */
@@ -603,11 +681,281 @@ type FillDocxWithPolicyOptions<TRejection = never> =
     unusedValuePolicy: UnusedValuePolicy;
   };
 
+type ApplyClausePatchesOptions = Pick<
+  Awaited<ReturnType<typeof discoverTemplateSource>>,
+  "bodies" | "clauses" | "slots"
+> & {
+  record: TemplateData;
+  namedConditions: ReturnType<typeof manifestNamedConditions>;
+};
+
+export const clauseDirectiveRecoveryHint = (
+  clause: ClauseProvenance,
+): string => {
+  const readSave =
+    "Use list_clauses with clause_id to read the clause, then save_clause with snapshot_version=true to publish corrected paragraphs.";
+  switch (clause.resolution) {
+    case "override":
+      return "Correct the clause override in this fill before filling again.";
+    case "pinned":
+      return `${readSave} Sync the pinned template clause link before filling again.`;
+    case "explicit":
+      return `${readSave} Update the template's :vN clause marker to the corrected published version before filling again.`;
+    case "variant":
+      return "Correct the linked clause variant, then fill again. Use list_clauses with clause_id to read the owning clause.";
+    case "latest":
+    case undefined:
+      return `${readSave} The slot reads the latest saved version; autosaving the working copy alone does not publish it.`;
+    default:
+      return panic("Unhandled clause resolution");
+  }
+};
+
+type ClauseDirectiveErrorOptions = {
+  error: HandlerError<422>;
+  clause: ClauseProvenance;
+  slot: ApplyClausePatchesOptions["slots"][number];
+};
+
+const clauseDirectiveError = ({
+  error,
+  clause,
+  slot,
+}: ClauseDirectiveErrorOptions) => {
+  const identity = `${clause.name ?? slot.name}${clause.id === undefined ? "" : ` (${clause.id})`}`;
+  return new HandlerError({
+    status: 422,
+    code: error.code,
+    retryable: false,
+    clause,
+    message: `Clause ${identity} in slot ${slot.patchKey} has invalid directives: ${error.message}`,
+    hint: clauseDirectiveRecoveryHint(clause),
+    issues: error.issues,
+  });
+};
+
+const validateAuthoredClauseOverrides = ({
+  slots,
+  bodies,
+  clauses,
+}: Pick<ApplyClausePatchesOptions, "slots" | "bodies" | "clauses">): Result<
+  void,
+  HandlerError<422>
+> => {
+  for (const slot of slots) {
+    const clause = clauses[slot.patchKey];
+    if (clause?.resolution !== "override") {
+      continue;
+    }
+    const body =
+      bodies[slot.patchKey] ??
+      panic(`Missing override body for ${slot.patchKey}`);
+    const validation = validateClauseBodyDirectives(body);
+    if (Result.isError(validation)) {
+      const error = clauseDirectiveError({
+        error: validation.error,
+        clause,
+        slot,
+      });
+      return Result.err(error);
+    }
+  }
+  return Result.ok(undefined);
+};
+
+const applyClausePatches = ({
+  slots,
+  bodies,
+  clauses,
+  record,
+  namedConditions,
+}: ApplyClausePatchesOptions): Result<
+  ClauseDirectiveWarning[],
+  HandlerError<422>
+> => {
+  const clauseWarnings: ClauseDirectiveWarning[] = [];
+  for (const slot of slots) {
+    const body = bodies[slot.patchKey];
+    if (body === undefined) {
+      continue;
+    }
+    const clause =
+      clauses[slot.patchKey] ??
+      panic(`Missing clause provenance for ${slot.patchKey}`);
+    const hint = clauseDirectiveRecoveryHint(clause);
+    if (clause.resolution !== "override") {
+      const warning = inspectLegacyClauseDirectives(body, {
+        clauseName: clause.name ?? slot.name,
+        clauseId: clause.id,
+        version: clause.version ?? null,
+        slotKey: slot.patchKey,
+        hint,
+      });
+      if (warning !== undefined) {
+        clauseWarnings.push(warning);
+      }
+    }
+    const patch = clauseBodyToRichPatch(body, {
+      source: clause.resolution === "override" ? "authored" : "stored",
+      values: record,
+      slotKey: slot.patchKey,
+      namedConditions,
+    });
+    if (Result.isError(patch)) {
+      return Result.err(
+        clauseDirectiveError({ error: patch.error, clause, slot }),
+      );
+    }
+    record[slot.patchKey] = patch.value;
+  }
+
+  return Result.ok(clauseWarnings);
+};
+
+const clauseGroundingTexts = ({
+  bodies,
+  record,
+  namedConditions,
+}: Pick<
+  ApplyClausePatchesOptions,
+  "bodies" | "record" | "namedConditions"
+>): Result<string[], HandlerError<422>> => {
+  const texts: string[] = [];
+  for (const [slotKey, body] of Object.entries(bodies)) {
+    const patch = clauseBodyToRichPatch(body, {
+      source: "stored",
+      values: record,
+      slotKey,
+      namedConditions,
+    });
+    if (Result.isError(patch)) {
+      return Result.err(patch.error);
+    }
+    const text =
+      typeof patch.value === "string"
+        ? patch.value
+        : patch.value.paragraphs
+            .map(({ runs }) =>
+              runs.map(({ text: runText }) => runText).join(""),
+            )
+            .join("\n");
+    // AI fields still awaiting drafts are absent from the grounding text.
+    const resolved = replaceOutputMarkers(text, () => "");
+    record[slotKey] = resolved;
+    texts.push(resolved);
+  }
+  return Result.ok(texts);
+};
+
+type DocumentGroundingOptions = {
+  file: ScannedFile;
+  manifest: TemplateManifest;
+  bodies: Record<string, ClauseBody>;
+  record: FillValues;
+};
+
+const documentGrounding = async ({
+  file,
+  manifest,
+  bodies,
+  record,
+}: DocumentGroundingOptions): Promise<
+  Result<string | undefined, HandlerError<422>>
+> => {
+  if (!isTemplateData(record)) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message:
+          "Values must be strings, numbers, booleans, arrays, or nested objects.",
+      }),
+    );
+  }
+  const templateText = await documentTextForAiFields(file, manifest.fields);
+  const clauseTexts = clauseGroundingTexts({
+    bodies,
+    record,
+    namedConditions: manifestNamedConditions(manifest),
+  });
+  if (Result.isError(clauseTexts)) {
+    return Result.err(clauseTexts.error);
+  }
+  return Result.ok(
+    templateText === undefined
+      ? undefined
+      : [templateText, ...clauseTexts.value].join("\n"),
+  );
+};
+
+type UnusedFilledValuesOptions = {
+  unusedValues: string[];
+  slots: ApplyClausePatchesOptions["slots"];
+  bodies: ApplyClausePatchesOptions["bodies"];
+  adaptedPaths: string[];
+  defaultedPaths: string[];
+  clauseFieldPaths: DiscoveredTemplate["clauseFieldPaths"];
+};
+
+const unusedFilledValues = ({
+  unusedValues,
+  slots,
+  bodies,
+  adaptedPaths,
+  defaultedPaths,
+  clauseFieldPaths,
+}: UnusedFilledValuesOptions): string[] =>
+  unusedValues.filter(
+    (name) =>
+      !slots.some(
+        (slot) => slot.patchKey === name && bodies[name] !== undefined,
+      ) &&
+      !adaptedPaths.includes(name) &&
+      !defaultedPaths.includes(name) &&
+      !clauseFieldPaths?.some(
+        (path) => path === name || name.startsWith(`${path}.`),
+      ),
+  );
+
+type FillInputContractOptions = {
+  manifest: TemplateManifest;
+  discovered: DiscoveredTemplate;
+};
+
+const templateFillInputContract = ({
+  manifest,
+  discovered,
+}: FillInputContractOptions) => {
+  const rawInputSources = collectRawTemplateInputSources({
+    fields: discovered.fields,
+    placeholderPaths: discovered.placeholders.map(
+      (placeholder) => placeholder.name,
+    ),
+  });
+  return collectTemplateInputKeys({
+    type: "manifest",
+    derivedOutputPaths: manifest.fields.flatMap((field) => {
+      const paths = isFillableTemplateInputField(field) ? [] : [field.path];
+      if (field.lookup !== undefined) {
+        for (const format of field.lookup.formats) {
+          paths.push(`${field.path}.${format.key}`);
+        }
+      }
+      return paths;
+    }),
+    fillableFieldPaths: manifest.fields
+      .filter(isFillableTemplateInputField)
+      .map((field) => field.path),
+    livePaths: rawInputSources.terminalPaths,
+    arrayPaths: rawInputSources.arrayPaths,
+    primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
+  });
+};
+
 /**
- * Shared fill recipe over an already-loaded DOCX: gate required fields,
- * resolve clause slots (stored templates only), run the manifest fill steps
- * (lookups, composites, formulas, dependent selects), draft/adapt AI fields,
- * then substitute. Records the template use when a `templateId` is present.
+ * Shared fill recipe over an already-loaded DOCX: discover linked content,
+ * gate required fields, run manifest fill steps (lookups, composites, formulas,
+ * dependent selects), draft/adapt AI fields, resolve clause directives, then
+ * substitute. Records the template use when a `templateId` is present.
  * Backs every fill boundary, so a template fills identically at each of them.
  */
 const fillTemplateDocxWithPolicy = async <TRejection = never>({
@@ -632,38 +980,32 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   );
   const loaded = source;
   const { templateId } = source;
-  const manifest = await deriveManifestFromDocx(loaded.file);
+  const { manifest, discovered, slots, bodies, clauses } =
+    await discoverTemplateSource({
+      source: loaded,
+      scopedDb,
+      organizationId,
+      clauseOverrides,
+    });
+  // Authored overrides must be valid before quota checks, lookups or AI work.
+  const overrideValidation = validateAuthoredClauseOverrides({
+    slots,
+    bodies,
+    clauses,
+  });
+  if (Result.isError(overrideValidation)) {
+    return {
+      error: overrideValidation.error.message,
+      storedTemplateError: overrideValidation.error,
+    };
+  }
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
-    const discovered = await discoverTemplate(loaded.file);
     strictInputPlaceholders = discovered.placeholders.map(
       (placeholder) => placeholder.name,
     );
-    const rawInputSources = collectRawTemplateInputSources({
-      fields: discovered.fields,
-      placeholderPaths: discovered.placeholders.map(
-        (placeholder) => placeholder.name,
-      ),
-    });
-    const inputContract = collectTemplateInputKeys({
-      type: "manifest",
-      derivedOutputPaths: manifest.fields.flatMap((field) => {
-        const paths = isFillableTemplateInputField(field) ? [] : [field.path];
-        if (field.lookup !== undefined) {
-          for (const format of field.lookup.formats) {
-            paths.push(`${field.path}.${format.key}`);
-          }
-        }
-        return paths;
-      }),
-      fillableFieldPaths: manifest.fields
-        .filter(isFillableTemplateInputField)
-        .map((field) => field.path),
-      livePaths: rawInputSources.terminalPaths,
-      arrayPaths: rawInputSources.arrayPaths,
-      primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
-    });
+    const inputContract = templateFillInputContract({ manifest, discovered });
     const unusedKeys = findUnusedTemplateValueKeys({
       contract: inputContract,
       values,
@@ -677,12 +1019,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   let record: FillValues = { ...values };
 
-  // Reject before any clause/AI/lookup work runs: a required, user-entered
-  // field (not AI-fillable, not formula/condition/source-derived) that is
-  // absent or empty must never be silently invented or left as a raw
-  // `{{marker}}` in the output. Ask the caller for exactly these fields
-  // instead of guessing. Every real fill passes "enforce" here; the live
-  // fill-preview route names its exception with "allow-partial".
+  // Reject missing user-entered fields before AI/lookup work. Every real fill
+  // enforces this gate; the live preview explicitly permits partial inputs.
   const missingRequiredFields = collectMissingRequiredFields({
     fields: manifest.fields,
     policy: requiredFields,
@@ -690,31 +1028,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   });
   if (missingRequiredFields.length > 0) {
     return { requiredFieldsRejection: missingRequiredFields };
-  }
-
-  const slots =
-    templateId !== undefined ? await discoverClauseSlots(loaded.file) : [];
-  if (templateId !== undefined && slots.length > 0) {
-    const patches = await resolveClauseSlots(
-      templateId,
-      slots,
-      scopedDb,
-      organizationId,
-    );
-    // Per-fill overrides take precedence over the linked clause body for any
-    // slot whose patch key matches a discovered slot (mirrors fill-by-id's
-    // resolveClausePatches).
-    if (clauseOverrides) {
-      const slotKeys = new Set(slots.map((slot) => slot.patchKey));
-      for (const [key, overrideBody] of Object.entries(clauseOverrides)) {
-        if (slotKeys.has(key)) {
-          patches[key] = clauseBodyToRichPatch(overrideBody);
-        }
-      }
-    }
-    for (const [key, value] of Object.entries(patches)) {
-      record[key] = value;
-    }
   }
 
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
@@ -772,18 +1085,25 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     return { error: stepError };
   }
 
-  const documentText = await documentTextForAiFields(
-    loaded.file,
-    manifest.fields,
-  );
+  const grounding = await documentGrounding({
+    file: loaded.file,
+    manifest,
+    bodies,
+    record,
+  });
+  if (Result.isError(grounding)) {
+    return {
+      error: grounding.error.message,
+      storedTemplateError: grounding.error,
+    };
+  }
   const drafted = await resolveAiFields({
     values: record,
     fields: manifest.fields,
-    documentText,
+    documentText: grounding.value,
     generate: generateAiValue,
   });
   record = drafted.values;
-  const aiFieldErrors = drafted.errors;
   // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
   // before substitution so its {% if field_path %} block resolves correctly.
   const decidedConditions = await resolveAiConditions({
@@ -803,6 +1123,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   });
   const fillSource = adapted.file;
   const adaptedPaths = adapted.adaptedPaths;
+  // A field the model could not adapt still fills with its stub, but nobody
+  // asked for that wording: reported like a failed draft, so the fill is
+  // partial.
+  const aiFieldErrors = [...drafted.errors, ...adapted.failures];
 
   const optionalDefaults =
     strictInputPlaceholders === null
@@ -821,7 +1145,22 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   }
 
-  const result = await fillTemplate(fillSource, record);
+  const namedConditions = manifestNamedConditions(manifest);
+  const patchedClauses = applyClausePatches({
+    slots,
+    bodies,
+    clauses,
+    record,
+    namedConditions,
+  });
+  if (Result.isError(patchedClauses)) {
+    return {
+      error: patchedClauses.error.message,
+      storedTemplateError: patchedClauses.error,
+    };
+  }
+
+  const result = await fillTemplate(fillSource, record, { namedConditions });
 
   if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
@@ -836,14 +1175,18 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     // Adapted stubs no longer match a marker (each occurrence was already
     // substituted), so they are not "unused" in any user-meaningful sense.
-    unusedValues: result.unusedValues.filter(
-      (name) =>
-        !adaptedPaths.includes(name) &&
-        !optionalDefaults.defaultedPaths.includes(name),
-    ),
+    unusedValues: unusedFilledValues({
+      unusedValues: result.unusedValues,
+      slots,
+      bodies,
+      adaptedPaths,
+      defaultedPaths: optionalDefaults.defaultedPaths,
+      clauseFieldPaths: discovered.clauseFieldPaths,
+    }),
     structureErrors: result.structureErrors,
     aiFieldErrors,
     conditionDecisions: decidedConditions.conditions,
+    clauseWarnings: patchedClauses.value,
   };
 };
 
@@ -851,7 +1194,7 @@ export const fillTemplateDocx = async <TRejection = never>(
   options: FillDocxOptions<TRejection>,
 ): Promise<
   | FilledDocx
-  | { error: string }
+  | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
@@ -904,10 +1247,12 @@ export type FillTemplateResult =
       text: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      structureErrors: FilledDocx["structureErrors"];
       /** AI-drafted fields the model could not complete; unfilled above. */
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
+      clauseWarnings: ClauseDirectiveWarning[];
     }
   | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] };
@@ -929,6 +1274,7 @@ export type FillTemplateWithDocxResult =
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
+      clauseWarnings: ClauseDirectiveWarning[];
     }
   | TemplateServiceError;
 
@@ -954,6 +1300,7 @@ const withExtractedText = async (
     structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
+    clauseWarnings: filled.clauseWarnings,
   };
 };
 
@@ -1035,7 +1382,9 @@ export const fillStoredTemplate = async (
       .trim(),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
+    clauseWarnings: filled.clauseWarnings,
   };
 };

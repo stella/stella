@@ -6,7 +6,7 @@ import {
   contactImportCandidateSchema,
   taxIdSchemeSchema,
 } from "@/api/handlers/contacts/contact-import-schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -25,6 +25,7 @@ const config = {
     "Under taxIdScheme br_cpf_cnpj a passing row comes back with its tax id " +
     "normalized to bare digits.",
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: importValidateBodySchema,
 } satisfies HandlerConfig;

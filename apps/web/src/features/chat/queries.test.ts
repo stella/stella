@@ -20,6 +20,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -3054,11 +3055,16 @@ describe("chat runtime identity across query refetch", () => {
     // is the corruption `chatThreadOptions`' `structuralSharing: false` avoids
     // by handing the registered runtime back verbatim.
     expect(
-      sendThreadChatMessage(
-        shared.chat,
-        createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
+      await rejectionOf(
+        sendThreadChatMessage(
+          shared.chat,
+          createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
+        ),
       ),
-    ).rejects.toThrow("Missing thread send capability");
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("Missing thread send capability"),
+    );
   });
 
   test("chatThreadOptions opts out of structural sharing", () => {
@@ -3099,6 +3105,7 @@ describe("acquireChatRuntime reconcile", () => {
     overrides: Partial<ChatThreadFetched> = {},
   ): ChatThreadFetched => ({
     activeTurnId: null,
+    attachedFiles: { fileCount: 0, files: [] },
     forkProvenance: { type: "none" },
     messages: [],
     olderCursor: null,

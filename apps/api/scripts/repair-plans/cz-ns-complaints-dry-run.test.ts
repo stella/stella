@@ -23,6 +23,9 @@ test("continues after a null source hash and preserves the official source value
   ];
   const child = Bun.spawn([process.execPath, scriptPath], {
     cwd: `${import.meta.dir}/../..`,
+    // The script validates its environment; the local example values are
+    // accepted only under the local test opt-in.
+    env: { ...process.env, NODE_ENV: "test", STELLA_LOCAL_DEV: "1" },
     stdin: new Blob([rows.map((row) => JSON.stringify(row)).join("\n")]),
     stdout: "pipe",
     stderr: "pipe",

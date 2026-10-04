@@ -14,6 +14,7 @@ import {
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
+  CHAT_USER_HREF_TEMPLATE,
   type EmailCitationBlock,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
   SKILL_REF_HREF_PREFIX,
@@ -55,7 +56,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
@@ -100,6 +100,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   CorpusPayloadUnavailableError,
@@ -353,6 +354,7 @@ const buildCoreRuleSections = ({
   "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).",
   `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Never link a stella decision by its appUrl or sourceUrl: the decisionId link opens the decision beside the chat, a URL opens as an external page. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`,
+  `PEOPLE MENTIONS: When you name a person a tool returned with a userId (a task assignee, a matter member, a person field), link the name with that userId: [Person's name](${CHAT_USER_HREF_TEMPLATE}), copying userId verbatim. This applies to every person you name, including in lists and "assigned to" lines. A person without a userId stays plain text; never build a link from a name, handle, or email.`,
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
   CORPUS_ONLY_CASE_LAW_SECTION,
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
@@ -903,7 +905,9 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      env.FEATURE_AI_MEMORY && organizationId && userId
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") &&
+      organizationId &&
+      userId
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,

@@ -436,6 +436,8 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "write",
+      permissions: { type: "all", permissions: { entity: ["update"] } },
+      accountAccess: "sandbox",
       annotations: {
         title: "Set example",
         destructiveHint: false,
@@ -487,6 +489,8 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "write",
+      permissions: { type: "all", permissions: { entity: ["update"] } },
+      accountAccess: "sandbox",
       annotations: {
         title: "Configure example",
         destructiveHint: false,

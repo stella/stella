@@ -1,15 +1,15 @@
+import type { Result as ResultType } from "better-result";
 /**
  * `templates.fills.preview`'s fill logic, factored out of the endpoint module
  * (`handlers/templates/fills/preview.ts`) so that module can keep to one
  * default `{ config, handler }` export while this stays directly testable.
  */
-
-import type { Result as ResultType } from "better-result";
 import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
@@ -41,6 +41,7 @@ type FillPreviewResult = {
   charCount: number;
   unmatchedPlaceholders: string[];
   unusedValues: string[];
+  clauseWarnings: ClauseDirectiveWarning[];
   structureErrors: TemplateStructureError[];
   /** AI-drafted fields the model could not complete; their markers are
    *  unfilled in the preview above. */
@@ -129,7 +130,10 @@ export const fillPreviewLogic = async ({
     return Result.err(result.usageRejection);
   }
   if ("error" in result) {
-    return Result.err(new HandlerError({ status: 400, message: result.error }));
+    return Result.err(
+      result.storedTemplateError ??
+        new HandlerError({ status: 400, message: result.error }),
+    );
   }
 
   const { paragraphs, charCount } = await extractDocxDocument(result.file);
@@ -139,6 +143,7 @@ export const fillPreviewLogic = async ({
     charCount,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     unusedValues: result.unusedValues,
+    clauseWarnings: result.clauseWarnings,
     structureErrors: result.structureErrors,
     aiFieldErrors: result.aiFieldErrors,
     conditionDecisions: result.conditionDecisions,

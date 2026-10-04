@@ -7,9 +7,11 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
@@ -27,6 +29,8 @@ import type {
 } from "./import-export-schema";
 import { normalizeClauseMetadata } from "./metadata";
 
+const CLAUSE_LIBRARY_AUDIT_RESOURCE_ID = "clause-library";
+
 const exportQuerySchema = t.Object({
   ids: t.Optional(t.String()),
   format: t.Optional(t.Union([t.Literal("csv"), t.Literal("json")])),
@@ -34,12 +38,14 @@ const exportQuerySchema = t.Object({
 
 type ExportProps = {
   safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
   organizationId: SafeId<"organization">;
   query: Static<typeof exportQuerySchema>;
 };
 
 export const exportHandler = async function* ({
   safeDb,
+  recordAuditEvent,
   organizationId,
   query,
 }: ExportProps) {
@@ -75,6 +81,16 @@ export const exportHandler = async function* ({
   );
 
   const format = query.format ?? "json";
+  yield* Result.await(
+    safeDb(async (tx) => {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+        resourceId: CLAUSE_LIBRARY_AUDIT_RESOURCE_ID,
+        metadata: { format, count: rows.length },
+      });
+    }),
+  );
 
   if (format === "csv") {
     const csvRows = ["slug,title,body,tags"];
@@ -198,6 +214,8 @@ export const exportHandler = async function* ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Download the organization's clauses as a single file: JSON by default, " +
     "carrying each clause with its variants, metadata, and category path, or " +
@@ -227,9 +245,10 @@ const config = {
 
 const exportClauses = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, query }) {
+  async function* ({ safeDb, session, query, recordAuditEvent }) {
     return yield* exportHandler({
       safeDb,
+      recordAuditEvent,
       organizationId: session.activeOrganizationId,
       query,
     });

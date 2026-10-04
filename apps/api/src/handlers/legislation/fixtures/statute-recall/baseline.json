@@ -1,0 +1,122 @@
+{
+  "top5Floor": 15,
+  "nonemptyQueryIds": [
+    "labour-trial-period",
+    "labour-fixed-term",
+    "civil-appeal-citation",
+    "labour-amendment",
+    "contractual-penalty",
+    "civil-appeal-deadline",
+    "director-remuneration",
+    "damage-threshold-date",
+    "land-register-good-faith",
+    "parental-return",
+    "civil-limitation-unaccented",
+    "labour-dismissal-unaccented",
+    "damage-threshold-unaccented",
+    "labour-notice-transition",
+    "historical-civil-limitation"
+  ],
+  "measurement": {
+    "runId": "37103798550",
+    "fixtureFingerprint": "b5f3a10bea83c3b1891d7f0a6299fd5f96097e70868062c26333771cb1a9c908",
+    "outcomes": [
+      {
+        "id": "labour-trial-period",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "labour-fixed-term",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "civil-appeal-citation",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "labour-amendment",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "contractual-penalty",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "civil-appeal-deadline",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "director-remuneration",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "damage-threshold-date",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "land-register-good-faith",
+        "rank": 1,
+        "match": "relaxed",
+        "nonempty": true
+      },
+      {
+        "id": "parental-return",
+        "rank": 1,
+        "match": "relaxed",
+        "nonempty": true
+      },
+      {
+        "id": "civil-limitation-unaccented",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "labour-dismissal-unaccented",
+        "rank": 1,
+        "match": "relaxed",
+        "nonempty": true
+      },
+      {
+        "id": "damage-threshold-unaccented",
+        "rank": 1,
+        "match": "strict",
+        "nonempty": true
+      },
+      {
+        "id": "labour-notice-transition",
+        "rank": 1,
+        "match": "relaxed",
+        "nonempty": true
+      },
+      {
+        "id": "historical-civil-limitation",
+        "rank": 2,
+        "match": "relaxed",
+        "nonempty": true
+      },
+      {
+        "id": "labour-amendment-english",
+        "rank": null,
+        "match": null,
+        "nonempty": false
+      }
+    ]
+  }
+}

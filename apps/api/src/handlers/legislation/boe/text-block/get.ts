@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
@@ -18,6 +18,7 @@ const boeTextBlock = createSafeRootHandler(
       "addressed by the law identifier and a block id taken from " +
       "legislation.boe.law-structure.get.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,

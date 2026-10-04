@@ -14,7 +14,10 @@ import { isCountryCode } from "@stll/country-codes";
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
-import { listContactsPage } from "@/api/handlers/contacts/list-query";
+import {
+  CONTACT_CURSOR_MAX_LENGTH,
+  listContactsPage,
+} from "@/api/handlers/contacts/list-query";
 import {
   MAX_CONTACT_NATIONALITY_CODES,
   validatePersonDetails,
@@ -395,6 +398,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const workspaceId = createSafeId<"workspace">();
     const created = await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         userId: context.userId,
@@ -457,6 +461,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -577,6 +582,7 @@ const listContactsArgsSchema = nullAsAbsent(
       v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
     ),
     cursor: cursorInput({
+      maxLength: CONTACT_CURSOR_MAX_LENGTH,
       description: "Opaque cursor from the previous page",
     }),
     limit: v.optional(
@@ -2373,6 +2379,19 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "matter_id",
+        present: {
+          operation: "update",
+          permissions: { workspace: ["update"] },
+        },
+        absent: { operation: "create", permissions: { workspace: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
     scope: "stella:matters_write",
@@ -2391,6 +2410,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "chat history. This is irreversible.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_matter",
@@ -2447,6 +2468,16 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "contact_id",
+        present: { operation: "update", permissions: { contact: ["update"] } },
+        absent: { operation: "create", permissions: { contact: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
     scope: "stella:contacts_write",
@@ -2466,6 +2497,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteContactArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { contact: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_contact",
@@ -2587,6 +2620,16 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "task_id",
+        present: { operation: "update", permissions: { entity: ["update"] } },
+        absent: { operation: "create", permissions: { entity: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
     scope: "stella:matters_write",
@@ -2606,6 +2649,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "archived. This is irreversible.",
     inputSchema: deleteTaskArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { entity: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_task",
@@ -2634,6 +2679,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",
     scope: "stella:matters_write",

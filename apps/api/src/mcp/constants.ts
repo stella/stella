@@ -8,10 +8,10 @@ import {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
   type McpOAuthScope,
+  REQUEST_ID_HEADER,
 } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import { REQUEST_ID_HEADER } from "@/api/lib/observability/request-context";
 import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
 import {
   getMcpResourceModeConfig,

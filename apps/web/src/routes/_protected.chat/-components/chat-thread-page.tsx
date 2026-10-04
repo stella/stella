@@ -84,12 +84,13 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
@@ -133,7 +134,7 @@ export const ChatThreadPage = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const canManageOrganization =
-    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
+    hasOrganizationManagementAccess(currentUserRole);
 
   // Local copy of the persisted contextMatterIds, seeded from the
   // server and re-seeded whenever the page navigates to a different
@@ -205,7 +206,7 @@ export const ChatThreadPage = ({
   // rendering while the entitlement state loads.
   const { data: usageEntitlementData } = useQuery({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
-    enabled: canManageOrganization,
+    enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:
@@ -579,6 +580,7 @@ export const ChatThreadPage = ({
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
             <ChromeHeaderActions>
+              <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
               <Tooltip
                 content={t("inspector.moveToSide")}
                 render={

@@ -1,13 +1,9 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
-import { signalSessionChange } from "@/lib/account/session-signal";
-import { toAuthClientError } from "@/lib/errors/auth";
-import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { rootKeys } from "@/lib/auth-query-options";
+import { STALE_TIME } from "@/lib/consts";
 
-export const rootKeys = {
-  session: ["session"],
-  role: ["role"],
-};
+export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
 /**
  * The shell blocks on these two, so their worst case is what a user stares
@@ -20,27 +16,37 @@ export const rootKeys = {
  */
 const BOOT_QUERY_RETRY = false;
 
-export const sessionOptions = queryOptions({
-  retry: BOOT_QUERY_RETRY,
-  queryKey: rootKeys.session,
-  queryFn: async () => {
-    const { authClient } = await import("@/lib/auth-client");
-    const result = await authClient.getSession();
+/**
+ * Reads the session. `bypassCookieCache` asks the server past its session
+ * cookie cache, so a change made in another tab (e.g. the active
+ * organization) is visible immediately.
+ */
+export const fetchSession = async ({
+  bypassCookieCache = false,
+}: { bypassCookieCache?: boolean } = {}) => {
+  const [{ authClient }, { toAuthClientError }] = await Promise.all([
+    import("@/lib/auth-client"),
+    import("@/lib/errors/auth"),
+  ]);
+  const result = await authClient.getSession(
+    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+  );
 
-    if (result.error) {
-      throw toAuthClientError(result.error);
-    }
+  if (result.error) {
+    throw toAuthClientError(result.error);
+  }
 
-    return result.data;
-  },
-  staleTime: ROUTE_QUERY_STALE_TIME_MS,
-});
+  return result.data;
+};
 
 export const roleOptions = queryOptions({
   retry: BOOT_QUERY_RETRY,
   queryKey: rootKeys.role,
   queryFn: async () => {
-    const { authClient } = await import("@/lib/auth-client");
+    const [{ authClient }, { toAuthClientError }] = await Promise.all([
+      import("@/lib/auth-client"),
+      import("@/lib/errors/auth"),
+    ]);
     const result = await authClient.organization.getActiveMemberRole();
 
     if (result.error) {
@@ -49,7 +55,7 @@ export const roleOptions = queryOptions({
 
     return result.data.role;
   },
-  staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  staleTime: STALE_TIME.FIVE.MINUTES,
 });
 
 /** Refreshes authentication queries; the host finishes frame cleanup after unmount. */
@@ -61,5 +67,6 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
     queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
   ]);
   await settleAuthTransition(queryClient);
+  const { signalSessionChange } = await import("@/lib/account/session-signal");
   signalSessionChange();
 };

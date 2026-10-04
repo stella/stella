@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "writeUnavailableStreaks in apps/api/src/handlers/case-law/ingestion/pipeline/unread-items.ts updates case_law_sources.config with per-item unavailable-cycle counts under the ingestion lease: public corpus bookkeeping, no workspace data or user action, like the other case-law ingestion watermark writes."
+}

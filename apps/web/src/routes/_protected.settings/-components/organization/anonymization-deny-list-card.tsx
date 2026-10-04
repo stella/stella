@@ -27,7 +27,7 @@ import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
@@ -340,10 +340,7 @@ export const AnonymizationDenyListCard = () => {
       });
     } catch (error) {
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     }
   };
 
@@ -367,10 +364,7 @@ export const AnonymizationDenyListCard = () => {
       { entries: next },
       {
         onError: (error) => {
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -384,10 +378,10 @@ export const AnonymizationDenyListCard = () => {
     const text = await file.text();
     const parsed = parseImport(text, file.name, pendingLabel);
     if (!parsed || parsed.length === 0) {
-      stellaToast.add({
-        title: t("settings.organization.anonymization.importParseError"),
-        type: "error",
-      });
+      notifyUserError(
+        undefined,
+        t("settings.organization.anonymization.importParseError"),
+      );
       return;
     }
     const merged = dedupeByCanonical([
@@ -411,10 +405,7 @@ export const AnonymizationDenyListCard = () => {
           });
         },
         onError: (error) => {
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

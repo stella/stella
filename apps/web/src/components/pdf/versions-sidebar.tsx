@@ -27,7 +27,6 @@ import {
 } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 import { useContentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -41,6 +40,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
@@ -272,7 +272,7 @@ export const VersionsSidebar = ({
     );
     if (Result.isError(requested)) {
       getAnalytics().captureError(requested.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(requested.error, t("errors.actionFailed"));
       await invalidateVersions();
       return;
     }
@@ -301,7 +301,7 @@ export const VersionsSidebar = ({
     );
     if (Result.isError(requested)) {
       getAnalytics().captureError(requested.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
     await invalidateVersions();
@@ -319,7 +319,7 @@ export const VersionsSidebar = ({
     );
     if (Result.isError(requested)) {
       getAnalytics().captureError(requested.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
     await invalidateVersions();
