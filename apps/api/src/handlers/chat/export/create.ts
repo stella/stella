@@ -92,6 +92,7 @@ const onlySourceDocumentTitle = (
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Export one assistant chat message as a DOCX document with the selected " +
     "citation style. Returns a short-lived download URL.",
