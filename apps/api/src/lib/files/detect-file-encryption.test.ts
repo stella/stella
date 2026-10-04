@@ -1,10 +1,14 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, mock, test } from "bun:test";
 
-import { SUBPROCESS_TERMINATION_REASON } from "@/api/lib/errors/tagged-errors";
+import {
+  SUBPROCESS_TERMINATION_REASON,
+  SubprocessError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   detectFileEncryption,
   officeFileEncryption,
+  retainedFileEncryption,
   serverBuiltFileEncryption,
   storedFileEncryption,
   uploadFileEncryption,
@@ -13,7 +17,11 @@ import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
-import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import {
+  classifyPdfWorkerFailure,
+  isEncryptedPdf,
+  PDF_WORKER_PARSE_ERROR_EXIT_CODE,
+} from "@/api/lib/files/pdf-utils";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -131,6 +139,54 @@ describe("uploadFileEncryption", () => {
         uploadFileEncryption(unreadable, { mimeType: PDF_MIME_TYPE }),
       ).toBeNull();
       // Both are reported; the unsure one is told apart by its stage.
+      expect(
+        analytics.exceptions().map((event) => event.properties),
+      ).toMatchObject([
+        { mimeType: PDF_MIME_TYPE, stage: "file-encryption-unsure" },
+        { mimeType: PDF_MIME_TYPE },
+      ]);
+    } finally {
+      analytics.restore();
+    }
+  });
+});
+
+describe("PDF worker exits", () => {
+  const exit = (exitCode: number | null) =>
+    new SubprocessError({ message: "worker", exitCode, termination: null });
+
+  test("only the parse-error exit makes a PDF unreadable", () => {
+    expect(
+      classifyPdfWorkerFailure(exit(PDF_WORKER_PARSE_ERROR_EXIT_CODE)).status,
+    ).toBe("unreadable");
+    // Bun exits 1 when the worker or one of its imports fails to load.
+    expect(classifyPdfWorkerFailure(exit(1)).status).toBe("unsure");
+    expect(classifyPdfWorkerFailure(exit(null)).status).toBe("unsure");
+  });
+});
+
+describe("retainedFileEncryption", () => {
+  test("keeps the file on every outcome and reports the failed ones", async () => {
+    const unsure = await detectFileEncryption({
+      mimeType: PDF_MIME_TYPE,
+      scanned: pdfFile(await plainPdf()),
+      probe: async () => ({ status: "unsure", cause: "worker killed" }),
+    });
+    const unreadable = await detectFileEncryption({
+      mimeType: PDF_MIME_TYPE,
+      scanned: pdfFile(new TextEncoder().encode("not a pdf")),
+    });
+    const known = await detectFileEncryption({
+      mimeType: PDF_MIME_TYPE,
+      scanned: pdfFile(await createEncryptedPdf()),
+    });
+
+    const analytics = installRecordingAnalytics();
+    try {
+      const context = { mimeType: PDF_MIME_TYPE };
+      expect(retainedFileEncryption(unsure, context).encrypted).toBe(false);
+      expect(retainedFileEncryption(unreadable, context).encrypted).toBe(false);
+      expect(retainedFileEncryption(known, context).encrypted).toBe(true);
       expect(
         analytics.exceptions().map((event) => event.properties),
       ).toMatchObject([

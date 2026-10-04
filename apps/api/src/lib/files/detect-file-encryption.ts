@@ -181,6 +181,22 @@ const detectOoxmlEncryption = (
   };
 };
 
+/** Reports a detection that did not inspect the file; a known one is silent. */
+const reportDetection = (
+  detection: FileEncryptionDetection,
+  context: Record<string, string>,
+): void => {
+  if (detection.status === "unsure") {
+    captureError(detection.cause, {
+      ...context,
+      stage: "file-encryption-unsure",
+    });
+  }
+  if (detection.status === "unreadable") {
+    captureError(detection.cause, context);
+  }
+};
+
 /**
  * The upload paths' reading of a detection: an unreadable PDF is refused as
  * corrupted (`null`), an unsure one is reported and the file is kept.
@@ -189,18 +205,21 @@ export const uploadFileEncryption = (
   detection: FileEncryptionDetection,
   context: Record<string, string>,
 ): FileEncryption | null => {
-  if (detection.status === "known") {
-    return detection.encryption;
-  }
-  if (detection.status === "unsure") {
-    captureError(detection.cause, {
-      ...context,
-      stage: "file-encryption-unsure",
-    });
-    return detection.encryption;
-  }
-  captureError(detection.cause, context);
-  return null;
+  reportDetection(detection, context);
+  return detection.status === "unreadable" ? null : detection.encryption;
+};
+
+/**
+ * The reading of a path that keeps every file (inbound email filing): the
+ * detection is reported as an upload's would be, and the file is recorded
+ * with the detector's value even when the inspection failed.
+ */
+export const retainedFileEncryption = (
+  detection: FileEncryptionDetection,
+  context: Record<string, string>,
+): FileEncryption => {
+  reportDetection(detection, context);
+  return detection.encryption;
 };
 
 /** Office bytes an editor produced: a readable OOXML zip, never encrypted. */

@@ -19,16 +19,30 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
  * What the PDF worker found out about a file's encryption.
  *
  * - `inspected`: the worker parsed the file and reported its encryption flag.
- * - `unreadable`: the worker ran and refused the bytes (it exits non-zero on a
- *   parse error), so the file is not a PDF the parser can open.
+ * - `unreadable`: the worker ran and its parser refused the bytes (it exits
+ *   with `PDF_WORKER_PARSE_ERROR_EXIT_CODE`), so the file is not a PDF the
+ *   parser can open.
  * - `unsure`: the inspection did not finish (the timeout killed the worker,
- *   the worker died to a signal, or it could not be started) or answered with
- *   something other than its two outputs. That says nothing about the file.
+ *   the worker died to a signal, it could not be started, or it exited with
+ *   any other code, as Bun does when the worker or an import fails to load)
+ *   or answered with something other than its two outputs. That says nothing
+ *   about the file.
  */
 export type PdfEncryptionProbe =
   | { status: "inspected"; encrypted: boolean }
   | { status: "unreadable"; cause: SubprocessError }
   | { status: "unsure"; cause: SubprocessError | string };
+
+/** The worker's exit code for a parse error (EX_DATAERR); see pdf-worker.ts. */
+export const PDF_WORKER_PARSE_ERROR_EXIT_CODE = 65;
+
+/** A worker failure as a probe outcome: only the parse-error exit is a verdict. */
+export const classifyPdfWorkerFailure = (
+  error: SubprocessError,
+): Extract<PdfEncryptionProbe, { status: "unreadable" | "unsure" }> =>
+  error.exitCode === PDF_WORKER_PARSE_ERROR_EXIT_CODE
+    ? { status: "unreadable", cause: error }
+    : { status: "unsure", cause: error };
 
 type PdfEncryptionProbeOptions = {
   /** Defaults to the extraction timeout; tests shorten it. */
@@ -47,11 +61,7 @@ export const isEncryptedPdf = async (
   });
 
   if (Result.isError(result)) {
-    // An exit code means the worker ran to completion and rejected the bytes;
-    // a termination (timeout, signal) or a spawn failure carries none.
-    return result.error.exitCode === null
-      ? { status: "unsure", cause: result.error }
-      : { status: "unreadable", cause: result.error };
+    return classifyPdfWorkerFailure(result.error);
   }
 
   if (result.value === "true" || result.value === "false") {
