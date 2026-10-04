@@ -395,9 +395,6 @@ export const STATUS_TRANSITION_OWNERSHIP = {
 const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
   "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
-  "handlers/case-law/ingestion/adapters/cz-ns.ts",
-  "handlers/case-law/ingestion/adapters/cz-nss.ts",
-  "handlers/case-law/ingestion/adapters/cz-regional.ts",
   "handlers/case-law/ingestion/adapters/eu-ecj.ts",
   "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
   "handlers/case-law/ingestion/adapters/pagination.ts",
