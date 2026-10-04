@@ -225,8 +225,11 @@ const CZ_NS_PRINT_PAGE =
  * A build the adapter reported unread, failed with the outcome it carries: a
  * refusal fails typed, as the crawl reports it.
  */
-const unreadBuild = (adapterKey: string, outcome: UnreadPublisherOutcome) =>
-  Promise.reject(
+const unreadBuild = async (
+  adapterKey: string,
+  outcome: UnreadPublisherOutcome,
+): Promise<never> =>
+  await Promise.reject(
     unreadPublisherError({
       outcome,
       message: `${adapterKey} fixture did not build`,
