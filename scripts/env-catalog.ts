@@ -1238,6 +1238,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 export const TOOLING_ENV_KEYS = new Set([
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
+  // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
+  "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
