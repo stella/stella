@@ -91,6 +91,7 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
+import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
 import {
@@ -6789,7 +6790,8 @@ if (import.meta.main) {
       stderr: "inherit",
       stdout: "inherit",
     });
-    process.exit(await child.exited);
+    await child.exited;
+    process.exit(childExitStatus(child));
   }
 
   console.log(

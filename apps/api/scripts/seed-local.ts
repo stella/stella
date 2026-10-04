@@ -10,6 +10,7 @@
  *   bun run db:seed-local
  */
 
+import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "./seed-utils";
 
 const SEED_SCRIPTS = ["seed-test-user.ts", "seed-dev.ts"] as const;
@@ -26,7 +27,8 @@ for (const script of SEED_SCRIPTS) {
     stderr: "inherit",
     stdout: "inherit",
   });
-  const exitCode = await child.exited;
+  await child.exited;
+  const exitCode = childExitStatus(child);
   if (exitCode !== 0) {
     process.exit(exitCode);
   }

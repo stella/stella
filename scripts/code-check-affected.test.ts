@@ -625,12 +625,13 @@ describe("full and affected code-check parity", () => {
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 if (process.argv[2] === "merge-base") {
   process.stderr.write("fatal: injected failure\\n");
   process.exit(128);
 }
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );
@@ -659,9 +660,10 @@ process.exit(result.exitCode);
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );

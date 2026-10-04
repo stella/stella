@@ -326,5 +326,6 @@ implies a hazard that is gone.
 - [`no-unvalidated-clause-write`](./no-unvalidated-clause-write.ts) (`no-unvalidated-clause-write`): confines clause, variant, and version body writes to their owning operations (including calls to the locked variant insertion owner) and requires a preceding `yield*` of the shared directive validator, or legacy inspection in the import/restore owners. Working-copy updates validate when publishing; draft persistence remains allowed. This syntactic check does not prove control-flow dominance. Search index maintenance may write only its static `searchVector` column.
 
 - [`no-direct-error-toast`](./no-direct-error-toast.ts) (`no-direct-error-toast`): confines error toast creation, updates, and promise handling to the shared notifier.
+- [`no-raw-child-exit-status`](./no-raw-child-exit-status.ts) (`no-raw-child-exit-status`): requires the shared `childExitStatus` helper when forwarding child-process statuses to process exit sinks, including aliases and local return values.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.

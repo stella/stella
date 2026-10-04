@@ -7,6 +7,8 @@ import {
   isRunnerName,
 } from "@stll/legal-atlas";
 
+import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+
 const HELP = `Usage:
   legal-atlas list
   legal-atlas run <runner>
@@ -47,10 +49,13 @@ const refetchEuDecisions = async (argv: readonly string[]): Promise<number> => {
   const terminate = () => child.kill("SIGTERM");
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", terminate);
-  return await child.exited.finally(() => {
+  try {
+    await child.exited;
+    return childExitStatus(child);
+  } finally {
     process.removeListener("SIGINT", interrupt);
     process.removeListener("SIGTERM", terminate);
-  });
+  }
 };
 
 type ImplementedRunnerOptions = {

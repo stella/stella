@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
 
+import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {
@@ -149,7 +150,8 @@ const CHILD_STOP_GRACE_MS = 10_000;
 const awaitChild = async (child: Bun.Subprocess): Promise<number> => {
   liveChildren.add(child);
   try {
-    return await child.exited;
+    await child.exited;
+    return childExitStatus(child);
   } finally {
     liveChildren.delete(child);
   }
