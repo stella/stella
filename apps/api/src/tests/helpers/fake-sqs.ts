@@ -122,13 +122,16 @@ export const createFakeSqsQueue = (): FakeSqsQueue => {
         }
         const body = decodeBody(request.body);
         const target = request.headers["x-amz-target"];
+        if (target === undefined) {
+          return panic("Fake SQS received a request without a target");
+        }
         switch (target) {
           case "AmazonSQS.ReceiveMessage":
             return await Promise.resolve(receive(body));
           case "AmazonSQS.DeleteMessage":
             return await Promise.resolve(remove(body));
           default:
-            return panic(`Fake SQS does not implement ${target ?? "?"}`);
+            return panic(`Fake SQS does not implement ${target}`);
         }
       },
     },

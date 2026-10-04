@@ -38,7 +38,7 @@ export const receiveInboundMail: SchedulerTask = async ({
   switch (config.type) {
     case "disabled":
       logger.warn("inbound_mail.queue.disabled");
-      return;
+      return Result.ok(undefined);
     case "enabled":
       break;
     default:

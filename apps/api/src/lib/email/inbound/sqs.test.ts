@@ -225,7 +225,9 @@ const drainHarness = ({
 const records: LogRecord[] = [];
 const captureLogs = () => {
   records.length = 0;
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
 };
 afterEach(() => {
   resetLogSinkForTesting();
