@@ -961,6 +961,7 @@ describe("provider failure HTTP response", () => {
         const endpoint = createSafeRootHandler(
           {
             permissions: { workspace: ["read"] },
+            accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "health_infra" },
           },
           async function* () {
