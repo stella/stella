@@ -1,6 +1,7 @@
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 // parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
+// parser-output-unchanged: rethrowCycleStop moves the existing cycle-stop rethrow here unchanged; parsed output is not affected.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
@@ -478,4 +479,24 @@ export const retryPublisherRequest = async (
     await runtime.sleep(delay, init.signal);
   }
   return panic("retryPublisherRequest: unreachable");
+};
+
+/**
+ * Rejects with `error` when it ends the ingestion cycle rather than describing
+ * one read: the caller's cancellation, or a source-level publisher refusal
+ * stop (an opted-in `stop-refusal`, or the gate's rate-limit refusal). The
+ * typed read owner (`publisher-read.ts`) keeps the publisher's rejection
+ * contract for these through this boundary.
+ */
+export const rethrowCycleStop = (
+  error: unknown,
+  signal: AbortSignal | undefined,
+): void => {
+  if (
+    signal?.aborted === true ||
+    (error instanceof AdapterFetchError &&
+      error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL)
+  ) {
+    throw error;
+  }
 };
