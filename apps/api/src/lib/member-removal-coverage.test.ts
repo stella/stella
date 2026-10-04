@@ -58,6 +58,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
+  "case_law_replay_audit_events.details",
+  "case_law_replay_batches.gate_verdict",
   "case_law_research_answers.answer",
   "case_law_research_answers.run",
   "case_law_research_columns.content",

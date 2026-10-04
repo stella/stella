@@ -933,7 +933,7 @@ export const tryLockAccountMemberCleanup = async (
  * Timer-owner/user locks precede these matter locks, just as in timer writes.
  * Only the matters removal changes are locked, in ascending id order.
  */
-export const lockMemberCleanupWorkspaces = async (
+const lockMemberCleanupWorkspaces = async (
   options: MemberCleanupWorkspaceOptions,
 ) => {
   const ids = await selectMemberCleanupWorkspaceIds(options);

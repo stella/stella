@@ -20,7 +20,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-export const publicStatuteSearchQuerySchema = t.Object(
+const publicStatuteSearchQuerySchema = t.Object(
   {
     ...t.Omit(searchLegislationBodySchema, ["jurisdiction", "limit"])
       .properties,

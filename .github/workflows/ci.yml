@@ -1468,6 +1468,21 @@ jobs:
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
 
+      - name: Tauri package alignment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          required=true
+          if [[ -n "$BASE_SHA" ]]; then
+            git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/tauri-changed-files"
+            mapfile -t files < "$RUNNER_TEMP/tauri-changed-files"
+            required=$(bun scripts/check-tauri-package-alignment.ts --requires-check "${files[@]}")
+          fi
+          if [[ "$required" == true ]]; then
+            bun test scripts/check-tauri-package-alignment.test.ts
+            bun scripts/check-tauri-package-alignment.ts
+          fi
+
       - name: Lockfile release-age guard
         # Bun applies the release-age quarantine only while it resolves
         # versions; a frozen install takes whatever bun.lock pins. This looks

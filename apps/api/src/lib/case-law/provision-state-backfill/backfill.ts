@@ -26,7 +26,7 @@ export const BOOTSTRAP_PAGE_SIZE = 1000;
  * deadline. With this bound a run reads at most this many pages (up to
  * `BOOTSTRAP_PAGE_SIZE` decisions each) and the next scheduled run resumes.
  */
-export const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
+const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
 const LOCK_TIMEOUT_MS = 30_000;
 const STATEMENT_TIMEOUT_MS = 60_000;
 

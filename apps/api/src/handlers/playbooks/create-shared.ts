@@ -51,6 +51,8 @@ export type CreatePlaybookDefinitionOrigin =
 type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** Matters the caller can access; a newly added source must be in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -63,6 +65,7 @@ type CreatePlaybookDefinitionArgs = {
 export const createPlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -92,7 +95,9 @@ export const createPlaybookDefinitionHandler = async function* ({
     assertPositionsValid({
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       positions: body.positions,
+      storedPositions: null,
     }),
   );
 

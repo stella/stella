@@ -29,7 +29,7 @@ export class GithubWriteError extends TaggedError("GithubWriteError")<{
 }> {}
 
 /** A field of a GitHub write body: a safe value, or a list of safe values. */
-export type GithubWriteValue =
+type GithubWriteValue =
   | GithubSafeText
   | GithubSafeTitle
   | readonly GithubSafeText[];

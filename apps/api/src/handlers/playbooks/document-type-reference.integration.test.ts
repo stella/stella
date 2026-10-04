@@ -13,20 +13,20 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   documentTypes,
   playbookDefinitions,
   playbookDefinitionVersions,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createScopedDb } from "@/api/db/scoped";
 import deleteDocumentType from "@/api/handlers/document-types/delete";
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "@/api/handlers/playbooks/assert-document-type";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -39,13 +39,14 @@ import {
   ensureDefaultDocumentTypes,
 } from "@/api/lib/document-types/defaults";
 import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   createTestIds,
   setupRlsTestData,
@@ -72,20 +73,23 @@ const orgContext = (organizationId = ids.orgA) => {
     request: new Request("https://example.test/playbooks"),
     server: null,
   };
-  return {
+  return createTestHandlerContext({
     createAuditRecorder: () => createAuditRecorder(bindings),
-    memberRole: sessionMemberRole("owner"),
-    orgAIConfig: null,
-    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-    managedAIResidency: "eu" as const,
-    promptCachingEnabled: false,
+    getActiveWorkspaceIds: async () => [],
+    getAccessibleWorkspaces: async () => [],
+    getWorkspaceAccess: async () => null,
+    pinServerValidatedWorkspaceId: () => false,
     recordAuditEvent: createAuditRecorder(bindings),
     request: bindings.request,
     route: "/playbooks",
-    safeDb: createSafeDb(testDb, [], organizationId, ids.userA1),
+    safeDb: toSafeDbMock(
+      asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [], organizationId, ids.userA1),
+      ),
+    ),
     session: { activeOrganizationId: organizationId },
     user: { id: ids.userA1 },
-  };
+  });
 };
 
 const readPlaybookAudit = (

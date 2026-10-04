@@ -2,12 +2,7 @@ import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
-import type {
-  AUDIT_ACTIVITY_CATEGORIES,
-  AUDIT_APPROVAL_STATUSES,
-  AUDIT_PERFORMER_TYPES,
-  AUDIT_TRIGGER_TYPES,
-} from "@/api/db/schema";
+import type { AUDIT_ACTIVITY_CATEGORIES } from "@/api/db/schema";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
@@ -49,9 +44,6 @@ export type FieldDiffs = Record<string, { old: unknown; new: unknown }>;
 
 type AuditMetadata = Record<string, unknown>;
 
-export type AuditPerformerType = (typeof AUDIT_PERFORMER_TYPES)[number];
-export type AuditTriggerType = (typeof AUDIT_TRIGGER_TYPES)[number];
-export type AuditApprovalStatus = (typeof AUDIT_APPROVAL_STATUSES)[number];
 export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
 
 export type AuditExecutionContext = {

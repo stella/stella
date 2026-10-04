@@ -70,7 +70,7 @@ export const readFileEndpoint = createSafeHandler(
   },
 );
 
-export const readEmailHtmlPreviewEndpoint = createSafeHandler(
+const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     contentDelivery: {
       type: "none",
@@ -106,7 +106,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-export const printPdfEndpoint = createSafeHandler(
+const printPdfEndpoint = createSafeHandler(
   {
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
@@ -139,7 +139,7 @@ export const printPdfEndpoint = createSafeHandler(
   },
 );
 
-export const stampedDownloadEndpoint = createSafeHandler(
+const stampedDownloadEndpoint = createSafeHandler(
   {
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
@@ -175,7 +175,7 @@ export const stampedDownloadEndpoint = createSafeHandler(
   },
 );
 
-export const readDocumentPropertiesEndpoint = createSafeHandler(
+const readDocumentPropertiesEndpoint = createSafeHandler(
   {
     contentDelivery: {
       type: "none",
@@ -244,7 +244,7 @@ const AUTHORED_PROPERTY_BODY = {
   typeof documentPropertyValue
 >;
 
-export const updateDocumentPropertiesEndpoint = createSafeHandler(
+const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
     contentDelivery: {
       type: "none",
@@ -290,7 +290,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
   },
 );
 
-export const scrubbedDownloadEndpoint = createSafeHandler(
+const scrubbedDownloadEndpoint = createSafeHandler(
   {
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
@@ -323,7 +323,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
   },
 );
 
-export const ocrExportEndpoint = createSafeHandler(
+const ocrExportEndpoint = createSafeHandler(
   {
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },

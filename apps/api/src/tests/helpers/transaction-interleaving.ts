@@ -19,7 +19,7 @@ type Participant = {
   steps: readonly Step[];
   transaction?: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
 };
-export type TransactionOutcome =
+type TransactionOutcome =
   | { status: "committed" }
   | {
       status: "serialization-error" | "deadlock" | "app-error";
