@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
 
@@ -14,6 +14,7 @@ const config = {
     "organization has decided each position across past reviews. Use " +
     "playbooks.list for the paginated overview.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_playbooks" },
   access: "read",
   params: playbookDefinitionParamsSchema,

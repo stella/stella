@@ -1,6 +1,6 @@
 import { Result, panic } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -31,6 +31,7 @@ const config = {
     "how many playbooks ran, how many columns were materialized, and how " +
     "many document runs opened. Use playbooks.run for a single playbook.",
   permissions: { playbook: ["apply"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 import type { CliClientMetadataDocument } from "@stll/cli/client-metadata-document";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
@@ -43,6 +44,7 @@ const toResponse = (
 const readCliClientMetadata = createSafeBoundedPublicHandler(
   {
     cache: { kind: "public", maxAge: 3600 },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     response: safePublicHandlerResponseSchemasWithStatusText(
       cliClientMetadataResponseSchema,

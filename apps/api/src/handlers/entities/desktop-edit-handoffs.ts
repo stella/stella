@@ -7,7 +7,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -117,6 +117,7 @@ const buildDesktopEditHandoffDeepLink = ({
 const createConfig = {
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
@@ -183,6 +184,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 const statusConfig = {
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 

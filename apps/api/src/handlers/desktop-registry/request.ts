@@ -20,7 +20,10 @@ import {
   searchDesktopRegistry,
   setDesktopRegistryDefaultFormat,
 } from "@/api/handlers/desktop-registry/service";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -33,6 +36,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   body: t.Union([
