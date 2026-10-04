@@ -208,8 +208,8 @@ type CompletionCandidate =
   | { type: "unchanged" };
 type RowResult = Result<EuCompletionRowOutcome, unknown>;
 
-const readStoredRaw = ({ row, signal, ensure }: CandidateContext) =>
-  Result.gen(async function* () {
+const readStoredRaw = async ({ row, signal, ensure }: CandidateContext) =>
+  await Result.gen(async function* () {
     yield* Result.await(ensure());
     const read = await legacyOperation(async () => {
       if (row.sourceRawS3Key !== null) {
@@ -278,11 +278,11 @@ const readStoredRaw = ({ row, signal, ensure }: CandidateContext) =>
   });
 
 type FullCandidateOptions = Pick<CandidateContext, "row" | "signal" | "ensure">;
-const fetchFullCompletionCandidate = (
+const fetchFullCompletionCandidate = async (
   { row, signal, ensure }: FullCandidateOptions,
   raw: Uint8Array | null,
 ) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     if (
       raw !== null &&
       Object.keys(decodeSourceRawEnvelopeObjects(new TextDecoder().decode(raw)))
@@ -374,11 +374,11 @@ const fetchFullCompletionCandidate = (
     return Result.ok(candidate);
   });
 
-const fetchCompletionCandidate = (
+const fetchCompletionCandidate = async (
   { row, signal, ensure, state }: CandidateContext,
   raw: Uint8Array | null,
 ): Promise<Result<CompletionCandidate, unknown>> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const parts =
       raw === null
         ? null
@@ -519,11 +519,11 @@ const recoverCompletionCandidate = async ({
   return Result.ok(parsed.value.result);
 };
 
-const prepareCompletionCandidate = (
+const prepareCompletionCandidate = async (
   context: CandidateContext,
   fingerprint: string,
 ): Promise<Result<CompletionCandidate, unknown>> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const { row, receipt, ensure, store } = context;
     if (receipt.payload !== null) {
       const candidate = yield* Result.await(
@@ -627,11 +627,11 @@ type CompletionWriteContext = CompletionContext & {
   lease: CaseLawSourceIngestionLease;
   observationOrder: bigint;
 };
-const checkCompletionWriteTx = (
+const checkCompletionWriteTx = async (
   tx: Transaction,
   { signal, store, receipt, lease }: CompletionWriteContext,
 ) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     if (signal.aborted) {
       return Result.err(
         new EuCompletionStop({
@@ -705,7 +705,7 @@ const checkCompletionWriteTx = (
     }
     return Result.ok();
   });
-const markCompletionWriteTx = (
+const markCompletionWriteTx = async (
   tx: Transaction,
   {
     signal,
@@ -715,7 +715,7 @@ const markCompletionWriteTx = (
     candidate,
   }: CompletionWriteContext,
 ) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     if (signal.aborted) {
       return Result.err(
         new EuCompletionStop({
@@ -807,11 +807,11 @@ const createGuardedLease = ({
   },
 });
 
-const applyCompletionCandidate = (
+const applyCompletionCandidate = async (
   context: CompletionContext,
   candidate: IngestionResult,
 ): Promise<RowResult> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const { ensure, sourceLease, receipt, ingestionDb, signal, raiseFailure } =
       context;
     yield* Result.await(ensure());
@@ -860,13 +860,13 @@ type HydrateOptions = Pick<
   CandidateContext,
   "rootDb" | "signal" | "ensure" | "row"
 >;
-const hydrateCompletionStatements = ({
+const hydrateCompletionStatements = async ({
   rootDb,
   signal,
   ensure,
   row,
 }: HydrateOptions) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const readOptions = {
       signal,
       s3Policy: { mode: "replay-strict", signal },
@@ -934,10 +934,10 @@ const hydrateCompletionStatements = ({
     return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
   });
 
-const finalizeWrittenCompletion = (
+const finalizeWrittenCompletion = async (
   context: CompletionContext,
 ): Promise<RowResult> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     yield* Result.await(context.ensure());
     const settled = yield* Result.await(
       legacyOperation(
@@ -975,8 +975,10 @@ const finalizeWrittenCompletion = (
     return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
   });
 
-const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
-  Result.gen(async function* () {
+const executeCompletionRow = async (
+  context: CompletionContext,
+): Promise<RowResult> =>
+  await Result.gen(async function* () {
     const { rootDb, receipt, ensure, store } = context;
     yield* Result.await(ensure());
     if (receipt.writtenAt !== null) {
@@ -1105,8 +1107,8 @@ const completionResponseLimiter =
       headers: response.headers,
     });
   };
-const chargeCompletionRequest = (context: CompletionContext) =>
-  Result.gen(async function* () {
+const chargeCompletionRequest = async (context: CompletionContext) =>
+  await Result.gen(async function* () {
     const { state, store, receipt, onRequest } = context;
     if (state.requests >= EU_COMPLETION_LIMITS.maxRequests) {
       return Result.err(
@@ -1173,10 +1175,10 @@ const checkCompletionBeforeSend = (
   return context.checkBeforeSend();
 };
 
-const runControlledCompletionRow = (
+const runControlledCompletionRow = async (
   context: CompletionContext,
 ): Promise<RowResult> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const { ensure, state } = context;
     // Adapter boundaries may wrap request errors. Keep benign stops available
     // to settlement before that conversion so they never become source failures.
@@ -1226,14 +1228,14 @@ const runControlledCompletionRow = (
   });
 
 type FailureContext = CompletionContext & { error: unknown };
-const settleCompletionFailure = ({
+const settleCompletionFailure = async ({
   receipt,
   store,
   state,
   healthyEvidence,
   error,
 }: FailureContext): Promise<RowResult> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     if (error instanceof CompletionWithdrawn) {
       yield* Result.await(
         legacyOperation(
@@ -1349,19 +1351,19 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
     refusal: null,
     publisherFailure: null,
   };
-  const runRow = (
+  const runRow = async (
     reserved: EuCompletionReceipt,
     rowOptions: EuCompletionRowOptions,
   ): Promise<RowResult> =>
-    Result.gen(async function* () {
+    await Result.gen(async function* () {
       resetCompletionPublisherRow(state);
       const receipt = yield* Result.await(
         legacyOperation(
           async () => await options.store.getReceipt(reserved.id),
         ),
       );
-      const ensure = () =>
-        Result.gen(async function* () {
+      const ensure = async () =>
+        await Result.gen(async function* () {
           if (state.refusal !== null) {
             return Result.err(
               new EuCompletionStop({
