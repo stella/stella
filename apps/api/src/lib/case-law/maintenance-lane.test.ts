@@ -47,7 +47,11 @@ const CASE_LAW_TABLE_MARKERS = ["case_law_", "caseLaw"] as const;
  * transitively: a script that never imports one, directly or through a
  * helper, issues no statements and needs no door.
  */
-const DATABASE_MODULES = ["@/api/db/root", "@/api/db/scoped"] as const;
+const DATABASE_MODULES = [
+  "@/api/db/root",
+  "@/api/db/scoped",
+  "@/api/db/long-running-connection",
+] as const;
 
 type EuCompletionStore = ReturnType<typeof createEuCompletionStore>;
 

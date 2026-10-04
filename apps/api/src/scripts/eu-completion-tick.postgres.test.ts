@@ -1068,7 +1068,11 @@ if (!databaseUrl || !enabled) {
             await withPublisherGateFixture(gate.dependencies, async () => {
               await fetchPublisher(
                 "https://publications.europa.eu/completion-crawl-fixture",
-                { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 },
+                {
+                  adapterKey: ADAPTER_KEYS.EU_ECJ,
+                  fetchStage: "listing",
+                  timeoutMs: 1000,
+                },
               );
               const report = await runEuCompletionTickFixture(
                 AbortSignal.timeout(20_000),

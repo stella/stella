@@ -15,8 +15,21 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import {
   encodeSourceRawEnvelope,
-  type IngestionResult,
+  type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+
+type ProtectOptions = Omit<
+  Parameters<typeof protectEcjCompletion>[0],
+  "candidate"
+> & { candidate: RawIngestionResult };
+
+/** Candidates arrive branded, as the adapter's plain-text boundary emits them. */
+const protect = ({ candidate, ...options }: ProtectOptions) =>
+  protectEcjCompletion({
+    ...options,
+    candidate: plainTextIngestionResult(candidate),
+  });
 
 const stored = (): EcjCompletionStoredDecision => ({
   caseNumber: "C-1/24",
@@ -48,7 +61,7 @@ const stored = (): EcjCompletionStoredDecision => ({
   redactedAt: null,
 });
 
-const candidate = (): IngestionResult => ({
+const candidate = (): RawIngestionResult => ({
   caseNumber: "C-1/24",
   caseNumberType: "case-number",
   sourceDocumentId: "62024CJ0001:en",
@@ -66,7 +79,7 @@ const candidate = (): IngestionResult => ({
 
 describe("completion preserves stated values", () => {
   test("adds absent values and nested provenance without dropping existing statements", () => {
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing: stored(),
       judges: [],
       candidate: {
@@ -84,7 +97,7 @@ describe("completion preserves stated values", () => {
       provenance: { source: "listing", format: "Formex" },
     });
     expect(outcome.candidate.sourceRaw).toBe("new raw");
-    const repeated = protectEcjCompletion({
+    const repeated = protect({
       existing: stored(),
       judges: [],
       candidate: outcome.candidate,
@@ -103,7 +116,7 @@ describe("completion preserves stated values", () => {
       sourceUrl: "https://example.test/source",
       documentUrl: "https://example.test/document",
     };
-    const incoming: IngestionResult = {
+    const incoming: RawIngestionResult = {
       ...candidate(),
       ecli: existing.ecli,
       courtId: existing.courtId,
@@ -116,7 +129,7 @@ describe("completion preserves stated values", () => {
     for (const key of ECJ_COMPLETION_PROTECTED_COLUMNS) {
       if (key === "caseNumberType") {
         expect(
-          protectEcjCompletion({
+          protect({
             existing,
             judges: [],
             candidate: { ...incoming, caseNumberType: "neutral-citation" },
@@ -124,7 +137,7 @@ describe("completion preserves stated values", () => {
         ).toEqual({ type: "review-required", fields: [key] });
         continue;
       }
-      const outcome = protectEcjCompletion({
+      const outcome = protect({
         existing,
         judges: [],
         candidate: { ...incoming, [key]: "changed" },
@@ -139,7 +152,7 @@ describe("completion preserves stated values", () => {
       ecli: "ECLI:EU:C:2024:1",
       metadata: { headnote: "Stored headnote" },
     };
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing,
       judges: [],
       candidate: { ...candidate(), fulltext: undefined },
@@ -158,7 +171,7 @@ describe("completion preserves stated values", () => {
   });
 
   test("nested metadata, arrays, publisher text and bench conflicts require review", () => {
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing: {
         ...stored(),
         metadata: {
@@ -191,7 +204,7 @@ describe("completion preserves stated values", () => {
 
   test("empty arrays and empty strings are stated values; null is absent", () => {
     expect(
-      protectEcjCompletion({
+      protect({
         existing: { ...stored(), metadata: { a: [], b: "", c: null } },
         judges: [],
         candidate: {
@@ -209,7 +222,7 @@ describe("completion preserves stated values", () => {
     const metadata: Record<string, unknown> = JSON.parse(
       '{"__proto__":{"polluted":true}}',
     );
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing: stored(),
       candidate: { ...candidate(), metadata },
       judges: [],
@@ -226,7 +239,7 @@ describe("completion preserves stated values", () => {
 
   test("redacted decisions cannot be completed", () => {
     expect(
-      protectEcjCompletion({
+      protect({
         existing: { ...stored(), redactedAt: new Date(0) },
         candidate: candidate(),
         judges: [],
@@ -410,7 +423,7 @@ describe("Formex-only raw preservation", () => {
 describe("additional stated boundaries", () => {
   test("rejects a document role or publisher text hidden in candidate metadata", () => {
     expect(
-      protectEcjCompletion({
+      protect({
         existing: {
           ...stored(),
           metadata: { documentRole: "ruling", summary: "Stored" },
@@ -431,7 +444,7 @@ describe("additional stated boundaries", () => {
   test("sections and AST are stated document content, and missing candidate content preserves them", () => {
     const sections = [
       { index: 0, type: "ruling", title: null, text: "Stored ruling" },
-    ] satisfies NonNullable<IngestionResult["sections"]>;
+    ] satisfies NonNullable<RawIngestionResult["sections"]>;
     const documentAst = {
       version: 1,
       source: { system: "fixture", documentId: "id", webUrl: "", printUrl: "" },
@@ -445,11 +458,11 @@ describe("additional stated boundaries", () => {
         statutes: [],
       },
       blocks: [],
-    } satisfies IngestionResult["documentAst"];
+    } satisfies RawIngestionResult["documentAst"];
     const existing = { ...stored(), sections, documentAst };
     const incoming = candidate();
     const snapshot = JSON.stringify({ existing, incoming });
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing,
       candidate: incoming,
       judges: [],
@@ -461,7 +474,7 @@ describe("additional stated boundaries", () => {
     expect(outcome.candidate.documentAst).toEqual(documentAst);
     expect(JSON.stringify({ existing, incoming })).toBe(snapshot);
     expect(
-      protectEcjCompletion({
+      protect({
         existing,
         judges: [],
         candidate: {
@@ -483,7 +496,7 @@ describe("additional stated boundaries", () => {
     const judges = [
       { role: "panel-member", nameAsPrinted: "Printed judge" },
     ] as const;
-    const outcome = protectEcjCompletion({
+    const outcome = protect({
       existing: stored(),
       candidate: candidate(),
       judges,

@@ -118,6 +118,7 @@ type ControlStore = Pick<
   "setControl" | "approveSupervisedDryRun"
 >;
 const CONTROL_QUERY_TIMEOUT_MS = 5000;
+const CONTROL_TIMEOUT_MS = 30_000;
 
 // A control-plane write touches only the completion controls and approvals.
 // It takes no maintenance door, so a stop never waits behind the tick it
@@ -125,34 +126,37 @@ const CONTROL_QUERY_TIMEOUT_MS = 5000;
 const withOperatorStore = async (
   work: (store: ControlStore) => Promise<number>,
 ) => {
-  const [
-    { rootDb },
-    { runUnderCorpusSchemaLane },
-    { setSharedLockTimeout, setSharedStatementTimeout },
-  ] = await Promise.all([
-    import("@/api/db/root"),
-    import("@/api/db/corpus-schema-lane"),
-    import("@/api/db/shared-pool-timeouts"),
-  ]);
-  const transaction: CaseLawRootHandle["transaction"] = async (fn) =>
-    await runUnderCorpusSchemaLane({
-      database: rootDb,
-      laneWaitMs: CONTROL_QUERY_TIMEOUT_MS,
-      work: async (tx) => {
-        await setSharedStatementTimeout(tx, CONTROL_QUERY_TIMEOUT_MS);
-        await setSharedLockTimeout(tx, CONTROL_QUERY_TIMEOUT_MS);
-        return await fn(tx);
-      },
-    });
-  return await work(
-    createEuCompletionStore({
-      db: {
-        transaction,
-        execute: async (query) =>
-          await transaction(async (tx) => await tx.execute(query)),
-      },
-      now: () => Temporal.Now.instant().epochMilliseconds,
-    }),
+  const [{ withLongRunningConnection }, { runUnderCorpusSchemaLane }] =
+    await Promise.all([
+      import("@/api/db/long-running-connection"),
+      import("@/api/db/corpus-schema-lane"),
+    ]);
+  const signal = AbortSignal.timeout(CONTROL_TIMEOUT_MS);
+  return await withLongRunningConnection(
+    {
+      statementTimeout: CONTROL_QUERY_TIMEOUT_MS,
+      lockTimeout: CONTROL_QUERY_TIMEOUT_MS,
+      signal,
+    },
+    async ({ db }) => {
+      const transaction: CaseLawRootHandle["transaction"] = async (fn) =>
+        await runUnderCorpusSchemaLane({
+          database: db,
+          laneWaitMs: CONTROL_QUERY_TIMEOUT_MS,
+          signal,
+          work: fn,
+        });
+      return await work(
+        createEuCompletionStore({
+          db: {
+            transaction,
+            execute: async (query) =>
+              await transaction(async (tx) => await tx.execute(query)),
+          },
+          now: () => Temporal.Now.instant().epochMilliseconds,
+        }),
+      );
+    },
   );
 };
 const controlFailureMessage = (error: unknown) => {

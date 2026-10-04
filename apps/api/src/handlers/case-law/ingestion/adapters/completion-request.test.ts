@@ -111,10 +111,12 @@ describe("completion request boundary", () => {
       operation: async () => {
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
+          fetchStage: "document",
           timeoutMs: 1000,
         });
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
+          fetchStage: "document",
           timeoutMs: 1000,
         });
       },
@@ -145,6 +147,7 @@ describe("completion request boundary", () => {
             operation: async () =>
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
+                fetchStage: "document",
                 timeoutMs: 1000,
               }),
           }),
@@ -190,6 +193,7 @@ describe("completion request boundary", () => {
             operation: async () =>
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
+                fetchStage: "document",
                 timeoutMs: 1000,
               }),
           }),
@@ -224,12 +228,14 @@ describe("completion request boundary", () => {
         const first = await Result.tryPromise(() =>
           fetchPublisher(target, {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
+            fetchStage: "document",
             timeoutMs: 1000,
           }),
         );
         const second = await Result.tryPromise(() =>
           fetchPublisher(target, {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
+            fetchStage: "document",
             timeoutMs: 1000,
           }),
         );
@@ -263,6 +269,7 @@ describe("completion request boundary", () => {
           operation: async () =>
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
+              fetchStage: "document",
               timeoutMs: 1000,
             }),
         }),
@@ -300,6 +307,7 @@ describe("completion request boundary", () => {
           operation: async () =>
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
+              fetchStage: "document",
               timeoutMs: 1000,
               retryPolicy: "publisher-backoff",
               isRateLimitRedirect: (response) => response.status === 302,
@@ -337,6 +345,7 @@ describe("completion request boundary", () => {
       operation: async () =>
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
+          fetchStage: "document",
           timeoutMs: 1000,
         }),
     });
@@ -361,6 +370,7 @@ describe("completion request boundary", () => {
       operation: async () =>
         await fetchWithRetry(target, undefined, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
+          fetchStage: "document",
           maxRetries: 5,
         }),
     });
@@ -391,6 +401,7 @@ describe("completion request boundary", () => {
           operation: async () =>
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
+              fetchStage: "document",
               timeoutMs: 1000,
             }),
         }),

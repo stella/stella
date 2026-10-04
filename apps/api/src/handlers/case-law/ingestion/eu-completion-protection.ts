@@ -4,6 +4,7 @@ import type { TextField } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 
 import type { caseLawDecisions } from "@/api/db/schema";
+import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
   splitStoredDecisionTextMetadata,
   TEXT_FIELD_TYPE,
@@ -11,11 +12,13 @@ import {
 import type {
   DecisionJudgeInput,
   IngestionResult,
+  RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
@@ -113,7 +116,7 @@ const mergeMetadata = ({
 
 type PreserveStoredStatementsOptions = EcjCompletionProtectionOptions & {
   metadata: Record<string, unknown>;
-  textFields: IngestionResult["textFields"];
+  textFields: RawIngestionResult["textFields"];
   hasStoredAst: boolean;
 };
 const preserveStoredStatements = ({
@@ -123,7 +126,7 @@ const preserveStoredStatements = ({
   metadata,
   textFields,
   hasStoredAst,
-}: PreserveStoredStatementsOptions): IngestionResult => ({
+}: PreserveStoredStatementsOptions): RawIngestionResult => ({
   ...candidate,
   caseNumberType: candidate.caseNumberType ?? existing.caseNumberType,
   sourceDocumentId:
@@ -265,9 +268,9 @@ export const protectEcjCompletion = ({
   if (fields.length > 0) {
     return { type: "review-required", fields: [...new Set(fields)] };
   }
-  return {
-    type: "accepted",
-    candidate: preserveStoredStatements({
+  // Stored values re-enter through the same plain-text boundary as a crawl.
+  const branded = toPlainTextIngestionResult(
+    preserveStoredStatements({
       existing,
       candidate,
       judges,
@@ -275,7 +278,12 @@ export const protectEcjCompletion = ({
       textFields,
       hasStoredAst,
     }),
-  };
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+  if (branded.isErr()) {
+    return { type: "review-required", fields: ["plainText"] };
+  }
+  return { type: "accepted", candidate: branded.value };
 };
 
 type EcjCompletionFormexPartsOptions = {

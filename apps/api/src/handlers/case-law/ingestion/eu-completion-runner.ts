@@ -453,6 +453,17 @@ const fetchCompletionCandidate = (
             message: "Selected Formex manifestation is gone",
           }),
         );
+      // The publisher refused this document's Formex part only; the row
+      // retries on the normal cadence and other rows continue.
+      case "formex-refused":
+        return Result.err(
+          new CompletionStageFailure({
+            message: `Publisher refused the Formex part (${String(refreshed.status)})`,
+            code: "publisher",
+            scope: "row",
+            cause: null,
+          }),
+        );
       case "notice-missing":
       case "formex-not-located":
       case "write-rejected":
