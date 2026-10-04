@@ -1608,6 +1608,15 @@
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
     "date": "Datum",
+    "datePicker": {
+      "label": "Datumsauswahl",
+      "nextDecade": "Nächstes Jahrzehnt",
+      "nextMonth": "Nächster Monat",
+      "nextYear": "Nächstes Jahr",
+      "previousDecade": "Vorheriges Jahrzehnt",
+      "previousMonth": "Vorheriger Monat",
+      "previousYear": "Vorheriges Jahr"
+    },
     "decisions": "Entscheidungen",
     "decline": "Ablehnen",
     "delete": "Löschen",
