@@ -35,6 +35,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import * as compactionTranscript from "@/api/lib/memory/compaction-transcript";
+import * as memoryDedup from "@/api/lib/memory/memory-dedup";
 import { logger } from "@/api/lib/observability/logger";
 import { createMemoryExtractorTask } from "@/api/lib/scheduler/tasks/memory-extractor";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
@@ -89,6 +90,7 @@ const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
 const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForRole");
 const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
 const warnSpy = spyOn(logger, "warn");
+const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
 const originalFeature = env.FEATURE_AI_MEMORY;
 
 /** The model's reply, after `beforeReply` runs while the call is in flight. */
@@ -103,10 +105,10 @@ const fakeExtraction = (beforeReply?: () => Promise<void>) =>
     };
   });
 
-const runExtractor = async () => {
+const runExtractor = async (db: typeof testDb = testDb) => {
   await extractMemories(
     asTestRaw<SchedulerTaskContext>({
-      db: testDb,
+      db,
       logger,
       signal: new AbortController().signal,
     }),
@@ -187,6 +189,7 @@ beforeEach(async () => {
   generateSpy.mockReset();
   transcriptSpy.mockClear();
   warnSpy.mockClear();
+  dedupSpy.mockClear();
   settingsSpy.mockImplementation(async () =>
     Result.ok({
       orgAIConfig: null,
@@ -265,6 +268,7 @@ afterAll(async () => {
   generateSpy.mockRestore();
   transcriptSpy.mockRestore();
   warnSpy.mockRestore();
+  dedupSpy.mockRestore();
   await releaseRlsFixture();
 });
 
@@ -374,5 +378,84 @@ describe("memory extraction for a compaction's owner", () => {
 
     expect(generateSpy).toHaveBeenCalledTimes(1);
     expect(await readSuggestions()).toEqual([]);
+    // Settled: the owner's access decides the outcome, so a retry would not
+    // change it.
+    const compactions = await readCompactions();
+    expect(compactions.every((row) => row.memoryExtractedAt !== null)).toBe(
+      true,
+    );
+    expect(
+      accessLossWarnings().map(
+        ([, attributes]) => attributes?.["owner.access"],
+      ),
+    ).toContain("not_organization_member");
+  });
+
+  test("sends nothing when the owner is removed after the run's first access check", async () => {
+    // Thread RLS checks a thread outside any matter against the organization
+    // id only, so the owner's handle alone would still read it. The settings
+    // load runs after the first check and the transcript read, before the
+    // send check.
+    settingsSpy.mockImplementation(async () => {
+      await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      return Result.ok({
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+        managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+      });
+    });
+
+    await runExtractor();
+
+    expect(settingsSpy).toHaveBeenCalled();
+    expect(transcriptSpy).toHaveBeenCalled();
+    expect(generateSpy).not.toHaveBeenCalled();
+    expect(await readSuggestions()).toEqual([]);
+  });
+
+  test("a failure after a compaction is stamped leaves it to be offered again, and the retry writes its suggestions once", async () => {
+    // The first suggestion row built fails, after the compaction's stamp and
+    // before its inserts. From then on the run behaves as if its process had
+    // died: no later write on the scheduler connection lands, so nothing can
+    // undo a stamp that was already committed.
+    let crashed = false;
+    const crashingSchedulerDb = new Proxy(testDb, {
+      get: (target, property, receiver) =>
+        crashed && property === "update"
+          ? () => {
+              throw new Error("scheduler connection lost");
+            }
+          : Reflect.get(target, property, receiver),
+    });
+    dedupSpy.mockImplementationOnce(() => {
+      crashed = true;
+      throw new Error("injected suggestion build failure");
+    });
+
+    await runExtractor(crashingSchedulerDb);
+    expect(crashed).toBe(true);
+
+    const afterFailure = await readCompactions();
+    expect(
+      afterFailure.filter((row) => row.memoryExtractedAt === null),
+    ).toHaveLength(1);
+    const written = await readSuggestions();
+    expect(written).toHaveLength(1);
+
+    await runExtractor();
+
+    const compactions = await readCompactions();
+    expect(compactions.every((row) => row.memoryExtractedAt !== null)).toBe(
+      true,
+    );
+    const suggestions = await readSuggestions();
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions.map(({ content }) => content).toSorted()).toEqual(
+      [MATTER_FACT, PREFERENCE].toSorted(),
+    );
+
+    // A third pass finds nothing left: each suggestion exists once.
+    await runExtractor();
+    expect(await readSuggestions()).toHaveLength(2);
   });
 });
