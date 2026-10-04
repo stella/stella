@@ -568,6 +568,7 @@ type EnvCatalogName =
   | keyof typeof envDocumentProcessingWorkerServerSchema
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
+  | keyof typeof replayTickServerSchema
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {

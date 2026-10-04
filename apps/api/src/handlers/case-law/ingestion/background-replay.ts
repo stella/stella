@@ -263,6 +263,50 @@ const countFailedOutcome = (
   return failed;
 };
 
+type SettleReplayFailureOptions = Omit<RunReplayBatchOptions, "signal"> & {
+  failure: ReplayFailure;
+  durationMs: number;
+};
+
+/** Records a batch failure and says whether the tick stops on it. */
+const settleReplayFailure = async ({
+  dependencies,
+  source,
+  batch,
+  report,
+  verdict,
+  failure,
+  durationMs,
+}: SettleReplayFailureOptions) => {
+  report.errors += 1;
+  const settlement = await Result.tryPromise(
+    async () =>
+      await dependencies.recordFailure(batch, {
+        ...failure,
+        durationMs,
+        verdict,
+        healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
+      }),
+  );
+  if (settlement.isErr()) {
+    return "failed" as const;
+  }
+  const failed = countFailedOutcome(settlement.value, report);
+  report.applied += Number(settlement.value === "applied");
+  if (
+    settlement.value === "failed" ||
+    settlement.value === "retry-exhausted" ||
+    settlement.value === "retry-terminal"
+  ) {
+    return null;
+  }
+  return replayFailureStop({
+    mode: source.mode,
+    code: failure.code,
+    scope: settlement.value === "isolated" || failed ? "row" : failure.scope,
+  });
+};
+
 const runReplayBatch = async ({
   dependencies,
   source,
@@ -325,38 +369,16 @@ const runReplayBatch = async ({
     }
   }
   if (failure !== null) {
-    let settledScope = failure.scope;
-    const failureToRecord = failure;
-    report.errors += 1;
-    const settlement = await Result.tryPromise(
-      async () =>
-        await dependencies.recordFailure(batch, {
-          ...failureToRecord,
-          durationMs,
-          verdict,
-          healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
-        }),
-    );
-    if (settlement.isOk()) {
-      const failed = countFailedOutcome(settlement.value, report);
-      if (settlement.value === "isolated" || failed) {
-        settledScope = "row";
-      }
-      report.applied += Number(settlement.value === "applied");
-    } else {
-      stop = "failed";
-    }
-    stop ??=
-      settlement.isOk() &&
-      (settlement.value === "failed" ||
-        settlement.value === "retry-exhausted" ||
-        settlement.value === "retry-terminal")
-        ? null
-        : replayFailureStop({
-            mode: source.mode,
-            code: failure.code,
-            scope: settledScope,
-          });
+    // A failure path never set `stop` above: completion only stops on success.
+    stop = await settleReplayFailure({
+      dependencies,
+      source,
+      batch,
+      report,
+      verdict,
+      failure,
+      durationMs,
+    });
   }
   if (source.mode === "dry-run" && failure === null) {
     await dependencies.advancePreview(batch);

@@ -24,6 +24,11 @@ export const REPLAY_BATCH_STATUSES = [
   "failed",
   "blocked",
 ] as const;
+/** Statuses an exhausted row waits in before readmission or terminal review. */
+const REPLAY_READMISSION_STATUSES = [
+  "retry-exhausted",
+  "retry-terminal",
+] as const satisfies readonly (typeof REPLAY_BATCH_STATUSES)[number][];
 export const REPLAY_TERMINAL_OUTCOMES = [
   "changed",
   "unchanged",
@@ -128,7 +133,10 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     ),
     p.check(
       "case_law_replay_batches_readmission_check",
-      sql`(${t.status} NOT IN ('retry-exhausted', 'retry-terminal')) OR (${t.failureCode} IS NOT NULL AND ${t.attemptState} = 'idle' AND ((${t.status} = 'retry-exhausted' AND ${t.retryAt} IS NOT NULL AND ${t.readmissions} < ${MAX_REPLAY_ROW_READMISSIONS}) OR (${t.status} = 'retry-terminal' AND ${t.retryAt} IS NULL AND ${t.readmissions} = ${MAX_REPLAY_ROW_READMISSIONS})))`,
+      sql`(${t.status} NOT IN (${sql.join(
+        REPLAY_READMISSION_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})) OR (${t.failureCode} IS NOT NULL AND ${t.attemptState} = 'idle' AND ((${t.status} = 'retry-exhausted' AND ${t.retryAt} IS NOT NULL AND ${t.readmissions} < ${MAX_REPLAY_ROW_READMISSIONS}) OR (${t.status} = 'retry-terminal' AND ${t.retryAt} IS NULL AND ${t.readmissions} = ${MAX_REPLAY_ROW_READMISSIONS})))`,
     ),
     p.pgPolicy("case_law_replay_batches_owner_access", {
       for: "all",
