@@ -76,7 +76,7 @@ test("membership is enforced for a resolved base commit", () => {
   }
 });
 
-test("an unresolved base fails the membership comparison", () => {
+test("an unresolved base fails the membership guard", () => {
   const root = createBaseRepo();
   try {
     writeFileSync(
@@ -92,13 +92,13 @@ test("an unresolved base fails the membership comparison", () => {
         label: "test",
         remediation: "remove the entry",
         args: ["--base", "missing-base"],
+        log: () => {},
         error: (message) => {
           errors.push(message);
         },
-        log: () => {},
       }),
-    ).toBe(1);
-    expect(errors.join("\n")).toContain("could not be resolved");
+    ).toBe(2);
+    expect(errors.join("\n")).toContain("membership cannot be checked");
     expect(errors.join("\n")).toContain("missing-base");
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -23,7 +23,7 @@ import {
 } from "./query";
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,

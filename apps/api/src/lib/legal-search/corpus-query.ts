@@ -4,7 +4,7 @@ import type {
   JurisdictionProfile,
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
-import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { foldToAscii } from "@stll/text-normalize";
 
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -206,8 +206,8 @@ export const partitionCorpusQueryTokens = ({
 }: PartitionCorpusQueryTokensOptions): PartitionCorpusQueryTokensResult => {
   const profile =
     CORPUS_QUERY_VARIANT_POLICY[queryVariant].provisions &&
-    (jurisdiction === "SVK" || jurisdiction === "CZE")
-      ? PROVISION_CITATION_PROFILES[jurisdiction]
+    jurisdiction !== undefined
+      ? provisionCitationProfileFor(jurisdiction)
       : null;
   const mentions =
     profile === null ? [] : readCorpusProvisionMentions(tokens, profile);

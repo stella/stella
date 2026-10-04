@@ -148,9 +148,9 @@ export const runLedgerMembershipGuard = ({
   });
   if (comparison.type === "unresolved-base") {
     error(
-      `${label} ledger: base ${baseRef} could not be resolved; fetch the comparison ref before checking membership.`,
+      `${label} ledger: base ${baseRef} could not be resolved; membership cannot be checked.`,
     );
-    return 1;
+    return 2;
   }
   const { added } = comparison;
   if (added.length === 0) {

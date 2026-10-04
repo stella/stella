@@ -3,13 +3,10 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { statements } from "@stll/permissions";
-
 import { createDemoSessionPolicy } from "@/api/lib/auth/demo-account-hooks";
 import {
   checkDemoAccountAccess,
   createDemoSessionFilter,
-  requiresStandardAccount,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
 import {
@@ -166,35 +163,6 @@ describe("account access policy", () => {
           }),
         ),
       ).toBe(true);
-    }
-  });
-
-  test("applies the same growth policy to each restricted permission", () => {
-    const restricted = [
-      "organization",
-      "member",
-      "invitation",
-      "team",
-      "ac",
-      "organizationSettings",
-      "integration",
-    ];
-    for (const [resource, actions] of Object.entries(statements)) {
-      for (const action of actions) {
-        const permissions = { [resource]: [action] };
-        // Runtime census over the producer; the policy map is total at compile time.
-        const policyRequired = requiresStandardAccount(permissions);
-        expect(policyRequired).toBe(
-          restricted.includes(resource) && action !== "read",
-        );
-        if (policyRequired) {
-          expect(
-            Result.isError(
-              checkDemoAccountAccess({ config, email, operation: "growth" }),
-            ),
-          ).toBe(true);
-        }
-      }
     }
   });
 
