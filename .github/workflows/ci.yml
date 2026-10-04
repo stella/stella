@@ -1491,6 +1491,7 @@ jobs:
           fi
 
       - name: Tauri counterpart autofix tests
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: bun test scripts/fix-tauri-package-alignment.test.ts scripts/tauri-autofix-workflow.test.ts
 
       - name: Lockfile release-age guard
@@ -1764,7 +1765,7 @@ jobs:
         run: bun scripts/check-oxlint-rule-decisions.ts
 
       - name: Oxlint effective config
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every base rule's severity, merged from oxlint.config.ts and its
         # presets by oxlint's documented precedence, must equal the severity
         # `oxlint --print-config` resolves, so a rule the config turns on cannot
