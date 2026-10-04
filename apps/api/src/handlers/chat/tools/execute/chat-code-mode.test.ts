@@ -6,6 +6,7 @@ import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sa
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -62,7 +63,7 @@ const buildProps = (scopedDb: ScopedDb) => {
   userCounter += 1;
   return {
     documentedReads: [],
-    memberRole: "owner" as const,
+    memberRole: sessionMemberRole("owner"),
     organizationId: toSafeId<"organization">("org_1"),
     refRegistry: createChatRefRegistry(),
     toolDefectMemo: createChatToolDefectMemo(),

@@ -6,10 +6,15 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  ACCOUNT_ACCESS,
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import {
@@ -32,6 +37,7 @@ const config = {
   description:
     "Save one attachment from an email into an accessible matter as a document. Returns the created entity and file field identifiers.",
   permissions: { workspace: ["read"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
     fieldId: tSafeId("field"),
@@ -198,10 +204,14 @@ const toSaveHandlerError = (
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" }
+    | DocumentWriteRefusedError
     | OrganizationFileUsageError,
 ): HandlerError => {
   if (error instanceof OrganizationFileUsageError) {
     return organizationFileUsageHandlerError(error);
+  }
+  if (DocumentWriteRefusedError.is(error)) {
+    return documentWriteRefusalHandlerError(error);
   }
   switch (error._tag) {
     case "DocumentTooLargeError":

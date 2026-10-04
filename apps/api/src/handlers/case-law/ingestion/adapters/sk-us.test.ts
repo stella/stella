@@ -591,12 +591,9 @@ describe("sk-us listSlicePage", () => {
    */
   const SPLIT_REQUEST_BOUND = 2 * Math.ceil(Math.log2(100)) + 1 + 1;
 
-  /**
-   * What a window that serves nothing costs: one halving per level down the
-   * spine, plus the two one-record windows at the bottom that establish it,
-   * each of which is asked twice before it counts as refused.
-   */
-  const OUTAGE_REQUEST_COUNT = Math.ceil(Math.log2(100)) + 2 * 2;
+  // The split budget permits 28 child requests and at most 15 singleton
+  // confirmations, plus the initial request, even when every record refuses.
+  const OUTAGE_REQUEST_BOUND = 44;
 
   /** A DMS document for result index `index`, keyed the way the real ones are. */
   const documentAt = (index: number) => ({
@@ -634,10 +631,8 @@ describe("sk-us listSlicePage", () => {
     expect(rejection instanceof Error ? rejection.message : "").toContain(
       "no body",
     );
-    // A window that serves nothing however narrowly it is cut is the endpoint
-    // being down, and is established by walking one spine of the halving
-    // rather than by subdividing the whole page.
-    expect(stub.calls()).toBe(OUTAGE_REQUEST_COUNT);
+    expect(stub.calls()).toBeGreaterThan(1);
+    expect(stub.calls()).toBeLessThanOrEqual(OUTAGE_REQUEST_BOUND);
   }, 30_000);
 
   test("a record the DMS refuses is isolated, not allowed to refuse its page", async () => {
@@ -1572,6 +1567,107 @@ describe("the sk-us steady-state frontier", () => {
     }
     return result.unwrap();
   };
+
+  test.each([
+    { cursor: "2025:120", nextCursor: "2026:0" },
+    { cursor: PARKED_CURSOR, nextCursor: `${PARKED_CURSOR}:refused` },
+  ])(
+    "a wholly refused crawl window checkpoints $cursor as $nextCursor",
+    async ({ cursor, nextCursor }) => {
+      const stub = mockFetch({ search: [{ type: "status", status: 204 }] });
+      const page = await fetchPageAt(cursor);
+      expect(stub.calls()).toBeLessThanOrEqual(30);
+      expect(stub.downloads()).toBe(0);
+      expect(page.decisions).toEqual([]);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 10,
+      });
+      expect(page.nextCursor).toBe(nextCursor);
+    },
+  );
+
+  test("a refused current frontier polls once and resumes its plain cursor when served", async () => {
+    const refusedCursor = `${PARKED_CURSOR}:refused`;
+    const refused = mockFetch({ search: [{ type: "status", status: 204 }] });
+    const waiting = await fetchPageAt(refusedCursor);
+    expect(refused.calls()).toBe(1);
+    expect(refused.downloads()).toBe(0);
+    expect(waiting.nextCursor).toBe(refusedCursor);
+    expect(waiting.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 10,
+    });
+
+    const served = mockFetch({
+      search: [
+        { type: "page", documents: NEW_DOCUMENTS, numFound: YEAR_NUM_FOUND },
+      ],
+    });
+    const recovered = await fetchPageAt(waiting.nextCursor);
+    expect(served.calls()).toBe(1);
+    expect(served.downloads()).toBe(NEW_DOCUMENTS.length);
+    expect(recovered.decisions).toHaveLength(NEW_DOCUMENTS.length);
+    expect(recovered.nextCursor).toBe(`2026:${YEAR_NUM_FOUND}`);
+  });
+
+  test.each(
+    [[0], [4], [9], [3, 4], [4, 5]].map((poisonIndices) => ({ poisonIndices })),
+  )(
+    "deterministic refusals at page indices %j are counted while every other record is collected",
+    async ({ poisonIndices }) => {
+      const documents = Array.from({ length: 10 }, (_, index) =>
+        newDocument(index),
+      );
+      const poisonOffsets = poisonIndices.map((index) => PARKED_OFFSET + index);
+      let confirmations = 0;
+      const stub = mockFetch({
+        search: [],
+        searchFor: ({ start, pageSize }) => {
+          if (
+            poisonOffsets.some(
+              (poisonOffset) =>
+                start <= poisonOffset && poisonOffset < start + pageSize,
+            )
+          ) {
+            if (pageSize === 1) {
+              confirmations++;
+            }
+            return { type: "status", status: 204 };
+          }
+          return {
+            type: "page",
+            documents: documents.slice(
+              start - PARKED_OFFSET,
+              start - PARKED_OFFSET + pageSize,
+            ),
+            numFound: PARKED_OFFSET + documents.length,
+          };
+        },
+      });
+
+      const page = await fetchPageAt(PARKED_CURSOR);
+
+      expect(confirmations).toBe(2 * poisonIndices.length);
+      expect(
+        page.decisions.map(({ caseNumber }) => String(caseNumber)),
+      ).toEqual(
+        documents
+          .filter((_, index) => !poisonIndices.includes(index))
+          .map(({ mkRSAPNumberOfFile }) => mkRSAPNumberOfFile),
+      );
+      expect(stub.downloads()).toBe(documents.length - poisonIndices.length);
+      expect(stub.calls()).toBeLessThanOrEqual(
+        poisonIndices.length * (2 * Math.ceil(Math.log2(10)) + 1) + 1,
+      );
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: poisonIndices.length,
+      });
+      expect(page.nextCursor).toBe(`2026:${PARKED_OFFSET + documents.length}`);
+    },
+    30_000,
+  );
 
   test("a cycle the court added nothing to costs one search and no downloads", async () => {
     const starts: number[] = [];

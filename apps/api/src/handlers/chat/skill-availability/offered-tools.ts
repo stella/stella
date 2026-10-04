@@ -33,7 +33,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
-import type { MemberRole } from "@/api/lib/member-roles";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 
@@ -41,7 +41,7 @@ export type ChatSkillAvailabilityContext = {
   getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
   /** The loader a send uses (`createSendMessage`'s dependency). */
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -197,7 +197,7 @@ const chatContextToolNames = (
       hasActiveTemplate: chatContext.document === CHAT_SKILL_DOCUMENT.template,
     }),
     editApplyMode: chatContext.editApplyMode,
-    memberRole: context.memberRole.role,
+    memberRole: context.memberRole,
     organizationId: context.organizationId,
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,

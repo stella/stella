@@ -34,7 +34,7 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,16 +44,14 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
-import {
-  commitOrganizationFileBytes,
-  reserveOrganizationFileBytes,
-} from "@/api/lib/files/organization-file-usage";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
+import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
@@ -82,76 +80,13 @@ const config = {
   // resource-appropriate grant depends on the upload's purpose, which
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "capability", reason: "file_transport", consumesServices: true },
   params: finalizeParamsSchema,
 } satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
-
-type PromoteTmpObjectOptions = {
-  organizationId: SafeId<"organization">;
-  tmpKey: string;
-  finalKey: string;
-  storedBytes: Uint8Array;
-  declaredMime: string;
-  promotion: "copy" | "write";
-};
-
-const promoteTmpObjectWithUsage = async ({
-  organizationId,
-  tmpKey,
-  finalKey,
-  storedBytes,
-  declaredMime,
-  promotion,
-}: PromoteTmpObjectOptions) => {
-  const reservation = await reserveOrganizationFileBytes({
-    organizationId,
-    objectKey: finalKey,
-    sizeBytes: storedBytes.byteLength,
-  });
-  if (Result.isError(reservation)) {
-    return Result.err(
-      new UploadFinalizeError({
-        status: reservation.error.reason === "capacity_exceeded" ? 409 : 500,
-        message: reservation.error.message,
-        rejectReason: reservation.error.reason,
-      }),
-    );
-  }
-  const promoted =
-    promotion === "copy"
-      ? await copyObject(tmpKey, finalKey)
-      : await Result.tryPromise(
-          async () =>
-            await writeS3ObjectWithRetry({
-              contentType: declaredMime,
-              data: storedBytes,
-              key: finalKey,
-            }),
-        );
-  if (promoted.status === "error") {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "Failed to promote tmp object",
-        rejectReason: promotion === "copy" ? "copy-failed" : "write-failed",
-      }),
-    );
-  }
-  const committed = await commitOrganizationFileBytes(reservation.value);
-  if (Result.isError(committed)) {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: committed.error.message,
-        rejectReason: "usage-commit-failed",
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
 
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
@@ -542,6 +477,7 @@ const runFinalize = async function* ({
   });
   if (Result.isError(scanResult)) {
     const scanError = scanResult.error;
+    observeScanFailures(scanError);
     return Result.err(
       FileScanRejectedError.is(scanError)
         ? new UploadFinalizeError({
@@ -574,6 +510,8 @@ const runFinalize = async function* ({
   // the client staged. Stripped bytes exist only here, so they are written.
   const promoteTmpObject = async (finalKey: string) =>
     await promoteTmpObjectWithUsage({
+      safeDb,
+      workspaceId,
       organizationId,
       tmpKey,
       finalKey,

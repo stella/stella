@@ -5,11 +5,10 @@ import type { StoreApi } from "zustand";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import "@/components/inspector/inspector-persistence-references";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
+import "@/components/inspector/inspector-persistence-references";
 import {
   FILE_FACETS,
   parseSkillResourceSource,
@@ -36,6 +35,7 @@ import { adoptRestoredLegalDocumentChatThreads } from "@/features/chat/legal-doc
 import type { RestoredLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
 
 export type InspectorBroadcastScope = {
@@ -615,10 +615,7 @@ const writePersistedInspectorState = (
     type: "detached",
     operation: "inspector-tabs.persist",
   });
-  stellaToast.add({
-    title: getTranslator()("inspector.groups.saveFailed"),
-    type: "error",
-  });
+  notifyUserError(undefined, getTranslator()("inspector.groups.saveFailed"));
 };
 
 const subscribeInspectorPersistence = (

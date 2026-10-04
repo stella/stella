@@ -9,7 +9,7 @@ import {
   decodeMessagePageCursor,
   loadChatMessagePage,
 } from "@/api/handlers/chat/message-page";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,6 +22,7 @@ const config = {
     "chat.messages.list carries. The thread must be yours and the matterId " +
     "scope must match the one it was created in.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

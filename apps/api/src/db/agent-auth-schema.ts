@@ -70,6 +70,12 @@ export const agentRegistration = pgTable(
       .on(table.userCode)
       .where(sql`status = 'pending' AND user_code IS NOT NULL`),
     index("agent_registration_status_idx").on(table.status),
+    index("agent_registration_expiry_idx")
+      .on(table.expiresAt, table.id)
+      .where(
+        sql`status IN ('pending', 'expired') AND bound_user_id IS NULL AND authorization_code IS NULL`,
+      ),
+    index("agent_registration_client_id_idx").on(table.clientId),
     index("agent_registration_bound_user_id_idx").on(table.boundUserId),
     ...denyStellaAccessPolicies(),
   ],

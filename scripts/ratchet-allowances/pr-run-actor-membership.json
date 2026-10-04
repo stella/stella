@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/member-run-queues.ts lists the member-run queues without importing the database, so scripts/ownership.test.ts can check the createRootRunActor allowlist against it."
+}
