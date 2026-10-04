@@ -1748,6 +1748,17 @@ jobs:
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
         run: bun scripts/check-oxlint-rule-decisions.ts
 
+      - name: Oxlint effective config
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every base rule's severity, merged from oxlint.config.ts and its
+        # presets by oxlint's documented precedence, must equal the severity
+        # `oxlint --print-config` resolves, so a rule the config turns on cannot
+        # stay off unnoticed. Known mismatches carry a reason in
+        # scripts/oxlint-effective-config-baseline.json, which may only shrink.
+        run: |
+          bun test scripts/oxlint-effective-config.test.ts
+          bun scripts/check-oxlint-effective-config.ts
+
       - name: Result boundary enrolment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Joining the better-result boundary convention is the default. Every
