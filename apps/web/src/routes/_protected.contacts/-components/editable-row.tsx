@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
@@ -8,6 +9,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
+import { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -44,6 +46,7 @@ export const EditableRow = ({
   const t = useTranslations();
   const locale = useLocale();
   const updateContact = useUpdateContact();
+  const queryClient = useQueryClient();
   const [scope] = useState(() => ({
     organizationId: contact.organizationId,
     contactId: contact.id,
@@ -81,6 +84,14 @@ export const EditableRow = ({
 
       let payload: ContactUpdate;
       if (field === "defaultHourlyRate") {
+        // Cleanup retains this row's currency even after its keyed replacement.
+        // Read the cache at commit time so the old draft cannot cross currencies.
+        const currentContact = queryClient.getQueryData(
+          contactOptions(scope.organizationId, scope.contactId).queryKey,
+        );
+        if (!currentContact || currentContact.currency !== contact.currency) {
+          return;
+        }
         const result = buildContactRatePayload({
           trimmedInput: trimmed,
           currency: contact.currency,

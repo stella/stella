@@ -320,7 +320,7 @@ function ContactDetailPage() {
               />
               <EditableRow
                 // A draft is typed in one currency's units; a currency change
-                // remounts the row so it cannot be saved at another's scale.
+                // remounts the row; its commit guard discards the old draft.
                 key={`default-hourly-rate-${contact.currency ?? "none"}`}
                 contact={contact}
                 field="defaultHourlyRate"
