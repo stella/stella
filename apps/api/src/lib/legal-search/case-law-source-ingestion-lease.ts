@@ -22,6 +22,8 @@ export type CaseLawSourceIngestionLease = {
 type AcquireCaseLawSourceIngestionLeaseOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  /** Cleanup may need a fresh bounded schema-lane retry after work stopped. */
+  releaseDb?: ScopedDb;
 };
 
 const nextLeaseExpiry = (): Date =>
@@ -37,6 +39,7 @@ const nextLeaseExpiry = (): Date =>
 export const acquireCaseLawSourceIngestionLease = async ({
   scopedDb,
   sourceId,
+  releaseDb = scopedDb,
 }: AcquireCaseLawSourceIngestionLeaseOptions): Promise<CaseLawSourceIngestionLease | null> => {
   const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
   const source = await scopedDb(async (tx) => {
@@ -113,7 +116,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
     },
     leaseToken,
     release: async () => {
-      await scopedDb(async (tx) => {
+      await releaseDb(async (tx) => {
         // audit: skip — releases only this caller's ephemeral lease
         await tx
           .update(caseLawSources)

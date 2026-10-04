@@ -980,7 +980,6 @@
     "packPartial": "تم تثبيت {installed}، وفشل {failed}",
     "removed": "لم تعد هذه الأداة متاحة.",
     "sectionOthers": "أخرى",
-    "sectionRecommended": "موصى به",
     "settings": {
       "packTitle": "الحزمة الموصى بها"
     },
@@ -1188,8 +1187,10 @@
       "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
+      "allModels": "كل النماذج ({count, number})",
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
+      "belowFrontier": "دون أفضل الموازنات",
       "effortHelpDescription": "يتحكم في مقدار الاستدلال الذي يستخدمه النموذج قبل الإجابة. قد تساعد المستويات الأعلى في المهام المعقدة، لكنها تستغرق عادةً وقتًا أطول. تشير النقطة إلى المستوى الافتراضي الذي اختاره المزوّد لهذا النموذج.",
       "effortHelpLabel": "حول مستوى الاستدلال",
       "effortLabel": "مستوى الاستدلال",
@@ -1203,6 +1204,10 @@
         "providerDefault": "الافتراضي",
         "xhigh": "مرتفع جدًا"
       },
+      "newModel": "جديد",
+      "premiumCost": "تكلفة مرتفعة على غير المعتاد",
+      "recommendedHelpDescription": "لا يوجد نموذج آخر متاح أرخص وأعلى تقييمًا في الوقت نفسه. النماذج الأحدث من أن تُقيَّم مُعلَّمة بأنها جديدة. الجودة: <link>{benchmark} من LMArena</link> ({licence})؛ التكلفة: أسعار القائمة.",
+      "recommendedHelpLabel": "حول النماذج الموصى بها",
       "selectionLabel": "{model} | {effort}",
       "title": "اختيار نموذج الدردشة",
       "viaProvider": "عبر {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
+    "datePicker": {
+      "label": "منتقي التاريخ",
+      "nextDecade": "العقد التالي",
+      "nextMonth": "الشهر التالي",
+      "nextYear": "السنة التالية",
+      "previousDecade": "العقد السابق",
+      "previousMonth": "الشهر السابق",
+      "previousYear": "السنة السابقة",
+      "time": "الوقت"
+    },
     "decisions": "الأحكام",
     "decline": "رفض",
     "delete": "حذف",
@@ -1776,6 +1791,7 @@
     "properties": "الخصائص",
     "queued": "قيد الانتظار",
     "reason": "السبب",
+    "recommended": "موصى به",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "إضافة حساب مصرفي",
       "noBillingData": "لم تُحدَّد أي تفاصيل فوترة.",
       "removeBankAccount": "إزالة الحساب المصرفي",
+      "selectCurrencyForRate": "اختر عملة لتحديد الأجر بالساعة.",
       "title": "تفاصيل الفوترة"
     },
     "columns": {
@@ -2271,10 +2288,13 @@
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
+      "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
+      "matterContactCapacityExceeded": "يحتوي هذا الملف القانوني على جهات اتصال أكثر مما يمكن عرضه. أزل روابط جهات الاتصال الظاهرة لعرض جهات الاتصال المتبقية.",
+      "matterContactCapacityReached": "بلغ هذا الملف القانوني الحد الأقصى لعدد جهات الاتصال. أزل ربط إحدى جهات الاتصال قبل إضافة جهة اتصال أخرى.",
       "mcpAuthorizationApprovalRequired": "يجب على المسؤول الموافقة على هذا الموصل قبل أن تتمكن من الاتصال.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",

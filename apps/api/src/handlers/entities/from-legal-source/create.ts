@@ -7,6 +7,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import {
@@ -49,6 +50,7 @@ export default createSafeHandler(
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: entityFileRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "document_processing",

@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -267,6 +268,7 @@ const deleteTimeEntryById = createSafeHandler(
       "invoice is reverted. Returns whether the entry was hard-deleted.",
     permissions: { timeEntry: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,
   },

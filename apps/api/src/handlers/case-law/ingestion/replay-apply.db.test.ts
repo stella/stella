@@ -95,6 +95,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 let fake: FakeS3;
 
 beforeEach(() => {
+  decisionUpdates.length = 0;
   fake = startFakeS3();
 });
 
@@ -102,8 +103,19 @@ afterEach(() => {
   fake.stop();
 });
 
+const decisionUpdates: string[] = [];
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery: (query) => {
+        if (/^update "case_law_decisions"/iu.test(query)) {
+          decisionUpdates.push(query);
+        }
+      },
+    },
+  });
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -905,7 +917,7 @@ test.each(["r o z h o d o l :", "Body text.\u0000"])(
 );
 
 test.each(["row-columns", "content-hash"])(
-  "a version-only replay leaves every decision column untouched: %p",
+  "an identical replay never updates the decision at a newer parser version: %p",
   async (storage) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     await db
@@ -943,11 +955,13 @@ test.each(["row-columns", "content-hash"])(
     if (lease === null) {
       throw new TypeError("Expected the source ingestion lease to be free");
     }
+    const updatesBefore = decisionUpdates.length;
     const run = await fixture.replay(lease);
     if (run.type !== "ran") {
       throw new TypeError("Expected replay to run");
     }
     expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
     expect(await readRow()).toEqual(before);
     const [timestamp] = await db
       .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })

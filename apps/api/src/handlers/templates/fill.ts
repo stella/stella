@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -15,15 +14,13 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
+import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import {
   scanTemplateUpload,
   templateUploadRejectionResponse,
 } from "@/api/lib/templates/scan-template-upload";
 import { containsNull } from "@/api/lib/templates/template-data";
-import {
-  fillDiagnosticsOf,
-  templateFillStatus,
-} from "@/api/lib/templates/template-fill-completion";
+import { fillDiagnosticsOf } from "@/api/lib/templates/template-fill-completion";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
@@ -172,31 +169,25 @@ export const fillHandler = async ({
     });
   }
 
-  const { unusedValues } = result;
+  // The recorded status is the completion decision over every diagnostic: a
+  // failed AI draft, an undecided AI condition or an unresolved clause counts
+  // against the fill the same way an unmatched placeholder does.
   const diagnostics = fillDiagnosticsOf(result);
 
-  // The completion decision over every diagnostic: a failed AI draft, an
-  // undecided AI condition or an unresolved clause counts against the fill
-  // the same way an unmatched placeholder does.
-  const fillStatus = templateFillStatus(diagnostics);
-
-  // Best-effort analytics; don't block the download.
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  scopedDb((tx) => {
-    // audit: skip — anonymous template-fill analytics counter; the input
-    // DOCX is supplied directly in the request body and is not persisted
-    // as a template resource, so there is no resourceId to audit against.
-    return tx.insert(templateFills).values({
-      organizationId,
-      userId,
-      format,
-      status: fillStatus,
-      unmatchedCount: result.unmatchedPlaceholders.length,
-      unusedCount: unusedValues.length,
-      structureErrors:
-        result.structureErrors.length > 0 ? result.structureErrors : null,
-    });
-  }).catch((error: unknown) => {
+  // Best-effort analytics; don't block the download. The template came with
+  // the request and is not stored, so the row has no template and no audit
+  // event (there is no resource to audit against).
+  scopedDb(
+    async (tx) =>
+      await recordTemplateFill({
+        tx,
+        templateId: null,
+        organizationId,
+        userId,
+        format,
+        diagnostics,
+      }),
+  ).catch((error: unknown) => {
     captureError(error, {
       operation: "template_fill_analytics",
       organizationId,

@@ -6,9 +6,8 @@ import { Result } from "better-result";
  */
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { templateFills } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -17,12 +16,12 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
-import { recordTemplateUse } from "@/api/lib/templates/record-use";
-import { containsNull } from "@/api/lib/templates/template-data";
 import {
-  fillDiagnosticsOf,
-  templateFillStatus,
-} from "@/api/lib/templates/template-fill-completion";
+  recordTemplateFill,
+  recordTemplateUse,
+} from "@/api/lib/templates/record-use";
+import { containsNull } from "@/api/lib/templates/template-data";
+import { fillDiagnosticsOf } from "@/api/lib/templates/template-fill-completion";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -121,40 +120,26 @@ export const fillByIdLogic = async function* ({
     );
   }
 
-  const { unusedValues } = result;
+  // The recorded status is the completion decision over every diagnostic: a
+  // failed AI draft, an undecided AI condition or an unresolved clause counts
+  // against the fill the same way an unmatched placeholder does.
   const diagnostics = fillDiagnosticsOf(result);
-  // The completion decision over every diagnostic: a failed AI draft, an
-  // undecided AI condition or an unresolved clause counts against the fill
-  // the same way an unmatched placeholder does.
-  const fillStatus = templateFillStatus(diagnostics);
 
   yield* Result.await(
     Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
           await recordTemplateUse({ tx, templateId });
-          await tx.insert(templateFills).values({
-            organizationId,
+          // A download from the template library: no workspace.
+          await recordTemplateFill({
+            tx,
             templateId,
+            organizationId,
             userId,
             format,
-            status: fillStatus,
-            unmatchedCount: result.unmatchedPlaceholders.length,
-            unusedCount: unusedValues.length,
-            structureErrors:
-              result.structureErrors.length > 0 ? result.structureErrors : null,
-          });
-
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DOWNLOAD,
-            resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-            resourceId: templateId,
-            workspaceId: null,
-            metadata: {
-              format,
-              status: fillStatus,
-              unmatchedCount: result.unmatchedPlaceholders.length,
-            },
+            diagnostics,
+            recordAuditEvent,
+            auditAction: AUDIT_ACTION.DOWNLOAD,
           });
         }),
       catch: (cause) =>

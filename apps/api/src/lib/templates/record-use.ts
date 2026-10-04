@@ -37,47 +37,68 @@ export const recordTemplateUse = async ({
     .where(eq(templates.id, templateId));
 };
 
-type RecordTemplateFillOptions = {
+/** The audit action a recorded fill is logged under: `EXECUTE` for a fill
+ *  that produces a document or text, `DOWNLOAD` for a stored template filled
+ *  straight into a download. */
+type TemplateFillAuditAction =
+  | typeof AUDIT_ACTION.EXECUTE
+  | typeof AUDIT_ACTION.DOWNLOAD;
+
+type RecordedFill = {
   tx: Transaction;
-  templateId: SafeId<"template">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  workspaceId?: SafeId<"workspace"> | undefined;
-  entityId?: SafeId<"entity"> | undefined;
-  entityVersionId?: SafeId<"entityVersion"> | undefined;
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
   /** The fill's diagnostics: the recorded status is their completion
    *  decision, and the recorded counts are read from them. */
   diagnostics: FillDiagnostics;
-  /** Records the `EXECUTE` audit event when present (chat tools may run without
-   *  one); the fill row is always written. */
-  recordAuditEvent?: AuditRecorder | undefined;
 };
 
+type StoredTemplateFill = RecordedFill & {
+  templateId: SafeId<"template">;
+  workspaceId?: SafeId<"workspace"> | undefined;
+  entityId?: SafeId<"entity"> | undefined;
+  entityVersionId?: SafeId<"entityVersion"> | undefined;
+  /** Records the audit event when present (chat tools may run without one);
+   *  the fill row is always written. */
+  recordAuditEvent?: AuditRecorder | undefined;
+  /** Defaults to `EXECUTE`. */
+  auditAction?: TemplateFillAuditAction | undefined;
+};
+
+/** A template uploaded with the request and never stored: the row is an
+ *  analytics count without a template, and there is no template resource to
+ *  audit against. */
+type UploadedTemplateFill = RecordedFill & {
+  templateId: null;
+  workspaceId?: never;
+  entityId?: never;
+  entityVersionId?: never;
+  recordAuditEvent?: never;
+  auditAction?: never;
+};
+
+type RecordTemplateFillOptions = StoredTemplateFill | UploadedTemplateFill;
+
 /**
- * Persist a template fill the way the REST fill routes do: a `template_fills`
- * row plus an `EXECUTE` audit event. The shared fill service records template
- * *use* (the counter) but, by design, leaves the fill row + audit to the
- * calling handler. Run inside the caller's RLS-scoped transaction.
+ * Persist a template fill: a `template_fills` row plus, for a stored
+ * template, its audit event (`EXECUTE` unless the caller downloads). The
+ * shared fill service records template *use* (the counter) but leaves the
+ * fill row + audit to the caller; every fill surface (REST fills and
+ * downloads, chat and MCP `fill_template`) records through here, so the row
+ * status and the audit metadata are the same for all of them. Run inside the
+ * caller's RLS-scoped transaction.
  */
-export const recordTemplateFill = async ({
-  tx,
-  templateId,
-  organizationId,
-  userId,
-  workspaceId,
-  entityId,
-  entityVersionId,
-  format,
-  diagnostics,
-  recordAuditEvent,
-}: RecordTemplateFillOptions): Promise<void> => {
+export const recordTemplateFill = async (
+  options: RecordTemplateFillOptions,
+): Promise<void> => {
+  const { tx, organizationId, userId, format, diagnostics } = options;
   const status = templateFillStatus(diagnostics);
   const unmatchedCount = diagnostics.unmatchedPlaceholders.length;
   await tx.insert(templateFills).values({
     organizationId,
-    templateId,
+    ...(options.templateId !== null && { templateId: options.templateId }),
     userId,
     format,
     status,
@@ -88,8 +109,14 @@ export const recordTemplateFill = async ({
         ? [...diagnostics.structureErrors]
         : null,
   });
-  await recordAuditEvent?.(tx, {
-    action: AUDIT_ACTION.EXECUTE,
+  if (options.templateId === null) {
+    // An uploaded template is not a stored resource: the row is an
+    // analytics count only.
+    return;
+  }
+  const { templateId, workspaceId, entityId, entityVersionId } = options;
+  await options.recordAuditEvent?.(tx, {
+    action: options.auditAction ?? AUDIT_ACTION.EXECUTE,
     resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
     resourceId: templateId,
     workspaceId: workspaceId ?? null,
@@ -115,7 +142,7 @@ const defaultTemplateExecutionRecorders = {
   recordTemplateFill,
 } satisfies TemplateExecutionRecorders;
 
-type RecordTemplateExecutionOptions = Omit<RecordTemplateFillOptions, "tx"> & {
+type RecordTemplateExecutionOptions = Omit<StoredTemplateFill, "tx"> & {
   scopedDb: ScopedDb;
   recorders?: TemplateExecutionRecorders | undefined;
 };

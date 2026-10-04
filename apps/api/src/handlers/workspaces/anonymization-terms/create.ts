@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { loadWorkspaceAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -31,6 +32,7 @@ const config = {
     "separately.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "anonymization_admin",
