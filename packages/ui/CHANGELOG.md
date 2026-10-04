@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.41.0
+
+### Minor Changes
+
+- [#4504](https://github.com/stella/stella/pull/4504) [`9669e8a`](https://github.com/stella/stella/commit/9669e8acbb6460e3fbf32478eb0dd2c0a0c1c185) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
 ## 0.40.2
 
 ### Patch Changes

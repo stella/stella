@@ -2275,6 +2275,8 @@
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
+      "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",
+      "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",

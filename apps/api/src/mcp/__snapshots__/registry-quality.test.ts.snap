@@ -3650,7 +3650,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
     "access": "write",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter. At the contact limit, unlink an existing matter_contact_id (without role) before linking another contact.",
     "annotations": {
       "title": "Link contact to matter",
       "destructiveHint": false,

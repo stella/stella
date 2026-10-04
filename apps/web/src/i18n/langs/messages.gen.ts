@@ -2278,6 +2278,8 @@ type Messages = {
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.";
+      "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.";
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
