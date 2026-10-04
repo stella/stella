@@ -5,8 +5,11 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
-import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
-import { persistExplicitMemory } from "@/api/lib/memory/persist-explicit-memory";
+import {
+  memoryWriteRefusalHandlerError,
+  persistExplicitMemory,
+  resolveMemoryWriteScope,
+} from "@/api/lib/memory/persist-explicit-memory";
 
 const config = {
   // Firm-wide memory is governance-gated: only roles granted
@@ -24,7 +27,21 @@ const config = {
 
 const createFirmMemory = createSafeRootHandler(
   config,
-  async function* ({ body, recordAuditEvent, safeDb, session, user }) {
+  async function* ({
+    body,
+    memberRole,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
+    const scope = yield* resolveMemoryWriteScope({
+      accessibleWorkspaces: [],
+      authority: memberRole,
+      organizationId: session.activeOrganizationId,
+      request: { scope: "organization", kind: body.kind },
+      userId: user.id,
+    }).mapError(memoryWriteRefusalHandlerError);
     // Firm memory is replayed into every member's chat prompt, so this is
     // the highest-blast-radius write; refuse model-control sequences here
     // even though only admins reach this route.
@@ -37,14 +54,6 @@ const createFirmMemory = createSafeRootHandler(
         }),
       );
     }
-    const identity = createMemoryDedupIdentity({
-      scope: "organization",
-      userId: null,
-      workspaceId: null,
-      kind: body.kind,
-      content: sanitized.value,
-      sourceDataWorkspaceIds: [],
-    });
 
     const created = yield* Result.await(
       safeDb(
@@ -52,20 +61,13 @@ const createFirmMemory = createSafeRootHandler(
           await persistExplicitMemory({
             tx,
             recordAuditEvent,
-            values: {
-              organizationId: session.activeOrganizationId,
-              scope: "organization",
-              userId: null,
-              workspaceId: null,
-              kind: body.kind,
+            scope,
+            memory: {
               content: sanitized.value,
-              dedupKey: identity.dedupKey,
               language: body.language ?? null,
-              sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
+              sourceDataWorkspaceIds: [],
               source: "user",
-              status: "active",
               pinned: body.pinned ?? false,
-              createdBy: user.id,
             },
           }),
       ),
