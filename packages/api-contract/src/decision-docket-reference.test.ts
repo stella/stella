@@ -6,9 +6,16 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   DECISION_DOCKET_GRAMMARS,
+  parseDecisionDocket,
   storedDecisionDocketOf,
 } from "./decision-docket-grammar";
 import {
+  DECISION_DOCKET_IDENTITY_FIXTURES,
+  DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
+  DOCKET_IDENTITY_PART_NUMERAL,
+} from "./decision-docket-identity.fixtures";
+import {
+  DECISION_DOCKETS_STORED_WITH_SHEETS,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
   readDecisionDocketReference,
@@ -940,5 +947,199 @@ describe("the case-file key a stored docket is kept under", () => {
     expect(docketFamilyKeyOf("KSCB 26 INS 8270/2018-A-15", "CZE")).toBeNull();
     expect(docketFamilyKeyOf("1 Afs 27/2009", "XXX")).toBeNull();
     expect(docketFamilyKeyOf("", "CZE")).toBeNull();
+  });
+});
+
+/** The ends of the range every fixture docket is numbered in. */
+const FIXTURE_NUMBERS = [1, DOCKET_IDENTITY_FIXTURE_NUMBER_MAX] as const;
+
+/** A trailing number no sheetless grammar may read as a sheet. */
+const PROBE_SHEET = "33";
+
+describe.each(
+  Object.values(DECISION_DOCKET_GRAMMARS).map(
+    ({ jurisdiction }) => jurisdiction,
+  ),
+)("a %s case file and its siblings", (jurisdiction) => {
+  const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+  const fixture = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
+  const { sheet } = fixture;
+  const part = DOCKET_IDENTITY_PART_NUMERAL;
+
+  const intentOf = (
+    entry: string,
+  ): Extract<DecisionIdentifierIntent, { kind: "docket" }> => {
+    const intent = parseDecisionQuery(entry, { grammar });
+    return intent.type === "identifier" && intent.kind === "docket"
+      ? intent
+      : panic(`Not a ${jurisdiction} docket: ${entry}`);
+  };
+
+  const canonicalOf = (docket: string): string =>
+    readDecisionDocketReference(docket, { grammar })?.family.canonical ??
+    panic(`Not a ${jurisdiction} docket: ${docket}`);
+
+  test("the filed docket and every reader spelling read as one file", () => {
+    for (const n of FIXTURE_NUMBERS) {
+      const docket = fixture.filed(n);
+      expect(parseDecisionDocket(docket, { grammar })?.formatted, docket).toBe(
+        docket,
+      );
+      const key = docketFamilyKeyOf(docket, jurisdiction);
+      expect(key, docket).not.toBeNull();
+      for (const entry of fixture.readerSpellings(n)) {
+        expect(entry, entry).not.toBe(docket);
+        const intent = intentOf(entry);
+        expect(intent.jurisdiction, entry).toBe(jurisdiction);
+        expect(intent.selector, entry).toEqual({ kind: "none" });
+        expect(canonicalOf(intent.family), entry).toBe(canonicalOf(docket));
+        expect(docketFamilyKeyOf(entry, jurisdiction), entry).toBe(key);
+      }
+      // The next number is another file.
+      expect(docketFamilyKeyOf(fixture.filed(n + 1), jurisdiction)).not.toBe(
+        key,
+      );
+    }
+  });
+
+  test("a sibling stored with a part numeral keys and reads as its file", () => {
+    for (const n of FIXTURE_NUMBERS) {
+      const docket = fixture.filed(n);
+      const stored = `${docket} - ${part}.`;
+      expect(docketFamilyKeyOf(stored, jurisdiction), stored).toBe(
+        docketFamilyKeyOf(docket, jurisdiction),
+      );
+      const intent = intentOf(stored);
+      expect(canonicalOf(intent.family), stored).toBe(canonicalOf(docket));
+      expect(intent.selector, stored).toEqual({ kind: "part", value: part });
+    }
+  });
+
+  switch (sheet.type) {
+    case "supported":
+      test("a sibling stored with its sheet keys as its file, and the sheet is its selector", () => {
+        for (const n of FIXTURE_NUMBERS) {
+          const docket = fixture.filed(n);
+          for (const stored of [
+            `${docket}-${sheet.held}`,
+            `${docket} - ${sheet.held}`,
+          ]) {
+            expect(docketFamilyKeyOf(stored, jurisdiction), stored).toBe(
+              docketFamilyKeyOf(docket, jurisdiction),
+            );
+            const intent = intentOf(stored);
+            expect(canonicalOf(intent.family), stored).toBe(
+              canonicalOf(docket),
+            );
+            expect(intent.selector, stored).toEqual({
+              kind: "sheet",
+              value: sheet.held,
+            });
+          }
+        }
+      });
+      break;
+    case "unsupported":
+      test("a trailing number is never read as a sheet, as the fixture declares", () => {
+        // A grammar that starts reading sheets has to declare them here.
+        for (const n of FIXTURE_NUMBERS) {
+          const entry = `${fixture.filed(n)}-${PROBE_SHEET}`;
+          expect(
+            readDecisionDocketReference(entry, { grammar })?.selector.kind,
+            entry,
+          ).not.toBe("sheet");
+        }
+      });
+      break;
+    default: {
+      sheet satisfies never;
+      panic("Unhandled sheet scenario");
+    }
+  }
+
+  describe("resolving among one day's siblings", () => {
+    const n = DOCKET_IDENTITY_FIXTURE_NUMBER_MAX;
+    const docket = fixture.filed(n);
+    const day = "2020-08-24";
+    const plain: Hit = {
+      id: "plain",
+      caseNumber: docket,
+      ecli: null,
+      decisionDate: day,
+    };
+    const partSibling: Hit = {
+      id: "part",
+      caseNumber: `${docket} - ${part}.`,
+      ecli: null,
+      decisionDate: day,
+    };
+    const sheetSiblings: readonly Hit[] =
+      sheet.type === "supported"
+        ? [
+            {
+              id: "sheet",
+              caseNumber: `${docket} - ${sheet.held}`,
+              ecli: null,
+              decisionDate: day,
+            },
+          ]
+        : [];
+    const otherFile: Hit = {
+      id: "other-file",
+      caseNumber: fixture.filed(n + 1),
+      ecli: null,
+      decisionDate: day,
+    };
+    const siblings = [plain, partSibling, ...sheetSiblings];
+    const hits = [...siblings, otherFile];
+    const resolved = (entry: string, among: readonly Hit[]) =>
+      resolveDecisionIdentity(intentOf(entry), among);
+    const fileIds = siblings.map(({ id }) => id).toSorted();
+
+    test("a bare docket names every sibling, never one and never another file", () => {
+      for (const entry of [docket, ...fixture.readerSpellings(n)]) {
+        const resolution = resolved(entry, hits);
+        expect(resolution, entry).toMatchObject({
+          status: "ambiguous",
+          reason: "several",
+        });
+        expect(idsOf(resolution), entry).toEqual(fileIds);
+      }
+    });
+
+    test("the part on a stored docket names exactly its sibling", () => {
+      for (const entry of [`${docket} - ${part}.`, `${docket}-${part}`]) {
+        const resolution = resolved(entry, hits);
+        expect(resolution, entry).toMatchObject({
+          status: "unique",
+          basis: "selector",
+        });
+        expect(idsOf(resolution), entry).toEqual(["part"]);
+      }
+    });
+
+    if (sheet.type === "supported") {
+      test("the sheet names exactly its sibling, and an unheld sheet the whole file", () => {
+        const named = resolved(`${docket}-${sheet.held}`, hits);
+        expect(named).toMatchObject({ status: "unique", basis: "selector" });
+        expect(idsOf(named)).toEqual(["sheet"]);
+        const unheld = resolved(`${docket}-${sheet.unheld}`, hits);
+        expect(unheld).toMatchObject({
+          status: "ambiguous",
+          reason: "selector_unmatched",
+        });
+        expect(idsOf(unheld)).toEqual(fileIds);
+      });
+    }
+
+    test("a lone decision is claimed only where no sibling can hide under a sheet", () => {
+      const resolution = resolved(docket, [plain, otherFile]);
+      expect(resolution).toMatchObject(
+        DECISION_DOCKETS_STORED_WITH_SHEETS[jurisdiction]
+          ? { status: "ambiguous", reason: "file_incomplete" }
+          : { status: "unique", basis: "docket" },
+      );
+      expect(idsOf(resolution)).toEqual(["plain"]);
+    });
   });
 });

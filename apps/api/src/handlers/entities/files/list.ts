@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -127,6 +127,7 @@ const config = {
     "and folders and tasks, are left out; use entities.list for the full " +
     "table with column values.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: listFilesQuerySchema,
