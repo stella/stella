@@ -74,6 +74,8 @@ export const docketFamilyScenario = (number: number) => {
     /** Siblings whose sheet only their source's recorded reference states. */
     sheet120: createSafeId<"caseLawDecision">(),
     sheet131: createSafeId<"caseLawDecision">(),
+    /** A sibling of the same file whose sheet no source states. */
+    sheetUnknown: createSafeId<"caseLawDecision">(),
     /** One file, two decisions on different dates, nothing else to tell. */
     earlier: createSafeId<"caseLawDecision">(),
     later: createSafeId<"caseLawDecision">(),
@@ -154,6 +156,7 @@ export const docketFamilyScenario = (number: number) => {
     decision(ids.sheet131, dockets.sheets, administrative, "2010-06-14", null, {
       publishedCaseNumber: `${dockets.sheets} - 131`,
     }),
+    decision(ids.sheetUnknown, dockets.sheets, administrative, "2011-03-01"),
     decision(ids.earlier, dockets.dated, supreme, "2015-03-01"),
     decision(ids.later, dockets.dated, supreme, "2016-09-30"),
     decision(ids.regional, dockets.dated, "Krajský soud v Brně", "2015-03-01"),
@@ -487,27 +490,30 @@ export const describeDocketFamilyIdentity = (
       });
     });
 
-    test("a sheet the corpus does not hold returns the file, never a sibling", async () => {
+    test("a sheet the corpus does not hold returns the siblings whose sheet is unknown, never one under another sheet", async () => {
+      // Each other sibling's sheet is known from a different source (ECLI,
+      // parallel identifier, recorded sheet, published reference); every
+      // source excludes alike.
       const { dockets, ids } = context().scenario;
       for (const entry of [
         `${dockets.sheets} - 50`,
         `${dockets.sheets}-8`,
         `${dockets.sheets}-9`,
       ]) {
-        expect(await searched(entry), entry).toEqual(
-          sorted(
-            ids.sheet86,
-            ids.sheet98,
-            ids.sheet109,
-            ids.sheet120,
-            ids.sheet131,
-          ),
-        );
+        expect(await searched(entry), entry).toEqual(sorted(ids.sheetUnknown));
         expect(await lookedUp(entry), entry).toMatchObject({
           status: "ambiguous",
           reason: "selector_unmatched",
         });
       }
+    });
+
+    test("a sheet no sibling can carry, every one stored under another, answers nothing", async () => {
+      // Every decision of the large file is stored with its own sheet.
+      const { dockets, largeFile } = context().scenario;
+      const entry = `${dockets.large}-${String(largeFile.length + 1)}`;
+      expect(await searched(entry)).toEqual([]);
+      expect(await lookedUp(entry)).toEqual({ status: "none" });
     });
 
     test("a row that still stores its sheet is found by it", async () => {
