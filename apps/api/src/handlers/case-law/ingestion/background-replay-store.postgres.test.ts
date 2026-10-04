@@ -17,6 +17,7 @@ import {
   caseLawReplayAuditEvents,
   caseLawSources,
   databaseBackfillStates,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import {
   EMPTY_AST,
@@ -2383,6 +2384,51 @@ if (!databaseUrl || !enabled) {
         .from(caseLawReplayAuditEvents)
         .where(eq(caseLawReplayAuditEvents.sourceId, source.id));
       expect(retained.map(({ id }) => id)).toEqual([`new-audit-${source.id}`]);
+    });
+
+    test("a tick that changed rows records one system audit run and an idle tick none", async () => {
+      const { source, store } = await fixture(10);
+      const replayRuns = async () =>
+        await db
+          .select()
+          .from(systemAuditRuns)
+          .where(
+            eq(systemAuditRuns.actor, "system:case-law-background-replay"),
+          );
+      const before = (await replayRuns()).length;
+      await store.recordTick({
+        source,
+        status: "row-limit",
+        attempted: 3,
+        applied: 2,
+        blocked: 1,
+        errors: 0,
+        failed: 0,
+        heldTooLong: false,
+        retryExhausted: 0,
+        retryTerminal: 0,
+      });
+      const after = await replayRuns();
+      expect(after).toHaveLength(before + 1);
+      expect(after.at(-1)?.counts).toEqual({
+        attempted: 3,
+        applied: 2,
+        blocked: 1,
+        failed: 0,
+      });
+      await store.recordTick({
+        source,
+        status: "empty",
+        attempted: 0,
+        applied: 0,
+        blocked: 0,
+        errors: 0,
+        failed: 0,
+        heldTooLong: false,
+        retryExhausted: 0,
+        retryTerminal: 0,
+      });
+      expect(await replayRuns()).toHaveLength(before + 1);
     });
 
     test("no-progress ticks survive process restarts and only verified applies reset them", async () => {

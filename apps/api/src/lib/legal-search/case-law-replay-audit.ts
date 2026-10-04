@@ -14,7 +14,6 @@ export const recordReplayMaintenanceAuditEvent = async (
   tx: Transaction,
   event: ReplayMaintenanceAuditEvent,
 ): Promise<void> => {
-  // audit: skip — public case-law corpus bookkeeping, no workspace data
   await tx.insert(caseLawReplayAuditEvents).values({
     ...event,
     id: Bun.randomUUIDv7(),

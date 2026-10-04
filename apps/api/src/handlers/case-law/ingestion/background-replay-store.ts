@@ -38,6 +38,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
@@ -46,6 +47,7 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import { getAdapter } from "./adapters/adapter-registry";
 import type {
@@ -377,7 +379,6 @@ const chooseSource = async (
     // persists fairness across independent scheduled ticks
     await withReplayTransaction(db, async (tx) => {
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(databaseBackfillStates)
         .values({
           name: ROUND_ROBIN_CHECKPOINT,
@@ -533,7 +534,6 @@ const previewBatch = async (
     // apply receipt lifecycle, including for workers deployed before this code.
     // Its attempt/retry fields recover failed or interrupted inspections.
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .insert(caseLawReplayBatches)
       .values({
         id,
@@ -630,7 +630,6 @@ const admitDailyRow = async (
   }
   // accounts for one maintenance row per UTC day, including recovery
   await tx
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     .insert(caseLawReplayDailyRows)
     .values({ batchId, sourceId: source.id, budgetDay: utcDay })
     .onConflictDoNothing();
@@ -710,7 +709,6 @@ const pendingInTransaction = async (
   if (row.parserVersionTo < source.currentParserVersion) {
     // preserves the superseded reservation before current-parser work
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({ status: "superseded", completedAt: sql`now()` })
       .where(eq(caseLawReplayBatches.id, row.id));
@@ -729,7 +727,6 @@ const pendingInTransaction = async (
   if (row.status === "retry-exhausted") {
     // The checkpoint lock serializes readmission and daily budget admission.
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         status: "reserved",
@@ -764,7 +761,6 @@ const lockCheckpoint = async (
   const name = checkpointName(source);
   // initializes owner-only maintenance checkpoint
   const initialized = await tx
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     .insert(databaseBackfillStates)
     .values({ name, batch: { ...initialBatchState(), size: 1 } })
     .onConflictDoNothing()
@@ -838,7 +834,6 @@ const saveGateState = async (
       source === null ? PREFLIGHT_CHECKPOINT : checkpointName(source);
     // maintenance pacing state has no tenant or document mutation
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .insert(databaseBackfillStates)
       .values({ name, batch })
       .onConflictDoUpdate({
@@ -908,7 +903,6 @@ const reserveBatch = async (
     // deterministic maintenance reservation and daily budget charge
     const reserved = (
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(caseLawReplayBatches)
         .values({
           id,
@@ -1004,7 +998,6 @@ const pickUpBatch = async (
       });
       const failureCode = receipt.failureCode ?? "unexpected";
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .update(caseLawReplayBatches)
         .set({
           ...retryState,
@@ -1040,7 +1033,6 @@ const pickUpBatch = async (
       BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
     );
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         attempts,
@@ -1069,7 +1061,6 @@ const recordVerifiedProgress = async (
 ) => {
   // source progress and the verified receipt commit atomically
   await tx
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     .insert(caseLawReplaySourceProgress)
     .values({
       sourceId,
@@ -1182,7 +1173,6 @@ const recordPreviewFailure = async (
       BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** Math.max(0, attempts - 1),
     );
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         attempts,
@@ -1282,7 +1272,6 @@ const recordFailure = async (
       // The database stamp wins over retry exhaustion, including the last attempt.
       // verifies the applied maintenance receipt after a post-write failure
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .update(caseLawReplayBatches)
         .set({
           status: "completed",
@@ -1301,7 +1290,6 @@ const recordFailure = async (
         })
         .where(eq(caseLawReplayBatches.id, batch.id));
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(caseLawReplayBlocked)
         .values({
           sourceId: batch.source.id,
@@ -1318,7 +1306,6 @@ const recordFailure = async (
       });
       // a verified completion precedes cursor advancement atomically
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .update(databaseBackfillStates)
         .set({ cursor: batch.decisionId, updatedAt: new Date(now()) })
         .where(eq(databaseBackfillStates.name, checkpointName(batch.source)));
@@ -1347,7 +1334,6 @@ const recordFailure = async (
         } as const);
     // persists bounded owner-only retry state before advancing the sweep
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         attempts,
@@ -1381,7 +1367,6 @@ const recordFailure = async (
         : checkpoint.batch;
     // failed row is durably queued or excluded before later work
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(databaseBackfillStates)
       .set({
         cursor: batch.decisionId,
@@ -1570,7 +1555,6 @@ const completeBatch = async (
     if (terminal !== null) {
       const reason = terminal.outcome === "rejected" ? terminal.reason : null;
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(caseLawReplayBlocked)
         .values({
           sourceId: batch.source.id,
@@ -1589,7 +1573,6 @@ const completeBatch = async (
     // Changed rows require the parser stamp; unchanged rows retain their stamp
     // and are fenced by the exact checked input token. Both settle the receipt.
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         status: successful ? "completed" : "blocked",
@@ -1614,7 +1597,6 @@ const completeBatch = async (
     await beforeCheckpoint?.(tx);
     // advances only after a verified terminal receipt or exclusion
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(databaseBackfillStates)
       .set({ cursor: batch.decisionId, updatedAt: new Date(now()) })
       .where(eq(databaseBackfillStates.name, checkpointName(batch.source)));
@@ -1654,7 +1636,6 @@ const advancePreviewCursor = async (
 ) => {
   // dry-run cursor is separate from apply and never mutates decisions
   await tx
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     .insert(databaseBackfillStates)
     .values({
       name: previewCheckpointName(batch.source),
@@ -1681,7 +1662,6 @@ const advancePreview = async (
   await withReplayTransaction(db, async (tx) => {
     await lockCheckpoint(tx, batch.source);
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         failed: 0,
@@ -1729,7 +1709,6 @@ const resetDryRunCursor = async (
       );
     // explicit reset of owner-only dry-run progress
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(databaseBackfillStates)
       .set({ cursor: null, updatedAt: new Date(now()) })
       .where(eq(databaseBackfillStates.name, previewCheckpointName(source)));
@@ -1824,7 +1803,6 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     const stale = buildReplayRetirementQuery(tx, limit);
     // Discover older terminal generations independently of new reservations.
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         supersededAt: sql`coalesce(${caseLawReplayBatches.completedAt}, now())`,
@@ -1855,7 +1833,6 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
       return 0;
     }
     if (auditPage.length > 0) {
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx.delete(caseLawReplayAuditEvents).where(
         inArray(
           caseLawReplayAuditEvents.id,
@@ -1878,11 +1855,9 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     const ids = old.map(({ id }) => id);
     // daily charges precede parent deletion because their FK restricts deletion
     await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
       .delete(caseLawReplayDailyRows)
       .where(inArray(caseLawReplayDailyRows.batchId, ids));
     // tuple membership is bounded by the locked compaction page
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
     await tx.delete(caseLawReplayBlocked).where(
       sql`(${caseLawReplayBlocked.sourceId}, ${caseLawReplayBlocked.decisionId}, ${caseLawReplayBlocked.parserVersionTo}) IN (${sql.join(
         old.map(
@@ -1895,7 +1870,6 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     // bounded superseded receipt retention, latest receipt preserved
     const compacted = (
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .delete(caseLawReplayBatches)
         .where(inArray(caseLawReplayBatches.id, ids))
         .returning({ id: caseLawReplayBatches.id })
@@ -1917,6 +1891,19 @@ const recordTick = async (
   { db, now }: ReplayStoreContext,
   report: BackgroundReplayTickReport,
 ) => {
+  // One system audit row per tick that changed anything, dry runs included:
+  // this module's writes are attributed to the replay actor's run.
+  await withReplayTransaction(db, async (tx) => {
+    await recordSystemAudit(tx, "system:case-law-background-replay", {
+      subject: createSafeId<"systemScriptRun">(),
+      counts: {
+        attempted: report.attempted,
+        applied: report.applied,
+        blocked: report.blocked,
+        failed: report.failed,
+      },
+    });
+  });
   if (report.source === null || report.source.mode === "dry-run") {
     return null;
   }
@@ -1937,7 +1924,6 @@ const recordTick = async (
     // owner-only progress signal resets only for verified completed rows
     const row = (
       await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(caseLawReplaySourceProgress)
         .values({
           sourceId,

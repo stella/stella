@@ -3961,11 +3961,16 @@ export default defineConfig({
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
       // ISO 27001). Handlers are held to the full rule; the block below
-      // extends it to MCP and library code with a reasoned ledger.
+      // extends it to MCP and library code with a reasoned ledger. A handler
+      // module registered in SYSTEM_AUDIT_MODULES is audited by its actor's
+      // run, as in library code.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "require-audit-on-mutation/require-audit-on-mutation": "error",
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { systemModules: SYSTEM_AUDIT_MODULES },
+        ],
       },
     },
     {
