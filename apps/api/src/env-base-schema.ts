@@ -1,6 +1,7 @@
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
+// parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).

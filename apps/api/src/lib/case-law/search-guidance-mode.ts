@@ -1,3 +1,4 @@
+// parser-output-unchanged: Search guidance affects the MCP tool text only, not parsed records.
 /**
  * Which query guidance `search_case_law` gives an agent.
  *
