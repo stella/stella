@@ -216,8 +216,8 @@ export const gradedToExtract = (position: GradedPosition): ExtractPosition => {
     sourceId: position.sourceId,
     issue: position.issue,
     ask,
-    ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
-    ...(position.sources !== undefined ? { sources: position.sources } : {}),
+    ...(position.guidance === undefined ? {} : { guidance: position.guidance }),
+    ...(position.sources === undefined ? {} : { sources: position.sources }),
     enabled: position.enabled,
   };
 };
@@ -236,8 +236,8 @@ export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
     question: position.ask.question,
     content: position.ask.content,
   },
-  ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
-  ...(position.sources !== undefined ? { sources: position.sources } : {}),
+  ...(position.guidance === undefined ? {} : { guidance: position.guidance }),
+  ...(position.sources === undefined ? {} : { sources: position.sources }),
   enabled: position.enabled,
 });
 
@@ -268,9 +268,9 @@ const withFreshRuleId = (rule: TierRule): TierRule => ({
 });
 
 const withFreshEntryId = (entry: FallbackEntry): FallbackEntry =>
-  entry.label !== undefined
-    ? { id: crypto.randomUUID(), text: entry.text, label: entry.label }
-    : { id: crypto.randomUUID(), text: entry.text };
+  entry.label === undefined
+    ? { id: crypto.randomUUID(), text: entry.text }
+    : { id: crypto.randomUUID(), text: entry.text, label: entry.label };
 
 // A reference standard's passages carry no client-generated ids (they are
 // pinned provenance, not editable rows), so a copy shares them verbatim.
@@ -284,9 +284,9 @@ const duplicateStandard = (standard: PositionStandard): PositionStandard => {
     tiers: {
       acceptable: {
         rules: tiers.acceptable.rules.map(withFreshRuleId),
-        ...(tiers.acceptable.ideal !== undefined
-          ? { ideal: tiers.acceptable.ideal }
-          : {}),
+        ...(tiers.acceptable.ideal === undefined
+          ? {}
+          : { ideal: tiers.acceptable.ideal }),
       },
       fallback: { entries: tiers.fallback.entries.map(withFreshEntryId) },
       notAcceptable: { rules: tiers.notAcceptable.rules.map(withFreshRuleId) },
@@ -420,7 +420,7 @@ export const normalizePosition = (position: Position): Position => {
             content: normalizeContent(position.ask.content),
           }
         : position.ask,
-    ...(negotiation !== undefined ? { negotiation } : {}),
+    ...(negotiation === undefined ? {} : { negotiation }),
   };
 };
 
@@ -431,7 +431,7 @@ const normalizeStandard = (standard: PositionStandard): PositionStandard => {
     return standard;
   }
   const { tiers } = standard;
-  const ideal = tiers.acceptable.ideal;
+  const { ideal } = tiers.acceptable;
   const keepIdeal = hasUsableIdeal(ideal);
   return {
     source: "tiers",
