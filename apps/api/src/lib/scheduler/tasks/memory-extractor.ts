@@ -710,6 +710,7 @@ const settleCompaction = async (
   compactionId: SafeId<"chatThreadCompaction">,
 ): Promise<boolean> => {
   const settledAt = new Date();
+  // audit: skip — settles a compaction its owner can no longer read; no member-visible state changes and the skip is logged
   const settled = await db
     .update(chatThreadCompactions)
     .set({
@@ -763,97 +764,86 @@ const persistSuggestions = async ({
   candidates,
   compaction,
 }: PersistSuggestionsOptions): Promise<PersistSuggestionsOutcome> =>
-  await actor.inputDb(
-    async (tx): Promise<PersistSuggestionsOutcome> =>
-      await writeSuggestionsAsOwner({ actor, candidates, compaction, tx }),
-  );
+  await actor.inputDb(async (tx): Promise<PersistSuggestionsOutcome> => {
+    // Share the consent transition lock used by the settings handler. A
+    // disable that wins the lock prevents persistence; a persistence that wins
+    // commits before the administrator's disable returns.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${compaction.threadOrganizationId}))`,
+    );
+    const [settings] = await tx
+      .select({
+        enabled: organizationSettings.memoryExtractionEnabled,
+        enabledAt: organizationSettings.memoryExtractionEnabledAt,
+      })
+      .from(organizationSettings)
+      .where(
+        eq(
+          organizationSettings.organizationId,
+          compaction.threadOrganizationId,
+        ),
+      )
+      .limit(1);
+    if (
+      !isMemoryExtractionConsentValid(settings, compaction.compactionCreatedAt)
+    ) {
+      return { type: "consent-withdrawn" };
+    }
 
-type WriteSuggestionsAsOwnerOptions = PersistSuggestionsOptions & {
-  tx: Transaction;
-};
-
-const writeSuggestionsAsOwner = async ({
-  actor,
-  candidates,
-  compaction,
-  tx,
-}: WriteSuggestionsAsOwnerOptions): Promise<PersistSuggestionsOutcome> => {
-  // Share the consent transition lock used by the settings handler. A
-  // disable that wins the lock prevents persistence; a persistence that wins
-  // commits before the administrator's disable returns.
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${compaction.threadOrganizationId}))`,
-  );
-  const [settings] = await tx
-    .select({
-      enabled: organizationSettings.memoryExtractionEnabled,
-      enabledAt: organizationSettings.memoryExtractionEnabledAt,
-    })
-    .from(organizationSettings)
-    .where(
-      eq(organizationSettings.organizationId, compaction.threadOrganizationId),
-    )
-    .limit(1);
-  if (
-    !isMemoryExtractionConsentValid(settings, compaction.compactionCreatedAt)
-  ) {
-    return { type: "consent-withdrawn" };
-  }
-
-  const access = await holdCompactionOwnerAccessOnTx({
-    actor,
-    compaction,
-    tx,
-  });
-  if (access !== COMPACTION_OWNER_ACCESS.current) {
-    return { type: "access-lost", access };
-  }
-
-  // Concurrent or zombie runs race on this conditional update; exactly one
-  // proceeds, and a failed insert rolls the stamp back with it.
-  const settledAt = new Date();
-  const [settled] = await tx
-    .update(chatThreadCompactions)
-    .set({
-      memoryExtractedAt: settledAt,
-      memoryExtractionAttemptedAt: settledAt,
-    })
-    .where(
-      and(
-        eq(chatThreadCompactions.id, compaction.compactionId),
-        eq(chatThreadCompactions.status, "active"),
-        isNull(chatThreadCompactions.memoryExtractedAt),
-      ),
-    )
-    .returning({ id: chatThreadCompactions.id });
-  if (!settled) {
-    return { type: "settled-elsewhere" };
-  }
-
-  const rows = candidates.flatMap((candidate) =>
-    buildSuggestionRow({ candidate, compaction }),
-  );
-  if (rows.length === 0) {
-    return { type: "written", count: 0 };
-  }
-  const inserted = await tx
-    .insert(aiMemories)
-    .values(rows)
-    .onConflictDoNothing({
-      target: [aiMemories.organizationId, aiMemories.dedupKey],
-    })
-    .returning({
-      id: aiMemories.id,
-      kind: aiMemories.kind,
-      scope: aiMemories.scope,
-      workspaceId: aiMemories.workspaceId,
+    const access = await holdCompactionOwnerAccessOnTx({
+      actor,
+      compaction,
+      tx,
     });
-  await recordExtractedMemoryAuditEvents(tx, {
-    compaction,
-    inserted,
+    if (access !== COMPACTION_OWNER_ACCESS.current) {
+      return { type: "access-lost", access };
+    }
+
+    // Concurrent or zombie runs race on this conditional update; exactly one
+    // proceeds, and a failed insert rolls the stamp back with it.
+    const settledAt = new Date();
+    const [settled] = await tx
+      .update(chatThreadCompactions)
+      .set({
+        memoryExtractedAt: settledAt,
+        memoryExtractionAttemptedAt: settledAt,
+      })
+      .where(
+        and(
+          eq(chatThreadCompactions.id, compaction.compactionId),
+          eq(chatThreadCompactions.status, "active"),
+          isNull(chatThreadCompactions.memoryExtractedAt),
+        ),
+      )
+      .returning({ id: chatThreadCompactions.id });
+    if (!settled) {
+      return { type: "settled-elsewhere" };
+    }
+
+    const rows = candidates.flatMap((candidate) =>
+      buildSuggestionRow({ candidate, compaction }),
+    );
+    if (rows.length === 0) {
+      return { type: "written", count: 0 };
+    }
+    const inserted = await tx
+      .insert(aiMemories)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [aiMemories.organizationId, aiMemories.dedupKey],
+      })
+      .returning({
+        id: aiMemories.id,
+        kind: aiMemories.kind,
+        scope: aiMemories.scope,
+        workspaceId: aiMemories.workspaceId,
+      });
+    await recordExtractedMemoryAuditEvents(tx, {
+      compaction,
+      inserted,
+    });
+    return { type: "written", count: inserted.length };
   });
-  return { type: "written", count: inserted.length };
-};
 
 const recordExtractedMemoryAuditEvents = async (
   tx: Transaction,

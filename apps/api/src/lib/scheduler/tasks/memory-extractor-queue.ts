@@ -180,7 +180,7 @@ export const buildSettleMemoryExtractionQueueQuery = ({
         -- is on such a thread would be woken on every pass.
         AND thread.used_anonymization = false
       LIMIT 1
-    ) THEN ${now}
+    ) THEN ${now}::timestamptz
     ELSE NULL
   END
   WHERE settings.organization_id = ANY(${sql.param([...organizationIds])}::text[])
