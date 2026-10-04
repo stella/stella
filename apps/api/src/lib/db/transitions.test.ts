@@ -291,6 +291,14 @@ describe("conditional status transitions", () => {
       // @ts-expect-error fence names must be present declared columns
       defineTransitions(jobs, graph, badFence),
     ).toThrow("not a table column");
+    expect(() =>
+      defineKeyedTransitions({
+        table: jobs,
+        key: "status",
+        edges: graph,
+        options: { terminal: [] },
+      }),
+    ).toThrow("must be a primary-key column");
     const openDomain = pgTable("open_status", { id: text(), status: text() });
     expect(() => defineTransitions(openDomain, {}, { terminal: [] })).toThrow(
       "must cover",

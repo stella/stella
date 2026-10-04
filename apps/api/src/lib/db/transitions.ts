@@ -77,6 +77,10 @@ export const defineKeyedTransitions = <
   options,
 }: DefineKeyedTransitionsArgs<TTable, TKey, TEdges, TOptions>) => {
   const idColumn = getColumns(table)[key];
+  // Runtime callers can supply keys outside the generic column domain.
+  const runtimeColumns: Readonly<Record<string, AnyPgColumn>> =
+    getColumns(table);
+  const runtimeIdColumn = runtimeColumns[key];
   const statuses = table.status.enumValues;
   if (
     statuses === undefined ||
@@ -105,7 +109,7 @@ export const defineKeyedTransitions = <
   ) {
     panic("The declared transition fence is not a table column");
   }
-  if (idColumn === undefined || !idColumn.primary) {
+  if (runtimeIdColumn === undefined || !runtimeIdColumn.primary) {
     panic("A transition identity must be a primary-key column");
   }
   for (const targets of Object.values<readonly string[]>(edges)) {
@@ -201,8 +205,8 @@ type TransitionArgs<
   ) => Promise<void>;
 };
 
-type TransitionAssignmentsArgs = {
-  spec: TransitionSpec;
+type TransitionAssignmentsArgs<TTable extends StatusTable> = {
+  spec: TransitionSpec & { table: TTable };
   key: string;
   options: {
     from: readonly string[];
@@ -212,11 +216,11 @@ type TransitionAssignmentsArgs = {
   };
 };
 
-const transitionAssignments = ({
+const transitionAssignments = <TTable extends StatusTable>({
   spec,
   key: identityKey,
   options,
-}: TransitionAssignmentsArgs) => {
+}: TransitionAssignmentsArgs<TTable>) => {
   if (
     options.from.length === 0 ||
     options.from.some((from) => !permitsTransition(spec, from, options.to))

@@ -182,8 +182,9 @@ test.each([
       },
       triggerSource: { type: "manual", userId: leaver.userId },
     });
+    const stepId = createSafeId<"flowRunStep">();
     await db.insert(flowRunSteps).values({
-      id: createSafeId<"flowRunStep">(),
+      id: stepId,
       workspaceId: coassigned.workspaceId,
       runId,
       index: 0,
@@ -216,23 +217,33 @@ test.each([
         .from(flowRuns)
         .where(eq(flowRuns.id, runId)),
     ).toEqual([{ status: refused ? "awaiting_review" : "cancelled" }]);
-    expect(
-      await db
-        .select({
-          changes: auditLogs.changes,
-          workspaceId: auditLogs.workspaceId,
-        })
-        .from(auditLogs)
-        .where(eq(auditLogs.resourceId, runId)),
-    ).toEqual(
+    const runAudits = await db
+      .select({
+        changes: auditLogs.changes,
+        workspaceId: auditLogs.workspaceId,
+        metadata: auditLogs.metadata,
+      })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, runId));
+    // The owner audits each step transition separately from its run transition.
+    expect(runAudits).toHaveLength(refused ? 0 : 2);
+    expect(runAudits).toEqual(
       refused
         ? []
-        : [
+        : expect.arrayContaining([
+            {
+              workspaceId: coassigned.workspaceId,
+              changes: {
+                stepStatus: { old: "awaiting_review", new: "skipped" },
+              },
+              metadata: { cause: "membership_removed", stepId },
+            },
             {
               workspaceId: coassigned.workspaceId,
               changes: { status: { old: "awaiting_review", new: "cancelled" } },
+              metadata: { cause: "membership_removed" },
             },
-          ],
+          ]),
     );
     const membershipAudit = await db
       .select({ metadata: auditLogs.metadata, userId: auditLogs.userId })

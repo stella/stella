@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { getTableName } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   auditLogs,
   correspondence,
   desktopEditSessions,
   desktopEditHandoffs,
-  pdfSigningSessions,
   timeEntries,
   workspaceMembers,
   workspaces,
@@ -130,7 +131,7 @@ describe("removeWorkspaceMember", () => {
 
   test("clears the workspace lead when removing that member", async () => {
     const deletedWorkspaceMemberId = toSafeId<"workspaceMember">("wm_lead");
-    const updates: { table: unknown; value: unknown }[] = [];
+    const updates: { table: string; value: unknown }[] = [];
     const insertedAuditLogs: unknown[] = [];
     const deletedWorkspaceMembers: unknown[] = [];
 
@@ -172,9 +173,9 @@ describe("removeWorkspaceMember", () => {
           },
         }),
       }),
-      update: (table: unknown) => ({
+      update: (table: PgTable) => ({
         set: (value: unknown) => {
-          updates.push({ table, value });
+          updates.push({ table: getTableName(table), value });
           return {
             where: () => ({
               returning: async () => {
@@ -202,32 +203,23 @@ describe("removeWorkspaceMember", () => {
 
     expect(result).toEqual({ id: deletedWorkspaceMemberId });
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
+    // Signing transitions require a held session; this fixture has none.
     expect(updates).toEqual([
       {
-        table: desktopEditSessions,
+        table: getTableName(desktopEditSessions),
         value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
       },
       {
-        table: desktopEditHandoffs,
+        table: getTableName(desktopEditHandoffs),
         value: { expiresAt: expect.any(Date), updatedAt: expect.any(Date) },
       },
       {
-        table: pdfSigningSessions,
-        value: {
-          status: "cancelled",
-          closeReason: "expired",
-          closedAt: expect.any(Date),
-          handoffExpiresAt: expect.any(Date),
-          tokenExpiresAt: expect.any(Date),
-        },
-      },
-      {
-        table: correspondence,
+        table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
-      { table: workspaces, value: { leadUserId: null } },
+      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
-        table: desktopEditSessions,
+        table: getTableName(desktopEditSessions),
         value: { status: "cancelled", closedAt: expect.any(Date) },
       },
     ]);
