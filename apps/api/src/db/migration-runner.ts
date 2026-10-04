@@ -292,10 +292,19 @@ const preflightAndAdopt = async ({
  */
 export const MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
+/**
+ * How long the run, with the next pause, may take for a rerun to start. A
+ * rerun is for a short miss; a migration that exhausted its own lock-wait
+ * loop has already spent this, and rerunning it would repeat that loop.
+ */
+export const MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS = 120_000;
+
 /** Why a pending set that lost a lock wait was not applied. */
 export const MIGRATION_LOCK_WAIT_FAILURE = {
   /** Every attempt lost its lock wait. */
   exhausted: "exhausted",
+  /** The run outlasted the rerun budget before losing a lock wait. */
+  budgetSpent: "budget_spent",
   /** A split migration committed receipts, so a rerun is not the same run. */
   ledgerMoved: "ledger_moved",
 } as const;
@@ -314,11 +323,15 @@ export class MigrationLockWaitError extends TaggedError(
 
 type LockWaitRetry = {
   delaysMs: readonly number[];
+  budgetMs: number;
+  now: () => number;
   sleep: (ms: number) => Promise<void>;
 };
 
 const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
   delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
+  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+  now: () => performance.now(),
   sleep: async (ms) => await Bun.sleep(ms),
 };
 
@@ -336,12 +349,15 @@ type ApplyPendingOptions = {
  * rerun is the same run. A migration that splits that transaction (the
  * concurrent-index protocol) can commit earlier receipts before the failure;
  * the ledger check refuses to rerun then, leaving the next migrate to plan
- * from a fresh preflight. Every other failure propagates unchanged.
- * Recursive so each attempt ends before the next begins.
+ * from a fresh preflight. A rerun starts only within the rerun budget, so a
+ * migration's own bounded lock-wait loop is not repeated. Every other
+ * failure propagates unchanged. Recursive so each attempt ends before the
+ * next begins.
  */
 export const applyPendingRetryingLockWaits = async (
   { apply, ledgerUnchanged, retry }: ApplyPendingOptions,
   attempt = 1,
+  startedAt = retry.now(),
 ): Promise<void> => {
   const outcome = await Result.tryPromise({
     try: apply,
@@ -359,6 +375,14 @@ export const applyPendingRetryingLockWaits = async (
     throw new MigrationLockWaitError({
       message: `Migrations lost a lock wait on each of ${String(attempt)} attempts`,
       reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
+      attempts: attempt,
+      cause: error,
+    });
+  }
+  if (retry.now() - startedAt + delayMs > retry.budgetMs) {
+    throw new MigrationLockWaitError({
+      message: `Migrations lost a lock wait on attempt ${String(attempt)} after the rerun budget was spent`,
+      reason: MIGRATION_LOCK_WAIT_FAILURE.budgetSpent,
       attempts: attempt,
       cause: error,
     });
@@ -384,6 +408,7 @@ export const applyPendingRetryingLockWaits = async (
   await applyPendingRetryingLockWaits(
     { apply, ledgerUnchanged, retry },
     attempt + 1,
+    startedAt,
   );
 };
 

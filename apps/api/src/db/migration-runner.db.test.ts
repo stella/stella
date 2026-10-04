@@ -20,6 +20,7 @@ import { withGatedTestClients } from "../tests/gated-test-database";
 import { CORPUS_SCHEMA_LANE } from "./corpus-schema-lane";
 import {
   MIGRATION_LOCK_WAIT_FAILURE,
+  MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
   MigrationLockWaitError,
   runMigrations,
 } from "./migration-runner";
@@ -626,6 +627,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 runOnline: async () => undefined,
                 lockWaitRetry: {
                   delaysMs: [10, 10, 10],
+                  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                  now: () => performance.now(),
                   sleep: async (ms) => {
                     sleeps.push(ms);
                     // The lane is still this connection's while it pauses.
@@ -680,6 +683,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                     runOnline: async () => undefined,
                     lockWaitRetry: {
                       delaysMs: [10, 10],
+                      budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                      now: () => performance.now(),
                       sleep: async (ms) => {
                         sleeps.push(ms);
                         await Promise.resolve();

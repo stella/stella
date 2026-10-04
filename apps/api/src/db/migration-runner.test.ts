@@ -8,6 +8,7 @@ import {
   applyPendingRetryingLockWaits,
   decideLedgerAheadPolicy,
   MIGRATION_LOCK_WAIT_FAILURE,
+  MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
   MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
   MigrationLockWaitError,
 } from "./migration-runner";
@@ -132,13 +133,17 @@ type ScriptedRunOptions = {
   /** One outcome per attempt: the failure it throws, or null to apply. */
   script: readonly (Error | null)[];
   ledgerUnchanged?: boolean;
+  /** How long each attempt takes on the fake clock. */
+  attemptMs?: number;
 };
 
 const runScripted = async ({
   script,
   ledgerUnchanged = true,
+  attemptMs = 0,
 }: ScriptedRunOptions) => {
   let attempts = 0;
+  let clock = 0;
   const sleeps: number[] = [];
   const stdout = spyOn(process.stdout, "write").mockImplementation(() => true);
   try {
@@ -146,6 +151,7 @@ const runScripted = async ({
       apply: async () => {
         const failure = script.at(attempts);
         attempts += 1;
+        clock += attemptMs;
         if (failure === undefined) {
           throw new Error("apply ran past its script");
         }
@@ -157,8 +163,11 @@ const runScripted = async ({
       ledgerUnchanged: async () => await Promise.resolve(ledgerUnchanged),
       retry: {
         delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
+        budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+        now: () => clock,
         sleep: async (ms) => {
           sleeps.push(ms);
+          clock += ms;
           await Promise.resolve();
         },
       },
@@ -206,6 +215,33 @@ describe("a pending set that loses a lock wait", () => {
       reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
       attempts: ATTEMPTS,
       cause: failures.at(-1),
+    });
+  });
+
+  test("does not rerun a run that outlasted the rerun budget, such as a migration's own lock-wait loop", async () => {
+    const failure = lockWaitLoss();
+    const run = await runScripted({
+      script: [failure, null],
+      attemptMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+    });
+    expect(run.attempts).toBe(1);
+    expect(run.sleeps).toEqual([]);
+    expect(run.outcome).toMatchObject({
+      reason: MIGRATION_LOCK_WAIT_FAILURE.budgetSpent,
+      attempts: 1,
+      cause: failure,
+    });
+  });
+
+  test("stops rerunning once the next pause would pass the rerun budget", async () => {
+    const failures = Array.from({ length: ATTEMPTS }, lockWaitLoss);
+    const attemptMs = MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS / 2;
+    const run = await runScripted({ script: failures, attemptMs });
+    expect(run.attempts).toBe(2);
+    expect(run.sleeps).toEqual(MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS.slice(0, 1));
+    expect(run.outcome).toMatchObject({
+      reason: MIGRATION_LOCK_WAIT_FAILURE.budgetSpent,
+      attempts: 2,
     });
   });
 
