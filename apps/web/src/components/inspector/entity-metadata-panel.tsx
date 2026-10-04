@@ -33,6 +33,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   EntityField,
@@ -643,7 +644,7 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
     const copied = await copyToClipboard(reference);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });

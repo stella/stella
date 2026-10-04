@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels do not alter collection parsing.
 import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -81,6 +82,7 @@ const requestIssue = async ({
     return panic("Collection URL is outside the selected publisher");
   }
   return await fetchPublisher(target, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     publisherGate: publisher.gate,
     headers,

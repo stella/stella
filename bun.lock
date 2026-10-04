@@ -58,6 +58,7 @@
         "@libpdf/core": "catalog:",
         "@litko/yara-x": "^0.7.2",
         "@modelcontextprotocol/server": "2.0.0",
+        "@openrouter/sdk": "0.13.20",
         "@opentelemetry/api-logs": "^0.222.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
         "@opentelemetry/resources": "^2.11.0",
@@ -159,7 +160,6 @@
         "@mistralai/mistralai": "2.2.0",
         "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/ext-apps": "^2.0.0",
-        "@openrouter/sdk": "0.13.20",
         "@standard-schema/spec": "^1.1.0",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -192,6 +192,7 @@
       },
       "devDependencies": {
         "@hocuspocus/provider": "^4.7.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -457,6 +458,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -490,13 +492,14 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/template-conditions": "workspace:^",
@@ -514,7 +517,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -539,7 +542,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -654,7 +657,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.33",
+      "version": "0.1.35",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -669,8 +672,12 @@
       },
       "peerDependencies": {
         "@base-ui/react": "^1.7.0",
+        "@types/react": ">=19",
         "react": ">=19",
       },
+      "optionalPeers": [
+        "@types/react",
+      ],
     },
     "packages/chat-limits": {
       "name": "@stll/chat-limits",
@@ -682,7 +689,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.3",
+      "version": "3.6.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -853,6 +860,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "better-result": "catalog:",
       },
@@ -873,7 +881,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.0.0",
+      "version": "0.2.0",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",
@@ -900,7 +908,7 @@
     },
     "packages/money": {
       "name": "@stll/money",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -938,6 +946,7 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -1132,7 +1141,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.40.0",
+      "version": "0.40.2",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1164,10 +1173,16 @@
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-virtual": "^3.14.13",
+        "@types/react": ">=19",
+        "@types/react-dom": ">=19",
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
       },
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom",
+      ],
     },
     "packages/user-agent": {
       "name": "@stll/user-agent",
@@ -1205,7 +1220,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.11.17",
+      "version": "0.11.18",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -1236,10 +1251,16 @@
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-table": "^9.1.2",
+        "@types/react": ">=19",
+        "@types/react-dom": ">=19",
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
       },
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom",
+      ],
     },
   },
   "trustedDependencies": [
@@ -1300,14 +1321,14 @@
     "@oxlint/plugins": "1.83.0",
     "@shadcn/lint": "0.1.0",
     "@silurus/ooxml": "0.87.0",
-    "@stll/anonymize": "3.0.3",
+    "@stll/anonymize": "3.0.4",
     "@stll/anonymize-data": "0.0.10",
-    "@stll/anonymize-wasm": "3.0.3",
+    "@stll/anonymize-wasm": "3.0.4",
     "@stll/docx-core": "0.29.0",
     "@stll/folio-agents": "0.15.1",
     "@stll/folio-core": "0.54.0",
     "@stll/folio-react": "0.24.1",
-    "@stll/fuzzy-search": "1.1.4",
+    "@stll/fuzzy-search": "1.1.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -2771,23 +2792,23 @@
 
     "@stll/analytics-config": ["@stll/analytics-config@workspace:packages/analytics-config"],
 
-    "@stll/anonymize": ["@stll/anonymize@3.0.3", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.3", "@stll/anonymize-darwin-x64": "3.0.3", "@stll/anonymize-linux-arm64-gnu": "3.0.3", "@stll/anonymize-linux-x64-gnu": "3.0.3", "@stll/anonymize-win32-x64-msvc": "3.0.3" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-WBUi9WIPWyAIS0THPGhy/u0NoNfYje2BT9phZglP7TGmL+5iaY21bGA+XOQR9np7drdlBFdtS5ydYytVLkF/bA=="],
+    "@stll/anonymize": ["@stll/anonymize@3.0.4", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.4", "@stll/anonymize-darwin-x64": "3.0.4", "@stll/anonymize-linux-arm64-gnu": "3.0.4", "@stll/anonymize-linux-x64-gnu": "3.0.4", "@stll/anonymize-win32-x64-msvc": "3.0.4" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-89uY3r0sMb1bfksvBCwi1gKcYsso/up3XMbKLGq6vCHumevNNOP6w7eXXZKpMA6x8/CnvIkjwQ3iNEwypyfFBA=="],
 
     "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
-    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-7+YSLx5cAC3t1yd0DDnBkANiyYtWpLm/oCSygoUIAJjn0Dr931fKbv4+aVGgSrOwzQ5ZBFgLvrHN1aeJ6gv7Zw=="],
+    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-+4SYvp+0OEe+a/J/CYPyJ2xkDj8Pz6dRqUgzBoyde0xeXlkv0CD58qalPVYlphObzKAmIpoLZk7nDR1rpdzjKQ=="],
 
-    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.3", "", { "os": "darwin", "cpu": "x64" }, "sha512-Q80MJzWVYBhwUZUqFwUd4rr2RlGEqkGyUPGSkOVQVUJphrhAAvqudLlPzU/8bXWbojtYeg3govGkRptCwFXEng=="],
+    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-MIXzLfOSfDbiDmxZ+gabgYeimC8Y2KS0RKKQUope0nrunyBek/6w4oNI5PUCCWqNGTNbHxoek1rVP6yc8/7s1g=="],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.10", "", {}, "sha512-Z6wxTw0dxpSV3htzWu2ROpy5mqdCBVMyyqVm07myA37w+KTk3AVfGaBlfwDDxj0DpSDyqukFxbc5psgroxZm+Q=="],
 
-    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.3", "", { "os": "linux", "cpu": "arm64" }, "sha512-4hA8zZU/Vb00INcdRxtNDBxoxRpImyisD7c3Ej6K3cf2yqUrvbwX/sjw66ILdSh+TCQZqRn7Xyu8tmYf1LfaEA=="],
+    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-b9U8Q/nMGBZZJvTxJQYpm3I1iMhzc10OdTqBnC4v0pzuqJi97B7l+vjKC4np/XALbDlwGdasuVhT+jCcS8GDOQ=="],
 
-    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.3", "", { "os": "linux", "cpu": "x64" }, "sha512-hfQ/eXrFNdStcAMssaa+d4sjCo7Y5okIypm8oZnAUlcwudTO6HzRafAIMEbXnc5IFvQ83T4mz0IxBad0cR/0PA=="],
+    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.4", "", { "os": "linux", "cpu": "x64" }, "sha512-vFLSDzvd/YMzhLHREeo+Z8Xr/On39Wk/s226snRL99CXP+umX9WcidnlkK3gpGJgy8qjlf26OMu535bljhu9vQ=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.3", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-mbhG9AlEZJQug3EKHKYia4hMzB0o+KzG8ZbAr+m4WXwkTw1xapv113zSFxXya9DiWJDg8KS1BUKDJTccNYCgEg=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.4", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-oCI6kyi3TPAfrkU8AbjNliem3PZIg0v3OBW33MhZjTCIcGAT1AHNwHRKWdnjx8M8hckw3/lWAwCMy+PCYUKrGg=="],
 
-    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.3", "", { "os": "win32", "cpu": "x64" }, "sha512-woYyWdS1x5ZKXz3F+ZBmfEdZqkME8k5jA9aD9B4x/Kk5gYPyH0QSSEQLge63FZ4UQPXO7nZ3fDCD1/68GNGFUA=="],
+    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.4", "", { "os": "win32", "cpu": "x64" }, "sha512-xKaoJdZiSS7pZQNz4ymW42ZaUl2+I5LnLjo+mKVpxMnOZMiVHAGPuOdEy3p7FI/gIC+UKKMT9VCZ+TKQqgXvQg=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
@@ -2843,19 +2864,19 @@
 
     "@stll/folio-react": ["@stll/folio-react@0.24.1", "", { "dependencies": { "@base-ui/react": "1.8.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.54.0", "better-result": "3.0.1", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-z6HEi5gV7ctUN7zg8xq02ESPHxTOMt4MoMdlqi/BvB7/QgSlaP4Y+QpzL5sI5aS2QBb50grbCizAsevbUMhqBg=="],
 
-    "@stll/fuzzy-search": ["@stll/fuzzy-search@1.1.4", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.1.4", "@stll/fuzzy-search-darwin-x64": "1.1.4", "@stll/fuzzy-search-linux-arm64-gnu": "1.1.4", "@stll/fuzzy-search-linux-x64-gnu": "1.1.4", "@stll/fuzzy-search-wasm32-wasi": "1.1.4", "@stll/fuzzy-search-win32-x64-msvc": "1.1.4" } }, "sha512-h7hYogQnoDGyRum4zjtlBob5Tc4zq+NfXWBqNmXEPfxl/BRyAIZmqTwXZ8Ckgt4GnppdpyoineCV5K9EZzW//g=="],
+    "@stll/fuzzy-search": ["@stll/fuzzy-search@1.1.5", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.1.5", "@stll/fuzzy-search-darwin-x64": "1.1.5", "@stll/fuzzy-search-linux-arm64-gnu": "1.1.5", "@stll/fuzzy-search-linux-x64-gnu": "1.1.5", "@stll/fuzzy-search-wasm32-wasi": "1.1.5", "@stll/fuzzy-search-win32-x64-msvc": "1.1.5" } }, "sha512-dEssLzCS+2JtK+oXV59//3S7dX7ncZhergDknmVh18r1ftKTFsvOd9rCaTqiKewAPfR/QZ8nRT6KXx1KezV4Dg=="],
 
-    "@stll/fuzzy-search-darwin-arm64": ["@stll/fuzzy-search-darwin-arm64@1.1.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-hfgrg1Z7Fvm6AKrgjov16rirJKGfUtBt7jRsSC4uk7NBPKKwDqJXpYHacwxin8kb0xC9Qcpa0zsP2NGA4rhIFQ=="],
+    "@stll/fuzzy-search-darwin-arm64": ["@stll/fuzzy-search-darwin-arm64@1.1.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-+wbvYI3sEdXb0XjCuATIDsDfLGT5cUAgLhvBMgatfxn3rUGsED2Ylz/JTyHrfCTgM9pSSNzFy7Mi4ZJ3VYMP4A=="],
 
-    "@stll/fuzzy-search-darwin-x64": ["@stll/fuzzy-search-darwin-x64@1.1.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-E08net945F1DeMs01q3Lx+K8szIVCs3IMu6e2FV/W6SaKaQ+7Eh97eWRgMo4uuyjyV0U2foY+w6kKKnYrfyBGQ=="],
+    "@stll/fuzzy-search-darwin-x64": ["@stll/fuzzy-search-darwin-x64@1.1.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-8qTtWE1f40rMLW0uuAVhY3IgM4Tjr1UsFmIp7wPy5GYHcFpw/1NQonInYSDC3UZsS7XIWSATmTgJDO2r6fuFug=="],
 
-    "@stll/fuzzy-search-linux-arm64-gnu": ["@stll/fuzzy-search-linux-arm64-gnu@1.1.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-+OCjFGa/oEW+9vu1Lu48JBLFlmdm6dfrnR09DK2lnOQ/YwjblYTI89A8WUc9foPdCf7S/wiO8z7zWtRu5PRmvQ=="],
+    "@stll/fuzzy-search-linux-arm64-gnu": ["@stll/fuzzy-search-linux-arm64-gnu@1.1.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-UM8awvee6TSXNLR402qWgyzBlXBgz8pZE/3KiEmfCsdcvxYJJ2cMMXdeKGADh7TU0D+XcZS951y952XNNCafQA=="],
 
-    "@stll/fuzzy-search-linux-x64-gnu": ["@stll/fuzzy-search-linux-x64-gnu@1.1.4", "", { "os": "linux", "cpu": "x64" }, "sha512-dVDT1VgDX0/ScxRwtVT/XeMx8AedbpkaUWQ5vz5UDjjbVlZRBvOTSOarMqEHYQrQtzktXr6Af7WMQfDq3gl6RA=="],
+    "@stll/fuzzy-search-linux-x64-gnu": ["@stll/fuzzy-search-linux-x64-gnu@1.1.5", "", { "os": "linux", "cpu": "x64" }, "sha512-LmnwbiL3XWPEddKdmZabQUGbjpPd6XnN5LjVO6kar9Sj4aOybVFBKw7UPsIL4Sld+hTFjMwEKjLc4LXPxuakZQ=="],
 
-    "@stll/fuzzy-search-wasm32-wasi": ["@stll/fuzzy-search-wasm32-wasi@1.1.4", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-eMU3skvJ5dJMmGiEzDrmCHPqqI6cHOgz7HbQ4F4wsO48HomZQ53QslRkcPrjXH8/LXmIDoC/Jvi+IuosQmHJyQ=="],
+    "@stll/fuzzy-search-wasm32-wasi": ["@stll/fuzzy-search-wasm32-wasi@1.1.5", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-qK8LhTZJigzaRo0DeuqJs9EdWiFGhOSGSDmW3NDbAdcRJJ2LWUM1ZNfSSG8jk8Ab+aehZELmIfNjDm857JjdsA=="],
 
-    "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.1.4", "", { "os": "win32", "cpu": "x64" }, "sha512-lMVPBhmtQOixYgAROOTtdQmSjnYtpoXChwgma52f9hUqY0W2ycVCK223jm/PfuIYwtQMns39P8O6S5bLmHmGZA=="],
+    "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.1.5", "", { "os": "win32", "cpu": "x64" }, "sha512-HwDAPBILL0nOi7GBC+RhCqX2vnO5JPnSs+xgOwL6vYzuOBQ2WGUAuf09irhmk3K1TYBIlDwwrB/9r7OrnAs4MQ=="],
 
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 

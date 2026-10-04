@@ -290,7 +290,9 @@ describe("provision citation grammars", () => {
 
   test("case-law reporters and the treaty collection are not statutes", () => {
     expect(
-      czech.locateGazetteCitations("č. 12/2020 Sb. NSS; 67/2013 Sb. m. s."),
+      czech.locateGazetteCitations(
+        "č. 12/2020 Sb. NSS; 89/2012 Sb. rozh.; 67/2013 Sb. m. s.",
+      ),
     ).toEqual([]);
   });
 

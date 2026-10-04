@@ -18,6 +18,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import myWork from "@/api/handlers/work-obligations/queues/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -158,7 +159,7 @@ const queueEntityIds = async (queue?: MyWorkQueue) => {
       getActiveWorkspaceIds: async () => [ids.wsA1],
       getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
       getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: { ...(queue && { queue }), asOf: AS_OF, limit: 100 },
       request: new Request("https://example.test/my-work"),
       route: "/test/my-work",

@@ -139,16 +139,40 @@ afterAll(async () => {
 });
 
 describe("pdf signing handoff redemption", () => {
+  test("a different account cannot consume another account's signing link", async () => {
+    const { handoffToken } = await seedHandoff();
+    for (const identity of [
+      { userId: ids.userB1, organizationId: ids.orgA },
+      { userId: ids.userA1, organizationId: ids.orgB },
+      { userId: ids.userB1, organizationId: ids.orgB },
+    ]) {
+      expect(
+        await redeemPdfSigningHandoff(handoffToken, tokenDb, { identity }),
+      ).toBeNull();
+    }
+    expect(
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      }),
+    ).not.toBeNull();
+  });
+
   test("mints a session token once and refuses every later redemption", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
 
-    const first = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const first = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
     expect(first).not.toBeNull();
     expect(first?.sessionId).toBe(sessionId);
     expect(first?.sessionToken).toMatch(/^[0-9a-f]{64}$/u);
 
     // The row itself arbitrates: the second attempt matches no row.
-    expect(await redeemPdfSigningHandoff(handoffToken, tokenDb)).toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      }),
+    ).toBeNull();
 
     const rows = await testDb
       .select({
@@ -170,7 +194,11 @@ describe("pdf signing handoff redemption", () => {
       createdBy: ids.userB1,
     });
 
-    expect(await redeemPdfSigningHandoff(handoffToken, tokenDb)).toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userB1, organizationId: ids.orgA },
+      }),
+    ).toBeNull();
 
     const rows = await testDb
       .select({ sessionTokenHash: pdfSigningSessions.sessionTokenHash })
@@ -185,6 +213,7 @@ describe("pdf signing handoff redemption", () => {
     // Access check, consumption and descriptor read are one transaction:
     // failing at its very end leaves the handoff as it was.
     const failed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
       afterConsume: async () => {
         throw new Error("interrupted before commit");
       },
@@ -203,7 +232,11 @@ describe("pdf signing handoff redemption", () => {
       sessionTokenHash: null,
     });
     // The same link still works once, as if the failed attempt never ran.
-    expect(await redeemPdfSigningHandoff(handoffToken, tokenDb)).not.toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      }),
+    ).not.toBeNull();
   });
 
   test("locks the creator's access rows while redeeming", () => {
@@ -224,7 +257,11 @@ describe("pdf signing handoff redemption", () => {
       handoffExpiresAt: new Date(Date.now() - MINUTE_MS),
     });
 
-    expect(await redeemPdfSigningHandoff(handoffToken, tokenDb)).toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      }),
+    ).toBeNull();
 
     const rows = await testDb
       .select({ sessionTokenHash: pdfSigningSessions.sessionTokenHash })
@@ -238,7 +275,9 @@ describe("pdf signing handoff redemption", () => {
     const { sessionId } = await seedHandoff();
 
     expect(
-      await redeemPdfSigningHandoff(createPdfSigningToken(), tokenDb),
+      await redeemPdfSigningHandoff(createPdfSigningToken(), tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      }),
     ).toBeNull();
 
     const rows = await testDb
@@ -252,7 +291,9 @@ describe("pdf signing handoff redemption", () => {
 describe("pdf signing session authorization", () => {
   test("scopes an authorized session to the workspace that owns it", async () => {
     const { handoffToken, sessionId, workspaceId } = await seedHandoff();
-    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
     expect(redeemed).not.toBeNull();
 
     const authorized = await authorizePdfSigningSession(
@@ -277,10 +318,12 @@ describe("pdf signing session authorization", () => {
     const redeemedMine = await redeemPdfSigningHandoff(
       mine.handoffToken,
       tokenDb,
+      { identity: { userId: ids.userA1, organizationId: ids.orgA } },
     );
     const redeemedTheirs = await redeemPdfSigningHandoff(
       theirs.handoffToken,
       tokenDb,
+      { identity: { userId: ids.userB1, organizationId: ids.orgB } },
     );
     expect(redeemedMine?.sessionToken).toBeDefined();
     expect(redeemedTheirs?.sessionToken).toBeDefined();
@@ -314,7 +357,9 @@ describe("pdf signing session authorization", () => {
 
   test("refuses a session token past its own expiry", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
-    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
 
     await testDb
       .update(pdfSigningSessions)
@@ -336,7 +381,9 @@ describe("pdf signing session authorization", () => {
 
   test("refuses a session the browser already cancelled", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
-    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
 
     await testDb
       .update(pdfSigningSessions)
@@ -358,7 +405,9 @@ describe("pdf signing session authorization", () => {
 
   test("round-trips the signer certificate through the bytea column", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
-    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
     const certificate = new Uint8Array([0x30, 0x82, 0x00, 0xff, 0x00, 0x7f]);
 
     await testDb
@@ -566,7 +615,9 @@ describe("pdf signing finalization attempts", () => {
 
   test("tells the token holder which version a finalized exchange produced", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
-    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
     await testDb
       .update(pdfSigningSessions)
       .set({ finalizedVersionId: ids.entityVersionA1, status: "finalized" })
@@ -945,10 +996,12 @@ describe("pdf signing token scopes", () => {
     const redeemedMine = await redeemPdfSigningHandoff(
       mine.handoffToken,
       tokenDb,
+      { identity: { userId: ids.userA1, organizationId: ids.orgA } },
     );
     const redeemedTheirs = await redeemPdfSigningHandoff(
       theirs.handoffToken,
       tokenDb,
+      { identity: { userId: ids.userB1, organizationId: ids.orgB } },
     );
     const mineHash = hashPdfSigningToken(redeemedMine?.sessionToken ?? "");
     const theirsHash = hashPdfSigningToken(redeemedTheirs?.sessionToken ?? "");

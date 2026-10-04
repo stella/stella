@@ -60,13 +60,14 @@ test(
             id uuid PRIMARY KEY, country varchar(3), language varchar(8),
             type varchar(32), ecli text, language_group_key text,
             case_number text, decision_id uuid, normalized_value text,
-            slug text, eli text
+            slug text, eli text, docket_family_key text
           )
         `);
         await db.execute(sql`
           INSERT INTO ${sql.identifier(table)}
             (id, country, language, type, ecli, language_group_key,
-             case_number, decision_id, normalized_value, slug, eli)
+             case_number, decision_id, normalized_value, slug, eli,
+             docket_family_key)
           SELECT
             ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
             CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
@@ -82,7 +83,9 @@ test(
             CASE WHEN n % 4 = 0 THEN 'eclieuc2024' || (n % 120)::text
               ELSE 'other' END,
             'qpg-slug-' || n::text,
-            '/eli/cz/sb/2024/' || n::text
+            '/eli/cz/sb/2024/' || n::text,
+            CASE WHEN n % 2 = 0 THEN NULL
+              ELSE 'qpg-family-' || (n % 90)::text END
           FROM generate_series(1, ${ROW_COUNT}) AS series(n)
         `);
         await db.execute(sql`ANALYZE ${sql.identifier(table)}`);

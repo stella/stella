@@ -4,8 +4,6 @@ import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import {
   collectDroppedFileTree,
   type DroppedFileTree,
@@ -14,6 +12,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;
@@ -121,10 +120,7 @@ export const useExternalFileDrop = ({
                     cause: error,
                   });
             handleDropError(normalized);
-            stellaToast.add({
-              title: t("errors.uploadFailed"),
-              type: "error",
-            });
+            notifyUserError(normalized, t("errors.uploadFailed"));
           });
       },
     });

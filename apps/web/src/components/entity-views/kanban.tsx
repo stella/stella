@@ -17,7 +17,6 @@ import {
   KanbanVirtualCell,
   resolveKanbanGrouping,
 } from "@stll/ui/kanban";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { SignalCard } from "@/components/inbox/signal-card";
@@ -31,7 +30,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
@@ -186,9 +185,7 @@ export const EntityViewKanban = ({
     });
     if (result.isErr()) {
       analytics.captureError(result.error);
-      stellaToast.error(
-        userErrorFromThrown(result.error, t("common.unexpectedError")),
-      );
+      notifyUserError(result.error, t("common.unexpectedError"));
     }
     await invalidateTaskQueries({
       queryClient,
@@ -297,10 +294,7 @@ export const EntityViewKanban = ({
             );
           }}
           onRename={(workspaceId, entityId, name) =>
-            rename.mutate(
-              { workspaceId, entityId, name },
-              { onSuccess: () => detached(onChanged(), "entity-view.rename") },
-            )
+            rename.mutate({ workspaceId, entityId, name })
           }
           onDrop={(id, sourceLane) =>
             detached(

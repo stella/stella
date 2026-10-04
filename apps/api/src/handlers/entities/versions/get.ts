@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -102,6 +102,7 @@ const config = {
     "version. A version tombstoned by entities.versions.delete reads as not " +
     "found. Use entities.get for the current version.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: readVersionByIdParamsSchema,

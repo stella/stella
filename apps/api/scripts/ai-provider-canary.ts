@@ -1136,7 +1136,7 @@ const runModelRoleProbe = async ({
             },
           },
         };
-  const model = resolveTanStackTextModel({
+  const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: probeConfig,
@@ -1203,7 +1203,7 @@ const runWeeklyModelRoleProbe = async ({
   role,
   signal,
 }: RunWeeklyModelRoleProbeOptions): Promise<void> => {
-  const model = resolveTanStackTextModel({
+  const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: rotatedConfig,
@@ -1403,7 +1403,7 @@ const runToolProbe = async ({
   signal,
   tool,
 }: RunToolProbeOptions): Promise<string> => {
-  const model = resolveTextModel({
+  const model = await resolveTextModel({
     dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: config,
@@ -1827,7 +1827,7 @@ const runCatalogModelProbe = async ({
     provider,
     rotatedModelId: modelId,
   });
-  const model = resolveTanStackTextModel({
+  const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: config,

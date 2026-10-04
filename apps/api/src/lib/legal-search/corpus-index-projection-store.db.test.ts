@@ -23,7 +23,11 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusIndexClient,
+  CorpusIndexError,
+  type CorpusIndexSettlementSplit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -51,6 +55,7 @@ import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/co
 import {
   corpusIndexAppendPublishDelayMs,
   corpusIndexUnknownAppendBarrierAt,
+  corpusProjectionRevisionsQuery,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionErasuresTx,
@@ -193,18 +198,42 @@ const withDatabaseClock = async <T>(
     return await operation(asTestRaw<Transaction>(tx));
   });
 
+type SettlementTestClient = Pick<
+  CorpusIndexClient,
+  "readDeleteSettlements" | "search"
+>;
+
 const settledProjectionClient = {
-  readDeleteSettlement: async ({ requiredOpstamp }) =>
-    Result.ok({
-      requiredOpstamp,
-      provingSplits: 1,
-      excludedSplits: 0,
-      laggingSplits: 0,
-      minAppliedOpstamp: requiredOpstamp,
-      settled: true,
-    }),
+  readDeleteSettlements: async ({ tasks }) =>
+    Result.ok(
+      tasks.map(({ requiredOpstamp }) =>
+        Result.ok({
+          requiredOpstamp,
+          provingSplits: 1,
+          excludedSplits: 0,
+          laggingSplits: 0,
+          minAppliedOpstamp: requiredOpstamp,
+          settled: true,
+          laggingProvingSplits: [],
+          laggingExcludedSplits: [],
+        }),
+      ),
+    ),
   search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-} satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+} satisfies SettlementTestClient;
+
+const verifyOneSettlement = async (
+  settlementClient: SettlementTestClient,
+  lease: CorpusProjectionCleanupSettlementLease,
+) => {
+  const verdicts = await CorpusProjectionCleanupSettlementProof.verifyAll({
+    client: settlementClient,
+    indexId: lease.indexId,
+    leases: [lease],
+  });
+  expect(verdicts.map((verdict) => verdict.lease)).toEqual([lease]);
+  return verdicts.at(0)?.result ?? panic("Expected one verdict for one lease");
+};
 
 const verifySettlement = async ({
   intentIds,
@@ -234,10 +263,7 @@ const verifySettlement = async ({
   }
   expect(lease.intentIds).toEqual(intentIds);
   expect(lease.deleteOpstamp).toBe(deleteOpstamp);
-  const result = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settledProjectionClient,
-    lease,
-  });
+  const result = await verifyOneSettlement(settledProjectionClient, lease);
   if (result.isErr()) {
     return panic("Projection settlement verification failed", result.error);
   }
@@ -2867,10 +2893,10 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   if (settlementLease === undefined) {
     panic("Expected settlement lease");
   }
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settledProjectionClient,
-    lease: settlementLease,
-  });
+  const verified = await verifyOneSettlement(
+    settledProjectionClient,
+    settlementLease,
+  );
   if (verified.isErr()) {
     panic("Expected successful settlement verification");
   }
@@ -3547,6 +3573,299 @@ const seedCommittedCleanupPair = async (): Promise<void> => {
   );
 };
 
+const leaseCommittedCleanupPair = async () => {
+  await seedCommittedCleanupPair();
+  const leases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 2,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+  expect(
+    leases.map(({ intentIds, deleteOpstamp, deleteTaskCreatedAt }) => ({
+      intentIds,
+      deleteOpstamp,
+      deleteTaskCreatedAt: deleteTaskCreatedAt.toString(),
+    })),
+  ).toEqual([
+    {
+      intentIds: [FIRST_INTENT_ID],
+      deleteOpstamp: 42,
+      deleteTaskCreatedAt: DELETE_TASK_CREATED_AT.toString(),
+    },
+    {
+      intentIds: [SECOND_INTENT_ID],
+      deleteOpstamp: 43,
+      deleteTaskCreatedAt: LATER_DELETE_TASK_CREATED_AT.toString(),
+    },
+  ]);
+  return leases;
+};
+
+// Reusing the first task's settlement for every lease must change the verdicts.
+test.each([
+  ["lagging", false],
+  ["lagging", true],
+  ["error", false],
+  ["error", true],
+] as const)(
+  "batch settlement retains task ownership with %s later and reversed=%s",
+  async (laterOutcome, reversed) => {
+    const claimed = await leaseCommittedCleanupPair();
+    const leases = reversed ? claimed.toReversed() : claimed;
+    const failure = new CorpusIndexError({
+      message: "fixture settlement unavailable",
+    });
+    const searched: string[] = [];
+    let listingReads = 0;
+    const settlementClient = {
+      readDeleteSettlements: async ({ indexId, tasks }) => {
+        listingReads += 1;
+        expect(indexId).toBe(INDEX_ID);
+        expect(tasks).toEqual(
+          leases.map(({ deleteOpstamp, deleteTaskCreatedAt }) => ({
+            requiredOpstamp: deleteOpstamp,
+            deleteCreatedAt: deleteTaskCreatedAt,
+          })),
+        );
+        return Result.ok(
+          tasks.map(({ requiredOpstamp }) => {
+            if (requiredOpstamp === 43 && laterOutcome === "error") {
+              return Result.err(failure);
+            }
+            const lagging = requiredOpstamp === 43;
+            return Result.ok({
+              requiredOpstamp,
+              provingSplits: 1,
+              excludedSplits: 0,
+              laggingSplits: lagging ? 1 : 0,
+              minAppliedOpstamp: lagging
+                ? requiredOpstamp - 1
+                : requiredOpstamp,
+              settled: !lagging,
+              laggingProvingSplits: lagging
+                ? [
+                    {
+                      splitId: "fixture-lagging",
+                      state: "Published" as const,
+                      appliedOpstamp: requiredOpstamp - 1,
+                      publishedAt: DELETE_TASK_CREATED_AT,
+                      maturity: { type: "mature" as const },
+                    },
+                  ]
+                : [],
+              laggingExcludedSplits: [],
+            });
+          }),
+        );
+      },
+      search: async ({ indexId, query, maxHits }) => {
+        expect(indexId).toBe(INDEX_ID);
+        expect(maxHits).toBe(0);
+        searched.push(query);
+        return Result.ok({ numHits: 0, hits: [], snippets: [] });
+      },
+    } satisfies SettlementTestClient;
+    const verdicts = await CorpusProjectionCleanupSettlementProof.verifyAll({
+      client: settlementClient,
+      indexId: INDEX_ID,
+      leases,
+      testNow: Temporal.Instant.from("2026-09-01T00:00:00Z"),
+    });
+
+    expect(listingReads).toBe(1);
+    expect(verdicts.map(({ lease }) => lease)).toEqual(leases);
+    expect(
+      verdicts.map(({ result }) =>
+        result.isErr() ? "error" : result.value.status,
+      ),
+    ).toEqual(
+      leases.map(({ deleteOpstamp }) => {
+        if (deleteOpstamp === 42) {
+          return "verified";
+        }
+        return laterOutcome === "error" ? "error" : "pending";
+      }),
+    );
+    expect(searched).toEqual([
+      corpusProjectionRevisionsQuery([FIRST_INTENT_ID]),
+    ]);
+    for (const { lease, result } of verdicts) {
+      if (lease.deleteOpstamp === 43) {
+        if (laterOutcome === "error") {
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toBe(failure);
+          }
+          continue;
+        }
+        if (result.isErr()) {
+          panic("Expected a pending lagging task", result.error);
+        }
+        expect(result.value).toMatchObject({
+          status: "pending",
+          reason: "delete_lagging",
+          settlement: { requiredOpstamp: 43 },
+          remainingRevisionCount: null,
+        });
+        continue;
+      }
+      if (result.isErr() || result.value.status !== "verified") {
+        panic("Expected the first task's own settlement proof");
+      }
+      expect(result.value.proof).toMatchObject({
+        indexId: INDEX_ID,
+        intentIds: [FIRST_INTENT_ID],
+        deleteOpstamp: 42,
+        leaseToken: lease.leaseToken,
+      });
+    }
+    const verified = verdicts.find(
+      ({ lease }) => lease.deleteOpstamp === 42,
+    )?.result;
+    if (
+      verified === undefined ||
+      verified.isErr() ||
+      verified.value.status !== "verified"
+    ) {
+      panic("Expected the first task's own settlement proof");
+    }
+    const proof = verified.value.proof;
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+            proof,
+          }),
+      ),
+    ).toBe(1);
+    expect(
+      await db
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          status: corpusIndexProjectionIntents.status,
+        })
+        .from(corpusIndexProjectionIntents)
+        .orderBy(corpusIndexProjectionIntents.id)
+        .limit(2),
+    ).toEqual([
+      { id: FIRST_INTENT_ID, status: "settled" },
+      { id: SECOND_INTENT_ID, status: "cleanup_committed" },
+    ]);
+  },
+);
+
+// Counting another lease's revisions must not clear a surviving task.
+test.each([false, true])(
+  "batch settlement counts each lease's revisions with reversed=%s",
+  async (reversed) => {
+    const claimed = await leaseCommittedCleanupPair();
+    const leases = reversed ? claimed.toReversed() : claimed;
+    const firstQuery = corpusProjectionRevisionsQuery([FIRST_INTENT_ID]);
+    const secondQuery = corpusProjectionRevisionsQuery([SECOND_INTENT_ID]);
+    expect(firstQuery).not.toBe(secondQuery);
+    const searched: string[] = [];
+    const settlementClient = {
+      readDeleteSettlements: settledProjectionClient.readDeleteSettlements,
+      search: async ({ indexId, query, maxHits }) => {
+        expect(indexId).toBe(INDEX_ID);
+        expect(maxHits).toBe(0);
+        searched.push(query);
+        if (query !== firstQuery && query !== secondQuery) {
+          panic("Exact count queried revisions outside the fixture leases");
+        }
+        return Result.ok({
+          numHits: query === secondQuery ? 3 : 0,
+          hits: [],
+          snippets: [],
+        });
+      },
+    } satisfies SettlementTestClient;
+    const verdicts = await CorpusProjectionCleanupSettlementProof.verifyAll({
+      client: settlementClient,
+      indexId: INDEX_ID,
+      leases,
+      testNow: Temporal.Instant.from("2026-09-01T00:00:00Z"),
+    });
+
+    expect(verdicts.map(({ lease }) => lease)).toEqual(leases);
+    expect(searched).toEqual(
+      leases.map(({ intentIds }) => corpusProjectionRevisionsQuery(intentIds)),
+    );
+    for (const { lease, result } of verdicts) {
+      if (result.isErr()) {
+        panic("Expected a per-lease settlement verdict", result.error);
+      }
+      if (lease.deleteOpstamp === 43) {
+        expect(result.value).toMatchObject({
+          status: "pending",
+          reason: "survivor",
+          remainingRevisionCount: 3,
+          settlement: { requiredOpstamp: 43 },
+          reissue: {
+            indexId: INDEX_ID,
+            intentIds: [SECOND_INTENT_ID],
+            deleteOpstamp: 43,
+            leaseToken: lease.leaseToken,
+            remainingRevisionCount: 3,
+          },
+        });
+        continue;
+      }
+      if (result.value.status !== "verified") {
+        panic("Expected the zero-count task to verify");
+      }
+      const proof = result.value.proof;
+      expect(proof).toMatchObject({
+        intentIds: [FIRST_INTENT_ID],
+        deleteOpstamp: 42,
+        leaseToken: lease.leaseToken,
+      });
+    }
+    const verified = verdicts.find(
+      ({ lease }) => lease.deleteOpstamp === 42,
+    )?.result;
+    if (
+      verified === undefined ||
+      verified.isErr() ||
+      verified.value.status !== "verified"
+    ) {
+      panic("Expected the zero-count task to verify");
+    }
+    const proof = verified.value.proof;
+    expect(
+      await db.transaction(
+        async (tx) =>
+          await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+            proof,
+          }),
+      ),
+    ).toBe(1);
+    expect(
+      await db
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          status: corpusIndexProjectionIntents.status,
+        })
+        .from(corpusIndexProjectionIntents)
+        .orderBy(corpusIndexProjectionIntents.id)
+        .limit(2),
+    ).toEqual([
+      { id: FIRST_INTENT_ID, status: "settled" },
+      { id: SECOND_INTENT_ID, status: "cleanup_committed" },
+    ]);
+  },
+);
+
 test("one settlement turn leases every delete task it is asked for", async () => {
   await seedCommittedCleanupPair();
 
@@ -3637,32 +3956,41 @@ test("settlement proves the lease against the instant its delete task carries", 
   // `corpus-index-client.test.ts`; what this asserts is that the instant the
   // receipt carries reaches the engine at all, and that a lease can settle.
   const excludingClient = {
-    readDeleteSettlement: async ({
-      requiredOpstamp,
-      deleteCreatedAt,
-    }: {
-      requiredOpstamp: number;
-      deleteCreatedAt: Temporal.Instant | null;
-    }) => {
-      const excluded =
-        deleteCreatedAt !== null &&
-        Temporal.Instant.compare(deleteCreatedAt, DELETE_TASK_CREATED_AT) === 0;
-      return Result.ok({
-        requiredOpstamp,
-        provingSplits: excluded ? 1 : 2,
-        excludedSplits: excluded ? 1 : 0,
-        laggingSplits: excluded ? 0 : 1,
-        minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
-        settled: excluded,
-      });
-    },
+    readDeleteSettlements: async ({ tasks }) =>
+      Result.ok(
+        tasks.map(({ requiredOpstamp, deleteCreatedAt }) => {
+          const excluded =
+            deleteCreatedAt !== null &&
+            Temporal.Instant.compare(
+              deleteCreatedAt,
+              DELETE_TASK_CREATED_AT,
+            ) === 0;
+          return Result.ok({
+            requiredOpstamp,
+            provingSplits: excluded ? 1 : 2,
+            excludedSplits: excluded ? 1 : 0,
+            laggingSplits: excluded ? 0 : 1,
+            minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
+            settled: excluded,
+            laggingProvingSplits: excluded
+              ? []
+              : [
+                  {
+                    splitId: "split-lagging",
+                    state: "Published",
+                    appliedOpstamp: requiredOpstamp - 1,
+                    publishedAt: DELETE_TASK_CREATED_AT,
+                    maturity: { type: "mature" },
+                  } satisfies CorpusIndexSettlementSplit,
+                ],
+            laggingExcludedSplits: [],
+          });
+        }),
+      ),
     search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+  } satisfies SettlementTestClient;
 
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: excludingClient,
-    lease,
-  });
+  const verified = await verifyOneSettlement(excludingClient, lease);
   if (verified.isErr()) {
     panic("Projection settlement verification failed", verified.error);
   }
@@ -3775,27 +4103,10 @@ test("a settlement release whose successor already released the revisions releas
 
 test("a settlement release whose successor already settled the revisions releases none", async () => {
   const { outrun, successor } = await claimOutrunAndSuccessorLeases();
-  const settlingClient = {
-    readDeleteSettlement: async ({
-      requiredOpstamp,
-    }: {
-      requiredOpstamp: number;
-      deleteCreatedAt: Temporal.Instant | null;
-    }) =>
-      Result.ok({
-        requiredOpstamp,
-        provingSplits: 1,
-        excludedSplits: 1,
-        laggingSplits: 0,
-        minAppliedOpstamp: requiredOpstamp,
-        settled: true,
-      }),
-    search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settlingClient,
-    lease: successor,
-  });
+  const verified = await verifyOneSettlement(
+    settledProjectionClient,
+    successor,
+  );
   if (verified.isErr()) {
     panic("Successor settlement verification failed", verified.error);
   }

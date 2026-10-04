@@ -19,13 +19,16 @@ type OperatorFlags = {
   ) => number;
 };
 
-export const operatorFlags = (usage: string): OperatorFlags => ({
+export const operatorFlags = (
+  usage: string,
+  argv: readonly string[] = process.argv,
+): OperatorFlags => ({
   flagValue: (name) => {
-    const index = process.argv.indexOf(`--${name}`);
+    const index = argv.indexOf(`--${name}`);
     if (index === -1) {
       return undefined;
     }
-    const value = process.argv[index + 1];
+    const value = argv[index + 1];
     if (value === undefined || value.startsWith("--")) {
       console.error(`--${name} requires a value`);
       console.error(usage);
@@ -33,7 +36,7 @@ export const operatorFlags = (usage: string): OperatorFlags => ({
     }
     return value;
   },
-  hasFlag: (name) => process.argv.includes(`--${name}`),
+  hasFlag: (name) => argv.includes(`--${name}`),
   positiveInteger: (raw, fallback, name) => {
     if (raw === undefined) {
       return fallback;

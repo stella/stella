@@ -460,7 +460,6 @@ describe.skipIf(!enabled)(
             execute: async (statement, parameters = []) => {
               await client.unsafe(statement, [...parameters]);
             },
-            release: () => undefined,
           },
         });
         const step = async () =>

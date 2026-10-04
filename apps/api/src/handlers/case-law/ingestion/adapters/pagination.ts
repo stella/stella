@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -203,7 +204,11 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   parseItem: (
     item: unknown,
     signal?: AbortSignal,
-  ) => Promise<IngestionItem | null>;
+  ) => Promise<
+    | IngestionItem
+    | { type: "item_build_failed"; decision: IngestionResult | null }
+    | null
+  >;
   /**
    * Max parallel parseItem calls within a single page.
    * Defaults to 1 (serial). Raise for adapters whose
@@ -657,6 +662,12 @@ const parsePageItems = async ({
           case "supplement":
             supplements.push(item.supplement);
             break;
+          case "item_build_failed":
+            itemsSkipped++;
+            if (item.decision !== null) {
+              decisions.push(item.decision);
+            }
+            break;
           default:
             item satisfies never;
             return panic(`Unhandled ingestion item: ${String(item)}`);
@@ -789,6 +800,7 @@ export const createPagePaginatedFetch = <TResponse>(
         try {
           // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
           response = await fetchWithRetry(url, init, {
+            fetchStage: "listing",
             maxRetries: SERVER_ERROR_RETRIES,
             timeoutMs: listTimeout,
             signal,
@@ -885,6 +897,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
             const retryResponse = await fetchWithRetry(url, init, {
+              fetchStage: "listing",
               maxRetries: 1,
               timeoutMs: listTimeout,
               signal,
@@ -1017,6 +1030,14 @@ export const createPagePaginatedFetch = <TResponse>(
 
         return Result.ok({
           decisions,
+          ...(itemsSkipped === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemsSkipped,
+                },
+              }),
           ...(supplements.length === 0 ? {} : { supplements }),
           nextCursor,
           sourceUrl: url,

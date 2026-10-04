@@ -19,6 +19,7 @@ import {
   scanUpload,
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(
@@ -257,6 +258,7 @@ export const createInboundMailPersistence =
               declaredMimeType: attachment.mimeType,
             });
             if (scanned.isErr()) {
+              observeScanFailures(scanned.error);
               if (!FileScanRejectedError.is(scanned.error)) {
                 return Result.err(
                   new InboundPersistenceError({

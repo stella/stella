@@ -75,6 +75,7 @@ export const releaseRlsFixture = async (): Promise<void> => {
   })();
   // Keep the current failure visible while allowing future test files to
   // create a fresh fixture rather than inheriting a rejected teardown chain.
+  // swallow-ok: recovers the shared teardown chain; this release still awaits the original rejection below
   fixtureReleasePromise = releasePromise.catch(() => undefined);
   await releasePromise;
 };

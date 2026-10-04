@@ -38,6 +38,7 @@ import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -45,6 +46,7 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
@@ -203,6 +205,9 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
 /** The HTTP answer a route's status response makes (a refusal, or a Stop's
  *  answer), as the browser sees it. */
 const statusResponse = (answer: unknown): Response => {
+  if (answer instanceof Response) {
+    return answer;
+  }
   const status: unknown =
     typeof answer === "object" && answer !== null
       ? Reflect.get(answer, "code")
@@ -344,6 +349,10 @@ export const createApprovalHarness = ({
   });
   const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
+    // An approved write reads the member's role again when it runs; read it
+    // from this test's database, not the shared pools.
+    resolveCurrentMembership: async (lookup) =>
+      await resolveMemberAuthorization(lookup, testDb),
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
@@ -458,7 +467,7 @@ export const createApprovalHarness = ({
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
       getWorkspaceAccess: async () => await Promise.resolve(null),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu",
@@ -633,7 +642,7 @@ export const createApprovalHarness = ({
     const set = { headers: {}, status: 200 };
     const answer: unknown = await cancelTurn.handler(
       asTestRaw<CancelTurnCtx>({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: {
           threadId: toSafeId<"chatThread">(threadId),
           turnId: toSafeId<"chatTurn">(turnId),
@@ -1503,6 +1512,11 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /** A compaction checkpoint landed on `threadId`: its next model call
+     *  starts from the summary rather than extending the calls before it. */
+    compacted: (threadId: SafeId<"chatThread">) => {
+      provider.promptLedgerOf(threadId).compacted();
     },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>

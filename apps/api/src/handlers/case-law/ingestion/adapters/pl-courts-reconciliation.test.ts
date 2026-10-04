@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from "bun:test";
 /**
  * The pl-courts listing reconciliation capability.
  *
@@ -10,8 +11,6 @@
  * a decision built out of the listing alone: writing the latter would make the
  * identity held and take the document out of every later reconciliation.
  */
-
-import { afterEach, describe, expect, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -460,16 +459,20 @@ describe("pl-courts buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.identifiers).toEqual([
-      {
-        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-        value: "II Cz 100/15",
-      },
-    ]);
-    expect(built.decision.metadata["courtReporters"]).toEqual([
-      "Ewa Popławska-Kośla",
-      "Jerzy Adam Porowski",
-    ]);
+    expect(
+      Bun.deepEquals(built.decision.identifiers, [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "II Cz 100/15",
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(built.decision.metadata["courtReporters"], [
+        "Ewa Popławska-Kośla",
+        "Jerzy Adam Porowski",
+      ]),
+    ).toBe(true);
   });
 
   test("builds through the adapter's own detail parse path", async () => {
@@ -507,13 +510,15 @@ describe("pl-courts buildDecision", () => {
       sourceDocumentId: "130600",
       sourceUrl: "https://www.saos.org.pl/judgments/130600",
     });
-    expect(built.decision.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: {
-        type: TEXT_FIELD_TYPE.PRESENT,
-        text: "Published summary.",
-      },
-    });
+    expect(
+      Bun.deepEquals(built.decision.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: {
+          type: TEXT_FIELD_TYPE.PRESENT,
+          text: "Published summary.",
+        },
+      }),
+    ).toBe(true);
     expect(built.decision.metadata).not.toHaveProperty("summary");
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
@@ -557,9 +562,12 @@ describe("pl-courts buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.textFields).toEqual(
-      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    );
+    expect(
+      Bun.deepEquals(
+        built.decision.textFields,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ),
+    ).toBe(true);
     expect(built.decision.metadata).not.toHaveProperty("summary");
   });
 
@@ -758,20 +766,22 @@ describe("pl-courts crawl detail reads", () => {
     try {
       const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
 
-      expect(tiersOf(page.decisions)).toEqual([
-        {
-          sourceDocumentId: String(COMMON_COURT_ITEM.id),
-          isListingOnly: undefined,
-          sourceTier: "dump",
-          detailReadState: "failed",
-        },
-        {
-          sourceDocumentId: String(SUPREME_COURT_ITEM.id),
-          isListingOnly: undefined,
-          sourceTier: "dump",
-          detailReadState: "failed",
-        },
-      ]);
+      expect(
+        Bun.deepEquals(tiersOf(page.decisions), [
+          {
+            sourceDocumentId: String(COMMON_COURT_ITEM.id),
+            isListingOnly: undefined,
+            sourceTier: "dump",
+            detailReadState: "failed",
+          },
+          {
+            sourceDocumentId: String(SUPREME_COURT_ITEM.id),
+            isListingOnly: undefined,
+            sourceTier: "dump",
+            detailReadState: "failed",
+          },
+        ]),
+      ).toBe(true);
       expect(page.decisions.map(({ fulltext }) => fulltext)).toEqual([
         expect.stringContaining("oddalić wniosek"),
         expect.stringContaining("oddalić wniosek"),
@@ -803,14 +813,16 @@ describe("pl-courts crawl detail reads", () => {
     try {
       const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
 
-      expect(tiersOf(page.decisions)).toEqual([
-        {
-          sourceDocumentId: String(COMMON_COURT_ITEM.id),
-          isListingOnly: undefined,
-          sourceTier: "dump",
-          detailReadState: "failed",
-        },
-      ]);
+      expect(
+        Bun.deepEquals(tiersOf(page.decisions), [
+          {
+            sourceDocumentId: String(COMMON_COURT_ITEM.id),
+            isListingOnly: undefined,
+            sourceTier: "dump",
+            detailReadState: "failed",
+          },
+        ]),
+      ).toBe(true);
       expect(detailReadFailures(logs)).toEqual([
         expect.objectContaining({
           documentId: String(COMMON_COURT_ITEM.id),
@@ -905,14 +917,16 @@ describe("pl-courts crawl detail reads", () => {
     try {
       const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
 
-      expect(tiersOf(page.decisions)).toEqual([
-        {
-          sourceDocumentId: String(COMMON_COURT_ITEM.id),
-          isListingOnly: undefined,
-          sourceTier: "dump",
-          detailReadState: "absent",
-        },
-      ]);
+      expect(
+        Bun.deepEquals(tiersOf(page.decisions), [
+          {
+            sourceDocumentId: String(COMMON_COURT_ITEM.id),
+            isListingOnly: undefined,
+            sourceTier: "dump",
+            detailReadState: "absent",
+          },
+        ]),
+      ).toBe(true);
       expect(detailReadFailures(logs)).toEqual([]);
     } finally {
       logs.restore();

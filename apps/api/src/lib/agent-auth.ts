@@ -14,6 +14,8 @@ import type {
   AgentRegistrationStatus,
   AgentRegistrationType,
 } from "@/api/agent-auth/constants";
+import { readStoredAgentClientCredential } from "@/api/agent-auth/credential-storage";
+import { prepareAgentClientCredential } from "@/api/agent-auth/credentials";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   oauthClient,
@@ -29,8 +31,10 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { reserveRegistration } from "@/api/lib/auth/registration-budget";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
@@ -115,7 +119,16 @@ export const createAgentOAuthClient = async ({
   registrationId: string;
   scopes: readonly string[];
   grantTypes: readonly string[];
-}): Promise<AgentClientCredentials> => {
+}): Promise<Result<AgentClientCredentials, HandlerError>> => {
+  const admission = await reserveRegistration({
+    kind: "agent",
+    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
+    now: new Date(),
+    execute: async (query) => await rootDb.execute(query),
+  });
+  if (Result.isError(admission)) {
+    return Result.err(admission.error);
+  }
   const clientId = Bun.randomUUIDv7().replaceAll("-", "");
   const clientSecret = generateOpaqueToken();
   const resourceId = getMcpResourceUrl(
@@ -140,6 +153,7 @@ export const createAgentOAuthClient = async ({
       panic("Agent OAuth resource is absent from the migrated auth schema");
     }
     await transaction.insert(oauthClient).values({
+      registrationOrigin: "agent",
       id: createSafeId<"mcpOAuthClient">(),
       applicationType: "web",
       clientId,
@@ -170,7 +184,7 @@ export const createAgentOAuthClient = async ({
     });
   });
 
-  return { clientId, clientSecret };
+  return Result.ok({ clientId, clientSecret });
 };
 
 export type TokenResponseShape = {
@@ -317,16 +331,27 @@ export type AnonymousRegistrationResult = {
  */
 export const startServiceAuthRegistration = async (
   loginHint: string,
-): Promise<ServiceAuthCeremony> => {
+): Promise<Result<ServiceAuthCeremony, HandlerError>> => {
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
   const userCode = generateUserCode();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "service_auth",
     registrationId,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
+  const storedCredential = await prepareAgentClientCredential(
+    credentials.clientSecret,
+  );
+  if (Result.isError(storedCredential)) {
+    return Result.err(storedCredential.error);
+  }
+
   const expiresAt = new Date(
     Temporal.Now.instant().epochMilliseconds + REGISTRATION_TTL_MS,
   );
@@ -338,21 +363,21 @@ export const startServiceAuthRegistration = async (
     userCode,
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: storedCredential.value,
     loginHint,
     grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
     pollIntervalSeconds: AGENT_AUTH_POLL_INTERVAL_SECONDS,
     expiresAt,
   });
 
-  return {
+  return Result.ok({
     registrationId,
     registrationType: "service_auth",
     userCode,
     claimToken,
     expiresIn: AGENT_AUTH_CEREMONY_TTL_SECONDS,
     interval: AGENT_AUTH_POLL_INTERVAL_SECONDS,
-  };
+  });
 };
 
 /**
@@ -360,20 +385,31 @@ export const startServiceAuthRegistration = async (
  * and persist a claimable registration so a user can upgrade it later.
  */
 export const startAnonymousRegistration = async (): Promise<
-  Result<AnonymousRegistrationResult, AgentTokenError>
+  Result<AnonymousRegistrationResult, AgentTokenError | HandlerError>
 > => {
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "anonymous",
     registrationId,
     scopes: AGENT_AUTH_ANONYMOUS_SCOPES,
     grantTypes: ["client_credentials"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
 
   const tokenResult = await mintAnonymousToken(credentials);
   if (Result.isError(tokenResult)) {
     return Result.err(tokenResult.error);
+  }
+
+  const storedCredential = await prepareAgentClientCredential(
+    credentials.clientSecret,
+  );
+  if (Result.isError(storedCredential)) {
+    return Result.err(storedCredential.error);
   }
 
   const expiresAt = new Date(
@@ -385,7 +421,7 @@ export const startAnonymousRegistration = async (): Promise<
     status: "pending",
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: storedCredential.value,
     grantedScopes: [...AGENT_AUTH_ANONYMOUS_SCOPES],
     pollIntervalSeconds: AGENT_AUTH_POLL_INTERVAL_SECONDS,
     expiresAt,
@@ -552,6 +588,7 @@ export const mintInternalSessionCookieHeader = async ({
   await rootDb.insert(session).values({
     id: `agent-idjag-${token}`,
     token,
+    refreshMode: "fixed",
     userId,
     activeOrganizationId: organizationId,
     expiresAt: new Date(now.getTime() + INTERNAL_SESSION_TTL_MS),
@@ -764,6 +801,19 @@ const isRegistrationStatus = (
   value === "denied" ||
   value === "expired";
 
+type RegistrationCredential = {
+  id: string;
+  clientId: string;
+  clientSecretSink: string;
+};
+
+export const readRegistrationClientCredential = async (
+  registration: RegistrationCredential,
+): Promise<Result<string, HandlerError>> =>
+  await rootDb.transaction(
+    async (tx) => await readStoredAgentClientCredential(tx, registration),
+  );
+
 /**
  * Exchange the stored authorization code for a JWT bound to the MCP
  * resource (so it verifies via apps/api/src/mcp/auth.ts) and consume the
@@ -786,12 +836,16 @@ const exchangeClaimedCode = async (
   const resource = getMcpResourceUrl(
     getResourceModeForType(toRegistrationType(registration.registrationType)),
   );
+  const clientSecret = await readRegistrationClientCredential(registration);
+  if (Result.isError(clientSecret)) {
+    return Result.err(new AgentTokenError("token_mint_failed"));
+  }
   const result = await Result.tryPromise(
     async () =>
       await callOauth2Token({
         grant_type: "authorization_code",
         client_id: registration.clientId,
-        client_secret: registration.clientSecretSink,
+        client_secret: clientSecret.value,
         code,
         redirect_uri: AGENT_REDIRECT_URI,
         resource,
@@ -827,7 +881,7 @@ export const startAnonymousUpgrade = async ({
 }: {
   claimToken: string;
   email: string;
-}): Promise<Result<ServiceAuthCeremony, AgentTokenError>> => {
+}): Promise<Result<ServiceAuthCeremony, AgentTokenError | HandlerError>> => {
   const tokenHash = hashClaimToken(claimToken);
   const rows = await rootDb
     .select({
@@ -856,12 +910,23 @@ export const startAnonymousUpgrade = async ({
   // existing token valid until the user completes the upgrade.
   const newClaimToken = generateOpaqueToken();
   const userCode = generateUserCode();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "service_auth",
     registrationId: registration.id,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
+  const storedCredential = await prepareAgentClientCredential(
+    credentials.clientSecret,
+  );
+  if (Result.isError(storedCredential)) {
+    return Result.err(storedCredential.error);
+  }
+
   const expiresAt = new Date(
     Temporal.Now.instant().epochMilliseconds + REGISTRATION_TTL_MS,
   );
@@ -877,7 +942,7 @@ export const startAnonymousUpgrade = async ({
       userCode,
       claimTokenHash: hashClaimToken(newClaimToken),
       clientId: credentials.clientId,
-      clientSecretSink: credentials.clientSecret,
+      clientSecretSink: storedCredential.value,
       loginHint: email,
       grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
       expiresAt,

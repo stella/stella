@@ -27,6 +27,7 @@ import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { ScanResult } from "@/api/lib/file-scan/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -132,6 +133,8 @@ let activeFile: SeededFile;
 let siblingFile: SeededFile;
 /** A document in another matter of the same firm, which the caller can open. */
 let otherMatterFile: SeededFile;
+/** A read-only document in the open matter. */
+let readOnlyFile: SeededFile;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -167,6 +170,14 @@ beforeAll(async () => {
     propertyId: otherMatterPropertyId,
     workspaceId: ids.wsA2,
   });
+  readOnlyFile = await seedFile({
+    propertyId: ids.filePropertyA1,
+    workspaceId: ids.wsA1,
+  });
+  await testDb
+    .update(entities)
+    .set({ readOnly: true })
+    .where(eq(entities.id, readOnlyFile.entityId));
 });
 
 afterAll(async () => {
@@ -175,7 +186,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   fake = startFakeS3();
-  for (const file of [activeFile, siblingFile, otherMatterFile]) {
+  for (const file of [activeFile, siblingFile, otherMatterFile, readOnlyFile]) {
     fake.put(
       bucket,
       objectKey({ ...file, organizationId: ids.orgA }),
@@ -206,7 +217,10 @@ const objectReads = () =>
 
 /** Runs the automatic `suggest_changes` against the open document, with the
  *  field id the client sent. */
-const suggestChanges = async (fileFieldId: SafeId<"field">) => {
+const suggestChanges = async (
+  fileFieldId: SafeId<"field">,
+  target: SeededFile = activeFile,
+) => {
   const written: unknown[] = [];
   const createVersion: typeof createEntityVersionFromBuffer = async (input) => {
     written.push(input);
@@ -222,15 +236,18 @@ const suggestChanges = async (fileFieldId: SafeId<"field">) => {
   const tools = createAutoApplySuggestChangesTools({
     createEntityVersionFromBuffer: createVersion,
     docxEditRepresentation: "direct",
-    entityId: activeFile.entityId,
-    expectedCurrentVersionId: activeFile.versionId,
+    access: memberDocumentWriteAccess({
+      type: "new_version",
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+    }),
+    expectedCurrentVersionId: target.versionId,
     fileFieldId,
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
     safeDb,
     scanFile: async () => Result.ok(scanResult),
     userId: ids.userA1,
-    workspaceId: activeFile.workspaceId,
   });
   const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
   if (!execute) {
@@ -245,7 +262,7 @@ const suggestChanges = async (fileFieldId: SafeId<"field">) => {
     try: async () =>
       await execute(
         {
-          documentVersion: activeFile.versionId,
+          documentVersion: target.versionId,
           operations: [
             {
               blockId: block.id,
@@ -297,6 +314,20 @@ describe("automatic suggest_changes with a client-sent file field", () => {
     expect(Result.isError(outcome)).toBe(true);
     expect(Result.isError(outcome) ? outcome.error : null).toMatchObject({
       message: "The active file field is not an editable DOCX file",
+    });
+    expect(reads).toEqual([]);
+    expect(written).toEqual([]);
+  });
+
+  test("refuses a read-only document, reading and writing nothing", async () => {
+    const { outcome, reads, written } = await suggestChanges(
+      readOnlyFile.fieldId,
+      readOnlyFile,
+    );
+
+    expect(Result.isError(outcome) ? outcome.error : null).toMatchObject({
+      kind: "invalid-input",
+      message: "Entity is read-only",
     });
     expect(reads).toEqual([]);
     expect(written).toEqual([]);

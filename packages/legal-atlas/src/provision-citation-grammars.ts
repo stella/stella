@@ -17,6 +17,7 @@
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
 import type {
   ProvisionReference,
   ProvisionUnit,
@@ -613,7 +614,9 @@ export const PROVISION_CITATION_GRAMMARS = {
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?:${CZ_STATUTE_COLLECTION.spellings
         .toSorted((left, right) => right.length - left.length)
         .map((spelling) => RegExp.escape(spelling))
-        .join("|")})(?![\p{L}\p{N}])(?!\.?\s*(?:m\.\s*s\.|NSS|rozh\.))`,
+        .join(
+          "|",
+        )})(?![\p{L}\p{N}])(?!\.?\s*(?:m\.\s*s\.|${CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE}))`,
     },
     jurisdiction: "CZE",
     levels: [

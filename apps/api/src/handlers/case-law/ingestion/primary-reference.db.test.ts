@@ -5,14 +5,15 @@
  * says what kind it is. The crawl, a refresh that changes the kind, a replay
  * of the stored payload and the identifier backfill must all leave the same
  * row: one id and slug, the typed identifiers, the docket kept beside a
- * reporter primary, and a legacy docket key only where the primary is a
- * docket. A docket-primary decision of an existing jurisdiction must come out
+ * reporter primary, and a legacy docket key and a case-file key only where
+ * the primary is a docket. A docket-primary decision of an existing jurisdiction must come out
  * exactly as it did before the type existed.
  */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -51,6 +52,7 @@ import {
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -89,36 +91,41 @@ const base = {
   textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
 } as const;
 
-const czechDecision = (rawHash: string): IngestionResult => ({
-  ...base,
-  caseNumber: "21 Cdo 1234/2020",
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  metadata: { chamber: "21" },
-  rawHash,
-  sourceDocumentId: "cz-1",
-});
+const czechDecision = (rawHash: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...base,
+    caseNumber: "21 Cdo 1234/2020",
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    metadata: { chamber: "21" },
+    rawHash,
+    sourceDocumentId: "cz-1",
+  });
 
-const usDocketDecision = (sourceDocumentId: string): IngestionResult => ({
-  ...base,
-  caseNumber: DOCKET,
-  court: SCOTUS,
-  courtId: "scotus",
-  country: "USA",
-  language: "en",
-  metadata: {},
-  rawHash: `docket-${sourceDocumentId}`,
-  sourceDocumentId,
-});
+const usDocketDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...base,
+    caseNumber: DOCKET,
+    court: SCOTUS,
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    metadata: {},
+    rawHash: `docket-${sourceDocumentId}`,
+    sourceDocumentId,
+  });
 
-const usReporterDecision = (sourceDocumentId: string): IngestionResult => ({
-  ...usDocketDecision(sourceDocumentId),
-  caseNumber: REPORTER,
-  caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-  identifiers: [{ type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: DOCKET }],
-  rawHash: `reporter-${sourceDocumentId}`,
-});
+const usReporterDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    ...usDocketDecision(sourceDocumentId),
+    caseNumber: REPORTER,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: DOCKET },
+    ],
+    rawHash: `reporter-${sourceDocumentId}`,
+  });
 
 let order = 0n;
 const ingest = async (
@@ -171,6 +178,7 @@ const storedDecision = async (
         caseNumber: caseLawDecisions.caseNumber,
         caseNumberType: caseLawDecisions.caseNumberType,
         citationKey: caseLawDecisions.citationKey,
+        docketFamilyKey: caseLawDecisions.docketFamilyKey,
         country: caseLawDecisions.country,
         ecli: caseLawDecisions.ecli,
         languageGroupKey: caseLawDecisions.languageGroupKey,
@@ -245,6 +253,8 @@ const replayerFor = async (
     .where(eq(caseLawDecisions.id, row.id));
   const adapter: SourceAdapter = {
     key: ADAPTER_KEYS.EU_ECJ,
+    documentStage: "inline",
+    observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
     sourceFields: {
       status: "declared",
       fields: {},
@@ -262,6 +272,7 @@ const replayerFor = async (
       throw new Error("a replay must never fetch from the publisher");
     },
     reconciliation: {
+      revisionOf: (payload) => payload,
       firstSlice: "1970-01-01",
       sliceOf: () => "1970-01-01",
       nextSlice: () => null,
@@ -320,6 +331,7 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
   const first = await storedDecision(sourceId, "cz-1");
 
   expect(first.citationKey).toBe(citationKeyOf("21 Cdo 1234/2020"));
+  expect(first.docketFamilyKey).toBe("21cdo1234/2020");
   expect(first.languageGroupKey).toBe(`${sourceId}:21 Cdo 1234/2020`);
   expect(first.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
   expect(first.metadata).toEqual({ chamber: "21" });
@@ -336,8 +348,43 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
   expect(refreshed.id).toBe(first.id);
   expect(refreshed.slug).toBe(first.slug);
   expect(refreshed.citationKey).toBe(first.citationKey);
+  expect(refreshed.docketFamilyKey).toBe(first.docketFamilyKey);
   expect(refreshed.languageGroupKey).toBe(first.languageGroupKey);
   expect(refreshed.identifiers).toEqual(first.identifiers);
+});
+
+test("a docket stored with its sheet is keyed by its case file", async () => {
+  const sourceId = await newSource();
+  await ingest(
+    sourceId,
+    plainTextIngestionResult({
+      ...czechDecision("cz-sheet"),
+      caseNumber: "4 As 50/2012 - 33",
+      court: "Nejvyšší správní soud",
+      sourceDocumentId: "cz-sheet",
+    }),
+  );
+  const stored = await storedDecision(sourceId, "cz-sheet");
+
+  expect(stored.caseNumber).toBe("4 As 50/2012 - 33");
+  expect(stored.citationKey).toBe(citationKeyOf("4 As 50/2012 - 33"));
+  // The file's key, which the sibling filed without the sheet shares.
+  expect(stored.docketFamilyKey).toBe(docketFamilyKeyOf("4 As 50/2012", "CZE"));
+});
+
+test("a refresh keys a row stored before the case-file key", async () => {
+  const sourceId = await newSource();
+  await ingest(sourceId, czechDecision("cz-unkeyed-v1"));
+  const first = await storedDecision(sourceId, "cz-1");
+  await db
+    .update(caseLawDecisions)
+    .set({ docketFamilyKey: null })
+    .where(eq(caseLawDecisions.id, first.id));
+
+  await ingest(sourceId, czechDecision("cz-unkeyed-v2"));
+  const refreshed = await storedDecision(sourceId, "cz-1");
+  expect(first.docketFamilyKey).not.toBeNull();
+  expect(refreshed.docketFamilyKey).toBe(first.docketFamilyKey);
 });
 
 test("a reporter primary keeps its docket as an identifier and no docket key", async () => {
@@ -347,6 +394,7 @@ test("a reporter primary keeps its docket as an identifier and no docket key", a
 
   expect(stored.caseNumber).toBe(REPORTER);
   expect(stored.citationKey).toBeNull();
+  expect(stored.docketFamilyKey).toBeNull();
   expect(stored.languageGroupKey).toBe(`${sourceId}:document:cluster-1`);
   expect(stored.caseNumberType).toBe(
     DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
@@ -363,6 +411,7 @@ test("a docket upgraded to a reporter primary keeps the row and drops its docket
   const docket = await storedDecision(sourceId, "cluster-2");
   // The fixture reaches the fault: a docket primary does carry a key.
   expect(docket.citationKey).toBe(citationKeyOf(DOCKET));
+  expect(docket.docketFamilyKey).toBe(docketFamilyKeyOf(DOCKET, "USA"));
 
   await ingest(sourceId, usReporterDecision("cluster-2"));
   const upgraded = await storedDecision(sourceId, "cluster-2");
@@ -375,6 +424,7 @@ test("a docket upgraded to a reporter primary keeps the row and drops its docket
     DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   );
   expect(upgraded.citationKey).toBeNull();
+  expect(upgraded.docketFamilyKey).toBeNull();
   expect(upgraded.identifiers).toEqual(REPORTER_IDENTIFIERS);
 });
 
@@ -387,10 +437,13 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
     const crawled = await storedDecision(sourceId, "cluster-3");
     expect(crawled.caseNumber).toBe(DOCKET);
     expect(crawled.citationKey).toBe(citationKeyOf(DOCKET));
-    const { replay, release } = await replayerFor(crawled, (stored) => ({
-      ...usReporterDecision(stored.sourceDocumentId ?? ""),
-      rawHash: "current-parser",
-    }));
+    expect(crawled.docketFamilyKey).toBe(docketFamilyKeyOf(DOCKET, "USA"));
+    const { replay, release } = await replayerFor(crawled, (stored) =>
+      plainTextIngestionResult({
+        ...usReporterDecision(stored.sourceDocumentId ?? ""),
+        rawHash: "current-parser",
+      }),
+    );
 
     const first = await replay();
     // The reference changed and the document did not: the same decision,
@@ -405,6 +458,7 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
       DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     );
     expect(replayed.citationKey).toBeNull();
+    expect(replayed.docketFamilyKey).toBeNull();
     expect(replayed.identifiers).toEqual(REPORTER_IDENTIFIERS);
     expect(replayed.recovered).toEqual(REPORTER_IDENTIFIERS);
 
@@ -441,11 +495,11 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
 test("a correction of the reference type alone is written under an unchanged source hash", async () => {
   const sourceId = await newSource();
   // A reporter citation first stored as though it were a docket.
-  const mistyped = {
+  const mistyped = plainTextIngestionResult({
     ...usDocketDecision("cluster-4"),
     caseNumber: REPORTER,
     rawHash: "same-payload",
-  };
+  });
   await ingest(sourceId, mistyped);
   const before = await storedDecision(sourceId, "cluster-4");
   expect(before.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
@@ -471,14 +525,20 @@ test("a correction of the reference type alone is written under an unchanged sou
 test("two spellings of one reporter citation become one identifier row", async () => {
   const sourceId = await newSource();
   // `A.` and `Atl.` name one reporter, so the two keys are one.
-  await ingest(sourceId, {
-    ...usDocketDecision("cluster-5"),
-    caseNumber: "10 A. 5",
-    caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    identifiers: [
-      { type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION, value: "10 Atl. 5" },
-    ],
-  });
+  await ingest(
+    sourceId,
+    plainTextIngestionResult({
+      ...usDocketDecision("cluster-5"),
+      caseNumber: "10 A. 5",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "10 Atl. 5",
+        },
+      ],
+    }),
+  );
   const stored = await storedDecision(sourceId, "cluster-5");
 
   // The primary's spelling is the row; the other stays in the stored
@@ -502,11 +562,11 @@ test("a replay correcting only the reference type is applied", async () => {
   const fake = startFakeS3();
   try {
     const sourceId = await newSource();
-    const mistyped = {
+    const mistyped = plainTextIngestionResult({
       ...usDocketDecision("cluster-6"),
       caseNumber: REPORTER,
       rawHash: "same-payload",
-    };
+    });
     await ingest(sourceId, mistyped);
     const before = await storedDecision(sourceId, "cluster-6");
     const { replay, release } = await replayerFor(before, () => ({

@@ -25,7 +25,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -53,6 +52,7 @@ import {
 } from "@/components/workspaces/table/group-columns";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -570,11 +570,8 @@ const PropertyComposerBody = ({
             }
             onClose();
           },
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
           },
         },
       );
@@ -632,11 +629,8 @@ const PropertyComposerBody = ({
           onClose();
           onCreated?.(result);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -675,11 +669,8 @@ const PropertyComposerBody = ({
             ],
           });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("workspaces.properties.autoPromptFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("workspaces.properties.autoPromptFailed"));
         },
       },
     );

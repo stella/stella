@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import updateDailyTarget from "@/api/handlers/time-entries/me/daily-target/update";
 import listMyTimeEntries from "@/api/handlers/time-entries/me/list";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
@@ -15,4 +16,8 @@ export const myTimeEntriesRoute = new Elysia({ prefix: "/v1/time-entries/me" })
   .get("/", listMyTimeEntries.handler, {
     permissions: listMyTimeEntries.config.permissions,
     query: listMyTimeEntries.config.query,
+  })
+  .put("/daily-target", updateDailyTarget.handler, {
+    permissions: updateDailyTarget.config.permissions,
+    body: updateDailyTarget.config.body,
   });

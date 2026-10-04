@@ -6,6 +6,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import thumbnailEndpoint from "./thumbnail";
@@ -24,7 +25,7 @@ const readFileThumbnail = async ({
 }: Pick<ThumbnailContext, "recordAuditEvent" | "scopedDb">) =>
   await thumbnailEndpoint.handler(
     asTestRaw<ThumbnailContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { fieldId, workspaceId },
       recordAuditEvent,
       request: new Request("https://example.test/files/thumbnail"),
@@ -106,7 +107,7 @@ describe("matter file thumbnail", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(events).toEqual([
       expect.objectContaining({
-        action: "download",
+        action: "access",
         resourceId: entityId,
         resourceType: "entity",
         workspaceId,

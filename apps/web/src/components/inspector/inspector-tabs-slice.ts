@@ -880,6 +880,17 @@ export const createInspectorTabsSlice = (
       }
     }),
 
+  updateFileMetadata: (tabId, { label, fileName }) =>
+    set((state) => {
+      const tab = state.tabs.find((candidate) => candidate.id === tabId);
+      if (tab?.type !== "pdf") {
+        return;
+      }
+      tab.label = label;
+      tab.fileName = fileName;
+      normalizeFileTabFacet(tab);
+    }),
+
   updateLabel: (tabId, label) =>
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === tabId);

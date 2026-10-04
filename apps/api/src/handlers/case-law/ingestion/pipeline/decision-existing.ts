@@ -32,6 +32,11 @@ import {
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  OBSERVATION_DETAIL,
+  OBSERVATION_DETAIL_RANK,
+  observationDetailOf,
+} from "@/api/lib/legal-search/partial-observation-sql";
 
 /** What an observation carries, measured against the row it would write. */
 export type ObservationShape = {
@@ -61,7 +66,7 @@ export const classifyObservation = ({
 }: ClassifyObservationOptions): ObservationShape => {
   const storedPartialObservation = existing
     ? partialObservationFromMetadata(existing.metadata)
-    : { caseNumberIsPlaceholder: false, isListingOnly: false };
+    : partialObservationFromMetadata(undefined);
   const incomingCarriesDocument = payloadCarriesDocument({
     text: result.fulltext ?? null,
     sections: result.sections ?? null,
@@ -74,8 +79,8 @@ export const classifyObservation = ({
     existing !== undefined &&
     ((result.caseNumberIsPlaceholder === true &&
       !storedPartialObservation.caseNumberIsPlaceholder) ||
-      (result.isListingOnly === true &&
-        !storedPartialObservation.isListingOnly));
+      OBSERVATION_DETAIL_RANK[observationDetailOf(result)] <
+        OBSERVATION_DETAIL_RANK[storedPartialObservation.detail]);
   return {
     storedPartialObservation,
     incomingCarriesDocument,
@@ -368,7 +373,7 @@ export const resolveExistingDecisionPolicy = async ({
     // that can mark it, so it is written instead.
     !(
       storesUnpublishedWithoutDocument &&
-      !storedPartialObservation.isListingOnly &&
+      storedPartialObservation.detail !== OBSERVATION_DETAIL.LISTING_ONLY &&
       !corpusCarriesDocument(existing.contentHash)
     ) &&
     existing.caseNumber === result.caseNumber &&

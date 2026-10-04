@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -59,10 +59,11 @@ const readRateEntries = createSafeHandler(
     description:
       "List the rate lines of one rate table, earliest effective-from first, " +
       "with cursor pagination. Each line carries the hourly rate in minor " +
-      "currency units, its effective dates, and the user it applies to (null " +
-      "for the table's fallback rate). A rate table that does not exist in " +
+      "currency units, its effective dates, and its person or organization role selector " +
+      "(both null for the table fallback). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       readClass: "tenant",
@@ -127,6 +128,7 @@ const readRateEntries = createSafeHandler(
           .select({
             id: rateEntries.id,
             userId: rateEntries.userId,
+            role: rateEntries.role,
             hourlyRate: rateEntries.hourlyRate,
             effectiveFrom: rateEntries.effectiveFrom,
             effectiveTo: rateEntries.effectiveTo,
@@ -186,6 +188,7 @@ const readRateEntries = createSafeHandler(
       items: page.items.map((row) => ({
         id: row.id,
         userId: row.userId,
+        role: row.role,
         hourlyRate: row.hourlyRate,
         effectiveFrom: row.effectiveFrom,
         effectiveTo: row.effectiveTo,

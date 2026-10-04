@@ -35,6 +35,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
 import "@/components/office/office-file-viewer.css";
@@ -96,10 +97,7 @@ export const OfficeFileViewer = ({
   const handleNavigationError = useCallback(
     (error: Error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
     [analytics, t],
   );

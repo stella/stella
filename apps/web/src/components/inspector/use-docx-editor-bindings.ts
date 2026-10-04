@@ -10,7 +10,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 type UseDocxEditorBindingsOptions = {
   docxActionsRef: RefObject<Map<string, DocxBrowserEditorActions>>;
-  onError: () => void;
+  onError: (error: unknown) => void;
   setDocxCompatibilityByTab: Dispatch<
     SetStateAction<Map<string, DocxCompatibility>>
   >;

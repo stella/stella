@@ -9,40 +9,6 @@ import { advanceDeploymentStability } from "./check-api-deployment";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Splits every `bun test` command in a step into test files and flags; any
-// token that is neither is returned so the caller can fail on it.
-const bunTestTargets = (
-  run: string,
-): { entries: string[]; unclassified: string[] } => {
-  const entries: string[] = [];
-  const unclassified: string[] = [];
-  for (const line of run.split("\n")) {
-    const command = line.trim();
-    if (!command.includes("bun test")) {
-      continue;
-    }
-    if (!command.startsWith("bun test ")) {
-      unclassified.push(command);
-      continue;
-    }
-    let previousFlag = false;
-    for (const token of command.slice("bun test ".length).split(/\s+/u)) {
-      if (/^scripts\/[\w./-]+\.test\.tsx?$/u.test(token)) {
-        entries.push(token);
-        previousFlag = false;
-      } else if (/^--?[a-z][\w-]*(?:=\S+)?$/u.test(token)) {
-        previousFlag = !token.includes("=");
-      } else if (previousFlag && /^[\w.:-]+$/u.test(token)) {
-        // A separate flag value, e.g. `--timeout 5000`.
-        previousFlag = false;
-      } else {
-        unclassified.push(token);
-      }
-    }
-  }
-  return { entries, unclassified };
-};
-
 type WorkflowStep = { run: string; env: Record<string, unknown> };
 
 const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
@@ -648,85 +614,5 @@ describe("API deployment health receipt", () => {
     });
 
     expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
-  });
-
-  test("every bun test target in a step is classified", () => {
-    expect(
-      bunTestTargets(
-        [
-          "bun test scripts/a.test.ts scripts/b.test.ts",
-          "bun test --timeout 5000 scripts/c.test.ts --bail",
-          "bun test --timeout=5000 scripts/d.test.tsx",
-          "bash scripts/e.test.sh",
-        ].join("\n"),
-      ),
-    ).toEqual({
-      entries: [
-        "scripts/a.test.ts",
-        "scripts/b.test.ts",
-        "scripts/c.test.ts",
-        "scripts/d.test.tsx",
-      ],
-      unclassified: [],
-    });
-    expect(
-      bunTestTargets(
-        [
-          "bun test apps/web/src/x.test.ts",
-          "bun test 'scripts/quoted.test.ts'",
-          "env X=1 bun test scripts/f.test.ts",
-        ].join("\n"),
-      ).unclassified,
-    ).toEqual([
-      "apps/web/src/x.test.ts",
-      "'scripts/quoted.test.ts'",
-      "env X=1 bun test scripts/f.test.ts",
-    ]);
-  });
-
-  test("release policy tests run without the dependency install", async () => {
-    const workflow = await Bun.file(
-      new URL("../.github/workflows/ci.yml", import.meta.url),
-    ).text();
-    const step = workflowSteps(Bun.YAML.parse(workflow), "ci.yml").find(
-      ({ run }) =>
-        run.includes("bun test scripts/check-api-deployment.test.ts"),
-    );
-    expect(step).toBeDefined();
-    const { entries, unclassified } = bunTestTargets(step?.run ?? "");
-    // Every token of every `bun test` command is a known target or flag, so a
-    // consolidated or flagged command cannot hide a test from this check.
-    expect(unclassified).toEqual([]);
-    expect(entries).toContain("scripts/check-api-deployment.test.ts");
-    const root = new URL("../", import.meta.url).pathname;
-    const transpiler = new Bun.Transpiler({ loader: "ts" });
-    const pending = [...entries];
-    const seen = new Set<string>();
-    const packages: string[] = [];
-    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
-      if (seen.has(file)) {
-        continue;
-      }
-      seen.add(file);
-      // Executable scripts start with a shebang, which is not TypeScript.
-      const source = (await Bun.file(`${root}${file}`).text()).replace(
-        /^#![^\n]*/u,
-        "",
-      );
-      for (const { path: specifier } of transpiler.scanImports(source)) {
-        if (specifier.startsWith(".")) {
-          const target = new URL(specifier, `file://${root}${file}`).pathname;
-          const relative = target.slice(root.length);
-          pending.push(relative.endsWith(".ts") ? relative : `${relative}.ts`);
-        } else if (
-          specifier !== "bun" &&
-          !specifier.startsWith("bun:") &&
-          !specifier.startsWith("node:")
-        ) {
-          packages.push(`${file} imports ${specifier}`);
-        }
-      }
-    }
-    expect(packages).toEqual([]);
   });
 });

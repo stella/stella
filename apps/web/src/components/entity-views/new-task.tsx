@@ -8,7 +8,6 @@ import type { TaskStatus } from "@stll/api-contract";
 import { UserText } from "@stll/ui/bidi-text";
 import { KanbanCellAction } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -16,7 +15,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -72,9 +71,7 @@ export const NewEntityViewTask = ({
     );
     if (result.isErr()) {
       analytics.captureError(result.error);
-      stellaToast.error(
-        userErrorFromThrown(result.error, t("common.unexpectedError")),
-      );
+      notifyUserError(result.error, t("common.unexpectedError"));
     } else {
       await Promise.all([
         onChanged(),

@@ -26,7 +26,11 @@ import type {
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
-import { copyEntities } from "./copy-utils";
+import {
+  copyEntities,
+  ENTITY_SNAPSHOT_COLUMNS,
+  EVERY_LIVE_VERSION_SELECT,
+} from "./copy-utils";
 import type {
   WritableEntitySnapshot,
   WritableEntityVersionSnapshot,
@@ -565,6 +569,66 @@ const lookUpCode = async (
     });
   });
 
+test("a move requires a complete live version snapshot before writing target rows", async () => {
+  const sourceMatter = await seedMatter();
+  const targetMatter = await seedTargetMatter(sourceMatter);
+  const document = await seedDocumentHistory(sourceMatter);
+  const outcome = await testDb.transaction(
+    async (tx: TestDatabaseTransaction) => {
+      await tx.execute(sql.raw("RESET ROLE"));
+      const sourceSnapshot = await tx.query.entities.findMany({
+        where: { id: { eq: document.entityId } },
+        columns: ENTITY_SNAPSHOT_COLUMNS,
+        with: EVERY_LIVE_VERSION_SELECT,
+        limit: 1,
+      });
+      return await copyEntities({
+        organizationId: sourceMatter.organizationId,
+        tx: asTestRaw<Transaction>(tx),
+        targetWorkspaceId: targetMatter.workspaceId,
+        targetParentId: null,
+        userId: sourceMatter.userId,
+        recordAuditEvent: noAuditRows,
+        sourceEntityId: document.entityId,
+        sourceEntities: [
+          seededSnapshot({
+            document,
+            propertyId: targetMatter.propertyId,
+            carried: document.versions.slice(-1),
+          }),
+        ],
+        transfer: {
+          type: "move",
+          sourceWorkspaceId: sourceMatter.workspaceId,
+          sourceSnapshot: sourceSnapshot.map((entity) => {
+            const snapshot = structuredClone(entity);
+            snapshot.versions = snapshot.versions.slice(-1);
+            return snapshot;
+          }),
+        },
+        fieldMapping: { type: "omit" },
+      });
+    },
+  );
+  expect(Result.isError(outcome)).toBe(true);
+  if (Result.isOk(outcome)) {
+    throw new TypeError("Expected an incomplete source snapshot to be refused");
+  }
+  expect(outcome.error).toMatchObject({ status: 409 });
+  expect(
+    await testDb.$count(
+      entities,
+      eq(entities.workspaceId, targetMatter.workspaceId),
+    ),
+  ).toBe(0);
+  expect(
+    await testDb.$count(
+      entityVersions,
+      eq(entityVersions.entityId, document.entityId),
+    ),
+  ).toBe(document.versions.length);
+});
+
 test("a move carries every version with its frozen stamp and verification code", async () => {
   const sourceMatter = await seedMatter();
   const targetMatter = await seedTargetMatter(sourceMatter);
@@ -591,7 +655,16 @@ test("a move carries every version with its frozen stamp and verification code",
               }),
             ],
             sourceWorkspaceId: sourceMatter.workspaceId,
-            transfer: { type: "move" },
+            transfer: {
+              type: "move",
+              sourceWorkspaceId: sourceMatter.workspaceId,
+              sourceSnapshot: await tx.query.entities.findMany({
+                where: { id: { eq: document.entityId } },
+                columns: ENTITY_SNAPSHOT_COLUMNS,
+                with: EVERY_LIVE_VERSION_SELECT,
+                limit: 1,
+              }),
+            },
             fieldMapping: { type: "omit" },
           });
           // What the handler does next, in the same transaction: the codes must

@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 
 /**
  * Minimal per-kind shape needed to install a catalogue entry. Kept
@@ -42,10 +42,14 @@ export const installCatalogueEntry = async (
       description: entry.description,
       url: entry.url,
     });
-    if (response.error) {
-      throw toAPIError(response.error);
+    const data = unwrapEden(response);
+    if (data.type === "confirmation_required") {
+      throw toAPIError({
+        status: 409,
+        value: { code: "mcp_authorization_approval_required" },
+      });
     }
-    return response.data;
+    return data;
   }
 
   const response = await api.catalogue["install-skill"].post({

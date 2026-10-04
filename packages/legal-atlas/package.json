@@ -47,6 +47,10 @@
       "types": "./src/provision-key.ts",
       "import": "./src/provision-key.ts"
     },
+    "./provision-citation-profiles": {
+      "types": "./src/provision-citation-profiles.ts",
+      "import": "./src/provision-citation-profiles.ts"
+    },
     "./provision-extraction-admission": {
       "types": "./src/provision-extraction-admission.ts",
       "import": "./src/provision-extraction-admission.ts"
@@ -59,9 +63,21 @@
       "types": "./src/sk-provision-citation-profile.ts",
       "import": "./src/sk-provision-citation-profile.ts"
     },
+    "./document-fetch-diagnostics": {
+      "types": "./src/document-fetch-diagnostics.ts",
+      "import": "./src/document-fetch-diagnostics.ts"
+    },
+    "./document-stage-observer": {
+      "types": "./src/document-stage-observer.ts",
+      "import": "./src/document-stage-observer.ts"
+    },
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
+    },
+    "./ingestion-cycle": {
+      "types": "./src/ingestion-cycle.ts",
+      "import": "./src/ingestion-cycle.ts"
     }
   },
   "scripts": {
@@ -75,6 +91,7 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"

@@ -744,6 +744,7 @@ describe.skipIf(!rustfsReachable)(
         // Best-effort cleanup — lifecycle rule will catch it anyway.
         await getS3()
           .delete(cleanupKey)
+          // swallow-ok: afterAll removes the smoke object after upload assertions; lifecycle expiration also removes it
           .catch(() => {});
       }
     });
@@ -853,9 +854,11 @@ describe.skipIf(!rustfsReachable)(
 
       await getS3()
         .delete(sourceKey)
+        // swallow-ok: removes the temporary source after copy and destination-size assertions have passed
         .catch(() => {});
       await getS3()
         .delete(destKey)
+        // swallow-ok: removes the temporary destination after its copied contents and size have been asserted
         .catch(() => {});
     });
   },
