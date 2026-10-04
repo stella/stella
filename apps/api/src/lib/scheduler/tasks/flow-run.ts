@@ -72,6 +72,8 @@ export const createScheduledFlowTask =
     if (!definition) {
       // Definition deleted without a sync (e.g. cascade from org deletion): drop
       // the orphaned scheduler row so it stops firing.
+      // audit: skip — scheduler bookkeeping for a definition that no longer
+      // exists; no user-owned record changes.
       await db
         .delete(schedulerJobs)
         .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
