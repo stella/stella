@@ -136,12 +136,6 @@ const executionOf = async (
   if (Result.isError(acquired)) {
     throw acquired.error;
   }
-  if (acquired.value === undefined) {
-    throw new HandlerError({
-      status: 500,
-      message: "Expected enabled execution admission",
-    });
-  }
   return acquired.value;
 };
 
