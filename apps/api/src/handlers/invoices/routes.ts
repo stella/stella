@@ -15,6 +15,8 @@ import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -40,10 +42,6 @@ export const invoicesRoute = new Elysia({
   .get("/:invoiceId", readInvoiceById.handler, {
     params: readInvoiceById.config.params,
     permissions: readInvoiceById.config.permissions,
-  })
-  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
-    params: exportInvoicePdf.config.params,
-    permissions: exportInvoicePdf.config.permissions,
   })
   .put("/", createInvoice.handler, {
     body: createInvoice.config.body,
@@ -95,4 +93,13 @@ export const invoicesRoute = new Elysia({
     resourceSetUpdated: invoiceRealtimeUpdates,
     params: deleteInvoiceLine.config.params,
     permissions: deleteInvoiceLine.config.permissions,
+  })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
+  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
+    params: exportInvoicePdf.config.params,
+    permissions: exportInvoicePdf.config.permissions,
   });

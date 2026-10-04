@@ -4,12 +4,12 @@ import { useLocale, useTranslations } from "use-intl";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 
@@ -59,10 +59,7 @@ export const InvoicePdfDownloadButton = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("workspaces.views.exportFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });
 
