@@ -431,6 +431,37 @@ describe("a failed chat script keeps its error text out of process logs", () => 
     expectMarkerOnlyInResult(output);
   });
 
+  test("completion events omit error text while the tool result retains it", async () => {
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+    const events: { name: string; value: unknown }[] = [];
+
+    const output = await execute(
+      { typescriptCode: `throw new Error(${JSON.stringify(MARKER)});` },
+      {
+        emitCustomEvent: (name, value) => {
+          events.push({ name, value });
+        },
+      },
+    );
+
+    expectMarkerOnlyInResult(output);
+    const finished = events.filter(
+      ({ name }) => name === "code_mode:execution_finished",
+    );
+    expect(finished).toHaveLength(1);
+    const event = finished.at(0) ?? expect.unreachable("no completion event");
+    expect(event.value).toMatchObject({
+      success: false,
+      phase: "execute",
+      error: { name: "runtime" },
+    });
+    expect(event.value).not.toHaveProperty("error.message");
+    expect(event.value).not.toHaveProperty("error.stack");
+    expect(Bun.inspect(events)).not.toContain(MARKER);
+  });
+
   test("text the script read from a tool and then threw", async () => {
     const rows = [
       {
