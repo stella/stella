@@ -976,13 +976,14 @@ test("a reader entry reads as its file, in a spelling its grammar keeps", () => 
           parseDecisionDocket(stored, { grammar })?.formatted,
           `${jurisdiction}: ${stored}`,
         ).toBe(stored);
-        const intent = parseDecisionQuery(
+        const read = parseDecisionQuery(
           withPart ? `${entry} - ${part}.` : entry,
           { grammar },
         );
-        if (intent.type !== "identifier" || intent.kind !== "docket") {
-          return panic(`Not a docket: ${label}`);
-        }
+        const intent =
+          read.type === "identifier" && read.kind === "docket"
+            ? read
+            : panic(`Not a docket: ${label}`);
         expect(intent.jurisdiction, label).toBe(jurisdiction);
         expect(intent.selector, label).toEqual(
           withPart ? { kind: "part", value: part } : { kind: "none" },
