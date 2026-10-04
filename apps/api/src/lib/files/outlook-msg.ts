@@ -32,6 +32,9 @@ const PROPERTY_ID = {
   bodyHtml: "1013",
   clientSubmitTime: "0039",
   messageDeliveryTime: "0e06",
+  internetMessageId: "1035",
+  inReplyToId: "1042",
+  internetReferences: "1039",
   recipientType: "0c15",
   displayName: "3001",
   email: "3003",
@@ -64,6 +67,11 @@ export type OutlookMsgEmail = {
   cc: OutlookMsgRecipient[];
   bcc: OutlookMsgRecipient[];
   date: string | null;
+  /** The sender's submit time, the counterpart of an RFC 5322 Date header. */
+  submittedAt: string | null;
+  messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
   html: string | null;
   text: string | null;
   attachments: OutlookMsgAttachment[];
@@ -107,6 +115,10 @@ export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
     date:
       getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
       getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    submittedAt: getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    messageId: getString(rootProperties, PROPERTY_ID.internetMessageId),
+    inReplyTo: getString(rootProperties, PROPERTY_ID.inReplyToId),
+    references: getString(rootProperties, PROPERTY_ID.internetReferences),
     html:
       getString(rootProperties, PROPERTY_ID.bodyHtml) ??
       getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
