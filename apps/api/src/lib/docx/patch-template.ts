@@ -143,24 +143,29 @@ export type ClauseSlotVisitor = (
 
 const visitClauseSlots = (
   container: slimdom.Element,
-  loopScopes: ReadonlyMap<slimdom.Element, Record<string, unknown>>,
+  processingContext: ReturnType<typeof createDirectiveProcessingContext>,
   visit: ClauseSlotVisitor,
 ): void => {
   for (const paragraph of [...container.getElementsByTagNameNS(W_NS, "p")]) {
-    const loopScope = loopScopes.get(paragraph);
-    const scoped: Record<string, RichPatchValue> = {};
+    const loopScope = processingContext.inlineDataByParagraph.get(paragraph);
+    const scoped = new Map<string, RichPatchValue>();
     for (const { meta } of scanMarkers(paragraphText(paragraph))) {
       const patchKey = meta.kind === "clause" ? substitutionKey(meta) : null;
       if (patchKey === null) {
         continue;
       }
-      const value = visit({ patchKey, loopScope });
-      if (value !== undefined && loopScope !== undefined) {
-        scoped[patchKey] = value;
+      const inlineScope = processingContext.inlineClauseScopes.get(patchKey);
+      const scope = inlineScope?.values ?? loopScope;
+      const value = visit({
+        patchKey: inlineScope?.patchKey ?? patchKey,
+        loopScope: scope,
+      });
+      if (value !== undefined && scope !== undefined) {
+        scoped.set(patchKey, value);
       }
     }
-    if (Object.keys(scoped).length > 0) {
-      patchParagraphPlaceholders(paragraph, scoped);
+    if (scoped.size > 0) {
+      patchParagraphPlaceholders(paragraph, Object.fromEntries(scoped));
     }
   }
 };
@@ -214,6 +219,8 @@ const preProcessTemplateDirectives = async (
     (await zip.file("word/numbering.xml")?.async("string")) ?? null;
   const validNumIds = collectValidNumIds(numberingXml);
   const processingContext = createDirectiveProcessingContext();
+  processingContext.clauseScopeMode =
+    visitClauseSlot === undefined ? "ignore" : "collect";
 
   for (const { path, xml } of parts) {
     const doc = slimdom.parseXmlDocument(xml);
@@ -228,7 +235,7 @@ const preProcessTemplateDirectives = async (
     paragraphOffsets[source] += paragraphCount;
     if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
       if (visitClauseSlot) {
-        visitClauseSlots(container, new Map(), visitClauseSlot);
+        visitClauseSlots(container, processingContext, visitClauseSlot);
       }
       continue;
     }
@@ -256,11 +263,7 @@ const preProcessTemplateDirectives = async (
     // Clause slots render where the evaluator kept them: a pruned branch drops
     // its marker, and a loop iteration renders the clause under its bindings.
     if (visitClauseSlot) {
-      visitClauseSlots(
-        container,
-        processingContext.inlineDataByParagraph,
-        visitClauseSlot,
-      );
+      visitClauseSlots(container, processingContext, visitClauseSlot);
     }
 
     if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
@@ -321,7 +324,7 @@ export const renderedClauseSlotOccurrences = async (
             templatePartSource(path),
           );
     if (container) {
-      visitClauseSlots(container, new Map(), collect);
+      visitClauseSlots(container, createDirectiveProcessingContext(), collect);
     }
   }
   return occurrences;

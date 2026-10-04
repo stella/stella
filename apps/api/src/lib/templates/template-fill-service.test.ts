@@ -2037,6 +2037,214 @@ describe("clause slot requiredness follows rendering", () => {
     ).toEqual(nameRejection("name"));
   });
 
+  test("a condition-only read retains the clause rendering scope", async () => {
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          partyClause,
+          {},
+          {
+            templateBody:
+              P("{% if name %}") +
+              P('{{ clause("Terms") }}') +
+              P("{% endif %}") +
+              P("Tail"),
+          },
+        ),
+      ),
+    ).toEqual(["Tail"]);
+  });
+
+  test.each(linkedAndOverride([{ text: "Hi {{ p.name | required }}" }]))(
+    "a $name inline loop slot retains each item binding",
+    async ({ body, override }) => {
+      const templateBody = P(
+        'Lead {% for p in persons %}{{ clause("Terms") }}; {% endfor %}Tail',
+      );
+      const result = await fillLinkedClause(
+        body,
+        { persons: [{ name: "Ann" }, { name: "Bob" }] },
+        { templateBody, override },
+      );
+      expect((await filledTexts(result)).join("")).toBe(
+        "Lead Hi Ann; Hi Bob; Tail",
+      );
+      expect(
+        await fillLinkedClause(
+          body,
+          { persons: [{ name: "Ann" }, {}] },
+          { templateBody, override },
+        ),
+      ).toEqual(nameRejection("p.name"));
+      expect(
+        (
+          await filledTexts(
+            await fillLinkedClause(
+              body,
+              { persons: [] },
+              { templateBody, override },
+            ),
+          )
+        ).join(""),
+      ).toBe("Lead Tail");
+    },
+  );
+
+  test.each(["block", "inline"])(
+    "a %s loop applies clause date and formula declarations per item",
+    async (mode) => {
+      const templateBody =
+        mode === "block"
+          ? P("{% for p in persons %}") +
+            P('{{ clause("Terms") }}') +
+            P("{% endfor %}")
+          : P(
+              'Lead {% for p in persons %}{{ clause("Terms") }}; {% endfor %}Tail',
+            );
+      const body = [
+        {
+          text: '{{ p.signed_on | date("cs-long") }}: {{ p.total | formula("p.qty * p.price") }}',
+        },
+      ];
+      const result = await fillLinkedClause(
+        body,
+        {
+          persons: [
+            { signed_on: "2028-06-13", qty: 2, price: 3 },
+            { signed_on: "2028-07-14", qty: 4, price: 5 },
+          ],
+        },
+        { templateBody },
+      );
+      const text = (await filledTexts(result)).join("");
+      expect(text).toContain("13. června 2028: 6");
+      expect(text).toContain("14. července 2028: 20");
+    },
+  );
+
+  test("nested inline slots inherit outer bindings and innermost loop counters", async () => {
+    const body = [
+      {
+        text: "{{ p.name | required }}/{{ child.name | required }}/{{ loop.index }}",
+      },
+    ];
+    const templateBody = P(
+      'Lead {% for p in persons %}{% for child in p.children %}{% if child.show %}{{ clause("Terms") }}; {% endif %}{% endfor %}{% endfor %}Tail',
+    );
+    const result = await fillLinkedClause(
+      body,
+      {
+        persons: [
+          {
+            name: "Ann",
+            children: [
+              { name: "A", show: true },
+              { show: false },
+              { name: "C", show: true },
+            ],
+          },
+          { name: "Bob", children: [{ name: "B", show: true }] },
+        ],
+      },
+      { templateBody },
+    );
+    expect((await filledTexts(result)).join("")).toBe(
+      "Lead Ann/A/1; Ann/C/3; Bob/B/1; Tail",
+    );
+  });
+
+  test.each(["block", "inline"])(
+    "a %s loop drafts clause fields from each item's values",
+    async (mode) => {
+      const body = [{ text: '{{ p.summary | ai("Summarize") }}' }];
+      const file = await makeDocx(
+        WRAP(
+          mode === "block"
+            ? P("{% for p in persons %}") +
+                P('{{ clause("Terms") }}') +
+                P("{% endfor %}")
+            : P(
+                'Lead {% for p in persons %}{{ clause("Terms") }}; {% endfor %}Tail',
+              ),
+        ),
+      );
+      const names: string[] = [];
+      const result = await fillTemplateDocx({
+        source: {
+          name: "Terms",
+          fileName: "terms.docx",
+          file,
+          templateId: toSafeId<"template">("tmpl_1"),
+        },
+        values: { persons: [{ name: "Ann" }, { name: "Bob" }] },
+        scopedDb: stubScopedDb(body),
+        organizationId,
+        requiredFields: "enforce",
+        useRecording: "caller",
+        aiCollaborators: async () => ({
+          generateAiValue: async ({ values }) => {
+            const name = values["name"];
+            if (typeof name !== "string") {
+              return panic("Expected the loop item's name in clause grounding");
+            }
+            names.push(name);
+            return { type: "drafted", value: `For ${name}` };
+          },
+        }),
+      });
+      expect(names).toEqual(["Ann", "Bob"]);
+      const text = (await filledTexts(result)).join("");
+      expect(text).toContain("For Ann");
+      expect(text).toContain("For Bob");
+    },
+  );
+
+  test("clause slot scope follows surviving loop items", async () => {
+    await assertProperty(
+      "clause slot scope follows surviving loop items",
+      fc.asyncProperty(
+        fc.constantFrom("block", "inline"),
+        fc.array(
+          fc.record({
+            name: fc.constantFrom("", "Ann", "Bob"),
+            show: fc.boolean(),
+          }),
+          { maxLength: 4 },
+        ),
+        async (mode, persons) => {
+          const templateBody =
+            mode === "block"
+              ? P("{% for p in persons %}") +
+                P("{% if p.show %}") +
+                P('{{ clause("Terms") }}') +
+                P("{% endif %}") +
+                P("{% endfor %}") +
+                P("Tail")
+              : P(
+                  'Lead {% for p in persons %}{% if p.show %}{{ clause("Terms") }}{% endif %}{% endfor %}Tail',
+                );
+          const result = await fillLinkedClause(
+            [{ text: "Hi {{ p.name | required }}" }],
+            { persons },
+            { templateBody },
+          );
+          const visible = persons.filter(({ show }) => show);
+          if (visible.some(({ name }) => name === "")) {
+            expect(result).toEqual(nameRejection("p.name"));
+            return;
+          }
+          expect((await filledTexts(result)).join("")).toBe(
+            `${
+              (mode === "inline" ? "Lead " : "") +
+              visible.map(({ name }) => `Hi ${name}`).join("")
+            }Tail`,
+          );
+        },
+      ),
+      { numRuns: 12 },
+    );
+  });
+
   const loopTemplate =
     P("{% for p in persons %}") +
     P('{{ clause("Terms") }}') +

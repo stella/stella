@@ -1111,7 +1111,7 @@ export const discoverTemplate = async (
     err.source = "body";
   }
 
-  const templateFieldPaths = new Set(primary.fields.keys());
+  const templateFieldPaths = new Set(primary.placeholderCounts.keys());
   const clauseFieldPaths = new Set<string>();
   const clausePathsBySlot = new Map<string, Set<string>>();
   for (const { container, clause } of additionalContent) {
@@ -1140,7 +1140,7 @@ export const discoverTemplate = async (
 
   // Scan headers and footers for additional fields
   const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
-  for (const path of hfAnalysis.fields.keys()) {
+  for (const path of hfAnalysis.placeholderCounts.keys()) {
     templateFieldPaths.add(path);
   }
   mergeAnalysis(primary, hfAnalysis);
