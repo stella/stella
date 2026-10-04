@@ -85,7 +85,11 @@ type WriteToolDefinition = Extract<
 
 export type RegistryWriteToolName = WriteToolDefinition["name"];
 
-/** One input parameter that accepts a chat ref, and the id kind it resolves to. */
+/**
+ * One place in a tool's input that accepts a chat ref, and the kind of id the
+ * ref resolves to. `param` is a path in the syntax of `input-ref-path.ts`: a
+ * top-level parameter name, or a nested path such as `positions[].sources[]`.
+ */
 export type InputRefParam = { kind: RegistryRefKind; param: string };
 
 /**
@@ -494,9 +498,10 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
   save_playbook: {
     chatProjectable: true,
-    // `playbook_id` and each position's `source_id` are org-scoped handles,
-    // not chat refs: they pass through as-is.
-    inputRefs: [],
+    // `playbook_id` and each position's `source_id` are org-scoped ids, not
+    // chat refs, so they are passed through unchanged. A position's `sources`
+    // are documents, given as the entity refs a listing or search returned.
+    inputRefs: [{ kind: "entity", param: "positions[].sources[]" }],
     projection: SAVE_PLAYBOOK_PROJECTION,
   },
   delete_clause: {

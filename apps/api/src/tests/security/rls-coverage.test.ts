@@ -10,6 +10,7 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import { CLIENT_MATTER_ADMIN_ROLES } from "@/api/lib/member-roles";
 import { CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS } from "@/api/tests/pglite-test-db";
 import {
   getRlsFixture,
@@ -235,6 +236,23 @@ describe("policy coverage", () => {
       security_invoker: false,
       view_owned_by_stella: false,
     });
+  });
+
+  test("workspace access view grants client matters to CLIENT_MATTER_ADMIN_ROLES", async () => {
+    const result = await testDb.execute<{ definition: string }>(sql`
+      SELECT pg_catalog.pg_get_viewdef(
+        ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
+      ) AS definition
+    `);
+    const definition = result.rows.at(0)?.definition ?? "";
+    const roleLists = [
+      ...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu),
+    ].map(
+      ([, list = ""]) =>
+        new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
+    );
+
+    expect(roleLists).toEqual([new Set(CLIENT_MATTER_ADMIN_ROLES)]);
   });
 
   test("every table with workspace_id has workspace policies", async () => {

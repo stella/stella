@@ -1,4 +1,5 @@
 [
+  "apps/api/src/lib/db/status-tables.gen.ts",
   "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/tsgo-compiler-options.ts",
   "packages/scripts/src/typescript-program.ts",
@@ -10,5 +11,6 @@
   "scripts/ratchet.ts",
   "scripts/result-boundary-globs.ts",
   "scripts/root-connection-shapes.ts",
-  "scripts/source-globs.ts"
+  "scripts/source-globs.ts",
+  "scripts/status-write-shapes.ts"
 ]

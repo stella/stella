@@ -117,8 +117,10 @@ import {
   unreadPublisherError,
   type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -1401,25 +1403,58 @@ const SK_COURTS_DETAIL_RECORD = {
   povodnaSpisovaZnacka: "7C/221/1991",
 };
 
+/** The court registry record for the listing row's court. */
+const SK_COURTS_REGISTRY_RECORD = {
+  registreGuid: "sud_105",
+  nazov: "Mestský súd Bratislava IV",
+  typSudu: "Mestský súd",
+  nadriadenySudId: "101",
+  ukonceny_string: "false",
+  skratka_string: "MSBA4",
+};
+
+/**
+ * Built through the adapter's own fetch path: the per-decision record and
+ * the court registry record are read from the publisher the way the crawl
+ * reads them, so the read-fault guard drives both reads.
+ */
 export const skCourtsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      assembleSkCourtsDecision({
-        item: { ...SK_COURTS_LISTING_ROW },
-        detail: { ...SK_COURTS_DETAIL_RECORD },
-        courtRegistry: {
-          status: "available",
-          record: {
-            registreGuid: "sud_105",
-            nazov: "Mestský súd Bratislava IV",
-            typSudu: "Mestský súd",
-            nadriadenySudId: "101",
-            ukonceny_string: "false",
-            skratka_string: "MSBA4",
-          },
-        },
-      }) ?? panic("sk-courts fixture did not build"),
-    ),
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const body = url.pathname.includes("/sud/")
+        ? SK_COURTS_REGISTRY_RECORD
+        : SK_COURTS_DETAIL_RECORD;
+      return await Promise.resolve(Response.json(body));
+    });
+
+    const built = await buildSkCourtsDecision({ ...SK_COURTS_LISTING_ROW });
+    switch (built.type) {
+      // The crawl stores both: a withheld record keeps the listing-only row
+      // with its typed outcome.
+      case "built":
+      case "detail-unavailable":
+        return built.decision;
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      case "unread": {
+        const { item } = built;
+        return (
+          planUnreadItems([item], {
+            [item.listing.sourceDocumentId]:
+              UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+          }).terminal.at(0) ?? panic("sk-courts unread item stored nothing")
+        );
+      }
+      case "read-failed":
+        throw built.error;
+      case "unkeyable":
+        return panic("sk-courts fixture did not build: unkeyable");
+      default:
+        built satisfies never;
+        return panic(`Unhandled sk-courts build: ${String(built)}`);
+    }
+  },
 });
 
 // ── SK ÚS fixture ────────────────────────────────────────
@@ -1612,6 +1647,17 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
     );
 
     const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
+    if (built.type === "unread") {
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      const { item } = built;
+      return (
+        planUnreadItems([item], {
+          [item.listing.sourceDocumentId]:
+            UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+        }).terminal.at(0) ?? panic("sk-us unread item stored nothing")
+      );
+    }
     if (built.type !== "built") {
       return panic(`sk-us fixture did not build: ${built.type}`);
     }

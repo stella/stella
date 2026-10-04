@@ -24,6 +24,11 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+} from "@/api/mcp/feature-access-prose";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -158,6 +163,10 @@ export const buildChatWriteTools = (
     ...contextDeps
   } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
 
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
@@ -170,7 +179,13 @@ export const buildChatWriteTools = (
     // access refuses, is not offered it.
     if (
       !hasMcpToolAuthority(context, definition) ||
-      !isAccountAuthorizedForMcpTool(context.userEmail, definition)
+      !isAccountAuthorizedForMcpTool(context.userEmail, definition) ||
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: definition.name,
+        featureId: definition.featureId,
+      })
     ) {
       continue;
     }
@@ -188,7 +203,7 @@ export const buildChatWriteTools = (
 
     tools[toolName] = toolDefinition({
       name: toolName,
-      description,
+      description: scopeMcpDescriptorProse(description, hiddenIds),
       inputSchema,
     }).server(async (args: unknown) => {
       const toolArgs = isRecord(args) ? args : {};

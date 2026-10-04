@@ -219,18 +219,57 @@ export const formatMoneyCents = ({
   locale,
   fractionDigits,
 }: FormatMoneyCentsParams): string => {
-  const major = toMajorUnits({ amountCents, currency });
-  const digits = fractionDigits ?? currencyMinorUnitDigits(currency);
-  const formatted = Result.try(() =>
-    new Intl.NumberFormat(locale, {
+  const minorDigits = currencyMinorUnitDigits(currency);
+  const digits = fractionDigits ?? minorDigits;
+  if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
+    return panic("Money fraction digits must be an integer from 0 to 100");
+  }
+  const magnitude = BigInt(Math.abs(cents(amountCents)));
+  const negative = amountCents < 0 || Object.is(amountCents, -0);
+  const displayUnits =
+    digits >= minorDigits
+      ? magnitude * 10n ** BigInt(digits - minorDigits)
+      : (magnitude + 10n ** BigInt(minorDigits - digits) / 2n) /
+        10n ** BigInt(minorDigits - digits);
+  const scale = 10n ** BigInt(digits);
+  const whole = displayUnits / scale;
+  const fraction = (displayUnits % scale).toString().padStart(digits, "0");
+  const formatted = Result.try(() => {
+    const formatter = new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
-    }).format(major),
-  );
+    });
+    const digitFormatter = new Intl.NumberFormat(locale, {
+      useGrouping: false,
+    });
+    const localizedFraction = fraction
+      .split("")
+      .map((digit) => digitFormatter.format(Number(digit)))
+      .join("");
+    // BigInt has no negative zero: -1 supplies the locale's sign and bidi
+    // literals for subunit credits, then only its integer digit is replaced.
+    const negativeSubunit = negative && whole === 0n;
+    let template = whole;
+    if (negative) {
+      template = negativeSubunit ? -1n : -whole;
+    }
+    return formatter
+      .formatToParts(template)
+      .map((part) => {
+        if (part.type === "fraction") {
+          return localizedFraction;
+        }
+        if (negativeSubunit && part.type === "integer") {
+          return digitFormatter.format(0);
+        }
+        return part.value;
+      })
+      .join("");
+  });
 
   return formatted.isErr()
-    ? `${major.toFixed(digits)} ${currency}`
+    ? `${negative ? "-" : ""}${whole}${digits === 0 ? "" : `.${fraction}`} ${currency}`
     : formatted.value;
 };
