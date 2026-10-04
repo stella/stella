@@ -320,7 +320,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella playbook save`
   - optional: --playbook-id, --expected-updated-at, --name, --description, --scope.document-type-key, --scope.perspective (buyer|seller|neutral), --remove-source-ids
   - via `--input` only: positions
-  - positions[]: mode="extract": issue:string, ask:{question}; mode="graded": issue:string, severity:"blocker" | "high" | "medium" | "low", tiers:object, negotiation?:object. Example: `--input '{"positions":[{"mode":"extract","issue":"x","ask":{"question":"x"}}]}'`
+  - positions[]: mode="extract": issue:string, sources?:string[], ask:{question}; mode="graded": issue:string, sources?:string[], severity:"blocker" | "high" | "medium" | "low", tiers:object, negotiation?:object. Example: `--input '{"positions":[{"mode":"extract","issue":"x","ask":{"question":"x"}}]}'`
 - `stella rate resolve`
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
