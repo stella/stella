@@ -623,37 +623,10 @@ const createAuthorizedWorkspaceTools = ({
   });
 };
 
-type CreateRememberToolsProps = {
-  canManageWorkspaceMemory: boolean;
-  organizationId: SafeId<"organization">;
-  recordAuditEvent: AuditRecorder;
-  safeDb: SafeDb;
-  resolveSourceDataWorkspaceIds: () => readonly SafeId<"workspace">[];
-  toDurableRefText: ChatRefRegistry["toDurableRefText"];
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace"> | null;
-};
-
-const createRememberTools = ({
-  canManageWorkspaceMemory,
-  organizationId,
-  recordAuditEvent,
-  safeDb,
-  resolveSourceDataWorkspaceIds,
-  toDurableRefText,
-  userId,
-  workspaceId,
-}: CreateRememberToolsProps) => ({
-  [REMEMBER_TOOL_NAME]: createRememberTool({
-    canManageWorkspaceMemory,
-    organizationId,
-    recordAuditEvent,
-    safeDb,
-    resolveSourceDataWorkspaceIds,
-    toDurableRefText,
-    userId,
-    workspaceId,
-  }),
+const createRememberTools = (
+  props: Parameters<typeof createRememberTool>[0],
+) => ({
+  [REMEMBER_TOOL_NAME]: createRememberTool(props),
 });
 
 /* Contract-owned so browser approval UX and server enforcement cannot drift. */
@@ -987,12 +960,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     resolveMemorySourceWorkspaceIds === undefined
       ? {}
       : createRememberTools({
-          canManageWorkspaceMemory:
-            hasMemberPermission(memberRole, {
-              workspace: ["update"],
-            }) &&
-            workspaceId !== null &&
-            workspaceStatusById?.get(workspaceId) === "active",
+          authority: memberRole,
           organizationId,
           recordAuditEvent,
           safeDb,
@@ -1000,6 +968,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           toDurableRefText: refRegistry.toDurableRefText,
           userId,
           workspaceId,
+          workspaceStatusById,
         });
   const externalChatTools = applyChatToolPolicies({
     defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
