@@ -153,6 +153,7 @@ afterAll(async () => {
  *  the thread so a test can tell which thread reached the model. */
 const seedDueThread = async (
   dataWorkspaceIds: SafeId<"workspace">[],
+  workspaceId: SafeId<"workspace"> | null = ids.wsA1,
 ): Promise<SafeId<"chatThread">> => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   await testDb.insert(chatThreads).values({
@@ -160,7 +161,7 @@ const seedDueThread = async (
     organizationId: ids.orgA,
     userId: ids.userA1,
     title: "Compactor test thread",
-    workspaceId: ids.wsA1,
+    workspaceId,
     dataWorkspaceIds,
     compactionScheduledAt: new Date(Date.now() - 60_000),
   });
@@ -171,7 +172,7 @@ const seedDueThread = async (
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
       threadId,
       userId: ids.userA1,
-      workspaceId: ids.wsA1,
+      workspaceId,
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
       content: {
         version: 1 as const,
@@ -292,5 +293,61 @@ describe("chat thread compactor", () => {
     expect(
       promptsSentToModel().filter((prompt) => prompt.includes(keptThreadId)),
     ).toHaveLength(1);
+  });
+
+  test("an owner removed after the access check is not compacted, even on a thread outside any matter", async () => {
+    // Thread RLS checks a thread outside any matter against the organization
+    // id only, so the owner's handle alone would still read it.
+    const threadId = await seedDueThread([], null);
+    // The settings load runs after the run's first access check and before
+    // the transcript is read.
+    settingsSpy.mockImplementation(async () => {
+      await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      return Result.ok({
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+        managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+      });
+    });
+
+    await runCompactor();
+
+    expect(settingsSpy).toHaveBeenCalled();
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect(await readThread(threadId)).toEqual({
+      compactionScheduledAt: null,
+    });
+    expect(accessLostLogs()).toContainEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "thread.id": threadId,
+          "thread.skip_reason": OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+        }),
+      }),
+    );
+  });
+
+  test("an owner removed while the summary is generated gets no checkpoint", async () => {
+    const threadId = await seedDueThread([], null);
+    modelSpy.mockImplementation(async () => {
+      await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      return SUMMARY_MARKDOWN;
+    });
+
+    await runCompactor();
+
+    expect(
+      promptsSentToModel().filter((prompt) => prompt.includes(threadId)),
+    ).toHaveLength(1);
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect(accessLostLogs()).toContainEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "thread.id": threadId,
+          "thread.skip_reason": OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+        }),
+      }),
+    );
   });
 });

@@ -12,17 +12,16 @@
  * membership as it stands when the run executes, so nothing widens and a
  * thread whose owner has since lost access is not compacted.
  */
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   ChatCompactionError,
@@ -30,6 +29,7 @@ import {
 } from "@/api/lib/chat/thread-compaction";
 import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
 import { errorTag } from "@/api/lib/errors/utils";
+import { holdMemberAccessOnTx } from "@/api/lib/member-access-hold";
 import { createRootMembershipSafeDb } from "@/api/lib/root-scoped-db";
 import type { MembershipSafeDb } from "@/api/lib/root-scoped-db";
 import {
@@ -284,17 +284,18 @@ const compactThread = async ({
   signal,
   thread,
 }: CompactThreadOptions): Promise<CompactThreadResult> => {
-  const access = await resolveOwnerAccess({ database, db, thread });
+  const memberDb = createRootMembershipSafeDb(
+    { organizationId: thread.organizationId, userId: thread.userId },
+    database,
+  );
+  const safeDb = holdOwnerAccess({ safeDb: memberDb, thread });
+  // Checked before the AI settings load so a run for a former member stops
+  // early; every later transaction holds the access again.
+  const access = await safeDb(async () => null);
   if (Result.isError(access)) {
-    return access;
+    const lost = ownerAccessLostOutcome(access.error);
+    return lost === null ? Result.err(access.error) : Result.ok(lost);
   }
-  if (access.value.type === "lost") {
-    return Result.ok({
-      type: "owner-access-lost",
-      reason: access.value.reason,
-    });
-  }
-  const { safeDb } = access.value;
 
   // `loadOrgAISettings` throws on a corrupt encrypted configuration, which is a
   // property of one organization. Outside the per-thread boundary that
@@ -330,7 +331,7 @@ const compactThread = async ({
     organizationId: thread.organizationId,
   });
 
-  return await runChatThreadCompaction({
+  const compacted = await runChatThreadCompaction({
     abortSignal: AbortSignal.any([
       AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
       signal,
@@ -346,7 +347,9 @@ const compactThread = async ({
       usageMetering: {
         actionType: "background",
         organizationId: thread.organizationId,
-        safeDb,
+        // Usage already incurred is recorded even if the owner has just
+        // left; reads and the checkpoint write hold the owner's access.
+        safeDb: memberDb,
         serviceTier: "batch",
         userId: thread.userId,
         workspaceId: null,
@@ -362,69 +365,100 @@ const compactThread = async ({
     threadId: thread.threadId,
     triggerTokens,
   });
+  if (Result.isError(compacted)) {
+    const lost = ownerAccessLostOutcome(compacted.error);
+    return lost === null ? Result.err(compacted.error) : Result.ok(lost);
+  }
+  return compacted;
 };
 
-type OwnerAccess =
-  | { type: "current"; safeDb: MembershipSafeDb }
-  | { type: "lost"; reason: OwnerAccessLostReason };
+/** Thrown inside an owner transaction to abort it; travels as the cause of
+ *  the `UnhandledException` the scoped handle wraps it in. */
+class OwnerAccessLostError extends TaggedError("OwnerAccessLostError")<{
+  message: string;
+  reason: OwnerAccessLostReason;
+}> {}
+
+type HoldOwnerAccessOptions = {
+  safeDb: MembershipSafeDb;
+  thread: QueuedCompactionThread;
+};
 
 /**
- * Settle, for this run, that the thread's owner may still read it.
+ * The owner's handle, with every transaction first holding the owner's access
+ * to the thread (`holdMemberAccessOnTx`) and aborting when it is gone.
  *
- * The returned handle carries no stored matter ids: every read and write the
- * compaction makes is held to the owner's membership when its transaction
- * runs, so access revoked after this check also stops the run.
+ * Thread RLS checks a thread outside any matter against the organization id
+ * alone, so the handle's own scope does not stop a run whose owner has left.
+ * Holding the membership rows in the transaction that reads the transcript or
+ * writes the checkpoint means a concurrent removal either waits for it or is
+ * seen by it.
  */
-const resolveOwnerAccess = async ({
-  database,
-  db,
-  thread,
-}: Omit<CompactThreadOptions, "signal">): Promise<
-  Result<OwnerAccess, ChatCompactionError | SafeDbError>
-> => {
-  const membership = await Result.tryPromise({
-    try: async () =>
-      await resolveMemberAuthorization(
-        { organizationId: thread.organizationId, userId: thread.userId },
-        db,
-      ),
-    catch: (cause) =>
-      new ChatCompactionError({
-        cause,
-        message: "failed to resolve the thread owner's membership",
-        threadId: thread.threadId,
-      }),
-  });
-  if (Result.isError(membership)) {
-    return membership;
-  }
-  if (membership.value === null) {
-    return Result.ok({
-      type: "lost",
-      reason: OWNER_ACCESS_LOST_REASON.ORGANIZATION,
-    });
-  }
+const holdOwnerAccess =
+  ({ safeDb, thread }: HoldOwnerAccessOptions): SafeDb =>
+  async (fn, retry) =>
+    await safeDb(async (tx) => {
+      const owner = {
+        organizationId: thread.organizationId,
+        userId: thread.userId,
+      };
+      const organization = await holdMemberAccessOnTx(tx, {
+        ...owner,
+        workspaceIds: [],
+      });
+      if (organization.type === "not-member") {
+        throw new OwnerAccessLostError({
+          message: "the thread owner is no longer an organization member",
+          reason: OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+        });
+      }
+      const scope = (
+        await tx
+          .select({
+            dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+            workspaceId: chatThreads.workspaceId,
+          })
+          .from(chatThreads)
+          .where(eq(chatThreads.id, thread.threadId))
+          .limit(1)
+      ).at(0);
+      if (scope === undefined) {
+        throw new OwnerAccessLostError({
+          message: "the thread owner can no longer read the thread",
+          reason: OWNER_ACCESS_LOST_REASON.THREAD,
+        });
+      }
+      const matters = [
+        ...new Set([
+          ...(scope.workspaceId === null ? [] : [scope.workspaceId]),
+          ...scope.dataWorkspaceIds,
+        ]),
+      ];
+      if (matters.length > 0) {
+        const held = await holdMemberAccessOnTx(tx, {
+          ...owner,
+          workspaceIds: matters,
+        });
+        if (
+          held.type === "not-member" ||
+          held.workspaceIds.length < matters.length
+        ) {
+          throw new OwnerAccessLostError({
+            message: "the thread owner can no longer read one of its matters",
+            reason: OWNER_ACCESS_LOST_REASON.THREAD,
+          });
+        }
+      }
+      return await fn(tx);
+    }, retry);
 
-  const safeDb = createRootMembershipSafeDb(
-    { organizationId: thread.organizationId, userId: thread.userId },
-    database,
-  );
-  const visible = await safeDb(
-    async (tx) =>
-      await tx
-        .select({ id: chatThreads.id })
-        .from(chatThreads)
-        .where(eq(chatThreads.id, thread.threadId))
-        .limit(1),
-  );
-  if (Result.isError(visible)) {
-    return visible;
-  }
-  if (visible.value.length === 0) {
-    return Result.ok({ type: "lost", reason: OWNER_ACCESS_LOST_REASON.THREAD });
-  }
-  return Result.ok({ type: "current", safeDb });
-};
+/** The skip outcome for a run an owner transaction aborted, if it was one. */
+const ownerAccessLostOutcome = (
+  error: ChatCompactionError | SafeDbError,
+): ChatCompactorOutcome | null =>
+  OwnerAccessLostError.is(error.cause)
+    ? { type: "owner-access-lost", reason: error.cause.reason }
+    : null;
 
 type ClaimedCompactionBatch = {
   leaseExpiresAt: Date;
