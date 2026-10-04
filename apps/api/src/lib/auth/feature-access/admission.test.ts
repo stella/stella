@@ -12,7 +12,12 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+// The fixture features are not registered (FeatureId is `never` while the
+// registry is empty), so the configs enter through the test-only cast.
+type RootHandlerConfig = Parameters<typeof createSafeRootHandler>[0];
 
 const featureId = "fixture-access";
 const registry = { [featureId]: { enrolment: "invitation" } } as const;
@@ -52,12 +57,12 @@ describe("feature access safe-handler admission", () => {
     let executions = 0;
     let identityQueries = 0;
     const endpoint = createSafeRootHandler(
-      {
+      asTestRaw<RootHandlerConfig>({
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: { type: "required", featureId },
-      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      }),
       async function* () {
         executions += 1;
         return Result.ok({ ok: true });
@@ -91,12 +96,12 @@ describe("feature access safe-handler admission", () => {
     ]) {
       let executions = 0;
       const endpoint = createSafeRootHandler(
-        {
+        asTestRaw<RootHandlerConfig>({
           accountAccess: ACCOUNT_ACCESS.sandbox,
           permissions: { workspace: ["read"] },
           mcp: { type: "internal", reason: "health_infra" },
           featureAccess: { type: "required", featureId },
-        } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+        }),
         async function* () {
           executions += 1;
           return Result.ok({ ok: true });
@@ -138,7 +143,7 @@ describe("feature access safe-handler admission", () => {
     decisions.set(otherFeature, enabled);
     let executions = 0;
     const endpoint = createSafeRootHandler(
-      {
+      asTestRaw<RootHandlerConfig>({
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -148,7 +153,7 @@ describe("feature access safe-handler admission", () => {
           usesFeature: async () => false,
           projectInputSchema: (schemas) => schemas,
         },
-      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      }),
       async function* (context) {
         executions += 1;
         expect(context.featureAccessProof).toBeUndefined();
@@ -174,7 +179,7 @@ describe("feature access safe-handler admission", () => {
   test("conditional metadata failures use the shared handler error response", async () => {
     let executions = 0;
     const endpoint = createSafeRootHandler(
-      {
+      asTestRaw<RootHandlerConfig>({
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -186,7 +191,7 @@ describe("feature access safe-handler admission", () => {
           },
           projectInputSchema: (schemas) => schemas,
         },
-      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      }),
       async function* () {
         executions += 1;
         return Result.ok({ ok: true });
@@ -215,12 +220,12 @@ describe("feature access safe-handler admission", () => {
     let executions = 0;
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
-      {
+      asTestRaw<RootHandlerConfig>({
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: { type: "required", featureId },
-      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      }),
       async function* () {
         executions += 1;
         return Result.ok({ ok: true });
@@ -269,7 +274,7 @@ test.each([
     const checkedQueries: unknown[] = [];
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
-      {
+      asTestRaw<RootHandlerConfig>({
         query: conditionalQuerySchema,
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
@@ -283,7 +288,7 @@ test.each([
           },
           projectInputSchema: (schemas) => schemas,
         },
-      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      }),
       async function* ({ safeDb, query }) {
         const output = yield* Result.await(
           safeDb(async () => {
