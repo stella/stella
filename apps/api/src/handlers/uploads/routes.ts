@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import presignUpload from "@/api/handlers/uploads/create";
 import abortUpload from "@/api/handlers/uploads/delete";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
@@ -11,15 +9,6 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const entityUploadRealtimeUpdates = workspaceResourceSetUpdates([
-  RESOURCE_TYPE.ENTITY,
-  RESOURCE_TYPE.USER_FILE,
-]);
 
 /**
  * Workspace-scoped presigned-upload coordination:
@@ -51,7 +40,6 @@ export const uploadsRoute = new Elysia({
   prefix: "/uploads/:workspaceId",
 })
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .use(
     rateLimit({
@@ -76,12 +64,10 @@ export const uploadsRoute = new Elysia({
   })
   .post("/entity-create/tree", entityCreateTree.handler, {
     body: entityCreateTree.config.body,
-    resourceSetUpdated: entityUploadRealtimeUpdates,
     permissions: entityCreateTree.config.permissions,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
     params: finalizeUpload.config.params,
-    resourceSetUpdated: entityUploadRealtimeUpdates,
     permissions: finalizeUpload.config.permissions,
   })
   .post("/:uploadId/abort", abortUpload.handler, {

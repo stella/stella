@@ -36,12 +36,14 @@ import { compareCodeUnit } from "@stll/collation";
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import type {
   Finding,
+  ParseCache,
   ScanInput,
   ScanResult,
   SourceRecord,
 } from "./lib/deployment-feature-scan";
 import {
   BASELINABLE_KINDS,
+  createParseCache,
   DEPLOYMENT_FEATURE_OWNER_FILE,
   findingKey,
   scanDeploymentFeatures,
@@ -100,8 +102,9 @@ const readCatalogFeatures = (): Map<string, string | undefined> => {
   return features;
 };
 
-/** The real tree, as the scanner's input. */
+/** The real tree, as the scanner's input. Each file is read from disk once. */
 export const loadRealInput = (): ScanInput => {
+  const sources = new Map<string, string | undefined>();
   const allFiles = new Set(scanFiles(["apps/api/src/**/*.{ts,tsx}"]));
   const routeFiles = scanFiles(["apps/api/src/handlers/**/*.ts"])
     .map(readRecord)
@@ -125,8 +128,15 @@ export const loadRealInput = (): ScanInput => {
     alwaysOnRouteFiles: ALWAYS_ON_ROUTE_FILES,
     allFiles,
     readSource: (file) => {
+      if (sources.has(file)) {
+        return sources.get(file);
+      }
       const absolute = path.join(REPO_ROOT, file);
-      return existsSync(absolute) ? readFileSync(absolute, "utf-8") : undefined;
+      const source = existsSync(absolute)
+        ? readFileSync(absolute, "utf-8")
+        : undefined;
+      sources.set(file, source);
+      return source;
     },
   };
 };
@@ -273,7 +283,8 @@ export const diffBaseline = ({
 type SelfTestCase = {
   name: string;
   mutate: (input: ScanInput) => ScanInput;
-  expect: (result: ScanResult) => boolean;
+  /** `real` is the unmutated input the case was applied to. */
+  expect: (result: ScanResult, real: ScanInput) => boolean;
 };
 
 const SELF_TEST_UNDECLARED = "FEATURE_SELF_TEST_UNDECLARED";
@@ -363,8 +374,7 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
           () => "true",
         ),
       ),
-    expect: (result) => {
-      const real = loadRealInput();
+    expect: (result, real) => {
       const expected = flaggedCapabilitiesIn(real, "lists");
       return (
         expected.length > 0 &&
@@ -444,10 +454,14 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
   },
 ];
 
-/** Names of self-test cases whose detector did not fire. */
-export const runSelfTest = (input: ScanInput): string[] => {
+/**
+ * Names of self-test cases whose detector did not fire. Every case edits a
+ * copy of `input` in memory, and all scans share `cache`, so only the files a
+ * case edits parse again.
+ */
+export const runSelfTest = (input: ScanInput, cache: ParseCache): string[] => {
   const failures: string[] = [];
-  const clean = scanDeploymentFeatures(input);
+  const clean = scanDeploymentFeatures(input, cache);
   if (
     clean.declared.length === 0 ||
     clean.routeFileCount < 50 ||
@@ -459,7 +473,8 @@ export const runSelfTest = (input: ScanInput): string[] => {
     );
   }
   for (const testCase of SELF_TEST_CASES) {
-    if (!testCase.expect(scanDeploymentFeatures(testCase.mutate(input)))) {
+    const result = scanDeploymentFeatures(testCase.mutate(input), cache);
+    if (!testCase.expect(result, input)) {
       failures.push(testCase.name);
     }
   }
@@ -517,7 +532,7 @@ const main = async (): Promise<number> => {
   const base = baseArgument();
   const input = loadRealInput();
   if (process.argv.includes("--self-test")) {
-    const failures = runSelfTest(input);
+    const failures = runSelfTest(input, createParseCache());
     for (const failure of failures) {
       console.error(
         `deployment-feature-guard self-test: did not fire: ${failure}`,
@@ -530,7 +545,7 @@ const main = async (): Promise<number> => {
     }
     return failures.length === 0 ? 0 : 1;
   }
-  const result = scanDeploymentFeatures(input);
+  const result = scanDeploymentFeatures(input, createParseCache());
   if (process.argv.includes("--report")) {
     printReport(result);
     return 0;

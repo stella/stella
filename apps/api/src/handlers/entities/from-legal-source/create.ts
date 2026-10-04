@@ -7,6 +7,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -48,6 +50,7 @@ export default createSafeHandler(
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: entityFileRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "document_processing",
@@ -87,6 +90,7 @@ export default createSafeHandler(
         buffer: compiled.value,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
       }).then((r) => Result.mapError(r, toHandlerError)),
     );
 

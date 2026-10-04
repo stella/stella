@@ -226,6 +226,7 @@ const createClauseDetailScopedDb = (clause: unknown) =>
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
+          $count: async () => 0,
           query: {
             clauses: { findFirst: async () => clause },
           },
@@ -536,6 +537,7 @@ describe("MCP knowledge tools", () => {
     const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
+          $count: async () => stored.variants.length,
           query: { clauses: { findFirst: async () => stored } },
           select: () => ({
             from: () => ({ where: () => ({ for: async () => [stored] }) }),

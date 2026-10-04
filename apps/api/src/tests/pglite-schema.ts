@@ -587,6 +587,22 @@ const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Install the migration-owned matter-contact capacity guard after schema push. */
+export const installPgliteWorkspaceContactCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125100_workspace_contact_capacity",
+      "migration.sql",
+    ),
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "REVOKE ALL ON FUNCTION",

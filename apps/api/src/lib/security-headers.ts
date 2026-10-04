@@ -4,6 +4,7 @@ import {
   CHAT_TURN_ID_HEADER,
   CLAUSE_WARNINGS_HEADER,
   REQUEST_ID_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
 } from "@stll/api-contract";
 
 import {
@@ -15,6 +16,7 @@ export const CORS_EXPOSED_HEADERS = [
   "Content-Disposition",
   "X-Ai-Field-Errors",
   CLAUSE_WARNINGS_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
   REQUEST_ID_HEADER,
   CHAT_TURN_ID_HEADER,
 ];

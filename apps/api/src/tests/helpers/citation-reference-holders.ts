@@ -61,8 +61,10 @@ export const readReferenceHolders = async (
            ${decisionTypeKeySql(sql.raw("d"))} AS decision_type_key,
            d.language,
            d.language_group_key,
-           coalesce(${holderAnswersSheetSql(sql.raw("d"), sheet)}, false)
-             AS answers_sheet,
+           coalesce(
+             ${holderAnswersSheetSql({ holder: sql.raw("d"), sheetNumber: sheet, familyKey: key })},
+             false
+           ) AS answers_sheet,
            coalesce(
              ${court} IS NOT NULL
              AND ${courtNameKeySql(sql.raw("d.court"))} = ${courtNameKeySql(court)},

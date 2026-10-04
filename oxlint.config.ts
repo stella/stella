@@ -10,10 +10,12 @@ import {
 
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -151,6 +153,17 @@ const publicSsrAmbientStateRules = {
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
+// One override carries every registered derived attribute: an oxlint override
+// replaces a rule's whole configuration, so a second override for the same
+// files would silently drop the first one's attributes.
+const derivedAttributeRuleOptions = {
+  attributes: DERIVED_ATTRIBUTES.map(({ name, detector, within }) => ({
+    name,
+    detector,
+    within,
+  })),
+};
+
 const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
@@ -211,6 +224,14 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
+  ]),
+  ...[
+    "calendar-day.fixture.ts",
+    "calendar-day.fixture.legacy.ts",
+    "calendar-day.fixture.stale.ts",
+  ].map((file) => fixtureRuleOverride(file, ["calendar-day/no-utc-user-day"])),
+  fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
+    "calendar-day/no-wall-clock-scheduler-decision",
   ]),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
@@ -972,6 +993,7 @@ export default defineConfig({
       "error",
     "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-direct-clause-variant-insert/no-direct-clause-variant-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
@@ -1265,6 +1287,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
+    "./.oxlint-plugins/calendar-day.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -1320,6 +1343,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
@@ -1356,6 +1380,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
@@ -2471,6 +2496,48 @@ export default defineConfig({
       },
     },
     {
+      // A user-facing "today" is the day in the user's or organization's
+      // zone, read through `todayFor(zone)`; the UTC day is another day for
+      // hours around local midnight. Existing sites are budgeted in
+      // scripts/calendar-day-ledger.json, which only shrinks.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/api/src/handlers/**/*.ts",
+        "apps/api/src/lib/**/*.ts",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "error",
+      },
+    },
+    {
+      // Ingestion adapters and parsers read publisher calendars, whose dates
+      // are the source's own days rather than a user's; tests build fixtures
+      // on fixed UTC days.
+      files: [
+        "apps/api/src/handlers/*/ingestion/**",
+        "apps/api/src/tests/**",
+        "apps/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "off",
+      },
+    },
+    {
+      // Scheduler tasks decide on the slot they were due for (`ctx.dueAt`),
+      // not on the wall clock when the runner got to them: a late tick would
+      // otherwise see the next day and skip or repeat the slot.
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.test.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "off",
+      },
+    },
+    {
       // An ambient async-context store is per-request state, and `enterWith`
       // is the one way to bind it that outlives the work it was opened for:
       // the frame it mutates stays current for whatever the runtime dispatches
@@ -3291,6 +3358,43 @@ export default defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-literal-derived-attribute.fixture.ts",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          {
+            attributes: [
+              {
+                name: "encrypted",
+                detector: "apps/api/src/lib/files/detect-file-encryption.ts",
+                within: [".oxlint-plugins/__fixtures__/"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // A derived attribute (scripts/derived-attributes.ts) comes from its
+      // detector: a literal written to it elsewhere records a guess.
+      files: [
+        ...new Set(DERIVED_ATTRIBUTES.flatMap(({ within }) => within)),
+      ].map((tree) => `${tree}**/*.ts`),
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          derivedAttributeRuleOptions,
+        ],
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-raw-decision-text-fields.fixture.ts",
       ],
       rules: {
@@ -3683,6 +3787,7 @@ export default defineConfig({
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
               "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
@@ -3867,7 +3972,8 @@ export default defineConfig({
       // The same rule over MCP tools and shared library code. Writes that
       // predate this scope are budgeted per owning function by the reasoned
       // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
-      // other unaudited write fails like it does in a handler.
+      // other unaudited write fails like it does in a handler. System
+      // modules (SYSTEM_AUDIT_MODULES) are audited by their actor's run.
       files: [...AUDIT_MUTATION_LEDGER_SCOPE],
       excludeFiles: [
         "apps/api/src/mcp/**/*.test.ts",
@@ -3876,7 +3982,10 @@ export default defineConfig({
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": [
           "error",
-          { budgets: auditMutationBudgets(auditMutationLedger) },
+          {
+            budgets: auditMutationBudgets(auditMutationLedger),
+            systemModules: SYSTEM_AUDIT_MODULES,
+          },
         ],
       },
     },

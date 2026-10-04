@@ -24,6 +24,7 @@ import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
 } from "@/api/handlers/entities/upload-origin";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -54,6 +55,10 @@ import {
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
@@ -64,7 +69,6 @@ import {
   OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
-import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
@@ -83,7 +87,6 @@ import {
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
 import { resolveEntityCreateFileName } from "@/api/lib/uploads/entity-create";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const cleanupSettlementFailure = failureSink({
   event: "entities.upload_cleanup_settlement_failed",
@@ -868,25 +871,19 @@ export const uploadEntityHandler = async function* ({
       ? sha256Hex
       : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
 
-  let encrypted = false;
-  if (file.type === PDF_MIME_TYPE) {
-    const result = await isEncryptedPdf(scanned);
-
-    if (Result.isError(result)) {
-      captureError(result.error, {
-        mimeType: PDF_MIME_TYPE,
-        sizeBytes: String(fileBuffer.byteLength),
-      });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Failed to open PDF: file appears corrupted",
-        }),
-      );
-    }
-
-    encrypted = result.value;
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({ mimeType: file.type, scanned }),
+    { mimeType: file.type, sizeBytes: String(fileBuffer.byteLength) },
+  );
+  if (encryption === null) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Failed to open PDF: file appears corrupted",
+      }),
+    );
   }
+  const { encrypted } = encryption;
 
   const fileId = allocateFileObject();
   const sourceKey = createFileKey({
@@ -1095,7 +1092,7 @@ export const uploadEntityHandler = async function* ({
             fileName: resolvedName.value,
             mimeType: file.type,
             sizeBytes: storedSizeBytes,
-            encrypted,
+            encryption,
             sha256Hex: storedSha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
@@ -1330,6 +1327,7 @@ const config = {
     "and then uploads.update.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -1376,6 +1374,7 @@ const generatedDocumentConfig = {
   },
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
 } satisfies WorkspaceHandlerConfig;
