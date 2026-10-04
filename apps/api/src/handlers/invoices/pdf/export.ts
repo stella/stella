@@ -6,7 +6,7 @@ import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
 import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -29,6 +29,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       description:
         "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
       permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       access: "write",
       mcp: {
         type: "capability",
@@ -158,7 +159,10 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await writeObject({ contentType: PDF_MIME_TYPE, data: body, key }),
+            await writeObject(
+              { contentType: PDF_MIME_TYPE, data: body, key },
+              { type: "lifecycle-prefix", prefix: "exports/" },
+            ),
           catch: (cause) =>
             new HandlerError({
               status: 502,
