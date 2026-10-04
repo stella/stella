@@ -1487,6 +1487,9 @@ jobs:
             bun scripts/check-tauri-package-alignment.ts
           fi
 
+      - name: Tauri counterpart autofix tests
+        run: bun test scripts/fix-tauri-package-alignment.test.ts scripts/tauri-autofix-workflow.test.ts
+
       - name: Lockfile release-age guard
         # Bun applies the release-age quarantine only while it resolves
         # versions; a frozen install takes whatever bun.lock pins. This looks
