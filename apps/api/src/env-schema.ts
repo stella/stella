@@ -14,6 +14,10 @@ import {
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
+import {
+  resolveInboundMailReceiving,
+  type InboundMailReceivingInput,
+} from "@/api/lib/email/inbound/receiving-config";
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
@@ -220,6 +224,19 @@ export const envApiServerSchema = {
   INBOUND_MAIL_DOMAIN: v.optional(
     v.pipe(v.string(), v.regex(/^[a-z0-9.-]+\.[a-z]{2,}$/u)),
   ),
+  INBOUND_MAIL_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
+  INBOUND_MAIL_TOPIC_ARN: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^arn:aws[a-z-]*:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/u),
+    ),
+  ),
+  INBOUND_MAIL_BUCKET: v.optional(
+    v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u)),
+  ),
+  INBOUND_MAIL_KEY_PREFIX: v.optional(v.pipe(v.string(), v.maxLength(512))),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
@@ -850,7 +867,7 @@ export const envApiServerSchema = {
   ),
 };
 
-type EnvApiInvariantInput = {
+type EnvApiInvariantInput = InboundMailReceivingInput & {
   AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
   FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -935,6 +952,18 @@ const managedProviderCheckInvariantViolation = ({
   return null;
 };
 
+// Feature-owned invariants, kept out of the top-level check's branch budget.
+const delegatedInvariantViolation = (
+  input: ManagedProviderCheckInvariantInput & InboundMailReceivingInput,
+): string | null => {
+  const managedViolation = managedProviderCheckInvariantViolation(input);
+  if (managedViolation !== null) {
+    return managedViolation;
+  }
+  const inboundMail = resolveInboundMailReceiving(input);
+  return inboundMail.isErr() ? inboundMail.error.message : null;
+};
+
 export const envApiInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
@@ -970,6 +999,11 @@ export const envApiInvariantViolation = ({
   USE_MOCK_AI,
   nodeEnv,
   runtimeMode,
+  INBOUND_MAIL_DOMAIN,
+  INBOUND_MAIL_QUEUE_URL,
+  INBOUND_MAIL_TOPIC_ARN,
+  INBOUND_MAIL_BUCKET,
+  INBOUND_MAIL_KEY_PREFIX,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -982,7 +1016,7 @@ export const envApiInvariantViolation = ({
   ) {
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
-  const managedViolation = managedProviderCheckInvariantViolation({
+  const delegatedViolation = delegatedInvariantViolation({
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -991,9 +1025,14 @@ export const envApiInvariantViolation = ({
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
+    INBOUND_MAIL_DOMAIN,
+    INBOUND_MAIL_QUEUE_URL,
+    INBOUND_MAIL_TOPIC_ARN,
+    INBOUND_MAIL_BUCKET,
+    INBOUND_MAIL_KEY_PREFIX,
   });
-  if (managedViolation !== null) {
-    return managedViolation;
+  if (delegatedViolation !== null) {
+    return delegatedViolation;
   }
   const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
   if (REPORT_SPECS_DIR !== undefined && REPORT_SPECS_S3_PREFIX !== undefined) {
