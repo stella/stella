@@ -241,6 +241,10 @@ const claimAttempt = async (
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  contentDelivery: {
+    type: "none",
+    reason: "Applies a signature without returning stored-file bytes.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["sessionToken", "signature"] }),
   params: permissiveRouteSchema({ keys: ["sessionId"] }),

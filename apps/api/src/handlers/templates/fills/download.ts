@@ -27,6 +27,7 @@ const fillByIdParamsSchema = t.Object({
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Fill a stored template and return the finished document as DOCX (the " +
     "default) or PDF. values is an object mapping each field path to its value; " +

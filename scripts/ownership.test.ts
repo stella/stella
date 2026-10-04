@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 import { MEMBER_RUN_QUEUES } from "../apps/api/src/lib/member-run-queues.ts";
 import type { OwnershipEntry } from "./ownership";
@@ -114,4 +116,80 @@ test("the run actor allowlist names exactly the member-run queues", () => {
     ({ module }) => module,
   );
   expect(allowed).toEqual(memberRunModules);
+});
+
+describe("stored-reader ownership coverage", () => {
+  for (const id of ["stored-file-read", "stored-tenant-file-read"]) {
+    test(`${id} covers every exported stored-reader primitive`, () => {
+      const enforcement = OWNERSHIP.find(
+        (candidate) => candidate.id === id,
+      )?.enforcement;
+      if (enforcement?.kind !== "import") {
+        throw new TypeError("Stored-reader ownership must confine imports.");
+      }
+      const names: readonly string[] | undefined =
+        "names" in enforcement ? enforcement.names : undefined;
+      const specifier = enforcement.specifiers.at(0);
+      if (specifier === undefined) {
+        throw new TypeError(
+          "Stored-reader ownership must name its source module.",
+        );
+      }
+      const filename = `${specifier.replace("@/api/", "apps/api/src/")}.ts`;
+      const source = ts.createSourceFile(
+        filename,
+        readFileSync(
+          new URL(filename, new URL("../", import.meta.url)),
+          "utf-8",
+        ),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS,
+      );
+      const exportedNames: string[] = [];
+      for (const statement of source.statements) {
+        if (
+          ts.isExportDeclaration(statement) &&
+          statement.exportClause !== undefined &&
+          ts.isNamedExports(statement.exportClause)
+        ) {
+          exportedNames.push(
+            ...statement.exportClause.elements.map(({ name }) => name.text),
+          );
+          continue;
+        }
+        if (
+          !ts.canHaveModifiers(statement) ||
+          !ts
+            .getModifiers(statement)
+            ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
+        ) {
+          continue;
+        }
+        if (ts.isVariableStatement(statement)) {
+          for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name)) {
+              exportedNames.push(declaration.name.text);
+            }
+          }
+          continue;
+        }
+        if (
+          ts.isFunctionDeclaration(statement) &&
+          statement.name !== undefined
+        ) {
+          exportedNames.push(statement.name.text);
+        }
+      }
+      expect(names?.toSorted()).toEqual(
+        exportedNames
+          .filter((name) =>
+            /^(?:readTenantS3ArrayBuffer|getS3ObjectWithSignal|readS3Object\w*|readS3ArrayBuffer)$/u.test(
+              name,
+            ),
+          )
+          .toSorted(),
+      );
+    });
+  }
 });
