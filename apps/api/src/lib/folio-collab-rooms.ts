@@ -20,7 +20,6 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +32,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -872,13 +872,16 @@ export const storeFolioCollabSnapshot = async ({
   const written = Result.flatten(
     await Result.tryPromise({
       try: async () => {
-        if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
           return Result.ok(
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: snapshotBytes,
+                key: nextKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
           );
         }
         return await writeOrganizationFile({
@@ -886,11 +889,14 @@ export const storeFolioCollabSnapshot = async ({
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: snapshotBytes,
+                key: nextKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
         });
       },
       catch: snapshotStoreFailure,

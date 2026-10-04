@@ -1,5 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
@@ -124,6 +122,7 @@ import type {
   PlUokikRulingHeader,
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -369,9 +368,7 @@ const PRINTED_DATE = /^(?<day>\d{2})\.(?<month>\d{2})\.(?<year>\d{4})$/u;
 
 /** Markup text as a reader sees it: entities decoded, spacing collapsed. */
 const textOf = (markup: string): string =>
-  cheerio
-    .load(`<body>${markup}</body>`)("body")
-    .text()
+  visibleHtmlText(cheerio.load(`<body>${markup}</body>`)("body"))
     .replace(/\s+/gu, " ")
     .trim();
 
@@ -724,7 +721,7 @@ export const parsePlUokikDetail = (html: string): PlUokikDetail | null => {
       }
       const valueCell = cells.eq(1);
       const label = nonEmpty(
-        labelCell.text().replace(/\s+/gu, " ").replace(/:\s*$/u, ""),
+        visibleHtmlText(labelCell).replace(/\s+/gu, " ").replace(/:\s*$/u, ""),
       );
       const files = valueCell
         .find("a[href]")
@@ -737,14 +734,14 @@ export const parsePlUokikDetail = (html: string): PlUokikDetail | null => {
         });
       fields.push({
         label,
-        text: valueCell.text().replace(/\s+/gu, " ").trim(),
+        text: visibleHtmlText(valueCell).replace(/\s+/gu, " ").trim(),
         files,
       });
     });
   if (!fields.some(({ label }) => label === PL_UOKIK_LABEL.NUMBER)) {
     return null;
   }
-  return { title: nonEmpty($("title").first().text()), fields };
+  return { title: nonEmpty(visibleHtmlText($("title").first())), fields };
 };
 
 const fieldText = (

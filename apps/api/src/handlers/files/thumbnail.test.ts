@@ -107,7 +107,7 @@ describe("matter file thumbnail", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(events).toEqual([
       expect.objectContaining({
-        action: "download",
+        action: "access",
         resourceId: entityId,
         resourceType: "entity",
         workspaceId,

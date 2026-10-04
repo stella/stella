@@ -13,12 +13,12 @@ import {
   WORKSPACE_VIEWS_CORRESPONDENCE_INDEX,
   workspaceViews,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -47,6 +47,7 @@ const config = {
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
   permissions: { view: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -111,7 +112,7 @@ const createView = createSafeHandler(
         tx,
         workspaceId,
         layout,
-        legalListsEnabled: legalListsDeployed(),
+        legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
       });
       if (avtRejection !== null) {
         // Nothing is written yet, so returning commits no partial view.

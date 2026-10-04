@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -73,12 +73,18 @@ const createTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a template and returns its metadata rather than file bytes.",
+  },
   description:
     "Create a document template from a DOCX. Pass file and a name; the " +
     "{{field}} markers in the file become the template's fillable fields. " +
     "Read the marker grammar from the template-markers reference resource " +
     "when unsure. Returns the template id and field count.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "create_template" },
   transport: {
     type: "file-input",

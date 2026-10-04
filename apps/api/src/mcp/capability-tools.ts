@@ -12,6 +12,7 @@ import {
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
@@ -32,6 +33,10 @@ import {
   isServiceClassification,
   type CatalogServiceClassification,
 } from "@/api/lib/rate-limit/service-classification";
+import {
+  HANDLER_KINDS,
+  type HandlerKind,
+} from "@/api/lib/safe-handler-factories";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -99,16 +104,6 @@ type CapabilityMcpDisposition =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };
-
-const HANDLER_KINDS = [
-  "workspace",
-  "root",
-  "session",
-  "token",
-  "public",
-] as const;
-
-type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;
@@ -373,6 +368,7 @@ type EndpointConfig = {
   params?: TSchema;
   query?: TSchema;
   permissions?: PermissionInput;
+  accountAccess?: AccountAccess;
 };
 
 type EndpointDefinition = {
@@ -391,7 +387,9 @@ const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
  * expose the expected endpoint shape (a generated-artifact drift the registry
  * test would also catch); the caller maps that to `internal_error`.
  */
-const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
+export const loadCapabilityEndpoint = async (
+  id: string,
+): Promise<EndpointDefinition | null> => {
   const dispatch = (await getDispatchById()).get(id);
   if (!dispatch) {
     return null;
@@ -1043,7 +1041,7 @@ const loadEndpointGuarded = async (
 ): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadEndpoint(id);
+    endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     endpoint = null;
@@ -2123,6 +2121,12 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "invoke_capability",
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "delegated",
+      reason:
+        "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
+    },
     readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },

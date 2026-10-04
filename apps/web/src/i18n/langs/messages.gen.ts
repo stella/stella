@@ -548,6 +548,7 @@ type Messages = {
     "numberSeries": {
       "add": "Add number series";
       "advance": "Advance";
+      "allSellers": "All sellers";
       "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
       "creditNote": "Credit note";
       "default": "Default series";
@@ -565,6 +566,9 @@ type Messages = {
       "preview": "Next number";
       "previewAllocated": "This number is already allocated.";
       "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "sellerProfile": "Seller profile";
+      "sellerUnavailable": "Seller archived or unavailable";
+      "sellerUnavailableHelp": "This seller is archived or unavailable. Keep the assignment or select another seller.";
       "setDefault": "Make default series";
       "title": "Number series";
     };
@@ -1168,6 +1172,7 @@ type Messages = {
       "noSkills": "No skills yet";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
+      "skillEditedBy": "Edited by {name} · {time}";
       "skills": "Skills";
     };
     "loadEarlierMessages": "Load earlier messages";
@@ -1299,6 +1304,9 @@ type Messages = {
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
+    "threadFiles": {
+      "title": "Files in this chat";
+    };
     "tool": {
       "add_comment": "Adding comment";
       "apply-active-docx-edits": "Preparing document edits";
@@ -1569,6 +1577,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "approve": "Approve";
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";
@@ -1852,12 +1861,14 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "appIdentity": "App identity";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "redirectDestination": "Redirect destination";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1879,6 +1890,7 @@ type Messages = {
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
     "title": "Authorize access";
+    "unverifiedApp": "Unverified app";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -2261,10 +2273,12 @@ type Messages = {
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
+      "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
@@ -3396,6 +3410,8 @@ type Messages = {
         "none": "No auth";
         "oauth2": "OAuth 2.0";
       };
+      "authorizationReviewDescription": "Review the authorization server and endpoint origins before approving.";
+      "authorizationServer": "Authorization server";
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
@@ -3406,9 +3422,11 @@ type Messages = {
       "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.";
       "emptyTitle": "No integrations yet";
       "enable": "Enable";
+      "endpointOrigins": "Endpoint origins";
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
+      "needsReapproval": "Needs re-approval";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
@@ -4820,6 +4838,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiConditionsUndecided": "AI could not decide these conditions, so their sections were filled as if they do not apply: {list}";
     "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
@@ -4911,6 +4930,7 @@ type Messages = {
     "directiveFor": "Loop: {expression}";
     "directiveIf": "If: {expression}";
     "discoveryFailed": "Failed to analyze template";
+    "documentCreatedIncomplete": "Document created, but the fill is incomplete";
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
@@ -5006,6 +5026,7 @@ type Messages = {
     "saveFailed": "Failed to save template";
     "savedLookupFormats": "Saved output formats";
     "searchTemplates": "Search templates…";
+    "structureErrorsInDocument": "Template directives that could not be applied: {count}. Check the document.";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {

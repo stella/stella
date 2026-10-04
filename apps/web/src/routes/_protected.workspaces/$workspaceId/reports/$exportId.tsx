@@ -11,12 +11,12 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
@@ -55,19 +55,13 @@ function ReportExportRecoveryPage() {
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
+      notifyUserError(result.error, t("common.unexpectedError"));
       return;
     }
 
     const downloadUrl = result.value.data?.downloadUrl;
     if (!downloadUrl) {
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
+      notifyUserError(undefined, t("common.unexpectedError"));
       return;
     }
 
@@ -78,10 +72,7 @@ function ReportExportRecoveryPage() {
     detached(
       handleDownload().catch((error: unknown) => {
         analytics.captureError(error);
-        stellaToast.add({
-          type: "error",
-          title: t("common.unexpectedError"),
-        });
+        notifyUserError(error, t("common.unexpectedError"));
       }),
       "reports.download",
     );
@@ -112,10 +103,10 @@ function ReportExportRecoveryPage() {
       if (Result.isError(result)) {
         analytics.captureError(result.error);
       }
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
+      notifyUserError(
+        Result.isError(result) ? result.error : undefined,
+        t("common.unexpectedError"),
+      );
     }
   };
 

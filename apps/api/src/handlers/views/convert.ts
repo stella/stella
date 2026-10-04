@@ -10,12 +10,12 @@ import {
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
@@ -34,6 +34,7 @@ const config = {
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -92,7 +93,7 @@ const convertView = createSafeHandler(
           tx,
           workspaceId,
           layout: newLayout,
-          legalListsEnabled: legalListsDeployed(),
+          legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
         });
         if (rejection !== null) {
           return rejection;

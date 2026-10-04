@@ -10,7 +10,7 @@ import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -79,7 +79,12 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Extracts contact fields without returning the source file.",
+  },
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

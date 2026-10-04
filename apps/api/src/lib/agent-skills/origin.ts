@@ -6,6 +6,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const AGENT_SKILL_ORIGIN_EDITABILITY = {
   authored: "editable",
   bundled: "read-only",
+  default: "editable",
   upload: "editable",
   url: "editable",
 } as const satisfies Record<AgentSkillOrigin, "editable" | "read-only">;

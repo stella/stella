@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -14,6 +14,7 @@ import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: t.Object({
     entityId: tSafeId("entity"),

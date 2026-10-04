@@ -178,7 +178,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     const isUnpublished = async (id: SafeId<"caseLawDecision">) =>
       partialObservationFromMetadata((await readDecision(id))?.metadata)
-        .isListingOnly;
+        .detail === "listing-only";
 
     const readDecision = async (id: SafeId<"caseLawDecision">) =>
       await db.query.caseLawDecisions.findFirst({

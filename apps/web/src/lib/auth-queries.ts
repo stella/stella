@@ -16,12 +16,21 @@ export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
  */
 const BOOT_QUERY_RETRY = false;
 
-export const fetchSession = async () => {
+/**
+ * Reads the session. `bypassCookieCache` asks the server past its session
+ * cookie cache, so a change made in another tab (e.g. the active
+ * organization) is visible immediately.
+ */
+export const fetchSession = async ({
+  bypassCookieCache = false,
+}: { bypassCookieCache?: boolean } = {}) => {
   const [{ authClient }, { toAuthClientError }] = await Promise.all([
     import("@/lib/auth-client"),
     import("@/lib/errors/auth"),
   ]);
-  const result = await authClient.getSession();
+  const result = await authClient.getSession(
+    bypassCookieCache ? { query: { disableCookieCache: true } } : undefined,
+  );
 
   if (result.error) {
     throw toAuthClientError(result.error);

@@ -1,7 +1,11 @@
 import { Result, TaggedError } from "better-result";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { discoverOAuthMetadata } from "@/api/lib/mcp-upstream/oauth";
+import {
+  discoverOAuthMetadataForApproval,
+  getOAuthEndpointOrigins,
+  endpointsRequiringConfirmation,
+} from "@/api/lib/mcp-upstream/oauth";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -22,6 +26,8 @@ export type McpProbeResult =
       authorizationServerUrl: string;
       resourceUrl: string;
       scopes: string[];
+      endpointOrigins: string[];
+      endpointOriginsRequiringConfirmation: string[];
     }
   | { authType: "bearer" }
   | { authType: "none" };
@@ -40,13 +46,17 @@ export const probeMcpServer = async (
   }
   const url = target.value.url;
 
-  const oauth = await discoverOAuthMetadata(url.toString());
+  const oauth = await discoverOAuthMetadataForApproval(url.toString());
   if (Result.isOk(oauth)) {
     return Result.ok({
       authType: "oauth2" as const,
       authorizationServerUrl: oauth.value.authorizationServer.issuer,
       resourceUrl: oauth.value.protectedResource.resource,
       scopes: arrayOrEmpty(oauth.value.protectedResource.scopes_supported),
+      endpointOrigins: getOAuthEndpointOrigins(oauth.value),
+      endpointOriginsRequiringConfirmation: endpointsRequiringConfirmation(
+        oauth.value,
+      ),
     });
   }
 

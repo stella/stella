@@ -35,6 +35,7 @@ import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-co
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -301,7 +302,7 @@ const UnexpectedRouteError = ({
     const copied = await copyToClipboard(errorReference);
     if (Result.isError(copied)) {
       analytics.captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });

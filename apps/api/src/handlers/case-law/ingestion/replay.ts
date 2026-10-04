@@ -98,15 +98,15 @@ import {
  * changing its words leaves that hash exactly where it was, so a replay
  * keyed on it would report every such migration as "unchanged" and apply
  * none of them. The comparison is therefore over the canonical payload the
- * row would store and the source-side refresh check; where it says the
- * row would change, the write is made under
+ * row would store and the source-side refresh check; where it says the row
+ * would change, the write is made under
  * `DECISION_REFRESH.ALWAYS`, since the pipeline's own dedup asks the
  * source-hash question this one deliberately does not.
  *
  * Together these make a re-run converge rather than accumulate: the second
  * pass derives the payload the row already holds, reports it unchanged, and
- * leaves the decision untouched. Where a write
- * does run, the corpus writer compares the derived keys against the ones
+ * leaves the decision row untouched, including its parser version and
+ * watermark. Where a write does run, the corpus writer compares the derived keys against the ones
  * the row records and skips re-uploading a payload the row already holds.
  *
  * One outcome is outside that path. A row whose payload re-parses to no
@@ -582,6 +582,49 @@ export type ReplayRowReport = {
   rejection?: StoredRawReparseRejection | undefined;
 };
 
+/** Content-free terminal result for a receipt at one parser generation. */
+export type ReplayRowResult = {
+  decisionId: SafeId<"caseLawDecision">;
+  targetParserVersion: number;
+} & (
+  | { outcome: "changed" }
+  | { outcome: "unchanged" }
+  | {
+      outcome: "rejected";
+      reason: StoredRawReparseRejection | "missing-payload";
+    }
+);
+
+/** Retryable work has no terminal receipt; dry runs describe the prospective result. */
+export const replayRowResult = (
+  report: ReplayRowReport,
+  targetParserVersion: number,
+): ReplayRowResult | null => {
+  const base = { decisionId: report.id, targetParserVersion };
+  switch (report.outcome) {
+    case REPLAY_ROW_OUTCOME.APPLIED:
+    case REPLAY_ROW_OUTCOME.WOULD_APPLY:
+      return { ...base, outcome: "changed" };
+    case REPLAY_ROW_OUTCOME.UNCHANGED:
+      return { ...base, outcome: "unchanged" };
+    case REPLAY_ROW_OUTCOME.MISSING_PAYLOAD:
+      return { ...base, outcome: "rejected", reason: "missing-payload" };
+    case REPLAY_ROW_OUTCOME.REJECTED:
+    case REPLAY_ROW_OUTCOME.WITHDRAWN:
+    case REPLAY_ROW_OUTCOME.WOULD_WITHDRAW:
+      if (report.rejection === undefined) {
+        return panic("Rejected replay row has no classified reason");
+      }
+      return { ...base, outcome: "rejected", reason: report.rejection };
+    case REPLAY_ROW_OUTCOME.RETRYABLE:
+    case REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE:
+      return null;
+    default:
+      report.outcome satisfies never;
+      return panic("Unhandled replay row outcome");
+  }
+};
+
 export type ReplayRunReport = {
   visited: number;
   outcomes: Record<ReplayRowOutcome, number>;
@@ -964,8 +1007,8 @@ const replayWouldChangeRow = async ({
 /**
  * Apply one re-parsed result, or say what applying it would do.
  *
- * An identical re-parse returns without writing the decision row. A changed
- * re-parse is written under `DECISION_REFRESH.ALWAYS`, because the pipeline's
+ * An identical row returns before reaching the writer. A changed row is
+ * written under `DECISION_REFRESH.ALWAYS`, because the pipeline's
  * own dedup asks only whether the publisher's document moved, and here it
  * did not: the payload the parser derives from it did.
  */
@@ -1057,10 +1100,60 @@ const replayRow = async ({
   if (!changed) {
     return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
   }
+  const candidate = {
+    outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY,
+    result: reparsed.result,
+    raw,
+    sourceRawContentType: row.sourceRawContentType,
+  } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY };
+    return { ...base, outcome: candidate.outcome };
   }
+  const processed = await writeReplayCandidate({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+    candidate,
+    sourceLease,
+    scopedDb,
+    sourceId,
+    resolveMetadataUrlSchema,
+  });
+  if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return {
+      ...base,
+      outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+      detail: processed.reason,
+    };
+  }
+  return { ...base, outcome: REPLAY_ROW_OUTCOME.APPLIED };
+};
 
+type ReplayWriteCandidate = {
+  outcome: typeof REPLAY_ROW_OUTCOME.WOULD_APPLY;
+  result: IngestionResult;
+  raw: Uint8Array;
+  sourceRawContentType: string | null;
+};
+
+type WriteReplayCandidateOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
+  candidate: ReplayWriteCandidate;
+  sourceLease: CaseLawSourceIngestionLease;
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+};
+
+const writeReplayCandidate = async ({
+  signal,
+  s3Policy,
+  candidate,
+  sourceLease,
+  scopedDb,
+  sourceId,
+  resolveMetadataUrlSchema,
+}: WriteReplayCandidateOptions) => {
   // Ordered on the source's own counter, under its lease: the row guards
   // compare observation orders, so a replay numbering itself independently
   // could overwrite a crawl observation newer than the payload it replayed.
@@ -1072,7 +1165,7 @@ const replayRow = async ({
   });
 
   signal?.throwIfAborted();
-  const processed = await processDecision(
+  return await processDecision(
     {
       ...(signal === undefined ? {} : { signal }),
       ...(s3Policy === undefined ? {} : { s3Policy }),
@@ -1084,10 +1177,11 @@ const replayRow = async ({
       // and the pipeline keys the object on their own hash, so it recognises
       // the key the row already holds and skips the re-upload.
       input: {
-        ...reparsed.result,
-        sourceRawBytes: raw,
+        ...candidate.result,
+        sourceRawBytes: candidate.raw,
         sourceRawContentType:
-          row.sourceRawContentType ?? reparsed.result.sourceRawContentType,
+          candidate.sourceRawContentType ??
+          candidate.result.sourceRawContentType,
       },
       sourceId,
       scopedDb,
@@ -1099,19 +1193,6 @@ const replayRow = async ({
     },
     resolveMetadataUrlSchema,
   );
-
-  if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return {
-      ...base,
-      outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
-      detail: processed.reason,
-    };
-  }
-
-  return {
-    ...base,
-    outcome: REPLAY_ROW_OUTCOME.APPLIED,
-  };
 };
 
 type ReplayOneRowOptions = {
@@ -1211,6 +1292,19 @@ const replayOneRow = async ({
         withdraw,
       }),
   );
+};
+
+// Every row outcome completes under the source lease, including paths that
+// report without writing. A lost lease rejects before recording or advancing.
+const completeReplayRow = async (
+  options: ReplayOneRowOptions,
+): Promise<Result<ReplayRowReport, unknown>> => {
+  const report = await replayOneRow(options);
+  if (report.isErr()) {
+    return report;
+  }
+  await options.sourceLease?.beforeDatabaseMark();
+  return report;
 };
 
 /** Bounded, printable context for a failure that halted the run. */
@@ -1469,7 +1563,7 @@ export const replayCaseLawSource = async ({
 
     const attempted = await Result.tryPromise({
       try: async () =>
-        await replayOneRow({
+        await completeReplayRow({
           ...(signal === undefined ? {} : { signal }),
           ...(s3Policy === undefined ? {} : { s3Policy }),
           resolveMetadataUrlSchema,
