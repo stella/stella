@@ -6,12 +6,15 @@ import {
   STATUTE_ALIASES,
   resolveStatuteAlias,
   type StatuteAliasTarget,
-  type StatuteQueryCountry,
 } from "./statute-aliases";
 import {
   CZE_CASE_LAW_REPORTER_TAIL_RE,
   STATUTE_GAZETTES,
 } from "./statute-gazette";
+import {
+  STATUTE_QUERY_CAPABILITIES,
+  type StatuteQueryCountry,
+} from "./statute-query-capability";
 
 /**
  * What a statute box entry asks for. An act is addressed by number (with the
@@ -117,7 +120,8 @@ const actFromNumber = (
   }
   const suffix = match?.[3];
   const collections = COLLECTION_BY_ABBREVIATION[country];
-  let collection: string | null = country === "cze" ? "sb" : "zz";
+  let collection: string | null =
+    STATUTE_QUERY_CAPABILITIES[country].defaultCollection;
   if (suffix !== undefined) {
     const abbreviation = canonicalCollectionAbbreviation(suffix);
     // A collection this jurisdiction does not publish (`Z. z.` while reading

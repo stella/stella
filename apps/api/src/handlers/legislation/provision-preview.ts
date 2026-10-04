@@ -8,8 +8,9 @@ import {
   provisionPreviewSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
 import {
-  safePublicHandlerResponseSchemasWithStatusText,
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,7 @@ const config = {
   // by the public-law route hook, neither of
   // which the generic invoke path can honor. Agents read provision text
   // through `read_statute_provisions`, which is where the MCP contract lives.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({
     documentId: tSafeId("legislationDocument"),

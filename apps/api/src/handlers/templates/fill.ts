@@ -6,7 +6,7 @@ import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
@@ -290,6 +290,7 @@ const config = {
     "and AI-fillable fields are resolved automatically; AI-fillable fields " +
     "are drafted when you omit them.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
   transport: {

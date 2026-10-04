@@ -21,7 +21,7 @@ import {
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -276,6 +276,7 @@ const updateContactById = createSafeRootHandler(
       "An attorney id that is not a member of the organization is refused, " +
       "and an unknown contact is a 404.",
     permissions: { contact: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "save_contact" },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,

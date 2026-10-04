@@ -1,4 +1,4 @@
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   createTaskBodySchema,
   createTaskEntityHandler,
@@ -20,6 +20,7 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
         "owner and target and deadline dates. Change one afterwards with " +
         "tasks.update.",
       permissions: { entity: ["create"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "tool", name: "save_task" },
       body: createTaskBodySchema,
     },
