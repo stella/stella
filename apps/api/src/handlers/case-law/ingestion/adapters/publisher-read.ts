@@ -9,9 +9,10 @@
  * hand its caller "nothing here" for a 500, a timeout, an empty 204 or a 403.
  *
  * Bodies are read through {@link readPublisherText} or
- * {@link readPublisherBytes}, which stop at a byte ceiling. The `Response`
- * that {@link readPublisher} returns is for its headers or a bounded stream
- * reader; `no-unbounded-response-body` reports a whole-body read of it.
+ * {@link readPublisherBytes}, which stop at a byte ceiling; a caller that
+ * inspects the headers first hands the outcome to {@link readBodyText}.
+ * `no-unbounded-response-body` reports a whole-body read of the `Response`
+ * that {@link readPublisher} returns.
  *
  * Where a refusal ends the cycle and where it describes one read:
  * - It ends the cycle (rejects) when it is a source-level stop: the caller
@@ -133,17 +134,16 @@ export const readPublisher = async (
 export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
- * One publisher request whose body is read whole, up to
- * {@link PUBLISHER_BODY_MAX_BYTES}. A body over the ceiling stops the read at
- * the ceiling and is `too-large`; a served but empty body is `empty-body`; a
- * body that fails after the headers is `thrown`. All three are failures to
- * read, never a document.
+ * The body of a present read, whole, up to {@link PUBLISHER_BODY_MAX_BYTES}.
+ * A body over the ceiling stops the read at the ceiling and is `too-large`; a
+ * served but empty body is `empty-body`; a body that fails after the headers
+ * is `thrown`. All three are failures to read, never a document. Any other
+ * outcome passes through unread.
  */
-export const readPublisherBytes = async (
-  url: string | URL,
-  init: PublisherReadInit,
+const readBodyBytes = async (
+  outcome: ReadOutcome<Response>,
+  signal: AbortSignal | undefined,
 ): Promise<ReadOutcome<Uint8Array>> => {
-  const outcome = await readPublisher(url, init);
   if (outcome.type !== "present") {
     return outcome;
   }
@@ -153,7 +153,7 @@ export const readPublisherBytes = async (
   }
   const bytes = await readStep(
     async () => await readCappedBytes(body, PUBLISHER_BODY_MAX_BYTES),
-    init.signal ?? undefined,
+    signal,
   );
   if (Result.isError(bytes)) {
     return bytes.error;
@@ -170,15 +170,29 @@ export const readPublisherBytes = async (
 };
 
 /**
- * One publisher request whose body is UTF-8 text, with the bounds and
- * failures of {@link readPublisherBytes}. Decoding matches `Response.text()`.
+ * The body of a present read as UTF-8 text, with the bounds and failures of
+ * {@link readBodyBytes}. Decoding matches `Response.text()`.
  */
+export const readBodyText = async (
+  outcome: ReadOutcome<Response>,
+  signal: AbortSignal | undefined,
+): Promise<ReadOutcome<string>> => {
+  const bytes = await readBodyBytes(outcome, signal);
+  return bytes.type === "present"
+    ? readPresent(new TextDecoder().decode(bytes.value))
+    : bytes;
+};
+
+/** One publisher request whose body is binary; see {@link readBodyBytes}. */
+export const readPublisherBytes = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<Uint8Array>> =>
+  await readBodyBytes(await readPublisher(url, init), init.signal ?? undefined);
+
+/** One publisher request whose body is text; see {@link readBodyText}. */
 export const readPublisherText = async (
   url: string | URL,
   init: PublisherReadInit,
-): Promise<ReadOutcome<string>> => {
-  const outcome = await readPublisherBytes(url, init);
-  return outcome.type === "present"
-    ? readPresent(new TextDecoder().decode(outcome.value))
-    : outcome;
-};
+): Promise<ReadOutcome<string>> =>
+  await readBodyText(await readPublisher(url, init), init.signal ?? undefined);

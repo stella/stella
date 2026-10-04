@@ -13,6 +13,7 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   PUBLISHER_BODY_MAX_BYTES,
+  readBodyText,
   readPublisher,
   readPublisherBytes,
   readPublisherText,
@@ -288,6 +289,33 @@ describe.each([
       type: "unavailable",
       cause: { kind: "empty-body", status: 200 },
     });
+  });
+});
+
+describe("readBodyText", () => {
+  test("reads an outcome whose headers the caller inspected first", async () => {
+    serve(
+      () =>
+        new Response("body", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+    );
+    const outcome = await readPublisher(URL_UNDER_TEST, init());
+    expect(
+      outcome.type === "present"
+        ? outcome.value.headers.get("Content-Type")
+        : null,
+    ).toBe("text/html");
+    expect(await readBodyText(outcome, undefined)).toEqual({
+      type: "present",
+      value: "body",
+    });
+  });
+
+  test("passes every other outcome through unread", async () => {
+    const absent = { type: "absent", evidence: "http-410" } as const;
+    expect(await readBodyText(absent, undefined)).toEqual(absent);
   });
 });
 

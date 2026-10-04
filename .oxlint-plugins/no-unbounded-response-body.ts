@@ -9,7 +9,8 @@
 //   - outbound HTTP: `safeOutboundFetchBytes` / `safeOutboundFetchStream`
 //     (`@/api/lib/safe-outbound-fetch`), or `readCappedBytes`
 //     (`@stll/skills/streaming`) over `response.body`;
-//   - case-law publishers: `readPublisherText` / `readPublisherBytes`
+//   - case-law publishers: `readPublisherText` / `readPublisherBytes`, or
+//     `readBodyText` over a `readPublisher` outcome
 //     (`adapters/publisher-read.ts`);
 //   - object storage: `readS3ObjectBounded`, `readCorpusS3BytesBounded`, and
 //     `readCorpusS3ObjectBounded` (`@/api/lib/s3`).
@@ -186,7 +187,8 @@ export default eslintCompatPlugin({
             "safeOutboundFetchStream (@/api/lib/safe-outbound-fetch), or " +
             "readCappedBytes (@stll/skills/streaming) over response.body. " +
             "Case-law publisher reads: readPublisherText / " +
-            "readPublisherBytes.",
+            "readPublisherBytes, or readBodyText over a " +
+            "readPublisher outcome.",
           s3Reader:
             "`{{method}}` reads the whole object with no size limit. Use " +
             "readS3ObjectBounded, readCorpusS3BytesBounded, or " +
