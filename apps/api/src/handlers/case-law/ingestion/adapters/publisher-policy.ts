@@ -164,7 +164,7 @@ type RunPublisherLimit = {
   controls?: PublisherRunControls;
 };
 
-export type PublisherRunControls = {
+type PublisherRunControls = {
   check: () => Promise<Result<void, unknown>>;
   checkBeforeSend: () => Result<void, unknown>;
   chargeRequest: () => Promise<Result<void, unknown>>;

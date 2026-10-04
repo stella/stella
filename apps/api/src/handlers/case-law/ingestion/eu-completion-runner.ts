@@ -91,11 +91,11 @@ const digest = (payload: string) =>
   new Bun.CryptoHasher("sha256").update(payload).digest("hex");
 
 /** The canonical writer and storage APIs still reject promises; this is their typed boundary. */
-const legacyOperation = <T>(operation: () => Promise<T>) =>
-  Result.tryPromise({ try: operation, catch: (error) => error });
+const legacyOperation = async <T>(operation: () => Promise<T>) =>
+  await Result.tryPromise({ try: operation, catch: (error) => error });
 
-const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
-  Result.gen(async function* () {
+const loadDecisionTx = async (tx: Transaction, receipt: EuCompletionReceipt) =>
+  await Result.gen(async function* () {
     const row = (yield* Result.await(
       legacyOperation(
         async () =>
@@ -132,7 +132,7 @@ const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
               .limit(1),
         ),
       )).at(0) ?? panic("Locked completion decision disappeared");
-    if (withdrawal.notWithdrawn === false) {
+    if (!withdrawal.notWithdrawn) {
       return Result.err(
         new CompletionWithdrawn({ message: "Decision has been withdrawn" }),
       );
