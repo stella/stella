@@ -2,15 +2,9 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { Temporal } from "temporal-polyfill/full";
 
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { todayFor } from "./today";
-
-const config = () => propertyConfig({ seed: propertySeed() });
 
 // Zones with DST in either hemisphere, a 30-minute DST shift, half-hour and
 // quarter-hour offsets, both sides of the date line and a zone that skipped a
@@ -77,7 +71,8 @@ describe("todayFor (properties)", () => {
   test(
     "is the zone's local calendar date for arbitrary instants",
     () => {
-      fc.assert(
+      assertProperty(
+        "todayFor is the zone's local calendar date for arbitrary instants",
         fc.property(zone, anyInstant, (zoneId, epochMilliseconds) => {
           const today = todayFor(
             zoneId,
@@ -87,7 +82,6 @@ describe("todayFor (properties)", () => {
             localDateOracle(zoneId, epochMilliseconds),
           );
         }),
-        config(),
       );
     },
     propertyTestTimeout(10_000),
@@ -96,7 +90,8 @@ describe("todayFor (properties)", () => {
   test(
     "is the zone's local calendar date around offset transitions",
     () => {
-      fc.assert(
+      assertProperty(
+        "todayFor is the zone's local calendar date around offset transitions",
         fc.property(
           zone,
           anyInstant,
@@ -112,7 +107,6 @@ describe("todayFor (properties)", () => {
             ).toEqual(Temporal.PlainDate.from(localDateOracle(zoneId, at)));
           },
         ),
-        config(),
       );
     },
     propertyTestTimeout(10_000),
@@ -121,7 +115,8 @@ describe("todayFor (properties)", () => {
   test(
     "changes exactly at local midnight, whatever the UTC day says",
     () => {
-      fc.assert(
+      assertProperty(
+        "todayFor changes exactly at local midnight, whatever the UTC day says",
         fc.property(zone, anyInstant, (zoneId, epochMilliseconds) => {
           const midnight = Temporal.Instant.fromEpochMilliseconds(
             epochMilliseconds,
@@ -141,7 +136,6 @@ describe("todayFor (properties)", () => {
             Temporal.PlainDate.compare(todayFor(zoneId, before), day),
           ).toBe(-1);
         }),
-        config(),
       );
     },
     propertyTestTimeout(10_000),

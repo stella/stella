@@ -200,6 +200,38 @@ describe("isScheduledFlowDue", () => {
     ).toBe(false);
   });
 
+  test("a backlogged claim also covers each later slot that had elapsed", () => {
+    // A Tuesday 09:00 slot claimed on Wednesday after 09:00 covers Wednesday's
+    // slot too: the runner schedules the next slot after this run.
+    const lateClaim = DueSlot.of({
+      nextRunAt: new Date("2026-06-30T09:00:00.000Z"),
+      lockedAt: new Date("2026-07-01T10:00:00.000Z"),
+    });
+    expect(
+      isScheduledFlowDue(
+        { frequency: "weekly", hourUtc: 9, dayOfWeek: 3 },
+        lateClaim,
+      ),
+    ).toBe(true);
+    expect(
+      isScheduledFlowDue(
+        { frequency: "monthly", hourUtc: 9, dayOfMonth: 1 },
+        lateClaim,
+      ),
+    ).toBe(true);
+    // Before Wednesday's 09:00 has elapsed, the claim covers Tuesday only.
+    const earlyClaim = DueSlot.of({
+      nextRunAt: new Date("2026-06-30T09:00:00.000Z"),
+      lockedAt: new Date("2026-07-01T08:59:59.999Z"),
+    });
+    expect(
+      isScheduledFlowDue(
+        { frequency: "weekly", hourUtc: 9, dayOfWeek: 3 },
+        earlyClaim,
+      ),
+    ).toBe(false);
+  });
+
   test("monthly with no configured day fails closed (never runs)", () => {
     expect(
       isScheduledFlowDue({ frequency: "monthly", hourUtc: 9 }, wednesday),

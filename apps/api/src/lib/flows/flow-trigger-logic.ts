@@ -102,10 +102,13 @@ export const flowScheduleToSchedulerSchedule = (
 
 /**
  * Per-slot gate for the daily scheduler job. `daily` always runs; `weekly` runs
- * only when the slot's day (in the zone the tick is scheduled in) is
- * `dayOfWeek`; `monthly` only when it is `dayOfMonth`. The gate reads the slot
- * the job was due for, never the wall clock: a Monday 23:00 slot claimed after
- * midnight is still Monday's run, and a Sunday slot claimed on Monday is not.
+ * only when a covered slot's day (in the zone the tick is scheduled in) is
+ * `dayOfWeek`; `monthly` only when it is `dayOfMonth`. The gate reads the slots
+ * the claim covers, never the wall clock: a Monday 23:00 slot claimed after
+ * midnight is still Monday's run, a Sunday 23:00 slot claimed early on Monday
+ * is not, and a Sunday 09:00 slot claimed on Monday after 09:00 also covers
+ * Monday's slot, which the runner would otherwise skip when it schedules the
+ * next slot after the run.
  * A weekly / monthly schedule missing its day field cannot be gated to a
  * specific day, so it fails closed (never fires) rather than degrading to a
  * daily run: the frontend always supplies the field, so a missing one means a
@@ -120,22 +123,23 @@ export const isScheduledFlowDue = (
   if (frequency === "daily") {
     return true;
   }
-  const day = slot.dayIn(flowScheduleToSchedulerSchedule(schedule).timeZone);
+  const days = slot.elapsedDailySlotDaysIn(
+    flowScheduleToSchedulerSchedule(schedule).timeZone,
+  );
   if (frequency === "weekly") {
-    if (schedule.dayOfWeek === undefined) {
-      return false;
-    }
-    const weekday = day.dayOfWeek % 7;
+    const { dayOfWeek } = schedule;
     if (
-      schedule.dayOfWeek < UTC_WEEKDAY_MIN ||
-      schedule.dayOfWeek > UTC_WEEKDAY_MAX
+      dayOfWeek === undefined ||
+      dayOfWeek < UTC_WEEKDAY_MIN ||
+      dayOfWeek > UTC_WEEKDAY_MAX
     ) {
       return false;
     }
-    return weekday === schedule.dayOfWeek;
+    return days.some((day) => day.dayOfWeek % 7 === dayOfWeek);
   }
-  if (schedule.dayOfMonth === undefined) {
+  const { dayOfMonth } = schedule;
+  if (dayOfMonth === undefined) {
     return false;
   }
-  return day.day === schedule.dayOfMonth;
+  return days.some((day) => day.day === dayOfMonth);
 };

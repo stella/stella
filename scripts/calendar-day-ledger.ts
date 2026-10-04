@@ -15,7 +15,13 @@
 // never appears on the base branch's terms.
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
@@ -70,6 +76,118 @@ const isCalendarDayOverride = (override: unknown): boolean => {
     rules !== null &&
     Object.keys(rules).some((rule) => rule.startsWith(`${PLUGIN}/`))
   );
+};
+
+const ScopeOverrideSchema = v.object({
+  files: v.array(v.string()),
+  rules: v.record(v.string(), v.unknown()),
+});
+type ScopeOverride = v.InferOutput<typeof ScopeOverrideSchema>;
+
+const calendarDayOverrides = (): ScopeOverride[] => {
+  const overrides = Reflect.get(oxlintConfig, "overrides");
+  return (Array.isArray(overrides) ? overrides : [])
+    .filter(isCalendarDayOverride)
+    .map((override) => v.parse(ScopeOverrideSchema, override));
+};
+
+/** Whether `rule` is on for `file` once every override has applied, in order. */
+export const ruleApplies = (
+  overrides: readonly ScopeOverride[],
+  rule: string,
+  file: string,
+): boolean => {
+  let on = false;
+  for (const override of overrides) {
+    const level = override.rules[`${PLUGIN}/${rule}`];
+    if (
+      level !== undefined &&
+      override.files.some((glob) => new Bun.Glob(glob).match(file))
+    ) {
+      on = level !== "off";
+    }
+  }
+  return on;
+};
+
+/**
+ * Rows the lint pass never visits: the file is gone, or the rule no longer
+ * applies to it. Lint reports a stale budget only from inside a visited file,
+ * so without this check such a row would keep its count and a later file at
+ * the same path and spelling could reuse it unreviewed.
+ */
+export const unreachableRows = (
+  rows: readonly LedgerRow[],
+  overrides: readonly ScopeOverride[],
+  exists: (file: string) => boolean,
+): string[] =>
+  rows
+    .filter((row) => {
+      const [rule, file] = row.id.split("::");
+      return (
+        rule === undefined ||
+        file === undefined ||
+        !exists(file) ||
+        !ruleApplies(overrides, rule, file)
+      );
+    })
+    .map((row) => row.id);
+
+const existsInRepo = (file: string): boolean =>
+  existsSync(path.join(REPO_ROOT, file));
+
+const readLedger = (): LedgerRow[] =>
+  v.parse(
+    Ledger,
+    JSON.parse(readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8")),
+  );
+
+const checkReachable = (): number => {
+  const unreachable = unreachableRows(
+    readLedger(),
+    calendarDayOverrides(),
+    existsInRepo,
+  );
+  for (const id of unreachable) {
+    console.error(
+      `${LEDGER_REL}: ${id} budgets a file that is gone or out of the rule's scope; run --write to drop it`,
+    );
+  }
+  return unreachable.length === 0 ? 0 : 1;
+};
+
+const selfTestReachability = (): number => {
+  const overrides: ScopeOverride[] = [
+    { files: ["apps/api/src/**/*.ts"], rules: { [`${PLUGIN}/r`]: "error" } },
+    { files: ["apps/api/src/**/*.test.ts"], rules: { [`${PLUGIN}/r`]: "off" } },
+  ];
+  const row = (file: string): LedgerRow => ({
+    id: `r::${file}::f::s`,
+    count: 1,
+    reason: "self-test budget row",
+  });
+  const unreachable = unreachableRows(
+    [
+      row("apps/api/src/a.ts"),
+      row("apps/api/src/a.test.ts"),
+      row("apps/api/src/gone.ts"),
+      row("apps/web/src/b.ts"),
+    ],
+    overrides,
+    (file) => file !== "apps/api/src/gone.ts",
+  );
+  const expected = [
+    "r::apps/api/src/a.test.ts::f::s",
+    "r::apps/api/src/gone.ts::f::s",
+    "r::apps/web/src/b.ts::f::s",
+  ];
+  if (JSON.stringify(unreachable) !== JSON.stringify(expected)) {
+    console.error(
+      `${PLUGIN} --self-test: unreachable rows must be ${expected.join(", ")}; got ${unreachable.join(", ")}`,
+    );
+    return 1;
+  }
+  return 0;
 };
 
 /**
@@ -143,15 +261,15 @@ const census = (): { excess: string[]; found: Map<string, number> } => {
 };
 
 const write = (): number => {
-  const current = v.parse(
-    Ledger,
-    JSON.parse(readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8")),
+  const current = readLedger();
+  const unreachable = new Set(
+    unreachableRows(current, calendarDayOverrides(), existsInRepo),
   );
   const { excess, found } = census();
   const next = new Map<string, LedgerRow>();
   for (const row of current) {
     const count = found.get(row.id) ?? row.count;
-    if (count > 0) {
+    if (count > 0 && !unreachable.has(row.id)) {
       next.set(row.id, { ...row, count });
     }
   }
@@ -178,17 +296,26 @@ const write = (): number => {
   return todo > 0 ? 1 : 0;
 };
 
+const main = (args: readonly string[]): number => {
+  if (args.includes("--write")) {
+    return write();
+  }
+  const reachable = args.includes("--self-test")
+    ? selfTestReachability()
+    : checkReachable();
+  if (reachable !== 0) {
+    return reachable;
+  }
+  return runLedgerMembershipGuard({
+    ledgerRel: LEDGER_REL,
+    repoRoot: REPO_ROOT,
+    parseLedger,
+    label: PLUGIN,
+    remediation:
+      "read the day through todayFor(zone) or decide on ctx.dueAt instead of budgeting a new site",
+  });
+};
+
 if (import.meta.main) {
-  process.exit(
-    process.argv.includes("--write")
-      ? write()
-      : runLedgerMembershipGuard({
-          ledgerRel: LEDGER_REL,
-          repoRoot: REPO_ROOT,
-          parseLedger,
-          label: PLUGIN,
-          remediation:
-            "read the day through todayFor(zone) or decide on ctx.dueAt instead of budgeting a new site",
-        }),
-  );
+  process.exit(main(process.argv.slice(2)));
 }

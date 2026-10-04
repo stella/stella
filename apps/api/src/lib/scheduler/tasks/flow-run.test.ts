@@ -183,6 +183,25 @@ describe("scheduled flow due day", () => {
     expect(started.filter((id) => id === definitionId)).toHaveLength(1);
   });
 
+  test("a Sunday slot claimed after Monday's slot elapsed starts Monday's weekly run", async () => {
+    const schedule: Schedule = {
+      frequency: "weekly",
+      hourUtc: 9,
+      dayOfWeek: 1,
+    };
+    const definitionId = await createDefinition(schedule);
+
+    // The runner collapses the backlog and schedules Tuesday 09:00 next, so
+    // this claim is the only one that can start Monday's run.
+    await runTick(
+      definitionId,
+      schedule,
+      new Date("2026-07-05T09:00:00.000Z"),
+      new Date("2026-07-06T10:00:00.000Z"),
+    );
+    expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+  });
+
   test("a month-end slot claimed on the 1st still starts the month-end run", async () => {
     const schedule: Schedule = {
       frequency: "monthly",
