@@ -63,7 +63,7 @@ export type SkCourtRegistryObservation =
   | { status: "available"; record: SkCourtRegistryRecord }
   | SkCourtRegistryWithheld;
 
-export const isSkCourtRegistryUnavailable = (
+const isSkCourtRegistryUnavailable = (
   value: unknown,
 ): value is SkCourtRegistryUnavailable =>
   isRecord(value) &&
