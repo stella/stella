@@ -1502,7 +1502,8 @@ export default defineConfig({
         "apps/api/scripts/**/*.test.ts",
       ],
       rules: {
-        "no-discarded-transition-result/no-discarded-transition-result": "error",
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
       },
     },
     {
