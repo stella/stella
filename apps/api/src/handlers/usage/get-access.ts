@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeRootHandler,
   type HandlerConfig,
   type SafeHandlerGenerator,
@@ -16,6 +17,7 @@ const config = {
   description:
     "Read the organization's current access notification and its deadline.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
