@@ -147,3 +147,108 @@ export const readOutcomeOfStatus = (
   }
   return readUnavailable({ kind: "status", status });
 };
+
+// ── Read outcomes as stored on a decision ──
+
+/**
+ * The metadata key under which a decision states the typed outcome of a read
+ * it was stored without: a {@link StoredReadUnavailable}, a
+ * {@link ReadRefusal}, or a {@link StoredReadAbsence}.
+ */
+export const READ_OUTCOME_METADATA_KEY = "readOutcome";
+
+/**
+ * Consecutive cycles a stored item's read may stay unavailable before the
+ * pipeline keeps its row with a typed outcome and moves on, instead of
+ * failing the page again.
+ */
+export const UNAVAILABLE_CYCLES_BEFORE_MARKING = 3;
+
+/** A {@link ReadUnavailableCause} reduced to what can be stored. */
+export type StoredReadUnavailableCause =
+  | { readonly kind: "status"; readonly status: number }
+  | { readonly kind: "no-content"; readonly status: number }
+  | { readonly kind: "empty-body"; readonly status: number }
+  | { readonly kind: "thrown" };
+
+/**
+ * A read that stayed unavailable, as stored: what it withheld, why, and for
+ * how many consecutive cycles. It is re-checked on the normal cadence.
+ *
+ * - scope "part": one part of a decision whose main text was read (a notice,
+ *   a record card, an abstract). The decision is stored with this marker.
+ *   A failed main text or AST is never a part: it fails the item.
+ * - scope "document": the decision's own document. A stored row keeps its
+ *   content and gains this marker; a row never stored is held listing-only
+ *   with it as the reason.
+ */
+export type StoredReadUnavailable = {
+  readonly type: "unavailable";
+  readonly scope: "document" | "part";
+  readonly cause: StoredReadUnavailableCause;
+  readonly consecutiveCycles: number;
+};
+
+/** An absence the source stated, as stored. */
+export type StoredReadAbsence = {
+  readonly type: "absent";
+  readonly evidence: AbsenceEvidence;
+};
+
+/** The typed outcome a decision carries for a read it was stored without. */
+export type StoredReadOutcome =
+  | StoredReadUnavailable
+  | ReadRefusal
+  | StoredReadAbsence;
+
+const storedCause = (
+  cause: ReadUnavailableCause,
+): StoredReadUnavailableCause =>
+  cause.kind === "thrown" ? { kind: "thrown" } : cause;
+
+export const storedReadUnavailable = ({
+  cause,
+  scope,
+  consecutiveCycles,
+}: {
+  cause: ReadUnavailableCause;
+  scope: StoredReadUnavailable["scope"];
+  consecutiveCycles: number;
+}): StoredReadUnavailable => ({
+  type: "unavailable",
+  scope,
+  cause: storedCause(cause),
+  consecutiveCycles,
+});
+
+const ABSENCE_EVIDENCE: ReadonlySet<unknown> = new Set<AbsenceEvidence>([
+  "http-404",
+  "http-410",
+  "stated-zero",
+  "publisher-typed-absence",
+]);
+
+const UNAVAILABLE_KINDS: ReadonlySet<unknown> = new Set<
+  StoredReadUnavailableCause["kind"]
+>(["status", "no-content", "empty-body", "thrown"]);
+
+/** Whether a value is a stored unavailable marker. */
+export const isStoredReadUnavailable = (
+  value: unknown,
+): value is StoredReadUnavailable =>
+  isRecord(value) &&
+  value["type"] === "unavailable" &&
+  (value["scope"] === "document" || value["scope"] === "part") &&
+  isRecord(value["cause"]) &&
+  UNAVAILABLE_KINDS.has(value["cause"]["kind"]) &&
+  typeof value["consecutiveCycles"] === "number" &&
+  Number.isInteger(value["consecutiveCycles"]) &&
+  value["consecutiveCycles"] >= 1;
+
+/** Whether a value is a stored absence marker. */
+export const isStoredReadAbsence = (
+  value: unknown,
+): value is StoredReadAbsence =>
+  isRecord(value) &&
+  value["type"] === "absent" &&
+  ABSENCE_EVIDENCE.has(value["evidence"]);

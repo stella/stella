@@ -3,15 +3,26 @@
  *
  * A driver builds a decision from an enrolled fixture twice: once as served,
  * and once with every request of one fetch stage failing in one way (a 500, a
- * timeout, an empty 204, an empty 200 body). A faulted build must either fail
- * (throw, or end in a typed non-built result the fixture refuses) or build
- * exactly the decision the control did. A build that succeeds with different
- * content turned a failed read into missing or empty fields.
+ * timeout, an empty 204, an empty 200 body). A faulted build must fail (throw,
+ * or end in a typed non-built result the fixture refuses), build exactly the
+ * decision the control did, or state the failure typed:
+ * - a part withheld: a `StoredReadUnavailable` of scope "part" on a decision
+ *   whose main text (fulltext, AST, sections) is exactly the control's. A part
+ *   marker never excuses a failed main text: that must fail the item.
+ * - the document withheld: a `StoredReadUnavailable` of scope "document" on a
+ *   decision held listing-only (`isListingOnly`, or the "listing-only"
+ *   observation detail), so a stored row is not overwritten.
+ * A failed read stored as an absence is degraded: faults are never absences.
+ * A build that succeeds with different content otherwise turned a failed read
+ * into missing or empty fields. Some adapters must fail on every fault (the
+ * pipeline, not the adapter, marks an item after repeated failures); for
+ * them only a failure or the control decision passes.
  *
  * A refusal (401, 403) is a separate class with a stricter expectation: the
  * build must state it as a typed refusal, either a typed refused marker on the
- * decision (`ReadRefusal`, or the pipeline's "secondary-refused" observation
- * detail for a withheld part) or a typed refused failure (a source-level
+ * decision (`ReadRefusal`; or the pipeline's "secondary-refused" observation
+ * detail, or a scope "part" refusal, for a withheld part, again only with the
+ * main text intact) or a typed refused failure (a source-level
  * `publisher_refusal` stop, or an error carrying a `ReadRefusal`). Failing
  * untyped, or building unchanged, does not state it.
  *
@@ -23,7 +34,11 @@ import { panic, Result } from "better-result";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
-import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { isRecord } from "@/api/lib/type-guards";
@@ -57,7 +72,7 @@ export type RefusalOutcome =
   | { readonly type: "surfaced" }
   | {
       readonly type: "untyped";
-      readonly how: "failed" | "unchanged" | "changed";
+      readonly how: "failed" | "unchanged" | "changed" | "main-text-failed";
       readonly changed: readonly string[];
     };
 
@@ -233,56 +248,135 @@ export const changedPaths = (
     .filter((path) => left.get(path) !== right.get(path))
     .toSorted();
 
+/** The decision's main text: its failure fails the item, never a part. */
+const MAIN_TEXT = /^(?:fulltext|documentAst|sections)(?:$|[.[])/u;
+
+type MarkerCount = { part: number; document: number; absent: number };
+
+/**
+ * Count the typed outcome markers a built value carries. With a refusal
+ * status, refusals of that status (and the "secondary-refused" detail) count;
+ * without one, stored unavailable markers count.
+ */
+const countMarkers = (
+  value: unknown,
+  refusalStatus: number | null,
+  into: MarkerCount,
+): MarkerCount => {
+  if (value instanceof Map) {
+    return countMarkers(Object.fromEntries(value), refusalStatus, into);
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      countMarkers(item, refusalStatus, into);
+    }
+    return into;
+  }
+  if (!isRecord(value) || value instanceof Uint8Array) {
+    return into;
+  }
+  if (isReadRefusal(value)) {
+    if (value.status === refusalStatus) {
+      into[value.scope === "part" ? "part" : "document"] += 1;
+    }
+    return into;
+  }
+  if (isStoredReadUnavailable(value)) {
+    if (refusalStatus === null) {
+      into[value.scope] += 1;
+    }
+    return into;
+  }
+  if (isStoredReadAbsence(value)) {
+    into.absent += 1;
+    return into;
+  }
+  if (
+    refusalStatus !== null &&
+    value["observationDetail"] === OBSERVATION_DETAIL.SECONDARY_REFUSED
+  ) {
+    into.part += 1;
+  }
+  for (const item of Object.values(value)) {
+    countMarkers(item, refusalStatus, into);
+  }
+  return into;
+};
+
+/** Markers the faulted build carries beyond the control's. */
+const addedMarkers = (
+  control: unknown,
+  faulted: unknown,
+  refusalStatus: number | null,
+): MarkerCount => {
+  const before = countMarkers(control, refusalStatus, {
+    part: 0,
+    document: 0,
+    absent: 0,
+  });
+  const after = countMarkers(faulted, refusalStatus, {
+    part: 0,
+    document: 0,
+    absent: 0,
+  });
+  return {
+    part: after.part - before.part,
+    document: after.document - before.document,
+    absent: after.absent - before.absent,
+  };
+};
+
+const isListingOnly = (value: unknown): boolean =>
+  isRecord(value) &&
+  (value["isListingOnly"] === true ||
+    value["observationDetail"] === OBSERVATION_DETAIL.LISTING_ONLY);
+
+const changedBetween = (
+  control: unknown,
+  faulted: unknown,
+  volatile: ReadonlySet<string>,
+): string[] =>
+  changedPaths(flattenBuilt(control), flattenBuilt(faulted)).filter(
+    (path) => !volatile.has(path),
+  );
+
 /**
  * What a faulted build did with the failure. `volatile` names paths that
  * differ between two unfaulted builds (timestamps), which say nothing about
- * the fault.
+ * the fault. `requireFailure` admits only a failure or the control decision.
  */
 export const classifyFaultedBuild = ({
   control,
   faulted,
   volatile,
+  requireFailure = false,
 }: {
   control: unknown;
   faulted: Result<unknown, unknown>;
   volatile: ReadonlySet<string>;
+  requireFailure?: boolean;
 }): FaultOutcome => {
   if (Result.isError(faulted)) {
     return { type: "surfaced" };
   }
-  const changed = changedPaths(
-    flattenBuilt(control),
-    flattenBuilt(faulted.value),
-  ).filter((path) => !volatile.has(path));
-  return changed.length === 0
-    ? { type: "recovered" }
-    : { type: "degraded", changed };
-};
-
-/** How many typed refusal markers of `status` a built value carries. */
-const refusalMarkers = (value: unknown, status: number): number => {
-  if (value instanceof Map) {
-    return refusalMarkers(Object.fromEntries(value), status);
+  const changed = changedBetween(control, faulted.value, volatile);
+  if (changed.length === 0) {
+    return { type: "recovered" };
   }
-  if (Array.isArray(value)) {
-    return value.reduce<number>(
-      (count, item) => count + refusalMarkers(item, status),
-      0,
-    );
+  if (requireFailure) {
+    return { type: "degraded", changed };
   }
-  if (!isRecord(value) || value instanceof Uint8Array) {
-    return 0;
+  const added = addedMarkers(control, faulted.value, null);
+  if (added.absent > 0) {
+    return { type: "degraded", changed };
   }
-  if (isReadRefusal(value)) {
-    return value.status === status ? 1 : 0;
+  if (added.part > 0 && !changed.some((path) => MAIN_TEXT.test(path))) {
+    return { type: "surfaced" };
   }
-  // The pipeline's typed marker for a decision stored without a refused part.
-  const secondaryRefused =
-    value["observationDetail"] === OBSERVATION_DETAIL.SECONDARY_REFUSED ? 1 : 0;
-  return Object.values(value).reduce<number>(
-    (count, item) => count + refusalMarkers(item, status),
-    secondaryRefused,
-  );
+  if (added.document > 0 && isListingOnly(faulted.value)) {
+    return { type: "surfaced" };
+  }
+  return { type: "degraded", changed };
 };
 
 /** A failure that states a refusal: a source-level stop or a carried marker. */
@@ -294,7 +388,8 @@ const isTypedRefusalFailure = (error: unknown): boolean =>
 
 /**
  * What a build with one stage refused did with the refusal. Only a typed
- * refusal surfaces it; an untyped failure and an unchanged build do not.
+ * refusal surfaces it; an untyped failure, an unchanged build and a part
+ * refusal hiding a failed main text do not.
  */
 export const classifyRefusedBuild = ({
   control,
@@ -312,14 +407,16 @@ export const classifyRefusedBuild = ({
       ? { type: "surfaced" }
       : { type: "untyped", how: "failed", changed: [] };
   }
-  const status = REFUSAL_STATUS[fault];
-  if (refusalMarkers(faulted.value, status) > refusalMarkers(control, status)) {
+  const changed = changedBetween(control, faulted.value, volatile);
+  const added = addedMarkers(control, faulted.value, REFUSAL_STATUS[fault]);
+  if (added.document > 0) {
     return { type: "surfaced" };
   }
-  const changed = changedPaths(
-    flattenBuilt(control),
-    flattenBuilt(faulted.value),
-  ).filter((path) => !volatile.has(path));
+  if (added.part > 0) {
+    return changed.some((path) => MAIN_TEXT.test(path))
+      ? { type: "untyped", how: "main-text-failed", changed }
+      : { type: "surfaced" };
+  }
   return changed.length === 0
     ? { type: "untyped", how: "unchanged", changed }
     : { type: "untyped", how: "changed", changed };

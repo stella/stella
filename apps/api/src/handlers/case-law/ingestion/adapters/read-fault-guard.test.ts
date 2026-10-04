@@ -3,13 +3,18 @@
 // Each adapter's enrolled fixture is built once as served, recording the
 // fetch stages it reads, then once per stage × fault (500, timeout, empty 204,
 // empty 200 body) with every request of that stage failing. A faulted build
-// must fail or build exactly the control decision; a build that succeeds with
-// different content stored a failed read as missing or empty fields.
+// must fail, build exactly the control decision, or state the failure typed:
+// a part marked unavailable while the main text reads as served, or the
+// document marked unavailable on a listing-only decision. A part marker never
+// excuses a failed main text, and a fault is never an absence. Otherwise a
+// build that succeeds with different content stored a failed read as missing
+// or empty fields. Adapters in FAULTS_MUST_FAIL admit only a failure.
 //
 // Refusals (401, 403) are a separate class: the build must state the refusal
-// typed (a `refused` marker on the decision, a withheld part typed as
-// "secondary-refused", or a typed refused failure). Failing untyped or
-// building unchanged does not count; a typed marker is surfaced, not degraded.
+// typed (a `refused` marker on the decision, a withheld part typed as refused
+// or "secondary-refused" with the main text intact, or a typed refused
+// failure). Failing untyped or building unchanged does not count; a typed
+// marker is surfaced, not degraded.
 //
 // Rows in read-fault-guard-baseline.json are the current exceptions: an
 // adapter whose fixture drives no publisher read (`<adapter>::undriven`), a
@@ -32,7 +37,16 @@ import { writeFileSync } from "node:fs";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
-import type { ReadRefusal } from "@/api/lib/errors/read-outcome";
+import {
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+  type ReadOutcome,
+  type ReadRefusal,
+  type ReadUnavailableCause,
+} from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
@@ -67,6 +81,7 @@ import {
   READ_FAULTS,
   READ_REFUSALS,
   recordFetchStages,
+  type FaultOutcome,
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -108,6 +123,17 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
+
+/**
+ * Adapters whose build must fail on every fault. An empty answer, a 204, a 5xx
+ * or a timeout from the SK general-courts portal is transient: the page fails
+ * and the shared pipeline's consecutive-unavailable count, not the adapter,
+ * marks the item. Only an explicit served answer with no record is a stated
+ * absence (listing-only), and no fault here serves one.
+ */
+const FAULTS_MUST_FAIL: ReadonlySet<string> = new Set<AdapterKey>([
+  ADAPTER_KEYS.SK_COURTS,
+]);
 
 const UNDRIVEN_REASON =
   "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.";
@@ -166,6 +192,8 @@ const refusalDetail = (
       return "the build stores the decision unchanged";
     case "changed":
       return `the build stores a different decision: ${outcome.changed.slice(0, 3).join(", ")}`;
+    case "main-text-failed":
+      return `a part refusal hides a failed main text: ${outcome.changed.slice(0, 3).join(", ")}`;
     default:
       outcome.how satisfies never;
       return panic(`Unhandled refusal outcome: ${String(outcome.how)}`);
@@ -207,6 +235,7 @@ for (const adapter of listAdapters()) {
             control: control.value,
             faulted: await buildWithFault({ stage, fault, build }),
             volatile,
+            requireFailure: FAULTS_MUST_FAIL.has(adapter.key),
           });
           if (outcome.type === "degraded") {
             rows.push(
@@ -465,4 +494,187 @@ test("a source-level refusal stop is a typed refusal", async () => {
       : panic(`Publisher read ${outcome.type}`);
   });
   expect(outcomes).toEqual(READ_REFUSALS.map(() => ({ type: "surfaced" })));
+});
+
+// ── Self-tests: typed unavailable outcomes ──
+
+const faultOutcomes = async (
+  build: () => Promise<unknown>,
+  stageIndex: number,
+  requireFailure = false,
+): Promise<FaultOutcome[]> => {
+  const control = await recordFetchStages(build);
+  const stage = control.stages.at(stageIndex) ?? panic("no stage");
+  const outcomes: FaultOutcome[] = [];
+  for (const fault of READ_FAULTS) {
+    outcomes.push(
+      classifyFaultedBuild({
+        control: control.value,
+        faulted: await buildWithFault({ stage, fault, build }),
+        volatile: new Set(),
+        requireFailure,
+      }),
+    );
+  }
+  return outcomes;
+};
+
+/** The cause a non-present read carries, for a stored marker. */
+const unreadCause = (outcome: ReadOutcome<string>): ReadUnavailableCause =>
+  outcome.type === "unavailable" ? outcome.cause : panic(outcome.type);
+
+const withPartMarker = async () => {
+  servedDocumentAndNotice();
+  const document = await readPublisherText(PUBLISHER, readInit);
+  const notice = await readPublisherText(NOTICE, readInit);
+  const fulltext =
+    document.type === "present" ? document.value : panic("no document");
+  return notice.type === "present"
+    ? { fulltext, notice: notice.value }
+    : {
+        fulltext,
+        metadata: {
+          [READ_OUTCOME_METADATA_KEY]: storedReadUnavailable({
+            cause: unreadCause(notice),
+            scope: "part",
+            consecutiveCycles: 1,
+          }),
+        },
+      };
+};
+
+test("a part marked unavailable while the main text reads as served is surfaced", async () => {
+  expect(await faultOutcomes(withPartMarker, 1)).toEqual(
+    READ_FAULTS.map(() => ({ type: "surfaced" })),
+  );
+});
+
+test("a part marker on a decision whose main text failed is degraded", async () => {
+  const build = async () => {
+    servedDocument();
+    const document = await readPublisherText(PUBLISHER, readInit);
+    return document.type === "present"
+      ? { fulltext: document.value }
+      : {
+          fulltext: "",
+          metadata: {
+            [READ_OUTCOME_METADATA_KEY]: storedReadUnavailable({
+              cause: unreadCause(document),
+              scope: "part",
+              consecutiveCycles: 1,
+            }),
+          },
+        };
+  };
+  for (const outcome of await faultOutcomes(build, 0)) {
+    expect(outcome.type).toBe("degraded");
+  }
+  const refused = await refusalOutcomes(async () => {
+    servedDocument();
+    const document = await readPublisherText(PUBLISHER, {
+      ...readInit,
+      refusalScope: "part",
+    });
+    return document.type === "present"
+      ? { fulltext: document.value }
+      : { fulltext: "", metadata: { [READ_OUTCOME_METADATA_KEY]: document } };
+  });
+  for (const outcome of refused) {
+    expect(outcome).toMatchObject({ type: "untyped", how: "main-text-failed" });
+  }
+});
+
+const listingOnlyWith =
+  (reason: (outcome: ReadOutcome<string>) => unknown, listingOnly = true) =>
+  async () => {
+    servedDocument();
+    const document = await readPublisherText(PUBLISHER, readInit);
+    return document.type === "present"
+      ? { caseNumber: "1", fulltext: document.value }
+      : {
+          caseNumber: "1",
+          ...(listingOnly ? { isListingOnly: true } : {}),
+          metadata: { [READ_OUTCOME_METADATA_KEY]: reason(document) },
+        };
+  };
+
+const documentUnavailable = (outcome: ReadOutcome<string>) =>
+  storedReadUnavailable({
+    cause: unreadCause(outcome),
+    scope: "document",
+    consecutiveCycles: UNAVAILABLE_CYCLES_BEFORE_MARKING,
+  });
+
+test("the document marked unavailable on a listing-only decision is surfaced, and only there", async () => {
+  expect(await faultOutcomes(listingOnlyWith(documentUnavailable), 0)).toEqual(
+    READ_FAULTS.map(() => ({ type: "surfaced" })),
+  );
+  for (const outcome of await faultOutcomes(
+    listingOnlyWith(documentUnavailable, false),
+    0,
+  )) {
+    expect(outcome.type).toBe("degraded");
+  }
+});
+
+test("a fault stored as a stated absence is degraded", async () => {
+  const absence = () => ({
+    type: "absent",
+    evidence: "publisher-typed-absence",
+  });
+  for (const outcome of await faultOutcomes(listingOnlyWith(absence), 0)) {
+    expect(outcome.type).toBe("degraded");
+  }
+});
+
+test("an adapter that must fail on faults passes only by failing", async () => {
+  for (const outcome of await faultOutcomes(
+    listingOnlyWith(documentUnavailable),
+    0,
+    true,
+  )) {
+    expect(outcome.type).toBe("degraded");
+  }
+  const failing = async () => {
+    servedDocument();
+    const document = await readPublisherText(PUBLISHER, readInit);
+    return document.type === "present"
+      ? { fulltext: document.value }
+      : panic(`Publisher read ${document.type}`);
+  };
+  expect(await faultOutcomes(failing, 0, true)).toEqual(
+    READ_FAULTS.map(() => ({ type: "surfaced" })),
+  );
+});
+
+test("stored outcome markers are recognised only in their typed shape", () => {
+  const marker = storedReadUnavailable({
+    cause: { kind: "thrown", error: new Error("timed out") },
+    scope: "part",
+    consecutiveCycles: 2,
+  });
+  expect(marker).toEqual({
+    type: "unavailable",
+    scope: "part",
+    cause: { kind: "thrown" },
+    consecutiveCycles: 2,
+  });
+  expect(isStoredReadUnavailable(marker)).toBe(true);
+  for (const value of [
+    { ...marker, consecutiveCycles: 0 },
+    { ...marker, scope: "source" },
+    { ...marker, cause: { kind: "guessed" } },
+    { type: "unavailable", cause: { kind: "status", status: 500 } },
+  ]) {
+    expect(isStoredReadUnavailable(value)).toBe(false);
+  }
+  expect(
+    isStoredReadAbsence({
+      type: "absent",
+      evidence: "publisher-typed-absence",
+    }),
+  ).toBe(true);
+  expect(isStoredReadAbsence({ type: "absent", evidence: "empty-body" })).toBe(
+    false,
+  );
 });
