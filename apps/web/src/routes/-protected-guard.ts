@@ -58,6 +58,7 @@ export const loadProtectedContext = async ({
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
+  const userId = authContext.session.userId;
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
@@ -78,7 +79,7 @@ export const loadProtectedContext = async ({
         await context.queryClient.query({
           ...organizationSettingsOptions({
             organizationId: activeOrganizationId,
-            userId: authContext.user.id,
+            userId,
           }),
           staleTime: "static",
         });
