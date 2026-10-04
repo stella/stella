@@ -438,20 +438,16 @@ export const DECISION_DOCKET_IDENTITY_FIXTURES = {
               partSibling: KEYED,
             })),
           ),
+        // An original case is filed in print, whichever form a reader types.
         fc.tuple(twoDigits, ordinal(9999)).chain(([term, number]) =>
-          fc.constantFrom("", "No. ").map((lead) => ({
-            filed: `No. ${term}O${number}`,
-            written: `${lead}${term}O${number}`,
-            partSibling: KEYED,
-          })),
-        ),
-        ordinal(9999).chain((number) =>
           fc
             .constantFrom(
               `No. ${number}, Orig.`,
               `${number}, Orig.`,
               `${number} orig`,
               `No. ${number} Original`,
+              `${term}O${number}`,
+              `No. ${term}O${number}`,
             )
             .map((written) => ({
               filed: `No. ${number}, Orig.`,

@@ -677,8 +677,10 @@ const USA_DOCKET_FORMS = [
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
     key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
-    format: ({ number, term }: UnitedStatesDocketParts) =>
-      `No. ${term}O${number}`,
+    // Printed, as every original case is: an electronic family would key
+    // apart from a printed member with a part after it.
+    format: ({ number }: UnitedStatesDocketParts) =>
+      `No. ${String(Number.parseInt(number, 10))}, Orig.`,
   },
   {
     pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
