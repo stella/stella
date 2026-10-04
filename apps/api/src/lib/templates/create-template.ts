@@ -89,13 +89,13 @@ type PrepareTemplateWriteOptions = Pick<
   "safeDb" | "organizationId" | "file" | "categoryId"
 >;
 
-const prepareTemplateWrite = ({
+const prepareTemplateWrite = async ({
   safeDb,
   organizationId,
   file,
   categoryId,
 }: PrepareTemplateWriteOptions) =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     if (categoryId) {
       const category = yield* Result.await(
         safeDb((tx) =>
@@ -149,26 +149,39 @@ const prepareTemplateWrite = ({
 
 /** Writes the template object, metered against the organization's file usage
  *  when that deployment feature is on. */
-const writeTemplateObject = async <T>({
+const writeTemplateObject = async ({
   organizationId,
-  objectKey,
-  sizeBytes,
-  write,
+  file,
+  s3Key,
+  intentId,
+  recordWriteState,
 }: {
   organizationId: SafeId<"organization">;
-  objectKey: string;
-  sizeBytes: number;
-  write: () => Promise<T>;
-}): Promise<Result<T, HandlerError>> =>
-  isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
+  file: ScannedFile;
+  s3Key: string;
+  intentId: SafeId<"pendingUpload">;
+  recordWriteState: (state: S3ObjectWriteCertainty) => void;
+}): Promise<
+  Result<Awaited<ReturnType<typeof writeScannedObject>>, HandlerError>
+> => {
+  const writeObject = async () => {
+    recordWriteState(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+    const written = await writeScannedObject(
+      { file, key: s3Key },
+      { type: "cleanup-intent", intent: intentId },
+    );
+    recordWriteState(written.certainty);
+    return written;
+  };
+  return isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await writeOrganizationFile({
         organizationId,
-        objectKey,
-        sizeBytes,
-        write,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        write: writeObject,
       })
     : await Result.tryPromise({
-        try: write,
+        try: writeObject,
         catch: (cause) =>
           new HandlerError({
             status: 503,
@@ -176,6 +189,7 @@ const writeTemplateObject = async <T>({
             cause,
           }),
       });
+};
 
 export const createStoredTemplate = async function* ({
   safeDb,
@@ -202,21 +216,15 @@ export const createStoredTemplate = async function* ({
   );
   let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
   try {
-    const writeObject = async () => {
-      writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
-      const written = await writeScannedObject(
-        { file, key: s3Key },
-        { type: "cleanup-intent", intent: intentId },
-      );
-      writeState = written.certainty;
-      return written;
-    };
     const { object: stored } = yield* Result.await(
       writeTemplateObject({
         organizationId,
-        objectKey: s3Key,
-        sizeBytes: file.bytes.byteLength,
-        write: writeObject,
+        file,
+        s3Key,
+        intentId,
+        recordWriteState: (state) => {
+          writeState = state;
+        },
       }),
     );
 

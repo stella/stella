@@ -133,9 +133,19 @@ const intentRows = async () =>
     .from(bufferObjectCleanupIntents)
     .where(eq(bufferObjectCleanupIntents.organizationId, ids.orgA));
 
+// The scheduler reconciles on the root connection: object keys and retry
+// metadata stay outside the request role's column grants.
+const rootSafeDb = () =>
+  asTestRaw<SafeDb>(
+    async (run: Parameters<SafeDb>[0]) =>
+      await Result.tryPromise(
+        async () => await testDb.transaction(asTestRaw(run)),
+      ),
+  );
+
 const reconcile = async () =>
   await reconcileBufferObjectCleanupIntents({
-    safeDb: memberSafeDb(),
+    safeDb: rootSafeDb(),
     limit: 25,
     deleteObject: async (key, signal) =>
       await deleteOrganizationFilesWithSignal([key], signal, {

@@ -312,6 +312,30 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
   `,
+  // Exact-key cleanup intents: the request role inserts and deletes its own
+  // rows and reaches only the id, the state and the retry schedule.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "buffer_object_cleanup_intents" FROM stella
+  `,
+  `
+    GRANT INSERT, DELETE ON TABLE "buffer_object_cleanup_intents" TO stella
+  `,
+  `
+    GRANT SELECT ("id", "status") ON TABLE "buffer_object_cleanup_intents"
+      TO stella
+  `,
+  `
+    GRANT UPDATE ("status", "attempt_count", "next_attempt_at")
+      ON TABLE "buffer_object_cleanup_intents" TO stella
+  `,
+  // List item provenance is frozen apart from its verification fields.
+  `
+    REVOKE UPDATE, DELETE ON TABLE "legal_list_item_sources" FROM stella
+  `,
+  `
+    GRANT UPDATE ("verification_status", "verified_by", "verified_at", "updated_at")
+      ON TABLE "legal_list_item_sources" TO stella
+  `,
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
       "case_law_sources",

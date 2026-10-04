@@ -1,8 +1,8 @@
+-- requires: 20260906130000_template_write_cleanup_intents
 SET lock_timeout = '1s';
 --> statement-breakpoint
 SET statement_timeout = '30min';
 --> statement-breakpoint
--- requires: 20260906130000_template_write_cleanup_intents
 -- stella-migration-safety: reviewed alter-policy - existing writer scopes remain unchanged; creation ownership admits only an authenticated organization writer's fresh template key without a published template reference.
 ALTER POLICY "buffer_object_cleanup_insert"
 ON "buffer_object_cleanup_intents"

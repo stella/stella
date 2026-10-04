@@ -118,8 +118,8 @@ test("a committed template refusal cleans its candidate and keeps the published 
     license: "MIT",
     authors: [],
   } as const satisfies TemplateOrigin;
-  const create = () =>
-    Result.gen(() =>
+  const create = async () =>
+    await Result.gen(() =>
       createStoredTemplate({
         safeDb,
         organizationId: fixture.ids.orgA,
@@ -139,7 +139,9 @@ test("a committed template refusal cleans its candidate and keeps the published 
     const publishedKey = fake.requests.find(
       (request) => request.method === "PUT",
     )?.key;
-    expect(publishedKey).toBeDefined();
+    if (publishedKey === undefined) {
+      throw new Error("Expected the first create to publish its template");
+    }
     const refused = await create();
     expect(Result.isError(refused)).toBe(true);
     if (Result.isError(refused)) {
@@ -150,7 +152,9 @@ test("a committed template refusal cleans its candidate and keeps the published 
     const candidateKey = fake.requests.findLast(
       (request) => request.method === "PUT",
     )?.key;
-    expect(candidateKey).toBeDefined();
+    if (candidateKey === undefined) {
+      throw new Error("Expected the refused create to write its candidate");
+    }
     expect(candidateKey).not.toBe(publishedKey);
     expect(fake.objects.has(`${envBase.S3_BUCKET}/${publishedKey}`)).toBe(true);
     expect(fake.objects.has(`${envBase.S3_BUCKET}/${candidateKey}`)).toBe(

@@ -63,8 +63,9 @@ const exemptions = {
   "scripts/seed-templates.ts:writeScannedObject:1": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:0": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
-  "src/handlers/uploads/update.ts:copyObject:0": "reservation_flow",
-  "src/handlers/uploads/update.ts:writeS3ObjectWithRetry:0": "reservation_flow",
+  "src/lib/uploads/promote-tmp-object.ts:copyObject:0": "reservation_flow",
+  "src/lib/uploads/promote-tmp-object.ts:writeS3ObjectWithRetry:0":
+    "reservation_flow",
 } as const satisfies Record<
   string,
   "export" | "public_corpus" | "temporary" | "fixture" | "reservation_flow"
@@ -89,7 +90,6 @@ const expectedWriteCounts = {
   "src/handlers/entities/upload.ts": 2,
   "src/handlers/reports/report-export-queue.ts": 1,
   "src/handlers/style-sets/storage.ts": 2,
-  "src/handlers/uploads/update.ts": 2,
   "src/handlers/workspaces/duplicate.ts": 1,
   "src/lib/document-processing-queue.ts": 1,
   "src/lib/entities/create-from-buffer.ts": 2,
@@ -99,6 +99,7 @@ const expectedWriteCounts = {
   "src/lib/legal-search/raw-source-storage.ts": 5,
   "src/lib/templates/create-template.ts": 1,
   "src/lib/templates/write-template.ts": 1,
+  "src/lib/uploads/promote-tmp-object.ts": 2,
   "src/mcp/document-file-upload.ts": 1,
   "src/mcp/file-comparison-links-tool.ts": 1,
 } as const satisfies Record<string, number>;

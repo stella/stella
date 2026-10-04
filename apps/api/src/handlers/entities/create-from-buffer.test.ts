@@ -10,8 +10,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
+import { stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -776,6 +777,10 @@ describe("service-owned buffer publication in the database", () => {
         }
       | undefined;
     const created = await createServiceDocument(async (tx) => {
+      // Writer attribution and object keys are outside the request role's
+      // column grants; observe them as the owner, then hand the transaction
+      // back to the request role for the rest of publication.
+      await tx.execute(sql`RESET ROLE`);
       intentDuringTransaction = (
         await tx
           .select({
@@ -786,6 +791,7 @@ describe("service-owned buffer publication in the database", () => {
           .from(bufferObjectCleanupIntents)
           .where(eq(bufferObjectCleanupIntents.objectKey, objectKey()))
       ).at(0);
+      await tx.execute(sql`SELECT set_config('role', ${stella.name}, true)`);
     });
     if (Result.isError(created)) {
       throw created.error;
