@@ -374,7 +374,11 @@ const sanitizeBodyHtml = (
     inlineImages: [],
     attachments: [],
   } satisfies ParsedEmail;
-  return Result.ok(load(renderEmailBodyHtml(parsed))("body").html());
+  // A MIME part's closing line break is transport framing, not content; the
+  // text body is trimmed the same way, so both formats hash alike.
+  return Result.ok(
+    load(renderEmailBodyHtml(parsed))("body").html()?.trim() ?? null,
+  );
 };
 
 const isExecutableContent = (bytes: Uint8Array) =>
