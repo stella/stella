@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] new helper; no parser calls it.
 import { Temporal } from "temporal-polyfill/full";
 
 /**

@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] adds the todayFor export; no parser calls it and existing exports are unchanged.
 // Time the apps agree on: named duration constants for elapsed-time math
 // (TTLs, staleness thresholds, rolling windows, polling intervals), and the
 // calendar-date helpers in `./dates`.
