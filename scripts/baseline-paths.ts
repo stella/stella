@@ -27,6 +27,8 @@ export const BASELINE_PATHS = {
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
+  /** scripts/failure-as-empty-baseline.ts */
+  failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
   /** scripts/sql-perf-baseline.ts */
@@ -44,6 +46,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
   caseLawSilentDrop:
     "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
+  /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
+  caseLawReadFault:
+    "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
   /** apps/api/src/handlers/legislation/statute-recall.contract.test.ts */
   statuteRecall:
     "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",

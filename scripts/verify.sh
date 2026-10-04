@@ -388,6 +388,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_failure_as_empty_guard() {
+  bun test scripts/failure-as-empty-baseline.test.ts || return 1
+  BASE_SHA="$base_ref" bun run check:failure-as-empty
+}
+run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts

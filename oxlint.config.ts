@@ -163,6 +163,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
+    "no-failure-as-empty/no-failure-as-empty",
+  ]),
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
   ]),
@@ -1301,6 +1304,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
+    "./.oxlint-plugins/no-failure-as-empty.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -3182,6 +3186,16 @@ export default defineConfig({
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
+    },
+    {
+      // A failed read must not come back as an empty value; existing sites
+      // are held to the shrink-only baseline the rule reads.
+      files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/{test,tests,__tests__,__fixtures__}/**",
+      ],
+      rules: { "no-failure-as-empty/no-failure-as-empty": "error" },
     },
     {
       files: [
