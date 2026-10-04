@@ -17,6 +17,8 @@ import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budg
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 type McpHttpToolCallOptions = {
+  /** Replaces the admission step, so a test can observe whether it ran. */
+  admitAction?: typeof withActionAdmission;
   args: Record<string, unknown>;
   context: McpRequestContext;
   mode: McpMode;
@@ -31,6 +33,7 @@ type McpHttpToolCallOptions = {
  * refusals are covered elsewhere and would mask the decision under test.
  */
 export const callMcpToolOverHttp = async ({
+  admitAction,
   args,
   context,
   mode,
@@ -42,8 +45,13 @@ export const callMcpToolOverHttp = async ({
     nowMs: Date.UTC(2026, 0, 15),
   });
   const handler = createMcpHttpRequestHandler({
-    admitAction: async (options) =>
-      await withActionAdmission({ ...options, demoActionBudget: demo.budget }),
+    admitAction:
+      admitAction ??
+      (async (options) =>
+        await withActionAdmission({
+          ...options,
+          demoActionBudget: demo.budget,
+        })),
     authenticateMcpRequest: async () =>
       await Promise.resolve(
         Result.ok({

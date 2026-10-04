@@ -51,7 +51,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
-import { mcpToolAuthorityDenial } from "@/api/mcp/write-tool-authority";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -247,26 +247,6 @@ const isStaticToolCallable = ({
   );
 };
 
-/**
- * The refusal for a tool the request's authority does not cover. A credential
- * narrower than the role needs a different credential, not a role change, so
- * the two are told apart.
- */
-const authorityRefusal = (
-  toolName: string,
-  denial: "member-role" | "credential",
-) =>
-  denial === "member-role"
-    ? {
-        code: "permission_denied" as const,
-        message: `Your member role does not permit ${toolName}`,
-      }
-    : {
-        code: "permission_denied" as const,
-        message: `This credential's permissions do not include ${toolName}`,
-        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
-      };
-
 export const handleMcpToolCall = async ({
   args,
   context,
@@ -356,13 +336,15 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  // Discovery withholds the tool; a call by name on any transport resolves it
-  // and is refused here, naming the member role or the credential.
-  const authorityDenial = mcpToolAuthorityDenial(context, staticTool);
-  if (authorityDenial !== null) {
-    return serializeForSurface(
-      structuredErrorResult(authorityRefusal(toolName, authorityDenial)),
-    );
+  // Discovery withholds the tool; a call by name resolves it and is refused
+  // here, naming the member role or the credential.
+  const authorityRefusal = mcpToolAuthorityRefusal({
+    authority: context,
+    definition: staticTool,
+    toolName,
+  });
+  if (authorityRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(authorityRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({

@@ -619,7 +619,9 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("the official v2 client separates host-file upload from the picker app", async () => {
-    const context = { type: "documents-mcp-context" };
+    // The transport checks write authority before dispatch, so the session
+    // carries a role that holds both upload tools.
+    const context = { type: "documents-mcp-context", memberRole: "owner" };
     const definitions = DOCUMENTS_MCP_TOOL_DEFINITIONS.filter(({ name }) =>
       ["upload_document_version", "open_document_version_upload"].includes(
         name,

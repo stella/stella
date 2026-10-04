@@ -89,7 +89,7 @@ export const hasMcpToolAuthority = (
  * `null` when the tool is authorized. The two need different recoveries (a
  * role change versus a credential that carries the grant).
  */
-export const mcpToolAuthorityDenial = (
+const mcpToolAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
 ): "member-role" | "credential" | null => {
@@ -99,4 +99,49 @@ export const mcpToolAuthorityDenial = (
   return hasMcpToolAuthority({ memberRole: authority.memberRole }, definition)
     ? "credential"
     : "member-role";
+};
+
+type McpToolAuthorityRefusalOptions = {
+  authority: McpEffectiveAuthority;
+  definition: McpToolAuthorityDeclaration;
+  toolName: string;
+};
+
+type McpToolAuthorityRefusal = {
+  code: "permission_denied";
+  message: string;
+  hint: string;
+};
+
+/**
+ * The refusal for a tool the request's authority does not cover, or `null`
+ * when it is authorized. The HTTP transport answers it before action
+ * admission, so an unauthorized call never spends the caller's action budget;
+ * dispatch answers it again for callers that enter there directly.
+ */
+export const mcpToolAuthorityRefusal = ({
+  authority,
+  definition,
+  toolName,
+}: McpToolAuthorityRefusalOptions): McpToolAuthorityRefusal | null => {
+  const denial = mcpToolAuthorityDenial(authority, definition);
+  switch (denial) {
+    case null:
+      return null;
+    case "member-role":
+      return {
+        code: "permission_denied",
+        message: `Your member role does not permit ${toolName}`,
+        hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
+      };
+    case "credential":
+      return {
+        code: "permission_denied",
+        message: `This credential's permissions do not include ${toolName}`,
+        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+      };
+    default:
+      denial satisfies never;
+      return panic(`Unhandled MCP tool authority denial: ${String(denial)}`);
+  }
 };
