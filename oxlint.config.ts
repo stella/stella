@@ -3782,9 +3782,25 @@ export default defineConfig({
       },
     },
     {
+      // Outside the API, apps and packages read their own env modules; a
+      // deployment flag is never read off the raw process environment.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          { processEnvOnly: true },
+        ],
+      },
+    },
+    {
       // Deployment feature flags are read through `isDeploymentFeatureEnabled`
       // so every surface shares one local-development policy per flag.
-      files: ["apps/api/src/**/*.ts"],
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",
