@@ -1901,6 +1901,7 @@
       "addBankAccount": "Pridať bankový účet",
       "noBillingData": "Žiadne fakturačné údaje.",
       "removeBankAccount": "Odstrániť bankový účet",
+      "selectCurrencyForRate": "Na nastavenie hodinovej sadzby vyberte menu.",
       "title": "Fakturačné údaje"
     },
     "columns": {
@@ -2275,6 +2276,8 @@
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
+      "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
+      "matterContactCapacityReached": "Tento spis dosiahol limit kontaktov. Pred pridaním ďalšieho kontaktu odstráňte jedno prepojenie s kontaktom.",
       "mcpAuthorizationApprovalRequired": "Skôr než sa budete môcť pripojiť, musí správca tento konektor schváliť.",
       "notOrganizationMember": "Nie ste členom tejto organizácie.",
       "providerKeyRejected": "Poskytovateľ odmietol kľúč API.",

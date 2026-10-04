@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -35,6 +36,7 @@ const updateRateEntry = createSafeHandler(
       "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

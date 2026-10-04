@@ -22,6 +22,7 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -387,6 +388,7 @@ const createInvoice = createSafeHandler(
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

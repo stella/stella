@@ -1901,6 +1901,7 @@
       "addBankAccount": "Pridėti banko sąskaitą",
       "noBillingData": "Atsiskaitymo duomenų nėra.",
       "removeBankAccount": "Pašalinti banko sąskaitą",
+      "selectCurrencyForRate": "Norėdami nustatyti valandinį įkainį, pasirinkite valiutą.",
       "title": "Atsiskaitymo duomenys"
     },
     "columns": {
@@ -2275,6 +2276,8 @@
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
+      "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
+      "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",

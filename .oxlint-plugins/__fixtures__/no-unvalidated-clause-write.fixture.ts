@@ -1,4 +1,5 @@
 import { clauses, clauseVersions } from "@/api/db/schema";
+import { insertClauseVariants as insertVariants } from "@/api/handlers/clauses/variant-insert";
 import {
   inspectLegacyClauseDirectives,
   validateClauseBodyDirectives as validate,
@@ -8,6 +9,7 @@ declare const tx: {
   insert: (table: unknown) => unknown;
   update: (table: unknown) => unknown;
 };
+declare const variantsInput: Parameters<typeof insertVariants>[0];
 declare const body: Parameters<typeof validate>[0];
 
 // oxlint-disable-next-line no-unvalidated-clause-write/no-unvalidated-clause-write -- fixture: owning writers must invoke directive validation
@@ -46,7 +48,17 @@ const _legacyInspectionCannotPublish = () => {
   return tx.insert(clauseVersions);
 };
 
+const _checkedVariantInsert = function* () {
+  yield* validate(body);
+  // expect-clean: no-unvalidated-clause-write/no-unvalidated-clause-write
+  return insertVariants(variantsInput);
+};
+// oxlint-disable-next-line no-unvalidated-clause-write/no-unvalidated-clause-write -- fixture: the insertion owner still requires caller validation
+const _uncheckedVariantInsert = () => insertVariants(variantsInput);
+
 export const __noUnvalidatedClauseWriteFixture = {
+  _checkedVariantInsert,
+  _uncheckedVariantInsert,
   _uncheckedOwner,
   _checkedOwner,
   _checkedSnapshot,

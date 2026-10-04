@@ -1901,6 +1901,7 @@
       "addBankAccount": "Bankszámla hozzáadása",
       "noBillingData": "Nincsenek számlázási adatok.",
       "removeBankAccount": "Bankszámla eltávolítása",
+      "selectCurrencyForRate": "Az óradíj megadásához válasszon pénznemet.",
       "title": "Számlázási adatok"
     },
     "columns": {
@@ -2275,6 +2276,8 @@
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
+      "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
+      "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",

@@ -1901,6 +1901,7 @@
       "addBankAccount": "Pievienot bankas kontu",
       "noBillingData": "Nav norēķinu datu.",
       "removeBankAccount": "Noņemt bankas kontu",
+      "selectCurrencyForRate": "Lai iestatītu stundas likmi, izvēlieties valūtu.",
       "title": "Norēķinu dati"
     },
     "columns": {
@@ -2275,6 +2276,8 @@
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
+      "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
+      "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
