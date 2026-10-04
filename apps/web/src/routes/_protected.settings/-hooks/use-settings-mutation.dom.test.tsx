@@ -63,7 +63,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   fc.constant({ kind: "submit" as const }),
   fc.record({
     kind: fc.constant("settle" as const),
-    pick: fc.nat({ max: 7 }),
+    pick: fc.nat(),
     succeeds: fc.boolean(),
   }),
 );
@@ -164,9 +164,15 @@ test("settings writes to one resource reach the server in submission order", asy
   await assertProperty(
     "settings writes to one resource reach the server in submission order",
     fc.asyncProperty(
-      fc.array(step, { minLength: 1, maxLength: 16 }),
-      fc.array(fc.boolean(), { maxLength: 8 }),
-      async (steps, tailOutcomes) => {
+      fc
+        .array(step)
+        .chain((steps) =>
+          fc.tuple(
+            fc.constant(steps),
+            fc.array(fc.boolean(), { maxLength: steps.length }),
+          ),
+        ),
+      async ([steps, tailOutcomes]) => {
         const harness = mountSettingsMutation();
         const submitted: number[] = [];
         const succeeded = new Set<number>();
@@ -189,7 +195,7 @@ test("settings writes to one resource reach the server in submission order", asy
         }
         let tail = 0;
         while (harness.inFlight.length > 0) {
-          await runSettle(tail, tailOutcomes[tail % 8] ?? true);
+          await runSettle(tail, tailOutcomes[tail] ?? true);
           tail += 1;
         }
 
