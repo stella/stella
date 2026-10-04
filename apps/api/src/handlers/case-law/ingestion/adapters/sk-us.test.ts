@@ -24,6 +24,7 @@ import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
+  type ReadRefusal,
   readAbsent,
   readPresent,
 } from "@/api/lib/errors/read-outcome";
@@ -36,6 +37,7 @@ import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
+  type IngestionResult,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -45,6 +47,19 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skUsAdapter);
+
+/**
+ * The stored refusal marker, typed as the stored shape: metadata values are
+ * branded plain text, so the narrowed metadata value cannot be compared with
+ * a literal directly.
+ */
+const storedRefusal = (decision: IngestionResult): ReadRefusal => {
+  const marker = decision.metadata[READ_OUTCOME_METADATA_KEY];
+  if (!isReadRefusal(marker)) {
+    throw new Error("expected a stored refusal");
+  }
+  return marker;
+};
 
 const SEARCH_PATH = "/o/v1/dms/search";
 const CONTENT_PATH = "/o/v1/dms/content";
@@ -1218,11 +1233,7 @@ describe("sk-us buildDecision", () => {
       if (built.type !== "built") {
         return;
       }
-      const marker = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
-      if (!isReadRefusal(marker)) {
-        throw new Error("expected a stored refusal");
-      }
-      expect(marker).toEqual({
+      expect(storedRefusal(built.decision)).toEqual({
         type: "refused",
         status,
         scope: "part",
