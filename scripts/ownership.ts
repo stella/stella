@@ -1233,6 +1233,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/audit-log.ts",
           reason: "Records a receipt after a content-access audit write.",
         },
+        {
+          path: "apps/api/src/tests/helpers/audit-recorder-double.ts",
+          reason:
+            "The handler-test audit recorder double issues the receipt the production recorder issues for an access event.",
+        },
       ],
     },
   },

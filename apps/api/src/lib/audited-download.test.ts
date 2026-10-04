@@ -31,7 +31,7 @@ describe("signed content delivery", () => {
           resourceId: "fixture-entity",
           s3Key: "fixture-key",
           expiresInSeconds: 60,
-          fileName,
+          ...(fileName === undefined ? {} : { fileName }),
           signDownload: async () => {
             markContentDeliveryIntent();
             return "https://example.test/fixture";

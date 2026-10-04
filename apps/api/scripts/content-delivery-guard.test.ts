@@ -35,6 +35,20 @@ describe("content delivery declarations follow reachable runtime definitions", (
     expect(result.candidates.at(0)?.declared).toBe(false);
   });
 
+  test.each([
+    'import { getS3 } from "@/api/lib/s3"; export default createSafeHandler({}, () => getS3().presign("key"));',
+    'import { getS3 } from "@/api/lib/s3"; export default createSafeHandler({}, () => { const store = getS3(); return store.presign("key", { expiresIn: 60 }); });',
+  ])("detects undeclared presigning on an S3 owner store: %s", (source) => {
+    const result = analyze({
+      "/routes.ts": source,
+      "/apps/api/src/lib/s3.ts": "export const getS3 = () => client;",
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates.at(0)?.terminals).toEqual(["presign"]);
+    expect(result.candidates.at(0)?.declared).toBe(false);
+  });
+
   test("follows named and star reexports, aliases, and injected readers", () => {
     const result = analyze({
       "/routes.ts":
@@ -149,6 +163,17 @@ describe("content delivery declarations follow reachable runtime definitions", (
         "/routes.ts":
           'import { readS3ArrayBuffer } from "./helper"; export default createSafeHandler({}, () => readS3ArrayBuffer());',
         "/helper.ts": 'export const readS3ArrayBuffer = () => "metadata";',
+      }),
+    ).toEqual({ candidates: [], errors: [] });
+  });
+
+  test("a presign method on a store outside the S3 owner is not delivery", () => {
+    expect(
+      analyze({
+        "/routes.ts":
+          'import { signer } from "./helper"; export default createSafeHandler({}, () => signer().presign("key"));',
+        "/helper.ts":
+          "export const signer = () => ({ presign: (key) => key });",
       }),
     ).toEqual({ candidates: [], errors: [] });
   });

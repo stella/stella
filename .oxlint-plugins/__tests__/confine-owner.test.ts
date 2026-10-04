@@ -178,7 +178,8 @@ describe.serial("confine-owner stored content rows", () => {
         throw new TypeError("Stored content ownership must confine imports.");
       }
       const module = entry.enforcement.specifiers.at(0);
-      const names = entry.enforcement.names;
+      const names: readonly string[] | undefined =
+        "names" in entry.enforcement ? entry.enforcement.names : undefined;
       const ownerPath = entry.owner.at(0);
       if (
         module === undefined ||

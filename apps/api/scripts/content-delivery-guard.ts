@@ -406,6 +406,7 @@ class ContentDeliveryInspector {
       return;
     }
     this.detectDisposition(current);
+    this.detectStoreSigner(current);
     if (
       ts.isCallExpression(current) &&
       current.expression.kind === ts.SyntaxKind.ImportKeyword
@@ -457,6 +458,69 @@ class ContentDeliveryInspector {
       return;
     }
     ts.forEachChild(current, (child) => this.trace(child));
+  };
+
+  /** Whether `identifier` names a binding a delivery owner module provides. */
+  private readonly boundToOwner = (identifier: ts.Identifier): boolean => {
+    const definition = this.lookup(identifier);
+    if (!definition) {
+      return false;
+    }
+    if (isDeliveryOwner(definition.getSourceFile().fileName)) {
+      return true;
+    }
+    if (ts.isVariableDeclaration(definition)) {
+      return (
+        definition.initializer !== undefined &&
+        this.isOwnerStore(definition.initializer)
+      );
+    }
+    let current: ts.Node = definition;
+    while (!ts.isImportDeclaration(current) && current.parent) {
+      current = current.parent;
+    }
+    if (
+      !ts.isImportDeclaration(current) ||
+      !ts.isStringLiteralLike(current.moduleSpecifier)
+    ) {
+      return false;
+    }
+    const resolved = this.options.resolveImport(
+      current.moduleSpecifier.text,
+      current.getSourceFile().fileName,
+    );
+    return resolved !== undefined && isDeliveryOwner(resolved);
+  };
+  /** An object store a delivery owner hands out: `getS3()`, `store.client()`, or a binding to one. */
+  private readonly isOwnerStore = (expression: ts.Expression): boolean => {
+    if (ts.isIdentifier(expression)) {
+      return this.boundToOwner(expression);
+    }
+    if (ts.isCallExpression(expression)) {
+      return this.isOwnerStore(expression.expression);
+    }
+    if (ts.isPropertyAccessExpression(expression)) {
+      return this.isOwnerStore(expression.expression);
+    }
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAwaitExpression(expression)
+    ) {
+      return this.isOwnerStore(expression.expression);
+    }
+    return false;
+  };
+  // Presigning on a store from the S3 owner (`getS3().presign(key)`) grants
+  // the same stored bytes as `presignDownloadUrl`.
+  private readonly detectStoreSigner = (current: ts.Node) => {
+    if (
+      ts.isCallExpression(current) &&
+      ts.isPropertyAccessExpression(current.expression) &&
+      current.expression.name.text === "presign" &&
+      this.isOwnerStore(current.expression.expression)
+    ) {
+      this.terminals.add("presign");
+    }
   };
 
   private readonly detectDisposition = (current: ts.Node) => {

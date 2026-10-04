@@ -1773,6 +1773,12 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Module ownership invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Invariants the ownership table cannot state itself, such as
+        # allowlists kept equal to their source lists.
+        run: bun test scripts/ownership.test.ts
+
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # DESIGN.md's semantic token table and font stack are rendered from
