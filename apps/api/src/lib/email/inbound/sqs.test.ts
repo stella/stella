@@ -76,6 +76,11 @@ const reasonOf = (body: string | undefined) => {
   return parsed.isErr() ? parsed.error.reason : parsed.value.type;
 };
 
+type QueueMessageRejection = Exclude<
+  ReturnType<typeof reasonOf>,
+  "received" | "setup"
+>;
+
 describe("queue message envelope", () => {
   test("accepts a received notification from the configured topic", () => {
     const parsed = parseInboundQueueMessage({
@@ -132,7 +137,11 @@ describe("queue message envelope", () => {
     ],
     ["an oversized body", "x".repeat(MAX_QUEUE_MESSAGE_CHARS + 1), "oversized"],
     ["a missing body", undefined, "oversized"],
-  ])("rejects %s", (_, body, reason) => {
+  ] as const satisfies readonly (readonly [
+    string,
+    string | undefined,
+    QueueMessageRejection,
+  ])[])("rejects %s", (_, body, reason) => {
     expect(reasonOf(body)).toBe(reason);
   });
 

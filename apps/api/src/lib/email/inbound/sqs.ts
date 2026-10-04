@@ -327,8 +327,9 @@ export const drainInboundMailQueue = async ({
       }
       return received;
     }
-    const messages = received.value.Messages ?? [];
-    if (messages.length === 0) {
+    // SQS omits Messages when a receive finds the queue empty.
+    const messages = received.value.Messages;
+    if (messages === undefined || messages.length === 0) {
       return summary(batch, "drained");
     }
     for (const message of messages) {

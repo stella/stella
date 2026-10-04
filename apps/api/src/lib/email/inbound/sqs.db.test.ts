@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { CORRESPONDENCE_DROP_REASONS } from "@stll/api-contract/correspondence";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
@@ -264,7 +266,10 @@ if (!databaseUrl || !runPostgresTests) {
         { workspaceId, authenticatedSenderAddress: "member@example.test" },
       ]);
       expect((await drops()).map(({ reason }) => reason).toSorted()).toEqual(
-        ["message_too_large", "unauthorized_sender"].toSorted(),
+        CORRESPONDENCE_DROP_REASONS.filter(
+          (reason) =>
+            reason === "message_too_large" || reason === "unauthorized_sender",
+        ).toSorted(),
       );
     });
 
