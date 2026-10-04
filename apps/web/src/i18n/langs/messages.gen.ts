@@ -4488,6 +4488,11 @@ type Messages = {
         "narrativeRequired": "Require a narrative";
         "title": "Time policy";
       };
+      "timeZone": {
+        "description": "Locked months, invoice dates and due work follow the calendar day in this time zone. Until one is chosen, it follows the primary jurisdiction: Europe/Prague for Czechia and Slovakia, UTC otherwise.";
+        "title": "Time zone";
+        "updated": "Time zone updated";
+      };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";

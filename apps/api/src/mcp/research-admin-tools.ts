@@ -31,6 +31,7 @@ import {
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
+import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
@@ -771,6 +772,22 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      time_zone: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.string(),
+              v.nonEmpty(),
+              v.maxLength(TIME_ZONE_ID_MAX_LENGTH),
+            ),
+          ),
+          v.description(
+            "IANA time zone whose calendar decides the organization's day, " +
+              "e.g. Europe/Prague; null derives it from the primary practice " +
+              "jurisdiction again (update_org_settings)",
+          ),
+        ),
+      ),
       // The CLI's --yes flow injects `confirm: true` for the destructive
       // remove_member subcommand; the strictObject would otherwise reject it.
       // Other actions accept but ignore it.
@@ -816,6 +833,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action === "update_org_settings" ||
@@ -826,7 +844,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           i.time_minimum_unit_minutes === undefined &&
           i.time_edit_window_days === undefined &&
           i.time_locked_through_month === undefined &&
-          i.time_narrative_required === undefined),
+          i.time_narrative_required === undefined &&
+          i.time_zone === undefined),
       "Settings fields apply only to update_org_settings",
     ),
     // matter_id/user_id are meaningless for an org-settings update.
@@ -849,6 +868,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action !== "update_org_settings" ||
@@ -859,7 +879,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.time_minimum_unit_minutes !== undefined ||
         i.time_edit_window_days !== undefined ||
         i.time_locked_through_month !== undefined ||
-        i.time_narrative_required !== undefined,
+        i.time_narrative_required !== undefined ||
+        i.time_zone !== undefined,
       "Provide at least one setting to change for update_org_settings",
     ),
     // The matter-number pattern and padding are a unit (mirrors the backing).
@@ -878,7 +899,8 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, document processing, and time policy. Manage provider " +
+    "numbering, prompt caching, document processing, time policy, and the " +
+    "organization's time zone. Manage provider " +
     "secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
@@ -1049,6 +1071,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.time_narrative_required === undefined
           ? {}
           : { timeNarrativeRequired: input.time_narrative_required }),
+        ...(input.time_zone === undefined ? {} : { timeZone: input.time_zone }),
       },
     }),
   );

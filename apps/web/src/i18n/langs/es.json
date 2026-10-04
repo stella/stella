@@ -4485,6 +4485,11 @@
         "narrativeRequired": "Exigir una descripción",
         "title": "Política de registro de tiempo"
       },
+      "timeZone": {
+        "description": "Los meses bloqueados, las fechas de factura y el trabajo pendiente siguen el día natural de esta zona horaria. Mientras no se elija una, se deriva de la jurisdicción principal: Europe/Prague para Chequia y Eslovaquia, UTC en los demás casos.",
+        "title": "Zona horaria",
+        "updated": "Zona horaria actualizada"
+      },
       "usage": "Uso",
       "usageDescription": "Límites de uso y estado de la autorización de esta organización",
       "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",

@@ -5245,7 +5245,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "manage_organization",
     "scope": "stella:admin_write",
     "access": "write",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, document processing, and time policy. Manage provider secrets in the dashboard.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, document processing, time policy, and the organization's time zone. Manage provider secrets in the dashboard.",
     "annotations": {
       "title": "Manage organization",
       "destructiveHint": true,
@@ -5329,6 +5329,19 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "time_narrative_required": {
           "type": "boolean",
           "description": "Require a narrative on time entries (update_org_settings)"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "IANA time zone whose calendar decides the organization's day, e.g. Europe/Prague; null derives it from the primary practice jurisdiction again (update_org_settings)"
         },
         "confirm": {
           "type": "boolean",

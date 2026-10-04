@@ -2804,6 +2804,7 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   timeEditWindowDays: v.optional(v.number()),
   timeLockedThroughMonth: v.optional(v.nullable(v.string())),
   timeNarrativeRequired: v.optional(v.boolean()),
+  timeZone: v.optional(v.nullable(v.string())),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([

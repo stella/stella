@@ -5,19 +5,27 @@ import { SCOUT_KEY } from "@stll/api-contract/signals";
 import type { OpenWorkObligationStatus } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, parseTimeZoneId } from "@stll/time";
+import type { TimeZoneId } from "@stll/time";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
+  organizationSettings,
   WORK_OBLIGATION_EVENT_TYPE,
   workObligationEvents,
   workObligations,
   workspaces,
 } from "@/api/db/schema";
+import type { PracticeJurisdiction } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  effectiveOrganizationTimeZone,
+  organizationTimeZoneColumns,
+} from "@/api/lib/organization-time-zone";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedOrganizationId,
@@ -85,7 +93,19 @@ type ObligationFacts = {
 
 type ObligationRow = ObligationFacts & {
   organizationId: SafeId<"organization">;
+  timeZone: TimeZoneId | null;
+  practiceJurisdictions: PracticeJurisdiction[] | null;
 };
+
+/**
+ * The zone whose day is the latest on Earth (UTC+14). A deadline due by the
+ * risk cutoff in any organization's zone is due by it here, so the page
+ * predicate can stay one shared bound; the scout then judges each obligation
+ * on its own organization's day.
+ */
+const LATEST_DAY_ZONE =
+  parseTimeZoneId("Pacific/Kiritimati") ??
+  panic("Runtime does not know Pacific/Kiritimati");
 
 /**
  * Either handle the scout reads obligations through: the root pool for the
@@ -148,10 +168,15 @@ const loadObligationPage = async (
     .select({
       ...obligationFactsColumns,
       organizationId: workspaces.organizationId,
+      ...organizationTimeZoneColumns,
     })
     .from(workObligations)
     .innerJoin(entities, obligationEntityJoin)
     .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+    .leftJoin(
+      organizationSettings,
+      eq(organizationSettings.organizationId, workspaces.organizationId),
+    )
     .where(
       and(
         inArray(workObligations.status, [...OPEN_WORK_OBLIGATION_STATUSES]),
@@ -160,7 +185,10 @@ const loadObligationPage = async (
             workObligations.status,
             WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
           ),
-          lte(workObligations.hardDeadlineDate, workAttentionToday(riskCutoff)),
+          lte(
+            workObligations.hardDeadlineDate,
+            workAttentionToday(riskCutoff, LATEST_DAY_ZONE),
+          ),
         ),
         cursor === null ? undefined : gt(workObligations.entityId, cursor),
       ),
@@ -266,6 +294,8 @@ const toObligation = (
 
 type OrganizationBatch = {
   organizationId: SafeId<"organization">;
+  /** The organization's zone: every obligation in it is judged on its day. */
+  zone: TimeZoneId;
   workspaceIds: SafeId<"workspace">[];
   /** Every scanned obligation, so the recheck reads exactly what was scanned. */
   obligationEntityIds: SafeId<"entity">[];
@@ -284,11 +314,22 @@ const groupByOrganization = (
 ): OrganizationBatch[] => {
   const batches = new Map<SafeId<"organization">, OrganizationBatch>();
   for (const row of rows) {
-    const signals = workAttentionSignals(toObligation(row, assignedAt), now);
     const batch = batches.get(row.organizationId);
+    const zone =
+      batch?.zone ??
+      effectiveOrganizationTimeZone({
+        timeZone: row.timeZone,
+        practiceJurisdictions: arrayOrEmpty(row.practiceJurisdictions),
+      });
+    const signals = workAttentionSignals(
+      toObligation(row, assignedAt),
+      now,
+      zone,
+    );
     if (!batch) {
       batches.set(row.organizationId, {
         organizationId: row.organizationId,
+        zone,
         workspaceIds: [row.workspaceId],
         obligationEntityIds: [row.entityId],
         signals,
@@ -331,7 +372,7 @@ const stillWarrantedKeys = async (
   const assignedAt = await loadAssignedAt(tx, rows);
   return new Set(
     rows.flatMap((row) =>
-      workAttentionSignals(toObligation(row, assignedAt), now).map(
+      workAttentionSignals(toObligation(row, assignedAt), now, batch.zone).map(
         ({ dedupeKey }) => dedupeKey,
       ),
     ),

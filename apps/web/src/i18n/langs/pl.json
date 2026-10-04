@@ -4485,6 +4485,11 @@
         "narrativeRequired": "Wymagaj opisu",
         "title": "Zasady ewidencji czasu"
       },
+      "timeZone": {
+        "description": "Zablokowane miesiące, daty faktur i zadania z terminem są liczone według dnia kalendarzowego w tej strefie czasowej. Dopóki żadna nie zostanie wybrana, wynika z głównej jurysdykcji: Europe/Prague dla Czech i Słowacji, w pozostałych przypadkach UTC.",
+        "title": "Strefa czasowa",
+        "updated": "Strefa czasowa została zaktualizowana"
+      },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",

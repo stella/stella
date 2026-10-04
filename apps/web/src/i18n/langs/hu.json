@@ -4485,6 +4485,11 @@
         "narrativeRequired": "Szöveges leírás megkövetelése",
         "title": "Időelszámolási szabályok"
       },
+      "timeZone": {
+        "description": "A zárolt hónapok, a számlák dátuma és az esedékes munka ennek az időzónának a naptári napját követi. Amíg nincs kiválasztva, az elsődleges joghatóság határozza meg: Csehországban és Szlovákiában Europe/Prague, egyébként UTC.",
+        "title": "Időzóna",
+        "updated": "Időzóna frissítve"
+      },
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",

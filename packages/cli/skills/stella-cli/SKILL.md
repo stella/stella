@@ -311,7 +311,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--user-id` — User id to add or remove for the member actions (string)
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
-  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text)
+  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`

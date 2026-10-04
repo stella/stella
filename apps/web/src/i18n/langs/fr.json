@@ -4485,6 +4485,11 @@
         "narrativeRequired": "Exiger une description",
         "title": "Règles de saisie du temps"
       },
+      "timeZone": {
+        "description": "Les mois verrouillés, les dates de facture et le travail à échéance suivent le jour calendaire de ce fuseau horaire. Tant qu’aucun n’est choisi, il découle de la juridiction principale : Europe/Prague pour la Tchéquie et la Slovaquie, UTC sinon.",
+        "title": "Fuseau horaire",
+        "updated": "Fuseau horaire mis à jour"
+      },
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",

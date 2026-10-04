@@ -22,12 +22,14 @@ import {
   expect,
   mock,
   setDefaultTimeout,
+  setSystemTime,
   test,
 } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
+import { parseTimeZoneId } from "@stll/time";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -38,6 +40,7 @@ import {
   flowRuns,
   flowRunSteps,
   notifications,
+  organizationSettings,
   properties,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
@@ -691,6 +694,37 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       expect(enqueuedSteps.filter((step) => step.runId === runId)).toEqual([]);
     },
   );
+
+  test("a review gate's task is due on the organization's day", async () => {
+    // 12:00 UTC on 10 June is already 02:00 on 11 June in UTC+14.
+    const timeZone = parseTimeZoneId("Pacific/Kiritimati");
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        id: createSafeId<"organizationSettings">(),
+        organizationId,
+        timeZone,
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { timeZone },
+      });
+    setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    try {
+      const { taskEntityId } = await createWaitingGate(true);
+      const obligation = await testDb.query.workObligations.findFirst({
+        where: { entityId: { eq: taskEntityId } },
+        columns: { workingTargetDate: true },
+      });
+      expect(obligation?.workingTargetDate).toBe("2026-06-11");
+    } finally {
+      setSystemTime();
+      await testDb
+        .update(organizationSettings)
+        .set({ timeZone: null })
+        .where(eq(organizationSettings.organizationId, organizationId));
+    }
+  });
 
   test("deleting a review task leaves its waiting gate decidable from the run panel", async () => {
     const { runId, taskEntityId, safeDb } = await createWaitingGate(true);

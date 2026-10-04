@@ -4485,6 +4485,11 @@
         "narrativeRequired": "Nõua selgitust",
         "title": "Ajaarvestuse reeglid"
       },
+      "timeZone": {
+        "description": "Lukustatud kuud, arvete kuupäevad ja tähtajaline töö järgivad selle ajavööndi kalendripäeva. Kuni ühtegi pole valitud, määrab selle peamine jurisdiktsioon: Tšehhi ja Slovakkia puhul Europe/Prague, muidu UTC.",
+        "title": "Ajavöönd",
+        "updated": "Ajavöönd on uuendatud"
+      },
       "usage": "Kasutus",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
