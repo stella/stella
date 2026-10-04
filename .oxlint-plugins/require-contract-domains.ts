@@ -1,4 +1,4 @@
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 import { readFileSync } from "node:fs";
 
 import { parseContractDomainLedger } from "../scripts/contract-domain-ledger.ts";
@@ -37,7 +37,13 @@ const LIMIT_METHODS = new Set([
 ]);
 const LIMIT_PROPERTIES = new Set(["maxLength", "minLength", "maxSize", "max"]);
 
+const FIXTURE_SUFFIX =
+  ".oxlint-plugins/__fixtures__/require-contract-domains.fixture.tsx";
+
 const relativeFile = (filename: string): string | null => {
+  if (filename.endsWith(FIXTURE_SUFFIX)) {
+    return `${WEB_ROOT}require-contract-domains.fixture.tsx`;
+  }
   for (const root of [WEB_ROOT, MCP_ROOT]) {
     const start = filename.indexOf(root);
     if (start !== -1) {
@@ -47,7 +53,7 @@ const relativeFile = (filename: string): string | null => {
   return null;
 };
 
-const declarationName = (node: AstNode): string => {
+const declarationName = (node: unknown): string => {
   let current: unknown = node;
   while (isAstNode(current)) {
     if (
@@ -112,7 +118,7 @@ const contractType = (node: unknown, options: ContractTypeOptions): boolean => {
 };
 
 const isContractTyped = (
-  node: AstNode,
+  node: unknown,
   options: ContractTypeOptions,
 ): boolean => {
   let current: unknown = node;
@@ -216,7 +222,7 @@ export default eslintCompatPlugin({
         let known = new Set<string>();
         let seen = new Set<string>();
         let occurrences = new Map<string, number>();
-        const report = (node: AstNode, kind: string, value: unknown) => {
+        const report = (node: Node, kind: string, value: unknown) => {
           if (file === null) {
             return;
           }
@@ -232,18 +238,27 @@ export default eslintCompatPlugin({
         return {
           before() {
             const options = context.options.at(0);
+            const configured =
+              typeof options === "object" &&
+              options !== null &&
+              !Array.isArray(options)
+                ? options.ledger
+                : undefined;
             const ledger =
-              options?.ledger === undefined
+              configured === undefined
                 ? readDefaultLedger()
                 : parseContractDomainLedger(
-                    JSON.stringify(options.ledger),
+                    JSON.stringify(configured),
                     "contract domain ledger",
                   );
-            file = relativeFile(filenameForContext(context));
+            const current = relativeFile(filenameForContext(context));
+            file = current;
             known = new Set(
-              ledger
-                .filter((entry) => entry.id.startsWith(`${file}::`))
-                .map((entry) => entry.id),
+              current === null
+                ? []
+                : ledger
+                    .filter((entry) => entry.id.startsWith(`${current}::`))
+                    .map((entry) => entry.id),
             );
             seen = new Set();
             occurrences = new Map();
@@ -259,20 +274,21 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const elements = node.expression.elements;
+            const elements: unknown = node.expression.elements;
+            if (!Array.isArray(elements)) {
+              return;
+            }
+            const values = elements.flatMap((element: unknown) =>
+              isStringLiteral(element) ? [element.value] : [],
+            );
             if (
-              !Array.isArray(elements) ||
-              elements.length < 2 ||
-              !elements.every(isStringLiteral) ||
+              values.length < 2 ||
+              values.length !== elements.length ||
               isContractTyped(node, typeOptions)
             ) {
               return;
             }
-            report(
-              node,
-              "domain",
-              elements.map((element) => element.value),
-            );
+            report(node, "domain", values);
           },
           CallExpression(node) {
             if (file === null) {

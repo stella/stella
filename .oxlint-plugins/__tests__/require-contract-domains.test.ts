@@ -3,7 +3,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
-const lint = (
+const lint = async (
   source: string,
   sourcePath = "apps/web/src/fixture.tsx",
   ledger: { id: string; reason: string }[] = [],
