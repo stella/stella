@@ -140,11 +140,14 @@ describe("goldenQueryRequest", () => {
     // jurisdiction's hits against several jurisdictions' hits. Both routes
     // are the same generation; what differs is whether that jurisdiction's
     // index holds others.
-    const perCountry = goldenQueryRequest(GENERATION, {
-      ...query,
-      jurisdiction: "pol",
+    const perCountry = goldenQueryRequest({
+      generation: GENERATION,
+      query: {
+        ...query,
+        jurisdiction: "pol",
+      },
     });
-    const shared = goldenQueryRequest(GENERATION, query);
+    const shared = goldenQueryRequest({ generation: GENERATION, query });
     expect(perCountry).toEqual({
       indexId: "case_law_v5_pol",
       engineQuery: '("náhrada" AND "škody") AND court:"Nejvyšší soud"',
@@ -158,10 +161,40 @@ describe("goldenQueryRequest", () => {
     expect(perCountry?.engineQuery).not.toBe(shared?.engineQuery);
   });
 
+  test("the diff can compare query variants on the same index generation", () => {
+    const provisionQuery = {
+      ...query,
+      jurisdiction: "SVK",
+      text: "§ 451 Občianskeho zákonníka",
+    };
+    const baseline = goldenQueryRequest({
+      generation: GENERATION,
+      query: provisionQuery,
+    });
+    expect(
+      goldenQueryRequest({
+        generation: GENERATION,
+        query: provisionQuery,
+        queryVariant: "off",
+      }),
+    ).toEqual(baseline);
+    const candidate = goldenQueryRequest({
+      generation: GENERATION,
+      query: provisionQuery,
+      queryVariant: "provision-refs",
+    });
+    expect(candidate?.indexId).toBe(baseline?.indexId);
+    expect(candidate?.engineQuery).not.toBe(baseline?.engineQuery);
+    expect(candidate?.engineQuery).toContain('"OZ"');
+  });
+
   test("a query without a searchable term has no request", () => {
-    expect(goldenQueryRequest(GENERATION, { ...query, text: "..." })).toBe(
-      null,
-    );
+    expect(
+      goldenQueryRequest({
+        generation: GENERATION,
+        query: { ...query, text: "..." },
+      }),
+    ).toBe(null);
   });
 });
 

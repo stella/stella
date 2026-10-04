@@ -14,7 +14,6 @@ import {
   PrinterIcon,
 } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
@@ -28,6 +27,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
@@ -142,10 +142,7 @@ export const PdfViewerControls = ({
       printPdfBuffer(data);
     } catch (error: unknown) {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsPrinting(false);
     }
@@ -271,8 +268,8 @@ export const PdfViewerControls = ({
                       fileName: fileMetadata.fileName,
                       variant: downloadVariant,
                       workspaceId,
-                      onError: (message) => {
-                        stellaToast.add({ title: message, type: "error" });
+                      onError: (message, error) => {
+                        notifyUserError(error, message);
                       },
                     }),
                     "pdf-viewer-controls.download",

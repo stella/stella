@@ -17,7 +17,6 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
@@ -64,12 +63,9 @@ import {
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedBilingualTranslationRunId,
-  brandPersistedUserId,
-  brandValidatedWorkflowActorKey,
-} from "@/api/lib/safe-id-boundaries";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
+import { brandPersistedBilingualTranslationRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "bilingual-translation-runs";
@@ -244,7 +240,12 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
     async (job) => {
       await processBilingualRunJob(job.data);
     },
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
 
   worker.on("failed", (job, error) => {
@@ -305,35 +306,11 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 // Execution
 // ----------------------------------------------------------------------------
 
-type RunActor = {
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
-  runId: SafeId<"bilingualTranslationRun">;
-};
+export type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
+type RunActor = BilingualRunActor;
 
-const brandActor = (data: BilingualRunJobData): RunActor => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
-  const userId = brandPersistedUserId(data.userId);
-  const tenant = {
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  };
-  return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
-    userId,
-    runId: brandPersistedBilingualTranslationRunId(data.runId),
-    scopedDb: createRootScopedDb(tenant),
-    safeDb: createRootSafeDb(tenant),
-  };
-};
+const brandActor = (data: BilingualRunJobData): RunActor =>
+  createRootRunActor(data, brandPersistedBilingualTranslationRunId);
 
 type ClaimedRun = {
   entityId: SafeId<"entity">;
@@ -346,7 +323,7 @@ type ClaimedRun = {
 
 /** Conditional `queued -> running` claim; a second delivery updates zero rows. */
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
-  const claimed = await actor.scopedDb(async (tx) => {
+  const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run row audited at create.
     const rows = await tx
       .update(bilingualTranslationRuns)
@@ -374,7 +351,10 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
 const processBilingualRunJob = async (
   data: BilingualRunJobData,
 ): Promise<void> => {
-  const actor = brandActor(data);
+  await processBilingualRun(brandActor(data));
+};
+
+export const processBilingualRun = async (actor: RunActor): Promise<void> => {
   const claimed = await claimRun(actor);
   if (claimed === null) {
     return;
@@ -397,7 +377,7 @@ const processBilingualRunJob = async (
 };
 
 const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
-  const rows = await actor.safeDb((tx) =>
+  const rows = await actor.inputSafeDb((tx) =>
     tx
       .select({
         rowId: bilingualTranslationRows.rowId,
@@ -430,7 +410,7 @@ const executeRun = async (
   run: ClaimedRun,
 ): Promise<BilingualRunErrorCode | null> => {
   const loaded = await loadEntityVersionDocxBuffer({
-    safeDb: actor.safeDb,
+    safeDb: actor.inputSafeDb,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     entityId: run.entityId,
@@ -446,7 +426,7 @@ const executeRun = async (
   const config = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        await actor.scopedDb(async (tx) => await loadOrgAISettings(tx, actor)),
+        await actor.writeDb(async (tx) => await loadOrgAISettings(tx, actor)),
       catch: (cause) => cause,
     }),
   );
@@ -471,7 +451,7 @@ const executeRun = async (
     usageMetering: {
       actionType: "doc_review",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: SERVICE_TIER,
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -550,7 +530,7 @@ const executeRun = async (
         }),
       };
     });
-    await actor.scopedDb(async (tx) => {
+    await actor.writeDb(async (tx) => {
       // audit: skip — row bookkeeping inside a run audited at create.
       // One statement for the whole batch: a VALUES list joined on row_id.
       const values = sql.join(
@@ -629,7 +609,7 @@ const executeRun = async (
   }
 
   const written = await createEntityVersionFromBuffer({
-    safeDb: actor.safeDb,
+    safeDb: actor.writeSafeDb,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     entityId: run.entityId,
@@ -674,7 +654,7 @@ const executeRun = async (
     return "apply_failed";
   }
 
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — completion bookkeeping on the run row audited at create.
     await tx
       .update(bilingualTranslationRuns)
@@ -692,7 +672,7 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: BilingualRunErrorCode,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — failure bookkeeping on the run row audited at create.
     await tx
       .update(bilingualTranslationRuns)

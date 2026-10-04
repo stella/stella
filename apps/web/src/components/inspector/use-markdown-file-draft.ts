@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -118,10 +119,8 @@ export const useMarkdownFileDraft = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("workspaces.files.versionUploadFailed"),
+      notifyUserError(error, t("workspaces.files.versionUploadFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });

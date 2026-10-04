@@ -48,6 +48,8 @@ import {
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  OBSERVATION_DETAIL,
+  observationDetailOf,
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
   type PartialObservation,
@@ -96,14 +98,26 @@ export const partialObservationFromMetadata = (
   const value = isRecord(metadata)
     ? metadata[PARTIAL_OBSERVATION_KEY]
     : undefined;
-  return {
-    caseNumberIsPlaceholder:
-      isRecord(value) &&
-      value[PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER] === true,
-    isListingOnly:
-      isRecord(value) &&
-      value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true,
-  };
+  const caseNumberIsPlaceholder =
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER] === true;
+  if (
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true
+  ) {
+    return { caseNumberIsPlaceholder, detail: OBSERVATION_DETAIL.LISTING_ONLY };
+  }
+  if (
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.DETAIL] ===
+      OBSERVATION_DETAIL.SECONDARY_REFUSED
+  ) {
+    return {
+      caseNumberIsPlaceholder,
+      detail: OBSERVATION_DETAIL.SECONDARY_REFUSED,
+    };
+  }
+  return { caseNumberIsPlaceholder, detail: OBSERVATION_DETAIL.COMPLETE };
 };
 
 /**
@@ -120,6 +134,7 @@ export const markListingOnly = (
     [PARTIAL_OBSERVATION_KEY]: {
       ...(isRecord(stored) ? stored : {}),
       [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+      [PARTIAL_OBSERVATION_FIELD.DETAIL]: OBSERVATION_DETAIL.LISTING_ONLY,
     },
   };
 };
@@ -324,13 +339,15 @@ export const sanitizeResult = (
   // Adapter metadata describes the publisher. Keep ingestion quality in a
   // reserved pipeline-owned marker so every court gets the same partial-row
   // upgrade/downgrade semantics without relying on court-specific keys.
+  const observationDetail = observationDetailOf(result);
   if (
     result.caseNumberIsPlaceholder === true ||
-    result.isListingOnly === true
+    observationDetail !== OBSERVATION_DETAIL.COMPLETE
   ) {
     metadata[PARTIAL_OBSERVATION_KEY] = {
       caseNumberIsPlaceholder: result.caseNumberIsPlaceholder === true,
-      isListingOnly: result.isListingOnly === true,
+      detail: observationDetail,
+      isListingOnly: observationDetail === OBSERVATION_DETAIL.LISTING_ONLY,
     };
   }
 
@@ -359,6 +376,7 @@ export const sanitizeResult = (
   return plainTextIngestionResult(
     {
       ...result,
+      observationDetail,
       caseNumber: storedCaseNumberOf(result),
       caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
       identifiers,

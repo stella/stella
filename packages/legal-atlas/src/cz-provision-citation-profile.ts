@@ -12,12 +12,16 @@
  * "latest wins" rule it does so silently.
  */
 
+import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   ActTitleSpec,
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
+
+const CZE = STATUTE_ACTS.cze;
 
 const SB = "Sb.";
 
@@ -122,20 +126,20 @@ const criminalProcedureCodes = (
     citedFrom: CRIMINAL_PROCEDURE_1957,
     citedUntil: CRIMINAL_CODES_1962,
   },
-  { spellings, identifier: sb(141, 1961) },
+  { spellings, identifier: CZE.criminalProcedure.work },
 ];
 
 const LABOUR_CODE_SUCCESSION = {
   older: sb(65, 1965),
   olderFrom: LABOUR_CODE_1966,
-  newer: sb(262, 2006),
+  newer: CZE.labourCode.work,
   on: LABOUR_CODE_RECODIFICATION,
 };
 
 const ADMINISTRATIVE_PROCEDURE_SUCCESSION = {
   older: sb(71, 1967),
   olderFrom: ADMINISTRATIVE_PROCEDURE_1968,
-  newer: sb(500, 2004),
+  newer: CZE.administrativeProcedure.work,
   on: ADMINISTRATIVE_PROCEDURE_RECODIFICATION,
 };
 
@@ -261,14 +265,14 @@ export const CZ_PROFILE = {
   aliases: [
     {
       spellings: ["OSŘ", "o. s. ř.", "o.s.ř.", "o. s. ř", "o.s.ř"],
-      identifier: sb(99, 1963),
+      identifier: CZE.civilProcedure.work,
     },
-    { spellings: ["NOZ"], identifier: sb(89, 2012) },
+    { spellings: ["NOZ"], identifier: CZE.civilCode.work },
     ...succession({
       spellings: ["OZ", "o. z.", "o.z."],
       older: sb(40, 1964),
       olderFrom: CIVIL_CODES_1964,
-      newer: sb(89, 2012),
+      newer: CZE.civilCode.work,
       on: RECODIFICATION,
     }),
     { spellings: ["OZ64"], identifier: sb(40, 1964) },
@@ -293,7 +297,7 @@ export const CZ_PROFILE = {
     }),
     {
       spellings: ["tr. zákoník", "tr. zákoníku", "tr. zákoníkem"],
-      identifier: sb(40, 2009),
+      identifier: CZE.criminalCode.work,
     },
     // `TZ` has no convention between the two codes; the citing date decides.
     {
@@ -304,7 +308,7 @@ export const CZ_PROFILE = {
     },
     {
       spellings: ["TZ"],
-      identifier: sb(40, 2009),
+      identifier: CZE.criminalCode.work,
       citedFrom: CRIMINAL_CODE_RECODIFICATION,
     },
     ...criminalProcedureCodes([
@@ -324,7 +328,10 @@ export const CZ_PROFILE = {
       spellings: ["SŘ", "spr. ř.", "s. ř.", "s.ř."],
       ...ADMINISTRATIVE_PROCEDURE_SUCCESSION,
     }),
-    { spellings: ["SŘS", "s. ř. s.", "s.ř.s."], identifier: sb(150, 2002) },
+    {
+      spellings: ["SŘS", "s. ř. s.", "s.ř.s."],
+      identifier: CZE.administrativeJustice.work,
+    },
     // Courts called 337/1992 Sb. the tax procedure code before 280/2009 Sb.
     // took that title.
     ...priorWindowed({
@@ -335,12 +342,15 @@ export const CZ_PROFILE = {
       spellings: ["EŘ", "ex. řád", "exek. řád", "ex. ř."],
       identifier: sb(120, 2001),
     },
-    { spellings: ["IZ", "InsZ", "ins. zák."], identifier: sb(182, 2006) },
-    { spellings: ["ZOK"], identifier: sb(90, 2012) },
-    { spellings: ["ZŘS", "z. ř. s.", "z.ř.s."], identifier: sb(292, 2013) },
+    { spellings: ["IZ", "InsZ", "ins. zák."], identifier: CZE.insolvency.work },
+    { spellings: ["ZOK"], identifier: CZE.corporations.work },
+    {
+      spellings: ["ZŘS", "z. ř. s.", "z.ř.s."],
+      identifier: CZE.specialProceedings.work,
+    },
     {
       spellings: ["LZPS", "Listina", "Listiny", "Listině", "Listinou"],
-      identifier: sb(2, 1993),
+      identifier: CZE.charter.work,
       unit: "article",
     },
     // Capitalised only: lowercase `ústavy` are institutions, not the
@@ -370,7 +380,7 @@ export const CZ_PROFILE = {
         "Ústavě ČR",
         "Ústavou ČR",
       ],
-      identifier: sb(1, 1993),
+      identifier: CZE.constitution.work,
       unit: "article",
     },
     {
@@ -379,12 +389,12 @@ export const CZ_PROFILE = {
       unit: "article",
     },
     { spellings: ["AT"], identifier: sb(177, 1996) },
-    { spellings: ["ZDP"], identifier: sb(586, 1992) },
+    { spellings: ["ZDP"], identifier: CZE.incomeTax.work },
     ...succession({
       spellings: ["ZDPH"],
       older: sb(588, 1992),
       olderFrom: VAT_1993,
-      newer: sb(235, 2004),
+      newer: CZE.vat.work,
       on: VAT_RECODIFICATION,
     }),
     { spellings: ["ZZVZ", "NZVZ"], identifier: sb(134, 2016) },
@@ -427,7 +437,7 @@ export const CZ_PROFILE = {
       ],
       older: sb(142, 1950),
       olderFrom: CIVIL_CODES_1951,
-      newer: sb(99, 1963),
+      newer: CZE.civilProcedure.work,
       on: CIVIL_CODES_1964,
     }),
     {
@@ -462,7 +472,7 @@ export const CZ_PROFILE = {
         "občanskému zákoníku",
         "občanským zákoníkem",
       ],
-      identifier: sb(89, 2012),
+      identifier: CZE.civilCode.work,
       citedFrom: RECODIFICATION,
     },
     {
@@ -484,7 +494,7 @@ export const CZ_PROFILE = {
         "trestnímu zákoníku",
         "trestním zákoníkem",
       ],
-      identifier: sb(40, 2009),
+      identifier: CZE.criminalCode.work,
     },
     // The 1950 and 1961 codes' name; the 2009 one is a `zákoník`, never a
     // `zákon`.
@@ -535,7 +545,7 @@ export const CZ_PROFILE = {
         "stavebnímu zákonu",
         "stavebním zákonem",
       ],
-      identifier: sb(283, 2021),
+      identifier: CZE.building.work,
       citedFrom: BUILDING_ACT_FULLY_APPLICABLE,
     },
     {
@@ -560,6 +570,16 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(256, 2013),
       citedFrom: "2014-01-01",
+    },
+    {
+      spellings: [
+        "živnostenský zákon",
+        "živnostenského zákona",
+        "živnostenském zákoně",
+        "živnostenskému zákonu",
+        "živnostenským zákonem",
+      ],
+      identifier: CZE.trades.work,
     },
     {
       spellings: actTitleForms("o veřejných zakázkách"),
@@ -610,7 +630,7 @@ export const CZ_PROFILE = {
         "Listině základních práv a svobod",
         "Listinou základních práv a svobod",
       ],
-      identifier: sb(2, 1993),
+      identifier: CZE.charter.work,
       unit: "article",
     },
     {
@@ -621,7 +641,7 @@ export const CZ_PROFILE = {
         "soudnímu řádu správnímu",
         "soudním řádem správním",
       ],
-      identifier: sb(150, 2002),
+      identifier: CZE.administrativeJustice.work,
     },
     // 20/1955 Sb. bore the name until 91/1960 Sb., titled `o správním
     // řízení`, replaced it on 1 July 1960.
@@ -665,11 +685,11 @@ export const CZ_PROFILE = {
         "insolvenčnímu zákonu",
         "insolvenčním zákonem",
       ],
-      identifier: sb(182, 2006),
+      identifier: CZE.insolvency.work,
     },
     {
       spellings: actTitleForms("o obchodních korporacích"),
-      identifier: sb(90, 2012),
+      identifier: CZE.corporations.work,
     },
     {
       spellings: ["advokátní tarif", "advokátního tarifu", "advokátním tarifu"],
@@ -743,7 +763,7 @@ export const CZ_PROFILE = {
         "Ústavy České republiky",
         "Ústavě České republiky",
       ],
-      identifier: sb(1, 1993),
+      identifier: CZE.constitution.work,
       unit: "article",
     },
     {
@@ -778,11 +798,11 @@ export const CZ_PROFILE = {
     },
     {
       spellings: actTitleForms("o zvláštních řízeních soudních"),
-      identifier: sb(292, 2013),
+      identifier: CZE.specialProceedings.work,
     },
     {
       spellings: actTitleForms("o daních z příjmů"),
-      identifier: sb(586, 1992),
+      identifier: CZE.incomeTax.work,
     },
     {
       spellings: actTitleForms("o dani z přidané hodnoty"),
@@ -792,7 +812,7 @@ export const CZ_PROFILE = {
     },
     {
       spellings: actTitleForms("o dani z přidané hodnoty"),
-      identifier: sb(235, 2004),
+      identifier: CZE.vat.work,
       citedFrom: VAT_RECODIFICATION,
     },
     ...succession({

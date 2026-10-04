@@ -1,4 +1,7 @@
+// parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 // parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
+// parser-output-unchanged: fetch entry takes an ID and writes require the claimed snapshot; parsing is unchanged.
+// parser-output-unchanged: the PDF download is read under a byte ceiling; a download within it parses as before.
 /**
  * Fetch and parse the PDFs behind Slovak court decisions.
  *
@@ -44,6 +47,8 @@ import {
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -117,6 +122,11 @@ import {
   storesNoCorpusDocumentSql,
 } from "@/api/lib/legal-search/sk-document-pending-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  createRemainingDocumentScan,
+  DOCUMENT_SCAN_PAGE_LIMIT,
+  DOCUMENT_SCAN_REPROBE_MS,
+} from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -177,6 +187,8 @@ const DOCUMENT_FETCH_FAILURES = [
   "network",
   /** The download is a PDF the parser could not read. */
   "unparseable",
+  /** The download is larger than {@link MAX_DOCUMENT_PDF_BYTES}. */
+  "too-large",
 ] as const;
 
 export type DocumentFetchFailure = (typeof DOCUMENT_FETCH_FAILURES)[number];
@@ -185,16 +197,32 @@ export const DOCUMENT_FETCH_FAILURE = {
   PUBLISHER_STATUS: DOCUMENT_FETCH_FAILURES[0],
   NETWORK: DOCUMENT_FETCH_FAILURES[1],
   UNPARSEABLE: DOCUMENT_FETCH_FAILURES[2],
+  TOO_LARGE: DOCUMENT_FETCH_FAILURES[3],
 } as const satisfies Record<string, DocumentFetchFailure>;
+
+/**
+ * The most bytes one decision's PDF download may hold. Generous for a court
+ * decision, scanned ones included; a larger body is refused before it is
+ * buffered, and the decision is parked rather than stored without its text.
+ */
+export const MAX_DOCUMENT_PDF_BYTES = 32 * 1024 * 1024;
+
+/** The leading bytes kept of a body over the ceiling, for its type check. */
+const OVERSIZED_PREFIX_BYTES = 1024;
 
 /** What one download produced. */
 export type PdfFetchResult =
   | { type: "document"; bytes: Uint8Array }
   /** The publisher states there is nothing to fetch. */
   | { type: "absent" }
+  /**
+   * The body ran past `limitBytes`; reading stopped there. `prefix` holds its
+   * leading bytes, so a body that is not a PDF is still refused as one.
+   */
+  | { type: "too-large"; limitBytes: number; prefix: Uint8Array }
   | {
       type: "failed";
-      failure: Exclude<DocumentFetchFailure, "unparseable">;
+      failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
       /** A short tag for telemetry: the status or the error's code. */
       detail: string;
     };
@@ -231,6 +259,33 @@ const brokenBodyDetail = (error: unknown): string | undefined => {
   return undefined;
 };
 
+type CappedBody =
+  | { type: "complete"; bytes: Uint8Array }
+  | { type: "over"; prefix: Uint8Array };
+
+/**
+ * Read a body up to {@link MAX_DOCUMENT_PDF_BYTES}, keeping the leading bytes
+ * of one that runs past it. The leading bytes are copied as they pass, so
+ * nothing is read twice or past the ceiling.
+ */
+const readCappedDocumentBody = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<CappedBody> => {
+  const prefix = new Uint8Array(OVERSIZED_PREFIX_BYTES);
+  let prefixBytes = 0;
+  const bytes = await readCappedBytes(body, MAX_DOCUMENT_PDF_BYTES, (chunk) => {
+    if (prefixBytes >= OVERSIZED_PREFIX_BYTES) {
+      return;
+    }
+    const part = chunk.subarray(0, OVERSIZED_PREFIX_BYTES - prefixBytes);
+    prefix.set(part, prefixBytes);
+    prefixBytes += part.byteLength;
+  });
+  return bytes === null
+    ? { type: "over", prefix: prefix.subarray(0, prefixBytes) }
+    : { type: "complete", bytes };
+};
+
 /**
  * Download one decision's document.
  *
@@ -262,11 +317,20 @@ export const fetchPdfBytes = async ({
   const { ok, status } = response;
   if (ok) {
     const body = await Result.tryPromise({
-      try: async () => await response.arrayBuffer(),
+      try: async (): Promise<CappedBody> =>
+        response.body === null
+          ? { type: "complete", bytes: new Uint8Array() }
+          : await readCappedDocumentBody(response.body),
       catch: (error) => error,
     });
     if (Result.isOk(body)) {
-      return { type: "document", bytes: new Uint8Array(body.value) };
+      return body.value.type === "complete"
+        ? { type: "document", bytes: body.value.bytes }
+        : {
+            type: "too-large",
+            limitBytes: MAX_DOCUMENT_PDF_BYTES,
+            prefix: body.value.prefix,
+          };
     }
     await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
     const detail = brokenBodyDetail(body.error);
@@ -421,13 +485,8 @@ const belowParkingThreshold = lt(
  * written to object storage) or one of the empty shapes (written before
  * the document existed) means there is still nothing to read.
  *
- * The hash test is a residual filter: the partial indexes behind the two
- * tiers are predicated on the text column and the document URL only,
- * because an index predicate would have to spell the hashes out as
- * literals and could then drift from these. Under the deployed storage
- * mode nothing carries a hash, so the filter costs nothing; a canonical
- * cutover should revisit it, since a fully drained corpus would leave
- * the scan walking trimmed rows to conclude the queue is empty.
+ * The outstanding indexes share the exact predicate, including the corpus
+ * hash test, so corpus-served rows leave the indexed queue after trimming.
  */
 /**
  * SQL for "object storage holds no document for this row".
@@ -626,7 +685,10 @@ const remainingCursorPredicate = ({
       );
 
 /**
- * Remaining tier: newest decision first. A fresh decision is the one a
+ * One-shot remaining-tier page: newest decision first. The continuous
+ * drain uses bounded outstanding candidate pages below so cooldown rows
+ * cannot make a cycle scan the entire ready-tier backlog.
+ * A fresh decision is the one a
  * reader is most likely to open next, and the crawl adds to this end of
  * the range, so draining from it keeps the readable window current
  * instead of chasing the oldest page in the archive.
@@ -647,6 +709,64 @@ export const loadRemainingDocuments = async ({
       after ? remainingCursorPredicate(after) : undefined,
     ),
   });
+
+/** Readiness is projected after the indexed candidate LIMIT, never a scan filter. */
+export const remainingDocumentCandidateQuery = ({
+  tx,
+  sourceId,
+  limit,
+  after,
+}: {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  limit: number;
+  after?: RemainingDocumentCursor;
+}) => {
+  const pageLimit = Math.min(limit, DOCUMENT_SCAN_PAGE_LIMIT);
+  const page = (cursorWhere?: SQL) =>
+    tx
+      .select({
+        ...PENDING_DOCUMENT_COLUMNS,
+        ready: sql<boolean>`coalesce(${remainingDocumentPredicate}, false)`.as(
+          "ready",
+        ),
+      })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          pendingDocumentPredicate,
+          cursorWhere,
+        ),
+      )
+      .orderBy(...remainingDocumentOrder)
+      .limit(pageLimit);
+  if (after === undefined) {
+    return page(undefined);
+  }
+  if (after.decisionDate === null) {
+    return page(remainingCursorPredicate(after));
+  }
+  // Mixed DESC/ASC order cannot use a tuple comparison. Separate tight
+  // ranges prevent the OR boundary becoming a filter over the entire prefix.
+  const candidates = page(
+    and(
+      eq(caseLawDecisions.decisionDate, after.decisionDate),
+      gt(caseLawDecisions.id, after.id),
+    ),
+  )
+    .unionAll(page(lt(caseLawDecisions.decisionDate, after.decisionDate)))
+    .unionAll(page(isNull(caseLawDecisions.decisionDate)))
+    .as("outstanding_candidates");
+  return tx
+    .select()
+    .from(candidates)
+    .orderBy(
+      sql`${candidates.decisionDate} desc nulls last`,
+      asc(candidates.id),
+    )
+    .limit(pageLimit);
+};
 
 /**
  * Whether any document remains outstanding, including work that is cooling
@@ -706,13 +826,38 @@ export const scopedPendingDocumentTierLoaders = (
   scopedDb: ScopedDb,
 ): PendingDocumentTierLoaders => {
   let sourceId: SafeId<"caseLawSource"> | undefined;
+  let sourceReprobeAt = Number.NEGATIVE_INFINITY;
 
   const resolveSourceId = async (): Promise<
     SafeId<"caseLawSource"> | undefined
   > => {
-    sourceId ??= await loadDeferredDocumentSourceId(scopedDb);
+    if (
+      sourceId !== undefined ||
+      Temporal.Now.instant().epochMilliseconds < sourceReprobeAt
+    ) {
+      return sourceId;
+    }
+    sourceId = await loadDeferredDocumentSourceId(scopedDb);
+    sourceReprobeAt =
+      Temporal.Now.instant().epochMilliseconds + DOCUMENT_SCAN_REPROBE_MS;
     return sourceId;
   };
+
+  const loadRemaining = createRemainingDocumentScan({
+    loadPage: async ({ limit, after }) => {
+      const id = await resolveSourceId();
+      return id === undefined
+        ? []
+        : await scopedDb((tx) =>
+            remainingDocumentCandidateQuery({
+              tx,
+              sourceId: id,
+              limit,
+              ...(after ? { after } : {}),
+            }),
+          );
+    },
+  });
 
   return {
     loadRequested: async (limit) => {
@@ -721,35 +866,33 @@ export const scopedPendingDocumentTierLoaders = (
         ? []
         : await loadRequestedDocuments({ scopedDb, sourceId: id, limit });
     },
-    loadRemaining: async (limit) => {
-      const id = await resolveSourceId();
-      return id === undefined
-        ? []
-        : await loadRemainingDocuments({ scopedDb, sourceId: id, limit });
-    },
+    loadRemaining,
   };
 };
 
 /**
- * One page of the queue: decisions a reader asked for first, then the
- * newest of the rest. Both tiers are keyset-ordered against a partial
- * index and bounded by `limit`, so neither scans the backlog. The
- * worker walks the same two tiers as a stream; see
- * `sk-document-queue.ts`.
+ * One ready page: decisions a reader asked for first, then the newest
+ * of the rest. The worker's continuous stream additionally limits rows
+ * examined before checking readiness; see `sk-document-queue.ts`.
  */
 export const loadPendingDocuments = async (
   scopedDb: ScopedDb,
   limit: number,
 ): Promise<PendingDocument[]> => {
-  const { loadRemaining, loadRequested } =
-    scopedPendingDocumentTierLoaders(scopedDb);
-
-  const requested = await loadRequested(limit);
+  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
+  if (sourceId === undefined) {
+    return [];
+  }
+  const requested = await loadRequestedDocuments({ scopedDb, sourceId, limit });
   if (requested.length >= limit) {
     return requested;
   }
 
-  const remaining = await loadRemaining(limit - requested.length);
+  const remaining = await loadRemainingDocuments({
+    scopedDb,
+    sourceId,
+    limit: limit - requested.length,
+  });
   return [...requested, ...remaining];
 };
 
@@ -761,7 +904,7 @@ export const corpusBackfillTransfer = (): CorpusTransfer | null =>
   corpusStorageMode === "off" ? null : deployedCorpusTransfer();
 
 export type StoreBackfilledDocumentOptions = {
-  decision: PendingDocument;
+  decision: ClaimedPendingDocument;
   document: BackfilledDocument;
   scopedDb: ScopedDb;
   /**
@@ -778,14 +921,6 @@ export type StoreBackfilledDocumentOptions = {
    * the environment first.
    */
   mode?: CorpusStorageMode;
-  /**
-   * The row's source hash when the fetch was claimed. The store applies
-   * only while it still holds: a source refresh that lands mid-fetch has
-   * rewritten the decision this document was parsed for, so the document
-   * is dropped and the queue fetches it again against the new state.
-   * Omitted by callers with no claim of their own (the repair scripts).
-   */
-  claimedSourceHash?: string | null;
 };
 
 /**
@@ -872,7 +1007,6 @@ export const storeBackfilledDocument = async ({
   scopedDb,
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
-  claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
@@ -884,9 +1018,7 @@ export const storeBackfilledDocument = async ({
     // read a decision another attempt already filled as still empty and
     // overwrite it.
     storesNoCorpusDocument,
-    claimedSourceHash === undefined
-      ? undefined
-      : holdsClaimedSource(claimedSourceHash),
+    holdsClaimedSource(decision.sourceHash),
   );
 
   const storedPayloadColumns = {
@@ -1162,9 +1294,7 @@ export const claimDocumentFetch = async (
 
 /** A write decided by one claimed fetch of one decision. */
 type ClaimedFetchWriteOptions = {
-  decisionId: SafeId<"caseLawDecision">;
-  /** The row's source hash when the fetch was claimed. */
-  claimedSourceHash: string | null;
+  decision: ClaimedPendingDocument;
   scopedDb: ScopedDb;
 };
 
@@ -1185,14 +1315,13 @@ type ClaimedFetchWriteOptions = {
  * that pointed the row at a new document mid-fetch leaves it pending.
  */
 export const markDocumentUnavailable = async ({
-  claimedSourceHash,
-  decisionId,
+  decision,
   scopedDb,
 }: ClaimedFetchWriteOptions): Promise<void> => {
   await scopedDb(async (tx) => {
     const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "case_law",
-      entityId: decisionId,
+      entityId: decision.id,
     });
     // audit: skip — queue backfill of public case-law text; no user action
     const updated = await tx
@@ -1206,18 +1335,18 @@ export const markDocumentUnavailable = async ({
       })
       .where(
         and(
-          eq(caseLawDecisions.id, decisionId),
+          eq(caseLawDecisions.id, decision.id),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
           storesNoCorpusDocument,
-          holdsClaimedSource(claimedSourceHash),
+          holdsClaimedSource(decision.sourceHash),
         ),
       )
       .returning({ id: caseLawDecisions.id });
     if (updated.length > 0 && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
-        subject: { family: "case_law", entityId: decisionId },
+        subject: { family: "case_law", entityId: decision.id },
       });
     }
   });
@@ -1232,8 +1361,7 @@ export const markDocumentUnavailable = async ({
  * unreadable bytes from before a refresh cannot park the refreshed row.
  */
 export const parkDocumentFetch = async ({
-  claimedSourceHash,
-  decisionId,
+  decision,
   scopedDb,
 }: ClaimedFetchWriteOptions): Promise<"parked" | "superseded"> => {
   const parked = await scopedDb(
@@ -1243,10 +1371,10 @@ export const parkDocumentFetch = async ({
           documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${MAX_DOCUMENT_FETCH_ATTEMPTS}::int)`,
         },
         where: and(
-          eq(caseLawDecisions.id, decisionId),
+          eq(caseLawDecisions.id, decision.id),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
-          holdsClaimedSource(claimedSourceHash),
+          holdsClaimedSource(decision.sourceHash),
         ),
       }),
   );
@@ -1388,7 +1516,7 @@ export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
   onDocumentObservation?: DocumentStageObserver | undefined;
-  decision: PendingDocument;
+  decisionId: SafeId<"caseLawDecision">;
   /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
   fetchDocument: SkDocumentFetch;
   scopedDb: ScopedDb;
@@ -1399,6 +1527,26 @@ type ParseFetchedDocumentOptions = {
   decision: ClaimedPendingDocument;
   bytes: Uint8Array;
   scopedDb: ScopedDb;
+};
+
+/**
+ * Throw for a body that is not a PDF: a publisher serving an error page serves
+ * it for every download, so the walk backs off rather than parking each one.
+ */
+const assertPdfBody = (bytes: Uint8Array): void => {
+  if (declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
+    return;
+  }
+  const error = new SkDocumentNonPdfError({
+    message: "Document fetch returned a body that is not a PDF",
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+  });
+  logger.warn(
+    "case_law.ingestion.sk_document_parse_failed",
+    skDocumentErrorDiagnostics(error),
+  );
+  throw error;
 };
 
 type ParseFetchedDocumentResult =
@@ -1421,18 +1569,7 @@ const parseFetchedDocument = async ({
   decision,
   scopedDb,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
-  if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
-    const error = new SkDocumentNonPdfError({
-      message: "Document fetch returned a body that is not a PDF",
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: null,
-    });
-    logger.warn(
-      "case_law.ingestion.sk_document_parse_failed",
-      skDocumentErrorDiagnostics(error),
-    );
-    throw error;
-  }
+  assertPdfBody(bytes);
   const parsed = await Result.tryPromise({
     try: async () => await parsePendingDocument(decision, bytes),
     catch: (error) => error,
@@ -1444,8 +1581,7 @@ const parseFetchedDocument = async ({
     throw parsed.error;
   }
   const parked = await parkDocumentFetch({
-    claimedSourceHash: decision.sourceHash,
-    decisionId: decision.id,
+    decision,
     scopedDb,
   });
   return parked === "parked"
@@ -1454,12 +1590,12 @@ const parseFetchedDocument = async ({
 };
 
 const runDecisionDocumentFetch = async ({
-  decision: { id },
+  decisionId,
   fetchDocument,
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
-  const claim = await claimDocumentFetch(id, scopedDb);
+  const claim = await claimDocumentFetch(decisionId, scopedDb);
   if (claim.status === "held") {
     return { status: "claimed" };
   }
@@ -1470,6 +1606,69 @@ const runDecisionDocumentFetch = async ({
     scopedDb,
     signal,
   });
+};
+
+type SettleFetchedDocumentOptions = {
+  attempts: number;
+  decision: ClaimedPendingDocument;
+  fetched: PdfFetchResult;
+  scopedDb: ScopedDb;
+};
+
+type SettledFetchedDocument =
+  | ParseFetchedDocumentResult
+  /** The download ended the attempt without bytes to parse. */
+  | { type: "settled"; outcome: DecisionDocumentOutcome };
+
+/**
+ * What a download leaves to parse. A PDF over the ceiling parks the decision
+ * at once: asking again returns the same body, and nothing of it is stored.
+ * An oversized body that is not a PDF throws as any non-PDF body does.
+ */
+const settleFetchedDocument = async ({
+  attempts,
+  decision,
+  fetched,
+  scopedDb,
+}: SettleFetchedDocumentOptions): Promise<SettledFetchedDocument> => {
+  switch (fetched.type) {
+    case "document":
+      return await parseFetchedDocument({
+        bytes: fetched.bytes,
+        decision,
+        scopedDb,
+      });
+    case "absent":
+      return { type: "parsed", document: undefined };
+    case "failed": {
+      const { failure, detail } = fetched;
+      return {
+        type: "settled",
+        outcome:
+          attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
+            ? { status: "parked", failure, detail }
+            : { status: "deferred", failure, detail },
+      };
+    }
+    case "too-large": {
+      assertPdfBody(fetched.prefix);
+      const parked = await parkDocumentFetch({ decision, scopedDb });
+      return {
+        type: "settled",
+        outcome:
+          parked === "parked"
+            ? {
+                status: "parked",
+                failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+                detail: `over-${fetched.limitBytes}-bytes`,
+              }
+            : { status: "superseded" },
+      };
+    }
+    default:
+      fetched satisfies never;
+      return panic(`Unhandled document download: ${String(fetched)}`);
+  }
 };
 
 type ProcessClaimedDocumentOptions = {
@@ -1494,21 +1693,12 @@ const processClaimedDocument = async ({
       })
     : { type: "absent" };
 
-  if (fetched.type === "failed") {
-    const { failure, detail } = fetched;
-    return claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
-      ? { status: "parked", failure, detail }
-      : { status: "deferred", failure, detail };
-  }
-
-  const parsed: ParseFetchedDocumentResult =
-    fetched.type === "document"
-      ? await parseFetchedDocument({
-          bytes: fetched.bytes,
-          decision,
-          scopedDb,
-        })
-      : { type: "parsed", document: undefined };
+  const parsed = await settleFetchedDocument({
+    attempts: claim.attempts,
+    decision,
+    fetched,
+    scopedDb,
+  });
   switch (parsed.type) {
     case "parsed":
       break;
@@ -1520,6 +1710,8 @@ const processClaimedDocument = async ({
       };
     case "superseded":
       return { status: "superseded" };
+    case "settled":
+      return parsed.outcome;
     default:
       parsed satisfies never;
       return panic(`Unhandled parse result: ${String(parsed)}`);
@@ -1528,8 +1720,7 @@ const processClaimedDocument = async ({
   const { document } = parsed;
   if (!document) {
     await markDocumentUnavailable({
-      claimedSourceHash: decision.sourceHash,
-      decisionId: decision.id,
+      decision,
       scopedDb,
     });
     return { status: "unavailable" };
@@ -1539,7 +1730,6 @@ const processClaimedDocument = async ({
     decision,
     document,
     scopedDb,
-    claimedSourceHash: decision.sourceHash,
   });
   if (stored === "superseded") {
     return { status: "superseded" };
@@ -1586,6 +1776,8 @@ export const fetchDecisionDocument = async (
               DOCUMENT_FETCH_OUTCOME.http4xx,
             [DOCUMENT_FETCH_FAILURE.NETWORK]: DOCUMENT_FETCH_OUTCOME.connection,
             [DOCUMENT_FETCH_FAILURE.UNPARSEABLE]:
+              DOCUMENT_FETCH_OUTCOME.bodyShape,
+            [DOCUMENT_FETCH_FAILURE.TOO_LARGE]:
               DOCUMENT_FETCH_OUTCOME.bodyShape,
           } as const satisfies Record<
             DocumentFetchFailure,

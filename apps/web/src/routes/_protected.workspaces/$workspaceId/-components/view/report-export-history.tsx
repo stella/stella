@@ -7,11 +7,11 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   REPORT_EXPORTS_PAGE_SIZE,
@@ -66,9 +66,7 @@ export const ReportExportHistory = ({
     setActiveActionId(null);
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
+      notifyUserError(result.error, t("workspaces.views.reportExport.failed"), {
         description: t("common.unexpectedError"),
       });
     }
@@ -101,10 +99,10 @@ export const ReportExportHistory = ({
       if (Result.isError(result)) {
         analytics.captureError(result.error);
       }
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
+      notifyUserError(
+        Result.isError(result) ? result.error : undefined,
+        t("common.unexpectedError"),
+      );
     }
   };
 

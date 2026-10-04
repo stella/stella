@@ -1,5 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -59,6 +57,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import {
+  legacyQuarantineHtmlText,
+  ownTableRows,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -467,8 +470,7 @@ const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
   $(selector).each((_, element) => {
     const cell = $(element).clone();
     cell.find("br").replaceWith("\n");
-    const text = cell
-      .text()
+    const text = visibleHtmlText(cell)
       .replaceAll(/\r\n?/gu, "\n")
       .split("\n")
       .map((line) => line.trim())
@@ -536,6 +538,26 @@ export type NalusAbstractOutcome =
   | { type: typeof CZ_US_ABSTRACT_STATE.READ; html: string }
   | { type: typeof CZ_US_ABSTRACT_STATE.ABSENT }
   | { type: typeof CZ_US_ABSTRACT_STATE.UNAVAILABLE };
+
+const abstractTextFields = (outcome: NalusAbstractOutcome) => {
+  switch (outcome.type) {
+    case CZ_US_ABSTRACT_STATE.READ:
+      return extractAbstract(outcome.html);
+    case CZ_US_ABSTRACT_STATE.ABSENT:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      };
+    case CZ_US_ABSTRACT_STATE.UNAVAILABLE:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      };
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled abstract outcome: ${JSON.stringify(outcome)}`);
+  }
+};
 
 // ── Record card (ResultDetail.aspx) ──────────────────────
 
@@ -624,7 +646,7 @@ const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
  * page repeats `Soudce zpravodaj` as a column heading of the result row above
  * the card, where it labels nothing.
  */
-const RECORD_CARD_SELECTOR = "table.recordCardTable tr";
+const RECORD_CARD_SELECTOR = "table.recordCardTable";
 
 /** Repeats inside one value cell, as the court separates them. */
 const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
@@ -677,7 +699,7 @@ const emptyDetailFields = (): Record<NalusDetailFieldKey, string[]> => ({
  */
 export const parseNalusDetail = (html: string): NalusDetailFields | null => {
   const $ = cheerio.load(html);
-  const rows = $(RECORD_CARD_SELECTOR);
+  const rows = ownTableRows($(RECORD_CARD_SELECTOR));
   if (rows.length === 0) {
     return null;
   }
@@ -687,14 +709,18 @@ export const parseNalusDetail = (html: string): NalusDetailFields | null => {
     if (cells.length !== 2) {
       return;
     }
-    const key = DETAIL_FIELD_BY_LABEL.get(detailText(cells.eq(0).text()));
+    const key = DETAIL_FIELD_BY_LABEL.get(
+      detailText(visibleHtmlText(cells.eq(0))),
+    );
     if (key === undefined) {
       return;
     }
     fields[key].push(
       ...(cells.eq(1).html() ?? "")
         .split(DETAIL_VALUE_SEPARATOR)
-        .map((part) => detailText(stripHtml(part)))
+        .map((part) =>
+          detailText(visibleHtmlText(cheerio.load(part, null, false).root())),
+        )
         .filter((part) => part.length > 0),
     );
   });
@@ -716,10 +742,10 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
   }
   const $ = cheerio.load(recordCard);
   const labels: string[] = [];
-  $(RECORD_CARD_SELECTOR).each((_, row) => {
+  ownTableRows($(RECORD_CARD_SELECTOR)).each((_, row) => {
     const cells = $(row).children("td");
     if (cells.length === 2) {
-      labels.push(detailText(cells.eq(0).text()));
+      labels.push(detailText(visibleHtmlText(cells.eq(0))));
     }
   });
   return labels;
@@ -1047,10 +1073,6 @@ const parseDecisionPage = ({
     });
   }
 
-  // Hash on identity fields only (not fulltext) for stability
-  // across parser changes. Matches NSS adapter pattern.
-  const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
-
   return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
@@ -1105,7 +1127,7 @@ const parseDecisionPage = ({
       nalusRecordId,
       nalusSz,
     }),
-    rawHash: hashContent(raw),
+    rawHash: hashContent(html),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst,
     sourceRaw: html,
@@ -1595,127 +1617,148 @@ const parseResultPage = ({
 
   const $ = cheerio.load(html);
   const listed: ListedDecision[] = [];
-  $("tr.resultData0, tr.resultData1").each((_, row) => {
-    const primary = $(row);
-    if (primary.attr("valign") === "top") {
-      return;
-    }
-    const detail = primary.find("a[href*='ResultDetail.aspx']").first();
-    const detailHref = detail.attr("href");
-    const nalusRecordId = persistableNalusComponent(
-      "nalus-record",
-      /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.["id"],
-    );
-    const actions = primary.next("tr");
-    const linkAction = actions
-      .find("[onclick*='GetText.aspx?sz=']")
-      .first()
-      .attr("onclick");
-    const rawUrl =
-      /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
-        linkAction ?? "",
-      )?.groups?.["url"];
-    let sz: string | undefined;
-    if (rawUrl) {
-      try {
-        sz = persistableNalusComponent(
-          "nalus-sz",
-          new URL(rawUrl).searchParams.get("sz") || undefined,
-        );
-      } catch {
-        // A malformed or withdrawn text action does not erase the stable
-        // ResultDetail record identity exposed by the listing.
+  ownTableRows($("table"))
+    .filter(".resultData0, .resultData1")
+    .each((_, row) => {
+      const primary = $(row);
+      if (primary.attr("valign") === "top") {
+        return;
       }
-    }
-    const listingHtml = `${primary.toString()}${actions.toString()}`;
-    const ecli = persistableNalusComponent(
-      "nalus-ecli",
-      /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0),
-    );
-    const registrySign = detail.text();
-    // The count banner says this is a publisher record even if a malformed or
-    // withdrawn row exposes neither of NALUS's normal identities. Give that
-    // terminal listing a content-addressed quarantine identity derived from
-    // semantic fields so one poison row cannot pin the reconciliation slice.
-    const exactPublisherIdentity = nalusIdentities({
-      recordId: nalusRecordId,
-      sz,
-      ecli,
-    });
-    const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
-      "counter"
-    ];
-    const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.["counter"];
-    const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
-    // Compute the identity-less form for every row. If publisher links are
-    // restored later, this becomes a migration alias for the earlier durable
-    // quarantine row. Strip every identity-bearing control from the visible
-    // text: the detail anchor, ECLI and retrieval action can all appear only
-    // when identity metadata recovers, so none may participate in the repair
-    // fingerprint.
-    const stablePrimary = primary.clone();
-    stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
-    const stablePrimaryText = stablePrimary.text().replace(ecli ?? "", "");
-    const stableActions = actions.clone();
-    stableActions
-      .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
-      .remove();
-    const stableFingerprintFields = {
-      stablePrimaryText,
-      stableActionsText: stableActions.text(),
-    };
-    const stableDetailTexts = [...new Set([listedCaseNumber, ""])];
-    const stableCounterTexts = [
-      ...new Set([counterText ?? szCounter ?? "", ""]),
-    ];
-    const quarantineRepairIds = stableDetailTexts.flatMap((stableDetailText) =>
-      stableCounterTexts.map((stableCounterText) =>
-        quarantineFingerprint({
-          ...stableFingerprintFields,
-          stableDetailText,
-          stableCounterText,
-        }),
-      ),
-    );
-    const quarantineId =
-      quarantineRepairIds[0] ?? panic("Missing quarantine id");
-    const publisherIdentity = exactPublisherIdentity ?? {
-      sourceDocumentId: `nalus-quarantine:${quarantineId}`,
-      aliases: undefined,
-    };
-    const fallbackCaseNumber =
-      exactPublisherIdentity === null
-        ? `NALUS listing ${quarantineId}`
-        : `NALUS record ${nalusRecordId ?? sz ?? ecli ?? exactPublisherIdentity.sourceDocumentId}`;
-    const caseNumber = listedCaseNumber || fallbackCaseNumber;
-    const sourceDocumentId = publisherIdentity.sourceDocumentId;
+      const detail = primary.find("a[href*='ResultDetail.aspx']").first();
+      const detailHref = detail.attr("href");
+      const nalusRecordId = persistableNalusComponent(
+        "nalus-record",
+        /[?&]id=(?<id>\d+)/u.exec(detailHref ?? "")?.groups?.["id"],
+      );
+      const actions = primary.next("tr");
+      const linkAction = actions
+        .find("[onclick*='GetText.aspx?sz=']")
+        .first()
+        .attr("onclick");
+      const rawUrl =
+        /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
+          linkAction ?? "",
+        )?.groups?.["url"];
+      let sz: string | undefined;
+      if (rawUrl) {
+        try {
+          sz = persistableNalusComponent(
+            "nalus-sz",
+            new URL(rawUrl).searchParams.get("sz") || undefined,
+          );
+        } catch {
+          // A malformed or withdrawn text action does not erase the stable
+          // ResultDetail record identity exposed by the listing.
+        }
+      }
+      const listingHtml = `${primary.toString()}${actions.toString()}`;
+      const ecli = persistableNalusComponent(
+        "nalus-ecli",
+        /ECLI:CZ:US:[^<\s]+/u.exec(primary.html() ?? "")?.at(0),
+      );
+      const registrySign = visibleHtmlText(detail);
+      // The count banner says this is a publisher record even if a malformed or
+      // withdrawn row exposes neither of NALUS's normal identities. Give that
+      // terminal listing a content-addressed quarantine identity derived from
+      // semantic fields so one poison row cannot pin the reconciliation slice.
+      const exactPublisherIdentity = nalusIdentities({
+        recordId: nalusRecordId,
+        sz,
+        ecli,
+      });
+      const counterText = /#(?<counter>\d+)\s*$/u.exec(registrySign)?.groups?.[
+        "counter"
+      ];
+      const szCounter = /_(?<counter>\d+)$/u.exec(sz ?? "")?.groups?.[
+        "counter"
+      ];
+      const listedCaseNumber = registrySign.replace(/#\d+\s*$/u, "").trim();
+      // Compute the identity-less form for every row. If publisher links are
+      // restored later, this becomes a migration alias for the earlier durable
+      // quarantine row. Strip every identity-bearing control from the visible
+      // text: the detail anchor, ECLI and retrieval action can all appear only
+      // when identity metadata recovers, so none may participate in the repair
+      // fingerprint.
+      const stablePrimary = primary.clone();
+      stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
+      const stableActions = actions.clone();
+      stableActions
+        .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
+        .remove();
+      // Visible text defines new identities; raw text only locates audited rows
+      // stored before the projection changed.
+      const quarantineRepairIds = [
+        ...new Set(
+          [visibleHtmlText, legacyQuarantineHtmlText].flatMap((readText) => {
+            const projectionDetailText = readText(detail);
+            const counter = /#(?<counter>\d+)\s*$/u.exec(projectionDetailText)
+              ?.groups?.["counter"];
+            const stableDetailTexts = [
+              ...new Set([
+                projectionDetailText.replace(/#\d+\s*$/u, "").trim(),
+                "",
+              ]),
+            ];
+            const stableCounterTexts = [
+              ...new Set([counter ?? szCounter ?? "", ""]),
+            ];
+            return stableDetailTexts.flatMap((stableDetailText) =>
+              stableCounterTexts.map((stableCounterText) =>
+                quarantineFingerprint({
+                  stablePrimaryText: readText(stablePrimary).replace(
+                    ecli ?? "",
+                    "",
+                  ),
+                  stableActionsText: readText(stableActions),
+                  stableDetailText,
+                  stableCounterText,
+                }),
+              ),
+            );
+          }),
+        ),
+      ];
+      const quarantineId =
+        quarantineRepairIds[0] ?? panic("Missing quarantine id");
+      const publisherIdentity = exactPublisherIdentity ?? {
+        sourceDocumentId: `nalus-quarantine:${quarantineId}`,
+        aliases: undefined,
+      };
+      const fallbackCaseNumber =
+        exactPublisherIdentity === null
+          ? `NALUS listing ${quarantineId}`
+          : `NALUS record ${nalusRecordId ?? sz ?? ecli ?? exactPublisherIdentity.sourceDocumentId}`;
+      const caseNumber = listedCaseNumber || fallbackCaseNumber;
+      const sourceDocumentId = publisherIdentity.sourceDocumentId;
 
-    let sourceUrl: URL;
-    if (sz !== undefined) {
-      sourceUrl = new URL(TEXT_URL);
-      sourceUrl.searchParams.set("sz", sz);
-    } else if (nalusRecordId !== undefined) {
-      sourceUrl = new URL(RESULT_DETAIL_URL);
-      sourceUrl.searchParams.set("id", nalusRecordId);
-    } else {
-      sourceUrl = new URL(RESULTS_URL);
-      sourceUrl.hash = `listing-${quarantineId}`;
-    }
-    listed.push({
-      caseNumber,
-      ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
-      counter: parseCounter(counterText ?? szCounter),
-      sourceDocumentId,
-      quarantineId,
-      quarantineRepairIds,
-      listingHtml,
-      ...(exactPublisherIdentity === null ? { identityQuarantined: true } : {}),
-      ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
-      sourceUrl: sourceUrl.href,
-      ...(sz === undefined ? {} : { sz }),
-      ecli,
+      let sourceUrl: URL;
+      if (sz !== undefined) {
+        sourceUrl = new URL(TEXT_URL);
+        sourceUrl.searchParams.set("sz", sz);
+      } else if (nalusRecordId !== undefined) {
+        sourceUrl = new URL(RESULT_DETAIL_URL);
+        sourceUrl.searchParams.set("id", nalusRecordId);
+      } else {
+        sourceUrl = new URL(RESULTS_URL);
+        sourceUrl.hash = `listing-${quarantineId}`;
+      }
+      listed.push({
+        caseNumber,
+        ...(listedCaseNumber ? {} : { listingDocketMissing: true }),
+        counter: parseCounter(counterText ?? szCounter),
+        sourceDocumentId,
+        quarantineId,
+        quarantineRepairIds,
+        listingHtml,
+        ...(exactPublisherIdentity === null
+          ? { identityQuarantined: true }
+          : {}),
+        ...(nalusRecordId === undefined ? {} : { nalusRecordId }),
+        sourceUrl: sourceUrl.href,
+        ...(sz === undefined ? {} : { sz }),
+        ecli,
+      });
     });
-  });
 
   const expectedRows = banner.rangeTo - banner.rangeFrom + 1;
   if (
@@ -1902,7 +1945,7 @@ const fetchSearchPage = async ({
   if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
       const $ = cheerio.load(await submit.text());
-      const noResults = $("#ctl00_MainContent_lbError").text().trim();
+      const noResults = visibleHtmlText($("#ctl00_MainContent_lbError")).trim();
       const resultsDisabled =
         $("#ctl00_bResults").attr("disabled") === "disabled";
       if (noResults === NO_RESULTS_MESSAGE && resultsDisabled) {
@@ -2097,6 +2140,31 @@ const parsedRecordCard = (
     : { state: CZ_US_RECORD_CARD_STATE.READ, fields };
 };
 
+type CzUsSourceHashInput = {
+  document: string;
+  detail: string | undefined;
+  abstract: string | undefined;
+  abstractState: CzUsAbstractState;
+};
+
+// Keep source bytes outside ASP.NET request state independent of projections.
+const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
+  const detail = payloads.detail?.replace(
+    /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
+    (input) => {
+      const $ = cheerio.load(input);
+      const field = $("input");
+      return field.attr("type")?.toLowerCase() === "hidden" &&
+        /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(
+          field.attr("name") ?? "",
+        )
+        ? ""
+        : input;
+    },
+  );
+  return hashContent(JSON.stringify({ ...payloads, detail }));
+};
+
 /**
  * Assemble one decision from the responses the court served for it.
  *
@@ -2139,24 +2207,21 @@ export const buildCzUsDecision = ({
     [CZ_US_ABSTRACT_METADATA_KEY]:
       abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
   });
-  decision.textFields =
-    abstractHtml === undefined
-      ? {
-          ...decision.textFields,
-          abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-          legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-        }
-      : { ...decision.textFields, ...extractAbstract(abstractHtml) };
-  // Text-field and record-card changes must pass the pipeline's source-hash
-  // gate, which compares this hash and not the stored payload.
-  decision.rawHash = hashContent(
-    JSON.stringify({
-      abstract: decision.textFields.abstract,
-      identityHash: decision.rawHash,
-      judges: decision.judges ?? null,
-      legalSentence: decision.textFields.legalSentence,
-    }),
-  );
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(
+      abstractHtml === undefined
+        ? { type: abstractState }
+        : { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml },
+    ),
+  };
+  decision.rawHash = czUsSourceHash({
+    document: textHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState:
+      abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
+  });
   Object.assign(
     decision,
     multiResponseSourceRaw({
@@ -2679,10 +2744,10 @@ const czUsStoredRawParts = (
 };
 
 /**
- * Rebuild a NALUS decision solely from its saved source responses. Rows from
- * before the multi-page envelope retain their metadata because their raw HTML
- * has no abstract page; envelope rows re-project the original abstract block
- * breaks without contacting the publisher.
+ * Rebuild a NALUS decision solely from its saved source responses. Abstract
+ * absence is derived from the captured page or saved availability state;
+ * envelope rows re-project the original abstract block breaks without
+ * contacting the publisher.
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
@@ -2757,16 +2822,31 @@ const reparseStoredRaw = (
     ...decision.metadata,
   });
   const abstractHtml = parts?.["abstract"];
+  let abstractOutcome: NalusAbstractOutcome;
   if (abstractHtml !== undefined) {
-    decision.textFields = {
-      ...decision.textFields,
-      ...extractAbstract(abstractHtml),
-    };
-    decision.metadata = checkedDecisionMetadata({
-      ...decision.metadata,
-      [CZ_US_ABSTRACT_METADATA_KEY]: CZ_US_ABSTRACT_STATE.READ,
-    });
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml };
+  } else if (
+    decision.metadata[CZ_US_ABSTRACT_METADATA_KEY] ===
+    CZ_US_ABSTRACT_STATE.ABSENT
+  ) {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.ABSENT };
+  } else {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
   }
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(abstractOutcome),
+  };
+  decision.metadata = checkedDecisionMetadata({
+    ...decision.metadata,
+    [CZ_US_ABSTRACT_METADATA_KEY]: abstractOutcome.type,
+  });
+  decision.rawHash = czUsSourceHash({
+    document: documentHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState: abstractOutcome.type,
+  });
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
   return { type: "parsed", result: plainTextIngestionResult(decision) };

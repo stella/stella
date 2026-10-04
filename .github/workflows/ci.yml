@@ -71,11 +71,14 @@ jobs:
       # services, other platforms). Production E2E also runs on PRs that
       # change its spec tree, and service suites when their dependencies change.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
+      queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
+      thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
       heavy_jobs: ${{ steps.heavy-plan.outputs.heavy_jobs }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       docker_checks_required: ${{ steps.changed-files.outputs.docker_checks_required }}
+      docker_checks_pr_required: ${{ steps.changed-files.outputs.docker_checks_pr_required }}
       # JSON matrix `include` list for api-image-smoke.
       api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -87,6 +90,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
@@ -113,10 +117,18 @@ jobs:
       - name: Resolve suite depth
         id: depth
         env:
+          MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
+          case "${MERGE_QUEUE_DEPTH:-}" in
+            ""|full|thin) ;;
+            *)
+              echo "::error::Unknown MERGE_QUEUE_DEPTH '$MERGE_QUEUE_DEPTH'; choose full or thin (unset means full)."
+              exit 1
+              ;;
+          esac
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             if [[ "$DISPATCH_DEPTH" != full ]]; then
               echo "::error::Heavy-only runs require full depth."
@@ -125,11 +137,14 @@ jobs:
             echo "suite_depth=full" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Full on merge_group only: the heavy suites check the tree that
-          # will land, once, in the merge queue. A pull request plans fast.
+          # Merge groups keep full scope planning; queue_depth controls which
+          # jobs certify the tree. A pull request continues to plan fast.
           # A manual run takes its `depth` input.
           case "$EVENT_NAME" in
             merge_group)
+              if [[ "${MERGE_QUEUE_DEPTH:-full}" == thin ]]; then
+                echo "queue_depth=thin" >> "$GITHUB_OUTPUT"
+              fi
               echo "suite_depth=full" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -228,13 +243,13 @@ jobs:
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
 
       - name: Install heavy planner dependencies
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
@@ -243,7 +258,7 @@ jobs:
       # older main commit that predates this planner.
       - name: Derive heavy jobs
         id: heavy-plan
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -346,6 +361,7 @@ jobs:
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
+              echo "docker_checks_pr_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "postgres_suites_required=true"
@@ -361,6 +377,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
+              echo "legal_atlas_image_pr_required=true"
               echo "dependency_malware_required=true"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=true"
@@ -388,6 +405,7 @@ jobs:
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "docker_checks_required=false"
+              echo "docker_checks_pr_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
               echo "postgres_suites_required=$empty_api_suites"
@@ -403,6 +421,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
+              echo "legal_atlas_image_pr_required=false"
               echo "dependency_malware_required=false"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=false"
@@ -465,6 +484,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
+          image_inputs_changed=false
           lockfile_ages_required=false
           migration_rehearsal_required=false
           mobile_build_required=false
@@ -564,8 +584,16 @@ jobs:
                 e2e_core_required=true
                 ;;
             esac
+            # Pull requests build the images only when their own inputs
+            # change: Dockerfiles, manifests, the runner and its packages.
+            # The merge queue keeps the broad selection above.
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.github/workflows/ci.yml)
+              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*|.dockerignore)
+                image_inputs_changed=true
+                ;;
+            esac
+            case "$file" in
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -654,6 +682,14 @@ jobs:
           if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
             docker_checks_required=true
           fi
+          docker_checks_pr_required=false
+          if [[ "$docker_checks_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            docker_checks_pr_required=true
+          fi
+          legal_atlas_image_pr_required=false
+          if [[ "$legal_atlas_image_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            legal_atlas_image_pr_required=true
+          fi
 
           # Full depth preserves the original broad folded-suite selection.
           if [[ "$SUITE_DEPTH" == full ]]; then
@@ -675,6 +711,7 @@ jobs:
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
             echo "docker_checks_required=$docker_checks_required"
+            echo "docker_checks_pr_required=$docker_checks_pr_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
             echo "postgres_suites_required=$postgres_suites_required"
@@ -690,6 +727,7 @@ jobs:
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
+            echo "legal_atlas_image_pr_required=$legal_atlas_image_pr_required"
             echo "dependency_malware_required=$dependency_malware_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
@@ -720,10 +758,14 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -1225,13 +1267,19 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Custom lint rule coverage
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/check-oxlint-rule-coverage.test.ts
+          bun scripts/check-oxlint-rule-coverage.ts
+
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every direct dependency must have an exact llms.txt source or a
         # time-bounded, explained quarantine.
-        run: |
-          bun test ./.oxlint-plugins/__tests__
-          bun run check:docs-sources
+        run: bun run check:docs-sources
 
       - name: Instruction references
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1635,6 +1683,14 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Query data state baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/query-data-state-baseline.test.ts
+          bun run check:query-data-state
+
       - name: SQL performance baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1642,6 +1698,14 @@ jobs:
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
           bun scripts/sql-perf-baseline.ts --check
+
+      - name: Failure-as-empty baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/failure-as-empty-baseline.test.ts
+          bun run check:failure-as-empty
 
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1730,6 +1794,20 @@ jobs:
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
+
+      - name: Queue authority
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every BullMQ queue declares whose authority its jobs run under
+        # (apps/api/src/lib/member-run-queues.ts), and a member-run queue
+        # builds its handles with the run actor; scheduler tasks are held the
+        # same way (apps/api/src/lib/scheduler/task-authority.ts). Existing
+        # gaps are listed in shrink-only baselines:
+        # `bun scripts/queue-authority.ts --write`.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun scripts/queue-authority.ts --self-test
+          bun scripts/queue-authority.ts --check
 
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1960,6 +2038,10 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/main-heavy-plan.test.ts scripts/main-heavy.test.ts scripts/validate-main-heavy-sha.test.ts
 
+      - name: Test thin merge queue contracts
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/thin-queue.test.ts
+
       - name: Test service-suite dependency scope
         run: bun test scripts/detect-service-suite-changes.test.ts
 
@@ -2105,6 +2187,12 @@ jobs:
       - name: Test projection-totality classification
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-projection-totality.test.ts
+
+      - name: Office fixture metadata
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bun run check:office-fixture-metadata
+          bun --filter @stll/docx-utils test:office-fixture-metadata
 
       # Root script tests belong to no workspace package, so no scoped test
       # run reaches them. The steps above call some by path; this runs every
@@ -2284,9 +2372,11 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
@@ -2720,12 +2810,14 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.service_suites_required == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2806,6 +2898,25 @@ jobs:
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
 
+      # The statute recall floor is raise-only against the target branch; the
+      # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Select statute recall base from the target branch
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            git fetch --no-tags --depth=1 origin main
+            base="$(git rev-parse FETCH_HEAD)"
+          else
+            git fetch --no-tags --depth=1 origin "$base"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api
@@ -2816,6 +2927,7 @@ jobs:
           mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
           # This suite is mandatory; retain dynamic discovery for the other engine contracts.
           printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/search-relaxed.contract.test.ts'
+          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/statute-recall.contract.test.ts'
           test "${#engine_tests[@]}" -gt 0
           bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
@@ -2853,10 +2965,12 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -2947,11 +3061,13 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
-      (github.event_name == 'pull_request'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((github.event_name == 'pull_request'
        || github.event_name == 'merge_group'
        || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -2988,9 +3104,11 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
-      github.event_name == 'pull_request'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (github.event_name == 'pull_request'
       && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -3311,9 +3429,11 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -3380,10 +3500,12 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.mobile_build_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -3421,9 +3543,11 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.landing_build_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -3460,8 +3584,10 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.heavy_web_build_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -3495,11 +3621,13 @@ jobs:
   route-smoke:
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.route_smoke_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
       && (github.event_name == 'pull_request' || inputs.heavy_only == true)
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3581,12 +3709,14 @@ jobs:
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3719,10 +3849,12 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -3755,10 +3887,12 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -3931,10 +4065,12 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -4018,13 +4154,15 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
       && (needs.ci-plan.outputs.web_build_required != 'true'
           || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))
+      )
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -4097,9 +4235,11 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -4199,10 +4339,14 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -4250,9 +4394,11 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
+      )
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -4301,9 +4447,11 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -4424,7 +4572,9 @@ jobs:
 
   dependency-malware:
     needs: ci-plan
-    if: needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true'
+    if: >-
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -4586,6 +4736,8 @@ jobs:
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           HEAVY_JOBS: ${{ needs.ci-plan.outputs.heavy_jobs || '[]' }}
+          QUEUE_DEPTH: ${{ needs.ci-plan.outputs.queue_depth || 'full' }}
+          THIN_JOBS: ${{ needs.ci-plan.outputs.thin_jobs || '[]' }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           # The ci-plan output each job's `if:` selects it by; null for a job
           # that always runs at full depth. scripts/ci-plan.test.ts binds each
@@ -4629,9 +4781,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts"]
+            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts", "docker-checks", "legal-atlas-image"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
@@ -4718,23 +4870,33 @@ jobs:
             exit 1
           fi
 
+          if [[ "$QUEUE_DEPTH" == thin && "$EVENT" != merge_group ]]; then
+            echo "::error::Thin queue depth is valid only for merge_group."
+            exit 1
+          fi
+          if [[ "$QUEUE_DEPTH" == thin ]] && ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' <<< "$THIN_JOBS" > /dev/null; then
+            echo "::error::Thin queue has no derived required job set."
+            exit 1
+          fi
           case "$SUITE_DEPTH" in
             full)
-              # Every job the plan selected must succeed: a skipped or
-              # cancelled one did not check this tree.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" '
+              # Planned checks must succeed. A thin queue allows only the
+              # heavy skips selected by the same plan, and rejects failures.
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
-                  | if ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                  | if $queue == "thin" and ($thin | index($job) | not) then
+                      (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
+                    elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
                     elif $result == "success" or $result == "skipped" then empty
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
-              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+              folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
                 . as $needs
                 | [$suites | to_entries[] | .key as $job | .value | to_entries[]
-                  | select($plan[.value] == "true") | .key as $suite
+                  | select(($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")

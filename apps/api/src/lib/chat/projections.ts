@@ -82,6 +82,7 @@ import {
   SANCTIONS_SOURCE_IDS,
   SANCTIONS_UNAVAILABLE_REASONS,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-outcome-projection";
 
 import {
   chatEntityRef,
@@ -1505,6 +1506,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
       // memory of what earlier pages emitted, so the deduplication `results`
       // carries is within the page; a caller paging keys on `decisionId`.
       nextCursor: v.nullable(passthroughId()),
+      paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       // One entry per `queries[]` entry, in the same order. Per query rather than
       // per call because each phrasing is interpreted on its own: one may carry
       // function words and another none.
@@ -1516,6 +1518,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // The words this phrasing actually required, itself a valid query:
           // send it back as a `queries` entry to repeat the same search.
           queryUsed: v.string(),
+          paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
           // What the search answered that the call did not ask for. Empty for a
           // phrasing that required every word it carried and found something.
           warnings: v.array(
@@ -1533,7 +1536,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
       results: v.array(
         v.strictObject({
           // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-          // is disabled (`isPublicLawAppUrlEnabled`), so the projected shape is
+          // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
           // nullable; a non-nullable declaration would fail the strict parse and
           // take the tool off the chat surface on any deployment with the flag off.
           appUrl: v.nullable(v.string()),
@@ -1894,9 +1897,10 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
     v.strictObject({
       // Opaque corpus-search cursor, base64url-encoded.
       nextCursor: v.nullable(passthroughId()),
+      paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`isPublicLawAppUrlEnabled`)
+          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`)
           // and null for a statute whose ELI carries no citation tail to mint a
           // slug from: both are addresses that do not exist, not missing data.
           appUrl: v.nullable(v.string()),

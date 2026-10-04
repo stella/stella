@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import type { properties, propertyDependencies } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
@@ -101,6 +101,7 @@ const config = {
     "date, or int), and status. Use the returned property id with " +
     "set_field_value to set a document's value for that property.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_properties" },
   access: "read",
 } satisfies WorkspaceHandlerConfig;

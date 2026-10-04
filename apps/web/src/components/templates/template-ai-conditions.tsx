@@ -126,6 +126,11 @@ export const AiDecidedConditions = ({
       <h3 className="text-foreground text-sm font-semibold">
         {t("templates.aiDecidedConditions")}
       </h3>
+      {data?.preview?.state === "incomplete" && (
+        <p className="text-warning-foreground text-xs" role="status">
+          {t("templates.conditionPreviewIncomplete")}
+        </p>
+      )}
       {queryFailed && (
         <p className="text-destructive text-xs" role="alert">
           {t("common.unexpectedError")}

@@ -6,6 +6,10 @@ import fc from "fast-check";
 import { normalizeCountry } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+} from "@stll/api-contract/search";
 import { propertyConfig } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -238,11 +242,13 @@ beforeEach(() => {
   searchProviderSearchMock.mockResolvedValue({ hits: [], nextCursor: null });
   searchDecisionsHandlerMock.mockReset();
   searchDecisionsHandlerMock.mockResolvedValue({
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     hits: [decisionHit],
     nextCursor: null,
   });
   searchLegislationHandlerMock.mockReset();
   searchLegislationHandlerMock.mockResolvedValue({
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     items: [statuteHit],
     nextCursor: null,
   });
@@ -445,9 +451,11 @@ describe("the corpus page cap split across countries", () => {
           0,
         );
 
-      expect(askedFor(searchDecisionsHandlerMock.mock.calls)).toBe(
-        LIMITS.mcpCompatDecisionPageSizeDefault,
-      );
+      expect(
+        askedFor(
+          searchDecisionsHandlerMock.mock.calls.map(([{ body }]) => [body]),
+        ),
+      ).toBe(LIMITS.mcpCompatDecisionPageSizeDefault);
       expect(askedFor(searchLegislationHandlerMock.mock.calls)).toBe(
         LIMITS.mcpCompatStatutePageSizeDefault,
       );
@@ -456,6 +464,24 @@ describe("the corpus page cap split across countries", () => {
 });
 
 describe("compat search reaching the public corpus", () => {
+  test("compat search preserves a truncated corpus outcome", async () => {
+    await withCorpus(async () => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        hits: [],
+        nextCursor: null,
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+      });
+      const payload = await run({
+        args: { query: "contract" },
+        context: createContext(),
+        handler: COMPAT_TOOL_HANDLERS.search,
+      });
+      expect(payload).toMatchObject({
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+      });
+    });
+  });
+
   test("the default surface returns matter hits, then decisions, then statutes", async () => {
     await withCorpus(async () => {
       searchProviderSearchMock.mockResolvedValue({
@@ -572,7 +598,7 @@ describe("compat search reaching the public corpus", () => {
         ]);
         expect(
           searchDecisionsHandlerMock.mock.calls.map(
-            ([input]) => asTestRaw<{ country: string }>(input).country,
+            ([{ body }]) => asTestRaw<{ country: string }>(body).country,
           ),
         ).toEqual([...PUBLIC_CASE_LAW_COUNTRIES]);
         expect(
@@ -647,8 +673,8 @@ describe("compat search reaching the public corpus", () => {
       });
       // First page: no sub-cursor is passed for a country the cursor never
       // named, so nothing is skipped.
-      for (const [input] of searchDecisionsHandlerMock.mock.calls) {
-        expect(asTestRaw<{ cursor?: string }>(input).cursor).toBeUndefined();
+      for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+        expect(asTestRaw<{ cursor?: string }>(body).cursor).toBeUndefined();
       }
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(
         PUBLIC_CASE_LAW_COUNTRIES.length,
@@ -667,10 +693,12 @@ describe("compat search reaching the public corpus", () => {
         nextCursor: "matter-2",
       });
       searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         hits: [],
         nextCursor: "decisions-2",
       });
       searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         items: [],
         nextCursor: null,
       });
@@ -694,7 +722,7 @@ describe("compat search reaching the public corpus", () => {
         cursor: "matter-2",
       });
       expect(searchDecisionsHandlerMock.mock.calls.at(0)?.[0]).toMatchObject({
-        cursor: "decisions-2",
+        body: { cursor: "decisions-2" },
       });
       // Statutes ended on the first page, so they are not asked again.
       expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
