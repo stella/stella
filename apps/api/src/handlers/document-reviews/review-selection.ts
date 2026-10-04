@@ -5,6 +5,7 @@ import type { DocumentReviewRef } from "@/api/handlers/document-reviews/schemas"
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type ReviewEntityRow = {
@@ -72,7 +73,7 @@ const resolveOne = (
     return Result.err(
       new HandlerError({
         status: 422,
-        message: "Encrypted document content cannot be extracted.",
+        message: ENCRYPTED_CONTENT_MESSAGE,
       }),
     );
   }

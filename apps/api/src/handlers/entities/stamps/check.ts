@@ -33,7 +33,7 @@ type CheckStampResult = { match: DocumentReferenceMatch | null };
  *
  * @yields {Err} on database lookup failure
  */
-const checkStampHandler = async function* ({
+export const checkStampHandler = async function* ({
   safeDb,
   organizationId,
   body: { file },

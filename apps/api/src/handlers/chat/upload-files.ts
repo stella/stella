@@ -54,6 +54,10 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
+  detectFileEncryption,
+  ENCRYPTED_CONTENT_MESSAGE,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   generateImageThumbnail,
   isThumbnailableMimeType,
   THUMBNAIL_MIME_TYPE,
@@ -650,6 +654,25 @@ const chatAttachmentStoreError = (
         cause: error,
       });
 
+/**
+ * No send mode can hand an encrypted attachment's content to the model: its
+ * text cannot be extracted and providers refuse the encrypted bytes. PDF and
+ * Office attachments share the detector's answer.
+ */
+const refuseEncryptedAttachment = async (
+  scanned: ScannedFile,
+): Promise<Result<void, HandlerError<422>>> => {
+  const detection = await detectFileEncryption({
+    mimeType: scanned.mimeType,
+    scanned,
+  });
+  return detection.encryption.encrypted
+    ? Result.err(
+        new HandlerError({ status: 422, message: ENCRYPTED_CONTENT_MESSAGE }),
+      )
+    : Result.ok();
+};
+
 type UploadUserFileInput = {
   dependencies?: UploadUserFileDependencies;
   file: {
@@ -762,6 +785,7 @@ export const uploadUserFile = async ({
 
     const scanned = scanResult.value;
     const scanWarnings = scanned.scanWarnings;
+    yield* Result.await(refuseEncryptedAttachment(scanned));
 
     const extractedText =
       file.mimeType === XLSX_MIME_TYPE

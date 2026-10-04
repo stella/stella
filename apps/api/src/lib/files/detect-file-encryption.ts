@@ -65,6 +65,13 @@ import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import type { PdfEncryptionProbe } from "@/api/lib/files/pdf-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
+/**
+ * What every consumer answers for an encrypted file's content, PDF or Office:
+ * the API, MCP and chat refusals share it.
+ */
+export const ENCRYPTED_CONTENT_MESSAGE =
+  "Encrypted document content cannot be extracted.";
+
 /** How the attribute was established; kept for callers and tests, not stored. */
 type FileEncryptionBasis =
   | "inspected"

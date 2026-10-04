@@ -54,6 +54,7 @@ import {
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -1297,7 +1298,7 @@ const loadDocumentProcessingStates = async ({
       return {
         status: "unsupported",
         sourceVersionId: current.currentVersionId,
-        reason: "Encrypted document content cannot be extracted.",
+        reason: ENCRYPTED_CONTENT_MESSAGE,
       };
     }
     if (!extractionCanBecomeAvailable) {

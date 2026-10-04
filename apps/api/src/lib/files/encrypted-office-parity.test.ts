@@ -3,18 +3,22 @@
  * the upload scan accepts it, the detector records it encrypted, and every
  * consumer that reads the attribute answers it the same way.
  */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { uploadUserFile } from "@/api/handlers/chat/upload-files";
+import { checkStampHandler } from "@/api/handlers/entities/stamps/check";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   asDesktopEditableFileContent,
   asDocxFieldContent,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import {
   detectFileEncryption,
+  ENCRYPTED_CONTENT_MESSAGE,
   uploadFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
 import {
@@ -30,6 +34,7 @@ import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 
 const officeFixture = async (format: string): Promise<Uint8Array> =>
@@ -136,6 +141,87 @@ describe("encrypted Office uploads", () => {
       docx: expected,
       xlsx: expected,
       pptx: expected,
+    });
+  });
+});
+
+describe("encrypted files on raw-byte paths", () => {
+  test("a chat attachment is refused as encrypted content, PDF or Office", async () => {
+    const fake = startFakeS3();
+    try {
+      const outcomes: Record<string, unknown> = {};
+      for (const entry of CASES) {
+        const result = await uploadUserFile({
+          dependencies: {
+            reserveChatObjectCleanupIntent: async () =>
+              await Promise.resolve(Result.ok([])),
+          },
+          file: {
+            bytes: await entry.bytes(),
+            fileName: `locked.${entry.label}`,
+            mimeType: entry.mimeType,
+          },
+          recordAuditEvent: async () => await Promise.resolve(),
+          safeDb: async () =>
+            await Promise.resolve(
+              panic("an encrypted attachment must not reach the database"),
+            ),
+          threadId: toSafeId<"chatThread">(
+            "11111111-1111-4111-8111-111111111112",
+          ),
+          userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+          workspaceId: null,
+        });
+        outcomes[entry.label] = Result.isError(result)
+          ? {
+              status: HandlerError.is(result.error)
+                ? result.error.status
+                : result.error._tag,
+              message: result.error.message,
+            }
+          : { status: "stored" };
+      }
+
+      const refused = { status: 422, message: ENCRYPTED_CONTENT_MESSAGE };
+      expect(outcomes).toEqual({
+        pdf: refused,
+        docx: refused,
+        xlsx: refused,
+        // Chat never takes presentations, encrypted or not.
+        pptx: { status: 422, message: "Unsupported file type" },
+      });
+      expect(fake.requests).toEqual([]);
+    } finally {
+      fake.stop();
+    }
+  });
+
+  test("the stamp check finds no reference in any encrypted file", async () => {
+    const outcomes: Record<string, unknown> = {};
+    for (const entry of CASES) {
+      const bytes = await entry.bytes();
+      const result = await Result.gen(async function* () {
+        return yield* checkStampHandler({
+          body: {
+            file: new File([bytes], `locked.${entry.label}`, {
+              type: entry.mimeType,
+            }),
+          },
+          organizationId: toSafeId<"organization">("org_1"),
+          safeDb: async () =>
+            await Promise.resolve(
+              panic("an encrypted file carries no reference to look up"),
+            ),
+        });
+      });
+      outcomes[entry.label] = result.unwrap();
+    }
+
+    expect(outcomes).toEqual({
+      pdf: { match: null },
+      docx: { match: null },
+      xlsx: { match: null },
+      pptx: { match: null },
     });
   });
 });
