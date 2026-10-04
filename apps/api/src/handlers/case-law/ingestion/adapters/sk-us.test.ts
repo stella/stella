@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
@@ -1228,13 +1229,13 @@ describe("sk-us buildDecision", () => {
         scope: "part",
         cause: { kind: "http-status", retryAfter: null },
       });
-      const parts = Object.keys(
-        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ?? {},
-      );
-      expect(parts).not.toContain(SURFACE_PART[surface]);
+      const { refusal, ...served } =
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ?? {};
+      expect(Object.keys(served)).not.toContain(SURFACE_PART[surface]);
+      expect(JSON.parse(refusal ?? "null")).toEqual(marker);
 
-      // The same part stated absent builds the same envelope with no marker,
-      // and the refusal joins the hash.
+      // The same part stated absent stores the same responses without the
+      // refusal, so the stored bytes, and with them the fingerprint, differ.
       mockFetch({
         search: [],
         supplementary: { [surface]: { type: "status", status: 404 } },
@@ -1246,8 +1247,19 @@ describe("sk-us buildDecision", () => {
       expect(absent.decision.metadata[READ_OUTCOME_METADATA_KEY]).toBe(
         undefined,
       );
-      expect(absent.decision.sourceRaw).toBe(built.decision.sourceRaw);
+      expect(decodeSourceRawEnvelope(absent.decision.sourceRaw ?? "")).toEqual(
+        served,
+      );
+      expect(absent.decision.sourceRaw).not.toBe(built.decision.sourceRaw);
       expect(absent.decision.rawHash).not.toBe(built.decision.rawHash);
+      for (const { decision } of [built, absent]) {
+        expect(decision.rawHash).toBe(
+          sourceFingerprint({
+            sourceRaw: decision.sourceRaw ?? "",
+            sourceRawObjects: decision.sourceRawObjects,
+          }),
+        );
+      }
     },
   );
 
