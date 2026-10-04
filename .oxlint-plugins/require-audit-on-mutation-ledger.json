@@ -1,0 +1,1407 @@
+[
+  {
+    "id": "apps/api/src/lib/account-deletion-effect-store.ts::claimNextAccountDeletionEffectChunk",
+    "writes": 3,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-effect-store.ts::completeAccountDeletionEffectChunk",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-effect-store.ts::failAccountDeletionEffectChunk",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-effect-store.ts::synchronizeParentProjection",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::clearWorkspaceLeadRole",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteChatThreadsAndFileLinks",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteConnectedCredentialsAndOAuthState",
+    "writes": 6,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteDesktopEditSessionsAndHandoffs",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteFileComparisonUploads",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deletePdfSigningSessions",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deletePendingUploads",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deletePersonalAiMemories",
+    "writes": 3,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deletePersonalBillingRates",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deletePersonalWorkspaceViewTemplatesAndAgentSkills",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteUserFiles",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::reassignActiveTaskAssignmentsAndDropMemberships",
+    "writes": 6,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::recordAccountDeletionRequest",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::resetFolioCollabUserState",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeAuthCredentialsAndInvitations",
+    "writes": 5,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth-idjag.ts::bindCeremonyToIssuer",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth-idjag.ts::issueRegistrationForPrincipal",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth-idjag.ts::loadIdJagExchangeContext",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth-idjag.ts::writeDelegation",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::confirmServiceAuthRegistration",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::createAgentOAuthClient",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::exchangeClaimedCode",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::mintInternalSessionCookieHeader",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::pollClaimGrant",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::startAnonymousRegistration",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::startAnonymousUpgrade",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-auth.ts::startServiceAuthRegistration",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/agent-skills/content-hash.ts::refreshSkillContentHash",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/anonymization-blacklist.ts::replaceOrganizationAnonymizationBlacklist",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/audit-log.ts::insertAuditRows",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::agentDelegation",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::agentRegistration",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::apiKey",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::desktopEditHandoff",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::desktopEditSession",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::folioCollabRoomToken",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::mcpOAuthState",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::mcpUserConnection",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::oauthAccessToken",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::oauthConsent",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::oauthRefreshToken",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::pdfSigningSession",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::removeOrganizationMemberWithAuthArtifacts",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::revokeAllUserOAuthTokens",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::revokeAllUserSessions",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::revokeOAuthClientAuthArtifacts",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::revokeUserSessionById",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::session",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointConnection",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointOAuthState",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth.ts::touchClient",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth/session-lifetime-store.ts::observe",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/auth/session-lifetime-store.ts::refresh",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/billing-time.ts::lockTimePolicy",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/billing/number-series.ts::allocateNumber",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/buffer-intent-reconciliation.ts::releaseObjectCleanupIntentsForLifecycle",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/business-registries/desktop/link-grant-store.ts::sweepExpiredLinkGrants",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/business-registries/desktop/link-grant-store.ts::try",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/case-law-config-store.ts::upsertCourtDirectoryRankRows",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/case-law-config-store.ts::upsertCourtWeightRows",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/case-law-config-store.ts::upsertFtsConfigRows",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/research-answer-queue.ts::queueResearchAnswerCells",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/research-answer-runner.ts::writeOutcomes",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts::swapSnapshot",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/chat/run-log.ts::append",
+    "writes": 3,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/chat/run-log.ts::close",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/chat/run-log.ts::closeChatRunLogOnTx",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/chat/run-log.ts::sweepClosedChatRunLogs",
+    "writes": 3,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/chat/thread-names.ts::recordChatThreadNamesOnTx",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/confirmation-otp.ts::try",
+    "writes": 3,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/corpus-ingestion-checkpoint.ts::advanceCorpusIngestionCheckpoint",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/db/account-row.ts::anonymizeDeletedAccountRow",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts::initializePristineBetterAuthOAuthPolicy",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/db/feedback-report-store.ts::recordDeliveries",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/desktop-edit-handoffs.ts::consumeDesktopEditHandoff",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/desktop-edit-handoffs.ts::markDesktopEditHandoffOpened",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/desktop-edit-sessions.ts::refreshDesktopEditSessionLiveness",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/document-counter.ts::allocateEntityStamps",
+    "writes": 3,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/document-counter.ts::recordEntityStamps",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-automatic-request.ts::requestAutomaticDocumentOcr",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-manual-ocr-restore.ts::restoreManualOcrRunAfterProjectionLoss",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-queue.ts::markRunFailed",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-queue.ts::persistMissingNativeExtractionRuns",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-queue.ts::persistOcrProjection",
+    "writes": 4,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-processing-queue.ts::processDocumentProcessingRun",
+    "writes": 4,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-review/reference-passages.ts::pinReferencePassages",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/run-queue.ts::failRedeliveredRun",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/run-queue.ts::reconcileDocumentTranslationRuns",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/run-queue.ts::translateBilingualWithAI",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/run-queue.ts::translateDocxWithAI",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/run-queue.ts::translateWithDeepL",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/document-translation/version-language.ts::recordEntityVersionDetectedLanguage",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/email/correspondence/create.ts::linkAttachments",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/email/correspondence/offboarding.ts::clearAssignmentBatch",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/email/correspondence/offboarding.ts::eraseFilerBatch",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/email/correspondence/offboarding.ts::eraseSenderBatch",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/email/inbound/persistence.ts::linkInboundAttachment",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/email/inbound/store.ts::drop",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/entity-deletion-effect-store.ts::claimNextEntityDeletionEffectChunk",
+    "writes": 2,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/entity-deletion-effect-store.ts::completeEntityDeletionEffectChunk",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/entity-deletion-effect-store.ts::ensureEntityDeletionEffectChunks",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/entity-deletion-effect-store.ts::failEntityDeletionEffectChunk",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/entity-deletion-effect-store.ts::synchronizeParentProjection",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/insert-entity-batch.ts::insertEntityBatch",
+    "writes": 3,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/insert-entity-version.ts::carryVerificationCodes",
+    "writes": 2,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/entity-versions/insert-entity-version.ts::insertPendingEntityVersions",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::complete",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::create",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::fail",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::failActiveForWorkspace",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::recordFailure",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::skip",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::start",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/extraction-runs/store.ts::syncProgress",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/file-derivative-queue.ts::markImageThumbnailFailed",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/file-derivative-queue.ts::markPdfDerivativeFailed",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/file-derivative-queue.ts::processImageThumbnailJob",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/file-derivative-queue.ts::processPdfDerivativeJob",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/file-derivative-queue.ts::requeueFileDerivative",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/files/office-evidence.ts::abandonOfficeEvidenceClaim",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/files/office-evidence.ts::claimOfficeEvidence",
+    "writes": 2,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/files/office-evidence.ts::createClaimedOfficeEvidence",
+    "writes": 2,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.ts::reconcileAbandonedOrganizationFileReservations",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/files/organization-file-usage.ts::try",
+    "writes": 13,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/files/pdf-signing/sessions.ts::redeemPdfSigningHandoff",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/flows/automated-run-cap.ts::insertAutomatedFlowRunWithinCap",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::completeStepInTransaction",
+    "writes": 3,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::executeFlowStep",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::pauseAtReviewGate",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::settleReviewTask",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/flow-executor.ts::writeFailure",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/flows/start-flow-run.ts::createAndEnqueue",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::cleanupExpiredFolioCollabRoomTokens",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::issueFolioCollabToken",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::recordFolioCollabContribution",
+    "writes": 2,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::refreshFolioCollabToken",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::touchFolioCollabRoom",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/folio-collab-rooms.ts::try",
+    "writes": 1,
+    "reason": "Document storage step called by an audited operation; confirm the caller records the event."
+  },
+  {
+    "id": "apps/api/src/lib/guide-progress.ts::writeUserGuideProgress",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts::redactCompletedWebhookEvents",
+    "writes": 1,
+    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::insertWebhookEventInTx",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::recordProviderEventReplayAuditInTx",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::updateWebhookEventResultInTx",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/infosoud/agenda-import.ts::importInfoSoudAgendaItems",
+    "writes": 3,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::cancelCaseLawCorpusUploadIntents",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::completeCaseLawCorpusUploadIntentCleanups",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::enqueueCaseLawCorpusUploadIntentCleanups",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::reconcileCaseLawCorpusUploadIntents",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::recordCorpusPackRefsTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::settleReservedCaseLawCorpusUpload",
+    "writes": 4,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts::try",
+    "writes": 4,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts::reconcileCaseLawRawSweeps",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts::sweepCaseLawRawDecision",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::beginCorpusIndexGenerationRebuildTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::completeCorpusIndexGenerationRebuildTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::registerCorpusIndexGenerationTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::resumeRetiringCorpusIndexGenerationTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::setServingCorpusIndexGenerationTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts::attestCorpusIndexGroupEnrollmentTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts::bindCorpusIndexGroupEnrollmentTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts::withdrawCorpusIndexGroupEnrollmentTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-job-audit.ts::recordCorpusWithdrawalAuditEvent",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts::runCorpusBootstrapPage",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts::setZeroCaseLawProjectionEpochs",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts::setZeroLegislationProjectionEpochs",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts::repairAppliedCorpusProjectionDriftTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::chargeExpiredAppendStatesTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::claimCorpusProjectionCleanupSettlementTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::claimCorpusProjectionCleanupTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::deferExpiredBatchStatesTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::recordCorpusProjectionDeleteTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::recoverExpiredCorpusProjectionIntentsTx",
+    "writes": 3,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::reissueCorpusProjectionCleanupTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::releaseCorpusProjectionCleanupSettlementTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::reopenCorpusProjectionCleanupTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::retryCorpusProjectionCleanupTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::settleCorpusProjectionCleanupTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts::setCanonicalProjectionEpoch",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts::writeDesiredStates",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts::advanceCorpusProjectionErasuresTx",
+    "writes": 5,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts::pruneCorpusIndexProjectionRevisionsTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::abandonCorpusProjectionAppendTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::cancelCorpusProjectionReservationTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::commitCorpusProjectionAppendTx",
+    "writes": 4,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::continueCorpusProjectionAppendPartTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::prepareCorpusProjectionReplacementsTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendBatchTx",
+    "writes": 3,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionMultipartAppendTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::unparkCorpusProjectionAppendTx",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/legislation-work-names.ts::syncLegislationWorkNamesTx",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts::refreshPgFtsBrowseFacets",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/reconciliation-store.ts::refreshTrackedReconciliationItems",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts::refreshStatuteSitemapShards",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::activateStagedEdition",
+    "writes": 6,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::markFailure",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::markVerifiedUnchanged",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::persistNextBatch",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::recordRejectedReplacement",
+    "writes": 3,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::recordUnexpectedSanctionsFailure",
+    "writes": 2,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::refreshSanctionsSource",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::stageAcceptedEdition",
+    "writes": 1,
+    "reason": "Shared public corpus or index maintenance with no tenant actor."
+  },
+  {
+    "id": "apps/api/src/lib/lists/verification/run-queue.ts::reconcileStuckListVerificationRuns",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/matter-reference.ts::allocateMatterReference",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/mcp-upstream/authorization-review.ts::applyConnectionEffect",
+    "writes": 2,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/notifications.ts::insertNotifications",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/oauth-connections.ts::try",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/properties/property-status.ts::markPropertiesFresh",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/report-export-notification-recovery.ts::listPendingReportExportNotifications",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/jobs.ts::ensureDefaultSchedulerJobs",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/jobs.ts::removeSchedulerJob",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/jobs.ts::upsertSchedulerJob",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/runner.ts::acquireNextDueJob",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/runner.ts::completeRun",
+    "writes": 2,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/runner.ts::createRun",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/runner.ts::renew",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/agent-client-storage-backfill.ts::backfillAgentClientStorage",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts::censusCaseLawRawObjectsTask",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts::reconcileCaseLawRawRowsTask",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::caseLawDetailBatch",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::legislationDetailBatch",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::try",
+    "writes": 2,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts::publishAndMarkExpiryNotifications",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts::persistCursor",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/flow-run.ts::runScheduledFlow",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseFailed",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseSynced",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts::claimExpressionIdsQuery",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/memory-curator.ts::transitionBatch",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts::persistSuggestions",
+    "writes": 2,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts::recordMemoryExtractionFailure",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/registration-retention.ts::sweepRegistrations",
+    "writes": 6,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts::claimCleanupBatch",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts::processCleanup",
+    "writes": 2,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts::backfillWorkObligations",
+    "writes": 4,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scouts/document-deadlines.ts::claimRun",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/scouts/document-deadlines.ts::settleRun",
+    "writes": 1,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-chat.ts::upsertChatMessageSearchDocuments",
+    "writes": 1,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-chat.ts::upsertChatThreadSearchDocument",
+    "writes": 2,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-entity.ts::upsertSearchDocument",
+    "writes": 4,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-global.ts::syncWorkspaceSearchActivity",
+    "writes": 1,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-global.ts::writeContactProjections",
+    "writes": 4,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/index-global.ts::writeWorkspaceProjections",
+    "writes": 4,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/pg-fts-provider.ts::removeEntity",
+    "writes": 1,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/process-extraction.ts::insertFrom",
+    "writes": 1,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/process-extraction.ts::persistNativeExtractionProjection",
+    "writes": 1,
+    "reason": "Search projection derived from a write that is audited at its source."
+  },
+  {
+    "id": "apps/api/src/lib/search/projection-repair-queue.ts::enqueueContactSearchRepairs",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/search/projection-repair-queue.ts::enqueueEntitySearchRepairs",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/search/projection-repair-queue.ts::enqueueWorkspaceSearchRepairs",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/search/projection-repair-queue.ts::settleFailed",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/search/projection-repair-queue.ts::settleRepaired",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/signals/emit.ts::emitSignals",
+    "writes": 2,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/signals/scout.ts::runScout",
+    "writes": 3,
+    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
+  },
+  {
+    "id": "apps/api/src/lib/smoke-session/store.ts::ensureSmokePrincipal",
+    "writes": 3,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/smoke-session/store.ts::mintSmokeSession",
+    "writes": 1,
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
+    "id": "apps/api/src/lib/uploads/file-comparison/sweep.ts::sweepExpiredFileComparisonUploads",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/usage/action-costs/store.ts::actionCostWriteQueries",
+    "writes": 2,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/assignment-capacity.ts::trimAssignmentsToCapacity",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/configured-access-store.ts::applyConfiguredAccessEvent",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/lane-budget.ts::incrementLaneCounter",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/organization-access-state.ts::endOrganizationEvaluation",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordMissingOrganizationAccessStates",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
+    "writes": 1,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/usage-ledger.ts::allocateUsage",
+    "writes": 2,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/usage/usage-ledger.ts::recordUsageEvent",
+    "writes": 2,
+    "reason": "Usage metering or counter row that is itself the accounting record."
+  },
+  {
+    "id": "apps/api/src/lib/work-obligations/create-work-obligation.ts::createWorkObligation",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/work-obligations/legacy-work-obligation.ts::ensureLegacyWorkObligation",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/workflow-queue.ts::markPendingPlannedFieldsErrored",
+    "writes": 1,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/workflow-queue.ts::processOneBatch",
+    "writes": 3,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/lib/workflow-queue.ts::setFieldsStatus",
+    "writes": 2,
+    "reason": "Background work state transition; the request that started the work records the audit event."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-run.ts::discardInput",
+    "writes": 1,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/mcp/template-persistence.ts::claimTemplatePersistenceRequest",
+    "writes": 2,
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  }
+]

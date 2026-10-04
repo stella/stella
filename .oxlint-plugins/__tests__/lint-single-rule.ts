@@ -32,6 +32,8 @@ type LintSingleRuleOptions = {
   plugin?: string;
   /** The rule's options object, for a rule configured by data. */
   ruleOptions?: unknown;
+  /** Options that name paths under the scratch root the source is written to. */
+  ruleOptionsForRoot?: (root: string) => unknown;
   /** Where the source is written, relative to a scratch root. */
   sourcePath?: string;
 };
@@ -47,10 +49,12 @@ export const lintSingleRule = async (
   {
     plugin = ruleName,
     ruleOptions,
+    ruleOptionsForRoot,
     sourcePath = "source.ts",
   }: LintSingleRuleOptions = {},
 ): Promise<number[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
     const configPath = path.join(directory, "oxlint.config.ts");
     await Bun.write(
@@ -62,7 +66,7 @@ export const lintSingleRule = async (
         ],
         rules: {
           [`${plugin}/${ruleName}`]:
-            ruleOptions === undefined ? "error" : ["error", ruleOptions],
+            options === undefined ? "error" : ["error", options],
         },
       })};\n`,
     );

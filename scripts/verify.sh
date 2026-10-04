@@ -184,7 +184,11 @@ run_module_mock_ledger_guard() {
   bun scripts/check-internal-module-mock-ledger.ts --self-test || return 1
   bun scripts/check-internal-module-mock-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-swallowed-item-error-ledger.ts --self-test || return 1
-  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref"
+  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref" || return 1
+  bun scripts/check-audit-mutation-ledger.ts --self-test || return 1
+  bun scripts/check-audit-mutation-ledger.ts --base "$base_ref" || return 1
+  bun scripts/check-write-tool-authority-ledger.ts --self-test || return 1
+  bun scripts/check-write-tool-authority-ledger.ts --base "$base_ref"
 }
 
 run_suppression_waiver_guard() {

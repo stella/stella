@@ -8,7 +8,14 @@
 // rule catches "wrote DB, forgot audit" before it ships. Postgres-level
 // triggers remain available as a defense-in-depth measure.
 //
-// Scope: apps/api/src/handlers/**/*.ts only.
+// Scope: apps/api/src/handlers/**, apps/api/src/mcp/** and
+// apps/api/src/lib/** (tests excluded). Outside handlers the rule takes a
+// `budgets` option, generated from require-audit-on-mutation-ledger.json by
+// scripts/audit-mutation-ledger.ts: per `<file>::<owner>` (the nearest named
+// enclosing function), the number of unaudited writes that existed when the
+// scope was extended. An owner over its budget reports every write it holds;
+// an owner under its budget reports the stale row, so the ledger only
+// shrinks. A file with no ledger row is held to the full rule.
 //
 // Flags (one report per mutation in an offending function):
 //   await safeDb(async (tx) => {
@@ -38,9 +45,12 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged, Variable } from "@oxlint/plugins";
+import path from "node:path";
 
 import {
+  type AstNode,
   type ImportedFromOptions,
+  filenameForContext,
   getCalleeName,
   invokedCallee,
   isAstNode,
@@ -351,7 +361,104 @@ const isAuditCall = (context: RuleContext, node: unknown): boolean => {
 
 type Range = [number, number];
 
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+
+const FUNCTION_TYPES: ReadonlySet<string> = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
+const MEMBER_DEFINITION_TYPES: ReadonlySet<string> = new Set([
+  "Property",
+  "MethodDefinition",
+  "PropertyDefinition",
+]);
+
+const keyName = (key: unknown): string | null => {
+  if (isIdentifier(key)) {
+    return key.name;
+  }
+  return isAstNode(key) &&
+    key.type === "Literal" &&
+    typeof key.value === "string"
+    ? key.value
+    : null;
+};
+
+// The name a function is reachable by in its file: its declaration name, the
+// variable it initializes, or the object or class member it defines.
+const ownFunctionName = (fn: AstNode): string | null => {
+  if (fn.type === "FunctionDeclaration" && isIdentifier(fn.id)) {
+    return fn.id.name;
+  }
+  const parent = isAstNode(fn.parent) ? fn.parent : null;
+  if (parent === null) {
+    return null;
+  }
+  if (parent.type === "VariableDeclarator" && parent.init === fn) {
+    return isIdentifier(parent.id) ? parent.id.name : null;
+  }
+  return MEMBER_DEFINITION_TYPES.has(parent.type) && parent.value === fn
+    ? keyName(parent.key)
+    : null;
+};
+
+/**
+ * The ledger key of a function: its nearest named enclosing function, so an
+ * anonymous transaction callback is budgeted with the function that opens
+ * it. A key carries no line number, so unrelated edits do not move it.
+ */
+const ownerName = (node: unknown): string => {
+  let current: AstNode | null = isAstNode(node) ? node : null;
+  while (current !== null) {
+    if (FUNCTION_TYPES.has(current.type)) {
+      const name = ownFunctionName(current);
+      if (name !== null) {
+        return name;
+      }
+    }
+    current = isAstNode(current.parent) ? current.parent : null;
+  }
+  return "<module>";
+};
+
+/** `budgets` option: `<repo-relative file>::<owner>` to unaudited writes. */
+const budgetsFromOptions = (options: unknown): ReadonlyMap<string, number> => {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    !("budgets" in options) ||
+    typeof options.budgets !== "object" ||
+    options.budgets === null
+  ) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(options.budgets).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && entry[1] > 0,
+    ),
+  );
+};
+
+/** `census` option: report every unaudited write with its owner, ignoring budgets. */
+const censusFromOptions = (options: unknown): boolean =>
+  typeof options === "object" &&
+  options !== null &&
+  "census" in options &&
+  options.census === true;
+
+/** `root` option: what ledger paths are relative to (tests use a scratch root). */
+const rootFromOptions = (options: unknown): string =>
+  typeof options === "object" &&
+  options !== null &&
+  "root" in options &&
+  typeof options.root === "string"
+    ? options.root
+    : REPOSITORY_ROOT;
+
 type FunctionScope = {
+  owner: string;
   mutationNodes: Ranged[];
   hasAuditCall: boolean;
   hasSkipDirective: boolean;
@@ -376,6 +483,20 @@ export default eslintCompatPlugin({
     "require-audit-on-mutation": {
       meta: {
         type: "problem",
+        schema: [
+          {
+            type: "object",
+            properties: {
+              budgets: {
+                type: "object",
+                additionalProperties: { type: "integer", minimum: 1 },
+              },
+              census: { type: "boolean" },
+              root: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+        ],
         messages: {
           missingAudit:
             "This function writes to the database (insert / update / " +
@@ -384,10 +505,26 @@ export default eslintCompatPlugin({
             "or annotate the function with `// audit: skip - <reason>` (at " +
             "least three words) if the write legitimately needs no audit " +
             "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+          overBudget:
+            "{{owner}} holds {{actual}} unaudited database writes; the audit " +
+            "ledger allows {{budget}}. Add an audit emission in the same " +
+            "transaction (or `// audit: skip - <reason>`); the ledger only " +
+            "shrinks.",
+          staleBudget:
+            "The audit ledger allows {{budget}} unaudited writes for " +
+            "{{owner}} but {{actual}} remain. Lower the row with " +
+            "`bun scripts/audit-mutation-ledger.ts --write`.",
         },
       },
       createOnce(context) {
         const scopes: FunctionScope[] = [];
+        // Ledger state for the current file: its budgets (empty outside the
+        // ledger) and its unaudited writes grouped by owner.
+        let fileBudgets = new Map<string, number>();
+        // `census: true` (the ledger generator) groups every file by owner.
+        let census = false;
+        const isBudgeted = () => census || fileBudgets.size > 0;
+        const unauditedByOwner = new Map<string, Ranged[]>();
         // Justified `audit: skip - <reason>` comments, collected once per
         // file; each marks only the innermost function whose own body holds
         // it.
@@ -407,6 +544,7 @@ export default eslintCompatPlugin({
             parentScope.childBodyRanges.push(range);
           }
           scopes.push({
+            owner: ownerName(node),
             mutationNodes: [],
             hasAuditCall: false,
             hasSkipDirective: false,
@@ -443,6 +581,12 @@ export default eslintCompatPlugin({
           ) {
             return;
           }
+          if (isBudgeted()) {
+            const owned = unauditedByOwner.get(scope.owner) ?? [];
+            owned.push(...scope.mutationNodes);
+            unauditedByOwner.set(scope.owner, owned);
+            return;
+          }
           for (const mutation of scope.mutationNodes) {
             context.report({ node: mutation, messageId: "missingAudit" });
           }
@@ -452,8 +596,56 @@ export default eslintCompatPlugin({
           before() {
             scopes.length = 0;
             skipDirectiveRanges.length = 0;
+            unauditedByOwner.clear();
+            fileBudgets = new Map();
+            census = false;
+          },
+          "Program:exit"(node) {
+            if (!isBudgeted()) {
+              return;
+            }
+            const owners = new Set([
+              ...fileBudgets.keys(),
+              ...unauditedByOwner.keys(),
+            ]);
+            for (const owner of owners) {
+              const writes = unauditedByOwner.get(owner) ?? [];
+              const budget = fileBudgets.get(owner) ?? 0;
+              const data = {
+                actual: String(writes.length),
+                budget: String(budget),
+                owner,
+              };
+              if (writes.length > budget) {
+                for (const write of writes) {
+                  context.report({
+                    node: write,
+                    messageId: "overBudget",
+                    data,
+                  });
+                }
+              } else if (writes.length < budget) {
+                context.report({ node, messageId: "staleBudget", data });
+              }
+            }
           },
           Program(node) {
+            const options = context.options.at(0);
+            census = censusFromOptions(options);
+            const relative = path
+              .relative(
+                rootFromOptions(options),
+                path.resolve(filenameForContext(context)),
+              )
+              .replaceAll("\\", "/");
+            const fileKey = `${relative}::`;
+            fileBudgets = new Map(
+              [...budgetsFromOptions(options)].flatMap(([key, budget]) =>
+                key.startsWith(fileKey)
+                  ? [[key.slice(fileKey.length), budget] as const]
+                  : [],
+              ),
+            );
             const comments: unknown = "comments" in node ? node.comments : null;
             if (!Array.isArray(comments)) {
               return;
