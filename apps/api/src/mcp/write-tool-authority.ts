@@ -82,3 +82,21 @@ export const hasMcpToolAuthority = (
   definition: McpToolAuthorityDeclaration,
 ): boolean =>
   isMemberAuthorizedForMcpTool(mcpMemberAuthority(authority), definition);
+
+/**
+ * Which half of the request's authority refuses the tool: the member role
+ * itself, or a credential whose own permission set is narrower than the role.
+ * `null` when the tool is authorized. The two need different recoveries (a
+ * role change versus a credential that carries the grant).
+ */
+export const mcpToolAuthorityDenial = (
+  authority: McpEffectiveAuthority,
+  definition: McpToolAuthorityDeclaration,
+): "member-role" | "credential" | null => {
+  if (hasMcpToolAuthority(authority, definition)) {
+    return null;
+  }
+  return hasMcpToolAuthority({ memberRole: authority.memberRole }, definition)
+    ? "credential"
+    : "member-role";
+};

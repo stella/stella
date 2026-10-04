@@ -207,6 +207,27 @@ describe("write tool permissions", () => {
       },
     });
   });
+
+  test("dispatch names the credential when only its permissions refuse the tool", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "matter_1", confirm: true },
+      context: asTestRaw<McpRequestContext>({
+        ...mcpContextFor("owner"),
+        credentialPermissions: { workspace: ["read"] },
+      }),
+      toolName: "delete_matter",
+    });
+    expect(result.isError).toBe(true);
+    const item = result.content.at(0);
+    const payload: unknown =
+      item?.type === "text" ? JSON.parse(item.text) : null;
+    expect(payload).toMatchObject({
+      error: {
+        code: "permission_denied",
+        message: "This credential's permissions do not include delete_matter",
+      },
+    });
+  });
 });
 
 describe("chat write tools re-read the member's role when they run", () => {
