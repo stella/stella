@@ -29,9 +29,10 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
-import { holdMemberAccessOnTx } from "@/api/lib/member-access-hold";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
@@ -151,8 +152,10 @@ export const createMemoryExtractorTask =
 
 export const extractMemoriesFromCompactions = createMemoryExtractorTask({});
 
-type RunMemoryExtractionOptions = MemoryExtractorTaskOptions &
-  Pick<SchedulerTaskContext, "db" | "logger" | "signal">;
+type RunMemoryExtractionOptions = Pick<
+  SchedulerTaskContext,
+  "db" | "logger" | "signal"
+> & { database: RlsDatabase<Transaction> | undefined };
 
 const runMemoryExtraction = async ({
   database,
@@ -359,8 +362,10 @@ const claimMemoryExtractionBatch = async (
   const leaseExpiresAt = new Date(
     now.getTime() + MEMORY_EXTRACTION_QUEUE_LEASE_MS,
   );
-  const rows = await db.execute(
-    buildClaimMemoryExtractionQueueQuery({ leaseExpiresAt, now }),
+  const rows = executedRows(
+    await db.execute(
+      buildClaimMemoryExtractionQueueQuery({ leaseExpiresAt, now }),
+    ),
   );
   return {
     leaseExpiresAt,
