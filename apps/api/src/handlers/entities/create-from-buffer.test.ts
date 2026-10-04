@@ -348,6 +348,9 @@ describe("createEntityFromBuffer", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({
+      value: { fileName: "Encrypted Agreement.pdf", renamed: false },
+    });
     expect(recordedAuditEvents).toHaveLength(1);
     expect(recordedAuditEvents.at(0)).toEqual({
       action: "create",
@@ -787,6 +790,72 @@ describe("service-owned buffer publication in the database", () => {
     }
   });
 
+  test("generated and template documents keep numbered bases and fill sibling gaps", async () => {
+    const requestedName = "report_2024.txt";
+    const occupied = [requestedName, "report_2024_1.txt", "report_2024_3.txt"];
+    const siblingRows = occupied.map((name) => ({
+      id: createSafeId<"entity">(),
+      workspaceId: ids.wsA1,
+      kind: "folder" as const,
+      name,
+      parentId: null,
+    }));
+    await db.insert(entities).values(siblingRows);
+    createdEntityIds.push(...siblingRows.map(({ id }) => id));
+    const createNamedDocument = async (creator: SafeId<"user"> | null) =>
+      await createEntityFromBufferForTest({
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(db, [ids.wsA1], ids.orgA, creator),
+        ),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: creator,
+        recordAuditEvent: async () => undefined,
+        buffer: new TextEncoder().encode("generated document"),
+        fileName: requestedName,
+        mimeType: "text/plain",
+      });
+    const serviceResult = await createNamedDocument(null);
+    const templateResult = await createNamedDocument(ids.userA1);
+    expect(Result.isOk(serviceResult)).toBe(true);
+    expect(Result.isOk(templateResult)).toBe(true);
+    if (Result.isError(serviceResult) || Result.isError(templateResult)) {
+      throw new TypeError("Expected generated documents to be created");
+    }
+    const results = [serviceResult.value, templateResult.value];
+    createdEntityIds.push(...results.map(({ entityId }) => entityId));
+    expect(results.map(({ fileName }) => fileName)).toEqual([
+      "report_2024_2.txt",
+      "report_2024_4.txt",
+    ]);
+    expect(results).toEqual([
+      expect.objectContaining({ renamed: true }),
+      expect.objectContaining({ renamed: true }),
+    ]);
+    for (const result of results) {
+      const entity = await db.query.entities.findFirst({
+        where: { id: { eq: result.entityId } },
+      });
+      const field = await db.query.fields.findFirst({
+        where: { id: { eq: result.fieldId } },
+      });
+      expect(entity?.name).toBe(result.fileName);
+      expect(field?.content).toMatchObject({ fileName: result.fileName });
+    }
+    const finalized = await db.query.pendingUploads.findMany({
+      where: { workspaceId: { eq: ids.wsA1 } },
+    });
+    expect(
+      finalized.some(
+        ({ finalizedResult }) =>
+          finalizedResult?.type === "entity_create" &&
+          finalizedResult.entityId === templateResult.value.entityId &&
+          finalizedResult.fileName === "report_2024_4.txt" &&
+          finalizedResult.renamed,
+      ),
+    ).toBe(true);
+  });
+
   test("commits a service document with null attribution and retires its exact-key intent", async () => {
     const pendingBefore = await db.$count(
       pendingUploads,
@@ -943,21 +1012,30 @@ const createParentSelect =
     onLock,
     workspaceStatus = "active",
   }: CreateParentSelectOptions) =>
-  (_selection: unknown) => ({
-    from: (table: unknown) => ({
-      where: () => ({
-        limit: () => ({
-          for: async (strength: unknown) => {
-            onLock?.(strength);
-            if (table === workspaces) {
-              return [{ status: workspaceStatus }];
-            }
-            if (parentKind !== null) {
-              return [{ id: parentId, kind: parentKind }];
-            }
-            return [];
-          },
+  (selection: unknown) => {
+    if (
+      typeof selection === "object" &&
+      selection !== null &&
+      "name" in selection
+    ) {
+      return { from: () => ({ where: async () => [] }) };
+    }
+    return {
+      from: (table: unknown) => ({
+        where: () => ({
+          limit: () => ({
+            for: async (strength: unknown) => {
+              onLock?.(strength);
+              if (table === workspaces) {
+                return [{ status: workspaceStatus }];
+              }
+              if (parentKind !== null) {
+                return [{ id: parentId, kind: parentKind }];
+              }
+              return [];
+            },
+          }),
         }),
       }),
-    }),
-  });
+    };
+  };

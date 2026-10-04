@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -29,6 +29,7 @@ const config = {
     "you are all conflicts. An agent surface cannot send multipart: use " +
     "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

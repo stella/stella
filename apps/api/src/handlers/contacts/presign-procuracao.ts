@@ -5,7 +5,7 @@ import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,6 +28,7 @@ const bodySchema = t.Object({
 
 const config = {
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: bodySchema,
 } satisfies HandlerConfig;

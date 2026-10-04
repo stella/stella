@@ -12,16 +12,15 @@
  *   can refuse to issue a URL the user couldn't redeem anyway.
  *
  * - `finalizeEntityCreate`: the transactional domain step.
- *   Reuses `resolveFileName` (filename de-duplication) and
+ *   Reuses `resolveEntityCreateFileName` (filename de-duplication) and
  *   `allocateEntityStamp` (workspace doc-sequence) from the
  *   existing slice. Mirrors the original handler's audit log,
  *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, eq, ne, or, sql } from "drizzle-orm";
 
-import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -30,7 +29,6 @@ import type {
 } from "@/api/db/schema";
 import {
   entities,
-  entityVersions,
   fields,
   pendingUploads,
   properties,
@@ -44,10 +42,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import {
+  insertNamedEntity,
+  resolveSiblingNameForInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -81,12 +82,9 @@ import {
   finalizeOk,
 } from "@/api/lib/uploads/runtime";
 
-const MAX_FILENAME_LENGTH = 255;
-
 type ResolveFileNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  propertyId: SafeId<"property">;
   parentId: SafeId<"entity"> | null;
   name: SanitizedFileName;
 };
@@ -94,54 +92,20 @@ type ResolveFileNameProps = {
 export const resolveEntityCreateFileName = async ({
   tx,
   workspaceId,
-  propertyId,
   parentId,
   name,
 }: ResolveFileNameProps) => {
-  const lastDot = name.lastIndexOf(".");
-  const base = lastDot === -1 ? name : name.slice(0, lastDot);
-  const ext = lastDot === -1 ? "" : name.slice(lastDot);
-  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
-
-  const siblingParentFilter =
-    parentId === null
-      ? isNull(entities.parentId)
-      : eq(entities.parentId, parentId);
-
-  const countRows = await tx
-    .select({ total: count() })
-    .from(fields)
-    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-    .innerJoin(
-      entities,
-      and(
-        eq(entityVersions.entityId, entities.id),
-        eq(entities.currentVersionId, entityVersions.id),
-      ),
-    )
-    .where(
-      and(
-        eq(fields.workspaceId, workspaceId),
-        eq(fields.propertyId, propertyId),
-        eq(entities.workspaceId, workspaceId),
-        siblingParentFilter,
-        like(jsonField(fields.content, "v1")("fileName"), pattern),
-      ),
-    );
-  const fieldsCount = countRows.at(0)?.total ?? 0;
-
-  if (fieldsCount === 0) {
-    return { renamed: false as const, value: name };
-  }
-
-  const suffix = `_${fieldsCount}`;
-  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
-  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
-
-  // SAFETY: name is already sanitized; the suffix is digits and underscore only
+  const value = await resolveSiblingNameForInsert({
+    tx,
+    workspaceId,
+    parentId,
+    name,
+    kind: "document",
+  });
   return {
-    renamed: true as const,
-    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
+    renamed: String(value.name) !== name,
+    value: value.fileName,
+    name: value.name,
   };
 };
 
@@ -636,18 +600,17 @@ export const finalizeEntityCreate = async function* ({
     const renamed = await resolveEntityCreateFileName({
       tx,
       workspaceId,
-      propertyId: targetResult.value.propertyId,
       parentId,
       name: sanitizedName,
     });
 
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-    await tx.insert(entities).values({
+    await insertNamedEntity(tx, {
       id: entityId,
       workspaceId,
       parentId,
-      name: renamed.value,
+      name: renamed.name,
       createdBy: userId,
       docSequence: entityStamp.docSequence,
     });

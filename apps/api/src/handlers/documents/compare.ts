@@ -12,7 +12,7 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
@@ -121,6 +121,7 @@ const config = {
     "redline is already saved: open it in stella instead of creating it again.",
   requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "compare_documents" },
   access: "write",
   params: workspaceParams({ documentId: tSafeId("entity") }),

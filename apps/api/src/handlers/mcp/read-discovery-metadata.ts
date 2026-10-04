@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import type { Context } from "elysia";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
@@ -14,6 +17,7 @@ import {
 
 const config = {
   cache: { kind: "public", maxAge: 300 },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } as const satisfies PublicHandlerConfig;
 

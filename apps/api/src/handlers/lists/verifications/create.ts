@@ -11,6 +11,7 @@ import { t } from "elysia";
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -48,6 +49,7 @@ const config = {
     "lists.verifications.get. A document holds one unfinished verification " +
     "at a time.",
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

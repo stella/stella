@@ -454,12 +454,6 @@ type TranslationOutput = {
   warnings: string[];
 };
 
-const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
-
 const loadDeepLApiKey = async (
   actor: RunActor,
 ): Promise<Result<string, "provider_unavailable">> => {
@@ -1156,11 +1150,7 @@ const executeRun = async (
     return "internal";
   }
   if (completedOutput.mimeType === DOCX_MIME_TYPE) {
-    const validation = await validateDocxBuffer(
-      completedOutput.buffer instanceof Uint8Array
-        ? copyToArrayBuffer(completedOutput.buffer)
-        : completedOutput.buffer,
-    );
+    const validation = await validateDocxBuffer(completedOutput.buffer);
     if (!validation.valid) {
       return "format_validation_failed";
     }

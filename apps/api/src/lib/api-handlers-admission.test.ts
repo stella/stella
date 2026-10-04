@@ -6,7 +6,7 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -37,6 +37,7 @@ const context = (signal?: AbortSignal) => ({
 const config = {
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
 
@@ -304,7 +305,11 @@ describe("finite HTTP action admission", () => {
     await withFeature(true, async () => {
       const deps = dependencies(0);
       const endpoint = createSafeRootHandler(
-        { permissions: config.permissions, mcp: config.mcp },
+        {
+          permissions: config.permissions,
+          accountAccess: config.accountAccess,
+          mcp: config.mcp,
+        },
         async function* ({ actionSignal }) {
           expect(actionSignal).toBeUndefined();
           return Result.ok({ ok: true });
