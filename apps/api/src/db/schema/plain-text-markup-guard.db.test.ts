@@ -503,7 +503,7 @@ if (!runPostgresTests || !databaseUrl) {
                     value: JSON.stringify(rejected),
                   });
                 }
-                const switched = await Result.tryPromise(() =>
+                const switched = await Result.tryPromise(async () =>
                   client.savepoint(async (tx) => {
                     await tx.unsafe(
                       `UPDATE "${tableName}" SET source_id = $1::uuid WHERE fixture_id = 2`,
