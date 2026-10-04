@@ -10,12 +10,14 @@ import {
 
 /** A stubbed response as `readPublisher` types it, by its status alone. */
 export const readOfResponse = (response: Response): ReadOutcome<Response> => {
-  const outcome = readOutcomeOfStatus(response.status);
+  const outcome = readOutcomeOfStatus(response.status, "document");
   switch (outcome.type) {
     case "present":
       return readPresent(response);
     case "absent":
       return readAbsent(outcome.evidence);
+    case "refused":
+      return outcome;
     case "unavailable":
       return readUnavailable(outcome.cause);
     default:

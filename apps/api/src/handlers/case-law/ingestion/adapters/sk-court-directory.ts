@@ -1,5 +1,4 @@
 // parser-output-unchanged: listing-stage labels do not alter directory parsing.
-// parser-output-unchanged: [sk-courts] a registry read that serves no record fails the page; a served record reads the same.
 import { panic, Result } from "better-result";
 
 import {
@@ -11,9 +10,12 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { isNullishString } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import type {
-  AbsenceEvidence,
-  ReadUnavailableCause,
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  type ReadRefusal,
+  type ReadUnavailableCause,
+  type StoredReadAbsence,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -36,15 +38,30 @@ const REGISTRY_UNAVAILABILITY_REASONS = [
   "invalid-shape",
 ] as const;
 
+/**
+ * A registry answer that served a body this reader cannot use. `http-refusal`
+ * is the disposition rows stored under sk-courts parser version 10 or lower
+ * carry for a 401, 403, 404 or 410; replay still reads it, and a status that
+ * is neither transient, refused nor absent is reported under it.
+ */
 export type SkCourtRegistryUnavailable = {
   status: "unavailable";
   httpStatus: number;
   reason: (typeof REGISTRY_UNAVAILABILITY_REASONS)[number];
 };
 
+/**
+ * A registry record the decision is stored without: refused (a typed part
+ * refusal, re-checked on the normal cadence), stated absent, or unusable.
+ */
+export type SkCourtRegistryWithheld =
+  | SkCourtRegistryUnavailable
+  | { status: "refused"; refusal: ReadRefusal }
+  | { status: "absent"; absence: StoredReadAbsence };
+
 export type SkCourtRegistryObservation =
   | { status: "available"; record: SkCourtRegistryRecord }
-  | SkCourtRegistryUnavailable;
+  | SkCourtRegistryWithheld;
 
 export const isSkCourtRegistryUnavailable = (
   value: unknown,
@@ -53,6 +70,14 @@ export const isSkCourtRegistryUnavailable = (
   value["status"] === "unavailable" &&
   typeof value["httpStatus"] === "number" &&
   REGISTRY_UNAVAILABILITY_REASONS.some((reason) => reason === value["reason"]);
+
+export const isSkCourtRegistryWithheld = (
+  value: unknown,
+): value is SkCourtRegistryWithheld =>
+  isSkCourtRegistryUnavailable(value) ||
+  (isRecord(value) &&
+    ((value["status"] === "refused" && isReadRefusal(value["refusal"])) ||
+      (value["status"] === "absent" && isStoredReadAbsence(value["absence"]))));
 
 const skCourtDefunctState = (stated: string | null | undefined) => {
   if (stated === "true") {
@@ -92,24 +117,6 @@ const MAX_REGISTRY_RESPONSE_BYTES = 1024 * 1024;
 /** Statuses after which the same request may answer on a later attempt. */
 const isTransientRegistryStatus = (status: number): boolean =>
   status >= 500 || [408, 425, 429].includes(status);
-
-/** The status an HTTP absence was stated with. */
-const absenceStatus = (evidence: AbsenceEvidence): number => {
-  switch (evidence) {
-    case "http-404":
-      return 404;
-    case "http-410":
-      return 410;
-    case "stated-zero":
-    case "publisher-typed-absence":
-      return panic(
-        `A publisher request stated a non-HTTP absence: ${evidence}`,
-      );
-    default:
-      evidence satisfies never;
-      return panic(`Unhandled absence evidence: ${String(evidence)}`);
-  }
-};
 
 /** No name guessing: an unrecognised publisher type stays observable. */
 export const skCourtDirectoryMetadata = (
@@ -199,6 +206,8 @@ export const createSkCourtRegistryReader = (
             {
               fetchStage: "listing",
               adapterKey: ADAPTER_KEYS.SK_COURTS,
+              // The decision is read without the record: a part.
+              refusalScope: "part",
               signal: requestSignal ?? signal,
               timeoutMs: ADAPTER_TIMEOUT.REQUEST,
               headers: { Accept: "application/json" },
@@ -226,6 +235,19 @@ export const createSkCourtRegistryReader = (
           reason,
         } as const);
       };
+      const withheld = (
+        observation: Exclude<
+          SkCourtRegistryWithheld,
+          SkCourtRegistryUnavailable
+        >,
+      ) => {
+        logger.warn("case_law.ingestion.court_registry_withheld", {
+          adapterKey: ADAPTER_KEYS.SK_COURTS,
+          registreGuid,
+          outcome: observation.status,
+        });
+        return Result.ok(observation);
+      };
       const unread = (cause: ReadUnavailableCause) => {
         switch (cause.kind) {
           case "thrown":
@@ -248,7 +270,12 @@ export const createSkCourtRegistryReader = (
         case "present":
           break;
         case "absent":
-          return unavailable(absenceStatus(read.evidence), "http-refusal");
+          return withheld({
+            status: "absent",
+            absence: { type: "absent", evidence: read.evidence },
+          });
+        case "refused":
+          return withheld({ status: "refused", refusal: read });
         case "unavailable":
           return unread(read.cause);
         default:

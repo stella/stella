@@ -1344,10 +1344,20 @@ export const skCourtsFixture = (): EnrolledAdapterFixture => ({
     });
 
     const built = await buildSkCourtsDecision({ ...SK_COURTS_LISTING_ROW });
-    if (built.type !== "built") {
-      return panic(`sk-courts fixture did not build: ${built.type}`);
+    switch (built.type) {
+      // The crawl stores both: a withheld record keeps the listing-only row
+      // with its typed outcome.
+      case "built":
+      case "detail-unavailable":
+        return built.decision;
+      case "read-failed":
+        throw built.error;
+      case "unkeyable":
+        return panic("sk-courts fixture did not build: unkeyable");
+      default:
+        built satisfies never;
+        return panic(`Unhandled sk-courts build: ${String(built)}`);
     }
-    return built.decision;
   },
 });
 

@@ -1,6 +1,5 @@
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: [sk-courts] failed publisher reads fail the item or page, and a detail-less row is listing-only; served reads build the same decision.
 import { panic, Result } from "better-result";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
@@ -59,7 +58,7 @@ import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/a
 import {
   createSkCourtRegistryReader,
   isSkCourtRegistryRecord,
-  isSkCourtRegistryUnavailable,
+  isSkCourtRegistryWithheld,
   skCourtDirectoryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import type {
@@ -86,11 +85,17 @@ import {
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
+  READ_OUTCOME_METADATA_KEY,
+  isReadRefusal,
+  isStoredReadAbsence,
+  readAbsent,
   readPresent,
   readUnavailable,
   type AbsenceEvidence,
   type ReadOutcome,
+  type ReadRefusal,
   type ReadUnavailableCause,
+  type StoredReadAbsence,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -214,6 +219,7 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       return read;
     }
     case "absent":
+    case "refused":
       return read;
     case "unavailable":
       if (read.cause.kind === "thrown") {
@@ -436,7 +442,12 @@ const fetchDetail = async (
     try: (): unknown => JSON.parse(read.value),
     catch: () => null,
   }).unwrapOr(null);
-  if (!isSkDetailItem(json) || Object.keys(json).length === 0) {
+  // The service answers a record it holds nothing for with an empty object:
+  // its own statement that there is no record, not a failed read.
+  if (isRecord(json) && Object.keys(json).length === 0) {
+    return readAbsent("publisher-typed-absence");
+  }
+  if (!isSkDetailItem(json)) {
     return readUnavailable({
       kind: "thrown",
       error: new FetchBoundaryError({
@@ -455,6 +466,8 @@ const readDiagnostics = (
   switch (read.type) {
     case "absent":
       return { outcome: read.evidence };
+    case "refused":
+      return { outcome: read.type, httpStatus: read.status };
     case "unavailable":
       return read.cause.kind === "thrown"
         ? { outcome: read.cause.kind }
@@ -598,10 +611,22 @@ type SkCourtsDetailFetch =
   | { type: "detail"; detail: SkDetailItem }
   /** The item names no record to ask about. */
   | { type: "listing-only" }
-  /** The publisher stated the record does not exist. */
-  | { type: "absent"; evidence: AbsenceEvidence }
-  /** A record was asked about and could not be read. */
+  /**
+   * The publisher stated the record does not exist, or refused it: the row
+   * is held listing-only with the typed outcome.
+   */
+  | { type: "withheld"; outcome: SkCourtsDetailOutcome }
+  /** A record was asked about and could not be read: the page fails. */
   | { type: "unavailable"; cause: ReadUnavailableCause };
+
+/** Why a decision is stored without its record. */
+type SkCourtsDetailOutcome = StoredReadAbsence | ReadRefusal;
+
+const isSkCourtsDetailOutcome = (
+  value: unknown,
+): value is SkCourtsDetailOutcome =>
+  isStoredReadAbsence(value) ||
+  (isReadRefusal(value) && value.scope === "document");
 
 const fetchDetailForItem = async (
   item: SkApiItem,
@@ -616,7 +641,12 @@ const fetchDetailForItem = async (
     case "present":
       return { type: "detail", detail: read.value };
     case "absent":
-      return { type: "absent", evidence: read.evidence };
+      return {
+        type: "withheld",
+        outcome: { type: "absent", evidence: read.evidence },
+      };
+    case "refused":
+      return { type: "withheld", outcome: read };
     case "unavailable":
       return { type: "unavailable", cause: read.cause };
     default:
@@ -624,6 +654,79 @@ const fetchDetailForItem = async (
       return panic(`Unhandled detail read: ${String(read)}`);
   }
 };
+
+/** One page's record reads, each asked once. */
+export type SkCourtsDetailReader = (
+  item: SkApiItem,
+  signal?: AbortSignal,
+) => Promise<SkCourtsDetailFetch>;
+
+/** Page-owned promise cache: bounded by the page, discarded on completion. */
+export const createSkCourtsDetailReader = (
+  signal?: AbortSignal,
+): SkCourtsDetailReader => {
+  const reads = new Map<string, Promise<SkCourtsDetailFetch>>();
+  return async (item, requestSignal) => {
+    const guid = toOptionalValue(item.guid) ?? "";
+    const cached = reads.get(guid);
+    if (cached !== undefined) {
+      return await cached;
+    }
+    const pending = fetchDetailForItem(item, requestSignal ?? signal);
+    reads.set(guid, pending);
+    return await pending;
+  };
+};
+
+type ReadPageDetailsOptions = {
+  items: readonly unknown[];
+  readDetail: SkCourtsDetailReader;
+  cursor: string | null;
+};
+
+/**
+ * Read every keyable item's record before any item is built, so a record
+ * that could not be read fails the page and keeps its cursor (rule 20)
+ * instead of failing one item past it.
+ */
+const readPageDetails = async ({
+  items,
+  readDetail,
+  cursor,
+}: ReadPageDetailsOptions): Promise<Result<void, AdapterFetchError>> => {
+  const reads = await mapWithConcurrency({
+    items: items.filter(
+      (item): item is SkApiItem =>
+        isSkApiItem(item) && skCourtsIdentityFields(item) !== null,
+    ),
+    limit: ITEM_CONCURRENCY,
+    operation: async (item) => await readDetail(item),
+  });
+  const failed = reads.find(
+    (read): read is Extract<SkCourtsDetailFetch, { type: "unavailable" }> =>
+      read.type === "unavailable",
+  );
+  return failed === undefined
+    ? Result.ok(undefined)
+    : Result.err(detailReadError({ cause: failed.cause, cursor }));
+};
+
+/** A record read that failed, as the page's error, with its status. */
+const detailReadError = ({
+  cause,
+  cursor,
+}: {
+  cause: ReadUnavailableCause;
+  cursor: string | null;
+}): AdapterFetchError =>
+  new AdapterFetchError({
+    message: "SK courts decision record unavailable",
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor,
+    ...(cause.kind === "thrown"
+      ? { cause: cause.error }
+      : { httpStatus: cause.status }),
+  });
 
 type SkCourtsMetadata = Record<string, unknown> & {
   updateDate: string | undefined;
@@ -642,10 +745,11 @@ type SkCourtsDecisionParts = {
   detail: SkDetailItem | null;
   courtRegistry?: SkCourtRegistryObservation | null | undefined;
   /**
-   * Set where a response the decision is built from could not be read, so a
-   * stored row is never overwritten with the absences of this one.
+   * Why the record is missing, where the publisher stated it absent or
+   * refused it. The row is then listing-only, so a stored row is never
+   * overwritten with the absences of this one.
    */
-  isListingOnly?: true | undefined;
+  detailOutcome?: SkCourtsDetailOutcome | undefined;
 };
 
 /**
@@ -659,6 +763,7 @@ const skCourtsSourceRaw = ({
   item,
   detail,
   courtRegistry,
+  detailOutcome,
 }: SkCourtsDecisionParts): {
   sourceRaw: string;
   sourceRawContentType: string;
@@ -668,13 +773,18 @@ const skCourtsSourceRaw = ({
       ? { "court-registry": JSON.stringify(courtRegistry.record) }
       : {};
   const unavailableParts =
-    courtRegistry?.status === "unavailable"
-      ? { "court-registry-unavailable": JSON.stringify(courtRegistry) }
-      : {};
+    courtRegistry === null ||
+    courtRegistry === undefined ||
+    courtRegistry.status === "available"
+      ? {}
+      : { "court-registry-unavailable": JSON.stringify(courtRegistry) };
   return {
     sourceRaw: encodeSourceRawEnvelope({
       listing: JSON.stringify(item),
       ...(detail === null ? {} : { detail: JSON.stringify(detail) }),
+      ...(detailOutcome === undefined
+        ? {}
+        : { "detail-outcome": JSON.stringify(detailOutcome) }),
       ...registryParts,
       ...unavailableParts,
     }),
@@ -693,7 +803,7 @@ const skCourtsSourceRaw = ({
 export const assembleSkCourtsDecision = ({
   courtRegistry,
   detail,
-  isListingOnly,
+  detailOutcome,
   item,
 }: SkCourtsDecisionParts): IngestionResult | null => {
   const fields = skCourtsIdentityFields(item);
@@ -713,7 +823,11 @@ export const assembleSkCourtsDecision = ({
       ? undefined
       : skCourtDirectoryMetadata(registryRecord, court);
   const registryUnavailable =
-    courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
+    courtRegistry === null ||
+    courtRegistry === undefined ||
+    courtRegistry.status === "available"
+      ? undefined
+      : courtRegistry;
   const courtSuccession = skCourtSuccessionReferences(
     court,
     registryRecord?.nazov,
@@ -723,6 +837,7 @@ export const assembleSkCourtsDecision = ({
     directoryMetadata,
     registryUnavailable,
     courtSuccession,
+    detailOutcome,
   });
   const rawHash = hashContent(rawJson);
 
@@ -780,6 +895,9 @@ export const assembleSkCourtsDecision = ({
           ...(registryUnavailable === undefined
             ? {}
             : { courtRegistry: registryUnavailable }),
+          ...(detailOutcome === undefined
+            ? {}
+            : { [READ_OUTCOME_METADATA_KEY]: detailOutcome }),
           caseNumber,
           ecli,
           court,
@@ -831,8 +949,8 @@ export const assembleSkCourtsDecision = ({
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-      ...(isListingOnly === undefined ? {} : { isListingOnly }),
-      ...skCourtsSourceRaw({ item, detail, courtRegistry }),
+      ...(detailOutcome === undefined ? {} : { isListingOnly: true }),
+      ...skCourtsSourceRaw({ item, detail, courtRegistry, detailOutcome }),
     },
     SK_COURTS_METADATA_URL_SCHEMA,
   );
@@ -850,8 +968,13 @@ export type SkCourtsBuildResult =
   | { type: "built"; decision: IngestionResult }
   /** No docket or no court to key on; nothing can store this item. */
   | { type: "unkeyable" }
-  /** A decision or court registry record was unavailable; reconciliation retries. */
-  | { type: "detail-unavailable"; decision: IngestionResult };
+  /**
+   * The publisher stated the decision's record absent, or refused it: the
+   * listing-only row with the typed outcome; reconciliation retries.
+   */
+  | { type: "detail-unavailable"; decision: IngestionResult }
+  /** The record or the court registry record could not be read: nothing is built. */
+  | { type: "read-failed"; error: AdapterFetchError };
 
 /**
  * Build one decision from a listing item, through this adapter's own parse and
@@ -861,6 +984,7 @@ export type SkCourtsBuildResult =
 type SkCourtsBuildOptions = {
   signal?: AbortSignal | undefined;
   readCourt?: SkCourtRegistryReader | undefined;
+  readDetail?: SkCourtsDetailReader | undefined;
 };
 
 export const buildSkCourtsDecision = async (
@@ -868,6 +992,7 @@ export const buildSkCourtsDecision = async (
   {
     signal,
     readCourt = createSkCourtRegistryReader(signal),
+    readDetail = createSkCourtsDetailReader(signal),
   }: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsBuildResult> => {
   // Asked before the record is fetched, so an item nothing can store never
@@ -876,7 +1001,13 @@ export const buildSkCourtsDecision = async (
   if (skCourtsIdentityFields(item) === null) {
     return { type: "unkeyable" };
   }
-  const fetched = await fetchDetailForItem(item, signal);
+  const fetched = await readDetail(item, signal);
+  if (fetched.type === "unavailable") {
+    return {
+      type: "read-failed",
+      error: detailReadError({ cause: fetched.cause, cursor: null }),
+    };
+  }
   const registreGuid = toOptionalValue(item.sud?.registreGuid);
   const registry =
     registreGuid === undefined
@@ -888,23 +1019,22 @@ export const buildSkCourtsDecision = async (
       ...(registreGuid === undefined ? {} : { registreGuid }),
       reason: registry.error.message,
     });
+    return { type: "read-failed", error: registry.error };
   }
-  const courtRegistry = registry.unwrapOr(null);
-  const detailUnread =
-    fetched.type === "unavailable" || fetched.type === "absent";
-  const unread = detailUnread || registry.isErr();
+  const detailOutcome =
+    fetched.type === "withheld" ? fetched.outcome : undefined;
   const decision = assembleSkCourtsDecision({
     item,
     detail: fetched.type === "detail" ? fetched.detail : null,
-    courtRegistry,
-    ...(unread ? { isListingOnly: true } : {}),
+    courtRegistry: registry.unwrapOr(null),
+    ...(detailOutcome === undefined ? {} : { detailOutcome }),
   });
   if (decision === null) {
     return { type: "unkeyable" };
   }
-  return unread
-    ? { type: "detail-unavailable", decision }
-    : { type: "built", decision };
+  return detailOutcome === undefined
+    ? { type: "built", decision }
+    : { type: "detail-unavailable", decision };
 };
 
 type SkCourtsParsedItem =
@@ -930,6 +1060,7 @@ const parseItemWithDetail = async (
         case "detail-unavailable":
           return value.decision;
         case "unkeyable":
+        case "read-failed":
           return undefined;
         default:
           value satisfies never;
@@ -954,6 +1085,10 @@ const parseItemWithDetail = async (
       return { type: "item_build_failed", decision: built.decision };
     case "built":
       return { type: "decision", decision: built.decision };
+    // Unreached on a crawl page: the page reads every record before building
+    // and fails on one it could not read. Counted, never stored.
+    case "read-failed":
+      return { type: "item_build_failed", decision: null };
     default: {
       built satisfies never;
       return panic(
@@ -1133,6 +1268,8 @@ const servedListing = ({ read, cursor }: ServedListingOptions): Response => {
         status: absenceStatus(read.evidence),
         cursor,
       });
+    case "refused":
+      throw listingStatusError({ status: read.status, cursor });
     case "unavailable":
       throw listingFailureError({ cause: read.cause, cursor });
     default:
@@ -1304,6 +1441,7 @@ const buildSkCourtsFromPayload = async (
     // Written as a decision it would make the identity held with the document
     // still unread, and unread is how the document walk finds its work.
     case "detail-unavailable":
+    case "read-failed":
       return { type: "detail-unavailable" };
     default: {
       built satisfies never;
@@ -1435,6 +1573,7 @@ const collectFrontierPage = async (
     signal,
   });
   const readCourt = createSkCourtRegistryReader(signal);
+  const readDetail = createSkCourtsDetailReader(signal);
   const records = await mapWithConcurrency({
     items: [
       ...new Set(
@@ -1455,11 +1594,19 @@ const collectFrontierPage = async (
       return record;
     }
   }
+  const details = await readPageDetails({
+    items: listed,
+    readDetail,
+    cursor: null,
+  });
+  if (details.isErr()) {
+    return details;
+  }
   const built = await mapWithConcurrency({
     items: listed,
     limit: ITEM_CONCURRENCY,
     operation: async (item) =>
-      await parseItemWithDetail(item, { signal, readCourt }),
+      await parseItemWithDetail(item, { signal, readCourt, readDetail }),
   });
   const decisions: IngestionResult[] = [];
   let failed = 0;
@@ -1784,7 +1931,11 @@ const reparseStoredRaw = (
   );
   const registryUnavailable = storedPart(
     parts?.["court-registry-unavailable"],
-    isSkCourtRegistryUnavailable,
+    isSkCourtRegistryWithheld,
+  );
+  const detailOutcome = storedPart(
+    parts?.["detail-outcome"],
+    isSkCourtsDetailOutcome,
   );
   const courtRegistry =
     registryRecord === null
@@ -1796,6 +1947,7 @@ const reparseStoredRaw = (
         registryRecord.registreGuid !== item.sud?.registreGuid)) ||
     (parts?.["court-registry-unavailable"] !== undefined &&
       registryUnavailable === null) ||
+    (parts?.["detail-outcome"] !== undefined && detailOutcome === null) ||
     (registryRecord !== null && registryUnavailable !== null)
   ) {
     return {
@@ -1808,6 +1960,7 @@ const reparseStoredRaw = (
     item,
     detail: storedPart(parts?.["detail"], isSkDetailItem),
     courtRegistry,
+    ...(detailOutcome === null ? {} : { detailOutcome }),
   });
   if (decision === null) {
     return {
@@ -2013,6 +2166,7 @@ export const skCourtsAdapter = defineSourceAdapter({
     if (frontier === null) {
       const page = await createBackfillPage(
         createSkCourtRegistryReader(signal),
+        createSkCourtsDetailReader(signal),
       )(cursor, config, signal);
       // The walk names its successor and nothing else, so the handover
       // cursor it writes states no day. Give it one here rather than
@@ -2050,7 +2204,10 @@ export const skCourtsAdapter = defineSourceAdapter({
  * decisions land at the end, behind the cursor — and when it reaches that
  * end, the frontier takes over.
  */
-const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
+const createBackfillPage = (
+  readCourt: SkCourtRegistryReader,
+  readDetail: SkCourtsDetailReader,
+) =>
   createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
@@ -2107,6 +2264,14 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
           return record;
         }
       }
+      const details = await readPageDetails({
+        items: arrayOrEmpty(json.rozhodnutieList),
+        readDetail,
+        cursor: null,
+      });
+      if (details.isErr()) {
+        return details;
+      }
       return Result.ok(json);
     },
 
@@ -2116,5 +2281,5 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     }),
 
     parseItem: async (item, signal) =>
-      await parseItemWithDetail(item, { signal, readCourt }),
+      await parseItemWithDetail(item, { signal, readCourt, readDetail }),
   });

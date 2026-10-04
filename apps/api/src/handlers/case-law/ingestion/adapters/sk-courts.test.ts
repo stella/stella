@@ -31,6 +31,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
@@ -124,8 +125,11 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
       });
     }
 
-    for (const detail of [{}, { ecli: 42 }]) {
-      test(`keeps a listing-only row for malformed detail ${JSON.stringify(detail)} at ${cursor}`, async () => {
+    for (const [detail, outcome] of [
+      [{}, "stated-absence"],
+      [{ ecli: 42 }, "unreadable"],
+    ] as const) {
+      test(`a detail record served as ${JSON.stringify(detail)} at ${cursor} is a ${outcome}`, async () => {
         const good = {
           guid: "good-detail",
           spisovaZnacka: "1C/1/2020",
@@ -154,6 +158,12 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           }),
         );
         const page = await skCourtsAdapter.fetchPage(cursor, {});
+        if (outcome === "unreadable") {
+          // Fail closed on a record this adapter cannot read: the page is
+          // read again rather than stored without it.
+          expect(page.isErr()).toBe(true);
+          return;
+        }
         expect(page.isOk()).toBe(true);
         if (page.isOk()) {
           expect(
@@ -169,11 +179,15 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
             type: "item_build_failed",
             count: 1,
           });
-          // Only the row whose record could not be read is listing-only, so
-          // it never overwrites a stored row's detail with absences.
+          // Only the row the service stated no record for is listing-only,
+          // with the publisher's absence typed, so it never overwrites a
+          // stored row's detail with absences.
           expect(
             page.value.decisions.map(({ isListingOnly }) => isListingOnly),
           ).toEqual([...Array.from({ length: 99 }, () => undefined), true]);
+          expect(
+            page.value.decisions.at(-1)?.metadata[READ_OUTCOME_METADATA_KEY],
+          ).toEqual({ type: "absent", evidence: "publisher-typed-absence" });
           expect(page.value.nextCursor).toBe(
             cursor.startsWith("backfill:")
               ? "backfill:100"
@@ -683,8 +697,8 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test.each([401, 403, 429])(
-    "a detail HTTP %s keeps the listed decision and advances the page",
+  test.each([401, 403] as const)(
+    "a detail HTTP %s keeps the listed decision with the typed refusal and advances the page",
     async (status) => {
       const stored = await storedDecision(TRANSFERRED_FILE_ID);
       const raw: unknown = JSON.parse(stored.sourceRaw);
@@ -719,7 +733,56 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       expect(parts?.["listing"]).toBe(JSON.stringify(listing));
       expect(parts?.["detail"]).toBeUndefined();
       expect(decision?.isListingOnly).toBe(true);
+      expect(decision?.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+        type: "refused",
+        status,
+        scope: "document",
+        cause: { kind: "http-status", retryAfter: null },
+      });
       expect(page.nextCursor).not.toBeNull();
+    },
+  );
+
+  test.each([
+    ["404", 404, "http-404"],
+    ["410", 410, "http-410"],
+  ] as const)(
+    "a detail read answering %s keeps a listing-only row with the stated absence",
+    async (_label, status, evidence) => {
+      const stored = await storedDecision(TRANSFERRED_FILE_ID);
+      const raw: unknown = JSON.parse(stored.sourceRaw);
+      const listing = isRecord(raw) ? raw["listItem"] : undefined;
+      if (!isRecord(listing)) {
+        panic("the recorded decision has no listing item");
+      }
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.searchParams.has("page")) {
+          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+        }
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response("registry unavailable", { status: 404 });
+        }
+        return await Promise.resolve(new Response("", { status }));
+      });
+
+      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+      expect(
+        page.decisions.map(({ isListingOnly, metadata }) => ({
+          isListingOnly,
+          outcome: metadata[READ_OUTCOME_METADATA_KEY],
+        })),
+      ).toEqual([
+        { isListingOnly: true, outcome: { type: "absent", evidence } },
+      ]);
+
+      const reconciliation = requireReconciliation(skCourtsAdapter);
+      expect(reconciliation.heldRequiresDetail).toBe(true);
+      expect(await reconciliation.buildDecision(listing)).toEqual({
+        type: "detail-unavailable",
+      });
     },
   );
 
@@ -727,9 +790,15 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
     ["500", () => new Response("", { status: 500 })],
     ["204", () => new Response(null, { status: 204 })],
     ["empty 200", () => new Response("")],
-    ["404", () => new Response("", { status: 404 })],
+    ["429", () => new Response("", { status: 429 })],
+    [
+      "timeout",
+      () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    ],
   ] as const)(
-    "a detail read answering %s keeps a listing-only row the reconciliation refuses",
+    "a detail read answering %s fails the page, so its cursor is kept",
     async (_label, answer) => {
       const stored = await storedDecision(TRANSFERRED_FILE_ID);
       const raw: unknown = JSON.parse(stored.sourceRaw);
@@ -750,14 +819,8 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
         return await Promise.resolve(answer());
       });
 
-      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
-      expect(page.decisions.map(({ isListingOnly }) => isListingOnly)).toEqual([
-        true,
-      ]);
-      expect(page.itemBuildFailures).toEqual({
-        type: "item_build_failed",
-        count: 1,
-      });
+      const page = await skCourtsAdapter.fetchPage(null, {});
+      expect(page.isErr()).toBe(true);
 
       const reconciliation = requireReconciliation(skCourtsAdapter);
       expect(reconciliation.heldRequiresDetail).toBe(true);

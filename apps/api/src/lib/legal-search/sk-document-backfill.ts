@@ -279,6 +279,8 @@ export const fetchPdfBytes = async ({
       return { type: "absent" };
     case "present":
       return await servedPdfBytes(async () => await read.value.arrayBuffer());
+    case "refused":
+      return publisherStatusPdf(read.status);
     case "unavailable":
       return unavailablePdf(read.cause);
     default:
@@ -330,23 +332,31 @@ const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
       };
     case "status":
     case "empty-body":
-      if (isDocumentOwnStatus(cause.status)) {
-        return {
-          type: "failed",
-          failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
-          detail: `http-${cause.status}`,
-        };
-      }
-      throw new AdapterFetchError({
-        message: `Document fetch returned ${cause.status}`,
-        adapterKey: ADAPTER_KEYS.SK_COURTS,
-        cursor: null,
-        httpStatus: cause.status,
-      });
+      return publisherStatusPdf(cause.status);
     default:
       cause satisfies never;
       return panic(`Unhandled read cause: ${String(cause)}`);
   }
+};
+
+/**
+ * A status about this one document is its own failure; any other ends the
+ * walk's batch with the status.
+ */
+const publisherStatusPdf = (status: number): PdfFetchResult => {
+  if (isDocumentOwnStatus(status)) {
+    return {
+      type: "failed",
+      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+      detail: `http-${status}`,
+    };
+  }
+  throw new AdapterFetchError({
+    message: `Document fetch returned ${status}`,
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+    httpStatus: status,
+  });
 };
 
 export type BackfilledDocument = {
