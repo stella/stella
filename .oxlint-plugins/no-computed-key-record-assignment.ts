@@ -176,7 +176,7 @@ const bindingAnnotation = (
   }
   const keys: string[] = [];
   let child = binding;
-  let parent = child.parent;
+  let { parent } = child;
   while (
     isAstNode(parent) &&
     ["Property", "ObjectPattern", "AssignmentPattern"].includes(parent.type)
@@ -387,7 +387,7 @@ const ownKeyTest = (
   if (node?.type !== "CallExpression" || !Array.isArray(node.arguments)) {
     return false;
   }
-  const callee = node.callee;
+  const { callee } = node;
   const objectHasOwn =
     isMemberAccess(callee, "Object", "hasOwn") &&
     isAstNode(callee) &&
@@ -491,7 +491,7 @@ const guardedRead = (context: ScopeContext, value: unknown): boolean => {
   }
   const read = value;
   let child = read;
-  let parent = read.parent;
+  let { parent } = read;
   while (isAstNode(parent) && !isFunction(parent)) {
     const test = branchTest({ parent, child });
     if (
@@ -615,7 +615,7 @@ export default eslintCompatPlugin({
             reportWrite(node.argument);
           },
           CallExpression(node) {
-            const callee = node.callee;
+            const { callee } = node;
             if (
               callee.type !== "MemberExpression" ||
               !isMemberAccess(callee, "Object", "assign") ||
@@ -643,7 +643,7 @@ export default eslintCompatPlugin({
             if (!node.computed || !isOpenModuleTable(context, node.object)) {
               return;
             }
-            const parent = node.parent;
+            const { parent } = node;
             if (
               parent.type === "AssignmentExpression" &&
               parent.left === node &&
