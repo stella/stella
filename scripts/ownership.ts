@@ -693,10 +693,6 @@ export const OWNERSHIP = [
           reason: "Compacts a user's own chat threads.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
           reason: "Scheduled organization automation.",
         },
@@ -724,7 +720,7 @@ export const OWNERSHIP = [
       "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
       "workspace pinned for the run's own rows and its output, and `inputDb` " +
       "reads under the requester's membership as it stands when the run " +
-      "executes. Member-run queues are listed in " +
+      "executes. Member-run queues and scheduler tasks are listed in " +
       "`apps/api/src/lib/member-run-queues.ts`.",
     enforcement: {
       kind: "import",
@@ -742,6 +738,12 @@ export const OWNERSHIP = [
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
+        // Kept equal to MEMBER_RUN_SCHEDULER_TASKS by scripts/ownership.test.ts.
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Member-run scheduler task; reads each compaction through its owner's inputDb.",
+        },
       ],
     },
   },

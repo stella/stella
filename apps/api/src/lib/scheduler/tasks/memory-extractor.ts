@@ -1,13 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
   chatThreadCompactions,
+  chatThreads,
   organizationSettings,
+  workspaces,
 } from "@/api/db/schema";
+import type { RlsDatabase } from "@/api/db/scoped";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -17,6 +20,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type ChatDurableRefText,
@@ -34,7 +38,9 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
-import { createRootSafeDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
+import { brandPersistedChatThreadCompactionId } from "@/api/lib/safe-id-boundaries";
 import { runMemoryExtractionFailureStamp } from "@/api/lib/scheduler/tasks/memory-extractor-failure";
 import {
   buildClaimMemoryExtractionQueueQuery,
@@ -102,22 +108,58 @@ Do not invent information that is not in the summary or transcript.`;
 
 type CompactionRow = QueuedMemoryCompaction;
 
+/** Acts for the thread owner; a thread outside any matter pins nothing. */
+type CompactionRunActor = RootRunActor<
+  "chatThreadCompaction",
+  SafeId<"workspace"> | null
+>;
+
+const COMPACTION_OWNER_ACCESS = {
+  current: "current",
+  notOrganizationMember: "not_organization_member",
+  matterAccessLost: "matter_access_lost",
+} as const;
+
+type CompactionOwnerAccess =
+  (typeof COMPACTION_OWNER_ACCESS)[keyof typeof COMPACTION_OWNER_ACCESS];
+
+type MemoryExtractorTaskOptions = {
+  /** The RLS database the owner's run actor opens; defaults to the app's. */
+  database?: RlsDatabase<Transaction>;
+};
+
 /**
  * Suggest-first memory extraction. Reads chat-thread compactions that have
  * not been mined yet, asks the cheap model for up to three candidate
  * memories per summary, and inserts each as status='suggested' so a human
  * confirms before it influences the assistant. Each compaction is stamped
- * with `memoryExtractedAt` afterwards for idempotency.
+ * with `memoryExtractedAt` once it is settled, for idempotency.
  *
- * Runs on the root connection: it spans every tenant, so every insert
- * carries the originating thread's own organization/user/workspace ids and
- * never widens scope.
+ * The queue spans every tenant, so claiming and stamping compactions runs on
+ * the scheduler connection. Everything else acts for the thread owner through
+ * a run actor: the transcript is read under the owner's membership as it
+ * stands when the compaction is processed, and suggestions are written only
+ * while the owner is still a member of the organization and, for a matter
+ * memory, of that matter. A compaction whose owner has lost that access is
+ * settled without being read.
  */
-export const extractMemoriesFromCompactions: SchedulerTask = async ({
+export const createMemoryExtractorTask =
+  ({ database }: MemoryExtractorTaskOptions): SchedulerTask =>
+  async ({ db, logger, signal }) => {
+    await runMemoryExtraction({ database, db, logger, signal });
+  };
+
+export const extractMemoriesFromCompactions = createMemoryExtractorTask({});
+
+type RunMemoryExtractionOptions = MemoryExtractorTaskOptions &
+  Pick<SchedulerTaskContext, "db" | "logger" | "signal">;
+
+const runMemoryExtraction = async ({
+  database,
   db,
   logger,
   signal,
-}) => {
+}: RunMemoryExtractionOptions): Promise<void> => {
   if (!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY")) {
     return;
   }
@@ -129,6 +171,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
 
   let processed = 0;
   let failed = 0;
+  let skipped = 0;
   let suggested = 0;
 
   const processCompactionAt = async (index: number): Promise<void> => {
@@ -142,7 +185,40 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       return;
     }
 
-    const candidatesResult = await extractCandidates(db, compaction, signal);
+    const actor = createRootRunActor(
+      {
+        organizationId: compaction.threadOrganizationId,
+        workspaceId: compaction.threadWorkspaceId,
+        userId: compaction.threadUserId,
+        runId: compaction.compactionId,
+      },
+      brandPersistedChatThreadCompactionId,
+      database,
+    );
+    const access = await resolveCompactionOwnerAccess({
+      actor,
+      compaction,
+      db,
+    });
+    if (access !== COMPACTION_OWNER_ACCESS.current) {
+      // Settled, not rotated: the owner's access decides the outcome, so a
+      // later run would reach the same one.
+      await settleCompaction(db, compaction.compactionId);
+      logger.warn("scheduler.memory_extractor_owner_access_lost", {
+        "compaction.id": compaction.compactionId,
+        "owner.access": access,
+      });
+      skipped += 1;
+      await processCompactionAt(index + 1);
+      return;
+    }
+
+    const candidatesResult = await extractCandidates({
+      actor,
+      compaction,
+      db,
+      schedulerSignal: signal,
+    });
 
     if (Result.isError(candidatesResult)) {
       // Rotate failures behind untouched work. They remain retryable on a
@@ -165,15 +241,18 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
     }
     const candidates = candidatesResult.value;
 
-    const persistedResult = await Result.tryPromise({
-      try: async () =>
-        await persistSuggestions({
-          db,
-          candidates,
-          compaction,
-        }),
-      catch: (error: unknown) => error,
-    });
+    const persistedResult = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await persistSuggestions({
+            actor,
+            db,
+            candidates,
+            compaction,
+          }),
+        catch: (error: unknown) => error,
+      }),
+    );
     if (Result.isError(persistedResult)) {
       // A source row can disappear while the provider call is in flight.
       // Keep that tenant-local race inside this compaction's failure boundary
@@ -208,6 +287,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   logger.info("scheduler.memory_extractor", {
     "compaction.processed": processed,
     "compaction.failed": failed,
+    "compaction.skipped": skipped,
     "memory.suggested": suggested,
     "organization.claimed": claimedBatch.organizations.length,
   });
@@ -304,23 +384,97 @@ type ExtractedCandidate = {
   content: string;
 };
 
-const extractCandidates = async (
-  db: SchedulerDb,
-  compaction: CompactionRow,
-  schedulerSignal: AbortSignal,
-): Promise<Result<ExtractedCandidate[] | null, unknown>> => {
+type ResolveCompactionOwnerAccessOptions = {
+  actor: CompactionRunActor;
+  compaction: CompactionRow;
+  db: SchedulerDb;
+};
+
+/**
+ * Whether the thread owner may still read what this compaction summarized.
+ * Organization membership is checked directly: a thread outside any matter is
+ * readable by its owner's identity alone. Matter access is read through the
+ * owner's current membership: the thread stays visible only while every
+ * matter it draws on does, and the compaction's own matter snapshot is
+ * checked the same way.
+ */
+const resolveCompactionOwnerAccess = async ({
+  actor,
+  compaction,
+  db,
+}: ResolveCompactionOwnerAccessOptions): Promise<CompactionOwnerAccess> => {
+  const membership = await resolveMemberAuthorization(
+    { organizationId: actor.organizationId, userId: actor.userId },
+    db,
+  );
+  if (!membership) {
+    return COMPACTION_OWNER_ACCESS.notOrganizationMember;
+  }
+  const snapshotWorkspaceIds = [
+    ...new Set(
+      compaction.threadWorkspaceId === null
+        ? compaction.threadDataWorkspaceIds
+        : [compaction.threadWorkspaceId, ...compaction.threadDataWorkspaceIds],
+    ),
+  ];
+  const readable = await actor.inputDb(async (tx) => {
+    const thread = await tx
+      .select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, compaction.threadId))
+      .limit(1);
+    if (thread.length === 0) {
+      return false;
+    }
+    if (snapshotWorkspaceIds.length === 0) {
+      return true;
+    }
+    const matters = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          inArray(workspaces.id, snapshotWorkspaceIds),
+          ne(workspaces.status, "deleting"),
+        ),
+      );
+    return matters.length === snapshotWorkspaceIds.length;
+  });
+  return readable
+    ? COMPACTION_OWNER_ACCESS.current
+    : COMPACTION_OWNER_ACCESS.matterAccessLost;
+};
+
+type ExtractCandidatesOptions = {
+  actor: CompactionRunActor;
+  compaction: CompactionRow;
+  db: SchedulerDb;
+  schedulerSignal: AbortSignal;
+};
+
+const extractCandidates = async ({
+  actor,
+  compaction,
+  db,
+  schedulerSignal,
+}: ExtractCandidatesOptions): Promise<
+  Result<ExtractedCandidate[] | null, unknown>
+> => {
   const summary = compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS);
   // The summary is lossy by design; the messages it replaced are still in
   // the database, so mine those too. A failure here degrades to
   // summary-only extraction rather than losing the whole compaction.
   const transcriptResult = await Result.tryPromise({
     try: async () =>
-      await loadCompactionTranscript({
-        db,
-        threadId: compaction.threadId,
-        firstSummarizedMessageId: compaction.firstSummarizedMessageId,
-        lastSummarizedMessageId: compaction.sourceMessageId,
-      }),
+      await actor.inputDb(
+        async (tx) =>
+          await loadCompactionTranscript({
+            db: tx,
+            threadId: compaction.threadId,
+            firstSummarizedMessageId: compaction.firstSummarizedMessageId,
+            lastSummarizedMessageId: compaction.sourceMessageId,
+          }),
+      ),
     catch: (error: unknown) => error,
   });
   if (Result.isError(transcriptResult)) {
@@ -366,13 +520,7 @@ const extractCandidates = async (
         usageMetering: {
           actionType: "background",
           organizationId: compaction.threadOrganizationId,
-          safeDb: createRootSafeDb({
-            organizationId: compaction.threadOrganizationId,
-            userId: compaction.threadUserId,
-            workspaceIds: compaction.threadWorkspaceId
-              ? [compaction.threadWorkspaceId]
-              : [],
-          }),
+          safeDb: actor.writeSafeDb,
           serviceTier: "batch",
           userId: compaction.threadUserId,
           workspaceId: compaction.threadWorkspaceId,
@@ -387,11 +535,16 @@ const extractCandidates = async (
       }
       // Extraction has no anonymization step: a thread that switched to
       // anonymized mode after the claim is not sent, and later claims skip it.
+      // Read as the owner, a thread they can no longer see reads as
+      // anonymized, so it is not sent either.
       if (
-        (await readThreadStoredContentSendModeOnTx({
-          threadId: compaction.threadId,
-          tx: db,
-        })) === THREAD_STORED_CONTENT_SEND_MODE.anonymized
+        (await actor.inputDb(
+          async (tx) =>
+            await readThreadStoredContentSendModeOnTx({
+              threadId: compaction.threadId,
+              tx,
+            }),
+        )) === THREAD_STORED_CONTENT_SEND_MODE.anonymized
       ) {
         return null;
       }
@@ -437,7 +590,10 @@ const extractCandidates = async (
   // nothing outside it: a memory keeps them as canonical links.
   const names = await Result.tryPromise({
     try: async () =>
-      await readChatThreadNames({ threadId: compaction.threadId, tx: db }),
+      await actor.inputDb(
+        async (tx) =>
+          await readChatThreadNames({ threadId: compaction.threadId, tx }),
+      ),
     catch: (error: unknown) => error,
   });
   if (Result.isError(names)) {
@@ -508,91 +664,152 @@ const normalizeCandidates = (
 
 type SuggestionInsert = typeof aiMemories.$inferInsert;
 
+/**
+ * Stamp a compaction as extracted. Concurrent or zombie runs race on this
+ * conditional update; exactly one sees `true`.
+ */
+const settleCompaction = async (
+  db: SchedulerDb,
+  compactionId: SafeId<"chatThreadCompaction">,
+): Promise<boolean> => {
+  const settledAt = new Date();
+  const settled = await db
+    .update(chatThreadCompactions)
+    .set({
+      memoryExtractedAt: settledAt,
+      memoryExtractionAttemptedAt: settledAt,
+    })
+    .where(
+      and(
+        eq(chatThreadCompactions.id, compactionId),
+        eq(chatThreadCompactions.status, "active"),
+        isNull(chatThreadCompactions.memoryExtractedAt),
+      ),
+    )
+    .returning({ id: chatThreadCompactions.id });
+  return settled.length > 0;
+};
+
 type PersistSuggestionsOptions = {
+  actor: CompactionRunActor;
   db: SchedulerDb;
   candidates: ExtractedCandidate[];
   compaction: CompactionRow;
 };
 
+/**
+ * Settle the compaction, then write its suggestions as the owner. The stamp
+ * runs on the scheduler connection because the owner's handle reaches a
+ * compaction only while every matter its thread draws on is pinned, while
+ * the suggestions need only the thread's own matter. A failed write releases
+ * the stamp so a later run retries the compaction.
+ */
 const persistSuggestions = async ({
+  actor,
   db,
   candidates,
   compaction,
-}: PersistSuggestionsOptions): Promise<number | null> => {
-  const rows = candidates.flatMap((candidate) =>
-    buildSuggestionRow({ candidate, compaction }),
-  );
+}: PersistSuggestionsOptions): Promise<Result<number | null, unknown>> => {
+  if (!(await settleCompaction(db, compaction.compactionId))) {
+    return Result.ok(null);
+  }
 
-  return await db.transaction(async (tx): Promise<number | null> => {
-    // Share the consent transition lock used by the settings handler. A
-    // disable that wins the lock prevents persistence; a persistence that wins
-    // commits before the administrator's disable returns.
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${compaction.threadOrganizationId}))`,
-    );
-    const [settings] = await tx
-      .select({
-        enabled: organizationSettings.memoryExtractionEnabled,
-        enabledAt: organizationSettings.memoryExtractionEnabledAt,
-      })
-      .from(organizationSettings)
-      .where(
-        eq(
-          organizationSettings.organizationId,
-          compaction.threadOrganizationId,
-        ),
-      )
-      .limit(1);
-    if (
-      !isMemoryExtractionConsentValid(settings, compaction.compactionCreatedAt)
-    ) {
-      return null;
-    }
-
-    // Claim in the same transaction as suggestion inserts. Concurrent or
-    // zombie runs race on this conditional update; exactly one can proceed,
-    // and a later insert failure rolls the claim back with the transaction.
-    const [claimed] = await tx
-      .update(chatThreadCompactions)
-      .set({
-        memoryExtractedAt: new Date(),
-        memoryExtractionAttemptedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(chatThreadCompactions.id, compaction.compactionId),
-          eq(chatThreadCompactions.status, "active"),
-          isNull(chatThreadCompactions.memoryExtractedAt),
-        ),
-      )
-      .returning({ id: chatThreadCompactions.id });
-    if (!claimed) {
-      return null;
-    }
-
-    let insertedCount = 0;
-    if (rows.length > 0) {
-      const inserted = await tx
-        .insert(aiMemories)
-        .values(rows)
-        .onConflictDoNothing({
-          target: [aiMemories.organizationId, aiMemories.dedupKey],
-        })
-        .returning({
-          id: aiMemories.id,
-          kind: aiMemories.kind,
-          scope: aiMemories.scope,
-          workspaceId: aiMemories.workspaceId,
-        });
-      insertedCount = inserted.length;
-      await recordExtractedMemoryAuditEvents(tx, {
-        compaction,
-        inserted,
-      });
-    }
-
-    return insertedCount;
+  const written = await Result.tryPromise({
+    try: async () =>
+      await actor.writeDb(
+        async (tx) =>
+          await writeSuggestionsAsOwner({ actor, candidates, compaction, tx }),
+      ),
+    catch: (error: unknown) => error,
   });
+  if (Result.isError(written)) {
+    // Only this run's stamp can be on the row: every other run's settle
+    // requires it unset.
+    await db
+      .update(chatThreadCompactions)
+      .set({ memoryExtractedAt: null })
+      .where(eq(chatThreadCompactions.id, compaction.compactionId));
+  }
+  return written;
+};
+
+type WriteSuggestionsAsOwnerOptions = {
+  actor: CompactionRunActor;
+  candidates: ExtractedCandidate[];
+  compaction: CompactionRow;
+  tx: Transaction;
+};
+
+const writeSuggestionsAsOwner = async ({
+  actor,
+  candidates,
+  compaction,
+  tx,
+}: WriteSuggestionsAsOwnerOptions): Promise<number | null> => {
+  // Share the consent transition lock used by the settings handler. A
+  // disable that wins the lock prevents persistence; a persistence that wins
+  // commits before the administrator's disable returns.
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${compaction.threadOrganizationId}))`,
+  );
+  const [settings] = await tx
+    .select({
+      enabled: organizationSettings.memoryExtractionEnabled,
+      enabledAt: organizationSettings.memoryExtractionEnabledAt,
+    })
+    .from(organizationSettings)
+    .where(
+      eq(organizationSettings.organizationId, compaction.threadOrganizationId),
+    )
+    .limit(1);
+  if (
+    !isMemoryExtractionConsentValid(settings, compaction.compactionCreatedAt)
+  ) {
+    return null;
+  }
+
+  // Re-check the owner's access in the transaction that writes as them: a
+  // removal during the provider call drops every suggestion, and losing the
+  // matter drops its matter memories.
+  const membership = await resolveMemberAuthorization(
+    {
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId ?? undefined,
+    },
+    tx,
+  );
+  if (!membership) {
+    return 0;
+  }
+  const memberWorkspaceId =
+    membership.workspace === null || membership.workspace.status === "deleting"
+      ? null
+      : membership.workspace.id;
+  const rows = candidates.flatMap((candidate) =>
+    buildSuggestionRow({ candidate, compaction, memberWorkspaceId }),
+  );
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const inserted = await tx
+    .insert(aiMemories)
+    .values(rows)
+    .onConflictDoNothing({
+      target: [aiMemories.organizationId, aiMemories.dedupKey],
+    })
+    .returning({
+      id: aiMemories.id,
+      kind: aiMemories.kind,
+      scope: aiMemories.scope,
+      workspaceId: aiMemories.workspaceId,
+    });
+  await recordExtractedMemoryAuditEvents(tx, {
+    compaction,
+    inserted,
+  });
+  return inserted.length;
 };
 
 const recordExtractedMemoryAuditEvents = async (
@@ -650,11 +867,14 @@ const recordExtractedMemoryAuditEvents = async (
 type BuildSuggestionRowOptions = {
   candidate: ExtractedCandidate;
   compaction: CompactionRow;
+  /** The thread's matter while its owner is still a member of it. */
+  memberWorkspaceId: SafeId<"workspace"> | null;
 };
 
 const buildSuggestionRow = ({
   candidate,
   compaction,
+  memberWorkspaceId,
 }: BuildSuggestionRowOptions): SuggestionInsert[] => {
   const resolvedScope = resolveExtractedMemoryScope({
     kind: candidate.kind,
@@ -667,6 +887,12 @@ const buildSuggestionRow = ({
   // matter-specific kind can only ever land at scope='workspace' (matching
   // the DB CHECK) and a user-preference kind can only land at scope='user'.
   if (resolvedScope.type === "drop") {
+    return [];
+  }
+  if (
+    resolvedScope.type === "workspace" &&
+    resolvedScope.workspaceId !== memberWorkspaceId
+  ) {
     return [];
   }
   const identity =
