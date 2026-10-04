@@ -215,6 +215,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
@@ -341,6 +342,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 
 const config = {
   permissions: CHAT_TURN_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
   requiresUsage: { actionType: "chat", laneRouting: true },

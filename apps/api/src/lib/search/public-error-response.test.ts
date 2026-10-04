@@ -8,11 +8,12 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   createSafePublicHandler,
   isSafePublicHandler,
-  safePublicHandlerResponseSchemasWithStatusText,
   safeHandlerResponseSchemasWithStatusText,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -79,6 +80,7 @@ test("public error projection bounds serialized Unicode and issue collections", 
 });
 
 const publicConfig = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(

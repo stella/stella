@@ -6,7 +6,7 @@ import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -20,6 +20,7 @@ const config = {
     "afterwards. A thread that does not exist in the requested scope is a " +
     "404: this never creates one.",
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "chat_thread_ui",

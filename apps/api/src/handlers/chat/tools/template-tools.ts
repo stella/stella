@@ -11,8 +11,8 @@ import {
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { templateAiCollaboratorsForBoundary } from "@/api/handlers/chat/tools/template-ai-boundary";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -24,8 +24,10 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
-import { recordTemplateFill } from "@/api/lib/templates/record-use";
+import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
 import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
 import {
@@ -38,6 +40,11 @@ const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
   "suggest_template_fields" as const;
+
+const RECORD_FILL_FAILED_SINK = failureSink({
+  event: "templates.fill.record_failed",
+  expected: [],
+});
 
 // Exported so the playbook eval offers the tool as chat does, answered by a
 // stub, instead of a copy that can drift from it.
@@ -97,7 +104,16 @@ type CreateTemplateToolsArgs = {
   recordAuditEvent?: AuditRecorder | undefined;
   /** The chat turn's boundary, which prepares the nested AI-field requests. */
   thirdPartyBoundary: ChatThirdPartyBoundary;
+  dependencies?: TemplateToolDependencies | undefined;
 };
+
+type TemplateToolDependencies = {
+  fillStoredTemplate: typeof fillStoredTemplate;
+};
+
+const defaultTemplateToolDependencies = {
+  fillStoredTemplate,
+} satisfies TemplateToolDependencies;
 
 type TemplateAiAnalyticsArgs = {
   safeDb: SafeDb;
@@ -151,6 +167,7 @@ export const createTemplateTools = ({
   managedAIResidency,
   recordAuditEvent,
   thirdPartyBoundary,
+  dependencies = defaultTemplateToolDependencies,
 }: CreateTemplateToolsArgs) => {
   // Model-backed collaborators for the manifest's AI fields, shared with the
   // web fill routes so AI placeholders behave identically: a generator for
@@ -254,12 +271,13 @@ export const createTemplateTools = ({
           )
           .map(([fieldPath]) => fieldPath),
       );
-      const result = await fillStoredTemplate({
+      const result = await dependencies.fillStoredTemplate({
         templateId: branded,
         values,
         scopedDb,
         organizationId,
         requiredFields: "enforce",
+        useRecording: "caller",
         aiCollaborators: () => aiCollaborators(unrestoredFields),
       });
       if ("requiredFieldsRejection" in result) {
@@ -272,24 +290,29 @@ export const createTemplateTools = ({
         };
       }
       if (!("error" in result)) {
-        // Record the execution (fill row + EXECUTE audit) like the REST fill
-        // routes, so agent-driven fills appear in the audit trail.
-        // Best-effort: a successful render is not discarded if the
-        // bookkeeping write fails (it is captured).
-        await scopedDb(
-          async (tx) =>
-            await recordTemplateFill({
-              tx,
-              templateId: branded,
-              organizationId,
-              userId,
-              format: "text",
-              unmatchedCount: result.unmatchedPlaceholders.length,
-              aiFieldErrorCount: result.aiFieldErrors.length,
-              unusedCount: result.unusedValues.length,
-              recordAuditEvent,
+        // The text reaches the model only once the fill is recorded (use
+        // count, fill row, EXECUTE audit); a recording failure fails the call.
+        const recorded = await recordTemplateExecution({
+          scopedDb,
+          templateId: branded,
+          organizationId,
+          userId,
+          format: "text",
+          unmatchedCount: result.unmatchedPlaceholders.length,
+          aiFieldErrorCount: result.aiFieldErrors.length,
+          unusedCount: result.unusedValues.length,
+          recordAuditEvent,
+        });
+        if (Result.isError(recorded)) {
+          observeFailure(recorded.error, { sink: RECORD_FILL_FAILED_SINK });
+          return raiseChatToolError(
+            new ChatToolError({
+              kind: "server-defect",
+              message: "The template fill could not be recorded.",
+              cause: recorded.error,
             }),
-        ).catch(captureError);
+          );
+        }
       }
       return unrestoredFields.size === 0
         ? result
