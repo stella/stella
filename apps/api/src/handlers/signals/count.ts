@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 
 import { entities, signals } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { canTriageSignals, signalListConditions } from "@/api/lib/signals/read";
 import { dueAssignedTaskCondition } from "@/api/lib/tasks/assigned";
@@ -17,6 +17,7 @@ const config = {
     "plus their unfinished tasks due on or before `asOf`; feeds the " +
     "navigation badge.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({

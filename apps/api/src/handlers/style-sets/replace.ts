@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
 import { replaceStoredStyleSet } from "@/api/handlers/style-sets/storage";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +17,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a style package and returns its metadata rather than file bytes.",
+  },
   description:
     "Replace one style set's stored package with the styles from an uploaded " +
     "DOCX, keeping its id and name. Any upload whose file name ends in .docx " +
@@ -24,6 +29,7 @@ const config = {
     "already created from the style set are unaffected, because they copied " +
     "its styles at creation time.",
   permissions: { styleSet: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

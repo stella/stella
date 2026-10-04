@@ -77,6 +77,20 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+// A role without the tool's declared permissions is refused by dispatch
+// before the handler runs.
+const roleDenied = (toolName: string) => [
+  {
+    type: "text" as const,
+    text: JSON.stringify({
+      error: {
+        code: "permission_denied",
+        message: `Your member role does not permit ${toolName}`,
+      },
+    }),
+  },
+];
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -2818,10 +2832,7 @@ describe("MCP template tools", () => {
       text: "Matter is archived; unarchive it first",
     });
     expect(forbidden.isError).toBe(true);
-    expect(forbidden.content.at(0)).toMatchObject({
-      type: "text",
-      text: "Forbidden",
-    });
+    expect(forbidden.content).toEqual(roleDenied("save_filled_template"));
     expect(validationEnvelope(malformedTemplate)).toMatchObject({
       code: "validation_error",
     });
@@ -3461,7 +3472,7 @@ describe("MCP template tools", () => {
       toolName: "create_template",
     });
     expect(creating.isError).toBe(true);
-    expect(creating.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(creating.content).toEqual(roleDenied("create_template"));
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
 
     const publishing = await handleMcpToolCall({
@@ -3473,7 +3484,7 @@ describe("MCP template tools", () => {
       toolName: "create_template",
     });
     expect(publishing.isError).toBe(true);
-    expect(publishing.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(publishing.content).toEqual(roleDenied("create_template"));
     expect(writeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
@@ -3488,7 +3499,7 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(result.content).toEqual(roleDenied("create_template"));
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
@@ -4467,7 +4478,7 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(result.content).toEqual(roleDenied("configure_template_fields"));
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 

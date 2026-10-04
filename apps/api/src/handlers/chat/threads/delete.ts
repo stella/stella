@@ -6,7 +6,7 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,6 +25,7 @@ const config = {
     "dereferenced. Succeeds silently when the thread does not exist or belongs " +
     "to someone else.",
   permissions: { chat: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "assistant_chat",

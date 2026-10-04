@@ -12,7 +12,7 @@ import {
 
 import { member, user } from "@/api/db/auth-schema";
 import { entities, workspaceMembers } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
@@ -24,6 +24,7 @@ const config = {
   permissions: {
     workspace: ["read"],
   },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_matters" },
   access: "read",
 } satisfies HandlerConfig;

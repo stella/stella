@@ -11,6 +11,7 @@ import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 
 import {
   auditChangesForResource,
@@ -372,6 +373,14 @@ const insertAuditRows = async (
   rows: readonly (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
   await insertInChunks(rows, (batch) => tx.insert(auditLogs).values(batch));
+  if (
+    rows.some(
+      ({ action }) =>
+        action === AUDIT_ACTION.ACCESS || action === AUDIT_ACTION.DOWNLOAD,
+    )
+  ) {
+    recordContentDeliveryReceipt();
+  }
 };
 
 /**

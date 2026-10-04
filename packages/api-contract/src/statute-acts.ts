@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { statuteGazetteEliCollection } from "./statute-gazette";
+import type { StatuteQueryCountry } from "./statute-query-capability";
 
 /**
  * Acts known by a short name, stated once for every reader that names them:
@@ -183,4 +184,4 @@ export const STATUTE_ACTS = {
       label: "Správny poriadok",
     }),
   },
-} as const satisfies Record<string, Record<string, StatuteAct>>;
+} as const satisfies Record<StatuteQueryCountry, Record<string, StatuteAct>>;

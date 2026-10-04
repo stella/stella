@@ -1,6 +1,8 @@
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateFills, templates } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -57,9 +59,7 @@ type RecordTemplateFillOptions = {
  * Persist a template fill the way the REST fill routes do: a `template_fills`
  * row plus an `EXECUTE` audit event. The shared fill service records template
  * *use* (the counter) but, by design, leaves the fill row + audit to the
- * calling handler, so the chat and MCP `fill_template` tools call this to keep
- * agent-driven executions in the audit trail. Run inside the caller's
- * RLS-scoped transaction.
+ * calling handler. Run inside the caller's RLS-scoped transaction.
  */
 export const recordTemplateFill = async ({
   tx,
@@ -104,3 +104,39 @@ export const recordTemplateFill = async ({
     },
   });
 };
+
+type TemplateExecutionRecorders = {
+  recordTemplateUse: typeof recordTemplateUse;
+  recordTemplateFill: typeof recordTemplateFill;
+};
+
+const defaultTemplateExecutionRecorders = {
+  recordTemplateUse,
+  recordTemplateFill,
+} satisfies TemplateExecutionRecorders;
+
+type RecordTemplateExecutionOptions = Omit<RecordTemplateFillOptions, "tx"> & {
+  scopedDb: ScopedDb;
+  recorders?: TemplateExecutionRecorders | undefined;
+};
+
+/**
+ * Record a transient fill (one returned as text, not persisted) in one
+ * transaction: the use-count bump, the fill row and the `EXECUTE` audit event.
+ * The chat and MCP `fill_template` tools fill with `useRecording: "caller"` and
+ * return the rendered text only once this commits, so an agent never receives
+ * a fill the audit trail lacks; on failure nothing is written and the caller
+ * returns an error instead of the text.
+ */
+export const recordTemplateExecution = async ({
+  scopedDb,
+  recorders = defaultTemplateExecutionRecorders,
+  ...fill
+}: RecordTemplateExecutionOptions) =>
+  await Result.tryPromise(
+    async () =>
+      await scopedDb(async (tx) => {
+        await recorders.recordTemplateUse({ tx, templateId: fill.templateId });
+        await recorders.recordTemplateFill({ tx, ...fill });
+      }),
+  );

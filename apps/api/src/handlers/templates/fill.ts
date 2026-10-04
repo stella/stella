@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
@@ -253,6 +253,10 @@ export const fillHandler = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Renders the template uploaded in this request.",
+  },
   description:
     "Fill a template with values. 'values' maps each field path to its " +
     'value, e.g. {"tenant.name": "ACME Sp. z o.o.", "signing_date": ' +
@@ -260,6 +264,7 @@ const config = {
     "and AI-fillable fields are resolved automatically; AI-fillable fields " +
     "are drafted when you omit them.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
   transport: {

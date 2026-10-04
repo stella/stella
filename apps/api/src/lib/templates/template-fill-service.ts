@@ -553,8 +553,9 @@ type FillServiceOptions<TRejection = never> = {
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
   assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
-  /** The persistence owner may defer use-count recording into its own atomic
-   *  transaction. All ordinary fill callers retain the after-fill default. */
+  /** A caller that records the fill itself (document persistence, or an agent
+   *  tool returning the text) defers use-count recording into its own atomic
+   *  transaction. Other fill callers retain the after-fill default. */
   useRecording?: TemplateUseRecording | undefined;
   /** The matter being filled into. When set and the manifest declares any
    *  data-bound field ({@link FieldMeta.source}), the matter's client, parties,
