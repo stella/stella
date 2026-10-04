@@ -163,7 +163,7 @@ beforeAll(async () => {
   `);
   await applyMigration(
     new URL(
-      "../../../drizzle/20261003124600_playbook_document_type_reference/migration.sql",
+      "../../../drizzle/20261003125200_playbook_document_type_reference/migration.sql",
       import.meta.url,
     ),
   );
@@ -588,7 +588,7 @@ describe("playbook document type references", () => {
   test("validates the deployed reference while retaining NO ACTION for organization teardown", async () => {
     await applyMigration(
       new URL(
-        "../../../drizzle/20261003124700_validate_playbook_document_type_reference/migration.sql",
+        "../../../drizzle/20261003125300_validate_playbook_document_type_reference/migration.sql",
         import.meta.url,
       ),
     );
