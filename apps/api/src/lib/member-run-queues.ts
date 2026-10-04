@@ -1,4 +1,5 @@
 import type { BullMqQueueName } from "@/api/lib/bullmq-queue";
+import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
 
 /**
  * Queues whose runs act for the member who requested them.
@@ -40,6 +41,21 @@ export const MEMBER_RUN_QUEUES = [
 ] as const satisfies readonly { queue: BullMqQueueName; module: string }[];
 
 export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
+
+/**
+ * Scheduler tasks that act for one member per item they process, through a
+ * `createRootRunActor` built for that member each time. `scripts/ownership.ts`
+ * allows `createRootRunActor` in these modules too.
+ */
+export const MEMBER_RUN_SCHEDULER_TASKS = [
+  {
+    task: "memory.extractor",
+    module: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+  },
+] as const satisfies readonly {
+  task: RegisteredSchedulerTaskName;
+  module: string;
+}[];
 
 /**
  * Whose authority a queued job runs under.

@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { status } from "elysia";
 
 /** Public route factories and the census of handlers they gate. */
-import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
-
 import type {
   ExactSuccessSchemaGuard,
   PublicHandlerConfig,
@@ -17,6 +15,7 @@ import type {
   DecisionSubjectLocator,
   RedistributableDecisionSubject,
 } from "@/api/lib/case-law/public-subject";
+import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 
 export const DECISION_NOT_FOUND = { message: "Decision not found" } as const;
 
@@ -31,11 +30,7 @@ type NotFoundStatus = ReturnType<typeof notFound>;
  */
 type UnreadableSubjectAddress =
   | { kind: "unreadable"; message: string }
-  | { kind: "unavailable"; response: PublicCountryUnavailable };
-
-const unavailableAddress = (response: PublicCountryUnavailable) =>
-  status(503, response);
-type UnavailableAddressStatus = ReturnType<typeof unavailableAddress>;
+  | { kind: "unavailable"; answer: PublicCountryUnavailableAnswer };
 
 const unreadableAddress = (message: string) => status(400, { message });
 type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
@@ -95,11 +90,11 @@ const buildGatedSubjectHandler = <
       | TResult
       | NotFoundStatus
       | UnreadableAddressStatus
-      | UnavailableAddressStatus
+      | PublicCountryUnavailableAnswer
     > {
       const located = locate(ctx);
       if (located.kind === "unavailable") {
-        return Result.ok(unavailableAddress(located.response));
+        return Result.ok(located.answer);
       }
       if (located.kind === "unreadable") {
         return Result.ok(unreadableAddress(located.message));

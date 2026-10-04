@@ -53,7 +53,9 @@ export type OnlineMigrationConnection = {
     query: string,
     params?: readonly OnlineMigrationParam[],
   ) => Promise<readonly unknown[]>;
-  release: () => void;
+  release: () => void | Promise<void>;
+  /** Closes this physical session immediately, including an active statement. */
+  terminate?: () => Promise<void>;
 };
 
 export type OnlineMigrationPool = {

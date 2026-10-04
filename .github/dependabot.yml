@@ -209,7 +209,16 @@ updates:
       minor-and-patch:
         patterns:
           - "*"
+        exclude-patterns:
+          - "@tauri-apps/*"
         update-types:
+          - "minor"
+          - "patch"
+      tauri:
+        patterns:
+          - "@tauri-apps/*"
+        update-types:
+          - "major"
           - "minor"
           - "patch"
       turbo:

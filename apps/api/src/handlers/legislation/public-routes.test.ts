@@ -5,6 +5,7 @@ import nodePath from "node:path";
 import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -36,7 +37,7 @@ describe("public statute routes", () => {
         const response = await publicLegislationRoute.handle(
           new Request(`http://localhost${url}`),
         );
-        expect(response.status).toBe(503);
+        expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
         expect(await response.json()).toMatchObject({
           status: "unavailable",
           country,
@@ -60,7 +61,7 @@ describe("public statute routes", () => {
       "unobserved",
     );
     expect(search).toMatchObject({
-      code: 503,
+      code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       response: {
         status: "unavailable",
         country: "SVK",
@@ -69,7 +70,9 @@ describe("public statute routes", () => {
     });
     for (const request of requests) {
       const response = await publicLegislationRoute.handle(request);
-      expect(response.status, request.url).toBe(503);
+      expect(response.status, request.url).toBe(
+        PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+      );
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",

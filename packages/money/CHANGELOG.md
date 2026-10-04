@@ -1,5 +1,17 @@
 # @stll/money
 
+## 0.3.1
+
+### Patch Changes
+
+- [#4502](https://github.com/stella/stella/pull/4502) [`ca5df32`](https://github.com/stella/stella/commit/ca5df32b4a006745b026adeb4c572da622be71ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add invoice PDF capability metadata and preserve exact minor-unit formatting.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#4582](https://github.com/stella/stella/pull/4582) [`b8a1d41`](https://github.com/stella/stella/commit/b8a1d41da558c4c148fd696a714d56621ecb2db3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared time-entry amount calculation that honors no-charge time.
+
 ## 0.2.3
 
 ### Patch Changes

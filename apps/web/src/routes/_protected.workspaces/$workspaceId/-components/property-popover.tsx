@@ -43,6 +43,8 @@ import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
+import { canEditPropertyViaComposer } from "./property-popover.logic";
+
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
   header: TableHeader;
@@ -169,14 +171,12 @@ export const PropertyPopover = ({
     },
   });
 
-  // The composer's CreatableContentType union excludes "file" by
-  // design — file columns are created by upload, not by user choice,
-  // and the composer has no UI for them. Hiding the entry here keeps
-  // a save from silently rewriting the file column as text/manual.
-  // Verdict columns are system-computed (read-only), so they are not
-  // editable via the composer either.
-  const canEditViaComposer =
-    property.content.type !== "file" && !isPlaybookVerdictProperty(property);
+  // The composer supports custom content types; file and computed verdict
+  // columns retain their dedicated editing controls.
+  const canEditViaComposer = canEditPropertyViaComposer(
+    property.content,
+    isPlaybookVerdictProperty(property),
+  );
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest

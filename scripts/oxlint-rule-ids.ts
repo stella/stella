@@ -54,6 +54,30 @@ const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
 
 export const pluginScope = (plugin: string) => PLUGIN_ALIASES[plugin] ?? plugin;
 
+// ESLint core rules oxlint also accepts under the typescript prefix; it
+// configures the ESLint rule for either spelling
+// (crates/oxc_linter/src/utils/mod.rs, TYPESCRIPT_COMPATIBLE_ESLINT_RULES).
+const TYPESCRIPT_ADAPTED_ESLINT_RULES: ReadonlySet<string> = new Set([
+  "class-methods-use-this",
+  "default-param-last",
+  "init-declarations",
+  "max-params",
+  "no-array-constructor",
+  "no-dupe-class-members",
+  "no-empty-function",
+  "no-invalid-this",
+  "no-loop-func",
+  "no-loss-of-precision",
+  "no-magic-numbers",
+  "no-redeclare",
+  "no-restricted-imports",
+  "no-shadow",
+  "no-unused-expressions",
+  "no-unused-vars",
+  "no-use-before-define",
+  "no-useless-constructor",
+]);
+
 /** Resolves a config rule key to `scope/name`; JS-plugin keys pass through. */
 export const ruleCanonicalizer = (rules: readonly BuiltinRule[]) => {
   const ids = new Set(rules.map((rule) => `${rule.scope}/${rule.value}`));
@@ -73,7 +97,14 @@ export const ruleCanonicalizer = (rules: readonly BuiltinRule[]) => {
       const named = owners.get(key) ?? [];
       return named.length === 1 ? (named[0] ?? key) : key;
     }
-    const id = `${pluginScope(key.slice(0, separator))}/${key.slice(separator + 1)}`;
-    return ids.has(id) ? id : key;
+    const scope = pluginScope(key.slice(0, separator));
+    const name = key.slice(separator + 1);
+    const id = `${scope}/${name}`;
+    if (ids.has(id)) {
+      return id;
+    }
+    return scope === "typescript" && TYPESCRIPT_ADAPTED_ESLINT_RULES.has(name)
+      ? `eslint/${name}`
+      : key;
   };
 };
