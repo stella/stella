@@ -15,6 +15,10 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Renders a style configuration against sample content.",
+  },
   description:
     "Render a content-free style set configuration against bounded sample " +
     "contract text and return a DOCX for the visual style editor preview. " +

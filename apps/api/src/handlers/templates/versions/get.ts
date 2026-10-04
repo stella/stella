@@ -14,6 +14,7 @@ const getTemplateVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: { type: "audited" },
   description:
     "Read one stored template version: its number, field count, creation " +
     "time, and a short-lived presigned URL to download that version's DOCX. " +
