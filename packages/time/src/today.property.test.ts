@@ -72,7 +72,7 @@ describe("todayFor (properties)", () => {
     "is the zone's local calendar date for arbitrary instants",
     () => {
       assertProperty(
-        "todayFor is the zone's local calendar date for arbitrary instants",
+        "is the zone's local calendar date for arbitrary instants",
         fc.property(zone, anyInstant, (zoneId, epochMilliseconds) => {
           const today = todayFor(
             zoneId,
@@ -91,7 +91,7 @@ describe("todayFor (properties)", () => {
     "is the zone's local calendar date around offset transitions",
     () => {
       assertProperty(
-        "todayFor is the zone's local calendar date around offset transitions",
+        "is the zone's local calendar date around offset transitions",
         fc.property(
           zone,
           anyInstant,
@@ -116,7 +116,7 @@ describe("todayFor (properties)", () => {
     "changes exactly at local midnight, whatever the UTC day says",
     () => {
       assertProperty(
-        "todayFor changes exactly at local midnight, whatever the UTC day says",
+        "changes exactly at local midnight, whatever the UTC day says",
         fc.property(zone, anyInstant, (zoneId, epochMilliseconds) => {
           const midnight = Temporal.Instant.fromEpochMilliseconds(
             epochMilliseconds,
