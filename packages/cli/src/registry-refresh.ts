@@ -188,7 +188,7 @@ export const resolveCommandTree = async ({
   registry,
   featureAccess,
   bakedTree = generatedRouteMap,
-  loadCatalog = loadBakedCapabilityCatalog,
+  loadCatalog = async () => loadBakedCapabilityCatalog(),
   annotations = TOOL_ANNOTATIONS,
 }: {
   serverOrigin: string | undefined;
