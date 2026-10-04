@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import {
@@ -14,6 +17,7 @@ import { extractLangFromRequest } from "@/api/lib/locale";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
 

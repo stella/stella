@@ -7,7 +7,7 @@ import {
   flowDefinitionParamsSchema,
 } from "@/api/handlers/flows/schema";
 import { parseAndValidateFlowDefinition } from "@/api/handlers/flows/validate-definition";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +21,7 @@ const config = {
     "changing or removing a schedule trigger, or disabling the flow, also " +
     "stops it from firing.",
   permissions: { flow: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",

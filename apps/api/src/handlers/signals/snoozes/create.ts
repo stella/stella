@@ -11,7 +11,7 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -25,6 +25,7 @@ const config = {
     "Snooze an inbox signal until a later time; it returns to the open feed " +
     "once that time passes.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

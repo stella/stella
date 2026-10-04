@@ -29,6 +29,7 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
   type CorpusIndexRankingMode,
@@ -65,11 +66,15 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
 const TIED_INDEX_ID = `${INDEX_ID}_tied`;
+const PROVISION_INDEX_ID = `${INDEX_ID}_provision`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000002";
 const SMALL_TIED_SOURCE_ID = "0198e331-e578-7000-8000-000000000003";
+const PROVISION_SOURCE_ID = "0198e331-e578-7000-8000-000000000004";
+const PROVISION_ALIAS_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000001";
+const PROVISION_OTHER_ACT_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000002";
 const ENGINE_TIMEOUT_MS = 120_000;
 
 /**
@@ -213,8 +218,53 @@ const tiedDocuments = (serial: number) => {
   return documents;
 };
 
+const provisionDocuments = () =>
+  [
+    {
+      documentId: PROVISION_ALIAS_DOCUMENT_ID,
+      text: "Podľa § 451 OZ vzniká bezdôvodné obohatenie pri plnení bez právneho dôvodu.",
+    },
+    {
+      documentId: PROVISION_OTHER_ACT_DOCUMENT_ID,
+      text: "Podľa § 451 Občianskeho súdneho poriadku súd posúdil bezdôvodné obohatenie. Výklad zákonníka uviedol oddelene.",
+    },
+  ].flatMap(({ documentId, text }) =>
+    buildCaseLawProjectionDocuments({
+      manifest: MANIFEST,
+      input: {
+        family: "case_law",
+        documentId,
+        sourceId: PROVISION_SOURCE_ID,
+        jurisdiction: "SVK",
+        language: "sk",
+        documentType: "rozsudok",
+        contentHash: null,
+        redistributionEligible: true,
+        redacted: false,
+        listingOnly: false,
+        caseNumber: "",
+        identifiers: [],
+        court: "",
+        courtId: null,
+        decisionDate: "2020-01-01",
+        ecli: null,
+        metadata: null,
+      },
+      payload: { text, ast: null },
+      revision: REVISION,
+    }),
+  );
+
+type HandlerQueryOptions = {
+  queryVariant?: CorpusIndexQueryVariant;
+  source?: string;
+};
+
 /** The engine query the search handler builds for an entry, relevance order. */
-const handlerQuery = (text: string): string => {
+const handlerQuery = (
+  text: string,
+  { queryVariant, source }: HandlerQueryOptions = {},
+): string => {
   const fields = caseLawCorpusQueryFields({
     generation: MANIFEST.generation,
     jurisdiction: "SVK",
@@ -223,7 +273,8 @@ const handlerQuery = (text: string): string => {
   const query = caseLawCorpusQuery({
     jurisdiction: "SVK",
     text,
-    filters: { jurisdiction: "SVK" },
+    filters: { jurisdiction: "SVK", source },
+    queryVariant,
     stemming: fields.stemming,
     surfaceFields: fields.surfaceFields,
     keywordFields: fields.keywordFields,
@@ -392,6 +443,28 @@ describe.skipIf(!runEngineTests)(
           throw new Error(`ingest ${String(response.status)}`);
         }
       }
+      const provisionCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(MANIFEST, PROVISION_INDEX_ID),
+        "unobserved",
+      );
+      if (provisionCreated.isErr()) {
+        throw provisionCreated.error;
+      }
+      // Its own index: the ENTRIES scans rank every candidate they reach, and
+      // these documents carry no projection count and no batch composition.
+      const provisionResponse = await fetch(
+        `${String(mutationBase)}/api/v1/${PROVISION_INDEX_ID}/ingest?commit=force`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: `${provisionDocuments()
+            .map((document) => JSON.stringify(document))
+            .join("\n")}\n`,
+        },
+      );
+      if (!provisionResponse.ok) {
+        throw new Error(`ingest ${String(provisionResponse.status)}`);
+      }
       const tiedCreated = await client.createIndex(
         corpusIndexConfigFromManifest(MANIFEST, TIED_INDEX_ID),
         "unobserved",
@@ -424,13 +497,52 @@ describe.skipIf(!runEngineTests)(
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      for (const indexId of [INDEX_ID, TIED_INDEX_ID]) {
+      for (const indexId of [INDEX_ID, TIED_INDEX_ID, PROVISION_INDEX_ID]) {
         const deleted = await client.deleteIndex(indexId, "unobserved");
         if (deleted.isErr()) {
           throw deleted.error;
         }
       }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "provision variants match civil-code aliases without admitting a different act",
+      async () => {
+        const text = "§ 451 Občianskeho zákonníka bezdôvodné obohatenie";
+        const offQuery = handlerQuery(text, {
+          queryVariant: "off",
+          source: PROVISION_SOURCE_ID,
+        });
+        const variantQuery = handlerQuery(text, {
+          queryVariant: "provision-refs",
+          source: PROVISION_SOURCE_ID,
+        });
+        expect(variantQuery).not.toBe(offQuery);
+        const off = await readScored({
+          query: offQuery,
+          from: 0,
+          size: 10,
+          indexId: PROVISION_INDEX_ID,
+        });
+        const variant = await readScored({
+          query: variantQuery,
+          from: 0,
+          size: 10,
+          indexId: PROVISION_INDEX_ID,
+        });
+        const offIds = new Set(
+          off.hits.map(({ fields }) => fields["document_id"]),
+        );
+        const variantIds = new Set(
+          variant.hits.map(({ fields }) => fields["document_id"]),
+        );
+        expect(offIds.has(PROVISION_ALIAS_DOCUMENT_ID)).toBe(false);
+        // The control reaches the old independent-word conjunction.
+        expect(offIds.has(PROVISION_OTHER_ACT_DOCUMENT_ID)).toBe(true);
+        expect(variantIds).toEqual(new Set([PROVISION_ALIAS_DOCUMENT_ID]));
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test(
       "all-tied scores past the cutoff fall back and visit every document once",

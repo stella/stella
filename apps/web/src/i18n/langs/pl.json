@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Dodaj serię numeracji",
       "advance": "Zaliczka",
+      "allSellers": "Wszyscy sprzedawcy",
       "archiveConfirm": "Zarchiwizować tę serię numeracji? Nie będzie już dostępna dla nowych dokumentów.",
       "creditNote": "Nota kredytowa",
       "default": "Seria domyślna",
@@ -562,6 +563,9 @@
       "preview": "Następny numer",
       "previewAllocated": "Ten numer został już przydzielony.",
       "previewHelp": "Podgląd używa zapisanego szablonu i nie rezerwuje numeru.",
+      "sellerProfile": "Profil sprzedawcy",
+      "sellerUnavailable": "Sprzedawca zarchiwizowany lub niedostępny",
+      "sellerUnavailableHelp": "Ten sprzedawca został zarchiwizowany lub jest niedostępny. Zachowaj przypisanie lub wybierz innego sprzedawcę.",
       "setDefault": "Ustaw jako serię domyślną",
       "title": "Serie numeracji"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
       "recentChats": "Ostatnie czaty",
+      "skillEditedBy": "Edytował(a) {name} · {time}",
       "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
     "thinking": "Pracuję z kontekstem",
+    "threadFiles": {
+      "title": "Pliki w tym czacie"
+    },
     "tool": {
       "add_comment": "Dodawanie komentarza",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
@@ -1566,6 +1574,7 @@
       "socialSecurityNumber": "Numer ubezpieczenia społecznego",
       "taxIdentificationNumber": "NIP"
     },
+    "approve": "Zatwierdź",
     "archive": "Archiwizuj",
     "ask": "Zapytaj",
     "askAI": "Zapytaj AI",
@@ -1849,12 +1858,14 @@
   },
   "consent": {
     "allow": "Zezwól",
+    "appIdentity": "Tożsamość aplikacji",
     "completeSetup": "Zakończ konfigurację",
     "defaultClientName": "Aplikacja",
     "description": "{clientName} chce uzyskać dostęp do Twojego obszaru roboczego w stella",
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
+    "redirectDestination": "Cel przekierowania",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -1875,7 +1886,8 @@
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
     "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
-    "title": "Autoryzacja dostępu"
+    "title": "Autoryzacja dostępu",
+    "unverifiedApp": "Niezweryfikowana aplikacja"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",
@@ -2258,10 +2270,12 @@
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
+      "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
@@ -3393,6 +3407,8 @@
         "none": "Bez uwierzytelniania",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Przed zatwierdzeniem sprawdź serwer autoryzacji i domeny punktów końcowych.",
+      "authorizationServer": "Serwer autoryzacji",
       "bearerTokenDescription": "Ten serwer używa tokenu Bearer. Wklej token od dostawcy, aby zakończyć łączenie.",
       "connectedToast": "MCP połączone",
       "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
@@ -3403,9 +3419,11 @@
       "emptyDescription": "Wybrane prawnicze integracje pojawią się tutaj po włączeniu ich dla Twojego obszaru roboczego.",
       "emptyTitle": "Brak integracji",
       "enable": "Włącz",
+      "endpointOrigins": "Domeny punktów końcowych",
       "errorDescription": "Nie udało się zaktualizować integracji.",
       "errorTitle": "MCP nieudane",
       "mcpExplainer": "Integracje łączą z czatem usługi zewnętrzne, z którymi może pracować AI.",
+      "needsReapproval": "Wymaga ponownego zatwierdzenia",
       "needsReauth": "Wymaga ponownego połączenia",
       "off": "Wył.",
       "on": "Wł.",
@@ -4817,6 +4835,7 @@
     "addPart": "Dodaj część",
     "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
+    "aiConditionsUndecided": "AI nie zdołała rozstrzygnąć tych warunków, więc ich sekcje wypełniono tak, jakby nie miały zastosowania: {list}",
     "aiDecidedConditions": "Decyduje AI",
     "aiFieldsNotDrafted": "AI nie zdołała przygotować tych pól: {list}",
     "allTemplates": "Wszystkie szablony",
@@ -4908,6 +4927,7 @@
     "directiveFor": "Pętla: {expression}",
     "directiveIf": "Jeśli: {expression}",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
+    "documentCreatedIncomplete": "Dokument utworzono, ale wypełnienie jest niekompletne",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",
     "downloadPdf": "Pobierz PDF",
@@ -5003,6 +5023,7 @@
     "saveFailed": "Nie udało się zapisać szablonu",
     "savedLookupFormats": "Zapisane formaty wyjściowe",
     "searchTemplates": "Szukaj szablonów…",
+    "structureErrorsInDocument": "Dyrektywy szablonu, których nie udało się zastosować: {count}. Sprawdź dokument.",
     "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {

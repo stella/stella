@@ -80,7 +80,9 @@ import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
+  readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  savedFillNotices,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -90,7 +92,9 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -1258,9 +1262,7 @@ const RegistryAutofillControl = ({
     } catch (error) {
       if (seq === lookupSeq.current) {
         setLoading(false);
-        stellaToast.add({
-          type: "error",
-          title: t("templates.registryNotFound"),
+        notifyUserError(error, t("templates.registryNotFound"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       }
@@ -1275,28 +1277,18 @@ const RegistryAutofillControl = ({
     setLoading(false);
 
     if (error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.registryNotFound"),
-        description: userErrorMessage(error, t("common.unexpectedError")),
-      });
+      notifyUserError(toAPIError(error), t("templates.registryNotFound"));
       return;
     }
 
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.registryNotFound"),
-      });
+      notifyUserError(error, t("templates.registryNotFound"));
       return;
     }
 
     const updates = buildAutofillUpdates(groupFields, data.hit);
     if (updates.length === 0) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.registryNotFound"),
-      });
+      notifyUserError(undefined, t("templates.registryNotFound"));
       return;
     }
     onApply(updates);
@@ -1851,10 +1843,7 @@ export const TemplateForm = ({
             break;
           }
         }
-        stellaToast.add({
-          type: "error",
-          title: t("templates.validationErrors"),
-        });
+        notifyUserError(undefined, t("templates.validationErrors"));
         return;
       }
 
@@ -1902,14 +1891,7 @@ export const TemplateForm = ({
           format === "pdf"
             ? "templates.pdfConversionFailed"
             : "templates.fillFailed";
-        stellaToast.add({
-          type: "error",
-          title: t(errorKey),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
+        notifyUserError(toAPIError(response.error), t(errorKey));
         return;
       }
 
@@ -1936,6 +1918,24 @@ export const TemplateForm = ({
           type: "warning",
           title: t("templates.aiFieldsNotDrafted", {
             list: aiFieldPaths.value.join(", "),
+          }),
+        });
+      }
+
+      const undecidedLabels = readUndecidedConditionLabels(
+        response.response.headers,
+      );
+      if (Result.isError(undecidedLabels)) {
+        getAnalytics().captureError(undecidedLabels.error);
+        stellaToast.add({
+          type: "warning",
+          title: t("common.unexpectedError"),
+        });
+      } else if (undecidedLabels.value.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiConditionsUndecided", {
+            list: undecidedLabels.value.join(", "),
           }),
         });
       }
@@ -1983,15 +1983,17 @@ export const TemplateForm = ({
   ) => {
     handleDownload(format, options).catch((error: unknown) => {
       setLoading(false);
-      stellaToast.add({
-        type: "error",
-        title: t(
+      notifyUserError(
+        error,
+        t(
           format === "pdf"
             ? "templates.pdfConversionFailed"
             : "templates.fillFailed",
         ),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
+        {
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+        },
+      );
       getAnalytics().captureError(error);
     });
   };
@@ -2011,10 +2013,7 @@ export const TemplateForm = ({
       return;
     }
     if (!validateAll(values)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.validationErrors"),
-      });
+      notifyUserError(undefined, t("templates.validationErrors"));
       return;
     }
 
@@ -2038,14 +2037,7 @@ export const TemplateForm = ({
         });
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.fillFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
+        notifyUserError(toAPIError(response.error), t("templates.fillFailed"));
         return;
       }
 
@@ -2060,30 +2052,54 @@ export const TemplateForm = ({
           }),
         });
       }
-      stellaToast.add({
-        type: "success",
-        title: t("success.documentCreated"),
-      });
-      if (created.unmatchedPlaceholders.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.unmatchedPlaceholders", {
-            list: created.unmatchedPlaceholders.join(", "),
-          }),
-        });
-      }
-      // A field whose draft failed is unfilled, so it is already listed above
-      // as an unmatched placeholder; this names the ones the model could not
-      // write, which the person filling the template has to write instead.
-      if (created.aiFieldErrors.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.aiFieldsNotDrafted", {
-            list: created.aiFieldErrors
-              .map((fieldError) => fieldError.fieldPath)
-              .join(", "),
-          }),
-        });
+      for (const notice of savedFillNotices(created)) {
+        switch (notice.kind) {
+          case "created":
+            stellaToast.add({
+              type: "success",
+              title: t("success.documentCreated"),
+            });
+            break;
+          case "createdIncomplete":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.documentCreatedIncomplete"),
+            });
+            break;
+          case "unmatchedPlaceholders":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.unmatchedPlaceholders", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "aiFieldsNotDrafted":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiFieldsNotDrafted", { list: notice.list }),
+            });
+            break;
+          case "aiConditionsUndecided":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiConditionsUndecided", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "structureErrors":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.structureErrorsInDocument", {
+                count: String(notice.count),
+              }),
+            });
+            break;
+          default:
+            notice satisfies never;
+            panic("Unhandled saved-fill notice");
+        }
       }
 
       setMatterDialogOpen(false);
@@ -2133,7 +2149,7 @@ export const TemplateForm = ({
     await runLeadingSingleFlight(fillToMatterFlight, async () => {
       const resolved = await resolveTarget(target);
       if (Result.isError(resolved)) {
-        stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+        notifyUserError(resolved.error, t("errors.actionFailed"));
         return;
       }
       if (target.type === "pending") {
@@ -2156,10 +2172,7 @@ export const TemplateForm = ({
    *  submittable form. */
   const handleChooseMatter = () => {
     if (!validateAll(values)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.validationErrors"),
-      });
+      notifyUserError(undefined, t("templates.validationErrors"));
       return;
     }
     if (!confirmEmptyFields("moveToMatter", values)) {
@@ -2175,10 +2188,7 @@ export const TemplateForm = ({
       // Validate + gate here so the empty-fields warning can interpose
       // before fillToMatter fires (it re-validates internally).
       if (!validateAll(values)) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.validationErrors"),
-        });
+        notifyUserError(e, t("templates.validationErrors"));
         return;
       }
       if (!confirmEmptyFields("createDocument", values)) {

@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Nummernkreis hinzufügen",
       "advance": "Anzahlung",
+      "allSellers": "Alle Verkäufer",
       "archiveConfirm": "Diesen Nummernkreis archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
       "creditNote": "Gutschrift",
       "default": "Standardnummernkreis",
@@ -562,6 +563,9 @@
       "preview": "Nächste Nummer",
       "previewAllocated": "Diese Nummer ist bereits vergeben.",
       "previewHelp": "Die Vorschau verwendet die gespeicherte Vorlage und reserviert keine Nummer.",
+      "sellerProfile": "Verkäuferprofil",
+      "sellerUnavailable": "Verkäufer archiviert oder nicht verfügbar",
+      "sellerUnavailableHelp": "Dieser Verkäufer ist archiviert oder nicht verfügbar. Behalten Sie die Zuordnung bei oder wählen Sie einen anderen Verkäufer.",
       "setDefault": "Als Standardnummernkreis festlegen",
       "title": "Nummernkreise"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Noch keine Skills",
       "pinnedMatters": "Angeheftete Akten",
       "recentChats": "Letzte Chats",
+      "skillEditedBy": "Bearbeitet von {name} · {time}",
       "skills": "Skills"
     },
     "loadEarlierMessages": "Ältere Nachrichten laden",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
     "thinking": "Arbeite mit Kontext",
+    "threadFiles": {
+      "title": "Dateien in diesem Chat"
+    },
     "tool": {
       "add_comment": "Kommentar hinzufügen",
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
@@ -1566,6 +1574,7 @@
       "socialSecurityNumber": "Sozialversicherungsnummer",
       "taxIdentificationNumber": "Steuer-Identifikationsnummer"
     },
+    "approve": "Genehmigen",
     "archive": "Archivieren",
     "ask": "Fragen",
     "askAI": "KI fragen",
@@ -1849,12 +1858,14 @@
   },
   "consent": {
     "allow": "Zulassen",
+    "appIdentity": "App-Identität",
     "completeSetup": "Einrichtung abschließen",
     "defaultClientName": "Eine Anwendung",
     "description": "{clientName} möchte auf Ihren stella-Arbeitsbereich zugreifen",
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",
     "permissions": "Dies erlaubt der Anwendung:",
+    "redirectDestination": "Weiterleitungsziel",
     "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
     "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
@@ -1875,7 +1886,8 @@
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
-    "title": "Zugriff autorisieren"
+    "title": "Zugriff autorisieren",
+    "unverifiedApp": "Nicht verifizierte App"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",
@@ -2258,10 +2270,12 @@
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
+      "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
+      "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
@@ -3393,6 +3407,8 @@
         "none": "Keine Authentifizierung",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Prüfen Sie vor der Genehmigung den Autorisierungsserver und die Ursprünge der Endpunkte.",
+      "authorizationServer": "Autorisierungsserver",
       "bearerTokenDescription": "Dieser Server verwendet ein Bearer-Token. Fügen Sie das Token des Anbieters ein, um die Verbindung abzuschließen.",
       "connectedToast": "MCP verbunden",
       "connectedWithLastUsed": "Verbunden · zuletzt verwendet {time}",
@@ -3403,9 +3419,11 @@
       "emptyDescription": "Kuratierte juristische Integrationen erscheinen hier, sobald sie für Ihren Arbeitsbereich aktiviert sind.",
       "emptyTitle": "Noch keine Integrationen",
       "enable": "Aktivieren",
+      "endpointOrigins": "Endpunkt-Ursprünge",
       "errorDescription": "Die Integration konnte nicht aktualisiert werden.",
       "errorTitle": "MCP fehlgeschlagen",
       "mcpExplainer": "Integrationen verbinden externe Dienste mit dem Chat, mit denen die KI arbeiten kann.",
+      "needsReapproval": "Erneute Genehmigung erforderlich",
       "needsReauth": "Erneute Verbindung erforderlich",
       "off": "Aus",
       "on": "Ein",
@@ -4817,6 +4835,7 @@
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
     "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
+    "aiConditionsUndecided": "Die KI konnte diese Bedingungen nicht entscheiden; ihre Abschnitte wurden so ausgefüllt, als ob sie nicht zutreffen: {list}",
     "aiDecidedConditions": "Von der KI entschieden",
     "aiFieldsNotDrafted": "Die KI konnte diese Felder nicht entwerfen: {list}",
     "allTemplates": "Alle Vorlagen",
@@ -4908,6 +4927,7 @@
     "directiveFor": "Schleife: {expression}",
     "directiveIf": "Wenn: {expression}",
     "discoveryFailed": "Vorlage konnte nicht analysiert werden",
+    "documentCreatedIncomplete": "Dokument erstellt, aber die Ausfüllung ist unvollständig",
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
@@ -5003,6 +5023,7 @@
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "savedLookupFormats": "Gespeicherte Ausgabeformate",
     "searchTemplates": "Vorlagen durchsuchen…",
+    "structureErrorsInDocument": "Vorlagenanweisungen, die nicht angewendet werden konnten: {count}. Prüfen Sie das Dokument.",
     "structureWarningParagraph": "Absatz {paragraph, number}",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {

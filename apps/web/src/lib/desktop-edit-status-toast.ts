@@ -5,6 +5,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type DesktopEditToastMessages = {
   notOpenedDescription: ReactNode;
@@ -49,18 +50,16 @@ export const showDesktopEditOpenResultToast = async ({
   } catch (error) {
     getAnalytics().captureError(error);
     if (error instanceof DesktopBridgeIncompatibleError) {
-      stellaToast.update(toastId, {
+      notifyUserError(error, messages.updateRequiredTitle, {
+        toastId,
         description: messages.updateRequiredDescription,
-        title: messages.updateRequiredTitle,
-        type: "error",
       });
       return;
     }
 
-    stellaToast.update(toastId, {
+    notifyUserError(error, messages.unavailableTitle, {
+      toastId,
       description: messages.notOpenedDescription,
-      title: messages.unavailableTitle,
-      type: "error",
     });
   }
 };

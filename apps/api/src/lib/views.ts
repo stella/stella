@@ -7,8 +7,8 @@ import {
 import { conditionIncludesKind } from "@stll/conditions";
 
 import type { EntityKind } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
@@ -259,7 +259,8 @@ export const getDefaultViews = (
 ): DefaultView[] => {
   const names = VIEW_NAMES[lang];
   const templates = defaultViewTemplates(
-    options.legalListsEnabled ?? env.FEATURE_LEGAL_LISTS,
+    options.legalListsEnabled ??
+      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
   );
   return templates.map((tmpl) => ({
     name: names[tmpl.nameKey],
@@ -404,7 +405,7 @@ export const normalizeDefaultViewLayout = ({
  * re-localized on read. Acceptable given the low collision likelihood.
  */
 export const localizeDefaultViewName = ({
-  legalListsEnabled = env.FEATURE_LEGAL_LISTS,
+  legalListsEnabled = isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
   lang,
   layoutType,
   name,

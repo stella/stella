@@ -3,13 +3,10 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { statements } from "@stll/permissions";
-
 import { createDemoSessionPolicy } from "@/api/lib/auth/demo-account-hooks";
 import {
   checkDemoAccountAccess,
   createDemoSessionFilter,
-  requiresStandardAccount,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
 import {
@@ -55,6 +52,34 @@ describe("account access policy", () => {
       }
     } finally {
       resetLogSinkForTesting();
+    }
+  });
+
+  test("normalizes configured account identities for access and session creation", async () => {
+    for (const accountEmail of [email, " Account@Example.Test "]) {
+      for (const configuredEmail of [email, " ACCOUNT@EXAMPLE.TEST "]) {
+        const normalizedConfig = { email: configuredEmail, organizationId };
+        expect(
+          Result.isError(
+            checkDemoAccountAccess({
+              config: normalizedConfig,
+              email: accountEmail,
+              operation: "growth",
+            }),
+          ),
+        ).toBe(true);
+        const createSession = createDemoSessionPolicy({
+          config: normalizedConfig,
+          resolveUser: async () => ({ email: accountEmail }),
+          hasMembership: async () => true,
+        });
+        expect(await createSession({ userId: "user_account" })).toEqual({
+          data: {
+            userId: "user_account",
+            activeOrganizationId: organizationId,
+          },
+        });
+      }
     }
   });
 
@@ -138,35 +163,6 @@ describe("account access policy", () => {
           }),
         ),
       ).toBe(true);
-    }
-  });
-
-  test("applies the same growth policy to each restricted permission", () => {
-    const restricted = [
-      "organization",
-      "member",
-      "invitation",
-      "team",
-      "ac",
-      "organizationSettings",
-      "integration",
-    ];
-    for (const [resource, actions] of Object.entries(statements)) {
-      for (const action of actions) {
-        const permissions = { [resource]: [action] };
-        // Runtime census over the producer; the policy map is total at compile time.
-        const policyRequired = requiresStandardAccount(permissions);
-        expect(policyRequired).toBe(
-          restricted.includes(resource) && action !== "read",
-        );
-        if (policyRequired) {
-          expect(
-            Result.isError(
-              checkDemoAccountAccess({ config, email, operation: "growth" }),
-            ),
-          ).toBe(true);
-        }
-      }
     }
   });
 

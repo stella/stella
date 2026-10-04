@@ -74,6 +74,23 @@ RUN bun build \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
+# Deployment-owned usage policy configuration; run explicitly after migrations:
+#   command override -> ["bun", "/app/seed-usage-policies.js"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/seed-usage-policies.js \
+    apps/api/scripts/seed-usage-policies.ts
+# Replays one stored hosted-usage provider event at a time. Run with the API
+# task's database credentials. --apply requires --requested-by (a claimed
+# operator label) and --reason.
+# Replay performer is the ECS task ARN; metadata resolution must succeed.
+#   command override -> ["bun", "/app/replay-provider-events.js"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/replay-provider-events.js \
+    apps/api/scripts/replay-provider-events.ts
 # Better Auth migration rehearsal validator. It accepts only a database
 # credential plus a private tmpfs baseline path; stdout is a redacted JSON
 # report. Run on the isolated clone task with command override:
@@ -328,6 +345,8 @@ RUN groupadd --system --gid 1001 stella && \
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/collab /app/collab
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
+COPY --chown=stella:stella --from=builder /app/seed-usage-policies.js /app/seed-usage-policies.js
+COPY --chown=stella:stella --from=builder /app/replay-provider-events.js /app/replay-provider-events.js
 COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
 COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-map.js /app/better-auth-microsoft-identity-map.js
 COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/better-auth-17-backfill.js

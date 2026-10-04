@@ -15,13 +15,14 @@ import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotatio
 import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   description:
     "Leave a highlight or comment on a passage of a case-law decision or a statute version; private unless shared.",
   mcp: { type: "tool", name: "create_reader_annotation" },

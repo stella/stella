@@ -379,7 +379,9 @@ const styledBlockChunk = (
     return null;
   }
 
-  const boldText = $el.find("span[style*='font-weight:bold']").text().trim();
+  const boldText = visibleHtmlText(
+    $el.find("span[style*='font-weight:bold']"),
+  ).trim();
   return {
     inlines,
     plainText,

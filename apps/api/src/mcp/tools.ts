@@ -51,6 +51,12 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+  isAccountAuthorizedForMcpTool,
+  mcpToolAuthorityDenial,
+  mcpToolInputAuthorityDenial,
+} from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -246,6 +252,70 @@ const isStaticToolCallable = ({
   );
 };
 
+const unknownToolResult = (toolName: string) =>
+  structuredErrorResult({
+    code: "unknown_tool",
+    message: `Unknown tool: ${toolName}`,
+    hint: "Call tools/list for the tools available to this session.",
+  });
+
+type AuthorityRefusal = {
+  code: "permission_denied";
+  message: string;
+  hint?: string;
+};
+
+/**
+ * The refusal for a tool (or the operation its input selects) the request's
+ * authority does not cover. A credential narrower than the role needs a
+ * different credential, not a role change, so the two are told apart.
+ */
+const authorityRefusal = (
+  subject: string,
+  denial: "member-role" | "credential",
+): AuthorityRefusal =>
+  denial === "member-role"
+    ? {
+        code: "permission_denied",
+        message: `Your member role does not permit ${subject}`,
+      }
+    : {
+        code: "permission_denied",
+        message: `This credential's permissions do not include ${subject}`,
+        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+      };
+
+/**
+ * The declared gates (member permissions narrowed by the credential, account
+ * access, and with the normalized input the exact grant of the operation it
+ * selects). Discovery already withholds a tool that fails the tool-level ones;
+ * this keeps the refusal on the call path for any caller that reaches
+ * dispatch by name.
+ */
+const staticToolAuthorityRefusal = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+  input?: Readonly<Record<string, unknown>>,
+): AuthorityRefusal | null => {
+  const toolDenial = mcpToolAuthorityDenial(context, definition);
+  if (toolDenial !== null) {
+    return authorityRefusal(definition.name, toolDenial);
+  }
+  if (!isAccountAuthorizedForMcpTool(context.userEmail, definition)) {
+    return {
+      code: "permission_denied",
+      message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+    };
+  }
+  const inputDenial =
+    input === undefined
+      ? null
+      : mcpToolInputAuthorityDenial(context, definition, input);
+  return inputDenial === null
+    ? null
+    : authorityRefusal(`this ${definition.name} operation`, inputDenial);
+};
+
 export const handleMcpToolCall = async ({
   args,
   context,
@@ -294,13 +364,7 @@ export const handleMcpToolCall = async ({
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "unknown_tool",
-        message: `Unknown tool: ${toolName}`,
-        hint: "Call tools/list for the tools available to this session.",
-      }),
-    );
+    return serializeForSurface(unknownToolResult(toolName));
   }
   const outputContract = resolveMcpToolOutputContract(toolName, mode);
   if (outputContract === undefined) {
@@ -333,6 +397,11 @@ export const handleMcpToolCall = async ({
         hint: featureDisabledHint(staticTool.feature),
       }),
     );
+  }
+
+  const toolRefusal = staticToolAuthorityRefusal(context, staticTool);
+  if (toolRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(toolRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({
@@ -370,6 +439,16 @@ export const handleMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
+
+  // With the input: the exact grant of the operation it selects.
+  const inputRefusal = staticToolAuthorityRefusal(
+    context,
+    staticTool,
+    normalizedArgs,
+  );
+  if (inputRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(inputRefusal));
+  }
 
   // Before confirmation: asking a human to approve a call that cannot run
   // would only defer the same answer.
@@ -413,13 +492,7 @@ export const handleMcpToolCall = async ({
 
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "unknown_tool",
-        message: `Unknown tool: ${toolName}`,
-        hint: "Call tools/list for the tools available to this session.",
-      }),
-    );
+    return serializeForSurface(unknownToolResult(toolName));
   }
 
   const executionContext = requiresConfirmation

@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
@@ -13,6 +13,8 @@ import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Mint a short-lived download URL for one organization style set's stored " +
     "DOCX package, recording the download in the audit trail. A style set " +

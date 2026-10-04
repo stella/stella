@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import type { LegislationWindowDispositionBasis } from "./legislation-expression";
 import {
   isEligibleLegislationExpression,
   LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
   LEGISLATION_EXPRESSION_KIND_APPLIES,
   LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES,
 } from "./legislation-expression";
 
 describe("which expression kinds can apply", () => {
@@ -37,5 +40,18 @@ describe("which expression kinds can apply", () => {
         }),
       ).toBe(LEGISLATION_EXPRESSION_KIND_APPLIES[kind]);
     },
+  );
+});
+
+test("the basis tuple lists every basis of every disposition exactly once", () => {
+  // Compile-time: a basis missing from the tuple makes this type `false`.
+  const total: [LegislationWindowDispositionBasis] extends [
+    (typeof LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES)[number],
+  ]
+    ? true
+    : false = true;
+  expect(total).toBe(true);
+  expect(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES.toSorted()).toEqual(
+    Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat().toSorted(),
   );
 });

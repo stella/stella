@@ -70,7 +70,8 @@ import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
@@ -208,10 +209,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       });
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        taskError ? toAPIError(taskError) : undefined,
+        t("errors.actionFailed"),
+      );
       return;
     }
     stellaToast.add({
@@ -258,11 +259,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         }),
       ]);
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 

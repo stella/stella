@@ -261,7 +261,7 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           EMAIL_PROVIDER: smtp
           FRONTEND_URL: "http://127.0.0.1:3000"
-          GOTENBERG_PASSWORD: gotenberg
+          GOTENBERG_PASSWORD: migration-smoke-password
           GOTENBERG_URL: "http://127.0.0.1:3000"
           GOTENBERG_USERNAME: gotenberg
           REDIS_URL: "redis://127.0.0.1:6379"

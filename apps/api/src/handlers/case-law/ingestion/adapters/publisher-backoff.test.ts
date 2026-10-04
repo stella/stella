@@ -1,14 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   createPublisherGateSlot,
   PUBLISHER_GATES,
   readPublisherCooldown,
+  withImmediatePublisherSlot,
 } from "./publisher-policy";
 import {
   createPublisherRequestSlot,
   publisherGateKeys,
 } from "./publisher-request-gate";
+import { fetchPublisher } from "./retry";
 
 // Redis Cluster uses CRC16/XMODEM over the first nonempty hash tag, or the full key.
 const redisKeySlot = (key: string) => {
@@ -59,6 +66,13 @@ const createGateClock = () => {
         values.get(key) ?? now,
         cooldownKey === undefined ? now : (values.get(cooldownKey) ?? now),
       );
+      if (args.at(0)?.includes("if math.max(reserved, cooldown) > now")) {
+        if (slot > now) {
+          return 0;
+        }
+        values.set(key, now + Number(args.at(2 + keyCount)));
+        return 1;
+      }
       values.set(key, slot + Number(args.at(2 + keyCount)));
       return slot - now;
     },
@@ -222,4 +236,148 @@ describe("a publisher cooldown shared across workers", () => {
     await pending;
     expect(requested).toBe(true);
   });
+});
+
+test("immediate reservations share the queued gate and leave a busy slot unchanged", async () => {
+  const clock = createGateClock();
+  const first = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  const second = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  expect(await first.tryReserve()).toBe(true);
+  expect(await second.tryReserve()).toBe(false);
+  expect(clock.sleeps).toEqual([]);
+  clock.advanceTo(CONFIG.intervalMs);
+  expect(await second.tryReserve()).toBe(true);
+});
+
+test("immediate reservations observe active shared cooldown", async () => {
+  const clock = createGateClock();
+  const first = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  const second = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  await first.defer(CONFIG.intervalMs * 2);
+  expect(await second.tryReserve()).toBe(false);
+  clock.advanceTo(CONFIG.intervalMs * 2);
+  expect(await second.tryReserve()).toBe(true);
+  expect(clock.sleeps).toEqual([]);
+});
+
+for (const reply of [-1, 2, "invalid"]) {
+  test(`immediate reservations propagate invalid reply ${reply}`, async () => {
+    const slot = createPublisherRequestSlot(CONFIG, {
+      redis: () => ({ send: () => reply }),
+      sleep: async () => {},
+    });
+    expect(await rejectionOf(slot.tryReserve())).toHaveProperty(
+      "message",
+      expect.stringContaining("publisher gate returned an invalid wait"),
+    );
+  });
+}
+
+test("read-through requests observe competing requests during preparation", async () => {
+  const clock = createGateClock();
+  const adapterKey = ADAPTER_KEYS.SK_COURTS;
+  const intervalMs = PUBLISHER_GATES["justice-sk"].intervalMs;
+  let now = 0;
+  const sent: number[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = asFetchMock(
+    mock(async () => {
+      sent.push(now);
+      return new Response("document");
+    }),
+  );
+  const request = async () =>
+    await fetchPublisher("https://obcan.justice.sk/document.pdf", {
+      adapterKey,
+      fetchStage: "document",
+      timeoutMs: 1000,
+    });
+  try {
+    const result = await withImmediatePublisherSlot({
+      adapterKey,
+      dependencies: clock.dependencies,
+      operation: async () => {
+        // Preparation spans the interval; another worker sends before it finishes.
+        now = intervalMs + 100;
+        clock.advanceTo(now);
+        const competitor = await withImmediatePublisherSlot({
+          adapterKey,
+          dependencies: clock.dependencies,
+          operation: request,
+        });
+        expect(competitor.status).toBe("completed");
+        now += 50;
+        clock.advanceTo(now);
+        return await request();
+      },
+    });
+    expect(result).toEqual({ status: "pacing-deferred" });
+    expect(sent).toEqual([intervalMs + 100]);
+    expect(clock.sleeps).toEqual([]);
+    now = intervalMs * 2 + 100;
+    clock.advanceTo(now);
+    expect(
+      (
+        await withImmediatePublisherSlot({
+          adapterKey,
+          dependencies: clock.dependencies,
+          operation: request,
+        })
+      ).status,
+    ).toBe("completed");
+    expect(sent).toEqual([intervalMs + 100, intervalMs * 2 + 100]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preparation without an outbound request leaves the shared gate available", async () => {
+  const clock = createGateClock();
+  const adapterKey = ADAPTER_KEYS.SK_COURTS;
+  expect(
+    await withImmediatePublisherSlot({
+      adapterKey,
+      dependencies: clock.dependencies,
+      operation: async () => "claimed",
+    }),
+  ).toEqual({ status: "completed", value: "claimed" });
+  expect(
+    await createPublisherGateSlot(
+      "justice-sk",
+      clock.dependencies,
+    ).tryReserve(),
+  ).toBe(true);
+});
+
+test("non-shared cooldown permits immediate and queued reservations", async () => {
+  const clock = createGateClock();
+  const { cooldown: _cooldown, ...config } = CONFIG;
+  const slot = createPublisherRequestSlot(config, clock.dependencies);
+  await slot.defer(CONFIG.intervalMs * 2);
+  expect(await slot.readCooldown()).toBe(CONFIG.intervalMs * 2);
+  expect(await slot.tryReserve()).toBe(true);
+  clock.advanceTo(CONFIG.intervalMs);
+  await slot();
+  expect(clock.sleeps).toEqual([0]);
+});
+
+for (const cooldown of ["shared", "independent"] as const) {
+  test(`the local gate honors ${cooldown} cooldown selection`, async () => {
+    const { cooldown: _cooldown, ...config } = CONFIG;
+    const slot = createPublisherRequestSlot(
+      cooldown === "shared" ? CONFIG : config,
+    );
+    await slot.defer(60_000);
+    expect(await slot.readCooldown()).not.toBeNull();
+    expect(await slot.tryReserve()).toBe(cooldown === "independent");
+  });
+}
+
+test("the local queued gate honors independent cooldown selection", async () => {
+  const { cooldown: _cooldown, ...config } = CONFIG;
+  const slot = createPublisherRequestSlot(config);
+  await slot.defer(60_000);
+  expect(await slot.readCooldown()).not.toBeNull();
+  await slot();
+  expect(await slot.tryReserve()).toBe(false);
 });

@@ -326,45 +326,56 @@ export const REHEARSAL_SEED_ORDER = [
   "legislation_index_jobs",
 ] as const satisfies readonly HighVolumeTable[];
 
-export type RehearsalSeedStep = {
-  statement: string;
-  table: HighVolumeTable | null;
-};
+export type RehearsalSeedStep =
+  | { type: "sql"; statement: string; table: HighVolumeTable | null }
+  | { type: "vacuum"; tables: readonly HighVolumeTable[] };
 
 /**
- * Every statement of one seed run, in order: fixtures, the decisions, the
- * numbering, each dependent table, then statistics so the planner sees the
- * rows the way it would after autovacuum caught up.
+ * One `name` row per given table the schema holds: the seed runs against the
+ * promoted release's schema, which need not hold every table this checkout
+ * registers yet. `VACUUM` cannot run inside the `DO` block that guards the
+ * other conditional statements, so the runner asks first.
+ */
+export const rehearsalPresentTablesStatement = (
+  tables: readonly HighVolumeTable[],
+): string =>
+  `SELECT name FROM (VALUES ${tables.map((table) => `('${table}')`).join(", ")}) AS present(name) WHERE to_regclass(name) IS NOT NULL`;
+
+export const rehearsalVacuumStatement = (
+  tables: readonly HighVolumeTable[],
+): string => `VACUUM (ANALYZE) ${tables.join(", ")}`;
+
+/**
+ * Every step of one seed run, in order: fixtures, the decisions, the
+ * numbering, each dependent table, then one vacuum of every seeded table.
+ * The vacuum leaves the tables the way autovacuum would after catching up,
+ * statistics included, so autovacuum does not start on the freshly written
+ * rows during the upgrade and hold locks its DDL then waits for.
  */
 export const rehearsalSeedSteps = (
   decisions: number,
 ): readonly RehearsalSeedStep[] => {
   assertCount(decisions);
   const [decisionsTable, ...dependents] = REHEARSAL_SEED_ORDER;
+  const sqlStep = (statement: string) => ({
+    type: "sql" as const,
+    statement,
+    table: null,
+  });
   return [
-    ...rehearsalFixtureStatements().map((statement) => ({
-      statement,
-      table: null,
-    })),
+    ...rehearsalFixtureStatements().map(sqlStep),
     {
+      type: "sql",
       statement: REHEARSAL_SEEDERS[decisionsTable](decisions),
       table: decisionsTable,
     },
-    ...rehearsalDecisionIndexStatements().map((statement) => ({
-      statement,
-      table: null,
-    })),
+    ...rehearsalDecisionIndexStatements().map(sqlStep),
     ...dependents.map((table) => ({
+      type: "sql" as const,
       statement: REHEARSAL_SEEDERS[table](decisions),
       table,
     })),
-    { statement: rehearsalFutureDatedCohortStatement(), table: null },
-    // Conditional for every table: the seed runs against the promoted
-    // release's schema, which need not hold every table this checkout
-    // registers yet.
-    ...REHEARSAL_SEED_ORDER.map((table) => ({
-      statement: `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`,
-      table: null,
-    })),
+    sqlStep(rehearsalFutureDatedCohortStatement()),
+    { type: "vacuum", tables: REHEARSAL_SEED_ORDER },
   ];
 };

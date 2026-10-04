@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
@@ -17,6 +17,7 @@ import {
   validateLedger,
   validateRequires,
 } from "../lib/db/migration-ledger";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
 import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
@@ -286,6 +287,143 @@ const preflightAndAdopt = async ({
   });
 };
 
+/**
+ * Pauses between attempts of a pending set that lost a lock wait; one attempt
+ * more than there are pauses. The lane drains corpus writers, but autovacuum
+ * and sessions outside it can still hold a table lock past a migration's
+ * `lock_timeout`: PostgreSQL cancels an autovacuum that blocks DDL only after
+ * `deadlock_timeout`, which ties the repository's one-second `lock_timeout`.
+ */
+export const MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+
+/**
+ * How long the run, with the next pause, may take for a rerun to start. A
+ * rerun is for a short miss; a migration that exhausted its own lock-wait
+ * loop has already spent this, and rerunning it would repeat that loop.
+ */
+export const MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS = 120_000;
+
+/** Why a pending set that lost a lock wait was not applied. */
+export const MIGRATION_LOCK_WAIT_FAILURE = {
+  /** Every attempt lost its lock wait. */
+  exhausted: "exhausted",
+  /** The run outlasted the rerun budget before losing a lock wait. */
+  budgetSpent: "budget_spent",
+  /** A split migration committed receipts, so a rerun is not the same run. */
+  ledgerMoved: "ledger_moved",
+} as const;
+
+type MigrationLockWaitFailure =
+  (typeof MIGRATION_LOCK_WAIT_FAILURE)[keyof typeof MIGRATION_LOCK_WAIT_FAILURE];
+
+export class MigrationLockWaitError extends TaggedError(
+  "MigrationLockWaitError",
+)<{
+  message: string;
+  reason: MigrationLockWaitFailure;
+  attempts: number;
+  cause: unknown;
+}> {}
+
+type LockWaitRetry = {
+  delaysMs: readonly number[];
+  budgetMs: number;
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
+  delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
+  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+  now: () => performance.now(),
+  sleep: async (ms) => await Bun.sleep(ms),
+};
+
+type ApplyPendingOptions = {
+  apply: () => Promise<void>;
+  /** Whether the ledger still equals the preflight read. */
+  ledgerUnchanged: () => Promise<boolean>;
+  retry: LockWaitRetry;
+};
+
+/**
+ * Applies the pending set, rerunning it whole while it fails on
+ * `lock_not_available` and pauses remain. Drizzle applies the set in one
+ * transaction, so a lost lock wait rolls every pending migration back and a
+ * rerun is the same run. A migration that splits that transaction (the
+ * concurrent-index protocol) can commit earlier receipts before the failure;
+ * the ledger check refuses to rerun then, leaving the next migrate to plan
+ * from a fresh preflight. A rerun starts only within the rerun budget, so a
+ * migration's own bounded lock-wait loop is not repeated. Every other
+ * failure propagates unchanged. Recursive so each attempt ends before the
+ * next begins.
+ */
+export const applyPendingRetryingLockWaits = async (
+  { apply, ledgerUnchanged, retry }: ApplyPendingOptions,
+  attempt = 1,
+  startedAt = retry.now(),
+): Promise<void> => {
+  const outcome = await Result.tryPromise({
+    try: apply,
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(outcome)) {
+    return;
+  }
+  const { error } = outcome;
+  if (!isPgError(error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    throw error;
+  }
+  const delayMs = retry.delaysMs.at(attempt - 1);
+  if (delayMs === undefined) {
+    throw new MigrationLockWaitError({
+      message: `Migrations lost a lock wait on each of ${String(attempt)} attempts`,
+      reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
+      attempts: attempt,
+      cause: error,
+    });
+  }
+  if (retry.now() - startedAt + delayMs > retry.budgetMs) {
+    throw new MigrationLockWaitError({
+      message: `Migrations lost a lock wait on attempt ${String(attempt)} after the rerun budget was spent`,
+      reason: MIGRATION_LOCK_WAIT_FAILURE.budgetSpent,
+      attempts: attempt,
+      cause: error,
+    });
+  }
+  if (!(await ledgerUnchanged())) {
+    throw new MigrationLockWaitError({
+      message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempt)}`,
+      reason: MIGRATION_LOCK_WAIT_FAILURE.ledgerMoved,
+      attempts: attempt,
+      cause: error,
+    });
+  }
+  process.stdout.write(
+    `${JSON.stringify({
+      event: "migrate.lock_wait_retry",
+      level: "warn",
+      attempt,
+      attempts: retry.delaysMs.length + 1,
+      delayMs,
+    })}\n`,
+  );
+  await retry.sleep(delayMs);
+  await applyPendingRetryingLockWaits(
+    { apply, ledgerUnchanged, retry },
+    attempt + 1,
+    startedAt,
+  );
+};
+
+const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
+  rows
+    .map(
+      ({ id, hash, created_at, name }) =>
+        `${String(id)}:${hash}:${String(created_at)}:${String(name)}`,
+    )
+    .join(",");
+
 type RunMigrationsOptions = {
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
@@ -297,6 +435,8 @@ type RunMigrationsOptions = {
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
   onlineIndexHold?: OnlineIndexHoldRef;
+  /** Test seam: the pauses between lock-wait attempts and how to wait them. */
+  lockWaitRetry?: LockWaitRetry;
 };
 
 export const runMigrations = async ({
@@ -308,6 +448,7 @@ export const runMigrations = async ({
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
   onlineIndexHold = createOnlineIndexHold(),
+  lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
 }: RunMigrationsOptions) => {
   let laneHeld = false;
   // A terminated session already dropped its advisory locks; unlocking on the
@@ -361,18 +502,30 @@ export const runMigrations = async ({
         name,
       })),
     });
-    // bun-sql's migrator calls this same function after reading files; passing
-    // the preflight array keeps validation and execution on identical bytes.
-    await pgCoreMigrate(migrations, database, {
-      migrationsFolder,
-      migrationsSchema,
-      migrationsTable,
+    const readLedger = async () =>
+      await database.execute<LedgerRow>(sql`
+        SELECT id, hash, created_at, name
+        FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
+        ORDER BY id
+      `);
+    const preflightFingerprint = ledgerFingerprint(preflight.rows);
+    // Attempts share this connection, which holds the lane until the finally
+    // below, so corpus writers stay drained between them.
+    await applyPendingRetryingLockWaits({
+      // bun-sql's migrator calls this same function after reading files; passing
+      // the preflight array keeps validation and execution on identical bytes.
+      apply: async () => {
+        await pgCoreMigrate(migrations, database, {
+          migrationsFolder,
+          migrationsSchema,
+          migrationsTable,
+        });
+      },
+      ledgerUnchanged: async () =>
+        ledgerFingerprint(await readLedger()) === preflightFingerprint,
+      retry: lockWaitRetry,
     });
-    const postflightRows = await database.execute<LedgerRow>(sql`
-      SELECT id, hash, created_at, name
-      FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
-      ORDER BY id
-    `);
+    const postflightRows = await readLedger();
     const priorIds = new Set(preflight.rows.map(({ id }) => id));
     const inserted = postflightRows.filter(({ id }) => !priorIds.has(id));
     if (
