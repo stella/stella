@@ -11,11 +11,14 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  ActionAdmissionError,
+  type ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
+import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
+import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -147,6 +150,7 @@ describe("chat execution admission owns settlement independently of transport re
     const reasons = {
       busy: "busy",
       period_exhausted: "period_exhausted",
+      daily_exhausted: "daily_exhausted",
       not_enabled: "not_enabled",
       unavailable: "unavailable",
     } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
@@ -155,10 +159,7 @@ describe("chat execution admission owns settlement independently of transport re
       for (const contactUrl of [undefined, "https://example.test/help"]) {
         env.ACTION_LIMIT_CONTACT_URL = contactUrl;
         for (const reason of Object.values(reasons)) {
-          const error = new ActionAdmissionError({
-            reason,
-            message: "Admission refused",
-          });
+          const error = actionAdmissionErrorFor(reason, "Admission refused");
           const acquired = await startChatExecutionAdmission({
             ...action,
             enabled: true,
@@ -175,7 +176,9 @@ describe("chat execution admission owns settlement independently of transport re
               message: refusal.message,
               retryable: refusal.retryable,
               contactUrl:
-                reason === "period_exhausted" || reason === "not_enabled"
+                reason === "period_exhausted" ||
+                reason === "daily_exhausted" ||
+                reason === "not_enabled"
                   ? contactUrl
                   : undefined,
               cause: error,
@@ -414,23 +417,57 @@ describe("chat execution admission owns settlement independently of transport re
     expect(store.counts()).toEqual({ acquisitions: 2, releases: 1, active: 0 });
   });
 
-  test("disabled execution admission never calls coordination or resolves its configuration", async () => {
-    let calls = 0;
-    const acquired = await startChatExecutionAdmission({
+  test("disabled execution admission skips coordination but counts the demo account", async () => {
+    const demo = createTestDemoActionBudget({
+      demoUserId: userId,
+      nowMs: Date.UTC(2026, 0, 15),
+    });
+    let coordinationCalls = 0;
+    const admit: typeof withActionAdmission = async (options) =>
+      await withActionAdmission({
+        ...options,
+        demoActionBudget: demo.budget,
+        redis: {
+          send: async () => {
+            coordinationCalls += 1;
+            throw new HandlerError({
+              status: 500,
+              message: "Disabled admission reached coordination",
+            });
+          },
+        },
+      });
+    const options = {
       ...action,
       enabled: false,
       organizationId,
       userId,
-      admit: async () => {
-        calls += 1;
-        throw new HandlerError({
-          status: 500,
-          message: "Disabled admission read configuration",
-        });
-      },
+      admit,
+    };
+    const execution = await executionOf(startChatExecutionAdmission(options));
+    expect(execution.signal.aborted).toBe(false);
+    expect(
+      Result.isOk(await execution.reservePeriod(action.periodIdentity)),
+    ).toBe(true);
+    await execution.release();
+    expect(demo.count()).toBe(1);
+
+    for (let index = 1; index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max; index++) {
+      const admitted = await executionOf(startChatExecutionAdmission(options));
+      await admitted.release();
+    }
+    const refused = await startChatExecutionAdmission(options);
+    if (Result.isOk(refused)) {
+      throw new Error("Expected the demo account's daily budget to refuse");
+    }
+    expect(refused.error).toMatchObject({
+      status:
+        ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.periodExhausted]
+          .status,
+      code: ACTION_ADMISSION_CODES.periodExhausted,
     });
-    expect(Result.isOk(acquired) && acquired.value).toBeUndefined();
-    expect(calls).toBe(0);
+    expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
+    expect(coordinationCalls).toBe(0);
   });
 
   for (const mode of ["busy", "offline"] as const) {
