@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { Temporal } from "@stll/time";
 
 import { entities, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -46,6 +46,7 @@ const config = {
     "endDatePropertyId supplies the end of a range. Filters and sorts follow " +
     "the same contract as the table views.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_tasks" },
   access: "read",
   body: calendarTasksBodySchema,

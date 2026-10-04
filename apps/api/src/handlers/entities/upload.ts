@@ -25,7 +25,7 @@ import {
   uploadTriggeredFlowPolicy,
 } from "@/api/handlers/entities/upload-origin";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -1253,6 +1253,7 @@ const config = {
     "cannot send multipart: use uploads.create with purpose entity_create " +
     "and then uploads.update.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -1293,6 +1294,7 @@ const uploadEntity = createSafeHandler(
 
 const generatedDocumentConfig = {
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
 } satisfies WorkspaceHandlerConfig;
