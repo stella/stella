@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { parsePlainDate } from "@stll/time";
+
 import { SoftLawItemError } from "./soft-law-types";
 import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
@@ -27,21 +29,16 @@ export const softLawIdentityKey = (
       }),
     );
   }
-  if (metadata.issuedOn.state === "stated") {
-    const iso = metadata.issuedOn.value;
-    const date = new Date(`${iso}T00:00:00Z`);
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/u.test(iso) ||
-      !Number.isFinite(date.getTime()) ||
-      date.toISOString().slice(0, 10) !== iso
-    ) {
-      return Result.err(
-        new SoftLawItemError({
-          message: "Issue date is not a valid ISO date",
-          tag: "invalid_document",
-        }),
-      );
-    }
+  if (
+    metadata.issuedOn.state === "stated" &&
+    parsePlainDate(metadata.issuedOn.value) === null
+  ) {
+    return Result.err(
+      new SoftLawItemError({
+        message: "Issue date is not a valid ISO date",
+        tag: "invalid_document",
+      }),
+    );
   }
   if (metadata.statedReference.state === "stated") {
     if (!metadata.statedReference.value.trim()) {

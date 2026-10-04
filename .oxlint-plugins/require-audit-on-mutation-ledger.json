@@ -572,14 +572,6 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
-    "id": "apps/api/src/lib/corpus-ingestion-checkpoint.ts::advanceCorpusIngestionCheckpoint",
-    "writes": {
-      "update:caseLawSources": 1,
-      "update:legislationSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/db/account-row.ts::anonymizeDeletedAccountRow",
     "writes": {
       "update:user": 1

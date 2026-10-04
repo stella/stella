@@ -91,6 +91,7 @@ export const advanceCorpusIngestionCheckpoint = async ({
   source,
 }: AdvanceCorpusIngestionCheckpointOptions): Promise<IngestionCheckpointResult> =>
   await scopedDb(async (tx) => {
+    // audit: skip - public corpus checkpoint maintenance has no tenant actor
     switch (source.type) {
       case CORPUS_SOURCE_TYPE.CASE_LAW: {
         const advanced = await tx
