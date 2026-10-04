@@ -8,6 +8,8 @@ import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
 export const MEMBER_RUN_ACTOR_RESOLVERS = [
   "createRootRunActor",
   "resolveMemberAuthorization",
+  // Holds the member's rows for the whole transaction that reads and writes.
+  "holdMemberAccessOnTx",
 ] as const;
 
 type MemberRunActorResolver = (typeof MEMBER_RUN_ACTOR_RESOLVERS)[number];
@@ -63,6 +65,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "agent-client-storage-backfill.ts",
     "Storage migration of client credentials.",
   ),
+  "audit.purgeSystemRuns": platform(
+    "system-audit-retention.ts",
+    "Retention sweep of system audit runs.",
+  ),
   "auth.sweepRegistrations": platform(
     "registration-retention.ts",
     "Retention sweep of registration records.",
@@ -110,9 +116,12 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "chat.compactThreads": {
     authority: "member-run",
     module: `${TASKS}/chat-thread-compactor.ts`,
-    runActor: null,
+    runActor: {
+      module: `${TASKS}/chat-thread-compactor.ts`,
+      resolver: "holdMemberAccessOnTx",
+    },
     reason:
-      "Summarizes a thread for its owner, reading under the owner's identity and the thread's stored workspaces.",
+      "Summarizes a thread for its owner, holding the owner's current membership for every read and write.",
   },
   "chat.reapOwnerlessTurns": platform(
     "chat-turn-reaper.ts",
@@ -195,9 +204,12 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "memory.extractor": {
     authority: "member-run",
     module: `${TASKS}/memory-extractor.ts`,
-    runActor: null,
+    runActor: {
+      module: `${TASKS}/memory-extractor.ts`,
+      resolver: "createRootRunActor",
+    },
     reason:
-      "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner.",
+      "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner, as that owner's run actor.",
   },
   "organizations.recordMissingAccessStates": platform(
     "organization-access-state-reconcile.ts",

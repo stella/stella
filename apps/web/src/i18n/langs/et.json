@@ -980,7 +980,6 @@
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
     "removed": "See tööriist pole enam saadaval.",
     "sectionOthers": "Muud",
-    "sectionRecommended": "Soovitatud",
     "settings": {
       "packTitle": "Soovitatud pakett"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
+      "allModels": "Kõik mudelid ({count, number})",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
+      "belowFrontier": "Allpool parimaid kompromisse",
       "effortHelpDescription": "Määrab, kui palju arutluskäiku mudel enne vastamist kasutab. Kõrgem tase võib keerukate ülesannete puhul aidata, kuid võtab tavaliselt kauem aega. Punkt tähistab teenusepakkuja selle mudeli vaiketaset.",
       "effortHelpLabel": "Teave arutlustaseme kohta",
       "effortLabel": "Arutlustase",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Vaikimisi",
         "xhigh": "Väga kõrge"
       },
+      "newModel": "Uus",
+      "premiumCost": "Ebatavaliselt kõrge hind",
+      "recommendedHelpDescription": "Ükski teine saadaolev mudel pole korraga odavam ja kõrgema hinnanguga. Hindamiseks liiga uued mudelid on märgitud uuena. Kvaliteet: <link>LMArena {benchmark}</link> ({licence}); hind: hinnakirja hinnad.",
+      "recommendedHelpLabel": "Soovitatud mudelitest",
       "selectionLabel": "{model} | {effort}",
       "title": "Vali vestlusmudel",
       "viaProvider": "teenuse {provider} kaudu"
@@ -1616,6 +1621,16 @@
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
+    "datePicker": {
+      "label": "Kuupäevavalija",
+      "nextDecade": "Järgmine kümnend",
+      "nextMonth": "Järgmine kuu",
+      "nextYear": "Järgmine aasta",
+      "previousDecade": "Eelmine kümnend",
+      "previousMonth": "Eelmine kuu",
+      "previousYear": "Eelmine aasta",
+      "time": "Kellaaeg"
+    },
     "decisions": "Lahendid",
     "decline": "Keeldu",
     "delete": "Kustuta",
@@ -1776,6 +1791,7 @@
     "properties": "Omadused",
     "queued": "Ootel",
     "reason": "Põhjus",
+    "recommended": "Soovitatud",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -2272,6 +2288,7 @@
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
+      "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",

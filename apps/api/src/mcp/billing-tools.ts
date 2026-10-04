@@ -1347,6 +1347,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           currency: te.currency,
           narrative: te.narrative,
           invoiceNarrative: te.invoiceNarrative,
+          noCharge: te.noCharge,
           status: te.status,
           entity: workItem ? { id: workItem.id, name: workItem.name } : null,
         };

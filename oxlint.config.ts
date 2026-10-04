@@ -10,6 +10,7 @@ import {
 
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
@@ -1386,6 +1387,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
+    "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -3786,7 +3788,9 @@ export default defineConfig({
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
               "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-replay.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -3959,18 +3963,24 @@ export default defineConfig({
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
       // ISO 27001). Handlers are held to the full rule; the block below
-      // extends it to MCP and library code with a reasoned ledger.
+      // extends it to MCP and library code with a reasoned ledger. A handler
+      // module registered in SYSTEM_AUDIT_MODULES is audited by its actor's
+      // run, as in library code.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "require-audit-on-mutation/require-audit-on-mutation": "error",
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { systemModules: SYSTEM_AUDIT_MODULES },
+        ],
       },
     },
     {
       // The same rule over MCP tools and shared library code. Writes that
       // predate this scope are budgeted per owning function by the reasoned
       // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
-      // other unaudited write fails like it does in a handler.
+      // other unaudited write fails like it does in a handler. System
+      // modules (SYSTEM_AUDIT_MODULES) are audited by their actor's run.
       files: [...AUDIT_MUTATION_LEDGER_SCOPE],
       excludeFiles: [
         "apps/api/src/mcp/**/*.test.ts",
@@ -3979,7 +3989,10 @@ export default defineConfig({
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": [
           "error",
-          { budgets: auditMutationBudgets(auditMutationLedger) },
+          {
+            budgets: auditMutationBudgets(auditMutationLedger),
+            systemModules: SYSTEM_AUDIT_MODULES,
+          },
         ],
       },
     },
@@ -4569,6 +4582,68 @@ export default defineConfig({
           "error",
           { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
         ],
+      },
+    },
+    {
+      // A template fill's completion comes from one decision over one record
+      // (`lib/templates/template-fill-completion.ts`): fills read the
+      // decision, diagnostic kinds are not decided on one by one, and status
+      // literals come from the owner. Existing sites are budgeted in
+      // scripts/fill-diagnostics-ledger.json.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics-owner-reading.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "fill-diagnostics/fill-consumer-reads-decision": "error",
+        "fill-diagnostics/no-raw-diagnostic-decision": "error",
+        "fill-diagnostics/fill-status-literal-in-owner": "error",
+      },
+    },
+    {
+      // The fill pipeline: a new diagnostic channel joins the record.
+      files: [
+        "apps/api/src/lib/docx/**/*.ts",
+        "apps/api/src/lib/templates/**/*.ts",
+        "apps/api/src/lib/clauses/**/*.ts",
+        "apps/api/src/handlers/templates/**/*.ts",
+        "apps/api/src/handlers/chat/tools/template-*.ts",
+        "apps/api/src/handlers/reports/report-export-queue.ts",
+        "apps/api/src/mcp/template-*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/*.test-fixture.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/no-diagnostic-channel-outside-record": "error",
+      },
+    },
+    {
+      // `template_fills` rows carry the recorded status: one recorder.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/fill-row-through-recorder": "error",
       },
     },
     {

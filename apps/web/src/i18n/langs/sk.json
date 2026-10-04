@@ -980,7 +980,6 @@
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
     "removed": "Tento nástroj už nie je dostupný.",
     "sectionOthers": "Ostatné",
-    "sectionRecommended": "Odporúčané",
     "settings": {
       "packTitle": "Odporúčaný balík"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
+      "allModels": "Všetky modely ({count, number})",
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
+      "belowFrontier": "Pod najlepšími kompromismi",
       "effortHelpDescription": "Určuje, koľko uvažovania model použije pred odpoveďou. Vyššie úrovne môžu pomôcť pri zložitej práci, ale zvyčajne trvajú dlhšie. Bodka označuje predvolenú úroveň poskytovateľa pre tento model.",
       "effortHelpLabel": "O úrovni uvažovania",
       "effortLabel": "Úroveň uvažovania",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Predvolené",
         "xhigh": "Veľmi vysoké"
       },
+      "newModel": "Nový",
+      "premiumCost": "Nezvyčajne vysoká cena",
+      "recommendedHelpDescription": "Žiadny iný dostupný model nie je zároveň lacnejší a lepšie hodnotený. Modely, ktoré sú na hodnotenie príliš nové, sú označené ako nové. Kvalita: <link>{benchmark} od LMArena</link> ({licence}); cena: cenníkové ceny.",
+      "recommendedHelpLabel": "O odporúčaných modeloch",
       "selectionLabel": "{model} | {effort}",
       "title": "Vybrať model chatu",
       "viaProvider": "cez {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Mena",
     "currentPage": "Aktuálna stránka",
     "date": "Dátum",
+    "datePicker": {
+      "label": "Výber dátumu",
+      "nextDecade": "Nasledujúce desaťročie",
+      "nextMonth": "Nasledujúci mesiac",
+      "nextYear": "Nasledujúci rok",
+      "previousDecade": "Predchádzajúce desaťročie",
+      "previousMonth": "Predchádzajúci mesiac",
+      "previousYear": "Predchádzajúci rok",
+      "time": "Čas"
+    },
     "decisions": "Rozhodnutia",
     "decline": "Odmietnuť",
     "delete": "Vymazať",
@@ -1776,6 +1791,7 @@
     "properties": "Vlastnosti",
     "queued": "V poradí",
     "reason": "Dôvod",
+    "recommended": "Odporúčané",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
     "refresh": "Obnoviť",
@@ -2272,6 +2288,7 @@
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
+      "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
