@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -104,6 +105,13 @@ type AuditEventFields = {
   workspaceId?: SafeId<"workspace"> | null;
 };
 
+// Requiring rollback keeps a database handle from standing in for a transaction.
+type AuditTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert" | "select"
+> &
+  Pick<Transaction, "rollback">;
+
 /** Chat entries carry only the change fields their resource type lists. */
 type ChatAuditEvent = {
   [T in ChatAuditResourceType]: AuditEventFields & {
@@ -126,7 +134,7 @@ export type AuditEvent =
     });
 
 export type AuditRecorder = (
-  tx: Transaction,
+  tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
 ) => Promise<void>;
 
@@ -369,7 +377,7 @@ const baseRequestMetadata = (
  * creations in one transaction).
  */
 const insertAuditRows = async (
-  tx: Transaction,
+  tx: AuditTransaction,
   rows: readonly (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
   await insertInChunks(rows, (batch) => tx.insert(auditLogs).values(batch));

@@ -126,14 +126,46 @@ export const BASELINABLE_KINDS: ReadonlySet<Finding["kind"]> = new Set([
 
 // --- AST helpers -------------------------------------------------------------
 
-const parse = ({ file, source }: SourceRecord): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+type ParsedSource = {
+  sourceFile: ts.SourceFile;
+  context?: FileContext;
+  flagReads?: FlagRead[];
+};
+
+/**
+ * Parsed sources by file, then by exact text. Scans of edited copies of one
+ * tree (the self-test) share a cache, so only the edited files parse again;
+ * an edit is a different text and never reuses the original's syntax tree.
+ */
+export type ParseCache = Map<string, Map<string, ParsedSource>>;
+
+export const createParseCache = (): ParseCache => new Map();
+
+const parsedSource = (
+  cache: ParseCache,
+  { file, source }: SourceRecord,
+): ParsedSource => {
+  const byText = cache.get(file) ?? new Map<string, ParsedSource>();
+  cache.set(file, byText);
+  const cached = byText.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const parsed: ParsedSource = {
+    sourceFile: ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    ),
+  };
+  byText.set(source, parsed);
+  return parsed;
+};
+
+const parse = (cache: ParseCache, record: SourceRecord): ts.SourceFile =>
+  parsedSource(cache, record).sourceFile;
 
 const unwrap = (node: ts.Expression): ts.Expression => {
   let current = node;
@@ -266,8 +298,11 @@ const collectFlagReads = (file: string, root: ts.Node): FlagRead[] => {
  * Record<DeploymentFeatureFlag, ...>`, so typecheck pins it to the env schema's
  * `FEATURE_*` keys exactly; reading it here reads the declared set.
  */
-const declaredFlagsFromOwner = (ownerSource: string): string[] => {
-  const sourceFile = parse({
+const declaredFlagsFromOwner = (
+  cache: ParseCache,
+  ownerSource: string,
+): string[] => {
+  const sourceFile = parse(cache, {
     file: DEPLOYMENT_FEATURE_OWNER_FILE,
     source: ownerSource,
   });
@@ -455,6 +490,15 @@ const fileContext = (file: string, sourceFile: ts.SourceFile): FileContext => {
   return { file, imports, locals, exports, statements };
 };
 
+const parseWithContext = (
+  cache: ParseCache,
+  record: SourceRecord,
+): { sourceFile: ts.SourceFile; context: FileContext } => {
+  const parsed = parsedSource(cache, record);
+  parsed.context ??= fileContext(record.file, parsed.sourceFile);
+  return { sourceFile: parsed.sourceFile, context: parsed.context };
+};
+
 /** `a.b().c()` -> root `a` plus the calls in application order. */
 const flattenChain = (
   expression: ts.Expression,
@@ -498,6 +542,7 @@ const isNewElysia = (node: ts.Expression): boolean =>
   node.expression.text === "Elysia";
 
 type ScanEnvironment = {
+  cache: ParseCache;
   contexts: Map<string, FileContext>;
   sourceFiles: Map<string, ts.SourceFile>;
   /** Every repo-relative file path the import resolver may land on. */
@@ -517,10 +562,10 @@ const exportedInitializer = (
     if (source === undefined) {
       return undefined;
     }
-    const sourceFile = parse({ file, source });
-    context = fileContext(file, sourceFile);
+    const parsed = parseWithContext(environment.cache, { file, source });
+    context = parsed.context;
     environment.contexts.set(file, context);
-    environment.sourceFiles.set(file, sourceFile);
+    environment.sourceFiles.set(file, parsed.sourceFile);
   }
   const local = context.exports.get(name);
   const node = local === undefined ? undefined : context.locals.get(local);
@@ -1014,17 +1059,28 @@ export type ScanResult = {
 
 // --- Flag readers -----------------------------------------------------------------
 
-const scanReaders = (
-  input: ScanInput,
-  declared: ReadonlySet<string>,
-): { reads: FlagRead[]; findings: Finding[] } => {
+const fileFlagReads = (cache: ParseCache, record: SourceRecord): FlagRead[] => {
+  const parsed = parsedSource(cache, record);
+  parsed.flagReads ??= collectFlagReads(record.file, parsed.sourceFile);
+  return parsed.flagReads;
+};
+
+const scanReaders = ({
+  input,
+  declared,
+  cache,
+}: {
+  input: ScanInput;
+  declared: ReadonlySet<string>;
+  cache: ParseCache;
+}): { reads: FlagRead[]; findings: Finding[] } => {
   const reads: FlagRead[] = [];
   for (const record of input.readerFiles) {
     if (
       record.file !== DEPLOYMENT_FEATURE_OWNER_FILE &&
       record.source.includes(FEATURE_PREFIX)
     ) {
-      reads.push(...collectFlagReads(record.file, parse(record)));
+      reads.push(...fileFlagReads(cache, record));
     }
   }
   for (const [capability, flag] of input.catalogFeatures) {
@@ -1058,14 +1114,17 @@ const scanReaders = (
   return { reads, findings };
 };
 
-const scanProcessEnvReads = (input: ScanInput): Finding[] => {
+const scanProcessEnvReads = (
+  input: ScanInput,
+  cache: ParseCache,
+): Finding[] => {
   const findings: Finding[] = [];
   const seen = new Set<string>();
   for (const record of [...input.processEnvFiles, ...input.readerFiles]) {
     if (!record.source.includes(FEATURE_PREFIX)) {
       continue;
     }
-    for (const read of collectFlagReads(record.file, parse(record))) {
+    for (const read of fileFlagReads(cache, record)) {
       const key = `${read.flag}:${read.file}`;
       if (read.form === "process-env-read" && !seen.has(key)) {
         seen.add(key);
@@ -1102,20 +1161,24 @@ type RouteGraph = {
   gateFlagsByFile: Map<string, Set<string>>;
 };
 
-const buildEnvironment = (input: ScanInput): ScanEnvironment => {
+const buildEnvironment = (
+  input: ScanInput,
+  cache: ParseCache,
+): ScanEnvironment => {
   const routeSources = new Map(
     input.routeFiles.map(({ file, source }) => [file, source]),
   );
   const environment: ScanEnvironment = {
+    cache,
     contexts: new Map(),
     sourceFiles: new Map(),
     allFiles: input.allFiles,
     readSource: (file) => routeSources.get(file) ?? input.readSource(file),
   };
   for (const record of input.routeFiles) {
-    const sourceFile = parse(record);
+    const { sourceFile, context } = parseWithContext(cache, record);
     environment.sourceFiles.set(record.file, sourceFile);
-    environment.contexts.set(record.file, fileContext(record.file, sourceFile));
+    environment.contexts.set(record.file, context);
   }
   return environment;
 };
@@ -1212,8 +1275,8 @@ const baseGates = (
   });
 };
 
-const buildRouteGraph = (input: ScanInput): RouteGraph => {
-  const environment = buildEnvironment(input);
+const buildRouteGraph = (input: ScanInput, cache: ParseCache): RouteGraph => {
+  const environment = buildEnvironment(input, cache);
   const table: InstanceTable = new Map();
   for (const record of input.routeFiles) {
     const context = environment.contexts.get(record.file);
@@ -1426,11 +1489,18 @@ const scanClassification = ({
   return findings;
 };
 
-export const scanDeploymentFeatures = (input: ScanInput): ScanResult => {
-  const declared = declaredFlagsFromOwner(input.ownerSource);
+/**
+ * `cache` is the caller's: a fresh one per tree, or one shared by scans of
+ * edited copies of the same tree.
+ */
+export const scanDeploymentFeatures = (
+  input: ScanInput,
+  cache: ParseCache,
+): ScanResult => {
+  const declared = declaredFlagsFromOwner(cache, input.ownerSource);
   const declaredSet = new Set(declared);
-  const readers = scanReaders(input, declaredSet);
-  const graph = buildRouteGraph(input);
+  const readers = scanReaders({ input, declared: declaredSet, cache });
+  const graph = buildRouteGraph(input, cache);
   const inherited = inheritedGates(graph);
   const mounts = scanMounts(input, graph, inherited);
   const undeclaredGates: Finding[] = [...graph.gateFlagsByFile].flatMap(
@@ -1441,7 +1511,7 @@ export const scanDeploymentFeatures = (input: ScanInput): ScanResult => {
   );
   const findings = [
     ...readers.findings,
-    ...scanProcessEnvReads(input),
+    ...scanProcessEnvReads(input, cache),
     ...undeclaredGates,
     ...mounts.findings,
     ...scanUnattributed(input, graph, mounts.attributed),

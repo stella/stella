@@ -120,6 +120,7 @@ const readInvoiceLineDraft = async (
         rateAtEntry: timeEntries.rateAtEntry,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
+        noCharge: timeEntries.noCharge,
       })
       .from(timeEntries)
       .where(
