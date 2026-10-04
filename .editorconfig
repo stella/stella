@@ -24,3 +24,11 @@ insert_final_newline = false
 [apps/api/src/handlers/case-law/**/__fixtures__/**.provenance.json]
 trim_trailing_whitespace = true
 insert_final_newline = true
+
+[packages/legal-atlas/src/__fixtures__/cz-esbirka-500-2004-par-64.json]
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+[packages/legal-atlas/src/__fixtures__/cz-esbirka-262-2006-par-1a.json]
+trim_trailing_whitespace = false
+insert_final_newline = false
