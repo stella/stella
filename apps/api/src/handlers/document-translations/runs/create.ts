@@ -31,6 +31,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Prepares translation inputs without returning stored-file bytes.",
+  },
   description:
     "Start a background document translation and save only the completed output as a new document.",
   permissions: { entity: ["create"] },
