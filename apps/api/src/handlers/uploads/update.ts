@@ -566,7 +566,11 @@ const runFinalize = async function* ({
       scanned,
     });
   } else if (purposeData.type === "entity_version") {
-    purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+    purposeOk = yield* finalizeEntityVersion({
+      ...domainArgs,
+      purposeData,
+      scanned,
+    });
   } else {
     purposeOk = yield* finalizeAgentSkill({
       safeDb,

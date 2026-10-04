@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   DOCX_EXT_RE,
   sanitizeFilename,
@@ -287,6 +288,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             buffer: filled.file.bytes,
             fileName,
             mimeType: DOCX_MIME_TYPE,
+            encryption: serverBuiltFileEncryption(),
             parentId,
           }),
         catch: (cause) =>

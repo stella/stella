@@ -30,6 +30,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
@@ -73,6 +74,8 @@ type CreateEntityVersionFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  /** From `detect-file-encryption.ts`, for these bytes. */
+  encryption: FileEncryption;
   source: DocumentSource | null;
   writePolicy: FileVersionWritePolicy;
   scanWarnings?: string[] | undefined;
@@ -159,6 +162,7 @@ export const createEntityVersionFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  encryption,
   source,
   writePolicy,
   scanWarnings,
@@ -304,6 +308,7 @@ export const createEntityVersionFromBuffer = async ({
         fileId,
         fileName,
         mimeType,
+        encryption,
         sizeBytes: bytes.byteLength,
         sha256Hex,
         source,
@@ -416,7 +421,7 @@ export const createEntityVersionFromBuffer = async ({
     });
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
-      encrypted: false,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,
@@ -429,7 +434,7 @@ export const createEntityVersionFromBuffer = async ({
     });
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
-      encrypted: false,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,
