@@ -4,7 +4,6 @@ import type { OxlintOverride } from "oxlint";
 import {
   libraryIgnorePatterns,
   libraryOverrides,
-  libraryRules,
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
@@ -869,7 +868,40 @@ export default defineConfig({
     },
   },
   rules: {
-    ...libraryRules,
+    // Every base rule is decided here or in the vendored presets, never by a
+    // spread: a spread replaces preset severities without naming the rules,
+    // and scripts/check-oxlint-effective-config.ts fails on that.
+    "stella-lowercase/stella-lowercase": "error",
+    "no-raw-colors/no-raw-colors": "error",
+    "no-useless-assignment": "error",
+    "promise/no-return-in-finally": "error",
+    // A `.then` callback returns or throws; `no-useless-return` is off below
+    // so the trailing `return;` this asks for can stay. `oxc/no-map-spread`
+    // stays off as the core preset declares: its fix mutates the mapped
+    // items, and object spread is the one record-copy form.
+    "promise/always-return": "error",
+    "typescript/no-unnecessary-condition": [
+      "error",
+      { allowConstantLoopConditions: "only-allowed-literals" },
+    ],
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/no-misused-promises": [
+      "error",
+      { checksVoidReturn: { attributes: false } },
+    ],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      { allowNullableString: true, allowNullableBoolean: true },
+    ],
+    "typescript/no-confusing-void-expression": [
+      "error",
+      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
+    ],
+    "typescript/prefer-nullish-coalescing": [
+      "error",
+      { ignorePrimitives: { string: true, boolean: true } },
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
     // It has no fix-only option.
@@ -917,8 +949,7 @@ export default defineConfig({
     // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
     "logical-assignment-operators": "off",
 
-    // Override libraryRules so React correctness is checked in every app and
-    // shared package.
+    // React correctness is checked in every app and shared package.
     "react/jsx-key": "error",
     "react/jsx-props-no-spread-multi": "error",
     "react/no-array-index-key": "error",
@@ -1094,9 +1125,6 @@ export default defineConfig({
       { checkConditionalExpressions: true },
     ],
     ...SIZE_LINT_RULES,
-    // libraryRules sets the bare `complexity` key, which outranks the
-    // canonical id above.
-    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
     // Annotations on literal initializers are deliberate widening
     // (`const marker: string = "…"`); removing them narrows to the literal.
