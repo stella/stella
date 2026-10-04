@@ -436,7 +436,6 @@ if (!databaseUrl || !enabled) {
               blocked: 0,
               errors: 1,
             });
-            expect((await state.checkpoint())?.cursor).toBeNull();
             const receipts = await db
               .select()
               .from(caseLawReplayBatches)
@@ -447,6 +446,11 @@ if (!databaseUrl || !enabled) {
               applied: 0,
               blocked: 0,
             });
+            // The failed row stays queued as a reservation, so the sweep
+            // cursor moves past it instead of retrying it before later work.
+            expect((await state.checkpoint())?.cursor).toBe(
+              receipts.at(0)?.firstDecisionId,
+            );
             expect(
               await db
                 .select()

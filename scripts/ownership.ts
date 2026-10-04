@@ -1089,6 +1089,11 @@ export const OWNERSHIP = [
             "Loads persisted source bytes under the completion job's byte cap and tick deadline.",
         },
         {
+          path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
+          reason:
+            "Loads persisted source bytes under the replay tick's byte cap and deadline.",
+        },
+        {
           path: "apps/api/src/handlers/chat/chat-prompt.ts",
           reason: "Loads document bytes for prompt preparation.",
         },
