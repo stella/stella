@@ -950,6 +950,7 @@ const CONTRACT_CORPUS = {
       mode: "detail",
       buildArgs: () => ({ clause_id: uid(30) }),
       tx: () => ({
+        $count: async () => 0,
         query: {
           clauses: {
             findFirst: async () => ({
