@@ -234,7 +234,10 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description: "File inbound mail deliveries from the provider queue",
-    enabled: resolveInboundMailReceiving(env).unwrap().type === "enabled",
+    enabled:
+      resolveInboundMailReceiving(env).unwrap(
+        "Boot validates the inbound mail receiving configuration",
+      ).type === "enabled",
     id: "inboundMail.receive.minutely",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
