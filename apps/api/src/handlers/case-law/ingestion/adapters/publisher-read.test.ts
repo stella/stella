@@ -184,7 +184,7 @@ describe("unreadPublisherError", () => {
         init({ refusalScope: scope }),
       );
       if (outcome.type !== "refused") {
-        return panic(`expected a refusal, got ${outcome.type}`);
+        panic(`expected a refusal, got ${outcome.type}`);
       }
 
       const error = unreadPublisherError({
