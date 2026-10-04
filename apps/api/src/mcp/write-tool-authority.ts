@@ -47,6 +47,11 @@ export type McpToolAuthorityDeclaration =
 /**
  * Whether a member may be offered and may call this tool. Reads carry no
  * tool-level grant (their scope and per-row checks govern them).
+ *
+ * Nothing caches the result today (discovery, chat registration and skill
+ * availability recompute it per request). A cache of any offered-tool list
+ * must key on the role, the credential's permission set and the account
+ * access (standard or sandbox), or one member's list serves another.
  */
 export const isMemberAuthorizedForMcpTool = (
   authority: AuthorizedMemberRole,

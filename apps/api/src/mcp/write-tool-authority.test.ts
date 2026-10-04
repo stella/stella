@@ -8,6 +8,7 @@ import { buildChatWriteTools } from "@/api/handlers/chat/tools/registry-write-to
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { MCP_MODES } from "@/api/mcp/constants";
@@ -84,27 +85,53 @@ const noopScopedDb = asTestRaw<ScopedDb>(
   async (run: (tx: unknown) => unknown) => await run({}),
 );
 
-const chatOffered = (role: MemberRole): ReadonlySet<string> =>
-  new Set(
-    Object.keys(
-      buildChatWriteTools({
-        memberRole: sessionMemberRole(role),
-        organizationId: toSafeId<"organization">("org_1"),
-        pinServerValidatedWorkspaceId: () => true,
-        refRegistry: createChatRefRegistry(),
-        safeDb: toSafeDbMock(noopScopedDb),
-        scopedDb: noopScopedDb,
-        toolDefectMemo: createChatToolDefectMemo(),
-        toolWorkspaceIds: resolveToolWorkspaceIds({
-          accessibleWorkspaceIds: [],
-          pinnedIds: [],
-        }),
-        userEmail: "member@example.test",
-        userId: toSafeId<"user">("user_1"),
-        workspaceStatusById: new Map(),
-      }),
-    ),
+const chatWriteTools = (
+  role: MemberRole,
+  currentRole: MemberRole | null = role,
+) =>
+  buildChatWriteTools({
+    memberRole: sessionMemberRole(role),
+    organizationId: toSafeId<"organization">("org_1"),
+    pinServerValidatedWorkspaceId: () => true,
+    refRegistry: createChatRefRegistry(),
+    resolveCurrentMembership: async () =>
+      currentRole === null ? null : { role: currentRole },
+    safeDb: toSafeDbMock(noopScopedDb),
+    scopedDb: noopScopedDb,
+    toolDefectMemo: createChatToolDefectMemo(),
+    toolWorkspaceIds: resolveToolWorkspaceIds({
+      accessibleWorkspaceIds: [],
+      pinnedIds: [],
+    }),
+    userEmail: "member@example.test",
+    userId: toSafeId<"user">("user_1"),
+    workspaceStatusById: new Map(),
+  });
+
+/** Run a registered chat write tool and return the refusal it throws, if any. */
+const chatExecutionFailure = async ({
+  args,
+  currentRole,
+  registeredRole,
+  tool,
+}: {
+  args: Record<string, unknown>;
+  currentRole: MemberRole | null;
+  registeredRole: MemberRole;
+  tool: string;
+}): Promise<unknown> => {
+  const execute = chatWriteTools(registeredRole, currentRole)[tool]?.execute;
+  if (execute === undefined) {
+    throw new Error(`${tool} must be registered for ${registeredRole}`);
+  }
+  return await Promise.resolve(execute(args)).then(
+    () => null,
+    (error: unknown) => error,
   );
+};
+
+const chatOffered = (role: MemberRole): ReadonlySet<string> =>
+  new Set(Object.keys(chatWriteTools(role)));
 
 const ledgerId = (definition: McpToolDefinition): string | null => {
   if (definition.access !== "write") {
@@ -178,6 +205,53 @@ describe("write tool permissions", () => {
         code: "permission_denied",
         message: "Your member role does not permit delete_matter",
       },
+    });
+  });
+});
+
+describe("chat write tools re-read the member's role when they run", () => {
+  const deleteMatter = {
+    args: { matter_id: "matter_1", confirm: true },
+    registeredRole: "owner",
+    tool: "delete_matter",
+  } as const;
+
+  test("a role downgraded after registration is refused at execution", async () => {
+    const failure = await chatExecutionFailure({
+      ...deleteMatter,
+      currentRole: "intern",
+    });
+    expect(failure).toBeInstanceOf(ChatToolError);
+    expect(failure).toMatchObject({
+      kind: "unavailable",
+      message: "Your member role does not permit delete_matter.",
+    });
+  });
+
+  test("a member removed after registration is refused at execution", async () => {
+    const failure = await chatExecutionFailure({
+      ...deleteMatter,
+      currentRole: null,
+    });
+    expect(failure).toBeInstanceOf(ChatToolError);
+    expect(failure).toMatchObject({
+      kind: "unavailable",
+      message: "You are no longer a member of this organization.",
+    });
+  });
+
+  test("an unchanged role passes the gate and reaches the tool", async () => {
+    const failure = await chatExecutionFailure({
+      ...deleteMatter,
+      currentRole: "owner",
+    });
+    // The matter is not in this caller's scope, so the tool itself answers;
+    // the point is that the role gate let it through.
+    expect(failure).not.toMatchObject({
+      message: "Your member role does not permit delete_matter.",
+    });
+    expect(failure).not.toMatchObject({
+      message: "You are no longer a member of this organization.",
     });
   });
 });

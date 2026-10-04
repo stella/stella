@@ -374,6 +374,13 @@ export type GetChatToolsProps = {
    */
   toolDefectMemo: ChatToolDefectMemo;
   /**
+   * Reads the caller's membership when an approved write runs. Tests inject
+   * it; production uses the credential-boundary read.
+   */
+  resolveCurrentMembership?: Parameters<
+    typeof buildChatWriteTools
+  >[0]["resolveCurrentMembership"];
+  /**
    * The turn's anonymization boundary. Threaded into
    * `createSpawnSubagentsTool` so each subagent's own model calls cross
    * the same anonymize/deanonymize boundary as the parent turn; the
@@ -711,6 +718,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     activeFile,
     refRegistry,
     toolDefectMemo,
+    resolveCurrentMembership,
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
@@ -1115,6 +1123,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     pinServerValidatedWorkspaceId,
     recordAuditEvent,
     refRegistry,
+    ...(resolveCurrentMembership === undefined
+      ? {}
+      : { resolveCurrentMembership }),
     safeDb,
     scopedDb,
     toolDefectMemo,
