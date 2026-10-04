@@ -75,6 +75,8 @@ export const SYNTHETIC_SCALE_PROFILE = {
       reltuples: 1_000_000,
       allVisibleFraction: 0.5,
     },
+    // 400 days of retention at a few thousand changed runs a day.
+    system_audit_runs: { reltuples: 2_000_000, allVisibleFraction: 0.5 },
   },
   attributes: [
     {

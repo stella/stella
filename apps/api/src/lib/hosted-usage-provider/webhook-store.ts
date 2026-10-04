@@ -38,6 +38,7 @@ import type {
   ProviderEventReplayPerformer,
 } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { isRecord } from "@/api/lib/type-guards";
 
 type InsertWebhookEventInput = {
@@ -170,7 +171,7 @@ export type WebhookTransactionRunner = typeof runWebhookTransaction;
  * marker. `audit_logs.user_id` is plain text (no FK) so this is
  * accepted by the schema.
  */
-export const WEBHOOK_AUDIT_ACTOR = "system:usage-provider" as const;
+export const WEBHOOK_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.usageProvider;
 
 type WebhookAuditEventInput = {
   tx: Transaction;

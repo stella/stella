@@ -34,6 +34,8 @@ export type ReadUnavailableCause =
   | { readonly kind: "status"; readonly status: number }
   | { readonly kind: "no-content"; readonly status: number }
   | { readonly kind: "empty-body"; readonly status: number }
+  /** The served body exceeded the reader's byte ceiling; reading stopped. */
+  | { readonly kind: "too-large"; readonly maxBytes: number }
   | { readonly kind: "thrown"; readonly error: unknown };
 
 /** The statuses by which a source refuses a read. */
@@ -169,6 +171,7 @@ export type StoredReadUnavailableCause =
   | { readonly kind: "status"; readonly status: number }
   | { readonly kind: "no-content"; readonly status: number }
   | { readonly kind: "empty-body"; readonly status: number }
+  | { readonly kind: "too-large"; readonly maxBytes: number }
   | { readonly kind: "thrown" };
 
 /**
@@ -228,9 +231,19 @@ const ABSENCE_EVIDENCE: ReadonlySet<unknown> = new Set<AbsenceEvidence>([
   "publisher-typed-absence",
 ]);
 
-const UNAVAILABLE_KINDS: ReadonlySet<unknown> = new Set<
-  StoredReadUnavailableCause["kind"]
->(["status", "no-content", "empty-body", "thrown"]);
+// Total over the stored cause kinds, so a new kind cannot be stored without
+// the guard accepting it.
+const UNAVAILABLE_KIND_RECORD = {
+  status: true,
+  "no-content": true,
+  "empty-body": true,
+  "too-large": true,
+  thrown: true,
+} as const satisfies Record<StoredReadUnavailableCause["kind"], true>;
+
+const UNAVAILABLE_KINDS: ReadonlySet<unknown> = new Set(
+  Object.keys(UNAVAILABLE_KIND_RECORD),
+);
 
 /** Whether a value is a stored unavailable marker. */
 export const isStoredReadUnavailable = (

@@ -65,6 +65,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "agent-client-storage-backfill.ts",
     "Storage migration of client credentials.",
   ),
+  "audit.purgeSystemRuns": platform(
+    "system-audit-retention.ts",
+    "Retention sweep of system audit runs.",
+  ),
   "auth.sweepRegistrations": platform(
     "registration-retention.ts",
     "Retention sweep of registration records.",
