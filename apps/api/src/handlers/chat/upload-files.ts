@@ -55,7 +55,7 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   detectFileEncryption,
-  ENCRYPTED_CONTENT_MESSAGE,
+  encryptedContentError,
 } from "@/api/lib/files/detect-file-encryption";
 import {
   generateImageThumbnail,
@@ -667,9 +667,7 @@ const refuseEncryptedAttachment = async (
     scanned,
   });
   return detection.encryption.encrypted
-    ? Result.err(
-        new HandlerError({ status: 422, message: ENCRYPTED_CONTENT_MESSAGE }),
-      )
+    ? Result.err(encryptedContentError())
     : Result.ok();
 };
 

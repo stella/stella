@@ -7,6 +7,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { ENCRYPTED_CONTENT_ERROR_CODE } from "@stll/api-contract";
+
 import { uploadUserFile } from "@/api/handlers/chat/upload-files";
 import { checkStampHandler } from "@/api/handlers/entities/stamps/check";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -177,12 +179,19 @@ describe("encrypted files on raw-byte paths", () => {
               status: HandlerError.is(result.error)
                 ? result.error.status
                 : result.error._tag,
+              code: HandlerError.is(result.error)
+                ? result.error.code
+                : undefined,
               message: result.error.message,
             }
           : { status: "stored" };
       }
 
-      const refused = { status: 422, message: ENCRYPTED_CONTENT_MESSAGE };
+      const refused = {
+        status: 422,
+        code: ENCRYPTED_CONTENT_ERROR_CODE,
+        message: ENCRYPTED_CONTENT_MESSAGE,
+      };
       expect(outcomes).toEqual({
         pdf: refused,
         docx: refused,

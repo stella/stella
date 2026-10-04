@@ -53,8 +53,11 @@
  * unencrypted. ODF encryption (per entry, inside the zip) is not inspected
  * either.
  */
+import { ENCRYPTED_CONTENT_ERROR_CODE } from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { DesktopEditMimeType } from "@/api/lib/desktop-edit-file-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SubprocessError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
@@ -71,6 +74,14 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
  */
 export const ENCRYPTED_CONTENT_MESSAGE =
   "Encrypted document content cannot be extracted.";
+
+/** The 422 a REST handler answers when it needs an encrypted file's content. */
+export const encryptedContentError = (): HandlerError<422> =>
+  new HandlerError({
+    status: 422,
+    code: ENCRYPTED_CONTENT_ERROR_CODE,
+    message: ENCRYPTED_CONTENT_MESSAGE,
+  });
 
 /** How the attribute was established; kept for callers and tests, not stored. */
 type FileEncryptionBasis =
