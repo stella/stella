@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { templateFills } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -10,7 +9,6 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -31,6 +29,7 @@ import {
   type SanitizedFileName,
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
   fillDiagnosticsOf,
@@ -324,29 +323,17 @@ const fillTemplateToWorkspace = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await scopedDb(async (tx) => {
-            await tx.insert(templateFills).values({
-              organizationId,
+            await recordTemplateFill({
+              tx,
               templateId,
+              organizationId,
               userId: user.id,
+              // The handler's own workspace, which its recorder is bound to.
+              workspaceId,
+              entityId,
               format: "docx",
-              status: fillStatus,
-              unmatchedCount: filled.unmatchedPlaceholders.length,
-              unusedCount: filled.unusedValues.length,
-              structureErrors:
-                filled.structureErrors.length > 0
-                  ? filled.structureErrors
-                  : null,
-            });
-
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.EXECUTE,
-              resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-              resourceId: templateId,
-              metadata: {
-                entityId,
-                status: fillStatus,
-                unmatchedCount: filled.unmatchedPlaceholders.length,
-              },
+              diagnostics,
+              recordAuditEvent,
             });
           }),
         catch: (cause) =>

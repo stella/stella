@@ -345,6 +345,7 @@ if (!databaseUrl || !runPostgresTests) {
               });
               const writeContext = {
                 organizationId: fixture.organizationId,
+                accessibleWorkspaceIds: [],
                 orgAIConfig: null,
                 orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
                 managedAIResidency: "eu" as const,

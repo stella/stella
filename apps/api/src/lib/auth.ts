@@ -148,7 +148,10 @@ import {
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  CLIENT_MATTER_ADMIN_ROLES,
+  isMemberRole,
+} from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
@@ -2152,7 +2155,6 @@ type MemberAuthorization = {
   workspace: AccessibleWorkspace | null;
 };
 
-const ADMIN_BYPASS_ROLES = ["owner", "admin"];
 const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
@@ -2213,7 +2215,7 @@ export const resolveMemberAuthorization = async (
         or(
           membershipExists,
           and(
-            inArray(member.role, ADMIN_BYPASS_ROLES),
+            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
             isNotNull(workspaces.clientId),
           ),
         ),
@@ -2354,7 +2356,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         or(
           membershipExists,
           and(
-            inArray(member.role, ADMIN_BYPASS_ROLES),
+            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
             isNotNull(workspaces.clientId),
           ),
         ),
