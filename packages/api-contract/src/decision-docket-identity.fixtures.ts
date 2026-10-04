@@ -1,6 +1,9 @@
 import fc from "fast-check";
 
-import type { DecisionDocketJurisdiction } from "./decision-docket-grammar";
+import {
+  DECISION_DOCKET_GRAMMARS,
+  type DecisionDocketJurisdiction,
+} from "./decision-docket-grammar";
 
 /** A scenario a jurisdiction's grammar cannot express, and why. */
 type UnsupportedDocketScenario = {
@@ -482,9 +485,10 @@ const LETTER_CASES = [
  * the written spelling behind one of the grammar's leads, in either letter
  * case, with or without gaps around its slashes and dashes, in any dash.
  */
-export const docketReaderEntryArbitrary = (
+const readerEntryOf = (
   jurisdiction: DecisionDocketJurisdiction,
 ): fc.Arbitrary<{
+  readonly jurisdiction: DecisionDocketJurisdiction;
   readonly filed: string;
   readonly entry: string;
   readonly partSibling: PartSiblingKey;
@@ -504,9 +508,23 @@ export const docketReaderEntryArbitrary = (
         .replaceAll("/", () => `${gap}/${gap}`)
         .replaceAll("-", () => `${gap}${dash}${gap}`);
       return {
+        jurisdiction,
         filed: docket.filed,
         entry: letterCase(spaced),
         partSibling: docket.partSibling,
       };
     });
 };
+
+/**
+ * A reader entry for a generated docket of any grammar. A property id is its
+ * test's literal title, so one property spans every grammar and its
+ * counterexample names the jurisdiction.
+ */
+export const docketReaderEntryArbitrary = fc
+  .constantFrom(
+    ...Object.values(DECISION_DOCKET_GRAMMARS).map(
+      ({ jurisdiction }) => jurisdiction,
+    ),
+  )
+  .chain(readerEntryOf);

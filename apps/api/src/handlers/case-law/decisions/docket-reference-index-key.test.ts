@@ -160,6 +160,50 @@ describe("the docket a query reads is keyed as the stored docket", () => {
   });
 });
 
+test("a reader entry's family keys as the filed docket, and its part as the stored sibling", () => {
+  // An entry with a part reads by the citation keys alone, never by the
+  // case-file key, so its stored sibling is reached only when the family
+  // keys exactly as the filed docket does.
+  const part = DOCKET_IDENTITY_PART_NUMERAL;
+  assertProperty(
+    "a reader entry's family keys as the filed docket, and its part as the stored sibling",
+    fc.property(
+      docketReaderEntryArbitrary,
+      ({ entry, filed: stored, jurisdiction, partSibling }) => {
+        const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+        const label = `${jurisdiction}: ${entry}`;
+        const familyIn = (text: string) => {
+          const intent = parseDecisionQuery(text, { grammar });
+          return intent.type === "identifier" && intent.kind === "docket"
+            ? intent
+            : panic(`Not a docket: ${jurisdiction}: ${text}`);
+        };
+        expect(keyOf(familyIn(entry).family), label).toBe(keyOf(stored));
+        const withPart = familyIn(`${entry} - ${part}.`);
+        expect(keyOf(withPart.family), label).toBe(keyOf(stored));
+        // Pinned both ways: a declared gap that closes has to be
+        // redeclared, and an undeclared one fails.
+        const reached = docketFamilyCitationKeys(withPart).includes(
+          keyOf(`${stored} - ${part}.`),
+        );
+        switch (partSibling.type) {
+          case "keyed":
+            expect(reached, label).toBe(true);
+            break;
+          case "apart":
+            expect(reached, `${label}: ${partSibling.reason}`).toBe(false);
+            break;
+          default: {
+            partSibling satisfies never;
+            panic("Unhandled part sibling declaration");
+          }
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
 describe.each(
   Object.values(DECISION_DOCKET_GRAMMARS).map(
     ({ jurisdiction }) => jurisdiction,
@@ -195,42 +239,6 @@ describe.each(
         );
         expect(keyOf(intent.family), entry).toBe(keyOf(docket));
       }
-    });
-
-    const readerEntryTitle = `a ${jurisdiction} reader entry's family keys as the filed docket, and its part as the stored sibling`;
-    test(readerEntryTitle, () => {
-      // An entry with a part reads by the citation keys alone, never by the
-      // case-file key, so its stored sibling is reached only when the family
-      // keys exactly as the filed docket does.
-      assertProperty(
-        readerEntryTitle,
-        fc.property(
-          docketReaderEntryArbitrary(jurisdiction),
-          ({ entry, filed: stored, partSibling }) => {
-            expect(keyOf(familyIn(entry).family), entry).toBe(keyOf(stored));
-            const withPart = familyIn(`${entry} - ${part}.`);
-            expect(keyOf(withPart.family), entry).toBe(keyOf(stored));
-            // Pinned both ways: a declared gap that closes has to be
-            // redeclared, and an undeclared one fails.
-            const reached = docketFamilyCitationKeys(withPart).includes(
-              keyOf(`${stored} - ${part}.`),
-            );
-            switch (partSibling.type) {
-              case "keyed":
-                expect(reached, entry).toBe(true);
-                break;
-              case "apart":
-                expect(reached, `${entry}: ${partSibling.reason}`).toBe(false);
-                break;
-              default: {
-                partSibling satisfies never;
-                panic("Unhandled part sibling declaration");
-              }
-            }
-          },
-        ),
-        propertyConfig(),
-      );
     });
 
     test("a member stored with a part numeral is read under its file's keys", () => {

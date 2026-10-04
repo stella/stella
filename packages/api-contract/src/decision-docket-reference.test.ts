@@ -957,6 +957,48 @@ const FIXTURE_NUMBERS = [1, DOCKET_IDENTITY_FIXTURE_NUMBER_MAX] as const;
 /** A trailing number no sheetless grammar may read as a sheet. */
 const PROBE_SHEET = "33";
 
+test("a reader entry reads as its file, in a spelling its grammar keeps", () => {
+  // The family is what the lookup keys like a stored docket: the grammar's
+  // format of it is a fixed point, under the filed docket's case-file key,
+  // with or without a part after it.
+  const part = DOCKET_IDENTITY_PART_NUMERAL;
+  assertProperty(
+    "a reader entry reads as its file, in a spelling its grammar keeps",
+    fc.property(
+      docketReaderEntryArbitrary,
+      fc.boolean(),
+      ({ entry, filed: stored, jurisdiction }, withPart) => {
+        const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+        const label = `${jurisdiction}: ${entry}`;
+        const canonicalOf = (docket: string) =>
+          readDecisionDocketReference(docket, { grammar })?.family.canonical;
+        expect(
+          parseDecisionDocket(stored, { grammar })?.formatted,
+          `${jurisdiction}: ${stored}`,
+        ).toBe(stored);
+        const intent = parseDecisionQuery(
+          withPart ? `${entry} - ${part}.` : entry,
+          { grammar },
+        );
+        if (intent.type !== "identifier" || intent.kind !== "docket") {
+          return panic(`Not a docket: ${label}`);
+        }
+        expect(intent.jurisdiction, label).toBe(jurisdiction);
+        expect(intent.selector, label).toEqual(
+          withPart ? { kind: "part", value: part } : { kind: "none" },
+        );
+        expect(canonicalOf(intent.family), label).toBe(canonicalOf(stored));
+        expect(canonicalOf(stored), label).toBeDefined();
+        expect(
+          parseDecisionDocket(intent.family, { grammar })?.formatted,
+          label,
+        ).toBe(intent.family);
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
 describe.each(
   Object.values(DECISION_DOCKET_GRAMMARS).map(
     ({ jurisdiction }) => jurisdiction,
@@ -1014,37 +1056,6 @@ describe.each(
       expect(canonicalOf(intent.family), stored).toBe(canonicalOf(docket));
       expect(intent.selector, stored).toEqual({ kind: "part", value: part });
     }
-  });
-
-  const readerEntryTitle = `a ${jurisdiction} reader entry reads as its file, in a spelling the grammar keeps`;
-  test(readerEntryTitle, () => {
-    // The family is what the lookup keys like a stored docket: the grammar's
-    // format of it is a fixed point, under the filed docket's case-file key,
-    // with or without a part after it.
-    assertProperty(
-      readerEntryTitle,
-      fc.property(
-        docketReaderEntryArbitrary(jurisdiction),
-        fc.boolean(),
-        ({ entry, filed: stored }, withPart) => {
-          expect(
-            parseDecisionDocket(stored, { grammar })?.formatted,
-            stored,
-          ).toBe(stored);
-          const intent = intentOf(withPart ? `${entry} - ${part}.` : entry);
-          expect(intent.jurisdiction, entry).toBe(jurisdiction);
-          expect(intent.selector, entry).toEqual(
-            withPart ? { kind: "part", value: part } : { kind: "none" },
-          );
-          expect(canonicalOf(intent.family), entry).toBe(canonicalOf(stored));
-          expect(
-            parseDecisionDocket(intent.family, { grammar })?.formatted,
-            entry,
-          ).toBe(intent.family);
-        },
-      ),
-      propertyConfig(),
-    );
   });
 
   switch (sheet.type) {
