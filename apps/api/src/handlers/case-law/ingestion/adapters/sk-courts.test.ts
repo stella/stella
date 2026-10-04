@@ -31,14 +31,42 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  type IngestionResult,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
+
+/**
+ * The stored read-outcome marker, typed as the stored shape: metadata values
+ * are branded plain text, so the narrowed metadata value cannot be compared
+ * with a literal directly.
+ */
+const storedOutcome = (
+  decision: IngestionResult | undefined,
+): StoredReadOutcome => {
+  const marker = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+  if (
+    isReadRefusal(marker) ||
+    isStoredReadAbsence(marker) ||
+    isStoredReadUnavailable(marker)
+  ) {
+    return marker;
+  }
+  throw new Error("expected a stored read outcome");
+};
 
 describe("Slovak court backfill rejects unreadable publisher listings", () => {
   afterEach(() => mock.restore());
@@ -185,9 +213,10 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           expect(
             page.value.decisions.map(({ isListingOnly }) => isListingOnly),
           ).toEqual([...Array.from({ length: 99 }, () => undefined), true]);
-          expect(
-            page.value.decisions.at(-1)?.metadata[READ_OUTCOME_METADATA_KEY],
-          ).toEqual({ type: "absent", evidence: "publisher-typed-absence" });
+          expect(storedOutcome(page.value.decisions.at(-1))).toEqual({
+            type: "absent",
+            evidence: "publisher-typed-absence",
+          });
           expect(page.value.nextCursor).toBe(
             cursor.startsWith("backfill:")
               ? "backfill:100"
@@ -733,7 +762,7 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       expect(parts?.["listing"]).toBe(JSON.stringify(listing));
       expect(parts?.["detail"]).toBeUndefined();
       expect(decision?.isListingOnly).toBe(true);
-      expect(decision?.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+      expect(storedOutcome(decision)).toEqual({
         type: "refused",
         status,
         scope: "document",
@@ -770,9 +799,9 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
 
       const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
       expect(
-        page.decisions.map(({ isListingOnly, metadata }) => ({
-          isListingOnly,
-          outcome: metadata[READ_OUTCOME_METADATA_KEY],
+        page.decisions.map((decision) => ({
+          isListingOnly: decision.isListingOnly,
+          outcome: storedOutcome(decision),
         })),
       ).toEqual([
         { isListingOnly: true, outcome: { type: "absent", evidence } },
