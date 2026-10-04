@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -15,6 +15,7 @@ const config = {
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: createMemoryBodySchema,
 } satisfies HandlerConfig;
