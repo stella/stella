@@ -61,13 +61,15 @@ const reparent = async (
   categoryId: SafeId<"templateCategory">,
   parentId: SafeId<"templateCategory">,
 ) =>
-  await updateTemplateCategoryHandler({
-    scopedDb,
-    organizationId,
-    categoryId,
-    body: { parentId },
-    recordAuditEvent: noAuditRows,
-  });
+  (
+    await updateTemplateCategoryHandler({
+      scopedDb,
+      organizationId,
+      categoryId,
+      body: { parentId },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
 
 const parentOf = async (categoryId: SafeId<"templateCategory">) =>
   (
@@ -215,31 +217,30 @@ test("a cycle check that cannot read its answer refuses rather than allowing", a
       return await callback(asTestRaw<Transaction>(proxied));
     });
 
-  let thrown: unknown;
-  try {
-    await updateTemplateCategoryHandler({
-      scopedDb: brokenExecute,
-      organizationId,
-      categoryId: root,
-      body: { parentId: middle },
-      recordAuditEvent: noAuditRows,
-    });
-  } catch (error) {
-    thrown = error;
-  }
+  const result = await updateTemplateCategoryHandler({
+    scopedDb: brokenExecute,
+    organizationId,
+    categoryId: root,
+    body: { parentId: middle },
+    recordAuditEvent: noAuditRows,
+  });
 
-  expect(thrown).toBeInstanceOf(Panic);
+  // The transaction fails with the guard's panic as its cause; nothing is written.
+  expect(result.isErr()).toBe(true);
+  expect(result.isErr() && result.error.cause).toBeInstanceOf(Panic);
   expect(await parentOf(root)).toBeNull();
 });
 
 test("another firm's category is not reachable from this firm's walk", async () => {
-  const result = await updateTemplateCategoryHandler({
-    scopedDb,
-    organizationId,
-    categoryId: sibling,
-    body: { parentId: foreign },
-    recordAuditEvent: noAuditRows,
-  });
+  const result = (
+    await updateTemplateCategoryHandler({
+      scopedDb,
+      organizationId,
+      categoryId: sibling,
+      body: { parentId: foreign },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
 
   expect(result).toMatchObject({
     code: 404,
@@ -273,13 +274,15 @@ test("a loop the pre-check misses is refused by the database with the same 400",
       return await callback(asTestRaw<Transaction>(proxied));
     });
 
-  const result = await updateTemplateCategoryHandler({
-    scopedDb: staleCycleCheck,
-    organizationId,
-    categoryId: root,
-    body: { parentId: leaf },
-    recordAuditEvent: noAuditRows,
-  });
+  const result = (
+    await updateTemplateCategoryHandler({
+      scopedDb: staleCycleCheck,
+      organizationId,
+      categoryId: root,
+      body: { parentId: leaf },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
 
   expect(result).toMatchObject({
     code: 400,

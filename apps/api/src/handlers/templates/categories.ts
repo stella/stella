@@ -1,10 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { templateCategories } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -236,26 +237,29 @@ const circularCategory = () =>
 
 /**
  * Run a parent change under the tree lock, answering the database guard's
- * refusal with the same 400 the pre-check gives. Any other failure is
- * rethrown unchanged.
+ * refusal with the same 400 the pre-check gives. Any other failure is returned
+ * unchanged as the transaction's error.
  */
 const withCategoryTree = async <T>(
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
   run: (tx: Transaction) => Promise<T>,
-) =>
-  await scopedDb(async (tx) => {
+): Promise<Result<T | ReturnType<typeof circularCategory>, SafeDbError>> => {
+  const attempt = await safeDbFromScoped(scopedDb)(async (tx) => {
     await lockTree(tx, {
       tree: "templateCategories",
       scopeId: organizationId,
     });
     return await run(tx);
-  }).catch((error: unknown) => {
-    if (isTreeParentGuardError(error, "templateCategories")) {
-      return circularCategory();
-    }
-    throw error;
   });
+  if (
+    attempt.isErr() &&
+    isTreeParentGuardError(attempt.error, "templateCategories")
+  ) {
+    return Result.ok(circularCategory());
+  }
+  return attempt;
+};
 
 type UpdateProps = {
   scopedDb: ScopedDb;

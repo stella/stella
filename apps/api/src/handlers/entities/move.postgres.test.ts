@@ -14,6 +14,7 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TREE_PARENT_CYCLE_ERROR_CODE } from "@/api/lib/db/tree-parent-guard";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -290,9 +291,11 @@ if (!databaseUrl || !runPostgresTests) {
                   panic("Expected one refused move");
                 }
                 expectDescendantRefusal(loser);
-                expect(loser.isErr() && loser.error.code).toBe(
-                  TREE_PARENT_CYCLE_ERROR_CODE,
-                );
+                expect(
+                  loser.isErr() &&
+                    HandlerError.is(loser.error) &&
+                    loser.error.code,
+                ).toBe(TREE_PARENT_CYCLE_ERROR_CODE);
                 await expectTerminatingChains(firstDb, hierarchy.workspaceId);
                 break;
               }

@@ -154,7 +154,7 @@ describe("tree trigger migrations", () => {
       const statement = newestTriggerStatement(guard.constraint);
       expect(statement).toBeDefined();
       expect(statement).toContain(
-        `BEFORE INSERT OR UPDATE OF "parent_id" ON "${guard.table}"`,
+        `AFTER INSERT OR UPDATE OF "parent_id" ON "${guard.table}"`,
       );
       expect(triggerArguments(statement ?? "")).toEqual([
         ...treeParentTriggerArguments(guard),

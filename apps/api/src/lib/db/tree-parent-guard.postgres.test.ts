@@ -19,6 +19,7 @@ import { updateCategoryHandler } from "@/api/handlers/clauses/categories";
 import { updateTemplateCategoryHandler } from "@/api/handlers/templates/categories";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -53,7 +54,12 @@ type Tree = {
   insert: (
     db: Db,
     scope: Scope,
-    rows: readonly { id: string; parentId: string | null }[],
+    rows: readonly {
+      id: string;
+      parentId: string | null;
+      /** Defaults to the statement's scope. */
+      scope?: Scope;
+    }[],
   ) => Promise<unknown>;
   setParent: (db: Db, id: string, parentId: string | null) => Promise<unknown>;
   parents: (db: Db, scope: Scope) => Promise<Map<string, string | null>>;
@@ -66,7 +72,7 @@ const TREES: Record<TreeName, Tree> = {
         rows.map((row) => ({
           id: toSafeId<"entity">(row.id),
           parentId: nullableId<"entity">(row.parentId),
-          workspaceId: scope.workspaceId,
+          workspaceId: (row.scope ?? scope).workspaceId,
           name: "Folder",
           kind: "folder" as const,
         })),
@@ -92,7 +98,7 @@ const TREES: Record<TreeName, Tree> = {
         rows.map((row) => ({
           id: toSafeId<"clauseCategory">(row.id),
           parentId: nullableId<"clauseCategory">(row.parentId),
-          organizationId: scope.organizationId,
+          organizationId: (row.scope ?? scope).organizationId,
           name: "Category",
         })),
       ),
@@ -120,7 +126,7 @@ const TREES: Record<TreeName, Tree> = {
         rows.map((row) => ({
           id: toSafeId<"templateCategory">(row.id),
           parentId: nullableId<"templateCategory">(row.parentId),
-          organizationId: scope.organizationId,
+          organizationId: (row.scope ?? scope).organizationId,
           name: "Category",
         })),
       ),
@@ -144,7 +150,10 @@ const TREES: Record<TreeName, Tree> = {
   },
 };
 
-const TREE_NAMES = Object.keys(TREE_PARENT_GUARDS) as TreeName[];
+const isTreeName = (key: string): key is TreeName =>
+  Object.hasOwn(TREE_PARENT_GUARDS, key);
+
+const TREE_NAMES = Object.keys(TREE_PARENT_GUARDS).filter(isTreeName);
 
 const createScope = async (db: GatedTestDb): Promise<Scope> => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -293,7 +302,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("each tree's trigger is enabled, fires before insert and parent updates, with the registry's arguments", async () => {
+    test("each tree's trigger is enabled, fires after insert and parent updates, with the registry's arguments", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         for (const guard of Object.values(TREE_PARENT_GUARDS)) {
@@ -316,7 +325,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(row?.["enabled"]).toBe("O");
           expect(row?.["function_name"]).toBe("guard_tree_parent");
           expect(String(row?.["definition"])).toContain(
-            `BEFORE INSERT OR UPDATE OF parent_id ON public.${guard.table} FOR EACH ROW`,
+            `AFTER INSERT OR UPDATE OF parent_id ON public.${guard.table} FOR EACH ROW`,
           );
           const args = String(row?.["args"])
             .split("\\000")
@@ -393,6 +402,115 @@ if (!databaseUrl || !runPostgresTests) {
         });
       });
 
+      // The self-referencing foreign key is checked at the end of the
+      // statement, so one INSERT can name rows it creates itself.
+      test("one INSERT whose rows point at each other is refused and stores nothing", async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const scope = await createScope(db);
+          try {
+            const { a, b, c } = ids();
+            expectGuardRefusal(
+              await failureOf(
+                tree.insert(db, scope, [
+                  { id: a, parentId: b },
+                  { id: b, parentId: a },
+                ]),
+              ),
+              treeName,
+            );
+            const threeRowLoop = await failureOf(
+              tree.insert(db, scope, [
+                { id: a, parentId: c },
+                { id: b, parentId: a },
+                { id: c, parentId: b },
+              ]),
+            );
+            expectGuardRefusal(threeRowLoop, treeName);
+            expect(threeRowLoop).toMatchObject({
+              cause: {
+                message: expect.stringContaining(
+                  "inserted tree rows cannot form a loop",
+                ),
+              },
+            });
+            expect(await tree.parents(db, scope)).toEqual(new Map());
+          } finally {
+            await dropScope(db, scope);
+          }
+        });
+      });
+
+      test("an inserted row whose parent is in another scope is refused", async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const scope = await createScope(db);
+          const otherScope = await createScope(db);
+          try {
+            const { a, b } = ids();
+            await tree.insert(db, otherScope, [{ id: a, parentId: null }]);
+            const refusal = await failureOf(
+              tree.insert(db, scope, [{ id: b, parentId: a }]),
+            );
+            expectGuardRefusal(refusal, treeName);
+            expect(refusal).toMatchObject({
+              cause: {
+                message: expect.stringContaining(
+                  "cannot have a parent in another scope",
+                ),
+              },
+            });
+            // The parent may also arrive in the same statement, after the row.
+            const { c } = ids();
+            expectGuardRefusal(
+              await failureOf(
+                tree.insert(db, scope, [
+                  { id: b, parentId: c },
+                  { id: c, parentId: null, scope: otherScope },
+                ]),
+              ),
+              treeName,
+            );
+            expect(await tree.parents(db, scope)).toEqual(new Map());
+            expect(await tree.parents(db, otherScope)).toEqual(
+              new Map([[a, null]]),
+            );
+          } finally {
+            await dropScope(db, scope);
+            await dropScope(db, otherScope);
+          }
+        });
+      });
+
+      // Copies, duplicates and folder uploads insert a whole subtree in one
+      // statement; the order of the rows in it does not matter.
+      test("acyclic inserts are applied: a subtree in one statement, children listed first, and rows under existing parents", async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const scope = await createScope(db);
+          try {
+            const { a, b, c } = ids();
+            const d = createSafeId<"entity">() as string;
+            await tree.insert(db, scope, [
+              { id: c, parentId: b },
+              { id: b, parentId: a },
+              { id: a, parentId: null },
+            ]);
+            await tree.insert(db, scope, [{ id: d, parentId: c }]);
+            expect(await tree.parents(db, scope)).toEqual(
+              new Map([
+                [a, null],
+                [b, a],
+                [c, b],
+                [d, c],
+              ]),
+            );
+          } finally {
+            await dropScope(db, scope);
+          }
+        });
+      });
+
       test("a parent from another scope is refused on a reparent", async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { db } = openClient();
@@ -414,6 +532,54 @@ if (!databaseUrl || !runPostgresTests) {
         });
       });
     });
+
+    // An insert can only close a loop inside its own statement, so the trigger
+    // takes no tree lock for it. (An entity insert still waits on a held
+    // matter-row lock through its own workspace foreign key, so only the
+    // advisory-locked trees can show this.)
+    if (treeName !== "entities") {
+      test(`${treeName}: an insert does not wait on a held tree lock`, async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const holderDb = openClient().db;
+          const writerDb = openClient().db;
+          const observer = openClient().db;
+          const scope = await createScope(observer);
+          const { a, b } = ids();
+          const locked = Promise.withResolvers<undefined>();
+          const release = Promise.withResolvers<undefined>();
+          try {
+            await tree.insert(observer, scope, [{ id: a, parentId: null }]);
+            const holder = holderDb.transaction(async (tx) => {
+              await lockTree(asTestRaw<Transaction>(tx), {
+                tree: treeName,
+                scopeId: scope.organizationId,
+              });
+              locked.resolve(undefined);
+              await release.promise;
+            });
+            await locked.promise;
+            const inserted = await failureOf(
+              writerDb.transaction(async (tx) => {
+                await setSharedLockTimeout(asTestRaw<Transaction>(tx), 2000);
+                await tree.insert(tx, scope, [{ id: b, parentId: a }]);
+              }),
+            );
+            release.resolve(undefined);
+            await holder;
+            expect(inserted).toBeUndefined();
+            expect(await tree.parents(observer, scope)).toEqual(
+              new Map([
+                [a, null],
+                [b, a],
+              ]),
+            );
+          } finally {
+            release.resolve(undefined);
+            await dropScope(observer, scope);
+          }
+        });
+      }, 30_000);
+    }
 
     // The handlers' `lockTree` and the trigger must be one key: a reparent
     // waits while a handler transaction holds the tree lock.
@@ -610,7 +776,7 @@ if (!databaseUrl || !runPostgresTests) {
         return await run(instrumented(raw, instrument));
       });
 
-  type Outcome = { ok: boolean; status?: number; code?: string };
+  type Outcome = { ok: boolean; status?: number; code?: string | undefined };
 
   const HANDLERS = {
     clauseCategories: async (
@@ -629,9 +795,17 @@ if (!databaseUrl || !runPostgresTests) {
           recordAuditEvent: async () => undefined,
         });
       });
-      return result.isOk()
-        ? { ok: true }
-        : { ok: false, status: result.error.status, code: result.error.code };
+      if (result.isOk()) {
+        return { ok: true };
+      }
+      if (!HandlerError.is(result.error)) {
+        return panic("Expected a handler error", result.error);
+      }
+      return {
+        ok: false,
+        status: result.error.status,
+        code: result.error.code,
+      };
     },
     templateCategories: async (
       db: GatedTestDb,
@@ -640,13 +814,15 @@ if (!databaseUrl || !runPostgresTests) {
       categoryId: string,
       parentId: string,
     ): Promise<Outcome> => {
-      const result = await updateTemplateCategoryHandler({
-        scopedDb: scopedOn(db, instrument),
-        organizationId: scope.organizationId,
-        categoryId: toSafeId<"templateCategory">(categoryId),
-        body: { parentId: toSafeId<"templateCategory">(parentId) },
-        recordAuditEvent: async () => undefined,
-      });
+      const result = (
+        await updateTemplateCategoryHandler({
+          scopedDb: scopedOn(db, instrument),
+          organizationId: scope.organizationId,
+          categoryId: toSafeId<"templateCategory">(categoryId),
+          body: { parentId: toSafeId<"templateCategory">(parentId) },
+          recordAuditEvent: async () => undefined,
+        })
+      ).unwrap();
       if ("id" in result) {
         return { ok: true };
       }
@@ -654,21 +830,21 @@ if (!databaseUrl || !runPostgresTests) {
       return {
         ok: false,
         status: result.code,
-        code:
-          typeof response === "object" &&
-          response !== null &&
-          "code" in response &&
-          typeof response.code === "string"
-            ? response.code
-            : undefined,
+        ...(typeof response === "object" &&
+        response !== null &&
+        "code" in response &&
+        typeof response.code === "string"
+          ? { code: response.code }
+          : {}),
       };
     },
   } as const;
 
-  for (const [handlerTree, runHandler] of Object.entries(HANDLERS) as [
-    "clauseCategories" | "templateCategories",
-    (typeof HANDLERS)["clauseCategories"],
-  ][]) {
+  for (const handlerTree of [
+    "clauseCategories",
+    "templateCategories",
+  ] as const) {
+    const runHandler = HANDLERS[handlerTree];
     const tree = TREES[handlerTree];
     describe(`${handlerTree} update handler under concurrent opposite moves`, () => {
       for (const lockMode of ["take", "omit"] as const) {

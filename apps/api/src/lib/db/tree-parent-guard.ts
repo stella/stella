@@ -2,11 +2,15 @@
  * Self-referencing trees and the database guard that keeps them acyclic.
  *
  * Every table whose `parent_id` references its own `id` carries the
- * `guard_tree_parent` trigger (migration 20261004003000). On a reparent the
- * trigger takes the tree's lock, requires the parent in the same scope and
- * walks the parent chain; a move that would close a loop is refused with
- * `check_violation` naming the tree's constraint. Two concurrent moves (A under
- * B, B under A) therefore cannot both commit, whatever the handler does.
+ * `guard_tree_parent` trigger (migration 20261004003000). It runs after each
+ * inserted or reparented row, once the whole statement's rows are visible,
+ * requires the parent in the same scope and walks the parent chain; a row that
+ * would close a loop is refused with `check_violation` naming the tree's
+ * constraint, including a loop built inside one bulk INSERT. A reparent first
+ * takes the tree's lock, so two concurrent moves (A under B, B under A) cannot
+ * both commit, whatever the handler does. An insert takes no lock: a loop
+ * through a new row is closed either inside its own statement or by a
+ * reparent, which locks.
  *
  * Writers still take the same lock first, in their own transaction, before any
  * row lock, and keep a readable pre-check: the trigger then re-acquires a lock
