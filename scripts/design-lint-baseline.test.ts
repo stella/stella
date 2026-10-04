@@ -116,9 +116,9 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       rule,
     ]),
   ]);
-  expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.get("react(no-unsafe)")).toBe(
-    "react/no-unsafe",
-  );
+  expect(
+    DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.get("react(no-children-prop)"),
+  ).toBe("react/no-children-prop");
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",

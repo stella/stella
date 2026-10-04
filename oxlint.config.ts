@@ -1564,6 +1564,12 @@ export default defineConfig({
 
   overrides: [
     {
+      // Plugin fixtures are inputs for the local rules' tests; route fixtures
+      // name their component before declaring it, as route modules do.
+      files: [".oxlint-plugins/__fixtures__/**"],
+      rules: { "eslint/no-use-before-define": "off" },
+    },
+    {
       files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       excludeFiles: [
         "apps/api/src/**/*.test.ts",

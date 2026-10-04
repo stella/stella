@@ -1729,6 +1729,7 @@
     "apps/api/src/mcp/capability-tools.ts": 6,
     "apps/api/src/mcp/case-law-court-filter.ts": 3,
     "apps/api/src/mcp/egress.ts": 6,
+    "apps/api/src/mcp/feature-access-prose.ts": 1,
     "apps/api/src/mcp/feedback-tools.ts": 2,
     "apps/api/src/mcp/gateway/dispatch-call.ts": 2,
     "apps/api/src/mcp/gateway/external-tools.ts": 6,
