@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "sk-courts.ts getTotalCount and sk-document-backfill.ts fetchPdfBytes read through readPublisher, which returns a thrown request as an unavailable outcome; both rethrow that original error, as the raw fetch they replace propagated it."
+}

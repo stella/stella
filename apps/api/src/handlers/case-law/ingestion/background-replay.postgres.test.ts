@@ -114,6 +114,21 @@ const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
   haltReason: null,
 });
 
+/** How long the deadline test waits for a server-side state to appear. */
+const BLOCKED_QUERY_DEADLINE_MS = 10_000;
+
+/** Polls `probe` until it holds or the deadline passes; true when it held. */
+const waitForState = async (probe: () => Promise<boolean>) => {
+  const deadline = Date.now() + BLOCKED_QUERY_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    if (await probe()) {
+      return true;
+    }
+    await Bun.sleep(20);
+  }
+  return false;
+};
+
 if (!databaseUrl || !enabled) {
   describe.skip("background replay ownership and durable batch boundaries", () => {
     test("requires explicitly enabled Postgres", () =>
@@ -924,7 +939,7 @@ if (!databaseUrl || !enabled) {
               lockTimeout: 10_000,
               signal: AbortSignal.any([
                 controller.signal,
-                AbortSignal.timeout(5000),
+                AbortSignal.timeout(BLOCKED_QUERY_DEADLINE_MS * 3),
               ]),
             },
             async ({ connection }) => {
@@ -955,19 +970,19 @@ if (!databaseUrl || !enabled) {
               panic("Expected blocked dedicated replay backend"),
             ),
           ]);
-          let blocked = false;
-          for (let probe = 0; probe < 100; probe++) {
-            const activity = await observer.sql.unsafe<{ waiting: boolean }[]>(
-              "SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = $1",
-              [pid],
-            );
-            if (activity.at(0)?.waiting === true) {
-              blocked = true;
-              break;
-            }
-            await Bun.sleep(10);
-          }
-          expect(blocked).toBe(true);
+          // The backend reports its pid before it sends the UPDATE, so wait
+          // for Postgres to show it waiting on the row lock.
+          expect(
+            await waitForState(async () => {
+              const activity = await observer.sql.unsafe<
+                { waiting: boolean }[]
+              >(
+                "SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = $1",
+                [pid],
+              );
+              return activity.at(0)?.waiting === true;
+            }),
+          ).toBe(true);
           controller.abort(
             new DOMException("fixture database deadline", "TimeoutError"),
           );
@@ -980,6 +995,17 @@ if (!databaseUrl || !enabled) {
                 : JSON.stringify(result.error),
             ).toMatch(/cancel|abort|deadline/u);
           }
+          // Session locks are released when the backend exits, which the
+          // server finishes after the client has closed its connection.
+          expect(
+            await waitForState(async () => {
+              const alive = await observer.sql.unsafe<{ pid: number }[]>(
+                "SELECT pid FROM pg_stat_activity WHERE pid = $1",
+                [pid],
+              );
+              return alive.length === 0;
+            }),
+          ).toBe(true);
           const acquired = await observer.sql.unsafe<{ acquired: boolean }[]>(
             "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
             ["replay-deadline-fixture", state.source.id],

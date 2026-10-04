@@ -177,6 +177,11 @@ run_desktop_rust_inputs_guard() {
   bun run check:desktop-rust-inputs
 }
 
+run_tauri_alignment_guard() {
+  bun test scripts/check-tauri-package-alignment.test.ts || return 1
+  bun scripts/check-tauri-package-alignment.ts
+}
+
 run_queue_authority_guard() {
   # Every BullMQ queue and scheduler task has a declared authority; member
   # runs settle their member's access when they run. Shrink-only baselines.
@@ -435,10 +440,16 @@ run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
+run_oxlint_effective_config_guard() {
+  bun test scripts/oxlint-effective-config.test.ts || return 1
+  bun scripts/check-oxlint-effective-config.ts
+}
+run_step "Oxlint effective config" run_oxlint_effective_config_guard
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
 run_step "Test input coverage" run_test_input_coverage_guard
 run_step "Desktop Rust inputs" run_desktop_rust_inputs_guard
+run_step "Tauri package alignment" run_tauri_alignment_guard
 run_step "Test shard partition" bun test scripts/test-shards.test.ts
 run_step "Module ownership" bun run check:module-ownership
 run_step "Queue authority" run_queue_authority_guard

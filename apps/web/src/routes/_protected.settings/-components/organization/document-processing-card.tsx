@@ -22,9 +22,12 @@ const DOCUMENT_PROCESSING_OFF_MODE = "off";
 export const DocumentProcessingCard = () => {
   const t = useTranslations();
   const checkboxId = useId();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
 
   const mutation = useSettingsMutation({
