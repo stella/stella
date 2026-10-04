@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CorrespondenceProvenance as CorrespondenceProvenanceRecord } from "@stll/api-contract/correspondence";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
@@ -215,11 +216,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             <span className="min-w-0 flex-1">
               <CorrespondenceProvenance record={item} />
               <span className="mt-2 block">
-                {item.intake !== "direct" && (
-                  <span className="text-muted-foreground mb-1 block text-xs">
-                    {t("correspondence.assertedOriginal")}
-                  </span>
-                )}
+                <AssertedHeadersLabel record={item} />
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="truncate text-sm font-medium">
                     <bdi dir="auto">
@@ -275,6 +272,23 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
         </div>
       )}
     </div>
+  );
+};
+
+const AssertedHeadersLabel = ({
+  record,
+}: {
+  record: CorrespondenceProvenanceRecord;
+}) => {
+  const t = useTranslations();
+  const { assertedHeadersLabel } = correspondenceProvenancePresentation(record);
+  if (assertedHeadersLabel === null) {
+    return null;
+  }
+  return (
+    <span className="text-muted-foreground mb-1 block text-xs">
+      {t(assertedHeadersLabel)}
+    </span>
   );
 };
 

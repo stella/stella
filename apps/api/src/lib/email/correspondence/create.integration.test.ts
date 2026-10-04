@@ -103,6 +103,7 @@ const expectSuccess = <T>(response: T | HandlerFailure): T => {
 };
 
 const directProvenance = {
+  source: "delivery",
   intake: "direct",
   originalSignature: null,
   authenticatedSender: {
@@ -485,6 +486,7 @@ describe("matter correspondence", () => {
       address: "forwarder@example.test",
     };
     const inline = parsedMessage({
+      source: "delivery",
       intake: "forwarded_inline",
       authenticatedSender,
       originalSignature: { status: "unverified" },
@@ -522,6 +524,7 @@ describe("matter correspondence", () => {
     ]) {
       const attachment = await fileMessage(
         parsedMessage({
+          source: "delivery",
           intake: "forwarded_attachment",
           authenticatedSender,
           originalSignature,

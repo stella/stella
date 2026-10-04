@@ -20,6 +20,7 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
+import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -353,6 +354,50 @@ const recordDocxVersionLanguage = async ({
   }
 };
 
+type RecordUploadedMailOptions = {
+  buffer: ArrayBuffer;
+  database: NativeExtractionDatabase;
+  extractionMimeType: string;
+  fileEmailCorrespondence: ExecuteNativeExtractionDependencies["fileEmailCorrespondence"];
+  run: NativeExtractionRun;
+};
+
+/**
+ * File an email document as matter correspondence linked to it.
+ *
+ * Every transport that stores a file version reaches this run, so uploads
+ * from the web, desktop, CLI, MCP and folder imports are covered without
+ * per-handler calls, and the bytes are already here. The record converges on
+ * the file, so a replayed run adds nothing. Telemetry-only on failure: the
+ * file stays a fully indexed document.
+ */
+const recordUploadedMail = async ({
+  buffer,
+  database,
+  extractionMimeType,
+  fileEmailCorrespondence,
+  run,
+}: RecordUploadedMailOptions): Promise<void> => {
+  const recorded = await Result.tryPromise({
+    try: async () =>
+      await fileEmailCorrespondence({
+        bytes: buffer,
+        mimeType: extractionMimeType,
+        scope: {
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          entityId: run.entityId,
+        },
+        database,
+      }),
+    catch: (cause) => cause,
+  });
+  const outcome = recorded.andThen((result) => result);
+  if (Result.isError(outcome)) {
+    captureError(outcome.error, { source: "native-extraction-uploaded-mail" });
+  }
+};
+
 export const executeNativeExtraction = async ({
   database,
   fileField,
@@ -374,6 +419,7 @@ export const executeNativeExtraction = async ({
 }): Promise<NativeExtractionProjectionOutcome> => {
   const {
     extractText,
+    fileEmailCorrespondence,
     persistProjection,
     recordLanguage,
     requestAutomaticOcr,
@@ -438,6 +484,14 @@ export const executeNativeExtraction = async ({
     text,
   });
 
+  await recordUploadedMail({
+    buffer,
+    database,
+    extractionMimeType: source.extractionMimeType,
+    fileEmailCorrespondence,
+    run,
+  });
+
   if (source.extractionMimeType === PDF_MIME_TYPE) {
     await restoreManualOcr({
       db: database,
@@ -478,6 +532,7 @@ export const executeNativeExtraction = async ({
  */
 export type ExecuteNativeExtractionDependencies = {
   extractText: typeof extractFileTextResult;
+  fileEmailCorrespondence: typeof fileUploadedMail;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
   requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
@@ -487,6 +542,7 @@ export type ExecuteNativeExtractionDependencies = {
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
     extractText: extractFileTextResult,
+    fileEmailCorrespondence: fileUploadedMail,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,
     requestAutomaticOcr: requestAutomaticDocumentOcr,

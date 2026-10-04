@@ -29,7 +29,10 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
-import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import {
+  CorrespondenceProvenance,
+  OriginalSignature,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
@@ -96,31 +99,40 @@ function CorrespondenceDetailPage() {
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
-          <section className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-sm font-medium">
-              {t("correspondence.deliveryAuthentication")}
-            </h2>
-            <CorrespondenceProvenance record={record} />
-            <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-              {(["spf", "dkim", "dmarc"] as const).map((check) => (
-                <bdi dir="ltr" key={check}>
-                  {check.toUpperCase()}:{" "}
-                  {t(
-                    CORRESPONDENCE_AUTH_LABEL_KEYS[
-                      record.authenticatedSender[check]
-                    ],
-                  )}
-                </bdi>
-              ))}
-            </span>
-          </section>
+          {record.source === "delivery" ? (
+            <section className="space-y-3 rounded-lg border p-4">
+              <h2 className="text-sm font-medium">
+                {t("correspondence.deliveryAuthentication")}
+              </h2>
+              <CorrespondenceProvenance record={record} />
+              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                {(["spf", "dkim", "dmarc"] as const).map((check) => (
+                  <bdi dir="ltr" key={check}>
+                    {check.toUpperCase()}:{" "}
+                    {t(
+                      CORRESPONDENCE_AUTH_LABEL_KEYS[
+                        record.authenticatedSender[check]
+                      ],
+                    )}
+                  </bdi>
+                ))}
+              </span>
+            </section>
+          ) : (
+            <UploadedSource
+              uploader={filers.find((filer) => filer.type === "user")}
+              signatureDomain={provenance.signatureDomain}
+              sourceEntityId={record.sourceEntityId}
+              workspaceId={workspaceId}
+            />
+          )}
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            {record.intake !== "direct" && (
+            {provenance.assertedHeadersLabel !== null && (
               <h2 className="text-sm font-medium sm:col-span-2">
-                {t("correspondence.assertedOriginal")}
+                {t(provenance.assertedHeadersLabel)}
               </h2>
             )}
-            {record.intake !== "direct" && (
+            {provenance.assertedHeadersLabel !== null && (
               <DetailField
                 label={t("inspector.metadata.documentProperties.keys.subject")}
               >
@@ -312,6 +324,63 @@ function CorrespondenceDetailPage() {
     </div>
   );
 }
+
+// An uploaded record links the email file it was read from; the file keeps the
+// attachments, so opening it shows them. Its uploader is its user filer.
+const UploadedSource = ({
+  uploader,
+  signatureDomain,
+  sourceEntityId,
+  workspaceId,
+}: {
+  uploader:
+    | { userName: string | null; userStatus: "active" | "deleted" }
+    | undefined;
+  signatureDomain: string | null;
+  sourceEntityId: string;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  let uploaderName = t("common.unknownUser");
+  if (uploader?.userStatus === "deleted") {
+    uploaderName = t("tasks.deletedAccount");
+  } else if (uploader?.userName) {
+    uploaderName = uploader.userName;
+  }
+  return (
+    <section className="space-y-3 rounded-lg border p-4">
+      <h2 className="text-sm font-medium">
+        {t("correspondence.uploadedFile")}
+      </h2>
+      <span className="block space-y-1 text-xs">
+        <span className="block">
+          <bdi dir="auto">
+            {t("correspondence.uploadedBy", { name: uploaderName })}
+          </bdi>
+        </span>
+        <OriginalSignature domain={signatureDomain} />
+      </span>
+      <Button
+        className="min-h-11"
+        onClick={() =>
+          detached(
+            openEntityInInspector(
+              sourceEntityId,
+              t("correspondence.uploadedFile"),
+              workspaceId,
+            ),
+            "correspondence.open-source-file",
+          )
+        }
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {t("correspondence.openSourceFile")}
+      </Button>
+    </section>
+  );
+};
 
 // Back to the matter's correspondence view (the overview when the matter
 // removed it). Until the matter's views are cached, the matter itself, which

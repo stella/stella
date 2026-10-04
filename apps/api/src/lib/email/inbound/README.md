@@ -100,6 +100,29 @@ message on the queue; its redelivery converges as a duplicate. Logs carry the
 queue message id, receive count and outcome, never subjects, bodies, addresses
 or tokens.
 
+## Uploaded email files
+
+An `.eml` or `.msg` file stored in a matter also becomes correspondence linked
+to that file, so one item appears in both Files and Correspondence. The native
+extraction run every new file version reaches calls `fileUploadedMail`, so
+every upload transport is covered; the record is written after the file's text
+projection, and a failure is reported to telemetry without failing extraction.
+
+- `parseEmailFile` reads the file as one message under the inbound limits: the
+  same normalization as delivered mail, with an adapter for Outlook's MAPI
+  properties. A forward inside the file is not extracted.
+- Provenance is `source: "upload"` with the file's entity id. There is no
+  transport authentication. An `.eml` file's own DKIM signature is checked like
+  an attached original; an `.msg` file has none and stays unverified.
+- The file's creator is the filer and must hold matter access when the run
+  files it. A file without a creator, an inbound attachment of a delivered
+  record, or an unreadable or oversized message files nothing; the skip is
+  logged with its reason and the file is unaffected.
+- Attachments stay inside the file and are not stored again; the record links
+  the file. Deleting the file deletes its record.
+- Each file has at most one record, keyed by the file. A delivered message and
+  an uploaded file of it remain separate records, as do two copies of a file.
+
 ## Local development
 
 With the development database, object storage and processing services configured:

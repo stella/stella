@@ -11,22 +11,33 @@ export const CorrespondenceProvenance = ({
 }) => {
   const t = useTranslations();
   const presentation = correspondenceProvenancePresentation(record);
+  const { origin } = presentation;
   return (
     <span className="block space-y-1 text-xs">
       <span className="block">
-        {t.rich(presentation.deliveryLabel, {
-          sender: presentation.deliverySender,
-          address: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
-        })}
+        {origin.type === "delivery"
+          ? t.rich(origin.label, {
+              sender: origin.sender,
+              address: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+            })
+          : t("correspondence.uploadedFile")}
       </span>
-      {presentation.signatureDomain && (
-        <span className="block">
-          {t.rich("correspondence.originalSignatureVerified", {
-            domain: presentation.signatureDomain,
-            identifier: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
-          })}
-        </span>
-      )}
+      <OriginalSignature domain={presentation.signatureDomain} />
+    </span>
+  );
+};
+
+export const OriginalSignature = ({ domain }: { domain: string | null }) => {
+  const t = useTranslations();
+  if (domain === null) {
+    return null;
+  }
+  return (
+    <span className="block">
+      {t.rich("correspondence.originalSignatureVerified", {
+        domain,
+        identifier: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+      })}
     </span>
   );
 };

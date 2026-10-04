@@ -1,17 +1,27 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { load } from "cheerio";
 import PostalMime, {
   addressParser,
   type Address,
+  type Attachment,
   type Email,
 } from "postal-mime";
 
+import type {
+  CorrespondenceProvenance,
+  ParsedCorrespondence,
+} from "@stll/api-contract/correspondence";
 import { Temporal } from "@stll/time";
 
 import {
   renderEmailBodyHtml,
   type ParsedEmail,
 } from "@/api/lib/files/email-to-html";
+import {
+  parseOutlookMsg,
+  type OutlookMsgEmail,
+  type OutlookMsgRecipient,
+} from "@/api/lib/files/outlook-msg";
 import {
   sanitizeFilename,
   type SanitizedFileName,
@@ -25,7 +35,21 @@ export type InboundAttachment = {
   bytes: Uint8Array;
 };
 
-type NormalizedInboundMessage = {
+/** The fields an email format states, before shared normalization. */
+type MessageFields = {
+  fromHeaders: string[];
+  to: Address[];
+  cc: Address[];
+  subject: string | undefined;
+  text: string | undefined;
+  html: string | undefined;
+  messageId: string | undefined;
+  inReplyTo: string | undefined;
+  references: string | undefined;
+  attachments: Pick<Attachment, "filename" | "mimeType" | "content">[];
+};
+
+export type NormalizedInboundMessage = {
   from: string | null;
   to: string[];
   cc: string[];
@@ -329,14 +353,13 @@ const normalizeText = (value: string | undefined): string =>
   (value ?? "").replace(/\r\n?/gu, "\n").trim();
 
 const sanitizeBodyHtml = (
-  email: Email,
+  html: string | undefined,
 ): Result<string | null, InboundMessageError> => {
-  if (!email.html) {
+  if (!html) {
     return Result.ok(null);
   }
   if (
-    new TextEncoder().encode(email.html).byteLength >
-    INBOUND_MAIL_LIMITS.bodyBytes
+    new TextEncoder().encode(html).byteLength > INBOUND_MAIL_LIMITS.bodyBytes
   ) {
     return fail("bodyTooLarge");
   }
@@ -347,7 +370,7 @@ const sanitizeBodyHtml = (
     cc: [],
     bcc: [],
     date: null,
-    body: { type: "html", html: email.html },
+    body: { type: "html", html },
     inlineImages: [],
     attachments: [],
   } satisfies ParsedEmail;
@@ -355,13 +378,13 @@ const sanitizeBodyHtml = (
 };
 
 const checkedAttachments = (
-  email: Email,
+  stated: MessageFields["attachments"],
 ): Result<InboundAttachment[], InboundMessageError> => {
-  if (email.attachments.length > INBOUND_MAIL_LIMITS.attachmentCount) {
+  if (stated.length > INBOUND_MAIL_LIMITS.attachmentCount) {
     return fail("tooManyAttachments");
   }
   const attachments: InboundAttachment[] = [];
-  for (const attachment of email.attachments) {
+  for (const attachment of stated) {
     const mimeType =
       attachment.mimeType.toLowerCase().split(";").at(0)?.trim() ?? "";
     const fileName = sanitizeFilename(attachment.filename ?? "attachment");
@@ -436,27 +459,73 @@ const contentHash = (
   return hash.digest("hex");
 };
 
+const mimeMessageFields = (email: Email): MessageFields => ({
+  fromHeaders: email.headers
+    .filter(({ key }) => key === "from")
+    .map(({ value }) => value),
+  to: email.to ?? [],
+  cc: email.cc ?? [],
+  subject: email.subject,
+  text: email.text,
+  html: email.html,
+  messageId: email.messageId,
+  inReplyTo: email.inReplyTo,
+  references: email.references,
+  attachments: email.attachments,
+});
+
+const outlookAddress = ({ name, email }: OutlookMsgRecipient): Address => ({
+  name: name ?? "",
+  address: email ?? "",
+});
+
+// Outlook stores the sender's SMTP address as a property, not a header; an
+// Exchange-only sender address fails mailbox parsing like a malformed From.
+const outlookMessageFields = (message: OutlookMsgEmail): MessageFields => ({
+  fromHeaders: message.fromEmail === null ? [] : [message.fromEmail],
+  to: message.to.map(outlookAddress),
+  cc: message.cc.map(outlookAddress),
+  subject: message.subject ?? undefined,
+  text: message.text ?? undefined,
+  html: message.html ?? undefined,
+  messageId: message.messageId ?? undefined,
+  inReplyTo: message.inReplyTo ?? undefined,
+  references: message.references ?? undefined,
+  // Embedded Outlook items carry no binary data; the file preview skips them
+  // the same way.
+  attachments: message.attachments.flatMap(({ fileName, mimeType, bytes }) =>
+    bytes === null
+      ? []
+      : [
+          {
+            filename: fileName,
+            mimeType: mimeType ?? "application/octet-stream",
+            content: bytes,
+          },
+        ],
+  ),
+});
+
 const normalizeMessage = (
-  email: Email,
+  fields: MessageFields,
   date: string | null,
 ): Result<NormalizedInboundMessage, InboundMessageError> =>
   Result.gen(function* () {
-    const fromHeaders = email.headers.filter(({ key }) => key === "from");
-    if (fromHeaders.length > 1) {
+    if (fields.fromHeaders.length > 1) {
       return fail("invalidFrom");
     }
-    const fromHeader = fromHeaders.at(0);
-    const from = fromHeader ? parseOneMailbox(fromHeader.value) : null;
-    if (fromHeader && !from) {
+    const fromHeader = fields.fromHeaders.at(0);
+    const from = fromHeader === undefined ? null : parseOneMailbox(fromHeader);
+    if (fromHeader !== undefined && !from) {
       return fail("invalidFrom");
     }
-    const to = normalizeAddresses(email.to);
-    const cc = normalizeAddresses(email.cc);
+    const to = normalizeAddresses(fields.to);
+    const cc = normalizeAddresses(fields.cc);
     if (to.length + cc.length > INBOUND_MAIL_LIMITS.recipients) {
       return fail("tooManyRecipients");
     }
-    const text = normalizeText(email.text);
-    const html = yield* sanitizeBodyHtml(email);
+    const text = normalizeText(fields.text);
+    const html = yield* sanitizeBodyHtml(fields.html);
     if (
       text.length > INBOUND_MAIL_LIMITS.bodyCharacters ||
       (html !== null && html.length > INBOUND_MAIL_LIMITS.bodyCharacters) ||
@@ -473,13 +542,13 @@ const normalizeMessage = (
       to,
       cc,
       date,
-      subject: email.subject?.trim() ?? null,
+      subject: fields.subject?.trim() ?? null,
       text,
       html,
-      messageId: normalizeHeaderId(email.messageId),
-      inReplyTo: normalizeHeaderId(email.inReplyTo),
-      references: normalizeReferences(email.references),
-      attachments: yield* checkedAttachments(email),
+      messageId: normalizeHeaderId(fields.messageId),
+      inReplyTo: normalizeHeaderId(fields.inReplyTo),
+      references: normalizeReferences(fields.references),
+      attachments: yield* checkedAttachments(fields.attachments),
     };
     return Result.ok({ ...message, contentHash: contentHash(message) });
   });
@@ -647,7 +716,7 @@ export const parseInboundMessage = async (
   if (outerSender.isErr()) {
     return outerSender;
   }
-  const message = normalizeMessage(outerEmail, outerDate);
+  const message = normalizeMessage(mimeMessageFields(outerEmail), outerDate);
   if (message.isErr()) {
     return message;
   }
@@ -685,7 +754,7 @@ export const parseInboundMessage = async (
       parseOneMailbox(fromHeader.value)
     ) {
       const original = normalizeMessage(
-        attached.value.email,
+        mimeMessageFields(attached.value.email),
         attached.value.date,
       );
       if (original.isErr()) {
@@ -721,3 +790,104 @@ export const parseInboundMessage = async (
         } satisfies ParsedInboundMessage),
   );
 };
+
+export const EMAIL_FILE_FORMATS = ["eml", "msg"] as const;
+export type EmailFileFormat = (typeof EMAIL_FILE_FORMATS)[number];
+
+const parseOutlookFile = (
+  bytes: ArrayBuffer,
+): Result<NormalizedInboundMessage, InboundMessageError> => {
+  if (bytes.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
+    return fail("rawTooLarge");
+  }
+  const parsed = Result.try({
+    try: () => parseOutlookMsg(bytes),
+    catch: () =>
+      new InboundMessageError({
+        reason: "invalidMime",
+        message: "invalidMime",
+      }),
+  });
+  return parsed.andThen((message) =>
+    normalizeMessage(
+      outlookMessageFields(message),
+      explicitZoneDate(message.submittedAt ?? ""),
+    ),
+  );
+};
+
+type ParseEmailFileOptions = {
+  bytes: ArrayBuffer;
+  format: EmailFileFormat;
+};
+
+/**
+ * Reads a stored email file as one message under the inbound limits. The file
+ * is the message itself, so a forward inside it is not extracted.
+ */
+export const parseEmailFile = async ({
+  bytes,
+  format,
+}: ParseEmailFileOptions): Promise<
+  Result<NormalizedInboundMessage, InboundMessageError>
+> => {
+  switch (format) {
+    case "eml": {
+      const parsed = await parseMime(new Uint8Array(bytes));
+      if (parsed.isErr()) {
+        return parsed;
+      }
+      return normalizeMessage(
+        mimeMessageFields(parsed.value.email),
+        parsed.value.date,
+      );
+    }
+    case "msg":
+      return parseOutlookFile(bytes);
+    default:
+      format satisfies never;
+      return panic("Unhandled email file format");
+  }
+};
+
+type CorrespondenceContent = Omit<
+  ParsedCorrespondence,
+  keyof CorrespondenceProvenance
+>;
+
+type CorrespondenceFromMessageOptions<
+  TProvenance extends CorrespondenceProvenance,
+> = {
+  message: NormalizedInboundMessage & { from: string };
+  provenance: TProvenance;
+  /** The authenticated outer sender, or the uploader's address. */
+  sender: string;
+  receivedAt: string;
+};
+
+/** The one field mapping from a normalized message to a correspondence record. */
+export const correspondenceFromMessage = <
+  TProvenance extends CorrespondenceProvenance,
+>({
+  message,
+  provenance,
+  sender,
+  receivedAt,
+}: CorrespondenceFromMessageOptions<TProvenance>): TProvenance &
+  CorrespondenceContent => ({
+  ...provenance,
+  channel: "email",
+  direction: message.from === sender ? "out" : "in",
+  from: { address: message.from, name: null },
+  to: message.to.map((address) => ({ address, name: null })),
+  cc: message.cc.map((address) => ({ address, name: null })),
+  subject: message.subject ?? "",
+  sentAt: message.date,
+  receivedAt,
+  messageId: message.messageId,
+  contentHash: message.contentHash,
+  inReplyTo: message.inReplyTo,
+  references: message.references,
+  bodyText: message.text,
+  bodyHtml: message.html,
+});
