@@ -13,6 +13,7 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   toPlainTextIngestionResult,
@@ -61,7 +62,10 @@ const validateDecision = (
   adapter: string,
 ): void => {
   const prefix = `${adapter}[${index}]`;
-  const d = toPlainTextIngestionResult(raw).unwrap(prefix);
+  const d = toPlainTextIngestionResult(
+    raw,
+    metadataUrlSchemaForAdapter(adapter),
+  ).unwrap(prefix);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();

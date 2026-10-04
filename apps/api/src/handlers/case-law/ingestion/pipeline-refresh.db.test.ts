@@ -178,7 +178,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     const isUnpublished = async (id: SafeId<"caseLawDecision">) =>
       partialObservationFromMetadata((await readDecision(id))?.metadata)
-        .isListingOnly;
+        .detail === "listing-only";
 
     const readDecision = async (id: SafeId<"caseLawDecision">) =>
       await db.query.caseLawDecisions.findFirst({
@@ -278,11 +278,10 @@ if (!databaseUrl || !runPostgresTests) {
         let transactions = 0;
         const racingDb: ScopedDb = async (callback) => {
           transactions += 1;
-          // Transactions in order: the decision lookup, the check for a
-          // stored document, then the row write. Injecting as the third
-          // opens exactly the window the guard closes — the check has
-          // already answered "no document", and the write is next.
-          if (transactions === 3) {
+          // One schema lookup starts this standalone run; then come the identity
+          // lookup, document check, and row write. Inject before the fourth
+          // transaction so the document check has answered and the write is next.
+          if (transactions === 4) {
             await db
               .update(caseLawDecisions)
               .set({
@@ -310,7 +309,7 @@ if (!databaseUrl || !runPostgresTests) {
 
         // If the sequence ever changes, the injection no longer lands in
         // the window and this test would pass without exercising it.
-        expect(transactions).toBe(3);
+        expect(transactions).toBe(4);
 
         const row = await readDecision(id);
         expect(row?.fulltext).toBe(STORED_TEXT);

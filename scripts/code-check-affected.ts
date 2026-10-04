@@ -67,9 +67,12 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+  "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+  "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -722,12 +725,27 @@ const main = () => {
         : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
     mergeBase,
     resolveMergeBase: () => {
-      const result = Bun.spawnSync(
-        ["git", "merge-base", DEFAULT_BASE, "HEAD"],
-        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
-      );
+      const git = (args: string[]) =>
+        Bun.spawnSync(["git", ...args], {
+          cwd: REPO_ROOT,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      // Only a missing comparison ref means "no base"; any other Git failure
+      // is surfaced rather than silently skipping the exact lint.
+      if (
+        git(["rev-parse", "--verify", "--quiet", `${DEFAULT_BASE}^{commit}`])
+          .exitCode !== 0
+      ) {
+        return null;
+      }
+      const result = git(["merge-base", DEFAULT_BASE, "HEAD"]);
       const base = result.stdout.toString().trim();
-      return result.exitCode === 0 && base !== "" ? base : null;
+      return result.exitCode === 0 && base !== ""
+        ? base
+        : panic(
+            `git merge-base ${DEFAULT_BASE} HEAD failed: ${result.stderr.toString().trim()}`,
+          );
     },
     measureDebt: measureResultBoundaryDebt,
     report: (message) => {

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { reconcileAbandonedOrganizationFileReservations } from "@/api/lib/files/organization-file-usage-reconcile";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -16,7 +16,7 @@ export const createReconcileOrganizationFileReservationsTask =
     reconcile = reconcileAbandonedOrganizationFileReservations,
   }: ReconcileDependencies = {}): SchedulerTask =>
   async ({ db, logger, signal }) => {
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       return;
     }
     if (signal.aborted) {

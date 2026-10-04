@@ -1112,7 +1112,176 @@ describe("cz-nss fetchPage", () => {
     setSystemTime();
   });
 
-  test("a full continuation page moves the cursor on within the day", async () => {
+  test("an uncounted search checkpoints its retry and refreshes the session", async () => {
+    const { requests } = installStub({
+      search: [
+        htmlResponse(SESSION_PAGE),
+        htmlResponse(
+          searchPage({ statedCount: 0, rows: [], withScript: false }),
+        ),
+      ],
+    });
+    const cursor = `${SLICE}:0`;
+    const failed = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+    expect(JSON.parse(failed.nextCursor ?? "")).toEqual({
+      date: SLICE,
+      page: 0,
+      missingCountAttempts: 1,
+    });
+    const sessionReads = requests.filter(
+      ({ method }) => method === "GET",
+    ).length;
+    const retried = await czNssAdapter.fetchPage(failed.nextCursor, {});
+    expect(Result.isError(retried)).toBe(false);
+    expect(Result.isError(retried) ? null : retried.value.nextCursor).toBe(
+      "2026-06-11:0",
+    );
+    expect(requests.filter(({ method }) => method === "GET").length).toBe(
+      sessionReads + 1,
+    );
+  });
+
+  test("persistent uncounted days reset their durable budget and return to plain cursors", async () => {
+    const recording = installRecordingLogger();
+    try {
+      installStub({
+        search: Array.from({ length: 7 }, () => htmlResponse(SESSION_PAGE)),
+      });
+      const cursor: { current: string | null } = { current: `${SLICE}:0` };
+      for (const attempt of [1, 2]) {
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
+          date: SLICE,
+          page: 0,
+          missingCountAttempts: attempt,
+        });
+      }
+      const skipped = (
+        await czNssAdapter.fetchPage(cursor.current, {})
+      ).unwrap();
+      expect(skipped.nextCursor).toBe("2026-06-11:0");
+      expect(skipped.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      cursor.current = skipped.nextCursor;
+      for (const attempt of [1, 2]) {
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
+          date: "2026-06-11",
+          page: 0,
+          missingCountAttempts: attempt,
+        });
+      }
+      const nextDaySkipped = (
+        await czNssAdapter.fetchPage(cursor.current, {})
+      ).unwrap();
+      expect(nextDaySkipped.nextCursor).toBe("2026-06-12:0");
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_unsettled_day",
+        ),
+      ).toHaveLength(2);
+      // The plain checkpoint remains usable after the retry budget resets.
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 0, rows: [], withScript: false }),
+          ),
+        ],
+      });
+      const empty = (
+        await czNssAdapter.fetchPage(nextDaySkipped.nextCursor, {})
+      ).unwrap();
+      expect(empty.nextCursor).toBe("2026-06-13:0");
+    } finally {
+      recording.restore();
+    }
+  });
+
+  test("short parsed pages account for their gaps and advance across the whole stated day", async () => {
+    const recording = installRecordingLogger();
+    try {
+      const malformed = rowBlock({
+        ...MUNICIPAL_ROW,
+        displayedCaseNumber: "X".repeat(101),
+      });
+      expect(parseResultRows(malformed)).toHaveLength(0);
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW] }) + malformed,
+          ),
+        ],
+      });
+      const short = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(
+        short.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ).toEqual([MUNICIPAL_ROW.documentId]);
+      expect(short.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(short.nextCursor).toBe("2026-06-11:0");
+
+      installStub({
+        search: Array.from({ length: 3 }, () =>
+          htmlResponse(searchPage({ statedCount: 61, rows: [MUNICIPAL_ROW] })),
+        ),
+        continuation: [
+          htmlResponse(rowBlock(MUNICIPAL_ROW) + malformed),
+          htmlResponse(rowBlock(MUNICIPAL_ROW)),
+        ],
+      });
+      const first = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(first.itemBuildFailures?.count).toBe(39);
+      expect(first.nextCursor).toBe(`${SLICE}:1`);
+      const second = (
+        await czNssAdapter.fetchPage(first.nextCursor, {})
+      ).unwrap();
+      expect(second.itemBuildFailures?.count).toBe(19);
+      expect(second.nextCursor).toBe(`${SLICE}:2`);
+      const third = (
+        await czNssAdapter.fetchPage(second.nextCursor, {})
+      ).unwrap();
+      expect(third.itemBuildFailures?.count).toBe(0);
+      expect(third.nextCursor).toBe("2026-06-11:0");
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_listing_gap",
+        ),
+      ).toHaveLength(3);
+    } finally {
+      recording.restore();
+    }
+  }, 30_000);
+
+  test("a counted day without pagination state fails", async () => {
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 1,
+            rows: [MUNICIPAL_ROW],
+            withScript: false,
+          }),
+        ),
+      ],
+    });
+    const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toContain("carried no pagination state");
+    }
+  });
+
+  test("a persisted plain cursor resumes its date and continuation page", async () => {
     // A continuation page is full at half the inline page's size, so a crawl
     // measuring it against the inline size ends the day here and never asks
     // for the records past it.
@@ -1136,10 +1305,15 @@ describe("cz-nss fetchPage", () => {
 
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
-    expect(Result.isError(page)).toBe(false);
-    expect(Result.isError(page) ? null : page.value.nextCursor).toBe(
-      `${SLICE}:2`,
+    const resumed = page.unwrap();
+    expect(
+      resumed.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(
+      fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(
+        ({ documentId }) => documentId,
+      ),
     );
+    expect(resumed.nextCursor).toBe(`${SLICE}:2`);
   }, 30_000);
 
   test("an empty continuation body fails the page instead of ending the day", async () => {

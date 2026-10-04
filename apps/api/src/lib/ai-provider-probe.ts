@@ -12,6 +12,7 @@ import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 import type {
   SafeOutboundFetchResponse,
@@ -78,7 +79,9 @@ const PROBE_TARGETS: Record<
     headers: { Authorization: `Bearer ${apiKey}` },
   }),
   openrouter: (apiKey) => ({
-    url: new URL("https://openrouter.ai/api/v1/auth/key"),
+    url: new URL(
+      `${PROVIDER_DATA_POLICY.public_corpus.serverURLs.eu}/auth/key`,
+    ),
     headers: { Authorization: `Bearer ${apiKey}` },
   }),
   mistral: (apiKey) => ({

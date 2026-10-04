@@ -1,5 +1,35 @@
 # @stll/cli
 
+## 3.6.0
+
+### Minor Changes
+
+- [#4630](https://github.com/stella/stella/pull/4630) [`a288e01`](https://github.com/stella/stella/commit/a288e01207fc95f92588ce94b17639d7931351e2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sign in with the client document the server publishes for the CLI when the server supports it.
+
+## 3.5.4
+
+### Patch Changes
+
+- [#4608](https://github.com/stella/stella/pull/4608) [`43f98b6`](https://github.com/stella/stella/commit/43f98b6ae327251066763a6593ca05e833be3968) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update linked clause discovery and authoring guidance in the capability catalog.
+
+## 3.5.3
+
+### Patch Changes
+
+- [#4600](https://github.com/stella/stella/pull/4600) [`2e1ebc2`](https://github.com/stella/stella/commit/2e1ebc2c4bc5c91baf821f904242173f0801bd63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept grouped case-law search continuation cursors.
+
+## 3.5.2
+
+### Patch Changes
+
+- [#4454](https://github.com/stella/stella/pull/4454) [`5518250`](https://github.com/stella/stella/commit/55182503902d5ada7d4f7e5e514a7f2ce78c3de1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept corpus search cursors that carry the ranking mode.
+
+## 3.5.1
+
+### Patch Changes
+
+- [#4489](https://github.com/stella/stella/pull/4489) [`a2690f4`](https://github.com/stella/stella/commit/a2690f4225ce99d3f661e333e1db9fc8e68f300f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report strict and relaxed legislation matches and preserve search phases in continuation cursors.
+
 ## 3.5.0
 
 ### Minor Changes

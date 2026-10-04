@@ -4,14 +4,16 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import {
   fetchManagedOpenRouterCompletion,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  createInstanceOpenRouterText,
   createManagedOpenRouterText,
   createStellaOpenRouterText,
   StellaOpenRouterTextAdapter,
@@ -57,7 +59,7 @@ describe("instance provider redirect policy", () => {
     }
   });
 
-  const model = "google/gemini-2.5-flash";
+  const model = BYOK_DEFAULT_MODELS.openrouter.chat;
   for (const scope of ["eu", "us", "public_corpus", "byok"] as const) {
     for (const path of ["chat", "structured", "structured-stream"] as const) {
       for (const status of [301, 302, 303, 307, 308, "opaque"] as const) {
@@ -119,15 +121,16 @@ describe("instance provider redirect policy", () => {
                 instance = createStellaOpenRouterText(model, "fixture-key");
                 break;
               case "public_corpus":
-                instance = createInstanceOpenRouterText(model, "fixture-key");
-                break;
               case "eu":
               case "us":
                 instance = createManagedOpenRouterText({
                   model,
                   apiKey: "fixture-key",
-                  managedAIResidency: scope,
-                });
+                  managedAIResidency:
+                    scope === "public_corpus"
+                      ? PROVIDER_DATA_POLICY.public_corpus.managedAIResidency
+                      : scope,
+                }).unwrap();
                 break;
               default:
                 scope satisfies never;
@@ -187,9 +190,9 @@ describe("instance provider redirect policy", () => {
               }
             }
             const expectedHost =
-              scope === "eu" || scope === "us"
-                ? `${scope}.openrouter.ai`
-                : "openrouter.ai";
+              scope === "byok"
+                ? "openrouter.ai"
+                : `${scope === "public_corpus" ? PROVIDER_DATA_POLICY.public_corpus.managedAIResidency : scope}.openrouter.ai`;
             expect(requests.map(({ url }) => new URL(url).hostname)).toEqual(
               scope === "byok"
                 ? [expectedHost, redirectedHost]

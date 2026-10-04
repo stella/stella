@@ -1,6 +1,9 @@
+// parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
+// parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
+// parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -28,7 +31,7 @@ import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   toPlainText,
   PlainTextError,
-  toPlainTextMetadata,
+  toPlainTextMetadataObject,
   type PlainText,
   type PlainTextMetadataValue,
 } from "@/api/lib/case-law/plain-text";
@@ -48,6 +51,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -126,6 +130,8 @@ export type RawIngestionResult = {
    * that an earlier fetch or repair already recovered.
    */
   isListingOnly?: boolean | undefined;
+  /** Quality of document and secondary reads, independent of document presence. */
+  observationDetail?: ObservationDetail | undefined;
   /**
    * Absent means `inline`. An inline result that carries no document is
    * stored unpublished, exactly as a listing-only one is, and is repaired the
@@ -367,6 +373,7 @@ const optionalPlainText = (raw: string | undefined) =>
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
 export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
+  metadataUrlSchema?: unknown,
 ): Result<
   IngestionResult & Omit<T, keyof PlainTextResultFields | "plainTextOutcome">,
   PlainTextError
@@ -406,12 +413,9 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
-      metadata: Object.fromEntries(
-        yield* Result.all(
-          Object.entries(raw.metadata).map(([key, value]) =>
-            toPlainTextMetadata(value).map((plain) => [key, plain] as const),
-          ),
-        ),
+      metadata: yield* toPlainTextMetadataObject(
+        raw.metadata,
+        metadataUrlSchema,
       ),
       judges:
         raw.judges === undefined
@@ -1720,7 +1724,10 @@ export type SourceAdapter = {
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
   "country" | "key" | "name" | "observeDocumentStage"
-> & { readonly key: TKey };
+> & {
+  readonly key: TKey;
+  readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+};
 
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <const TKey extends AdapterKey>(

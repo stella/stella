@@ -7,15 +7,29 @@
  * hold the notice to being read per expression rather than per work.
  */
 
-import { describe, expect, test } from "bun:test";
+import { Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
 
+import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
+
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+  caseLawSources,
+  corpusIndexGenerations,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildListingQuery,
+  buildDecision,
   ecjRawParts,
+  fetchNotice,
   euEcjAdapter,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -23,7 +37,25 @@ import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapter
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
+import {
+  classifyObservation,
+  resolveExistingDecisionPolicy,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
+import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { createSafeId } from "@/api/lib/branded-types";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
+import {
+  sanitizeResult,
+  partialObservationFromMetadata,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -31,6 +63,8 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -116,6 +150,524 @@ const decisionFrom = async (notice: string | undefined) => {
   }
   return outcome.result;
 };
+
+describe("notice publication outcomes", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+  beforeEach(() => {
+    Bun.sleep = async () => {};
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  test("a 500 notice rejects the item and a later attempt can build it", async () => {
+    let noticeRequests = 0;
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      if (
+        (input instanceof Request ? input.url : String(input)).includes(
+          "/resource/celex/",
+        )
+      ) {
+        noticeRequests += 1;
+        return new Response(null, { status: noticeRequests === 1 ? 500 : 404 });
+      }
+      return new Response(documentEn, {
+        headers: { "Content-Type": "application/xhtml+xml" },
+      });
+    });
+
+    const initial = await Result.tryPromise({
+      try: async () => buildDecision(binding, AbortSignal.timeout(5000)),
+      catch: (error) => error,
+    });
+    expect(Result.isError(initial)).toBe(true);
+    if (
+      !Result.isError(initial) ||
+      !(initial.error instanceof AdapterFetchError)
+    ) {
+      throw new TypeError("Expected a notice fetch failure");
+    }
+    expect(initial.error.message).toContain("Cellar notice HTTP 500");
+    const retried = await buildDecision(binding, AbortSignal.timeout(5000));
+    expect(noticeRequests).toBe(2);
+    expect(retried?.fulltext?.length).toBeGreaterThan(100);
+    expect(retried?.judges).toBeUndefined();
+  });
+  const readNotice = async (status: number) =>
+    fetchNotice({
+      celex: CELEX,
+      languageUri: binding.language.value,
+      signal: AbortSignal.timeout(1000),
+      fetch: async () =>
+        new Response(status === 200 ? noticeEn : null, { status }),
+    });
+
+  for (const status of [404, 410] as const) {
+    test(`HTTP ${status} states the notice is not published`, async () => {
+      expect((await readNotice(status)).unwrap()).toEqual({
+        type: "not-published",
+        status,
+      });
+    });
+  }
+
+  for (const status of [408, 429, 500, 502, 503, 504]) {
+    test(`HTTP ${status} propagates a notice read failure`, async () => {
+      const result = await readNotice(status);
+      expect(Result.isError(result)).toBe(true);
+      if (!Result.isError(result)) {
+        throw new TypeError("Expected a notice read failure");
+      }
+      expect(result.error).toBeInstanceOf(AdapterFetchError);
+      expect(result.error.message).toContain(`Cellar notice HTTP ${status}`);
+    });
+  }
+
+  test.each([400, 401, 403, 405, 422])(
+    "HTTP %s is a terminal notice refusal",
+    async (status) => {
+      expect((await readNotice(status)).unwrap()).toEqual({
+        type: "refused",
+        status,
+      });
+    },
+  );
+
+  test.each([400, 401, 403, 405, 422])(
+    "a notice refusal %s retains the row and a later publication changes its hash",
+    async (status) => {
+      let noticeStatus: number = status;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/resource/celex/")) {
+          return new Response(noticeStatus === 200 ? noticeEn : null, {
+            status: noticeStatus,
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      });
+      const refused = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(refused?.fulltext?.length).toBeGreaterThan(100);
+      expect(refused?.judges).toBeUndefined();
+      expect(
+        decodeSourceRawEnvelope(refused?.sourceRaw ?? "")?.["notice-state"],
+      ).toBe(`notice:refused:${status}`);
+      noticeStatus = 404;
+      const absent = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(refused?.rawHash).not.toBe(absent?.rawHash);
+      noticeStatus = 200;
+      const present = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(present?.rawHash).not.toBe(refused?.rawHash);
+      expect(present?.judges?.length).toBeGreaterThan(0);
+      if (!refused) {
+        throw new TypeError("Expected a refused-notice decision");
+      }
+      const replayed = await reparse(storedFrom(refused.sourceRaw ?? ""));
+      expect(replayed.type).toBe("parsed");
+      if (replayed.type === "parsed") {
+        expect(replayed.result.rawHash).toBe(refused.rawHash);
+        expect(replayed.result.observationDetail).toBe("secondary-refused");
+      }
+    },
+  );
+
+  test.each([400, 401, 403, 404, 410, 408, 429, 500, 503])(
+    "a Formex HTTP %s permits only terminal reads and later content changes the hash",
+    async (status) => {
+      let formexStatus: number = status;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/resource/celex/")) {
+          return new Response(noticeEn, {
+            headers: { "Content-Type": "application/xml" },
+          });
+        }
+        if (url.endsWith("/DOC_1")) {
+          return new Response(formexStatus === 200 ? formexEn : null, {
+            status: formexStatus,
+            headers: { "Content-Type": "application/xml" },
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      });
+      const initial = buildDecision(binding, AbortSignal.timeout(5000));
+      if ([408, 429, 500, 503].includes(status)) {
+        const outcome = await Result.tryPromise({
+          try: async () => initial,
+          catch: (error) => error,
+        });
+        expect(Result.isError(outcome)).toBe(true);
+        if (!Result.isError(outcome)) {
+          throw new TypeError("Expected a Formex fetch failure");
+        }
+        expect(outcome.error).toBeInstanceOf(
+          status === 429 ? PublisherRateLimitRefusalError : AdapterFetchError,
+        );
+      } else {
+        const incomplete = await initial;
+        expect(incomplete?.metadata["formexCelex"]).toBeUndefined();
+        const incompleteParts = decodeSourceRawEnvelope(
+          incomplete?.sourceRaw ?? "",
+        );
+        expect(incompleteParts?.["formex-state"]).toBe(
+          [404, 410].includes(status)
+            ? "formex:gone"
+            : `formex:refused:${status}`,
+        );
+        formexStatus = 200;
+        const complete = await buildDecision(
+          binding,
+          AbortSignal.timeout(5000),
+        );
+        expect(complete?.fulltext).toBe(incomplete?.fulltext);
+        expect(complete?.metadata["formexCelex"]).toBeDefined();
+        expect(complete?.rawHash).not.toBe(incomplete?.rawHash);
+        if (!incomplete) {
+          throw new TypeError("Expected an incomplete Formex decision");
+        }
+        const replayed = await reparse(storedFrom(incomplete.sourceRaw ?? ""));
+        expect(replayed.type).toBe("parsed");
+        if (replayed.type === "parsed") {
+          expect(replayed.result.rawHash).toBe(incomplete.rawHash);
+          expect(replayed.result.observationDetail).toBe(
+            [404, 410].includes(status) ? "complete" : "secondary-refused",
+          );
+        }
+        const repeated = await buildDecision(
+          binding,
+          AbortSignal.timeout(5000),
+        );
+        expect(repeated?.rawHash).toBe(complete?.rawHash);
+        formexStatus = 404;
+        const gone = await buildDecision(binding, AbortSignal.timeout(5000));
+        if (![404, 410].includes(status)) {
+          expect(gone?.rawHash).not.toBe(incomplete.rawHash);
+        }
+      }
+    },
+  );
+
+  const storedDecision = (result: IngestionResult) =>
+    ({
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber: result.caseNumber,
+      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+      citationKey: null,
+      country: result.country,
+      decisionDate: result.decisionDate ?? null,
+      sourceDocumentId: result.sourceDocumentId ?? null,
+      ecli: result.ecli ?? null,
+      metadata: result.metadata,
+      sourceHash: result.rawHash,
+      sourceObservedAt: new Date("2026-10-01T00:00:00Z"),
+      sourceObservationHash: result.rawHash,
+      redactedAt: null,
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      contentHash: "stored-complete-document",
+      textS3Key: "stored/text",
+      normalizedS3Key: "stored/normalized",
+      astS3Key: "stored/ast",
+      sourceRawS3Key: "stored/raw",
+      sourceRawContentType: result.sourceRawContentType ?? null,
+      sourceUrl: result.sourceUrl ?? null,
+      hasStoredDocument: true,
+    }) satisfies ExistingDecision;
+
+  test.each(["notice", "formex"] as const)(
+    "a refused %s observation preserves complete metadata and raw; complete reads enrich earlier refusals",
+    async (refusedPart) => {
+      let status = 200;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/resource/celex/")) {
+          const noticeStatus = refusedPart === "notice" ? status : 200;
+          return new Response(noticeStatus === 200 ? noticeEn : null, {
+            status: noticeStatus,
+          });
+        }
+        if (url.endsWith("/DOC_1")) {
+          const formexStatus = refusedPart === "formex" ? status : 200;
+          return new Response(formexStatus === 200 ? formexEn : null, {
+            status: formexStatus,
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      });
+      const read = async () => {
+        const result = await buildDecision(binding, AbortSignal.timeout(5000));
+        if (result === undefined) {
+          throw new TypeError("Expected a decision from the captured HTML");
+        }
+        return sanitizeResult(result);
+      };
+      const complete = await read();
+      expect(complete.metadata["noticeCelex"]).toBeDefined();
+      expect(complete.metadata["publisherCaseNumber"]).toBeDefined();
+      expect(complete.metadata["formexCelex"]).toBeDefined();
+      expect(
+        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.["notice"],
+      ).toBeDefined();
+      expect(
+        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.["formex"],
+      ).toBeDefined();
+      const existing = storedDecision(complete);
+      const persisted = { ...existing, sourceRaw: complete.sourceRaw };
+      const before = structuredClone(persisted);
+      status = 403;
+      const refused = await read();
+      expect(refused.rawHash).not.toBe(complete.rawHash);
+      const refusedParts = decodeSourceRawEnvelope(refused.sourceRaw ?? "");
+      expect(refusedParts?.[refusedPart]).toBeUndefined();
+      expect(refusedParts?.[`${refusedPart}-state`]).toBe(
+        `${refusedPart}:refused:403`,
+      );
+      expect(partialObservationFromMetadata(refused.metadata).detail).toBe(
+        "secondary-refused",
+      );
+      expect(
+        partialObservationFromMetadata(refused.metadata).detail ===
+          "listing-only",
+      ).toBe(false);
+      const projection = deriveCorpusIndexProjectionDescriptor(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        caseLawProjectionInputFromCanonical({
+          documentId: createSafeId<"caseLawDecision">(),
+          sourceId: createSafeId<"caseLawSource">(),
+          jurisdiction: refused.country,
+          language: refused.language,
+          documentType: "judgment",
+          contentHash: "refused-secondary-with-complete-primary-text",
+          redactedAt: null,
+          caseNumber: refused.caseNumber,
+          identifiers: [],
+          court: refused.court,
+          courtId: null,
+          decisionDate: refused.decisionDate ?? null,
+          ecli: refused.ecli ?? null,
+          metadata: refused.metadata,
+          sourceDescriptor: null,
+        }),
+      );
+      expect(projection.action).toBe("upsert");
+      const observations: DocumentStageObservation[] = [];
+      await withDocumentStageWindow({
+        source: ADAPTER_KEYS.EU_ECJ,
+        now: () => 0,
+        observe: (event) => {
+          observations.push(event);
+        },
+        fetchPage: async () =>
+          Result.ok({ decisions: [refused], nextCursor: null }),
+      });
+      expect(observations.at(-1)).toMatchObject({
+        filled: 1,
+        backlog: 0,
+        failed: 0,
+      });
+      const shape = classifyObservation({ result: refused, existing });
+      expect(shape.preservesExistingDetail).toBe(true);
+      const writes: Record<string, unknown>[] = [];
+      const tx = {
+        select: () => ({
+          from: (table: unknown) => {
+            if (table === caseLawSources) {
+              return {
+                innerJoin: () => ({
+                  where: () => ({
+                    limit: () => ({
+                      for: async () => [
+                        {
+                          sourceId: createSafeId<"caseLawSource">(),
+                          sourceDescriptor: {},
+                        },
+                      ],
+                    }),
+                  }),
+                }),
+              };
+            }
+            expect(table).toBe(corpusIndexGenerations);
+            return { where: () => ({ limit: async () => [] }) };
+          },
+        }),
+        update: (table: unknown) => {
+          expect(table).toBe(caseLawDecisions);
+          return {
+            set: (values: Record<string, unknown>) => {
+              writes.push(values);
+              Object.assign(persisted, values);
+              return {
+                where: () => ({ returning: async () => [{ id: existing.id }] }),
+              };
+            },
+          };
+        },
+      };
+      const scopedDb: ScopedDb = async (work) =>
+        await work(asTestRaw<Transaction>(tx));
+      const observedAt = new Date("2026-10-03T00:00:00Z");
+      const outcome = await resolveExistingDecisionPolicy({
+        scopedDb,
+        existing,
+        result: refused,
+        shape,
+        observedAt,
+        observationOrder: 2n,
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      });
+      expect(outcome?.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+      expect(writes).toHaveLength(1);
+      expect(Object.keys(writes.at(0) ?? {}).toSorted()).toEqual(
+        [
+          "sourceObservedAt",
+          "sourceObservationOrder",
+          "sourceObservationHash",
+          "updatedAt",
+        ].toSorted(),
+      );
+      expect(persisted.metadata).toEqual(before.metadata);
+      expect(persisted.sourceRaw).toBe(before.sourceRaw);
+      expect(persisted.sourceRawS3Key).toBe(before.sourceRawS3Key);
+      expect(persisted.sourceHash).toBe(before.sourceHash);
+      expect(persisted.decisionDate).toBe(before.decisionDate);
+      expect(persisted.sourceObservationHash).toBe(refused.rawHash);
+      expect(persisted.sourceObservedAt).toBe(observedAt);
+
+      const partialExisting = storedDecision(refused);
+      for (const stored of [existing, partialExisting]) {
+        const listingOnly = sanitizeResult({
+          ...refused,
+          observationDetail: "listing-only",
+        });
+        expect(
+          classifyObservation({ result: listingOnly, existing: stored })
+            .preservesExistingDetail,
+        ).toBe(true);
+      }
+
+      expect(
+        classifyObservation({ result: refused, existing: undefined })
+          .preservesExistingDetail,
+      ).toBe(false);
+      expect(
+        classifyObservation({ result: refused, existing: partialExisting })
+          .preservesExistingDetail,
+      ).toBe(false);
+      status = 200;
+      const enriched = await read();
+      expect(enriched.metadata).toEqual(complete.metadata);
+      expect(enriched.sourceRaw).toBe(complete.sourceRaw);
+      expect(
+        partialObservationFromMetadata(enriched.metadata).detail ===
+          "listing-only",
+      ).toBe(false);
+      const enrichmentShape = classifyObservation({
+        result: enriched,
+        existing: partialExisting,
+      });
+      expect(enrichmentShape.preservesExistingDetail).toBe(false);
+      expect(
+        await resolveExistingDecisionPolicy({
+          scopedDb,
+          existing: partialExisting,
+          result: enriched,
+          shape: enrichmentShape,
+          observedAt,
+          observationOrder: 3n,
+          refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        }),
+      ).toBeNull();
+
+      for (const goneStatus of [404, 410]) {
+        status = goneStatus;
+        const gone = await read();
+        expect(gone.rawHash).not.toBe(complete.rawHash);
+        expect(
+          partialObservationFromMetadata(gone.metadata).detail ===
+            "listing-only",
+        ).toBe(false);
+        const goneShape = classifyObservation({ result: gone, existing });
+        expect(goneShape.preservesExistingDetail).toBe(false);
+        expect(
+          gone.metadata[
+            refusedPart === "notice" ? "noticeCelex" : "formexCelex"
+          ],
+        ).toBeUndefined();
+        // Confirmed absence is authoritative: the pipeline proceeds to replace
+        // metadata and raw, removing the notice or Formex content that is gone.
+        expect(
+          await resolveExistingDecisionPolicy({
+            scopedDb,
+            existing,
+            result: gone,
+            shape: goneShape,
+            observedAt,
+            observationOrder: 4n,
+            refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          }),
+        ).toBeNull();
+        expect(
+          decodeSourceRawEnvelope(gone.sourceRaw ?? "")?.[refusedPart],
+        ).toBeUndefined();
+      }
+      expect(writes).toHaveLength(1);
+    },
+  );
+
+  test("a published notice retains its bytes", async () => {
+    expect((await readNotice(200)).unwrap()).toEqual({
+      type: "present",
+      xml: noticeEn,
+    });
+  });
+
+  test("Formex publication and content changes alter the source hash without changing fulltext", async () => {
+    const decisions = [];
+    for (const formex of [undefined, formexEn, `${formexEn}\n`, formexEn]) {
+      const outcome = await reparse(
+        storedFrom(
+          encodeSourceRawEnvelope(
+            ecjRawParts({
+              binding,
+              html: documentEn,
+              notice: noticeEn,
+              formex,
+            }),
+          ),
+        ),
+      );
+      if (outcome.type !== "parsed") {
+        throw new TypeError(`Expected parsed, got ${outcome.type}`);
+      }
+      decisions.push(outcome.result);
+    }
+    expect(new Set(decisions.map((decision) => decision.fulltext)).size).toBe(
+      1,
+    );
+    expect(new Set(decisions.map((decision) => decision.rawHash)).size).toBe(3);
+    expect(decisions.at(1)?.rawHash).toBe(decisions.at(3)?.rawHash);
+  });
+
+  test("notice publication and content changes alter the source hash", async () => {
+    const absent = await decisionFrom(undefined);
+    const present = await decisionFrom(noticeEn);
+    const changed = await decisionFrom(noticeEn.replace("<NOTICE", "<NOTICE "));
+
+    expect(present.fulltext).toBe(absent.fulltext);
+    expect(changed.fulltext).toBe(present.fulltext);
+    expect(present.rawHash).not.toBe(absent.rawHash);
+    expect(changed.rawHash).not.toBe(present.rawHash);
+    expect((await decisionFrom(noticeEn)).rawHash).toBe(present.rawHash);
+  });
+});
 
 describe("the branch notice is read per expression", () => {
   test("the translated fields differ between two notices of one work", () => {
@@ -283,6 +835,29 @@ describe("stored Formex refresh", () => {
     expect(outcome.decision.fulltext).not.toBe("");
   });
 
+  test("a successful Formex refresh removes an earlier refusal marker", async () => {
+    const outcome = await refreshEcjStoredFormex({
+      stored: refreshStored({
+        ...ecjRawParts({
+          binding,
+          html: documentEn,
+          notice: noticeEn,
+          formex: undefined,
+        }),
+        "formex-state": "formex:refused:403",
+      }),
+      signal,
+      fetchFormex: async () => response(formexEn),
+    });
+    if (outcome.type !== "refreshed") {
+      throw new TypeError(`Expected refreshed, got ${outcome.type}`);
+    }
+    const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
+    expect(parts?.["formex"]).toBe(formexEn);
+    expect(parts?.["formex-state"]).toBeUndefined();
+    expect(outcome.decision.observationDetail).toBe("complete");
+  });
+
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
     const archive = new JSZip();
     archive.file("FORMEX/main.xml", "<new-formex />");
@@ -369,7 +944,7 @@ describe("stored Formex refresh", () => {
     for (const [status, expected] of [
       [404, "formex-gone"],
       [410, "formex-gone"],
-      [403, "retryable-exhausted"],
+      [403, "formex-refused"],
       [408, "retryable-exhausted"],
       [429, "retryable-exhausted"],
       [503, "retryable-exhausted"],
@@ -386,7 +961,11 @@ describe("stored Formex refresh", () => {
         signal,
         fetchFormex: async () => response("", status),
       });
-      expect(outcome).toEqual({ type: expected });
+      expect(outcome).toEqual(
+        expected === "formex-refused"
+          ? { type: expected, status }
+          : { type: expected },
+      );
     }
 
     const refusal = new PublisherRateLimitRefusalError({
@@ -589,3 +1168,53 @@ describe("the listing query binds CELEX the way the endpoint answers", () => {
     expect(query).toContain('FILTER(STR(?date) >= "2024-01-01")');
   });
 });
+
+for (const candidate of [
+  " https://example.org/manifestation?a=1&amp;b=2#part ",
+  "https://example.org/%26amp%3B?a=1&b=2",
+  "//example.org/manifestation",
+  "/manifestation",
+  "ftp://example.org/document",
+  "data:text/plain,manifestation",
+  "mailto:publisher@example.org",
+]) {
+  test(`notice manifestation URI provenance: ${candidate}`, async () => {
+    const $ = cheerio.load(noticeEn, { xml: true });
+    const manifestations = $("NOTICE > MANIFESTATION");
+    expect(manifestations.length).toBeGreaterThan(0);
+    manifestations.each((_, element) => {
+      $(element).children("URI").children("VALUE").text(candidate);
+    });
+    const decision = await decisionFrom($.xml());
+    const listed = decision.metadata["manifestations"];
+    expect(Array.isArray(listed) ? listed.length : 0).toBe(
+      manifestations.length,
+    );
+    if (candidate.trim().startsWith("https://")) {
+      expect(
+        Array.isArray(listed)
+          ? listed.map((item: unknown) =>
+              isRecord(item) ? item["uri"] : undefined,
+            )
+          : [],
+      ).toEqual(
+        Array.from({ length: manifestations.length }, () => candidate.trim()),
+      );
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    } else {
+      expect(
+        Array.isArray(listed) &&
+          listed.every(
+            (item: unknown) => isRecord(item) && !Object.hasOwn(item, "uri"),
+          ),
+      ).toBe(true);
+      expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+        entries: Array.from({ length: manifestations.length }, (_, index) => ({
+          address: `manifestations[${index}].uri`,
+          reason: candidate.startsWith("/") ? "invalid-url" : "unsafe-protocol",
+        })),
+        overflowCount: 0,
+      });
+    }
+  });
+}

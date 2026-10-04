@@ -1,3 +1,4 @@
+// parser-output-unchanged: threads an optional static metadata URL schema; ordinary source assembly is unchanged
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
 import {
@@ -17,8 +18,9 @@ const persistableIdentity = (value: string) =>
 /** A rejected label stays explicit and replayable without aborting synchronous source assembly. */
 export const plainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
+  metadataUrlSchema?: unknown,
 ) => {
-  const result = toPlainTextIngestionResult(raw);
+  const result = toPlainTextIngestionResult(raw, metadataUrlSchema);
   if (result.isOk()) {
     return result.value;
   }

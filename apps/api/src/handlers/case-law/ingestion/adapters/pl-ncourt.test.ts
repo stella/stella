@@ -894,6 +894,32 @@ const withoutWhitespace = (text: string): string => text.replace(/\s+/gu, "");
 const layoutPayload = "before <xText>nested</xText><![CDATA[cdata]]> after";
 
 describe("the document", () => {
+  test("a nested table row appears once in the assembled decision", async () => {
+    const decision = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({
+          id: PAIR,
+          signature: "II Ca 236/18",
+          courtId: "15502000",
+          type: "SENTENCE, REASON",
+        }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml:
+          "<xPart><xRows><xRow><xClmn><xText>Outer cell</xText>" +
+          "<xRows><xRow><xClmn><xText>Nested cell</xText></xClmn></xRow></xRows>" +
+          "</xClmn></xRow></xRows></xPart>",
+      }),
+    );
+
+    expect(decision.fulltext?.split("Nested cell")).toHaveLength(2);
+    const tables =
+      "blocks" in decision.documentAst
+        ? decision.documentAst.blocks.filter((block) => block.type === "table")
+        : [];
+    expect(tables).toHaveLength(1);
+    expect(tables.at(0)?.rows).toHaveLength(1);
+  });
+
   test("a line break keeps its nested text and CDATA", () => {
     const content =
       readPlNcourtContent(

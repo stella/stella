@@ -82,6 +82,13 @@ export const DecisionFilterPopover = ({
           </div>
         </section>
       )}
+      <FacetSection
+        buckets={facets.source}
+        heading={t("common.source")}
+        name="source"
+        onSelect={(value) => onSelect("sourceId", value)}
+        selectedValue={selection.sourceId}
+      />
       <DateSection
         buckets={facets.year}
         dateRange={dateRange}

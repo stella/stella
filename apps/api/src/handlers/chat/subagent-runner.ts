@@ -197,7 +197,7 @@ export const runSubagent = async (
   options: RunSubagentOptions,
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
-  const model = dependencies.resolveModel({
+  const model = await dependencies.resolveModel({
     dataClass: "customer",
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,

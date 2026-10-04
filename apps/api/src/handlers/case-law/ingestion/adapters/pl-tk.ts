@@ -1,6 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: session refusals retain their HTTP status; successful page parsing is unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -113,6 +110,7 @@ import type {
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   TEXT_ABSENCE_REASON,
@@ -126,6 +124,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_TK_METADATA_URL_SCHEMA } from "./pl-tk.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -619,7 +619,7 @@ export const parsePlTkListingPage = (
   if (body.children("tr.ui-datatable-empty-message").length > 0) {
     return { page: 1, totalPages: 0, rows: [] };
   }
-  const pager = LISTING_PAGER.exec($("body").text())?.groups;
+  const pager = LISTING_PAGER.exec(visibleHtmlText($("body")))?.groups;
   const page = Number(pager?.["page"]);
   const totalPages = Number(pager?.["total"]);
   if (!Number.isSafeInteger(page) || !Number.isSafeInteger(totalPages)) {
@@ -638,12 +638,14 @@ export const parsePlTkListingPage = (
           ? undefined
           : URL.parse(href, `${PL_TK_BASE}/`)?.searchParams;
       const documentId = params?.get("dokument") ?? undefined;
-      const caseNumber = collapse(cell.find(".sygnatura").first().text());
+      const caseNumber = collapse(
+        visibleHtmlText(cell.find(".sygnatura").first()),
+      );
       const subjectNode = cell.find('span[style*="italic"]');
-      const subject = collapse(subjectNode.text());
+      const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
-      const line = splitListingLine(collapse(lineNode.text()));
+      const line = splitListingLine(collapse(visibleHtmlText(lineNode)));
       const form = line?.form;
       const persistableId =
         documentId !== undefined &&
@@ -954,9 +956,7 @@ export const plTkJudges = (ruling: PlTkRuling): DecisionJudgeInput[] => {
 const statedList = <T>(values: readonly T[]): readonly T[] | undefined =>
   values.length === 0 ? undefined : values;
 
-const recordMetadata = (
-  record: PlTkCaseRecord | undefined,
-): Record<string, unknown> =>
+const recordMetadata = (record: PlTkCaseRecord | undefined) =>
   record === undefined
     ? {}
     : {
@@ -972,7 +972,7 @@ const recordMetadata = (
         caseDocuments: statedList(record.caseDocuments),
       };
 
-const rulingMetadata = (ruling: PlTkRuling | null): Record<string, unknown> =>
+const rulingMetadata = (ruling: PlTkRuling | null) =>
   ruling === null
     ? {}
     : {
@@ -1055,7 +1055,10 @@ export const assemblePlTkDecision = ({
   const decisionType = plTkDecisionType(decisionForm);
   const decisionDate = ruling?.decisionDate ?? row.decisionDate;
   const sourceUrl = `${PL_TK_BASE}${casePagePath(row)}`;
-  const documentUrl = ruling?.wordDocumentUrl;
+  const documentUrl =
+    typeof ruling?.wordDocumentUrl === "string"
+      ? ruling.wordDocumentUrl
+      : undefined;
 
   const parsed =
     ruling?.textHtml === undefined
@@ -1089,60 +1092,69 @@ export const assemblePlTkDecision = ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const hasText = document !== null && deciding.type === "stated";
 
-  const decision: IngestionResult = plainTextIngestionResult({
-    caseNumber,
-    ...(statedCaseNumber === undefined
-      ? { caseNumberIsPlaceholder: true }
-      : {}),
-    sourceDocumentId: id,
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_TK].country,
-    language: PL_TK_LANGUAGE,
-    decisionDate,
-    decisionType,
-    fulltext: document?.fulltext,
-    ...(hasText ? {} : { isListingOnly: true }),
-    ...(ruling === null ? {} : { judges: plTkJudges(ruling) }),
-    sourceUrl,
-    documentUrl,
-    // The portal prints no abstract or headnote beside the ruling; the
-    // subject line it states is kept as metadata.
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata(
-      definedEntries({
-        documentId: id,
-        caseId: row.caseId,
-        stage: row.stage,
-        listingDefect: row.defect,
-        ...(deciding.type === "unknown"
-          ? {
-              quarantineReason: "court-not-stated",
-              courtAsPrinted: deciding.courtAsPrinted,
-            }
-          : {}),
-        decisionForm,
-        subject: ruling?.subject ?? row.subject,
-        ...recordMetadata(page?.record),
-        ...rulingMetadata(ruling),
-        // A quarantined row keys as nothing: the fallback court name would
-        // otherwise pair it with the Tribunal's rulings from another source.
-        rulingKeys:
-          statedCaseNumber === undefined || deciding.type !== "stated"
-            ? undefined
-            : plConstitutionalTribunalRulingKeys({
-                caseNumber: statedCaseNumber,
-                court: deciding.court,
-                decisionDate,
-                decisionType,
-              }),
-      }),
-    ),
-    rawHash: hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK],
-    documentAst,
-    sourceRaw,
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
+      caseNumber,
+      ...(statedCaseNumber === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : {}),
+      sourceDocumentId: id,
+      court,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_TK].country,
+      language: PL_TK_LANGUAGE,
+      decisionDate,
+      decisionType,
+      fulltext: document?.fulltext,
+      ...(hasText ? {} : { isListingOnly: true }),
+      ...(ruling === null ? {} : { judges: plTkJudges(ruling) }),
+      sourceUrl,
+      documentUrl,
+      // The portal prints no abstract or headnote beside the ruling; the
+      // subject line it states is kept as metadata.
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
+        definedEntries(
+          checkedDecisionMetadata(
+            {
+              documentId: id,
+              caseId: row.caseId,
+              stage: row.stage,
+              listingDefect: row.defect,
+              ...(deciding.type === "unknown"
+                ? {
+                    quarantineReason: "court-not-stated",
+                    courtAsPrinted: deciding.courtAsPrinted,
+                  }
+                : {}),
+              decisionForm,
+              subject: ruling?.subject ?? row.subject,
+              ...recordMetadata(page?.record),
+              ...rulingMetadata(ruling),
+              // A quarantined row keys as nothing: the fallback court name would
+              // otherwise pair it with the Tribunal's rulings from another source.
+              rulingKeys:
+                statedCaseNumber === undefined || deciding.type !== "stated"
+                  ? undefined
+                  : plConstitutionalTribunalRulingKeys({
+                      caseNumber: statedCaseNumber,
+                      court: deciding.court,
+                      decisionDate,
+                      decisionType,
+                    }),
+            },
+            PL_TK_METADATA_URL_SCHEMA,
+          ),
+        ),
+        { type: "stored", schema: PL_TK_METADATA_URL_SCHEMA },
+      ),
+      rawHash: hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK],
+      documentAst,
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_TK_METADATA_URL_SCHEMA,
+  );
   return hasText
     ? { type: "built", decision }
     : { type: "detail-unavailable", decision };

@@ -5,8 +5,6 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import {
   toFactDetailsBody,
   withFactDetails,
@@ -17,7 +15,7 @@ import type { FactDetails, ListItem } from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
 
@@ -101,11 +99,7 @@ export const useFactDetailActions = (scope: ListScope) => {
         writeDetails(itemEntityId, context.previous);
       }
       analytics.captureError(error);
-      stellaToast.add({
-        type: "error",
-        title: t("avt.save.failedTitle"),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
+      notifyUserError(error, t("avt.save.failedTitle"));
     },
   });
 

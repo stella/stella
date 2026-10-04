@@ -547,9 +547,15 @@ describe("explicit uses are not shapes", () => {
 
 describe("modules that reach an owner-level handle", () => {
   const importsOf = (...lines: readonly string[]): number =>
-    countRootConnectionImports(`${lines.join("\n")}\n`);
+    countRootConnectionImports(
+      `${lines.join("\n")}\n`,
+      "apps/api/src/imports.ts",
+    );
   const typesOf = (...lines: readonly string[]): number =>
-    countRootConnectionTypeImports(`${lines.join("\n")}\n`);
+    countRootConnectionTypeImports(
+      `${lines.join("\n")}\n`,
+      "apps/api/src/imports.ts",
+    );
 
   test("one per handle a named import names, renamed or by path", () => {
     expect(importsOf(ROOT_IMPORT)).toBe(1);

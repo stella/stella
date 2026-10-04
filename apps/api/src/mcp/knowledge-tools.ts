@@ -935,7 +935,12 @@ const clauseRunArgSchema = v.strictObject({
 });
 
 const clauseParagraphArgSchema = v.strictObject({
-  text: v.pipe(v.string(), v.description("Paragraph plain text")),
+  text: v.pipe(
+    v.string(),
+    v.description(
+      "Paragraph text; directive paragraphs use balanced literal tags, e.g. {% if enabled %} ... {% endif %}.",
+    ),
+  ),
   style: v.optional(
     v.pipe(v.string(), v.description("Optional paragraph style name")),
   ),
@@ -2083,7 +2088,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "clause_id to create (title and body required); pass clause_id to update. " +
       "body is an ordered array of paragraphs, each with text and optional " +
       "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. " +
+      "and directive_expression. Use balanced {% ... %} tags. " +
+      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
       "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
       "update to also append a version snapshot of the body. Returns the clause id.",
@@ -2102,6 +2108,11 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ clause: ["create"] }, { clause: ["update"] }],
+      reason: "clause_id selects update; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
     scope: "stella:knowledge_write",
@@ -2120,6 +2131,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "organization's clause library. This is irreversible.",
     inputSchema: deleteClauseArgsSchema,
     access: "write",
+    permissions: { type: "all", permissions: { clause: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_clause",
@@ -2194,6 +2206,11 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ playbook: ["create"] }, { playbook: ["update"] }],
+      reason: "playbook_id selects update; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_playbook",
     scope: "stella:knowledge_write",
@@ -2214,6 +2231,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: { type: "all", permissions: { playbook: ["apply"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",
     scope: "stella:knowledge_write",

@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-outcome-projection";
+
 /**
  * The wire contract the OpenAI-compatible `search`/`fetch` pair answers with,
  * shared by the two surfaces that serve the pair: the default audience, which
@@ -52,6 +54,7 @@ export const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
     v.strictObject({ id: v.string(), title: v.string(), url: v.string() }),
   ),
   nextCursor: v.optional(v.nullable(v.string())),
+  paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
 });
 
 export const COMPAT_FETCH_OUTPUT_SCHEMA = compatFetchOutput(

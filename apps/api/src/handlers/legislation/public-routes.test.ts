@@ -86,11 +86,25 @@ describe("public statute routes", () => {
     env.FEATURE_PUBLIC_LAW = false;
 
     try {
-      const response = await publicLegislationRoute.handle(
-        new Request("http://localhost/law/statutes?country=CZE"),
+      const absent = await publicLegislationRoute.handle(
+        new Request("http://localhost/law/absent-route"),
       );
-
-      expect(response.status).toBe(404);
+      const absentBody = await absent.text();
+      for (const path of [
+        "/law/statutes?country=CZE",
+        "/law/statutes/search?country=CZE&query=text",
+        // Malformed input must not reach validation and answer 422.
+        "/law/statutes/search",
+      ]) {
+        const response = await publicLegislationRoute.handle(
+          new Request(`http://localhost${path}`),
+        );
+        // A disabled public surface is indistinguishable from an absent route.
+        expect(
+          { status: response.status, body: await response.text() },
+          path,
+        ).toEqual({ status: absent.status, body: absentBody });
+      }
     } finally {
       restoreRuntimeMode();
       env.FEATURE_PUBLIC_LAW = previousFeature;
@@ -256,5 +270,20 @@ describe("public statute routes", () => {
     expect(searchWrapper).toContain("searchLegislationHandler(");
     expect(searchWrapper).toContain("legislationPublicReadDb");
     expect(searchWrapper).not.toContain("scopedDb");
+  });
+
+  test("public full-text search retains the shared redistribution boundary", async () => {
+    const source = await readHandlerSource("public-search.ts");
+    expect(source).toContain("searchLegislationHandler");
+    expect(source).toContain("legislationPublicReadDb");
+    expect(source).not.toContain("scopedDb");
+    expect(source).not.toContain("loadSearchConfigs:");
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        "http://localhost/law/statutes/search?country=CZE&query=text&cursor=invalid-cursor",
+      ),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: "Invalid cursor" });
   });
 });

@@ -2,6 +2,8 @@ import { revalidateLogic } from "@tanstack/react-form";
 import type { AnyFieldMeta, FormOptions } from "@tanstack/react-form";
 import * as v from "valibot";
 
+import { isUuid } from "@stll/api-contract/safe-id";
+
 type FormErrors = Record<string, string | string[]>;
 
 const toUndefinedIfEmpty = (value: string) =>
@@ -17,6 +19,11 @@ export const emailSchema = () =>
 
 export const optionalSearchStringSchema = () =>
   v.optional(v.pipe(v.string(), v.trim(), v.transform(toUndefinedIfEmpty)));
+
+export const optionalUuidSearchSchema = v.fallback(
+  v.optional(v.pipe(v.string(), v.length(36), v.check(isUuid))),
+  undefined,
+);
 
 const fieldErrorsToString = (errors: readonly unknown[]): string | null => {
   if (errors.length === 0) {

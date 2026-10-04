@@ -46,6 +46,7 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -89,7 +90,7 @@ const StyleSetsPage = () => {
 
   const replace = async (target: StyleSetItem, file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({ type: "error", title: t("templates.invalidFileType") });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
     setBusy(true);
@@ -551,9 +552,7 @@ const showError = (
   error: Parameters<typeof userErrorMessage>[0],
   fallbackMessage: string,
 ) => {
-  stellaToast.add({
-    type: "error",
-    title,
+  notifyUserError(toAPIError(error), title, {
     description: userErrorMessage(error, fallbackMessage),
   });
 };
@@ -563,9 +562,7 @@ const showThrownError = (
   error: unknown,
   fallbackMessage: string,
 ) => {
-  stellaToast.add({
-    type: "error",
-    title,
+  notifyUserError(error, title, {
     description: userErrorFromThrown(error, fallbackMessage),
   });
 };

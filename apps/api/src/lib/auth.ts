@@ -2,7 +2,6 @@ import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -20,13 +19,22 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import { ac, roles } from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -53,7 +61,7 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -79,6 +87,22 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  createOAuthConsentInfoPlugin,
+  getVerifiedOAuthOrigins,
+} from "@/api/lib/auth/oauth-consent-info";
+import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
+import {
+  createStellaOAuthProvider,
+  OAUTH_DISABLED_PATHS,
+} from "@/api/lib/auth/oauth-registration-policy";
+import {
+  admitOpenClient,
+  authorizationClientId,
+  requireAuthRetention,
+  REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+  withAuthRetention,
+} from "@/api/lib/auth/registration-adapter";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -125,10 +149,16 @@ import {
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  mapMembershipInvariantError,
+  ownerRequiredError,
+} from "@/api/lib/membership-role-invariants";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -554,6 +584,14 @@ const requireTwoFactorManageOtp = async ({
 
 /** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
 const TWO_FACTOR_ISSUER = "Stella";
+const MEMBERSHIP_UPDATE_FAILED = failureSink({
+  event: "auth.membership_update_failed",
+  expected: [],
+});
+const MEMBERSHIP_REMOVAL_FAILED = failureSink({
+  event: "auth.membership_removal_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -880,7 +918,7 @@ const oauthUiFragmentBridgePlugin = {
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-const createAuth = () => {
+export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
@@ -929,6 +967,157 @@ const createAuth = () => {
         message: admission.error.message,
       });
     }
+  };
+
+  const requireAssignableMemberRole = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    const endpoint = tryGetCurrentAuthEndpointContext();
+    // Inspect the original input as well: the plugin normalizes comma lists
+    // before invoking organization hooks.
+    const input =
+      endpoint && isRecord(endpoint.body) ? endpoint.body["role"] : role;
+    if (
+      typeof input !== "string" ||
+      !isMemberRole(input) ||
+      !isMemberRole(role)
+    ) {
+      throw new APIError("BAD_REQUEST", {
+        code: "invalid_member_role",
+        message: "Select one product membership role.",
+      });
+    }
+    const headers =
+      endpoint?.headers instanceof Headers
+        ? endpoint.headers
+        : endpoint?.request?.headers;
+    if (!headers) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const session = await getAuth().api.getSession({
+      headers,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
+    if (!session) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const actor = await rootDb.query.member.findFirst({
+      columns: { role: true },
+      where: {
+        organizationId: { eq: organizationId },
+        userId: { eq: session.user.id },
+      },
+    });
+    if (
+      !actor ||
+      !isMemberRole(actor.role) ||
+      !roleAssignmentPolicy(actor.role).includes(role)
+    ) {
+      throw new APIError("FORBIDDEN", {
+        code: "member_role_not_assignable",
+        message: "You cannot assign this membership role.",
+      });
+    }
+  };
+
+  const refuseLastOwnerChange = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    if (role !== "owner") {
+      return;
+    }
+    const [owners] = await rootDb
+      .select({ count: count() })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.role, "owner"),
+        ),
+      );
+    if (!owners || owners.count <= 1) {
+      throw ownerRequiredError();
+    }
+  };
+
+  const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
+  const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
+    const adapter = withAuthRetention({
+      adapter: rawAuthAdapter(options),
+      admitClient: async () =>
+        await admitOpenClient({
+          limit: env.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
+          now: new Date(),
+          execute: async (query) => await rootDb.execute(query),
+        }),
+      touchClient: async (clientId) => {
+        const endpoint = tryGetCurrentAuthEndpointContext();
+        if (
+          !endpoint?.path ||
+          !["/oauth2/authorize", "/oauth2/token"].includes(endpoint.path)
+        ) {
+          return;
+        }
+        const touched = await rootDb.execute(
+          sql`update oauth_client set updated_at = now() where client_id = ${clientId} returning client_id`,
+        );
+        if (touched.length === 0) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Authorization client is unavailable.",
+          });
+        }
+      },
+      protectCreate: (raw) => async (args) => {
+        const table = requireAuthRetention({ model: args.model });
+        const clientId =
+          table === "verification"
+            ? authorizationClientId(args.data)
+            : undefined;
+        if (!clientId) {
+          return await raw.create(args);
+        }
+        return await rootDb.transaction(async (tx) => {
+          const clients = await tx.execute(
+            sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
+          );
+          if (clients.length === 0) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Authorization client is unavailable.",
+            });
+          }
+          return await drizzleAdapter(
+            tx,
+            AUTH_DATABASE_ADAPTER_OPTIONS,
+          )(options).create(args);
+        });
+      },
+    });
+    return {
+      ...adapter,
+      // The hook's preflight cannot hold a lock across this plugin write.
+      // Translate the database's final refusal at the adapter boundary.
+      update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
+        const update = await Result.tryPromise({
+          try: async () => await adapter.update<T>(args),
+          catch: mapMembershipInvariantError,
+        });
+        if (Result.isError(update)) {
+          if (
+            !(update.error instanceof APIError) ||
+            update.error.statusCode >= 500
+          ) {
+            observeFailure(update.error, {
+              sink: MEMBERSHIP_UPDATE_FAILED,
+              ctx: { operation: args.model },
+            });
+          }
+          throw update.error;
+        }
+        return update.value;
+      },
+    };
   };
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
@@ -988,6 +1177,9 @@ const createAuth = () => {
       // strictly stronger than the freshness it used to carry.
       "/unlink-account",
       "/organization/leave",
+      // OAuth client management Stella has no use for; see
+      // `OAUTH_ENDPOINT_POLICY`.
+      ...OAUTH_DISABLED_PATHS,
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
@@ -1140,7 +1332,7 @@ const createAuth = () => {
         },
       },
     },
-    database: drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS),
+    database: membershipAuthAdapter,
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
         ? {
@@ -1172,6 +1364,7 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
+      REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createSessionBearer(),
@@ -1181,6 +1374,7 @@ const createAuth = () => {
         context: new RedisRateLimitContext({
           failurePolicy: "fail_open_local",
         }),
+        demoAccountEmail: demoConfig.email,
       }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
@@ -1352,6 +1546,10 @@ const createAuth = () => {
             invitation,
             inviter,
           }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              invitation.role,
+            );
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: inviter.email,
@@ -1381,7 +1579,30 @@ const createAuth = () => {
               "membership",
             );
           },
-          async beforeAddMember({ organization: org, user }) {
+          async beforeAddMember({
+            organization: org,
+            user,
+            member: addedMember,
+          }) {
+            const endpoint = tryGetCurrentAuthEndpointContext();
+            if (endpoint?.path === "/organization/create") {
+              // Better Auth supplies the creator role, before a membership or
+              // browser session exists on the system provisioning path.
+              if (
+                addedMember.role !==
+                BETTER_AUTH_ORGANIZATION_OPTIONS.creatorRole
+              ) {
+                throw new APIError("BAD_REQUEST", {
+                  code: "invalid_member_role",
+                  message: "Select one product membership role.",
+                });
+              }
+            } else {
+              await requireAssignableMemberRole(
+                brandPersistedOrganizationId(org.id),
+                addedMember.role,
+              );
+            }
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
@@ -1393,6 +1614,22 @@ const createAuth = () => {
               "membership",
             );
           },
+          async beforeUpdateMemberRole({
+            member: updatedMember,
+            newRole,
+            organization: org,
+          }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              newRole,
+            );
+            if (newRole !== "owner") {
+              await refuseLastOwnerChange(
+                brandPersistedOrganizationId(org.id),
+                updatedMember.role,
+              );
+            }
+          },
           async afterRemoveMember({
             member: removedMember,
             organization: org,
@@ -1400,10 +1637,6 @@ const createAuth = () => {
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
             await rootDb.transaction(async (tx) => {
-              await revokeOrganizationMemberAuthArtifacts(tx, {
-                organizationId,
-                userId,
-              });
               await clearOrganizationCorrespondenceAssignments({
                 tx,
                 organizationId,
@@ -1424,28 +1657,41 @@ const createAuth = () => {
             // ids for the tenant predicates the helper applies.
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
-            await rootDb.transaction(async (tx) => {
-              const timerClose = await closeRemovedMemberActiveTimer({
-                organizationId,
-                tx,
-                userId,
-              });
-              if (Result.isError(timerClose)) {
-                throw timerClose.error;
-              }
-              // Better Auth deletes the member after this hook, outside this
-              // transaction. Remove the exact row here so a timer cannot start
-              // between the timer check and membership removal.
-              await tx
-                .delete(member)
-                .where(
-                  and(
-                    eq(member.id, removedMember.id),
-                    eq(member.organizationId, organizationId),
-                    eq(member.userId, userId),
-                  ),
-                );
+            await refuseLastOwnerChange(organizationId, removedMember.role);
+            const removal = await Result.tryPromise({
+              try: async () =>
+                await rootDb.transaction(async (tx) => {
+                  const timerClose = await closeRemovedMemberActiveTimer({
+                    organizationId,
+                    tx,
+                    userId,
+                  });
+                  if (Result.isError(timerClose)) {
+                    throw timerClose.error;
+                  }
+                  // Better Auth deletes the member after this hook, outside this
+                  // transaction. Remove the exact row (and its credentials) here
+                  // so a timer cannot start between the timer check and removal.
+                  await removeOrganizationMemberWithAuthArtifacts(tx, {
+                    memberId: removedMember.id,
+                    organizationId,
+                    userId,
+                  });
+                }),
+              catch: mapMembershipInvariantError,
             });
+            if (Result.isError(removal)) {
+              if (
+                !(removal.error instanceof APIError) ||
+                removal.error.statusCode >= 500
+              ) {
+                observeFailure(removal.error, {
+                  sink: MEMBERSHIP_REMOVAL_FAILED,
+                  ctx: { organizationId },
+                });
+              }
+              throw removal.error;
+            }
           },
         },
         async sendInvitationEmail(data, request) {
@@ -1468,122 +1714,133 @@ const createAuth = () => {
           });
         },
       }),
-      oauthProvider({
-        loginPage: OAUTH_UI_LOGIN_PATH,
-        consentPage: OAUTH_UI_CONSENT_PATH,
-        scopes: [...MCP_OAUTH_SCOPES],
-        resources: oauthResources,
-        // The additive bridge/backfill owns resource creation and proves its
-        // fixed point before this candidate runs. Runtime seeding would hide
-        // a missed migration and add an owner-DB write to auth startup.
-        resourceSeedMode: "none",
-        enforcePerClientResources: true,
-        clientRegistrationDefaultResources: oauthResourceIdentifiers,
-        clientRegistrationAllowedResources: oauthResourceIdentifiers,
-        allowDynamicClientRegistration: true,
-        allowUnauthenticatedClientRegistration: true,
-        rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
-        // Hosted MCP clients identify themselves by an https URL `client_id`
-        // and skip per-user registration entirely. The transport resolves the
-        // host once, refuses any non-public-routable answer, pins that address
-        // for the connection, and never follows a redirect; resources and
-        // scopes stay bound by the `clientMetadataDocument` registration rules
-        // above, so such a client gets no more reach than a registered one.
-        extensions: [
-          {
-            clientDiscovery: createCimdClientDiscovery({
-              fetchClientMetadataResource,
-            }),
-          },
-        ],
-        accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
-        refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
-        clientReference: ({ session }) =>
-          getSessionActiveOrganizationId(session),
-        postLogin: {
-          page: OAUTH_UI_ORGANIZATION_PATH,
-          shouldRedirect: async ({
-            headers,
-            scopes,
-            session,
-          }): Promise<boolean> => {
-            const needsOrganization = scopes.some(isMcpResourceScope);
-            if (!needsOrganization) {
-              return false;
-            }
-
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
-            // The organization page continues the authorization once the user
-            // has picked; the provider asks this predicate again on that step,
-            // so the pick itself has to end the redirect.
-            if (activeOrganizationId && isOrganizationPageContinuation()) {
-              return false;
-            }
-
-            const organizations: { id: string }[] =
-              await auth.api.listOrganizations({
-                headers,
-              });
-
-            return (
-              organizations.length !== 1 ||
-              organizations.at(0)?.id !== activeOrganizationId
-            );
-          },
-          consentReferenceId: ({ scopes, session }) => {
-            const needsOrganization = scopes.some(isMcpResourceScope);
-            if (!needsOrganization) {
-              return undefined;
-            }
-
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
-            if (!activeOrganizationId) {
-              throw new APIError("BAD_REQUEST", {
-                error: "set_organization",
-                message:
-                  "An organization must be selected before granting stella MCP access",
-              });
-            }
-
-            return activeOrganizationId;
-          },
-        },
-        customAccessTokenClaims: async ({ referenceId, user }) => {
-          if (user) {
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: user.email,
-                operation: "growth",
+      createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
+      createStellaOAuthProvider(
+        {
+          loginPage: OAUTH_UI_LOGIN_PATH,
+          consentPage: OAUTH_UI_CONSENT_PATH,
+          scopes: [...MCP_OAUTH_SCOPES],
+          resources: oauthResources,
+          // The additive bridge/backfill owns resource creation and proves its
+          // fixed point before this candidate runs. Runtime seeding would hide
+          // a missed migration and add an owner-DB write to auth startup.
+          resourceSeedMode: "none",
+          enforcePerClientResources: true,
+          clientRegistrationDefaultResources: oauthResourceIdentifiers,
+          clientRegistrationAllowedResources: oauthResourceIdentifiers,
+          allowDynamicClientRegistration: true,
+          allowUnauthenticatedClientRegistration: true,
+          rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+          // Hosted MCP clients identify themselves by an https URL `client_id`
+          // and skip per-user registration entirely. The transport resolves the
+          // host once, refuses any non-public-routable answer, pins that address
+          // for the connection, and never follows a redirect; resources and
+          // scopes stay bound by the `clientMetadataDocument` registration rules
+          // above, so such a client gets no more reach than a registered one.
+          extensions: [
+            {
+              clientDiscovery: createCimdClientDiscovery({
+                fetchClientMetadataResource: withOwnClientDocuments(
+                  fetchClientMetadataResource,
+                ),
               }),
-            );
-          }
-          if (!referenceId || !user) {
-            return { org_id: referenceId };
-          }
-          // `member_id` pins the token to the membership row that minted it,
-          // so a later membership of the same user in the same organization
-          // (removal followed by re-invitation) is a different identity.
-          const row = await rootDb
-            .select({ id: member.id })
-            .from(member)
-            .where(
-              and(
-                eq(member.userId, user.id),
-                eq(member.organizationId, referenceId),
-              ),
-            )
-            .limit(1)
-            .then((rows) => rows.at(0));
-          if (!row) {
-            throw new APIError("FORBIDDEN", {
-              message: "The user is not a member of this organization",
-            });
-          }
-          return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+            },
+          ],
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+          clientReference: ({ session }) =>
+            getSessionActiveOrganizationId(session),
+          postLogin: {
+            page: OAUTH_UI_ORGANIZATION_PATH,
+            shouldRedirect: async ({
+              headers,
+              scopes,
+              session,
+            }): Promise<boolean> => {
+              const needsOrganization = scopes.some(isMcpResourceScope);
+              if (!needsOrganization) {
+                return false;
+              }
+
+              const activeOrganizationId =
+                getSessionActiveOrganizationId(session);
+              // The organization page continues the authorization once the user
+              // has picked; the provider asks this predicate again on that step,
+              // so the pick itself has to end the redirect.
+              if (activeOrganizationId && isOrganizationPageContinuation()) {
+                return false;
+              }
+
+              const organizations: { id: string }[] =
+                await auth.api.listOrganizations({
+                  headers,
+                });
+
+              return (
+                organizations.length !== 1 ||
+                organizations.at(0)?.id !== activeOrganizationId
+              );
+            },
+            consentReferenceId: ({ scopes, session }) => {
+              const needsOrganization = scopes.some(isMcpResourceScope);
+              if (!needsOrganization) {
+                return undefined;
+              }
+
+              const activeOrganizationId =
+                getSessionActiveOrganizationId(session);
+              if (!activeOrganizationId) {
+                throw new APIError("BAD_REQUEST", {
+                  error: "set_organization",
+                  message:
+                    "An organization must be selected before granting stella MCP access",
+                });
+              }
+
+              return activeOrganizationId;
+            },
+          },
+          customAccessTokenClaims: async ({ referenceId, user }) => {
+            if (user) {
+              requireDemoAccountAccess(
+                checkConfiguredDemoAccountAccess({
+                  email: user.email,
+                  operation: "growth",
+                }),
+              );
+            }
+            if (!referenceId || !user) {
+              return { org_id: referenceId };
+            }
+            // `member_id` pins the token to the membership row that minted it,
+            // so a later membership of the same user in the same organization
+            // (removal followed by re-invitation) is a different identity.
+            const row = await rootDb
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                and(
+                  eq(member.userId, user.id),
+                  eq(member.organizationId, referenceId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows.at(0));
+            if (!row) {
+              throw new APIError("FORBIDDEN", {
+                message: "The user is not a member of this organization",
+              });
+            }
+            return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+          },
         },
-      }),
+        {
+          verifiedOrigins: getVerifiedOAuthOrigins([
+            env.FRONTEND_URL,
+            getAuthIssuerUrl(),
+          ]),
+        },
+      ),
       oauthUiFragmentBridgePlugin,
     ],
     hooks: {

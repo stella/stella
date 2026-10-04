@@ -303,3 +303,7 @@ export const getNativeToolCatalog = ({
     ];
   });
 };
+
+export const getCuratedMcpOAuthApproval = (connectorUrl: string) =>
+  filterCatalogueByKind("mcp").find((entry) => entry.url === connectorUrl)
+    ?.oauthAuthorization ?? null;

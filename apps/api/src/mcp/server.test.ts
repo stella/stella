@@ -26,9 +26,14 @@ import {
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
+import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -56,6 +61,7 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
@@ -294,6 +300,89 @@ describe("handleMcpHttpRequest", () => {
     } finally {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("flags off still count the demo account's tool calls", async () => {
+    const previous = {
+      FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+      FEATURE_ACTION_COST_RECORDS: env.FEATURE_ACTION_COST_RECORDS,
+    };
+    Object.assign(env, {
+      FEATURE_ACTION_ADMISSION: false,
+      FEATURE_ACTION_COST_RECORDS: false,
+    });
+    try {
+      const demo = createTestDemoActionBudget({
+        demoUserId: toSafeId<"user">("user_1"),
+        nowMs: Date.UTC(2026, 0, 15),
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "get_document",
+        scope: "stella:read",
+        access: "read",
+        description: "Read a document",
+        inputSchema: { type: "object", properties: {} },
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "served" }],
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            demoActionBudget: demo.budget,
+          }),
+      });
+      const callTool = async () =>
+        await readTestJson<McpJsonResponse<CallToolResult>>(
+          await handler(
+            createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: "get_document", arguments: {} },
+            }),
+          ),
+        );
+
+      expect((await callTool()).result.isError).toBeFalsy();
+      expect(demo.count()).toBe(1);
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+
+      for (
+        let index = 1;
+        index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max;
+        index++
+      ) {
+        await withActionAdmission({
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          demoActionBudget: demo.budget,
+          run: async () => await Promise.resolve(undefined),
+        });
+      }
+      const refused = await callTool();
+      const item = refused.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(refused.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({ code: "action_period_exhausted" });
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+      expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
+    } finally {
+      Object.assign(env, previous);
     }
   });
 

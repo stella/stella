@@ -1,3 +1,4 @@
+// parser-output-unchanged: threads an optional static metadata URL schema; ordinary text normalization is unchanged
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -47,6 +48,8 @@ import {
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
+  OBSERVATION_DETAIL,
+  observationDetailOf,
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
   type PartialObservation,
@@ -95,14 +98,26 @@ export const partialObservationFromMetadata = (
   const value = isRecord(metadata)
     ? metadata[PARTIAL_OBSERVATION_KEY]
     : undefined;
-  return {
-    caseNumberIsPlaceholder:
-      isRecord(value) &&
-      value[PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER] === true,
-    isListingOnly:
-      isRecord(value) &&
-      value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true,
-  };
+  const caseNumberIsPlaceholder =
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER] === true;
+  if (
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true
+  ) {
+    return { caseNumberIsPlaceholder, detail: OBSERVATION_DETAIL.LISTING_ONLY };
+  }
+  if (
+    isRecord(value) &&
+    value[PARTIAL_OBSERVATION_FIELD.DETAIL] ===
+      OBSERVATION_DETAIL.SECONDARY_REFUSED
+  ) {
+    return {
+      caseNumberIsPlaceholder,
+      detail: OBSERVATION_DETAIL.SECONDARY_REFUSED,
+    };
+  }
+  return { caseNumberIsPlaceholder, detail: OBSERVATION_DETAIL.COMPLETE };
 };
 
 /**
@@ -119,6 +134,7 @@ export const markListingOnly = (
     [PARTIAL_OBSERVATION_KEY]: {
       ...(isRecord(stored) ? stored : {}),
       [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+      [PARTIAL_OBSERVATION_FIELD.DETAIL]: OBSERVATION_DETAIL.LISTING_ONLY,
     },
   };
 };
@@ -212,7 +228,10 @@ export const storedCaseNumberOf = (
  * same reason (`observedDocketOf`). The adapter's metadata keeps the docket
  * as the publisher wrote it.
  */
-export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
+export const sanitizeResult = (
+  result: RawIngestionResult,
+  metadataUrlSchema?: unknown,
+): IngestionResult => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -320,13 +339,15 @@ export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
   // Adapter metadata describes the publisher. Keep ingestion quality in a
   // reserved pipeline-owned marker so every court gets the same partial-row
   // upgrade/downgrade semantics without relying on court-specific keys.
+  const observationDetail = observationDetailOf(result);
   if (
     result.caseNumberIsPlaceholder === true ||
-    result.isListingOnly === true
+    observationDetail !== OBSERVATION_DETAIL.COMPLETE
   ) {
     metadata[PARTIAL_OBSERVATION_KEY] = {
       caseNumberIsPlaceholder: result.caseNumberIsPlaceholder === true,
-      isListingOnly: result.isListingOnly === true,
+      detail: observationDetail,
+      isListingOnly: observationDetail === OBSERVATION_DETAIL.LISTING_ONLY,
     };
   }
 
@@ -352,44 +373,52 @@ export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
-  return plainTextIngestionResult({
-    ...result,
-    caseNumber: storedCaseNumberOf(result),
-    caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-    identifiers,
-    sourceDocumentId,
-    sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-      (identity): identity is string =>
-        strip(identity) === identity && isPersistableSourceDocumentId(identity),
-    ),
-    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases?.filter(
-      (identity): identity is string =>
-        strip(identity) === identity && isPersistableSourceDocumentId(identity),
-    ),
-    legacySourceUrls: result.legacySourceUrls
-      ?.map((url) => strip(url))
-      .filter((url): url is string => url !== undefined),
-    legacyEcli: strip(result.legacyEcli),
-    sheetNumber: strip(result.sheetNumber),
-    fulltext: result.fulltext
-      ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-      : undefined,
-    ecli: strip(result.ecli),
-    decisionDate: boundDecisionDate(result.decisionDate),
-    decisionType: normalizeDecisionType(strip(result.decisionType)),
-    sourceUrl: strip(result.sourceUrl),
-    documentUrl: strip(result.documentUrl),
-    metadata,
-    textFields,
-    publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-      stripDangerousChars(cited),
-    ),
-    sections: result.sections?.map((section) => ({
-      ...section,
-      title: section.title === null ? null : stripDangerousChars(section.title),
-      text: collapseSpacedLetters(strip(section.text) ?? ""),
-    })),
-    documentAst,
-    sourceRaw: strip(result.sourceRaw),
-  });
+  return plainTextIngestionResult(
+    {
+      ...result,
+      observationDetail,
+      caseNumber: storedCaseNumberOf(result),
+      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+      identifiers,
+      sourceDocumentId,
+      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
+        (identity): identity is string =>
+          strip(identity) === identity &&
+          isPersistableSourceDocumentId(identity),
+      ),
+      sourceDocumentIdRepairAliases:
+        result.sourceDocumentIdRepairAliases?.filter(
+          (identity): identity is string =>
+            strip(identity) === identity &&
+            isPersistableSourceDocumentId(identity),
+        ),
+      legacySourceUrls: result.legacySourceUrls
+        ?.map((url) => strip(url))
+        .filter((url): url is string => url !== undefined),
+      legacyEcli: strip(result.legacyEcli),
+      sheetNumber: strip(result.sheetNumber),
+      fulltext: result.fulltext
+        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+        : undefined,
+      ecli: strip(result.ecli),
+      decisionDate: boundDecisionDate(result.decisionDate),
+      decisionType: normalizeDecisionType(strip(result.decisionType)),
+      sourceUrl: strip(result.sourceUrl),
+      documentUrl: strip(result.documentUrl),
+      metadata,
+      textFields,
+      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+        stripDangerousChars(cited),
+      ),
+      sections: result.sections?.map((section) => ({
+        ...section,
+        title:
+          section.title === null ? null : stripDangerousChars(section.title),
+        text: collapseSpacedLetters(strip(section.text) ?? ""),
+      })),
+      documentAst,
+      sourceRaw: strip(result.sourceRaw),
+    },
+    metadataUrlSchema,
+  );
 };

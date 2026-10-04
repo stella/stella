@@ -9,7 +9,7 @@ import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,6 +19,7 @@ import {
   clauseBodySchema,
   clauseExpectedBodySchema,
 } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -84,6 +85,10 @@ export const updateClauseHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateClauseProps) {
+  if (body.body !== undefined && body.snapshotVersion === true) {
+    yield* validateClauseBodyDirectives(body.body);
+  }
+
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.clauses.findFirst({
@@ -375,6 +380,7 @@ const config = {
     "limit. Pass expectedBody from your last read to require the working " +
     "copy still matches; a changed body returns a conflict without writing.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_clause" },
   params: updateClauseParamsSchema,
   body: updateClauseBodySchema,

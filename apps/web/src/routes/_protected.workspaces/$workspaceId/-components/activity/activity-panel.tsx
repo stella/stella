@@ -70,7 +70,6 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -89,6 +88,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   FULL_DATE_LONG_TIME_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
@@ -462,26 +462,26 @@ const ActivityAdvancedFilters = ({
                       .then((result) => {
                         if (result.isError) {
                           getAnalytics().captureError(result.error);
-                          stellaToast.add({
-                            description: userErrorFromThrown(
-                              result.error,
-                              t("common.unexpectedError"),
-                            ),
-                            title: t("errors.actionFailed"),
-                            type: "error",
-                          });
+                          notifyUserError(
+                            result.error,
+                            t("errors.actionFailed"),
+                            {
+                              description: userErrorFromThrown(
+                                result.error,
+                                t("common.unexpectedError"),
+                              ),
+                            },
+                          );
                         }
                         return result;
                       })
                       .catch((error: unknown) => {
                         getAnalytics().captureError(error);
-                        stellaToast.add({
+                        notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
                             t("common.unexpectedError"),
                           ),
-                          title: t("errors.actionFailed"),
-                          type: "error",
                         });
                       });
                     detached(request, "activity-panel.fetch-actors");
@@ -572,13 +572,12 @@ const ActivityExportMenu = ({
     setExporting(false);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({
-        title:
-          APIError.is(result.error) && result.error.status === 413
-            ? t("settings.organization.auditLogsExportTooLarge")
-            : t("workspaces.views.exportFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        result.error,
+        APIError.is(result.error) && result.error.status === 413
+          ? t("settings.organization.auditLogsExportTooLarge")
+          : t("workspaces.views.exportFailed"),
+      );
       return;
     }
 
@@ -606,10 +605,7 @@ const ActivityExportMenu = ({
     detached(
       exportActivity(format).catch((error: unknown) => {
         getAnalytics().captureError(error);
-        stellaToast.add({
-          title: t("workspaces.views.exportFailed"),
-          type: "error",
-        });
+        notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
     );
@@ -670,23 +666,19 @@ const ActivityTimeline = ({
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
           getAnalytics().captureError(result.error);
-          stellaToast.add({
+          notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
               t("common.unexpectedError"),
             ),
-            title: t("errors.actionFailed"),
-            type: "error",
           });
         }
         return result;
       })
       .catch((error: unknown) => {
         getAnalytics().captureError(error);
-        stellaToast.add({
+        notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
-          title: t("errors.actionFailed"),
-          type: "error",
         });
       });
     detached(request, "activity-panel.fetch-next-page");

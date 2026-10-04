@@ -22,6 +22,9 @@ const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
+const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
+const LEGACY_DOCUMENT_DATE_INDEX =
+  "case_law_decisions_document_pending_date_idx";
 const ACCOUNT_INDEX = "account_provider_account_id_uidx";
 const LEGACY_ACCOUNT_INDEX = "account_issuer_account_id_uidx";
 const FILTER_INDEX_CUTOVER = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
@@ -35,6 +38,11 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+const CLEANUP_STALL_CONSTRAINTS = [
+  "corpus_index_projection_intents_status_values",
+  "corpus_index_projection_intents_status_shape",
+  "corpus_index_projection_intents_delete_reissues_nonnegative",
+] as const;
 
 describe("online migrations", () => {
   /**
@@ -205,6 +213,46 @@ describe("online migrations", () => {
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
     );
+  });
+
+  test("retires the broad document index only after its exact replacement validates", async () => {
+    const harness = createHarness({
+      indexStates: { [DOCUMENT_DATE_INDEX]: [undefined, true] },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    const createOffset = indexOfStatement(
+      harness.statements,
+      `${CREATE_INDEX_FRAGMENT} "${DOCUMENT_DATE_INDEX}"`,
+    );
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_DOCUMENT_DATE_INDEX}"`,
+    );
+    expect(createOffset).toBeGreaterThan(-1);
+    expect(dropOffset).toBeGreaterThan(createOffset);
+  });
+
+  test("preserves the broad document index when its replacement loses validity", async () => {
+    const harness = createHarness({
+      indexStates: { [DOCUMENT_DATE_INDEX]: [true, false] },
+    });
+
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Required migration index ${DOCUMENT_DATE_INDEX} is not ready`,
+    });
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, LEGACY_DOCUMENT_DATE_INDEX),
+    ).toBe(-1);
   });
 
   test("retires the account issuer index only after its replacement validates", async () => {
@@ -425,6 +473,54 @@ describe("online migrations", () => {
     ).toBe(-1);
     expect(
       indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("validates the cleanup-stall checks without walking the intents", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: CLEANUP_STALL_CONSTRAINTS,
+    });
+
+    await runOnlineMigrations(harness.pool);
+    await assertOnlineMigrationsApplied(harness.pool);
+
+    for (const constraint of CLEANUP_STALL_CONSTRAINTS) {
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `VALIDATE CONSTRAINT "${constraint}"`,
+        ),
+      ).toBeGreaterThan(-1);
+    }
+    expect(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated cleanup-stall check without repairing", async () => {
+    const [constraint] = CLEANUP_STALL_CONSTRAINTS;
+    const harness = createHarness({ unvalidatedConstraints: [constraint] });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: `Online repair corpus-projection-cleanup-stall is not complete: constraint ${constraint} is not validated`,
+    });
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `VALIDATE CONSTRAINT "${constraint}"`,
+      ),
     ).toBe(-1);
     expect(harness.released()).toBe(true);
   });

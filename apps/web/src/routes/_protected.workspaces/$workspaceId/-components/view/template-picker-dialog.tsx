@@ -44,6 +44,7 @@ import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -129,11 +130,8 @@ export const TemplatePickerDialog = ({
             detached(startWorkflow(), "template-picker-dialog.start-workflow");
           }
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToCreateView"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToCreateView"));
         },
       },
     );
@@ -152,11 +150,8 @@ export const TemplatePickerDialog = ({
           onCreated(newId);
           onOpenChange(false);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToCreateView"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToCreateView"));
         },
       },
     );
@@ -172,11 +167,8 @@ export const TemplatePickerDialog = ({
             type: "success",
           });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToDeleteTemplate"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToDeleteTemplate"));
         },
       },
     );

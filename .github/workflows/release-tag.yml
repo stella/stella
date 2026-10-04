@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
   statuses: read
+  actions: read
+  issues: read
 
 concurrency:
   group: release-tag
@@ -38,6 +40,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_SHA: ${{ inputs.sha }}
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve the trusted release guard
+        run: cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
 
       - name: Checkout the verified commit
         env:
@@ -77,6 +82,7 @@ jobs:
 
       - name: Push tag
         env:
+          RELEASE_HEALTH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
           # Injected only for this step: the App token never touches disk via
@@ -84,6 +90,7 @@ jobs:
           # scripts) run without it available.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA"
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           git tag -a "$TAG" "$RELEASE_SHA" -m "$TAG"

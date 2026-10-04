@@ -1,3 +1,10 @@
+import { panic } from "better-result";
+import { afterEach, describe, expect, test } from "bun:test";
+
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * What this adapter makes of the payloads SAOS actually serves.
  *
@@ -8,14 +15,6 @@
  * complement — it fills every field so the conformance suites can exercise
  * every disposition, which no single real decision does.
  */
-
-import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
-
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceRawParts,
@@ -27,12 +26,17 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -336,6 +340,29 @@ describe("pl-courts document the parser cannot read", () => {
   });
 });
 
+describe("pl-courts nested tables", () => {
+  test("a nested table row appears once in the assembled decision", async () => {
+    const row = await rowById(DUMP_PAGE, 332_735);
+    const nestedTable = [
+      "<table><tbody><tr><td><p>Outer cell</p>",
+      "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
+      "</td></tr></tbody></table>",
+    ].join("");
+    const decision = decisionFrom({
+      listingRow: { ...row, textContent: nestedTable },
+      detail: null,
+    });
+
+    expect(decision.fulltext?.split("Nested cell")).toHaveLength(2);
+    const tables =
+      "blocks" in decision.documentAst
+        ? decision.documentAst.blocks.filter((block) => block.type === "table")
+        : [];
+    expect(tables).toHaveLength(1);
+    expect(tables.at(0)?.rows).toHaveLength(1);
+  });
+});
+
 describe("pl-courts replays a stored row", () => {
   const reparse =
     plCourtsAdapter.reparseStoredRaw ??
@@ -396,6 +423,138 @@ describe("pl-courts replays a stored row", () => {
 
     expect(outcome.type).toBe("rejected");
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(String(entry.input), async () => {
+      const { input } = entry;
+      const recorded = await detailRecord(CHAMBER_DETAIL);
+      const division = isRecord(recorded["division"])
+        ? recorded["division"]
+        : {};
+      const court = isRecord(division["court"]) ? division["court"] : {};
+      const source = isRecord(recorded["source"]) ? recorded["source"] : {};
+      const decision = decisionFrom({
+        listingRow: recorded,
+        detail: {
+          ...recorded,
+          href: input,
+          division: {
+            ...division,
+            href: input,
+            court: { ...court, href: input },
+            chamber: { id: 1, name: "Chamber", href: input },
+          },
+          chambers: [{ id: 1, name: "Chamber", href: input }],
+          source: { ...source, judgmentUrl: input },
+        },
+      });
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_COURTS_METADATA_URL_SCHEMA,
+        ),
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap();
+      const addresses = [
+        "href",
+        "division.href",
+        "division.court.href",
+        "division.chamber.href",
+        "chambers[0].href",
+        "source.judgmentUrl",
+      ];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            const expected =
+              input === null && address === "href"
+                ? recorded["href"]
+                : entry.expected;
+            expect(metadata).toHaveProperty(address, expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+        }
+        if ("reason" in entry) {
+          expect(metadata).toHaveProperty(
+            "metadataUrlDiagnostics.entries",
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
+  }
+});
+
+test("SAOS preserves publisher nulls and an opaque string division chamber", async () => {
+  const recorded = await detailRecord(CHAMBER_DETAIL);
+  const decision = decisionFrom({
+    listingRow: { ...recorded, href: null, chambers: null },
+    detail: {
+      ...recorded,
+      href: null,
+      division: { id: 1, name: "Division", href: null, chamber: "Izba" },
+      chambers: null,
+    },
+  });
+  expect(decision.metadata).not.toHaveProperty("href");
+  expect(decision.metadata).toHaveProperty("division.href", null);
+  expect(decision.metadata).toHaveProperty("division.chamber", "Izba");
+  expect(decision.metadata).toHaveProperty("chambers", null);
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+});
+
+test("SAOS detail null URLs and chambers fall back to the listing", async () => {
+  const recorded = await detailRecord(CHAMBER_DETAIL);
+  const url = "https://publisher.example/item?a=1&amp;b=2";
+  const decision = decisionFrom({
+    listingRow: {
+      ...recorded,
+      href: url,
+      chambers: [{ id: 1, name: "Chamber", href: url }],
+    },
+    detail: { ...recorded, href: null, chambers: null },
+  });
+  expect(decision.metadata).toHaveProperty("href", url);
+  expect(decision.metadata).toHaveProperty("chambers[0].href", url);
 });
 
 describe("SAOS detail refusals preserve the dump crawl's storage policy", () => {

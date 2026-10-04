@@ -39,6 +39,7 @@ import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isDocumentTypeClassifierShape } from "@/api/lib/properties/create-schema";
+import type { ContentReadDb } from "@/api/lib/root-scoped-db";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
@@ -660,7 +661,7 @@ export const findDocTypePropertyId = (
 };
 
 type BuildReportDataArgs = {
-  safeDb: SafeDb;
+  safeDb: ContentReadDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   currentUserId: SafeId<"user">;

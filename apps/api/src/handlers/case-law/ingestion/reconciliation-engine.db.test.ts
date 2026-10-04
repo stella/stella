@@ -9,6 +9,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -23,7 +24,10 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
@@ -41,10 +45,12 @@ import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-abso
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   EMPTY_AST,
@@ -57,6 +63,8 @@ import type {
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -2156,5 +2164,138 @@ test("a build that throws without a code reports the frame that threw", async ()
   for (const value of Object.values(failure ?? {})) {
     expect(String(value)).not.toContain("undefined is not an object");
     expect(String(value)).not.toContain("row.shape");
+  }
+});
+
+test("pipeline metadata classification follows the persisted source adapter", async () => {
+  const sourceId = await seedSource();
+  try {
+    expect(
+      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+    ).toBeUndefined();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.CZ_NS })
+      .where(eq(caseLawSources.id, sourceId));
+    expect(
+      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+    ).toBeUndefined();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, sourceId));
+    expect(await resolveSourceMetadataUrlSchema(sourceId, scopedDb)).toEqual(
+      metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+    );
+  } finally {
+    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+  }
+});
+
+test("metadata classification rejects a missing persisted source", async () => {
+  const absentSourceId = createSafeId<"caseLawSource">();
+  expect(
+    await rejectionOf(resolveSourceMetadataUrlSchema(absentSourceId, scopedDb)),
+  ).toHaveProperty("message", expect.stringContaining("is absent"));
+});
+
+test("reconciliation persists registered root and nested URLs without caller schema overrides", async () => {
+  const fake = startFakeS3();
+  const sourceId = await seedSource();
+  const stated =
+    "https://example.test/?first=&amp;amp;&second=&#x26;&third=%26";
+  const sourceRaw = JSON.stringify({
+    href: stated,
+    division: { href: stated },
+    invalid: "ftp://example.test/private",
+  });
+  try {
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, sourceId));
+    await seedWalkableSlice(sourceId);
+    const decision = plainTextIngestionResult(
+      {
+        caseNumber: "II K 123/26",
+        sourceDocumentId: "registered-url-reconciliation",
+        court: "Sąd Rejonowy",
+        country: "POL",
+        language: "pl",
+        metadata: checkedDecisionMetadata(
+          {
+            href: toMetadataUrl(stated, "transport-json"),
+            division: { href: toMetadataUrl(stated, "transport-json") },
+            source: {
+              judgmentUrl: toMetadataUrl(
+                "ftp://example.test/private",
+                "transport-json",
+              ),
+            },
+          },
+          PL_COURTS_METADATA_URL_SCHEMA,
+        ),
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: new Bun.CryptoHasher("sha256").update(sourceRaw).digest("hex"),
+        sourceRaw,
+        sourceRawContentType: "application/json",
+        documentAst: EMPTY_AST,
+      },
+      PL_COURTS_METADATA_URL_SCHEMA,
+    );
+    const outcome = await runUnit(sourceId, {
+      ...stubReconciliation,
+      listSlicePage: async () =>
+        await Promise.resolve({
+          items: [
+            {
+              identity: {
+                type: "document",
+                sourceDocumentId: "registered-url-reconciliation",
+              },
+              payload: { href: stated },
+            },
+          ],
+          totalPages: 1,
+        }),
+      buildDecision: async () =>
+        await Promise.resolve({ type: "built", decision, companions: [] }),
+    });
+    expect(outcome).toMatchObject({ type: "worked", summary: { written: 1 } });
+    const row = (
+      await db
+        .select({
+          metadata: caseLawDecisions.metadata,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+        .limit(1)
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      href: stated,
+      division: { href: stated },
+      metadataUrlDiagnostics: {
+        entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
+    });
+    expect(row?.sourceRawS3Key).toBeDefined();
+    const rawObject = [...fake.objects.entries()]
+      .find(
+        ([key]) =>
+          row?.sourceRawS3Key !== null &&
+          row?.sourceRawS3Key !== undefined &&
+          key.endsWith(`/${row.sourceRawS3Key}`),
+      )
+      ?.at(1);
+    expect(rawObject).toBeDefined();
+    expect({ value: rawObject }).toHaveProperty(
+      "value.bytes",
+      new TextEncoder().encode(sourceRaw),
+    );
+  } finally {
+    fake.stop();
+    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
   }
 });

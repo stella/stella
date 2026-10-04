@@ -536,7 +536,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `templates.condition-decisions.get` | read | stella:templates | — | curated tool `preview_template_conditions` |
 | `templates.create` | write | stella:templates | — | curated tool `create_template` |
 | `templates.delete` | write, destructive | stella:templates | — | generic invoke → `stella capability templates delete` |
-| `templates.discover` | read | stella:templates | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. templates.get covers part of this: returns the discovered fields of a template already stored; it cannot inspect a newly supplied DOCX |
+| `templates.discover` | read | stella:templates | — | generic invoke → `stella capability templates discover` (JSON mode only: `file` cannot be supplied) |
 | `templates.document.update` | write | stella:templates | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the new template version IS the edited DOCX body; no capability accepts that body as JSON |
 | `templates.fields.suggest` | write | stella:templates | — | generic invoke → `stella capability templates fields-suggest` |
 | `templates.fill` | write | stella:templates | — | curated tool `fill_template` |
@@ -665,20 +665,20 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 17 |
+| auth_plumbing | 18 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| hosted_billing | 6 |
-| mcp_transport | 11 |
+| hosted_billing | 7 |
+| mcp_transport | 12 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
-| public_indexing | 7 |
+| public_indexing | 8 |
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 10 |
-| upload_mechanics | 15 |
+| upload_mechanics | 19 |
 | url_preview | 2 |
