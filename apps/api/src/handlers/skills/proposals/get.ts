@@ -6,7 +6,7 @@ import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkillRevisions } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +21,7 @@ const config = {
     "Read one change proposal for an agent skill, with its proposed body and " +
     "the body of the revision it branched from, so the two can be diffed.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

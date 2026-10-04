@@ -2245,7 +2245,7 @@ const readCreateTemplateDocx = async ({
     };
   }
 
-  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
+  const validation = await validateDocxBuffer(buffer);
   if (!validation.valid) {
     return {
       status: "error",

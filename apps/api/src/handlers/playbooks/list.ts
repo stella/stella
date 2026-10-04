@@ -1,4 +1,4 @@
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 import {
@@ -12,6 +12,7 @@ const config = {
     "each with its scope, status, and approval metadata. Read one playbook's " +
     "positions in full with playbooks.get.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_playbooks" },
   access: "read",
   query: listPlaybookDefinitionsQuerySchema,

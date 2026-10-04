@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -19,6 +19,7 @@ const config = {
     "(value: integer, optional currency: 3-letter ISO code). An empty value " +
     "clears the cell.",
   permissions: FIELD_VALUE_WRITE_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "set_field_value" },
   body: t.Object({
     propertyId: tSafeId("property", {

@@ -8,6 +8,7 @@ import {
   startFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -26,6 +27,7 @@ const config = {
   description:
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
