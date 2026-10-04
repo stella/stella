@@ -150,6 +150,7 @@ describe("a matter handler's declared resource sets", () => {
   ]) {
     test(`a ${realtime.scope} broadcast failure preserves the committed result and is captured`, async () => {
       const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
       let committed = false;
       let attempts = 0;
       const payload = { ok: true };
@@ -174,10 +175,11 @@ describe("a matter handler's declared resource sets", () => {
         );
         expect(attempts).toBe(1);
         expect(analytics.exceptions()).toHaveLength(1);
-        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+        expect(logs.at("ERROR").at(0)?.attributes).toMatchObject({
           "failure.sink": "resource-set-realtime.announce",
         });
       } finally {
+        logs.restore();
         analytics.restore();
       }
     });
