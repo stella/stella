@@ -1103,7 +1103,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
       await executeCheckCommands({
         commands,
         dryRun: options.dryRun,
-        runner: (command) =>
+        runner: async (command) =>
           command === fallbackCommand
             ? runFullFallback(leg)
             : runCheck(command),
