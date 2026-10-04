@@ -67,7 +67,9 @@ describe("unread listed items", () => {
     expect(spent.streaks).toEqual({});
     expect(spent.terminal.map((row) => row.sourceDocumentId)).toEqual(["a"]);
     const marker = spent.terminal.at(0)?.metadata[READ_OUTCOME_METADATA_KEY];
-    expect(isStoredReadUnavailable(marker)).toBe(true);
+    if (!isStoredReadUnavailable(marker)) {
+      throw new Error("expected a stored unavailable outcome");
+    }
     expect(marker).toEqual({
       type: "unavailable",
       scope: "document",
@@ -105,7 +107,11 @@ describe("unread listed items", () => {
       { t: UNAVAILABLE_CYCLES_BEFORE_MARKING - 1 },
     );
 
-    expect(plan.terminal.at(0)?.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+    const marker = plan.terminal.at(0)?.metadata[READ_OUTCOME_METADATA_KEY];
+    if (!isStoredReadUnavailable(marker)) {
+      throw new Error("expected a stored unavailable outcome");
+    }
+    expect(marker).toEqual({
       type: "unavailable",
       scope: "document",
       cause: { kind: "thrown" },
