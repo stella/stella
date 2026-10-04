@@ -26,6 +26,7 @@ import {
   type DecisionQueryIntent,
   namedDecisionsOf,
 } from "@stll/api-contract/decision-query-intent";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   DEFAULT_SEARCH_EXCERPT,
   SEARCH_SORTS,
@@ -151,10 +152,8 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { optionalUuidSearchSchema } from "@/lib/schema";
+import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 import { ssrStatusHeaders } from "@/ssr-response-status";
-
-/** What the route accepts in `q`, and therefore what the field may hold. */
-const MAX_QUERY_LENGTH = 256;
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
@@ -214,7 +213,7 @@ const searchSchema = v.object({
   lang: optionalBrowseStringSchema(16),
   page: publicLawPageSearchSchema,
   pageSize: publicLawPageSizeSearchSchema,
-  q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
+  q: optionalLawSearchQuerySchema,
   // The organization's questions this search draws, in order. Read leniently
   // like the rest; an id the reader's organization does not hold is not drawn.
   questions: v.fallback(
@@ -1054,7 +1053,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
       <CaseLawSearch
         country={countryParam}
-        maxLength={MAX_QUERY_LENGTH}
+        maxLength={SEARCH_QUERY_MAX_LENGTH}
         onQueryChange={handleQueryChange}
         onRefined={searchRefinedQuery}
         onSubmit={openSingleMatch}

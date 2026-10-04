@@ -121,15 +121,19 @@ export const runBackgroundJob = async <T>({
   if (Result.isOk(result)) {
     return result.value;
   }
-  if (
-    executionState.phase === "started" ||
-    !ActionAdmissionError.is(result.error)
-  ) {
-    throw result.error;
+  const refusal = result.error;
+  if (executionState.phase === "started" || !ActionAdmissionError.is(refusal)) {
+    throw refusal;
   }
   // Refusals before execution wait for a fresh lease without consuming retries.
+  // A refusal that knows its reset waits for it (BullMQ has no delay ceiling),
+  // spread over one initial backoff so deferred jobs do not resume at once.
+  const { retryAtMs } = refusal;
   await job.moveToDelayed(
-    now() + admissionRetryDelayMs(job.attemptsStarted ?? 1, random),
+    retryAtMs === undefined
+      ? now() + admissionRetryDelayMs(job.attemptsStarted ?? 1, random)
+      : Math.max(now(), retryAtMs) +
+          Math.floor(random() * INITIAL_ADMISSION_RETRY_MS),
     job.token,
   );
   throw new DelayedError();
