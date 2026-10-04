@@ -17,6 +17,7 @@ import type {
   IngestionItem,
   IngestionResult,
   SyncPage,
+  UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -199,7 +200,8 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   /**
    * Transform a single raw item into a decision, or a supplement to one.
    * May perform secondary fetches (detail pages, fulltext).
-   * Return null to skip the item.
+   * Return null to skip the item, and `unread` for a listed item whose read
+   * did not produce it: the pipeline decides what that costs the page.
    */
   parseItem: (
     item: unknown,
@@ -207,6 +209,7 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   ) => Promise<
     | IngestionItem
     | { type: "item_build_failed"; decision: IngestionResult | null }
+    | { type: "unread"; item: UnreadListedItem }
     | null
   >;
   /**
@@ -610,6 +613,7 @@ const materialiseConfiguredWalks = ({
 type ParsedPageItems = {
   decisions: IngestionResult[];
   supplements: DecisionSupplement[];
+  unreadItems: UnreadListedItem[];
   itemsSkipped: number;
   processedThroughIndex: number;
 };
@@ -633,6 +637,7 @@ const parsePageItems = async ({
 }: ParsePageItemsOptions): Promise<ParsedPageItems> => {
   const decisions: IngestionResult[] = [];
   const supplements: DecisionSupplement[] = [];
+  const unreadItems: UnreadListedItem[] = [];
   let itemsSkipped = 0;
   let processedThroughIndex = 0;
   const chunkSize = Math.max(1, itemConcurrency ?? 1);
@@ -662,6 +667,9 @@ const parsePageItems = async ({
           case "supplement":
             supplements.push(item.supplement);
             break;
+          case "unread":
+            unreadItems.push(item.item);
+            break;
           case "item_build_failed":
             itemsSkipped++;
             if (item.decision !== null) {
@@ -688,7 +696,13 @@ const parsePageItems = async ({
       total: items.length,
     });
   }
-  return { decisions, supplements, itemsSkipped, processedThroughIndex };
+  return {
+    decisions,
+    supplements,
+    unreadItems,
+    itemsSkipped,
+    processedThroughIndex,
+  };
 };
 
 const resolveNextCursor = ({
@@ -950,8 +964,13 @@ export const createPagePaginatedFetch = <TResponse>(
           parseItem: opts.parseItem,
           signal,
         });
-        const { decisions, supplements, itemsSkipped, processedThroughIndex } =
-          parsedItems;
+        const {
+          decisions,
+          supplements,
+          unreadItems,
+          itemsSkipped,
+          processedThroughIndex,
+        } = parsedItems;
 
         const totalMs = Math.round(performance.now() - fetchT0);
         logger.info("case_law.ingestion.page_completed", {
@@ -1039,6 +1058,7 @@ export const createPagePaginatedFetch = <TResponse>(
                 },
               }),
           ...(supplements.length === 0 ? {} : { supplements }),
+          ...(unreadItems.length === 0 ? {} : { unreadItems }),
           nextCursor,
           sourceUrl: url,
         });

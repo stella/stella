@@ -30,6 +30,10 @@ import {
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  planUnreadItems,
+  type UnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   isReadRefusal,
@@ -37,7 +41,9 @@ import {
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
   type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   type IngestionResult,
@@ -187,9 +193,28 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         );
         const page = await skCourtsAdapter.fetchPage(cursor, {});
         if (outcome === "unreadable") {
-          // Fail closed on a record this adapter cannot read: the page is
-          // read again rather than stored without it.
-          expect(page.isErr()).toBe(true);
+          // A record this adapter cannot read is an unread item, never a
+          // page failure: the pipeline holds the page for a bounded number
+          // of cycles, so one malformed record cannot pin the cursor.
+          const { decisions, unreadItems } = page.unwrap();
+          expect(
+            Bun.deepEquals(
+              decisions.map(({ caseNumber }) => caseNumber),
+              Array.from({ length: 99 }, () => good.spisovaZnacka),
+            ),
+          ).toBe(true);
+          expect(unreadItems).toHaveLength(1);
+          const unread = unreadItems?.at(0);
+          expect(unread?.listing.sourceDocumentId).toBe("bad-detail");
+          expect(unread?.listing.caseNumber).toBe(bad.spisovaZnacka);
+          expect(unread?.listing.isListingOnly).toBe(true);
+          expect(unread?.outcome.type).toBe("unavailable");
+          expect(
+            unread?.outcome.type === "unavailable" &&
+              unread.outcome.cause.kind === "thrown"
+              ? unread.outcome.cause.error
+              : undefined,
+          ).toBeInstanceOf(FetchBoundaryError);
           return;
         }
         expect(page.isOk()).toBe(true);
@@ -815,11 +840,34 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
     },
   );
 
+  /** The recorded listing row, served as a one-item page, with `answer` for its record. */
+  const serveRecordedListing = async (
+    answer: () => Response,
+  ): Promise<Record<string, unknown>> => {
+    const stored = await storedDecision(TRANSFERRED_FILE_ID);
+    const raw: unknown = JSON.parse(stored.sourceRaw);
+    const listing = isRecord(raw) ? raw["listItem"] : undefined;
+    if (!isRecord(listing)) {
+      return panic("the recorded decision has no listing item");
+    }
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.searchParams.has("page")) {
+        return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+      }
+      if (url.pathname.includes("/v1/sud/")) {
+        return new Response("registry unavailable", { status: 404 });
+      }
+      return await Promise.resolve(answer());
+    });
+    return listing;
+  };
+
   test.each([
     ["500", () => new Response("", { status: 500 })],
     ["204", () => new Response(null, { status: 204 })],
     ["empty 200", () => new Response("")],
-    ["429", () => new Response("", { status: 429 })],
+    ["malformed 200", () => Response.json({ ecli: 42 })],
     [
       "timeout",
       () => {
@@ -827,29 +875,44 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       },
     ],
   ] as const)(
-    "a detail read answering %s fails the page, so its cursor is kept",
+    "a detail read answering %s is an unread item that holds the page for a bounded number of cycles",
     async (_label, answer) => {
-      const stored = await storedDecision(TRANSFERRED_FILE_ID);
-      const raw: unknown = JSON.parse(stored.sourceRaw);
-      const listing = isRecord(raw) ? raw["listItem"] : undefined;
-      if (!isRecord(listing)) {
-        panic("the recorded decision has no listing item");
-      }
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.searchParams.has("page")) {
-          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
-        }
-        if (url.pathname.includes("/v1/sud/")) {
-          return new Response("registry unavailable", { status: 404 });
-        }
-        return await Promise.resolve(answer());
-      });
+      const listing = await serveRecordedListing(answer);
 
-      const page = await skCourtsAdapter.fetchPage(null, {});
-      expect(page.isErr()).toBe(true);
+      let streaks: UnavailableStreaks = {};
+      for (let cycle = 1; cycle <= UNAVAILABLE_CYCLES_BEFORE_MARKING; cycle++) {
+        const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+        expect(page.decisions).toEqual([]);
+        expect(page.unreadItems).toHaveLength(1);
+        const unread = page.unreadItems?.at(0);
+        expect(unread?.listing.sourceDocumentId).toBe(TRANSFERRED_FILE_ID);
+        expect(unread?.listing.isListingOnly).toBe(true);
+        expect(unread?.outcome.type).toBe("unavailable");
+        const parts = decodeSourceRawEnvelope(unread?.listing.sourceRaw ?? "");
+        expect(parts?.["listing"]).toBe(JSON.stringify(listing));
+        expect(parts?.["detail"]).toBeUndefined();
+
+        const plan = planUnreadItems(page.unreadItems, streaks);
+        if (cycle < UNAVAILABLE_CYCLES_BEFORE_MARKING) {
+          expect(plan.holding).toBe(1);
+          expect(plan.terminal).toEqual([]);
+          streaks = plan.streaks;
+          continue;
+        }
+        // The bound is spent: the listing is stored with the typed outcome
+        // and the page advances.
+        expect(plan.holding).toBe(0);
+        expect(plan.streaks).toEqual({});
+        expect(plan.terminal).toHaveLength(1);
+        const terminal = plan.terminal.at(0);
+        expect(terminal?.isListingOnly).toBe(true);
+        expect(terminal?.sourceDocumentId).toBe(TRANSFERRED_FILE_ID);
+        const outcome = storedOutcome(terminal);
+        expect(outcome.type).toBe("unavailable");
+        expect(
+          outcome.type === "unavailable" ? outcome.consecutiveCycles : 0,
+        ).toBe(UNAVAILABLE_CYCLES_BEFORE_MARKING);
+      }
 
       const reconciliation = requireReconciliation(skCourtsAdapter);
       expect(reconciliation.heldRequiresDetail).toBe(true);
@@ -858,4 +921,22 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       });
     },
   );
+
+  test("a served-no-record detail is listing-only at once, never an unread item", async () => {
+    await serveRecordedListing(() => Response.json({}));
+    const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+    expect(page.unreadItems).toBeUndefined();
+    expect(page.decisions).toHaveLength(1);
+    expect(page.decisions.at(0)?.isListingOnly).toBe(true);
+    expect(storedOutcome(page.decisions.at(0))).toEqual({
+      type: "absent",
+      evidence: "publisher-typed-absence",
+    });
+  });
+
+  test("a detail read answering 429 fails the page, so its cursor is kept", async () => {
+    await serveRecordedListing(() => new Response("", { status: 429 }));
+    const page = await skCourtsAdapter.fetchPage(null, {});
+    expect(page.isErr()).toBe(true);
+  });
 });
