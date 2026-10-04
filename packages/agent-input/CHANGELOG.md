@@ -1,5 +1,12 @@
 # @stll/agent-input
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`6a78bd5`](https://github.com/stella/stella/commit/6a78bd510e807883521924bbaf38afe2be5e84f3)]:
+  - @stll/time@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes
