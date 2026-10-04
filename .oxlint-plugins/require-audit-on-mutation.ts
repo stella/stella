@@ -24,6 +24,7 @@
 //     `.transaction(...)` callback or typed as a transaction.
 //   - `<receiver>.execute(sql`...`)` whose static SQL inserts, updates, or
 //     deletes rows.
+// (`isDatabaseWriteCall` in utils.ts owns this detection.)
 //
 // Allows:
 //   - The function calls an audit recorder: the handler context's injected
@@ -41,10 +42,9 @@ import type { Ranged, Variable } from "@oxlint/plugins";
 
 import {
   type ImportedFromOptions,
-  getCalleeName,
   invokedCallee,
   isAstNode,
-  isIdentifier,
+  isDatabaseWriteCall,
   isIdentifierReference,
   isImportedFrom,
   memberPropertyName,
@@ -56,30 +56,6 @@ import {
 } from "./utils.ts";
 
 type RuleContext = ImportedFromOptions["context"];
-
-const MUTATION_METHODS: ReadonlySet<string> = new Set([
-  "insert",
-  "update",
-  "delete",
-]);
-
-const isDatabaseHandleName = (name: string): boolean =>
-  name === "tx" ||
-  name === "db" ||
-  name === "trx" ||
-  /[a-z](?:Tx|Db)$/u.test(name);
-
-const GET_DB_CALL = /^get[A-Za-z]*Db$/u;
-const TRANSACTION_TYPE = /(?:^|[a-z])(?:Transaction|Tx)$|^(?:Db|DbOrTx)$/u;
-
-// Static SQL that writes rows. Interpolations are joined as a placeholder
-// token so `UPDATE ${table} AS t SET` still reads as one statement.
-const WRITE_SQL = [
-  /\bINSERT\s+INTO\b/iu,
-  /\bDELETE\s+FROM\b/iu,
-  /\bUPDATE\s+(?:ONLY\s+)?\S+(?:\s+(?:AS\s+)?\w+)?\s+SET\b/iu,
-];
-const SQL_PLACEHOLDER = " __value__ ";
 
 const AUDIT_RECORDER_NAME =
   /^(?:record[A-Z][A-Za-z0-9]*?AuditEvents?|recordAuditEvent)$/u;
@@ -104,11 +80,6 @@ const AUDIT_RECORDER_FACTORIES: ReadonlySet<string> = new Set([
   "createAuditRecorder",
   "createBackgroundAuditRecorder",
 ]);
-const DRIZZLE_SQL: ReadonlySet<string> = new Set(["sql"]);
-
-const isDrizzleModule = (moduleId: string): boolean =>
-  moduleId === "drizzle-orm" || moduleId.startsWith("drizzle-orm/");
-
 // Guards the identifier-to-initializer walks against cycles.
 const MAX_RESOLVE_DEPTH = 4;
 
@@ -121,134 +92,6 @@ const isJustifiedSkipDirective = (text: string): boolean => {
   const reason = SKIP_DIRECTIVE.exec(text)?.groups?.reason ?? "";
   const words = reason.split(/\s+/u).filter((word) => /\p{L}/u.test(word));
   return words.length >= MIN_SKIP_REASON_WORDS;
-};
-
-const typeAnnotationName = (identifier: unknown): string | null => {
-  if (!isAstNode(identifier) || !isAstNode(identifier.typeAnnotation)) {
-    return null;
-  }
-  const annotation = identifier.typeAnnotation.typeAnnotation;
-  if (!isAstNode(annotation) || annotation.type !== "TSTypeReference") {
-    return null;
-  }
-  const typeName = annotation.typeName;
-  if (isIdentifier(typeName)) {
-    return typeName.name;
-  }
-  return isAstNode(typeName) && typeName.type === "TSQualifiedName"
-    ? getCalleeName(typeName.right)
-    : null;
-};
-
-// Whether a function is the callback of `<handle>.transaction(...)`.
-const isTransactionCallback = (fn: unknown): boolean => {
-  const call = isAstNode(fn) ? fn.parent : null;
-  if (!isAstNode(call) || call.type !== "CallExpression") {
-    return false;
-  }
-  const callee = unwrapExpression(call.callee);
-  return (
-    callee?.type === "MemberExpression" &&
-    memberPropertyName(callee) === "transaction" &&
-    Array.isArray(call.arguments) &&
-    call.arguments.includes(fn)
-  );
-};
-
-const isTransactionParameter = (variable: Variable): boolean => {
-  const definition = variable.defs.at(0);
-  if (variable.defs.length !== 1 || definition?.type !== "Parameter") {
-    return false;
-  }
-  const typeName = typeAnnotationName(definition.name);
-  return (
-    (typeName !== null && TRANSACTION_TYPE.test(typeName)) ||
-    isTransactionCallback(definition.node)
-  );
-};
-
-const isDatabaseHandle = (context: RuleContext, node: unknown): boolean => {
-  const receiver = unwrapExpression(node);
-  if (receiver === null) {
-    return false;
-  }
-  if (isIdentifierReference(receiver)) {
-    if (isDatabaseHandleName(receiver.name)) {
-      return true;
-    }
-    const variable = resolveVariable(context, receiver);
-    return variable !== null && isTransactionParameter(variable);
-  }
-  if (receiver.type === "MemberExpression") {
-    const property = memberPropertyName(receiver);
-    return property !== null && isDatabaseHandleName(property);
-  }
-  if (receiver.type === "CallExpression") {
-    const name = getCalleeName(receiver.callee)?.split(".").at(-1);
-    return name !== undefined && GET_DB_CALL.test(name);
-  }
-  return false;
-};
-
-// The static text of a drizzle `sql` template, or of a const holding one.
-const writeSqlText = (
-  context: RuleContext,
-  node: unknown,
-  depth = 0,
-): string | null => {
-  const expression = unwrapExpression(node);
-  if (expression === null || depth > MAX_RESOLVE_DEPTH) {
-    return null;
-  }
-  if (isIdentifierReference(expression)) {
-    const variable = resolveVariable(context, expression);
-    const init = variable === null ? null : stableInitializer(variable);
-    return init === null ? null : writeSqlText(context, init, depth + 1);
-  }
-  if (
-    expression.type !== "TaggedTemplateExpression" ||
-    !isImportedFrom({
-      context,
-      node: expression.tag,
-      modules: [isDrizzleModule],
-      names: DRIZZLE_SQL,
-    }) ||
-    !isAstNode(expression.quasi) ||
-    !Array.isArray(expression.quasi.quasis)
-  ) {
-    return null;
-  }
-  return expression.quasi.quasis
-    .map((quasi: unknown) => {
-      const value = isAstNode(quasi) ? quasi.value : null;
-      return typeof value === "object" &&
-        value !== null &&
-        "raw" in value &&
-        typeof value.raw === "string"
-        ? value.raw
-        : "";
-    })
-    .join(SQL_PLACEHOLDER);
-};
-
-const isMutationCall = (context: RuleContext, node: unknown): boolean => {
-  const call = unwrapExpression(node);
-  if (call?.type !== "CallExpression") {
-    return false;
-  }
-  const callee = unwrapExpression(call.callee);
-  if (callee?.type !== "MemberExpression") {
-    return false;
-  }
-  const method = memberPropertyName(callee);
-  if (method !== null && MUTATION_METHODS.has(method)) {
-    return isDatabaseHandle(context, callee.object);
-  }
-  if (method !== "execute" || !Array.isArray(call.arguments)) {
-    return false;
-  }
-  const text = writeSqlText(context, call.arguments.at(0));
-  return text !== null && WRITE_SQL.some((pattern) => pattern.test(text));
 };
 
 const isAuditedHelperImport = (context: RuleContext, node: unknown): boolean =>
@@ -483,7 +326,7 @@ export default eslintCompatPlugin({
             }
             if (isAuditCall(context, node)) {
               scope.hasAuditCall = true;
-            } else if (isMutationCall(context, node)) {
+            } else if (isDatabaseWriteCall(context, node)) {
               scope.mutationNodes.push(node);
             }
           },
