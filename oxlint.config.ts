@@ -10,6 +10,7 @@ import {
 
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
@@ -3961,18 +3962,24 @@ export default defineConfig({
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
       // ISO 27001). Handlers are held to the full rule; the block below
-      // extends it to MCP and library code with a reasoned ledger.
+      // extends it to MCP and library code with a reasoned ledger. A handler
+      // module registered in SYSTEM_AUDIT_MODULES is audited by its actor's
+      // run, as in library code.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "require-audit-on-mutation/require-audit-on-mutation": "error",
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { systemModules: SYSTEM_AUDIT_MODULES },
+        ],
       },
     },
     {
       // The same rule over MCP tools and shared library code. Writes that
       // predate this scope are budgeted per owning function by the reasoned
       // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
-      // other unaudited write fails like it does in a handler.
+      // other unaudited write fails like it does in a handler. System
+      // modules (SYSTEM_AUDIT_MODULES) are audited by their actor's run.
       files: [...AUDIT_MUTATION_LEDGER_SCOPE],
       excludeFiles: [
         "apps/api/src/mcp/**/*.test.ts",
@@ -3981,7 +3988,10 @@ export default defineConfig({
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": [
           "error",
-          { budgets: auditMutationBudgets(auditMutationLedger) },
+          {
+            budgets: auditMutationBudgets(auditMutationLedger),
+            systemModules: SYSTEM_AUDIT_MODULES,
+          },
         ],
       },
     },
