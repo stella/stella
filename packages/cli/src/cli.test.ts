@@ -122,34 +122,44 @@ describe("stella CLI shell", () => {
   });
 });
 
-// A cached delta for the configured origin, so startup resolves a diverged
-// tree. No token is stored, so nothing reaches the network.
-describe("stella CLI: registry drift reporting", () => {
+// Legacy caller listings cannot project commands in an offline invocation.
+// No token is stored, so nothing reaches the network.
+describe("stella CLI: offline registry projection", () => {
   const SERVER = "https://drift.example";
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-drift-"));
   const cacheHome = path.join(home, ".cache");
   const REMOVED = ["save_task", "delete_task"];
 
   beforeAll(async () => {
-    await writeCacheFile(cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome }), {
+    const filePath = cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome });
+    await writeCacheFile(filePath, {
       version: CACHE_SCHEMA_VERSION,
       serverOrigin: SERVER,
       fetchedAt: new Date().toISOString(),
       ttlSeconds: 86_400,
-      toolsListHash: "h",
-      listings: [
-        {
-          name: "list_matters",
-          description: "d",
-          inputSchema: { type: "object", properties: {} },
-        },
-      ],
-      delta: {
-        added: [],
-        removed: REMOVED,
-        changed: ["lookup_business_registry"],
-      },
     });
+    await Bun.write(
+      filePath,
+      JSON.stringify({
+        version: 4,
+        serverOrigin: SERVER,
+        fetchedAt: new Date().toISOString(),
+        ttlSeconds: 86_400,
+        toolsListHash: "h",
+        listings: [
+          {
+            name: "list_matters",
+            description: "d",
+            inputSchema: { type: "object", properties: {} },
+          },
+        ],
+        delta: {
+          added: [],
+          removed: REMOVED,
+          changed: ["lookup_business_registry"],
+        },
+      }),
+    );
   });
 
   const spawnDrifted = (args: readonly string[]) => {
@@ -175,11 +185,10 @@ describe("stella CLI: registry drift reporting", () => {
   const driftLines = (stderr: string): string[] =>
     stderr.split("\n").filter((line) => line.includes("server registry"));
 
-  test("a domain command gets one counted line on stderr, not the tool lists", () => {
+  test("an offline domain command ignores cached caller drift", () => {
     const result = spawnDrifted(["matter", "list", "--schema"]);
-    expect(driftLines(result.stderr.toString())).toEqual([
-      "server registry differs from this CLI build: 2 removed, 1 changed; re-run with --verbose to list the tools",
-    ]);
+    expect(result.exitCode).toBe(0);
+    expect(driftLines(result.stderr.toString())).toEqual([]);
     for (const tool of REMOVED) {
       expect(result.stderr.toString()).not.toContain(tool);
     }
@@ -197,16 +206,16 @@ describe("stella CLI: registry drift reporting", () => {
     });
   }
 
-  test("--verbose lists every diverged tool", () => {
+  test("--verbose does not expose legacy caller drift", () => {
     const stderr = spawnDrifted([
       "matter",
       "list",
       "--schema",
       "--verbose",
     ]).stderr.toString();
-    expect(stderr).toContain("2 removed, 1 changed\n");
-    expect(stderr).toContain(`  removed: ${REMOVED.join(", ")}`);
-    expect(stderr).toContain("  changed: lookup_business_registry");
+    expect(driftLines(stderr)).toEqual([]);
+    expect(stderr).not.toContain(REMOVED.join(", "));
+    expect(stderr).not.toContain("lookup_business_registry");
   });
 
   test("stdout stays machine-readable under --json", () => {
@@ -215,16 +224,12 @@ describe("stella CLI: registry drift reporting", () => {
     expect(() => JSON.parse(result.stdout.toString())).not.toThrow();
   });
 
-  test("a command whose tool the server dropped fails with a clear error", () => {
-    // `save_task` is removed above; its command is still in this CLI build.
-    const result = spawnDrifted(["task", "save", "--title", "x"]);
-    expect(result.exitCode).toBe(4);
+  test("legacy caller omissions do not disable baked commands offline", () => {
+    const result = spawnDrifted(["task", "save", "--name", "x"]);
+    expect(result.exitCode).toBe(3);
     const stderr = result.stderr.toString();
-    expect(stderr).toContain(
-      "stella task save is not available on this server",
-    );
-    expect(stderr).toContain("save_task");
-    expect(stderr).toContain("stella tools list");
+    expect(stderr).toContain("Not signed in");
+    expect(stderr).not.toContain("not available on this server");
   });
 });
 
@@ -241,9 +246,6 @@ describe("stella CLI: server-attested disabled commands", () => {
       serverOrigin: SERVER,
       fetchedAt: new Date().toISOString(),
       ttlSeconds: 86_400,
-      toolsListHash: "h",
-      listings: [],
-      delta: { added: [], removed: [], changed: [] },
       featureOmittedTools: ["get_usage"],
       featureOmittedCapabilities: ["usage.entitlement.get"],
     });

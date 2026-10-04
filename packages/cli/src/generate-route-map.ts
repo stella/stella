@@ -623,6 +623,25 @@ const resolveLocalFileProp = ({
   return prop;
 };
 
+const toolMetadata = ({
+  listing,
+  annotation,
+}: {
+  listing: RegistryToolListing;
+  annotation: ToolAnnotation | undefined;
+}) => {
+  const featureId = annotation?.featureId ?? listing.featureId;
+  const additionalScopes = annotation?.additionalScopes;
+  const requestTimeoutMs = annotation?.requestTimeoutMs;
+  const scope = annotation ? scopeOf(annotation) : undefined;
+  return {
+    ...(featureId === undefined ? {} : { featureId }),
+    ...(additionalScopes === undefined ? {} : { additionalScopes }),
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+    ...(scope === undefined ? {} : { scope }),
+  };
+};
+
 const leafSpecsForTool = ({
   listing,
   annotation,
@@ -639,9 +658,7 @@ const leafSpecsForTool = ({
   const destructiveHint = listing.annotations?.destructiveHint === true;
 
   const command = annotation?.command ?? heuristicCommandPath(listing.name);
-  const additionalScopes = annotation?.additionalScopes;
-  const requestTimeoutMs = annotation?.requestTimeoutMs;
-  const scope = annotation ? scopeOf(annotation) : undefined;
+  const metadata = toolMetadata({ listing, annotation });
   const itemsKey = annotation?.itemsKey;
   const textPath = annotation?.windowedText?.textPath;
   const windowedText = textPath !== undefined;
@@ -717,9 +734,7 @@ const leafSpecsForTool = ({
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
-        ...(additionalScopes === undefined ? {} : { additionalScopes }),
-        ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-        ...(scope === undefined ? {} : { scope }),
+        ...metadata,
         inputSchema: schema,
       });
     }
@@ -749,9 +764,7 @@ const leafSpecsForTool = ({
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
-      ...(additionalScopes === undefined ? {} : { additionalScopes }),
-      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-      ...(scope === undefined ? {} : { scope }),
+      ...metadata,
       inputSchema: schema,
     },
   ];

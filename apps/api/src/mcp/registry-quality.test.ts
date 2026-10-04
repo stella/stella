@@ -115,7 +115,7 @@ describe.each(SURFACES)(
     });
 
     test("every output schema fits the per-tool budget", () => {
-      for (const tool of toMcpTools(definitions, mode)) {
+      for (const tool of toMcpTools(definitions, { mode })) {
         const chars = JSON.stringify(tool.outputSchema).length;
         expect(
           chars,
@@ -431,7 +431,7 @@ describe("MCP static tool-set coherence", () => {
   test.each(MCP_MODES)(
     "every %s wire tool advertises its executable output contract",
     (mode) => {
-      const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);
+      const tools = toMcpTools(listStaticMcpToolDefinitions(mode), { mode });
       for (const tool of tools) {
         const contract = getStaticMcpToolOutputContract(tool.name, mode);
         expect(
@@ -483,7 +483,9 @@ describe("MCP wire schemas under an independent validator", () => {
       }
     >();
     for (const mode of MCP_MODES) {
-      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
+      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), {
+        mode,
+      })) {
         const contract = getStaticMcpToolOutputContract(tool.name, mode);
         if (contract !== undefined) {
           contracts.set(contractKey(contract), {
@@ -509,7 +511,9 @@ describe("MCP wire schemas under an independent validator", () => {
   test.each([...MCP_MODES])(
     "every %s input and output schema compiles",
     (mode) => {
-      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), mode)) {
+      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), {
+        mode,
+      })) {
         expect(
           () => compileWireSchema(validator, tool.inputSchema),
           `${tool.name} inputSchema`,
