@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
+import { open } from "node:fs/promises";
 
 import { caseLawSources } from "@/api/db/schema";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
@@ -37,6 +38,10 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
  *
+ *   # every row's outcome to a file, not only the summary's sample
+ *   bun run src/scripts/replay-case-law-source.ts --adapter sk-courts --all \
+ *     --results-out /tmp/sk-courts-replay.jsonl
+ *
  * Not a scheduled job: it runs when a parser changes, under an operator who
  * reads the report.
  */
@@ -47,6 +52,7 @@ import {
   REPLAY_ROW_OUTCOME,
   replayCapability,
   replayCaseLawSource,
+  type ReplayRowReport,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -78,6 +84,7 @@ const {
   leaseWaitMinutes,
   pageSize,
   rejectionPolicy,
+  resultsOut,
   scope,
 } = parsed.value;
 
@@ -102,6 +109,28 @@ if (capability.type === "unsupported") {
   console.error(UNSUPPORTED_ADAPTER_MESSAGE(capability.adapterKey));
   process.exit(1);
 }
+
+// Opened before the object stores and the lease. A path that already
+// exists is refused rather than appended to, so one file never mixes two
+// runs.
+const resultsFile =
+  resultsOut === null ? null : await open(resultsOut, "wx", 0o600);
+
+const recordRow =
+  resultsFile === null
+    ? undefined
+    : async (row: ReplayRowReport): Promise<void> => {
+        await resultsFile.appendFile(
+          `${JSON.stringify({
+            id: row.id,
+            caseNumber: row.caseNumber,
+            language: row.language,
+            outcome: row.outcome,
+            rejection: row.rejection ?? null,
+            detail: row.detail ?? null,
+          })}\n`,
+        );
+      };
 
 await refreshS3();
 await refreshCorpusS3();
@@ -196,6 +225,7 @@ const replayed = await Result.tryPromise({
       after,
       scope,
       rejectionPolicy,
+      recordRow,
     }),
   catch: (cause) => cause,
 });
@@ -203,6 +233,7 @@ const replayed = await Result.tryPromise({
 // Released on both paths: a lease left behind blocks the source's next
 // ingestion cycle until it expires.
 await sourceLease?.release();
+await resultsFile?.close();
 
 if (Result.isError(replayed)) {
   console.error("Replay failed:", replayed.error);

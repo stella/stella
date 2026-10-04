@@ -11,6 +11,7 @@
  * fallback only fires in local development and tests.
  */
 
+import { Result } from "better-result";
 import { hkdf } from "node:crypto";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -31,20 +32,19 @@ const getMasterKey = (): Buffer | null => {
 };
 
 /**
- * Derive a 256-bit per-org key using HKDF-SHA256.
- * The org ID is used as the `info` parameter so each
- * organization gets an independent key.
+ * Derive a 256-bit key using HKDF-SHA256. The scope is the
+ * `info` parameter; organization IDs and application content use distinct scopes.
  */
-const deriveOrgKey = async (
+const deriveScopeKey = async (
   masterKey: Buffer,
-  organizationId: SafeId<"organization">,
+  scope: string,
 ): Promise<Buffer> =>
   await new Promise((resolve, reject) => {
     hkdf(
       "sha256",
       masterKey,
       Buffer.alloc(0),
-      organizationId,
+      scope,
       AES_KEY_BYTES,
       (err, key) => {
         if (err) {
@@ -62,12 +62,12 @@ export type EncryptedContent = {
 };
 
 /**
- * Encrypt plaintext with AES-256-GCM using an org-derived
+ * Encrypt plaintext with AES-256-GCM using a scope-derived
  * key. When the master key is absent, wraps plaintext in a
  * no-op envelope (iv = 12 zero bytes, ciphertext = UTF-8).
  */
-export const encryptContent = async (
-  organizationId: SafeId<"organization">,
+const encryptScopedContent = async (
+  scope: string,
   plaintext: string,
 ): Promise<EncryptedContent> => {
   const masterKey = getMasterKey();
@@ -79,9 +79,9 @@ export const encryptContent = async (
     };
   }
 
-  const orgKey = await deriveOrgKey(masterKey, organizationId);
+  const scopeKey = await deriveScopeKey(masterKey, scope);
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const keyBytes = new Uint8Array(orgKey);
+  const keyBytes = new Uint8Array(scopeKey);
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -107,8 +107,8 @@ export const encryptContent = async (
  * Decrypt AES-256-GCM ciphertext. When the master key is
  * absent, treats ciphertext as plaintext UTF-8.
  */
-export const decryptContent = async (
-  organizationId: SafeId<"organization">,
+const decryptScopedContent = async (
+  scope: string,
   ciphertext: Buffer,
   iv: Buffer,
 ): Promise<string> => {
@@ -129,8 +129,8 @@ export const decryptContent = async (
     });
   }
 
-  const orgKey = await deriveOrgKey(masterKey, organizationId);
-  const keyBytes = new Uint8Array(orgKey);
+  const scopeKey = await deriveScopeKey(masterKey, scope);
+  const keyBytes = new Uint8Array(scopeKey);
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -151,4 +151,68 @@ export const decryptContent = async (
   );
 
   return new TextDecoder().decode(decrypted);
+};
+
+export const encryptContent = async (
+  organizationId: SafeId<"organization">,
+  plaintext: string,
+): Promise<EncryptedContent> =>
+  await encryptScopedContent(organizationId, plaintext);
+
+export const decryptContent = async (
+  organizationId: SafeId<"organization">,
+  ciphertext: Buffer,
+  iv: Buffer,
+): Promise<string> =>
+  await decryptScopedContent(organizationId, ciphertext, iv);
+
+const APP_CONTENT_SCOPE = "stella:app-content:v1";
+
+const requireAppContentKey = (): Result<void, ConfigurationError> =>
+  getMasterKey()
+    ? Result.ok(undefined)
+    : Result.err(
+        new ConfigurationError({
+          message:
+            "Application credential storage requires CONTENT_ENCRYPTION_KEY",
+        }),
+      );
+
+export const encryptAppContent = async (
+  plaintext: string,
+): Promise<Result<EncryptedContent, ConfigurationError>> => {
+  const configured = requireAppContentKey();
+  if (Result.isError(configured)) {
+    return Result.err(configured.error);
+  }
+  return await Result.tryPromise({
+    try: async () => await encryptScopedContent(APP_CONTENT_SCOPE, plaintext),
+    catch: () =>
+      new ConfigurationError({
+        message: "Could not prepare application content",
+      }),
+  });
+};
+
+export const decryptAppContent = async (
+  ciphertext: Buffer,
+  iv: Buffer,
+): Promise<Result<string, ConfigurationError>> => {
+  const configured = requireAppContentKey();
+  if (Result.isError(configured)) {
+    return Result.err(configured.error);
+  }
+  if (iv.length !== IV_BYTES || iv.every((byte) => byte === 0)) {
+    return Result.err(
+      new ConfigurationError({
+        message: "Application credential storage requires the shared envelope",
+      }),
+    );
+  }
+  return await Result.tryPromise({
+    try: async () =>
+      await decryptScopedContent(APP_CONTENT_SCOPE, ciphertext, iv),
+    catch: () =>
+      new ConfigurationError({ message: "Could not read application content" }),
+  });
 };

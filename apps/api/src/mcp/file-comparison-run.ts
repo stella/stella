@@ -33,8 +33,13 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  detectFileEncryption,
+  ENCRYPTED_CONTENT_MESSAGE,
+} from "@/api/lib/files/detect-file-encryption";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
@@ -334,6 +339,7 @@ const loadInput = async ({
   });
   if (Result.isError(scanned)) {
     const scanError = scanned.error;
+    observeScanFailures(scanError);
     // A scanner failure says nothing about the bytes: keep the staged input
     // so the retry the hint suggests can still find it.
     if (!FileScanRejectedError.is(scanError)) {
@@ -367,6 +373,17 @@ const loadInput = async ({
         })),
       }),
     };
+  }
+
+  const detection = await detectFileEncryption({
+    mimeType: DOCX_MIME_TYPE,
+    scanned: scanned.value,
+  });
+  if (detection.encryption.encrypted) {
+    return await refuse(
+      ENCRYPTED_CONTENT_MESSAGE,
+      "Remove the password from the document, then stage it again.",
+    );
   }
 
   return {

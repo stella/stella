@@ -1,63 +1,120 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { ScopedDb } from "@/api/db/safe-db";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import {
-  scanTemplateUpload,
-  templateUploadRejectionResponse,
-} from "@/api/lib/templates/scan-template-upload";
+  discoverTemplateSource,
+  loadStoredTemplateSource,
+} from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const discoverBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+  file: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
+  templateId: t.Optional(tSafeId("template")),
 });
 
 type DiscoverProps = {
   organizationId: SafeId<"organization">;
-  body: { file: File };
+  body: {
+    file?: File | undefined;
+    templateId?: SafeId<"template"> | undefined;
+  };
+  scopedDb?: ScopedDb | undefined;
 };
 
-export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
-  if (file.type !== DOCX_MIME_TYPE) {
-    return new Response(
-      JSON.stringify({
-        error: "Invalid file type. Expected a DOCX file.",
+type DiscoverResult = Result<
+  {
+    fields: ReturnType<typeof mergeManifestWithDiscovery>;
+    conditions: ReturnType<typeof manifestNamedConditions>;
+    structureErrors: Awaited<
+      ReturnType<typeof discoverTemplate>
+    >["structureErrors"];
+  },
+  HandlerError
+>;
+
+export const discoverHandler = async ({
+  organizationId,
+  scopedDb,
+  body: { file, templateId },
+}: DiscoverProps): Promise<DiscoverResult> => {
+  if (templateId !== undefined) {
+    if (scopedDb === undefined) {
+      panic("Stored template discovery requires scopedDb");
+    }
+    const loaded = await loadStoredTemplateSource({
+      templateId,
+      organizationId,
+      scopedDb,
+    });
+    if (Result.isError(loaded)) {
+      return Result.err(loaded.error);
+    }
+    const { discovered, manifest } = await discoverTemplateSource({
+      source: loaded.value,
+      organizationId,
+      scopedDb,
+    });
+    return Result.ok({
+      fields: mergeManifestWithDiscovery(manifest, discovered),
+      conditions: manifestNamedConditions(manifest),
+      structureErrors: discovered.structureErrors,
+    });
+  }
+  if (file === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "A file or templateId is required",
       }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (file.type !== DOCX_MIME_TYPE) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid file type. Expected a DOCX file.",
+      }),
     );
   }
 
   const scanned = await scanTemplateUpload(file);
   if (Result.isError(scanned)) {
-    return templateUploadRejectionResponse(scanned.error);
+    return Result.err(scanned.error);
   }
 
   const discovered = await discoverTemplate(scanned.value);
   const manifest = deriveManifest(discovered);
 
-  return {
+  return Result.ok({
     fields: mergeManifestWithDiscovery(manifest, discovered),
     conditions: manifestNamedConditions(manifest),
     structureErrors: discovered.structureErrors,
-  };
+  });
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
-    "Inspect an uploaded DOCX and report the fillable fields it carries: the " +
-    "markers found in the document, each configured by the filters written " +
-    "in it, the named conditions from that manifest, and any structural " +
-    "marker errors. Reads the supplied bytes and stores nothing; use " +
-    "templates.get for a template that is already in the library.",
+    "Inspect DOCX fields, marker configuration, named conditions and structural errors. " +
+    "With templateId, resolve the stored template and linked clauses; otherwise inspect uploaded bytes. Stores nothing.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -67,7 +124,7 @@ const config = {
   access: "read",
   transport: {
     type: "file-input",
-    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    input: { field: "file", required: false, mediaTypes: [DOCX_MIME_TYPE] },
     alternative: {
       type: "partial",
       via: ["templates.get"],
@@ -80,23 +137,26 @@ const config = {
 
 const discoverTemplateHandler = createSafeRootHandler(
   config,
-  async function* ({ session, body }) {
+  async function* ({ session, scopedDb, body }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await discoverHandler({
             organizationId: session.activeOrganizationId,
             body,
+            scopedDb,
           }),
         catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
+          cause instanceof HandlerError
+            ? cause
+            : new HandlerError({
+                status: 500,
+                message: "Internal server error",
+                cause,
+              }),
       }),
     );
-    return Result.ok(result);
+    return result;
   },
 );
 

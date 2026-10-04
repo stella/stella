@@ -33,7 +33,9 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import {
   flowRunDetailOptions,
@@ -132,14 +134,16 @@ const RunDetailContent = ({
     setCancelling(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.runs.cancelFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("flows.runs.cancelFailed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 
@@ -380,14 +384,16 @@ const ReviewGateCard = ({
     setSubmitting(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.runs.review.failed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("flows.runs.review.failed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 

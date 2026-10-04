@@ -54,6 +54,8 @@
 
 import ts from "typescript";
 
+import { parseSource } from "./parse-memo";
+
 // `apps/api/src/db/root.ts`, by alias or path. `./root` is how a sibling in
 // `apps/api/src/db/` names it; no other API module is called `root`.
 const ROOT_CONNECTION_MODULE =
@@ -461,15 +463,8 @@ type RootConnectionScan = {
 const scanRootConnectionShapes = (
   content: string,
   file: string,
-  scriptKind: ts.ScriptKind,
 ): RootConnectionScan => {
-  const sourceFile = ts.createSourceFile(
-    "root-connection-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
+  const sourceFile = parseSource({ fileName: file, text: content });
   const bindings = collectRootBindings(sourceFile);
   if (bindings.handles.size === 0 && bindings.namespaces.size === 0) {
     return { hits: [], exemptOperations: [] };
@@ -566,20 +561,10 @@ const scanRootConnectionShapes = (
   return { hits, exemptOperations };
 };
 
-// Parsing a `.ts` generic arrow as TSX misreads what follows it, so both
-// parses run and the one that found more is the one that read the file
-// correctly (the same rule the import count in `scripts/ratchet.ts` follows).
-// The path is read only to match ROOT_OPERATION_RESULTS entries.
-const scanFile = (content: string, file: string): RootConnectionScan => {
-  const asTs = scanRootConnectionShapes(content, file, ts.ScriptKind.TS);
-  const asTsx = scanRootConnectionShapes(content, file, ts.ScriptKind.TSX);
-  return asTsx.hits.length > asTs.hits.length ? asTsx : asTs;
-};
-
 export const findRootConnectionShapes = (
   content: string,
   file: string,
-): RootConnectionShapeHit[] => scanFile(content, file).hits;
+): RootConnectionShapeHit[] => scanRootConnectionShapes(content, file).hits;
 
 /**
  * Listed operations with no exempt site left in their file. The list may only
@@ -592,9 +577,10 @@ export const findStaleRootOperations = (
     .filter(isRootOperationName)
     .filter((operation) => {
       const { file } = ROOT_OPERATION_RESULTS[operation];
-      return !scanFile(readSource(file), file).exemptOperations.includes(
-        operation,
-      );
+      return !scanRootConnectionShapes(
+        readSource(file),
+        file,
+      ).exemptOperations.includes(operation);
     });
 
 export const countRootConnectionShapes = (
@@ -690,17 +676,11 @@ const importTypeHandles = (node: ts.ImportTypeNode): number => {
   return HANDLES_PER_MODULE;
 };
 
-const countRootConnectionReferencesAs = (
+const countRootConnectionReferences = (
   content: string,
-  scriptKind: ts.ScriptKind,
+  file: string,
 ): RootConnectionReferences => {
-  const sourceFile = ts.createSourceFile(
-    "root-connection-imports",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
+  const sourceFile = parseSource({ fileName: file, text: content });
   let value = 0;
   let type = 0;
   const add = (count: number, isTypeOnly: boolean): void => {
@@ -782,21 +762,12 @@ const countRootConnectionReferencesAs = (
   return { value, type };
 };
 
-// The counter sees content, not the file name. Parsing a `.ts` generic arrow
-// as TSX misreads what follows it, so both parses run and the one that found
-// more is the one that read the file correctly.
-const countRootConnectionReferences = (
+export const countRootConnectionImports = (
   content: string,
-): RootConnectionReferences => {
-  const asTs = countRootConnectionReferencesAs(content, ts.ScriptKind.TS);
-  const asTsx = countRootConnectionReferencesAs(content, ts.ScriptKind.TSX);
-  return asTsx.value + asTsx.type > asTs.value + asTs.type ? asTsx : asTs;
-};
+  file: string,
+): number => countRootConnectionReferences(content, file).value;
 
-/** Runtime references to the owner-level handles. */
-export const countRootConnectionImports = (content: string): number =>
-  countRootConnectionReferences(content).value;
-
-/** Type-only references to the owner-level handles. */
-export const countRootConnectionTypeImports = (content: string): number =>
-  countRootConnectionReferences(content).type;
+export const countRootConnectionTypeImports = (
+  content: string,
+  file: string,
+): number => countRootConnectionReferences(content, file).type;

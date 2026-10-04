@@ -3,12 +3,13 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   rateLookupKey,
   resolveRatesInTransaction,
@@ -154,6 +155,7 @@ const batchUpdate = createSafeHandler(
       "no rate; mark_billable re-resolves each entry's rate and is refused " +
       "when one of them has no effective rate.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -249,6 +251,10 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -320,6 +326,10 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -481,6 +491,10 @@ const batchUpdate = createSafeHandler(
               tx,
               buildBatchEvents(updated, action, rateChanges),
             );
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -549,6 +563,10 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );

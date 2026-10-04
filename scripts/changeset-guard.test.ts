@@ -807,9 +807,7 @@ describe("changeset policy file", () => {
   });
 
   test("gates the CLI capability catalog", () => {
-    expect(policy.releasePaths).toContain(
-      "packages/cli/capability-catalog.json",
-    );
+    expect(policy.releasePaths).toContain("packages/cli/capabilities/**");
   });
 
   test("declares the same packages to the changesets entry validator", () => {

@@ -13,11 +13,30 @@ export const actionAdmissionOutcome = (error: unknown) => {
   let current = error;
   while (current instanceof Error && !seen.has(current)) {
     seen.add(current);
-    if (APIError.is(current) && isActionAdmissionCode(current.code)) {
+    const code =
+      "code" in current && isActionAdmissionCode(current.code)
+        ? current.code
+        : undefined;
+    if (code !== undefined) {
+      let details: unknown;
+      if (APIError.is(current)) {
+        details = current.details;
+      } else if (
+        "rawEvent" in current &&
+        typeof current.rawEvent === "object" &&
+        current.rawEvent !== null &&
+        "code" in current.rawEvent &&
+        current.rawEvent.code === code
+      ) {
+        details = current.rawEvent;
+      }
       const contact =
-        current.code === ACTION_ADMISSION_CODES.periodExhausted ||
-        current.code === ACTION_ADMISSION_CODES.notEnabled
-          ? current.details?.["contactUrl"]
+        (code === ACTION_ADMISSION_CODES.periodExhausted ||
+          code === ACTION_ADMISSION_CODES.notEnabled) &&
+        typeof details === "object" &&
+        details !== null &&
+        "contactUrl" in details
+          ? details.contactUrl
           : undefined;
       const href =
         typeof contact === "string" ? sanitizeHref(contact) : undefined;
@@ -29,10 +48,10 @@ export const actionAdmissionOutcome = (error: unknown) => {
           ? href
           : undefined;
       return {
-        code: current.code,
+        code,
         contactUrl,
-        messageKey: ACTION_ADMISSION_ERROR_KEYS[current.code],
-        retryable: ACTION_ADMISSION_REFUSALS[current.code].retryable,
+        messageKey: ACTION_ADMISSION_ERROR_KEYS[code],
+        retryable: ACTION_ADMISSION_REFUSALS[code].retryable,
       };
     }
     current = current.cause;

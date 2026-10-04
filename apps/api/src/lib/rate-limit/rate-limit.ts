@@ -3,6 +3,7 @@ import { Elysia, type Context } from "elysia";
 
 import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
@@ -55,6 +56,7 @@ export type RateLimitOptions = {
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
+  onLimit?: () => void;
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
@@ -176,7 +178,17 @@ type RateLimitRequestState =
 
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
-const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+
+/**
+ * Before-handle hooks `rateLimit` installed. The composed-route census asserts
+ * every `/v1` route carries one, which a hook's name cannot guarantee.
+ */
+const rateLimitHooks = new WeakSet<object>();
+
+/** Whether a mounted route's before-handle hook came out of `rateLimit`. */
+export const isRateLimitHook = (hook: unknown): boolean =>
+  typeof hook === "function" && rateLimitHooks.has(hook);
 
 const writeRateLimitHeaders = ({
   max,
@@ -191,9 +203,19 @@ const writeRateLimitHeaders = ({
   retryAfter: boolean;
   set: RateLimitResponseSet;
 }): void => {
-  set.headers["RateLimit-Limit"] = String(max);
-  set.headers["RateLimit-Remaining"] = String(remaining);
-  set.headers["RateLimit-Reset"] = String(reset);
+  const previousRemaining = Number(set.headers["RateLimit-Remaining"]);
+  const previousReset = Number(set.headers["RateLimit-Reset"]);
+  // Keep one complete policy tuple: the tightest remaining budget wins,
+  // with the earliest reset breaking ties between equally tight budgets.
+  if (
+    set.headers["RateLimit-Remaining"] === undefined ||
+    remaining < previousRemaining ||
+    (remaining === previousRemaining && reset < previousReset)
+  ) {
+    set.headers["RateLimit-Limit"] = String(max);
+    set.headers["RateLimit-Remaining"] = String(remaining);
+    set.headers["RateLimit-Reset"] = String(reset);
+  }
   if (retryAfter) {
     set.headers["Retry-After"] = String(reset);
   }
@@ -228,6 +250,7 @@ export const rateLimit = ({
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
+  onLimit,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -249,7 +272,9 @@ export const rateLimit = ({
     server: RequestIpServer | null;
     set: RateLimitResponseSet;
   }): Promise<RateLimitErrorResponse | undefined> => {
-    if (await skip(request)) {
+    // The validated development-only switch applies to every HTTP budget,
+    // including dedicated budgets whose route policy does not define a bypass.
+    if (env.E2E_DISABLE_AUTH_RATE_LIMIT || (await skip(request))) {
       requestState.set(request, { type: "skipped" });
       return undefined;
     }
@@ -278,6 +303,7 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
+      onLimit?.();
       requestState.set(request, { type: "limited" });
       set.status = 429;
       return errorResponse;
@@ -292,16 +318,23 @@ export const rateLimit = ({
     return undefined;
   };
 
-  plugin.onBeforeHandle(
-    { as: "scoped" },
-    async ({ request, server, set }) =>
-      await applyRateLimit({
-        phase: "before_handler",
-        request,
-        server,
-        set,
-      }),
-  );
+  const beforeHandle = async ({
+    request,
+    server,
+    set,
+  }: {
+    request: Request;
+    server: RequestIpServer | null;
+    set: RateLimitResponseSet;
+  }) =>
+    await applyRateLimit({
+      phase: "before_handler",
+      request,
+      server,
+      set,
+    });
+  rateLimitHooks.add(beforeHandle);
+  plugin.onBeforeHandle({ as: "scoped" }, beforeHandle);
 
   plugin.onError(
     { as: "scoped" },

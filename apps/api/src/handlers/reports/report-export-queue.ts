@@ -16,7 +16,6 @@ import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type { ReportExportFormat, ReportTemplateRef } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -48,6 +47,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
@@ -56,15 +56,19 @@ import { createBullMqConnection } from "@/api/lib/redis-client";
 import { REPORT_EXPORT_QUEUE_NAME } from "@/api/lib/report-export-enqueue";
 import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import {
-  brandPersistedReportExportId,
-  brandPersistedUserId,
-  brandValidatedWorkflowActorKey,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { recordTemplateUse } from "@/api/lib/templates/record-use";
+import type { FillDiagnosticSources } from "@/api/lib/templates/template-fill-completion";
+import {
+  decideTemplateFillCompletion,
+  describeFillShortfall,
+  fillDiagnosticsOf,
+} from "@/api/lib/templates/template-fill-completion";
 import type {
   AiFillCollaborators,
   MissingRequiredField,
@@ -80,6 +84,7 @@ const WORKER_CONCURRENCY = 2;
 const ERROR_MESSAGE_MAX_CHARS = 1000;
 const DOCX_TO_PDF_ERROR = "Failed to convert the report to PDF.";
 const NOTIFICATION_RECONCILE_INTERVAL_MS = 60_000;
+const REPORT_SOURCE_UNAVAILABLE = "The report source is no longer available.";
 
 /** Human-readable failure string persisted on the export row. */
 export const toExportErrorMessage = (cause: unknown): string => {
@@ -93,7 +98,9 @@ export const toExportErrorMessage = (cause: unknown): string => {
 };
 
 export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
 
   const worker = new Worker<ReportExportJobData>(
     REPORT_EXPORT_QUEUE_NAME,
@@ -137,10 +144,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
       await listPendingReportExportNotifications(db);
     // db-await-in-loop: one claim-and-notify transaction per pending actor; the pending read caps actors at REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT
     const results = await Promise.all(
-      actors.map(
-        async (actorKey) =>
-          await notifyReportExportStatus(brandActor(actorKey)),
-      ),
+      actors.map(async (actorKey) => await notifyStatus(brandActor(actorKey))),
     );
     const finalized = results.filter(
       ({ status }) =>
@@ -178,14 +182,10 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
-type ExportActor = {
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
+export type ReportExportActor = RootRunActor<"reportExport"> & {
   exportId: SafeId<"reportExport">;
 };
+type ExportActor = ReportExportActor;
 
 type ReportExportActorKey = Pick<
   ReportExportJobData,
@@ -193,36 +193,35 @@ type ReportExportActorKey = Pick<
 >;
 
 const brandActor = (data: ReportExportActorKey): ExportActor => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
-  const userId = brandPersistedUserId(data.userId);
-  return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
-    userId,
-    exportId: brandPersistedReportExportId(data.exportId),
-    scopedDb: createRootScopedDb({
-      organizationId: branded.organizationId,
-      userId,
-      workspaceIds: [branded.workspaceId],
-    }),
-    safeDb: createRootSafeDb({
-      organizationId: branded.organizationId,
-      userId,
-      workspaceIds: [branded.workspaceId],
-    }),
-  };
+  const actor = createRootRunActor(
+    { ...data, runId: data.exportId },
+    brandPersistedReportExportId,
+  );
+  return { ...actor, exportId: actor.runId };
 };
+
+const notifyStatus = async (actor: ExportActor) =>
+  await notifyReportExportStatus({
+    exportId: actor.exportId,
+    organizationId: actor.organizationId,
+    scopedDb: actor.writeDb,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+  });
 
 const processReportExportJob = async (
   data: ReportExportJobData,
 ): Promise<void> => {
-  const actor = brandActor(data);
+  await processReportExport(brandActor(data), data);
+};
+
+export const processReportExport = async (
+  actor: ExportActor,
+  data: Pick<ReportExportJobData, "aiNarrative" | "format">,
+): Promise<void> => {
   const { exportId } = actor;
 
-  const row = await actor.scopedDb((tx) =>
+  const row = await actor.writeDb((tx) =>
     tx.query.reportExports.findFirst({
       where: {
         id: { eq: exportId },
@@ -244,7 +243,7 @@ const processReportExportJob = async (
     return;
   }
   if (row.status !== "queued") {
-    await notifyReportExportStatus(actor);
+    await notifyStatus(actor);
     return;
   }
 
@@ -262,10 +261,11 @@ const processReportExportJob = async (
   });
 
   if (Result.isError(outcome)) {
-    await markExportFailed(data, toExportErrorMessage(outcome.error));
+    await markExportFailedRow(actor, toExportErrorMessage(outcome.error));
+    await notifyStatus(actor);
     return;
   }
-  await notifyReportExportStatus(actor);
+  await notifyStatus(actor);
 };
 
 type ExportRow = {
@@ -357,18 +357,26 @@ const runExport = async ({
     return;
   }
 
-  const workspace = await actor.safeDb((tx) =>
+  // Everything the report is built from is read under the requester's
+  // current membership.
+  const workspace = await actor.inputSafeDb((tx) =>
     tx.query.workspaces.findFirst({
       where: { id: { eq: actor.workspaceId } },
       columns: { name: true },
     }),
   );
-  const workspaceName = Result.isError(workspace)
-    ? "Workspace"
-    : (workspace.value?.name ?? "Workspace");
+  if (Result.isError(workspace)) {
+    await markExportFailedRow(actor, toExportErrorMessage(workspace.error));
+    return;
+  }
+  if (workspace.value === undefined) {
+    await markExportFailedRow(actor, REPORT_SOURCE_UNAVAILABLE);
+    return;
+  }
+  const workspaceName = workspace.value.name;
 
   const dataResult = await buildReportData({
-    safeDb: actor.safeDb,
+    safeDb: actor.inputSafeDb,
     workspaceId: actor.workspaceId,
     organizationId: actor.organizationId,
     currentUserId: actor.userId,
@@ -384,7 +392,7 @@ const runExport = async ({
   // Deterministic export: skip loading the org AI config entirely; fillReport
   // builds no generators and runs no usage preflight when aiNarrative is off.
   const orgAIConfigResult = aiNarrative
-    ? await actor.scopedDb(async (tx) => await loadOrgAISettings(tx, actor))
+    ? await actor.writeDb(async (tx) => await loadOrgAISettings(tx, actor))
     : Result.ok(null);
   if (Result.isError(orgAIConfigResult)) {
     await markExportFailedRow(actor, orgAIConfigResult.error.message);
@@ -449,7 +457,7 @@ const runExport = async ({
 
   if (row.mode === "workspace") {
     const created = await createEntityFromBuffer({
-      scopedDb: actor.scopedDb,
+      scopedDb: actor.writeDb,
       organizationId: actor.organizationId,
       workspaceId: actor.workspaceId,
       userId: actor.userId,
@@ -473,16 +481,21 @@ const runExport = async ({
       buffer: delivery.buffer,
       fileName,
       mimeType: delivery.mimeType,
+      encryption: serverBuiltFileEncryption(),
     });
     if (Result.isError(created)) {
       await markExportFailedRow(actor, created.error.message);
       return;
     }
-    await completeExport(actor, {
-      type: "workspace",
-      entityId: created.value.entityId,
-      fieldId: created.value.fieldId,
-    });
+    await completeExport(
+      actor,
+      {
+        type: "workspace",
+        entityId: created.value.entityId,
+        fieldId: created.value.fieldId,
+      },
+      filled.usedTemplateId,
+    );
     return;
   }
 
@@ -491,32 +504,73 @@ const runExport = async ({
   // org/workspace segments keep the key tenant-scoped); the status endpoint
   // presigns it and names the download from the stored key's extension.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
-  await writeS3ObjectWithRetry({
-    contentType: delivery.mimeType,
-    data: delivery.buffer,
-    key,
-  });
-  await completeExport(actor, { type: "download", s3Key: key });
+  await writeS3ObjectWithRetry(
+    {
+      contentType: delivery.mimeType,
+      data: delivery.buffer,
+      key,
+    },
+    { type: "lifecycle-prefix", prefix: "exports/" },
+  );
+  await completeExport(
+    actor,
+    { type: "download", s3Key: key },
+    filled.usedTemplateId,
+  );
 };
 
 type FillReportResult =
-  | { templateName: string; fileName: string; buffer: Buffer }
+  | {
+      templateName: string;
+      fileName: string;
+      buffer: Buffer;
+      /** The stored template whose use the completed export records; absent
+       *  for a built-in. Recorded with the completion, so a failed export
+       *  leaves the template's usage statistics untouched. */
+      usedTemplateId?: SafeId<"template"> | undefined;
+    }
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: unknown };
 
 type FilledReportDocx =
-  | { templateName: string; fileName: string; file: ScannedFile }
+  | ({
+      templateName: string;
+      fileName: string;
+      file: ScannedFile;
+    } & FillDiagnosticSources)
   | Exclude<FillReportResult, { buffer: Buffer }>;
 
-const toFillReportResult = (filled: FilledReportDocx): FillReportResult =>
-  "file" in filled
-    ? {
-        templateName: filled.templateName,
-        fileName: filled.fileName,
-        buffer: Buffer.from(filled.file.bytes),
-      }
-    : filled;
+/**
+ * A report export has no reader to hand a partial document to, so it reads
+ * the fill's completion decision under the strict policy: an unfilled
+ * placeholder, a failed AI draft or an undecided AI condition fails the
+ * export with each shortfall named, instead of completing a document with
+ * that content missing.
+ */
+const toFillReportResult = (
+  filled: FilledReportDocx,
+  usedTemplateId?: SafeId<"template">,
+): FillReportResult => {
+  if (!("file" in filled)) {
+    return filled;
+  }
+  const completion = decideTemplateFillCompletion({
+    mode: "require_complete",
+    diagnostics: fillDiagnosticsOf(filled),
+  });
+  if (completion.type === "rejected_partial") {
+    return {
+      error: `Report template fill incomplete; ${describeFillShortfall(completion.blocking)}`,
+    };
+  }
+  return {
+    templateName: filled.templateName,
+    fileName: filled.fileName,
+    buffer: Buffer.from(filled.file.bytes),
+    usedTemplateId,
+  };
+};
 
 const fillReport = async ({
   actor,
@@ -632,7 +686,7 @@ const buildReportAiGenerators = ({
     usageMetering: {
       actionType: "chat",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: "standard",
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -653,7 +707,7 @@ const buildReportAiGenerators = ({
             orgAIConfig,
             workspaceId: actor.workspaceId,
             userId: actor.userId,
-            safeDb: actor.safeDb,
+            safeDb: actor.writeSafeDb,
           })
       : undefined;
 
@@ -663,7 +717,7 @@ const buildReportAiGenerators = ({
     organizationId: actor.organizationId,
     skillContext: {
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       userId: actor.userId,
     },
     aiAnalytics,
@@ -699,11 +753,14 @@ const fillReportDocx = async ({
       await fillStoredTemplateDocx({
         templateId: templateRef.templateId,
         values,
-        scopedDb: actor.scopedDb,
+        scopedDb: actor.writeDb,
         organizationId: actor.organizationId,
         requiredFields: "enforce",
+        // The export records use when it completes, not when the fill does.
+        useRecording: "caller",
         ...generators,
       }),
+      templateRef.templateId,
     );
   }
 
@@ -730,7 +787,7 @@ const fillReportDocx = async ({
     await fillTemplateDocx({
       source: { name: builtin.name, fileName, file: scanned.value },
       values,
-      scopedDb: actor.scopedDb,
+      scopedDb: actor.writeDb,
       organizationId: actor.organizationId,
       requiredFields: "enforce",
       ...generators,
@@ -742,7 +799,7 @@ const setExportStatus = async (
   actor: ExportActor,
   status: "running",
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — status bookkeeping on the already-audited export row.
     await tx
       .update(reportExports)
@@ -787,8 +844,14 @@ const completedExportValues = (result: CompletedExportResult) => {
 const completeExport = async (
   actor: ExportActor,
   result: CompletedExportResult,
+  usedTemplateId: SafeId<"template"> | undefined,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
+    // A stored template is used by the export that completes, in the same
+    // transaction, so a failed or rejected export never counts as a use.
+    if (usedTemplateId !== undefined) {
+      await recordTemplateUse({ tx, templateId: usedTemplateId });
+    }
     // audit: skip — terminal bookkeeping on the already-audited export row (the
     // created document, in workspace mode, is audited by createEntityFromBuffer).
     await tx
@@ -811,7 +874,7 @@ const markExportFailedRow = async (
   actor: ExportActor,
   message: string,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — failure bookkeeping on the already-audited export row.
     await tx
       .update(reportExports)
@@ -837,5 +900,5 @@ const markExportFailed = async (
 ): Promise<void> => {
   const actor = brandActor(data);
   await markExportFailedRow(actor, message);
-  await notifyReportExportStatus(actor);
+  await notifyStatus(actor);
 };

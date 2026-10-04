@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/workflow-queue.ts",
+  "delta": 1,
+  "reason": "Workflow extraction checks the requester's matter access once per dependency level, before that level's reads; levels run in order and the plan holds few of them."
+}

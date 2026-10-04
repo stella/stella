@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { Err, panic } from "better-result";
 import {
   and,
   asc,
@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
   SchedulerDb,
@@ -639,10 +640,11 @@ export const runJob = async ({
       }, maxRuntimeMs);
     });
 
-    await Promise.race([
+    const outcome = await Promise.race([
       Promise.resolve(
         task({
           db,
+          dueAt: DueSlot.of(job),
           job,
           logger,
           payload: job.payload,
@@ -655,6 +657,10 @@ export const runJob = async ({
       ),
       timeout,
     ]);
+    if (outcome instanceof Err) {
+      raceError = outcome.error.cause;
+      raceRejected = true;
+    }
   } catch (error: unknown) {
     raceError = error;
     raceRejected = true;

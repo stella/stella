@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
   PropertyTestConfigError,
+  drawPropertySamples,
   propertyConfig,
   propertySeed,
   propertyTestDefaultTimeout,
@@ -239,5 +241,74 @@ describe("propertySeed", () => {
         expect(propertySeed).toThrow(PropertyTestConfigError);
       });
     }
+  });
+});
+
+describe("drawPropertySamples", () => {
+  const seedOf = (label: string): number =>
+    Number(/^PROPERTY_TEST_SEED=(-?\d+) /u.exec(label)?.[1]);
+
+  test("draws under an explicit seed and labels every sample with it", () => {
+    const expected = fc.sample(fc.integer(), { numRuns: 20, seed: 77 });
+    const samples = drawPropertySamples(fc.integer(), {
+      numRuns: 20,
+      seed: 77,
+    });
+
+    expect(samples.map(({ value }) => value)).toEqual(expected);
+    expect(samples.map(({ label }) => seedOf(label))).toEqual(
+      Array.from({ length: 20 }, () => 77),
+    );
+  });
+
+  test("resolves the seed from the tier policy, generating one while exploring", () => {
+    withEnv(
+      { [FACTOR_ENV]: undefined, [PROPERTY_TEST_SEED_ENV]: "1234" },
+      () => {
+        const first = drawPropertySamples(fc.integer(), { numRuns: 1 }).at(0);
+        expect(seedOf(first?.label ?? "")).toBe(1234);
+      },
+    );
+    withEnv(
+      { [FACTOR_ENV]: undefined, [PROPERTY_TEST_SEED_ENV]: undefined },
+      () => {
+        const first = drawPropertySamples(fc.integer(), { numRuns: 1 }).at(0);
+        expect(seedOf(first?.label ?? "")).toBe(propertySeed() ?? Number.NaN);
+      },
+    );
+    withEnv({ [FACTOR_ENV]: "10", [PROPERTY_TEST_SEED_ENV]: undefined }, () => {
+      const first = drawPropertySamples(fc.integer(), { numRuns: 1 }).at(0);
+      expect(first?.label).toMatch(
+        /^PROPERTY_TEST_SEED=-?\d+ PROPERTY_TEST_NUM_RUNS_FACTOR=10 sample 0: /u,
+      );
+      expect(Number.isSafeInteger(seedOf(first?.label ?? ""))).toBe(true);
+    });
+  });
+
+  test("a labelled seed replays the exact batch, ignoring a replay path", () => {
+    withEnv({ [FACTOR_ENV]: "3", [PROPERTY_TEST_SEED_ENV]: undefined }, () => {
+      const drawn = drawPropertySamples(fc.string(), { numRuns: 10 });
+      const seed = String(seedOf(drawn.at(0)?.label ?? ""));
+      withEnv(
+        { [PROPERTY_TEST_SEED_ENV]: seed, PROPERTY_TEST_PATH: "0:1" },
+        () => {
+          expect(drawPropertySamples(fc.string(), { numRuns: 10 })).toEqual(
+            drawn,
+          );
+        },
+      );
+    });
+  });
+
+  test("a failing sample's message names its seed, index and value", () => {
+    const samples = drawPropertySamples(fc.nat(), { numRuns: 5, seed: 77 });
+    const failing = samples.at(1);
+    expect(() => {
+      for (const [index, { value, label }] of samples.entries()) {
+        expect(index === 1 ? -1 : value, label).toBeGreaterThanOrEqual(0);
+      }
+    }).toThrow(
+      `PROPERTY_TEST_SEED=77 sample 1: ${fc.stringify(failing?.value)}`,
+    );
   });
 });

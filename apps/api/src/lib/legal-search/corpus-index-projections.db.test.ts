@@ -17,6 +17,10 @@ const MIGRATION_URLS = [
     "../../../drizzle/20260825211300_corpus_projection_delete_guard_record/migration.sql",
     import.meta.url,
   ),
+  new URL(
+    "../../../drizzle/20261003123500_corpus_projection_cleanup_reissue/migration.sql",
+    import.meta.url,
+  ),
 ] as const;
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000001";
 const FIRST_DECISION_ID = "0198e331-e578-7000-8000-000000000002";

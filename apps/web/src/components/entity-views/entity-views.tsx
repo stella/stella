@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
 import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
@@ -46,6 +45,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -126,7 +126,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       : (views.find((view) => view.id === selectedId) ?? views.at(0));
   const reportError = (error: unknown) => {
     analytics.captureError(error);
-    stellaToast.error(userErrorFromThrown(error, t("common.unexpectedError")));
+    notifyUserError(error, t("common.unexpectedError"));
   };
   const save = useMutation({
     scope: { id: `entity-views:${organizationId}` },

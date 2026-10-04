@@ -25,11 +25,14 @@ import {
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import {
   getCopyToMatterRootEntities,
+  getCopyToMatterErrorKey,
   type CopyToMatterEntity,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -98,7 +101,7 @@ export const CopyToMatterDialog = ({
     const resolved = await resolveTarget(target);
     if (Result.isError(resolved)) {
       setIsSubmitting(false);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(resolved.error, t("errors.actionFailed"));
       return;
     }
     const { workspaceId: targetWorkspaceId, parentId: targetParentId } =
@@ -114,6 +117,7 @@ export const CopyToMatterDialog = ({
     }
 
     let failedCount = 0;
+    let firstError: unknown;
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
       const result = await Result.tryPromise(async () => {
@@ -133,18 +137,15 @@ export const CopyToMatterDialog = ({
 
       if (Result.isError(result)) {
         failedCount++;
+        firstError ??= result.error;
+        firstErrorMessage ??= t("errors.actionFailed");
         continue;
       }
       const { error } = result.value;
       if (error) {
         failedCount++;
-        if (
-          firstErrorMessage === null &&
-          typeof error.value === "object" &&
-          "message" in error.value
-        ) {
-          firstErrorMessage = error.value.message;
-        }
+        firstError ??= toAPIError(error);
+        firstErrorMessage ??= t(getCopyToMatterErrorKey(error.value));
       }
     }
 
@@ -162,10 +163,8 @@ export const CopyToMatterDialog = ({
     setIsSubmitting(false);
 
     if (failedCount === transferEntities.length) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
+      notifyUserError(firstError, t("errors.actionFailed"), {
         description: firstErrorMessage ?? undefined,
-        type: "error",
       });
       return;
     }
@@ -189,7 +188,7 @@ export const CopyToMatterDialog = ({
     if (failedCount > 0) {
       stellaToast.add({
         title: successTitle,
-        description: t("errors.actionFailed"),
+        description: firstErrorMessage ?? t("errors.actionFailed"),
         type: "warning",
         action: goToMatterAction,
         timeout: 10_000,

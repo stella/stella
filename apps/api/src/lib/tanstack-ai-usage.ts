@@ -70,6 +70,74 @@ export const tokenUsageFromTerminalChunk = (
   };
 };
 
+/** Only known numeric usage fields may cross a failed run's public boundary.
+ * Provider detail bags and billing units can contain arbitrary provider text. */
+const SAFE_USAGE_SCALAR_KEYS = {
+  promptTokens: true,
+  completionTokens: true,
+  totalTokens: true,
+  durationSeconds: true,
+  unitsBilled: true,
+  cost: true,
+} as const satisfies Record<
+  Exclude<
+    keyof TokenUsage,
+    | "promptTokensDetails"
+    | "completionTokensDetails"
+    | "costDetails"
+    | "providerUsageDetails"
+    | "billed"
+  >,
+  true
+>;
+
+const safeCounts = <TKey extends string>(
+  keys: Record<TKey, true>,
+  values: Partial<Record<NoInfer<TKey>, number>> | undefined,
+) => {
+  const projected = new Map<TKey, number>();
+  for (const key in keys) {
+    if (!Object.hasOwn(keys, key)) {
+      continue;
+    }
+    const value = values?.[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      projected.set(key, value);
+    }
+  }
+  return Object.fromEntries(projected);
+};
+
+export const safeTokenUsageFromTerminalChunk = (
+  chunk: RunTerminalChunk,
+): TokenUsage | undefined => {
+  const usage = tokenUsageFromTerminalChunk(chunk);
+  if (usage === undefined) {
+    return undefined;
+  }
+  const counts = safeCounts(SAFE_USAGE_SCALAR_KEYS, usage);
+  const promptTokensDetails = nonEmptyDetails(
+    safeCounts(PROMPT_TOKENS_DETAIL_KEYS, usage.promptTokensDetails),
+  );
+  const completionTokensDetails = nonEmptyDetails(
+    safeCounts(COMPLETION_TOKENS_DETAIL_KEYS, usage.completionTokensDetails),
+  );
+  const costDetails = nonEmptyDetails(
+    safeCounts(COST_DETAIL_KEYS, usage.costDetails),
+  );
+  return {
+    ...counts,
+    promptTokens: counts["promptTokens"] ?? 0,
+    completionTokens: counts["completionTokens"] ?? 0,
+    totalTokens: counts["totalTokens"] ?? 0,
+    ...(promptTokensDetails === undefined ? {} : { promptTokensDetails }),
+    ...(completionTokensDetails === undefined
+      ? {}
+      : { completionTokensDetails }),
+    ...(costDetails === undefined ? {} : { costDetails }),
+  };
+};
+
 const addCount = (
   total: number | undefined,
   step: number | undefined,

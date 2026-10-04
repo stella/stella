@@ -8,7 +8,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -16,6 +15,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
 import type { UsagePolicyEntry } from "@/routes/_protected.settings/-queries/usage-policies";
 
@@ -174,11 +174,11 @@ function PolicyRow({
     },
     onError: (error: unknown) => {
       setPending(false);
-      stellaToast.add({
-        title: t("settings.organization.usagePlanCheckoutError"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(
+        error,
+        t("settings.organization.usagePlanCheckoutError"),
+        { description: userErrorFromThrown(error, t("errors.actionFailed")) },
+      );
     },
   });
 

@@ -237,7 +237,7 @@ export const getDisabledNativeToolSlugsFromSettingsRow = (
     nativeToolOverrides: row?.nativeToolOverrides ?? {},
   });
 
-export const arrayOrEmpty = <T>(
+const arrayOrEmpty = <T>(
   value: readonly T[] | null | undefined,
 ): readonly T[] => {
   if (value === undefined || value === null) {
@@ -303,3 +303,7 @@ export const getNativeToolCatalog = ({
     ];
   });
 };
+
+export const getCuratedMcpOAuthApproval = (connectorUrl: string) =>
+  filterCatalogueByKind("mcp").find((entry) => entry.url === connectorUrl)
+    ?.oauthAuthorization ?? null;

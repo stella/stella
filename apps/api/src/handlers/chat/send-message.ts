@@ -12,7 +12,10 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
-import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -212,12 +215,14 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -227,6 +232,7 @@ import {
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { registeredChatTool } from "@/api/lib/chat/chat-tool-types";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -261,6 +267,10 @@ import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provena
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -332,7 +342,13 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes document inputs in the chat operation and returns its response stream.",
+  },
   permissions: CHAT_TURN_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
   requiresUsage: { actionType: "chat", laneRouting: true },
@@ -450,6 +466,12 @@ type ClaimedChatTurnOwnership =
   | {
       status: "preflight";
       execution: ChatTurnExecution;
+      owningAssistantMessage?: PersistableChatMessage | undefined;
+    }
+  | {
+      status: "failure-pending";
+      execution: ChatTurnExecution;
+      failure: { code: ChatTurnFailureCode; retryable: boolean };
       owningAssistantMessage?: PersistableChatMessage | undefined;
     }
   | { status: "handed-over" };
@@ -677,23 +699,37 @@ export class ChatSendLifecycle {
     return this.admission?.signal;
   }
 
-  checkAdmission(): Result<void, HandlerError> {
+  async checkAdmission(): Promise<Result<void, HandlerError>> {
     if (!this.admission?.signal.aborted) {
       return Result.ok(undefined);
     }
-    return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "service_unavailable",
-        message: "Action admission is unavailable",
-        cause: this.admission.signal.reason,
-      }),
-    );
+    const error: unknown = this.admission.signal.reason;
+    const refusal = new HandlerError({
+      ...(ActionAdmissionError.is(error)
+        ? actionAdmissionRefusal(error)
+        : {
+            status: 503 as const,
+            code: "service_unavailable",
+            message: "Action admission is unavailable",
+          }),
+      cause: error,
+    });
+    if (
+      this.claimedTurn.status === "preflight" &&
+      !(await this.restorePreExecutionCheckpoint())
+    ) {
+      const settled = await this.refuseCurrentTurn(refusal);
+      if (Result.isError(settled)) {
+        return settled;
+      }
+    }
+    return Result.err(refusal);
   }
 
   private async restorePreExecutionCheckpoint(): Promise<boolean> {
     if (
-      this.claimedTurn.status !== "preflight" ||
+      (this.claimedTurn.status !== "preflight" &&
+        this.claimedTurn.status !== "failure-pending") ||
       !this.admission?.signal.aborted ||
       this.checkpoint === undefined
     ) {
@@ -787,6 +823,16 @@ export class ChatSendLifecycle {
     });
     this.countPreflightSettlement("failed", code, failureResult);
     if (Result.isError(failureResult)) {
+      this.claimedTurn = {
+        status: "failure-pending",
+        execution: this.claimedTurn.execution,
+        failure: { code, retryable },
+        ...(this.claimedTurn.owningAssistantMessage === undefined
+          ? {}
+          : {
+              owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+            }),
+      };
       captureError(failureResult.error, { threadId: this.options.threadId });
       return;
     }
@@ -802,14 +848,24 @@ export class ChatSendLifecycle {
     const settled = await persistTerminalAssistantTurn({
       execution: this.claimedTurn.execution,
       failure: { code: "boundary-refusal", retryable: false },
-      outcome: {
-        type: "failed",
-        error:
-          error.code === ACTION_ADMISSION_CODES.periodExhausted ||
-          error.status === 429
-            ? "quota_exhausted"
-            : "provider_unavailable",
-      },
+      outcome: isActionAdmissionCode(error.code)
+        ? {
+            type: "failed",
+            error: "unknown",
+            refusal: {
+              ...ACTION_ADMISSION_REFUSALS[error.code],
+              code: error.code,
+              ...(error.hint === undefined ? {} : { hint: error.hint }),
+              ...(error.contactUrl === undefined
+                ? {}
+                : { contactUrl: error.contactUrl }),
+            },
+          }
+        : {
+            type: "failed",
+            error:
+              error.status === 429 ? "quota_exhausted" : "provider_unavailable",
+          },
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -879,23 +935,53 @@ export class ChatSendLifecycle {
 
   async cleanup(): Promise<void> {
     try {
-      if (
-        this.claimedTurn.status === "preflight" &&
-        !(await this.restorePreExecutionCheckpoint())
-      ) {
+      const failureToPersist = await (async () => {
+        // Admission can be lost while a failed settlement write is in flight.
+        // Its original pending interaction still owns the turn in that case.
+        if (await this.restorePreExecutionCheckpoint()) {
+          return undefined;
+        }
+        switch (this.claimedTurn.status) {
+          case "failure-pending":
+            return this.claimedTurn;
+          case "preflight":
+            return {
+              status: "failure-pending" as const,
+              execution: this.claimedTurn.execution,
+              failure: { code: "internal" as const, retryable: true },
+              ...(this.claimedTurn.owningAssistantMessage === undefined
+                ? {}
+                : {
+                    owningAssistantMessage:
+                      this.claimedTurn.owningAssistantMessage,
+                  }),
+            };
+          case "unclaimed":
+          case "handed-over":
+            return undefined;
+          default:
+            this.claimedTurn satisfies never;
+            return panic(`Unhandled claimed turn: ${String(this.claimedTurn)}`);
+        }
+      })();
+      if (failureToPersist !== undefined) {
         const failureResult = await persistFailedChatTurn({
-          code: "internal",
-          execution: this.claimedTurn.execution,
+          code: failureToPersist.failure.code,
+          execution: failureToPersist.execution,
           indexThread: this.options.indexThread,
-          owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+          owningAssistantMessage: failureToPersist.owningAssistantMessage,
           recordAuditEvent: this.options.recordAuditEvent,
-          retryable: true,
+          retryable: failureToPersist.failure.retryable,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
           userId: this.options.userId,
           workspaceId: this.options.workspaceId,
         });
-        this.countPreflightSettlement("failed", "internal", failureResult);
+        this.countPreflightSettlement(
+          "failed",
+          failureToPersist.failure.code,
+          failureResult,
+        );
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, {
             source: "send-message-claimed-turn-preflight-cleanup",
@@ -1089,6 +1175,8 @@ const acceptIncomingTurn = async ({
 
     let messagesForPersistence: ChatThreadState["data"]["messages"] =
       thread.data.messages;
+    // Every decision below reads this history; acceptance holds the turn to it.
+    let plannedOnHistory = thread.data.historySnapshot;
     let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
     let incomingMessageExists = false;
     if (replayTargetMessageId !== undefined) {
@@ -1116,6 +1204,7 @@ const acceptIncomingTurn = async ({
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
+      plannedOnHistory = truncationTarget.snapshot;
       deleteMessageIdsBeforeLatest =
         truncationTarget.deleteMessageIdsBeforeLatest;
       if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
@@ -1324,6 +1413,7 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        plannedOnHistory,
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {
@@ -1430,7 +1520,7 @@ type PrepareValidatedIncomingMessageOptions = {
   };
   authorization: {
     accessibleWorkspaceIds: SafeId<"workspace">[];
-    memberRole: { role: ChatToolsInput["memberRole"] };
+    memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
     workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
@@ -1572,7 +1662,7 @@ const prepareValidatedIncomingMessage = async ({
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
       organizationId,
-      memberRole: memberRole.role,
+      memberRole,
       orgAIConfig,
       managedAIResidency,
       pinServerValidatedWorkspaceId,
@@ -1916,6 +2006,11 @@ export type SendMessageDependencies = {
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+  /**
+   * Reads the caller's membership when an approved write tool runs. Defaults
+   * to the credential-boundary read; tests bind it to their own database.
+   */
+  resolveCurrentMembership?: typeof resolveCredentialMemberAuthorization;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -1953,6 +2048,11 @@ const readOwnedTurnThreadNames = async ({
   }
   return read;
 };
+
+const currentMembershipReader = (
+  dependencies: SendMessageDependencies,
+): typeof resolveCredentialMemberAuthorization =>
+  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2345,7 +2445,7 @@ export const createSendMessage = (
                 : undefined,
           }),
         );
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
           managedAIResidency,
@@ -2516,7 +2616,7 @@ export const createSendMessage = (
           activeFile: activeFileForTools,
           editApplyMode,
           hasActiveDocxEditClient,
-          memberRole: memberRole.role,
+          memberRole,
           recordAuditEventAvailable: true,
           requestWorkspaceId: workspaceId,
           toolWorkspaceIds,
@@ -2547,7 +2647,7 @@ export const createSendMessage = (
         const chatToolContext = {
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
-          memberRole: memberRole.role,
+          memberRole,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -2555,6 +2655,7 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
+          resolveCurrentMembership: currentMembershipReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,
@@ -2641,9 +2742,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
-            templateAuthoring: areTemplateAuthoringToolsRegistered(
-              memberRole.role,
-            ),
+            templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
             webResearch: areWebResearchToolsRegistered({
               webSearchEnabled: thread.data.webSearchEnabled,
               webSearchProviders,
@@ -2778,7 +2877,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
         });
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
         yield* Result.await(
           prepareDispatch({
             phase: "dispatch",
@@ -2790,10 +2889,10 @@ export const createSendMessage = (
           }),
         );
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const isServerTool = (toolName: string) =>
-          streamingTools[toolName]?.execute !== undefined;
+          registeredChatTool(streamingTools, toolName)?.execute !== undefined;
 
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.
@@ -2999,7 +3098,7 @@ export const createSendMessage = (
                   });
                 };
 
-                const chatResponse = await dependencies.streamResponse({
+                const outcome = await dependencies.streamResponse({
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -3063,11 +3162,22 @@ export const createSendMessage = (
                 // refusal). No terminal middleware hook runs in that branch,
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
-                if (!isChatStreamResponse(chatResponse)) {
-                  await run.fail("internal", chatResponse.status >= 500);
+                switch (outcome.type) {
+                  case "refused":
+                    await run.fail(
+                      outcome.response.failureCode,
+                      outcome.response.retryable,
+                    );
+                    return outcome.response;
+                  case "streaming":
+                    return outcome.response;
+                  default: {
+                    outcome satisfies never;
+                    return panic(
+                      `Unhandled chat stream outcome: ${String(outcome)}`,
+                    );
+                  }
                 }
-
-                return chatResponse;
               } catch (error) {
                 await run.fail("internal", true);
                 throw error;
@@ -3127,11 +3237,6 @@ const applyAssistantPersistencePlan = ({
       return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
     }
   }
-};
-
-const isChatStreamResponse = (response: Response): boolean => {
-  const contentType = response.headers.get("content-type");
-  return contentType?.includes("text/event-stream") === true;
 };
 
 const messageNeedsExternalMcpValidation = (

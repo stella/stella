@@ -10,7 +10,7 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   canTriageSignals,
@@ -23,6 +23,7 @@ const config = {
     "Dismiss an inbox signal with an optional reason; the reason is kept " +
     "for tuning the producer that emitted it.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

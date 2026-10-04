@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
   statuses: read
+  actions: read
+  issues: read
 
 concurrency:
   group: release-tag
@@ -23,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: release-app
     timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.candidate.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,6 +40,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_SHA: ${{ inputs.sha }}
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve the trusted release guard
+        run: cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
 
       - name: Checkout the verified commit
         env:
@@ -63,17 +70,6 @@ jobs:
           VERSION: ${{ steps.candidate.outputs.value }}
         run: bun scripts/check-cli-release-coupling.ts --version "$VERSION"
 
-      - name: Warn on stale marketing recordings
-        # Reads the committed captures.ts matrix and recordings-manifest.json
-        # only (no node_modules), so no install step is needed. Marketing
-        # freshness is content debt, not a release defect: staleness surfaces
-        # as a workflow warning instead of blocking the tag. Clear it with
-        # `bun run marketing:reshoot` (re-records only the stale captures).
-        run: |
-          if ! bun run marketing:stale --strict; then
-            echo "::warning::Stale marketing recordings (see step log). Re-record with \`bun run marketing:reshoot\`."
-          fi
-
       - name: Mint App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -86,6 +82,7 @@ jobs:
 
       - name: Push tag
         env:
+          RELEASE_HEALTH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
           # Injected only for this step: the App token never touches disk via
@@ -93,7 +90,42 @@ jobs:
           # scripts) run without it available.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA"
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           git tag -a "$TAG" "$RELEASE_SHA" -m "$TAG"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG"
+
+  # Marketing freshness is content debt, not a release defect: staleness
+  # surfaces as a warning and never blocks the tag. The check loads installed
+  # packages, so it runs in its own read-only job, away from the tag token.
+  # Clear it with `bun run marketing:reshoot` (re-records only stale captures).
+  marketing-freshness:
+    name: Warn on stale marketing recordings
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.tag.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Warn on stale marketing recordings
+        run: |
+          if ! bun run marketing:stale --strict; then
+            echo "::warning::Stale marketing recordings (see step log). Re-record with \`bun run marketing:reshoot\`."
+          fi

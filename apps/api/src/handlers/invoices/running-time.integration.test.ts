@@ -29,6 +29,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -98,7 +99,7 @@ const context = <TContext>(
   return asTestRaw<TContext>({
     ...request,
     workspaceId,
-    memberRole: { role: actor },
+    memberRole: sessionMemberRole(actor),
     session: { activeOrganizationId: ids.orgA },
     user: { id: actorId },
     safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),
@@ -590,31 +591,20 @@ test("concurrent invoice creation respects the final available matter slot", asy
   expect(await db.$count(invoices, eq(invoices.workspaceId, workspaceId))).toBe(
     LIMITS.invoicesPerWorkspace - 1,
   );
-  const bothRead = Promise.withResolvers();
-  let readCount = 0;
+  const bothStarted = Promise.withResolvers();
+  let startedCount = 0;
   const realSafeDb = asTestRaw<SafeDb>(
     createSafeDb(db, [workspaceId], ids.orgA, ids.userAdmin),
   );
+  // Synchronize competing requests at transaction admission, since eligibility
+  // is now checked inside the guarded transaction rather than in a preflight.
   const safeDb: SafeDb = async (run, retry) => {
-    const result = await realSafeDb(run, retry);
-    if (
-      result.isOk() &&
-      Array.isArray(result.value) &&
-      result.value.some(
-        (item: unknown) =>
-          typeof item === "object" &&
-          item !== null &&
-          "id" in item &&
-          entryIds.some((id) => item.id === id),
-      )
-    ) {
-      readCount += 1;
-      if (readCount === 2) {
-        bothRead.resolve(undefined);
-      }
-      await bothRead.promise;
+    startedCount += 1;
+    if (startedCount === 2) {
+      bothStarted.resolve(undefined);
     }
-    return result;
+    await bothStarted.promise;
+    return await realSafeDb(run, retry);
   };
   const results = await Promise.all(
     entryIds.map(
@@ -633,7 +623,7 @@ test("concurrent invoice creation respects the final available matter slot", asy
         }),
     ),
   );
-  expect(readCount).toBe(2);
+  expect(startedCount).toBe(2);
   expect(results.filter((result) => "id" in result)).toHaveLength(1);
   expect(results.filter((result) => "code" in result)).toEqual([
     expect.objectContaining({

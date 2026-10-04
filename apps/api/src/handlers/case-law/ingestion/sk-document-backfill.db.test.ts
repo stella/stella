@@ -8,6 +8,7 @@
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 
+import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -26,15 +27,19 @@ import {
   claimDocumentFetch,
   DOCUMENT_FETCH_FAILURE,
   fetchDecisionDocument,
+  hasPendingDeferredDocumentsForSource,
   loadPendingDocuments,
+  loadRequestedDocuments,
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 /**
@@ -43,22 +48,6 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
  * row it created.
  */
 const QUEUE_READ_LIMIT = 500;
-
-/**
- * The queue row a store call would have come from. Only the id and the
- * jurisdiction are read, and this suite runs with corpus storage off,
- * so the rest is filler.
- */
-const pendingFor = (id: SafeId<"caseLawDecision">): PendingDocument => ({
-  id,
-  caseNumber: "stored",
-  ecli: null,
-  court: "Okresný súd",
-  country: "SVK",
-  decisionDate: null,
-  decisionType: null,
-  documentUrl: null,
-});
 
 /**
  * Keep only the decisions a test created, in the order the queue
@@ -131,6 +120,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     let sourceId: SafeId<"caseLawSource">;
     const created: SafeId<"caseLawDecision">[] = [];
+    const probeSources: SafeId<"caseLawSource">[] = [];
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
     const insertDecision = async (values: {
@@ -148,11 +138,12 @@ if (!databaseUrl || !runPostgresTests) {
         | typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
       sourceObservationHash?: string;
       sourceObservationOrder?: bigint;
+      sourceId?: SafeId<"caseLawSource">;
     }) => {
       const [row] = await db
         .insert(caseLawDecisions)
         .values({
-          sourceId,
+          sourceId: values.sourceId ?? sourceId,
           caseNumber: values.caseNumber,
           court: "Okresný súd",
           country: "SVK",
@@ -175,6 +166,15 @@ if (!databaseUrl || !runPostgresTests) {
       }
       created.push(row.id);
       return row.id;
+    };
+
+    const claimFor = async (id: SafeId<"caseLawDecision">) => {
+      const claim = await claimDocumentFetch(id, scopedDb);
+      expect(claim.status).toBe("claimed");
+      if (claim.status !== "claimed") {
+        throw new Error("expected claimed snapshot");
+      }
+      return claim.decision;
     };
 
     const readFetchState = async (id: SafeId<"caseLawDecision">) =>
@@ -219,6 +219,82 @@ if (!databaseUrl || !runPostgresTests) {
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
       }
+      if (probeSources.length > 0) {
+        await db
+          .delete(caseLawSources)
+          .where(inArray(caseLawSources.id, probeSources));
+      }
+    });
+
+    test("backlog presence includes cooled-down and parked decisions", async () => {
+      const [probeSource] = await db
+        .insert(caseLawSources)
+        .values({
+          adapterKey: `sk-document-probe-${suffix}`,
+          name: "SK document backlog probe",
+          enabled: false,
+        })
+        .returning({ id: caseLawSources.id });
+      if (!probeSource) {
+        throw new Error("expected probe source row");
+      }
+      probeSources.push(probeSource.id);
+
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `filled-probe-${suffix}`,
+        fulltext: "already parsed",
+        documentUrl: "https://example.test/filled-probe.pdf",
+      });
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `url-less-probe-${suffix}`,
+        fulltext: null,
+        documentUrl: null,
+      });
+      expect(
+        await hasPendingDeferredDocumentsForSource({
+          scopedDb,
+          sourceId: probeSource.id,
+        }),
+      ).toBe(false);
+
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `cooled-backlog-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/cooled-backlog.pdf",
+        documentFetchAttemptedAt: new Date(),
+        documentFetchAttempts: 1,
+      });
+      await insertDecision({
+        sourceId: probeSource.id,
+        caseNumber: `parked-backlog-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/parked-backlog.pdf",
+        documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS,
+      });
+
+      expect(
+        await loadRequestedDocuments({
+          scopedDb,
+          sourceId: probeSource.id,
+          limit: 1,
+        }),
+      ).toEqual([]);
+      expect(
+        await loadRemainingDocuments({
+          scopedDb,
+          sourceId: probeSource.id,
+          limit: 1,
+        }),
+      ).toEqual([]);
+      expect(
+        await hasPendingDeferredDocumentsForSource({
+          scopedDb,
+          sourceId: probeSource.id,
+        }),
+      ).toBe(true);
     });
 
     test("queues only decisions that are still waiting on a document", async () => {
@@ -260,7 +336,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision: await claimFor(id),
         document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
@@ -302,9 +378,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision: await claimFor(id),
         scopedDb,
       });
 
@@ -334,9 +408,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision: await claimFor(id),
         scopedDb,
       });
 
@@ -362,15 +434,16 @@ if (!databaseUrl || !runPostgresTests) {
         sections: [],
       };
 
+      const decision = await claimFor(id);
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: stored,
         scopedDb,
       });
       // A second fetch of the same decision — the queue and a reader can
       // both reach it — must converge rather than replace what is there.
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: { ...stored, fulltext: "Stale re-parse." },
         scopedDb,
       });
@@ -390,8 +463,9 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/no-erase.pdf",
       });
 
+      const decision = await claimFor(id);
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
@@ -400,9 +474,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
       });
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision,
         scopedDb,
       });
 
@@ -510,6 +582,8 @@ if (!databaseUrl || !runPostgresTests) {
         sections: [],
       };
 
+      const decision = await claimFor(id);
+
       // The source refreshed the decision while the document was being
       // fetched, so what was parsed describes a row that no longer
       // exists in that form.
@@ -519,10 +593,9 @@ if (!databaseUrl || !runPostgresTests) {
         .where(eq(caseLawDecisions.id, id));
 
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document,
         scopedDb,
-        claimedSourceHash: "hash-at-claim",
       });
 
       expect(
@@ -534,13 +607,19 @@ if (!databaseUrl || !runPostgresTests) {
         )?.fulltext,
       ).toBeNull();
 
+      await db
+        .update(caseLawDecisions)
+        .set({
+          documentFetchAttemptedAt: new Date(Date.now() - 60 * 60 * 1000),
+        })
+        .where(eq(caseLawDecisions.id, id));
+
       // Fetched again against the row as it now stands, the same
       // document stores.
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision: await claimFor(id),
         document,
         scopedDb,
-        claimedSourceHash: "hash-after-refresh",
       });
 
       expect(
@@ -563,11 +642,16 @@ if (!databaseUrl || !runPostgresTests) {
 
       const claim = await claimDocumentFetch(id, scopedDb);
 
-      expect(claim).toEqual({
-        status: "claimed",
+      expect(claim.status).toBe("claimed");
+      if (claim.status !== "claimed") {
+        throw new Error("expected claimed snapshot");
+      }
+      expect(claim.decision).toMatchObject({
+        id,
         sourceHash: "hash-at-claim",
-        attempts: 1,
+        documentUrl: "https://example.test/claim-hash.pdf",
       });
+      expect(claim.attempts).toBe(1);
     });
 
     test("a run just attempted is left alone until its cooldown passes", async () => {
@@ -715,7 +799,7 @@ if (!databaseUrl || !runPostgresTests) {
         answer: () => Promise<Response>,
       ) =>
         await fetchDecisionDocument({
-          decision: { ...pendingFor(id), documentUrl: PUBLISHER_URL },
+          decisionId: id,
           fetchDocument: answer,
           scopedDb,
           signal: new AbortController().signal,
@@ -731,6 +815,89 @@ if (!databaseUrl || !runPostgresTests) {
           documentUrl: PUBLISHER_URL,
           documentFetchAttempts,
         });
+
+      test("buffered decisions use the claimed URL and metadata for every old response", async () => {
+        const pdf = PDF.create();
+        pdf
+          .addPage({ size: "letter" })
+          .drawText("Current decision text", { x: 72, y: 720, size: 12 });
+        const bytes = await pdf.save();
+        const oldPdf = PDF.create();
+        oldPdf
+          .addPage({ size: "letter" })
+          .drawText("Old decision text", { x: 72, y: 720, size: 12 });
+        const oldBytes = await oldPdf.save();
+        const currentUrl = PUBLISHER_URL.replace("0b7e8a8e", "1b7e8a8e");
+        for (const oldStatus of [200, 404]) {
+          const label = `buffered-${oldStatus}`;
+          const id = await insertDecision({
+            caseNumber: `${label}-${suffix}`,
+            fulltext: null,
+            documentUrl: PUBLISHER_URL,
+            sourceHash: "source-v1",
+          });
+          const buffered = await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+          });
+          if (buffered === undefined) {
+            throw new Error("expected buffered decision");
+          }
+          const metadata = {
+            caseNumber: `current-${suffix}-${oldStatus}`,
+            ecli: "ECLI:SK:OSBA1:2026:1234567890.1",
+            court: "Current court",
+            country: "SVK",
+            decisionDate: "2026-06-01",
+            decisionType: "ROZSUDOK",
+          };
+          await db
+            .update(caseLawDecisions)
+            .set({
+              ...metadata,
+              documentUrl: currentUrl,
+              sourceHash: "source-v2",
+            })
+            .where(eq(caseLawDecisions.id, buffered.id));
+          expect(buffered.documentUrl).not.toBe(currentUrl);
+          expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
+          const urls: string[] = [];
+          const outcome = await fetchDecisionDocument({
+            decisionId: buffered.id,
+            fetchDocument: async (url) => {
+              urls.push(url.href);
+              return url.href === currentUrl
+                ? new Response(bytes)
+                : new Response(oldStatus === 200 ? oldBytes : null, {
+                    status: oldStatus,
+                  });
+            },
+            scopedDb,
+            signal: new AbortController().signal,
+          });
+          expect(urls).toEqual([currentUrl]);
+          expect(outcome.status).toBe("filled");
+          if (outcome.status !== "filled") {
+            throw new Error("expected current document");
+          }
+          expect(outcome.document.fulltext).toContain("Current decision text");
+          expect(outcome.document.fulltext).not.toContain("Old decision text");
+          expect(outcome.document.documentAst.metadata).toMatchObject({
+            caseNumber: metadata.caseNumber,
+            ecli: metadata.ecli,
+            court: metadata.court,
+            decisionDate: metadata.decisionDate,
+            decisionType: metadata.decisionType,
+          });
+          const stored = await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+            columns: { fulltext: true, sourceHash: true },
+          });
+          expect(stored).toEqual({
+            fulltext: outcome.document.fulltext,
+            sourceHash: "source-v2",
+          });
+        }
+      });
 
       test("an unreadable download parks the decision instead of throwing", async () => {
         const id = await insertPending("unparseable");
@@ -756,6 +923,57 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(text?.fulltext).toBeNull();
+      });
+
+      /** A body one byte over the ceiling that starts with `head`. */
+      const oversizedBody = (head: string): Uint8Array => {
+        const bytes = new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1);
+        bytes.set(new TextEncoder().encode(head));
+        return bytes;
+      };
+
+      test("a PDF over the byte ceiling parks the decision with nothing stored", async () => {
+        const id = await insertPending("too-large");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(new Response(oversizedBody("%PDF-1.7\n"))),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+          detail: `over-${MAX_DOCUMENT_PDF_BYTES}-bytes`,
+        });
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
+        const [stored] = await db
+          .select({ fulltext: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        expect(stored).toEqual({ fulltext: null });
+      });
+
+      test("a body over the byte ceiling that is not a PDF throws as any non-PDF body does", async () => {
+        const id = await insertPending("too-large-html");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(oversizedBody("<!doctype html><title>error")),
+            ),
+        ).then(
+          (value: unknown) => ({ resolved: value }),
+          (error: unknown) => error,
+        );
+
+        expect(outcome).toBeInstanceOf(SkDocumentNonPdfError);
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBeLessThan(
+          MAX_DOCUMENT_FETCH_ATTEMPTS,
+        );
       });
 
       test("a refused download defers the decision behind its own cooldown", async () => {

@@ -595,11 +595,7 @@ export const nativeExtractionRunRequestForFields = ({
   filePropertyId,
 }: NativeExtractionRequestOptions): NativeExtractionRequestResult => {
   const fileFieldRow = findExtractionFileFieldRow(fields, filePropertyId);
-  if (
-    !fileFieldRow ||
-    fileFieldRow.content.type !== "file" ||
-    !requiresDurableNativeExtraction(fileFieldRow.content)
-  ) {
+  if (!fileFieldRow || !requiresDurableNativeExtraction(fileFieldRow.content)) {
     return null;
   }
   return {

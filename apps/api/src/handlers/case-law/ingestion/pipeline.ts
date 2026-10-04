@@ -1,6 +1,14 @@
 import { Result, panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+  type IngestionPipelineResult,
+  CYCLE_HALT_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
+
+import type { IngestionScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,
@@ -30,11 +38,18 @@ import {
   PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import {
+  loadUnavailableStreaks,
+  planUnreadItems,
+  sameStreaks,
+  writeUnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -42,8 +57,11 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import {
+  AdapterFetchError,
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -53,7 +71,10 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import type {
+  CycleDeadline,
+  StartCycleDeadlineOptions,
+} from "@/api/lib/legal-search/cycle-deadline";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -63,9 +84,17 @@ type DbSlot = {
 };
 
 type PipelineInput = {
+  onDocumentObservation?: DocumentStageObserver;
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
-  scopedDb: ScopedDb;
+  scopedDb: IngestionScopedDb;
+  countStoredTotalSource?: Parameters<
+    typeof refreshNextSourceStoredTotal
+  >[0]["countSource"];
+  acquireStoredTotalAdmission: (options: {
+    deadline: CycleDeadline | undefined;
+    phase?: "reserve" | "start";
+  }) => Promise<"granted" | "held" | "unknown">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
    * starts a page only while enough of the budget is left for the page to
@@ -95,26 +124,6 @@ type PipelineInput = {
   dbSlot?: DbSlot;
   corpus?: CaseLawCorpusDependencies;
 };
-
-type PipelineResult = {
-  inserted: number;
-  skipped: number;
-  searchVectorFailures: number;
-  s3UploadFailures: number;
-  pagesProcessed: number;
-  nextCursor: string | null;
-  /** Non-null if the adapter was halted early due to repeated failures. */
-  haltReason: string | null;
-};
-
-/**
- * Halt reasons the operator loop classifies on. The runner reads the timeout
- * one to separate a cycle that ran out of budget from one that failed, so the
- * text is a shared constant rather than a literal on both sides.
- */
-export const CYCLE_HALT_REASON = {
-  TIMEOUT: "Cycle timeout exceeded",
-} as const;
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -179,9 +188,35 @@ const batchHaltReason = (
   }
 };
 
-/** What a page asks the database to write: its decisions and supplements. */
-const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
-  decisions.length + (supplements?.length ?? 0);
+const batchStopKind = (
+  stop: DecisionBatchHalt,
+): IngestionStopKind | undefined => {
+  switch (stop.type) {
+    case "retryable":
+    case "timeout":
+      return INGESTION_STOP_KIND.INTERNAL_ERROR;
+    case "insert-limit":
+      return undefined;
+    case "failure-streak":
+      return stop.stopKind;
+    case "aborted":
+      return panic("A crawl batch carries no abort signal");
+    default:
+      stop satisfies never;
+      return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
+/**
+ * What a page asks the database to write: its decisions, supplements and
+ * unread items.
+ */
+const pageItemCount = ({
+  decisions,
+  supplements,
+  unreadItems,
+}: SyncPage): number =>
+  decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
 const PAGE_SLOT = {
   HELD: "held",
@@ -203,13 +238,18 @@ export const runIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
+  acquireStoredTotalAdmission,
+  countStoredTotalSource,
+  onDocumentObservation,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-}: PipelineInput): Promise<PipelineResult> => {
+}: PipelineInput): Promise<IngestionPipelineResult> => {
+  const resolveMetadataUrlSchema =
+    createSourceMetadataUrlSchemaResolver(scopedDb);
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -221,6 +261,11 @@ export const runIngestionPipeline = async ({
   const deadline = cycle === undefined ? undefined : startCycleDeadline(cycle);
 
   let cursor = source.syncCursor;
+  /** The held page's consecutive unavailable cycles, as last stored. */
+  let unavailableStreaks = loadUnavailableStreaks({
+    adapterKey: adapter.key,
+    config: source.config,
+  });
   let inserted = 0;
   let skipped = 0;
   let searchVectorFailures = 0;
@@ -235,6 +280,7 @@ export const runIngestionPipeline = async ({
    */
   let consecutiveFailures = 0;
   let haltReason: string | null = null;
+  let stopKind: IngestionStopKind | undefined;
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -259,11 +305,29 @@ export const runIngestionPipeline = async ({
           if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
             return { type: "budget-exhausted" } as const;
           }
-          const pageResult = await adapter.fetchPage(
-            fetchCursor,
-            source.config ?? {},
-            pageSignal,
-          );
+          const fetched = await Result.tryPromise({
+            try: async () =>
+              await adapter.fetchPage(
+                fetchCursor,
+                source.config ?? {},
+                pageSignal,
+                onDocumentObservation,
+              ),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: cause instanceof Error ? cause.message : String(cause),
+                adapterKey: adapter.key,
+                cursor: fetchCursor,
+                cause,
+                stopKind: pageSignal.aborted
+                  ? INGESTION_STOP_KIND.DEADLINE
+                  : ingestionStopKindOf(cause, "adapter"),
+              }),
+          });
+          if (Result.isError(fetched)) {
+            return { error: fetched.error, type: "fetch-error" } as const;
+          }
+          const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
             return { error: pageResult.error, type: "fetch-error" } as const;
           }
@@ -290,7 +354,11 @@ export const runIngestionPipeline = async ({
       remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
       pageTimeoutMs: pageTimeout,
     });
-    return { type: "halt", reason: CYCLE_HALT_REASON.TIMEOUT } as const;
+    return {
+      type: "halt",
+      reason: CYCLE_HALT_REASON.TIMEOUT,
+      stopKind: INGESTION_STOP_KIND.DEADLINE,
+    } as const;
   };
 
   const fetchNextObservedPage = async () => {
@@ -312,6 +380,7 @@ export const runIngestionPipeline = async ({
         return {
           type: "halt",
           reason: databaseTimeoutHaltReason(observedPageResult.error),
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
         } as const;
       }
       if (observedPageResult.error instanceof Error) {
@@ -328,15 +397,20 @@ export const runIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
+      const pageStopKind =
+        deadline?.signal.aborted || pageSignal.aborted
+          ? INGESTION_STOP_KIND.DEADLINE
+          : observedPageResult.value.error.stopKind;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
         httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
         reason,
+        stopKind: pageStopKind,
         inserted,
         skipped,
       });
-      return { type: "halt", reason } as const;
+      return { type: "halt", reason, stopKind: pageStopKind } as const;
     }
     return observedPageResult.value;
   };
@@ -426,19 +500,22 @@ export const runIngestionPipeline = async ({
         });
       }
       // db-await-in-loop: one admitted part at a time, each settled before the next, ordered per observation
-      const applied = await applyDecisionBatch({
-        batch,
-        sourceId: source.id,
-        scopedDb,
-        observation,
-        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-        corpus,
-        polarityRules,
-        context: { adapterKey: adapter.key, cursor },
-        failureStreak: consecutiveFailures,
-        insertLimit:
-          maxDecisions === undefined ? undefined : maxDecisions - inserted,
-      });
+      const applied = await applyDecisionBatch(
+        {
+          batch,
+          sourceId: source.id,
+          scopedDb,
+          observation,
+          refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          corpus,
+          polarityRules,
+          context: { adapterKey: adapter.key, cursor },
+          failureStreak: consecutiveFailures,
+          insertLimit:
+            maxDecisions === undefined ? undefined : maxDecisions - inserted,
+        },
+        resolveMetadataUrlSchema,
+      );
       inserted += applied.inserted;
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
@@ -451,6 +528,10 @@ export const runIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
+        stopKind =
+          applied.halt === null
+            ? INGESTION_STOP_KIND.INTERNAL_ERROR
+            : batchStopKind(applied.halt);
         return batchHalt;
       }
     }
@@ -483,17 +564,20 @@ export const runIngestionPipeline = async ({
       const placed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-          await processSupplement({
-            supplement,
-            sourceId: source.id,
-            scopedDb,
-            observedAt: new Date(),
-            nextObservationOrder,
-            reparseStoredRaw,
-            readStoredRaw: readStoredRawFromS3,
-            corpus,
-            polarityRules,
-          }),
+          await processSupplement(
+            {
+              supplement,
+              sourceId: source.id,
+              scopedDb,
+              observedAt: new Date(),
+              nextObservationOrder,
+              reparseStoredRaw,
+              readStoredRaw: readStoredRawFromS3,
+              corpus,
+              polarityRules,
+            },
+            resolveMetadataUrlSchema,
+          ),
         catch: (cause) => cause,
       });
       if (Result.isError(placed)) {
@@ -536,7 +620,74 @@ export const runIngestionPipeline = async ({
     return await flushIngestionFailures(failures);
   };
 
-  /** Apply a page's decisions, then place its supplements. */
+  /**
+   * Settle a page's unread items once everything else on it is settled.
+   * Items whose read stays unavailable hold the cursor until their bound is
+   * spent; refusals and spent items are stored typed. The counts are written
+   * only from a cycle in which nothing else held the page, so a cycle that
+   * failed for another reason does not count against an item.
+   */
+  const settlePageUnreadItems = async ({
+    unreadItems,
+    observation,
+  }: {
+    unreadItems: SyncPage["unreadItems"];
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    if (
+      unreadItems === undefined &&
+      Object.keys(unavailableStreaks).length === 0
+    ) {
+      return null;
+    }
+    const plan = planUnreadItems(unreadItems, unavailableStreaks);
+    if (plan.terminal.length > 0) {
+      const s3FailuresBefore = s3UploadFailures;
+      const halted = await applyPageDecisions({
+        decisions: plan.terminal,
+        observation,
+      });
+      if (halted !== null) {
+        return halted;
+      }
+      if (s3UploadFailures > s3FailuresBefore) {
+        // The page's corpus-write hold reports this cycle; the counts stay.
+        return null;
+      }
+    }
+    if (!sameStreaks(plan.streaks, unavailableStreaks)) {
+      await sourceLease.beforeDatabaseMark();
+      const written = await writeUnavailableStreaks({
+        scopedDb,
+        sourceId: source.id,
+        leaseToken: sourceLease.leaseToken,
+        streaks: plan.streaks,
+      });
+      if (!written) {
+        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        return "Source ingestion lease was lost; cursor held for retry";
+      }
+      unavailableStreaks = plan.streaks;
+    }
+    if (plan.holding === 0) {
+      if (plan.terminal.length > 0) {
+        logger.warn("case_law.ingestion.unread_items_stored", {
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          stored: plan.terminal.length,
+        });
+      }
+      return null;
+    }
+    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
+  };
+
+  /**
+   * Apply a page's decisions, place its supplements, then settle its unread
+   * items. A page with failed corpus writes stops before the unread items:
+   * the cycle is held for those writes and does not count against an item.
+   */
   const applyPage = async ({
     page,
     observation,
@@ -544,6 +695,7 @@ export const runIngestionPipeline = async ({
     page: SyncPage;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
+    const s3FailuresBefore = s3UploadFailures;
     const halted = await applyPageDecisions({
       decisions: page.decisions,
       observation,
@@ -551,9 +703,16 @@ export const runIngestionPipeline = async ({
     // After the page's packs are flushed, so a judgment written on this page
     // is settled before its supplement writes it again, and before the
     // cursor moves, so a supplement that could not be placed holds it.
-    return await placePageSupplements({
+    const placed = await placePageSupplements({
       supplements: page.supplements,
       halted,
+    });
+    if (placed !== null || s3UploadFailures > s3FailuresBefore) {
+      return placed;
+    }
+    return await settlePageUnreadItems({
+      unreadItems: page.unreadItems,
+      observation,
     });
   };
 
@@ -561,6 +720,7 @@ export const runIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
+      stopKind = observedPage.stopKind;
       break;
     }
 
@@ -577,6 +737,7 @@ export const runIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
+      stopKind = INGESTION_STOP_KIND.DEADLINE;
       break;
     }
     const pageT0 = performance.now();
@@ -606,6 +767,7 @@ export const runIngestionPipeline = async ({
         nextCursor: page.nextCursor ?? "",
         page: pagesProcessed + 1,
         decisions: page.decisions.length,
+        itemBuildFailures: page.itemBuildFailures?.count ?? 0,
         inserted: pageInserted,
         skipped: pageSkipped,
         durationMs: Math.round(performance.now() - pageT0),
@@ -613,10 +775,12 @@ export const runIngestionPipeline = async ({
       });
 
       if (haltReason) {
+        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
         logger.error("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,
+          stopKind,
           inserted,
           skipped,
         });
@@ -666,15 +830,19 @@ export const runIngestionPipeline = async ({
   }
   cursor = checkpoint.cursor;
 
-  // After the checkpoint and outside its transaction: the count walks the
-  // source's whole index range, and holding the leased source row's
-  // transaction open for it would block the next cycle on bookkeeping. It
-  // rate-limits itself to one count per source per interval and reports its
-  // own failures, so its outcome never reaches this run's result.
-  await refreshSourceStoredTotal({
+  // Outside the checkpoint transaction: a durable refresh claim bounds
+  // daily counts, including failed attempts, through separate admission.
+  await refreshNextSourceStoredTotal({
     scopedDb,
-    sourceId: source.id,
-    now: new Date(),
+    ...(countStoredTotalSource === undefined
+      ? {}
+      : { countSource: countStoredTotalSource }),
+    ...(deadline === undefined ? {} : { deadline }),
+    acquireAdmission: async (phase) =>
+      await acquireStoredTotalAdmission({
+        deadline,
+        ...(phase === undefined ? {} : { phase }),
+      }),
   });
 
   return {
@@ -685,5 +853,6 @@ export const runIngestionPipeline = async ({
     pagesProcessed,
     nextCursor: cursor,
     haltReason,
+    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };

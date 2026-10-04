@@ -4,90 +4,203 @@
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 32549
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 33312
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 33513
       }
     ],
     "anthropic/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 33039
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 33801
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 34002
       }
     ],
     "bedrock/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 32782
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 33545
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 33746
       }
     ],
     "bedrock/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 33271
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34033
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 34234
       }
     ],
     "google/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 31718
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 32481
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 32682
       }
     ],
     "google/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 32196
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 32958
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 33159
       }
     ],
     "mistral/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 34143
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34906
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 35118
       }
     ],
     "mistral/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 34668
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 35431
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 35644
       }
     ],
     "openai/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 33757
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34520
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 34721
       }
     ],
     "openai/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 34272
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 35035
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 35236
       }
     ],
     "openrouter-anthropic/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 33597
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34383
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 34587
       }
     ],
     "openrouter-anthropic/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 34096
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34881
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 35086
       }
     ],
     "openrouter/default": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 33597
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34383
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 34587
       }
     ],
     "openrouter/extended": [
       {
         "reason": "Measured when the stable prefix was layered.",
         "tokens": 34096
+      },
+      {
+        "reason": "Sanctions screening inputs on counterparty_check",
+        "tokens": 34881
+      },
+      {
+        "reason": "Linked clause directive guidance and published-source discovery",
+        "tokens": 35086
       }
     ]
   },
   "toolTokenBudget": 1000,
   "toolsOverBudget": {
     "configure_template_fields": "One call configures every field of a template: who fills it, its input control, options and validation, one union member per field kind.",
+    "counterparty_check": "Register and sanctions checks share four subject variants and birth dates at three precisions; identity inputs and per-list result guidance must remain explicit.",
     "create-document": "The document source grammar the compiler reads (headings, clauses, tables, numbering) is the contract, and the description states what the tool must not be used for.",
     "create_reader_annotation": "A mark anchors to a decision or statute passage, so the call carries the target, quoted passages with their anchors, and the visibility rules.",
     "discover_tools": "Its description lists every sandbox API the model can discover; that list is what keeps those APIs out of the eager tool set.",

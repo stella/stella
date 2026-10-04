@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
+import { readCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-data";
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
 import {
   inputSchemaByteSize,
   MAX_CAPABILITY_SCHEMA_BYTES,
 } from "./capability-catalog";
-import { compactSchemaDefs } from "./compact-schema-defs";
+import {
+  serializeCapabilityJson,
+  serializeCapabilityShard,
+} from "./capability-shards";
+import { compactSchemaDefs, recompactSchemaDefs } from "./compact-schema-defs";
 
 // THE correctness gate for `$defs` compaction. A compacted schema that admits
 // even slightly more than its source is a schema the CLI accepts and the
@@ -20,20 +26,15 @@ import { compactSchemaDefs } from "./compact-schema-defs";
 // committed artifact, where it holds with no handler graph, no env, and no
 // database, and where it also catches a hand-edit of the generated JSON.
 
-// Read rather than `import`: a 300KB JSON literal in a module graph is a large
-// bill for the type checker to pay on every build, for a value only this file
-// reads once.
-const catalogEntries: readonly Record<string, unknown>[] = JSON.parse(
-  await Bun.file(
-    new URL(
-      "../../../../packages/cli/capability-catalog.json",
-      import.meta.url,
-    ),
-  ).text(),
-);
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const catalogEntries = readCapabilityCatalog().map((entry) => {
+  if (!isRecord(entry)) {
+    throw new TypeError("Expected capability catalog object");
+  }
+  return entry;
+});
 
 /** Narrow a schema node for assertions; anything else is a test failure. */
 const recordOf = (value: unknown): Record<string, unknown> => {
@@ -91,7 +92,12 @@ describe("committed capability catalog", () => {
 describe("compact/expand round trip over every catalog entry", () => {
   test("expanding then recompacting reproduces the committed artifact exactly", () => {
     const mismatches: string[] = [];
-    for (const [id, compacted] of compactedById) {
+    for (const entry of catalogEntries) {
+      const id = entry["id"];
+      if (typeof id !== "string") {
+        throw new TypeError("Capability id is not a string");
+      }
+      const compacted = compactedById.get(id);
       if (compacted === undefined) {
         continue;
       }
@@ -107,23 +113,35 @@ describe("compact/expand round trip over every catalog entry", () => {
         mismatches.push(`${id}: expanded schema still contains a $ref`);
         continue;
       }
-      const recompacted = compactSchemaDefs(expanded);
+      const recompacted = recompactSchemaDefs(compacted);
       if (recompacted.status !== "compacted") {
         mismatches.push(`${id}: recompaction failed: ${recompacted.reason}`);
         continue;
       }
       // Deterministic down to the byte, in a different process than the one
       // that wrote the artifact.
+      const recompactedEntry = {
+        ...entry,
+        id,
+        inputSchema: recompacted.inputSchema,
+      };
       if (
-        JSON.stringify(recompacted.inputSchema) !== JSON.stringify(compacted)
+        serializeCapabilityShard(recompactedEntry) !==
+        readFileSync(
+          new URL(
+            `../../../../packages/cli/capabilities/${id}.json`,
+            import.meta.url,
+          ),
+          "utf-8",
+        )
       ) {
         mismatches.push(`${id}: recompaction did not reproduce the artifact`);
         continue;
       }
       // The other direction, so neither pass can drift from the other.
       if (
-        JSON.stringify(expandSchemaDefs(recompacted.inputSchema)) !==
-        JSON.stringify(expanded)
+        serializeCapabilityJson(expandSchemaDefs(recompacted.inputSchema)) !==
+        serializeCapabilityJson(expanded)
       ) {
         mismatches.push(`${id}: re-expansion did not reproduce the schema`);
       }
@@ -179,6 +197,135 @@ describe("compactSchemaDefs", () => {
     }
     expect(JSON.stringify(result.inputSchema)).toBe(JSON.stringify(source));
     expect(result.inputSchema.$defs).toBeUndefined();
+  });
+
+  test("artifact recompaction preserves published defs across fragment key orders", () => {
+    const reverseKeys = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map(reverseKeys);
+      }
+      if (!isRecord(value)) {
+        return value;
+      }
+      return Object.fromEntries(
+        Object.entries(value)
+          .toReversed()
+          .map(([key, child]) => [key, reverseKeys(child)]),
+      );
+    };
+    const entries = Object.entries(condition);
+    const orders = entries.flatMap((first, firstIndex) =>
+      entries.flatMap((second, secondIndex) => {
+        if (firstIndex === secondIndex) {
+          return [];
+        }
+        return [
+          [
+            first,
+            second,
+            ...entries.filter(
+              (_entry, index) => index !== firstIndex && index !== secondIndex,
+            ),
+          ],
+        ];
+      }),
+    );
+    expect(orders).toHaveLength(6);
+    const fragments = orders.flatMap((order) => {
+      const fragment = Object.fromEntries(order);
+      return [fragment, reverseKeys(fragment)];
+    });
+    expect(JSON.stringify(fragments.at(0))).not.toBe(
+      JSON.stringify(fragments.at(1)),
+    );
+    const baselineSource = {
+      body: {
+        type: "object",
+        properties: { first: condition, second: condition },
+      },
+    };
+    const baseline = compactSchemaDefs(baselineSource);
+    expect(baseline.status).toBe("compacted");
+    if (baseline.status !== "compacted") {
+      return;
+    }
+    const expected = serializeCapabilityJson(baseline.inputSchema);
+    const defs = baseline.inputSchema.$defs;
+    expect(Object.keys(defs ?? {})).toHaveLength(1);
+    if (defs === undefined) {
+      throw new TypeError("Missing baseline definition");
+    }
+    for (const first of fragments) {
+      for (const second of fragments) {
+        const source = {
+          body: { type: "object", properties: { first, second } },
+        };
+        const result = recompactSchemaDefs({
+          ...source,
+          $defs: defs,
+        });
+        expect(result.status).toBe("compacted");
+        if (result.status !== "compacted") {
+          return;
+        }
+        expect(serializeCapabilityJson(result.inputSchema.$defs)).toBe(
+          serializeCapabilityJson(baseline.inputSchema.$defs),
+        );
+        expect(serializeCapabilityJson(result.inputSchema)).toBe(expected);
+        expect(
+          serializeCapabilityJson(expandSchemaDefs(result.inputSchema)),
+        ).toBe(serializeCapabilityJson(source));
+      }
+    }
+  });
+
+  test("normal generation retains insertion-order definition names", () => {
+    const reversed = Object.fromEntries(Object.entries(condition).toReversed());
+    expect(JSON.stringify(reversed)).not.toBe(JSON.stringify(condition));
+    const original = compactSchemaDefs({
+      body: {
+        type: "object",
+        properties: { first: condition, second: condition },
+      },
+    });
+    const reordered = compactSchemaDefs({
+      body: {
+        type: "object",
+        properties: { first: reversed, second: reversed },
+      },
+    });
+    expect(original.status).toBe("compacted");
+    expect(reordered.status).toBe("compacted");
+    if (original.status !== "compacted" || reordered.status !== "compacted") {
+      return;
+    }
+    expect(Object.keys(original.inputSchema.$defs ?? {})).toHaveLength(1);
+    expect(Object.keys(reordered.inputSchema.$defs ?? {})).toHaveLength(1);
+    expect(Object.keys(original.inputSchema.$defs ?? {})).not.toEqual(
+      Object.keys(reordered.inputSchema.$defs ?? {}),
+    );
+    expect(JSON.stringify(expandSchemaDefs(original.inputSchema))).toBe(
+      JSON.stringify({
+        body: {
+          type: "object",
+          properties: { first: condition, second: condition },
+        },
+      }),
+    );
+  });
+
+  test("artifact name recovery rejects canonical aliases instead of overwriting names", () => {
+    const reversed = Object.fromEntries(Object.entries(condition).toReversed());
+    expect(JSON.stringify(reversed)).not.toBe(JSON.stringify(condition));
+    const result = recompactSchemaDefs({
+      body: { $ref: "#/$defs/published-a" },
+      $defs: { "published-a": condition, "published-b": reversed },
+    });
+    expect(result).toEqual({
+      status: "unsupported",
+      reason:
+        'artifact definitions "published-a" and "published-b" alias the same canonical body',
+    });
   });
 
   test("sizes a non-ASCII fragment by its UTF-8 bytes, not code units", () => {

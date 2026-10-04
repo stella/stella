@@ -3,14 +3,17 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  getModelImageInputCapability,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
 
 import {
   BEDROCK_IMAGE_MAX_BYTES,
   prepareProviderImageMessages,
   withProviderImageInput,
 } from "@/api/lib/chat/provider-image-input";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -40,7 +43,8 @@ const prepareImages = async (
 const TEXT: ModelMessage[] = [{ role: "user", content: "Read this text." }];
 
 describe("image input preparation", () => {
-  test("every offered model accepts or records unknown images, refuses explicit incompatibility, and accepts text", async () => {
+  test("every offered model follows its catalog image capability, unlisted models proceed, and text passes", async () => {
+    const outcomes = new Set<string>();
     for (const provider of TANSTACK_AI_PROVIDERS) {
       for (const modelId of [
         ...BYOK_MODEL_OPTIONS[provider],
@@ -54,7 +58,9 @@ describe("image input preparation", () => {
           }),
         ).toBe(TEXT);
         const messages = imageMessages();
-        if (getModelImageCapability({ provider, modelId }) !== "unsupported") {
+        const capability = getModelImageInputCapability({ provider, modelId });
+        outcomes.add(capability ?? "unlisted");
+        if (capability !== "unsupported") {
           expect(await prepareImages({ messages, provider, modelId })).toEqual(
             messages,
           );
@@ -75,16 +81,19 @@ describe("image input preparation", () => {
         });
       }
     }
+    // Both refusing and sending branches must be exercised, not vacuously
+    // skipped by a catalog that happens to list one kind only.
+    expect(outcomes).toEqual(new Set(["supported", "unsupported", "unlisted"]));
   });
 
-  test("unknown image capability proceeds with an observable log field", async () => {
+  test("an unlisted model proceeds with an observable log field", async () => {
     const telemetry = installRecordingLogger();
     try {
       const messages = imageMessages();
       for (const provider of TANSTACK_AI_PROVIDERS) {
         expect(
-          getModelImageCapability({ provider, modelId: "unknown-model" }),
-        ).toBe("unknown");
+          getModelImageInputCapability({ provider, modelId: "unknown-model" }),
+        ).toBeUndefined();
         expect(
           await prepareImages({
             messages,
@@ -93,14 +102,17 @@ describe("image input preparation", () => {
           }),
         ).toEqual(messages);
       }
+      const unknownLogs = telemetry.records.filter(
+        ({ attributes }) => attributes?.["image_capability_unknown"] === true,
+      );
       expect(
-        telemetry.records
-          .filter(
-            ({ attributes }) =>
-              attributes?.["image_capability_unknown"] === true,
-          )
-          .map(({ attributes }) => attributes?.["provider"]),
+        unknownLogs.map(({ attributes }) => attributes?.["provider"]),
       ).toEqual([...TANSTACK_AI_PROVIDERS]);
+      expect(
+        unknownLogs.every(
+          ({ attributes }) => attributes?.["reason"] === "unlisted_model",
+        ),
+      ).toBe(true);
       telemetry.records.length = 0;
       await prepareImages({
         messages: TEXT,
@@ -113,16 +125,16 @@ describe("image input preparation", () => {
     }
   });
 
-  test("conflicting sources preserve images and log the unknown reason", async () => {
+  test("a catalog-supported model sends images without an unknown log", async () => {
     const telemetry = installRecordingLogger();
     try {
       const messages = imageMessages();
       expect(
-        getModelImageCapability({
+        getModelImageInputCapability({
           provider: "mistral",
           modelId: "mistral-large-latest",
         }),
-      ).toBe("unknown");
+      ).toBe("supported");
       expect(
         await prepareImages({
           messages,
@@ -130,16 +142,7 @@ describe("image input preparation", () => {
           modelId: "mistral-large-latest",
         }),
       ).toBe(messages);
-      expect(telemetry.records).toContainEqual(
-        expect.objectContaining({
-          message: "ai.image_capability_unknown",
-          attributes: expect.objectContaining({
-            provider: "mistral",
-            image_capability_unknown: true,
-            reason: "conflicting_sources",
-          }),
-        }),
-      );
+      expect(telemetry.records).toEqual([]);
     } finally {
       telemetry.restore();
     }

@@ -21,6 +21,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
@@ -68,7 +69,7 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
-    memberRole: { role: "owner" as const },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,

@@ -52,6 +52,11 @@
     "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
   },
   "dialog": {
+    "accountWindowTitle": "Konto verbinden",
+    "accountTitle": "Dieses Konto verbinden?",
+    "accountSubtitle": "Verbinden Sie stella desktop mit diesem Konto und dieser Organisation.",
+    "accountEmail": "Konto",
+    "organizationName": "Organisation",
     "allow": "Zulassen",
     "apiUrl": "API-URL",
     "cancel": "Abbrechen",

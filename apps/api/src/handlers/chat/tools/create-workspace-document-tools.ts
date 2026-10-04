@@ -2,17 +2,29 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import {
+  authorizeDocumentWrite,
+  documentWriteRefusalChatToolError,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
+import type {
+  CreateDocumentOperation,
+  DocumentWriteAccess,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -68,7 +80,7 @@ type CreateWorkspaceDocumentToolsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
+  access: DocumentWriteAccess<CreateDocumentOperation>;
   recordAuditEvent: AuditRecorder;
   refRegistry: ChatRefRegistry;
   createEntityFromBuffer?: typeof createEntityFromBuffer;
@@ -76,7 +88,9 @@ type CreateWorkspaceDocumentToolsProps = {
 
 const toChatToolError = (
   error:
+    | DocumentWriteRefusedError
     | OrganizationFileUsageError
+    | SafeDbError
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
@@ -90,7 +104,18 @@ const toChatToolError = (
       cause: error,
     });
   }
+  if (DocumentWriteRefusedError.is(error)) {
+    return documentWriteRefusalChatToolError(error);
+  }
   switch (error._tag) {
+    case "DatabaseError":
+    case "DatabaseRlsError":
+    case "UnhandledException":
+      return new ChatToolError({
+        kind: "server-defect",
+        message: "The document could not be authorized.",
+        cause: error,
+      });
     case "DocumentTooLargeError":
       return new ChatToolError({
         kind: "limit",
@@ -129,18 +154,17 @@ const toChatToolError = (
  * A mutation (creates data), so it is classified
  * `CHAT_TOOL_POLICY_KIND.mutation` in `chat-tools.ts` (needs approval).
  *
- * `workspaceId` is threaded in from the request's server-validated active
- * matter context (`requestWorkspaceId`), never taken from tool input — the
- * model has no way to choose or forge a destination workspace. `chat-tools.ts`
- * only registers this tool when a single matter is pinned for the thread
- * (`requestWorkspaceId !== null`) and an audit recorder is available; there is
- * no folder/parent targeting yet, so every document lands at the matter root.
+ * The destination comes from `access`, minted by
+ * `authorizeDocumentWriteAccess` for the request's server-validated active
+ * matter (`requestWorkspaceId`), never from tool input: the model has no way
+ * to choose or forge a destination workspace. There is no folder/parent
+ * targeting yet, so every document lands at the matter root.
  */
 export const createCreateWorkspaceDocumentTools = ({
   scopedDb,
   organizationId,
   userId,
-  workspaceId,
+  access,
   recordAuditEvent,
   refRegistry,
   createEntityFromBuffer: createEntity = createEntityFromBuffer,
@@ -189,20 +213,29 @@ export const createCreateWorkspaceDocumentTools = ({
       `${trimmedTitle}.docx`,
     );
 
+    const { workspaceId } = access.operation;
+    const authorized = await authorizeDocumentWrite({
+      access,
+      safeDb: safeDbFromScoped(scopedDb),
+    });
+    if (Result.isError(authorized)) {
+      return raiseChatToolError(toChatToolError(authorized.error));
+    }
+
     const created = await createEntity({
       scopedDb,
       organizationId,
-      workspaceId,
+      workspaceId: authorized.value.operation.workspaceId,
       userId,
       recordAuditEvent,
       buffer: docxResult.value,
       fileName,
       mimeType: DOCX_MIME_TYPE,
+      encryption: serverBuiltFileEncryption(),
       parentId: null,
     });
-
     if (Result.isError(created)) {
-      throw toChatToolError(created.error);
+      return raiseChatToolError(toChatToolError(created.error));
     }
 
     return buildCreatedDocumentToolOutput({
