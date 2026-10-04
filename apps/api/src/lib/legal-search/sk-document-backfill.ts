@@ -1,6 +1,7 @@
 // parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 // parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
 // parser-output-unchanged: fetch entry takes an ID and writes require the claimed snapshot; parsing is unchanged.
+// parser-output-unchanged: the PDF download is read under a byte ceiling; a download within it parses as before.
 /**
  * Fetch and parse the PDFs behind Slovak court decisions.
  *
@@ -46,6 +47,7 @@ import {
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -185,6 +187,8 @@ const DOCUMENT_FETCH_FAILURES = [
   "network",
   /** The download is a PDF the parser could not read. */
   "unparseable",
+  /** The download is larger than {@link MAX_DOCUMENT_PDF_BYTES}. */
+  "too-large",
 ] as const;
 
 export type DocumentFetchFailure = (typeof DOCUMENT_FETCH_FAILURES)[number];
@@ -193,16 +197,26 @@ export const DOCUMENT_FETCH_FAILURE = {
   PUBLISHER_STATUS: DOCUMENT_FETCH_FAILURES[0],
   NETWORK: DOCUMENT_FETCH_FAILURES[1],
   UNPARSEABLE: DOCUMENT_FETCH_FAILURES[2],
+  TOO_LARGE: DOCUMENT_FETCH_FAILURES[3],
 } as const satisfies Record<string, DocumentFetchFailure>;
+
+/**
+ * The most bytes one decision's PDF download may hold. Generous for a court
+ * decision, scanned ones included; a larger body is refused before it is
+ * buffered, and the decision is parked rather than stored without its text.
+ */
+export const MAX_DOCUMENT_PDF_BYTES = 32 * 1024 * 1024;
 
 /** What one download produced. */
 export type PdfFetchResult =
   | { type: "document"; bytes: Uint8Array }
   /** The publisher states there is nothing to fetch. */
   | { type: "absent" }
+  /** The body ran past `limitBytes`; reading stopped there. */
+  | { type: "too-large"; limitBytes: number }
   | {
       type: "failed";
-      failure: Exclude<DocumentFetchFailure, "unparseable">;
+      failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
       /** A short tag for telemetry: the status or the error's code. */
       detail: string;
     };
@@ -270,11 +284,16 @@ export const fetchPdfBytes = async ({
   const { ok, status } = response;
   if (ok) {
     const body = await Result.tryPromise({
-      try: async () => await response.arrayBuffer(),
+      try: async () =>
+        response.body === null
+          ? new Uint8Array()
+          : await readCappedBytes(response.body, MAX_DOCUMENT_PDF_BYTES),
       catch: (error) => error,
     });
     if (Result.isOk(body)) {
-      return { type: "document", bytes: new Uint8Array(body.value) };
+      return body.value === null
+        ? { type: "too-large", limitBytes: MAX_DOCUMENT_PDF_BYTES }
+        : { type: "document", bytes: body.value };
     }
     await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
     const detail = brokenBodyDetail(body.error);
@@ -1543,6 +1562,67 @@ const runDecisionDocumentFetch = async ({
   });
 };
 
+type SettleFetchedDocumentOptions = {
+  attempts: number;
+  decision: ClaimedPendingDocument;
+  fetched: PdfFetchResult;
+  scopedDb: ScopedDb;
+};
+
+type SettledFetchedDocument =
+  | ParseFetchedDocumentResult
+  /** The download ended the attempt without bytes to parse. */
+  | { type: "settled"; outcome: DecisionDocumentOutcome };
+
+/**
+ * What a download leaves to parse. A body over the ceiling parks the decision
+ * at once: asking again returns the same body, and nothing of it is stored.
+ */
+const settleFetchedDocument = async ({
+  attempts,
+  decision,
+  fetched,
+  scopedDb,
+}: SettleFetchedDocumentOptions): Promise<SettledFetchedDocument> => {
+  switch (fetched.type) {
+    case "document":
+      return await parseFetchedDocument({
+        bytes: fetched.bytes,
+        decision,
+        scopedDb,
+      });
+    case "absent":
+      return { type: "parsed", document: undefined };
+    case "failed": {
+      const { failure, detail } = fetched;
+      return {
+        type: "settled",
+        outcome:
+          attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
+            ? { status: "parked", failure, detail }
+            : { status: "deferred", failure, detail },
+      };
+    }
+    case "too-large": {
+      const parked = await parkDocumentFetch({ decision, scopedDb });
+      return {
+        type: "settled",
+        outcome:
+          parked === "parked"
+            ? {
+                status: "parked",
+                failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+                detail: `over-${fetched.limitBytes}-bytes`,
+              }
+            : { status: "superseded" },
+      };
+    }
+    default:
+      fetched satisfies never;
+      return panic(`Unhandled document download: ${String(fetched)}`);
+  }
+};
+
 type ProcessClaimedDocumentOptions = {
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
@@ -1565,21 +1645,12 @@ const processClaimedDocument = async ({
       })
     : { type: "absent" };
 
-  if (fetched.type === "failed") {
-    const { failure, detail } = fetched;
-    return claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
-      ? { status: "parked", failure, detail }
-      : { status: "deferred", failure, detail };
-  }
-
-  const parsed: ParseFetchedDocumentResult =
-    fetched.type === "document"
-      ? await parseFetchedDocument({
-          bytes: fetched.bytes,
-          decision,
-          scopedDb,
-        })
-      : { type: "parsed", document: undefined };
+  const parsed = await settleFetchedDocument({
+    attempts: claim.attempts,
+    decision,
+    fetched,
+    scopedDb,
+  });
   switch (parsed.type) {
     case "parsed":
       break;
@@ -1591,6 +1662,8 @@ const processClaimedDocument = async ({
       };
     case "superseded":
       return { status: "superseded" };
+    case "settled":
+      return parsed.outcome;
     default:
       parsed satisfies never;
       return panic(`Unhandled parse result: ${String(parsed)}`);
@@ -1655,6 +1728,8 @@ export const fetchDecisionDocument = async (
               DOCUMENT_FETCH_OUTCOME.http4xx,
             [DOCUMENT_FETCH_FAILURE.NETWORK]: DOCUMENT_FETCH_OUTCOME.connection,
             [DOCUMENT_FETCH_FAILURE.UNPARSEABLE]:
+              DOCUMENT_FETCH_OUTCOME.bodyShape,
+            [DOCUMENT_FETCH_FAILURE.TOO_LARGE]:
               DOCUMENT_FETCH_OUTCOME.bodyShape,
           } as const satisfies Record<
             DocumentFetchFailure,

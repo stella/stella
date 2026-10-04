@@ -33,6 +33,7 @@ import {
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
@@ -921,6 +922,31 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(text?.fulltext).toBeNull();
+      });
+
+      test("a download over the byte ceiling parks the decision with nothing stored", async () => {
+        const id = await insertPending("too-large");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1)),
+            ),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+          detail: `over-${MAX_DOCUMENT_PDF_BYTES}-bytes`,
+        });
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
+        const [stored] = await db
+          .select({ fulltext: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        expect(stored).toEqual({ fulltext: null });
       });
 
       test("a refused download defers the decision behind its own cooldown", async () => {
