@@ -324,6 +324,8 @@ export type TemplatePersistenceResult =
       /** Optional only because receipts persisted before AI diagnostics were
        * recorded do not carry this property. New partial receipts include it. */
       aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
+      /** Older receipts predate undecided-condition diagnostics. */
+      undecidedConditions?: TemplatePersistenceUndecidedCondition[] | undefined;
     }
   | {
       action: "create_version";
@@ -336,12 +338,22 @@ export type TemplatePersistenceResult =
       clauseWarnings?: ClauseDirectiveWarning[];
       /** See the persisted-receipt compatibility boundary above. */
       aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
+      /** Older receipts predate undecided-condition diagnostics. */
+      undecidedConditions?: TemplatePersistenceUndecidedCondition[] | undefined;
       versionNumber: number;
     };
 
 type TemplatePersistenceAiFieldError = {
   field: AiFieldError["valuePath"];
 } & Pick<AiFieldError, "reason" | "message">;
+
+/** As `save_filled_template` reports it (its wire reason names). */
+type TemplatePersistenceUndecidedCondition = {
+  path: string;
+  label: string;
+  state: "undecided";
+  reason: "no_decision_model" | "below_floor" | "failed";
+};
 
 export const TEMPLATE_PERSISTENCE_REQUEST_STATUS = {
   COMPLETED: "completed",

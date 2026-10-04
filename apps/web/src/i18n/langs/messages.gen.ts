@@ -4829,6 +4829,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiConditionsUndecided": "AI could not decide these conditions, so their sections were filled as if they do not apply: {list}";
     "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";

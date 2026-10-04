@@ -31,7 +31,6 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
-import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -74,9 +73,15 @@ import {
   templateConditionPreviewSchema,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
-import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
+import type {
+  FillDiagnosticSources,
+  TemplateFillCompletionMode,
+} from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
+  describeFillShortfall,
+  fillDiagnosticsOf,
+  fillShortfallIssues,
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
@@ -98,9 +103,11 @@ import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
+  TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA,
   type TemplateConditionDecisionOutput,
   toFillConditionDecision,
   toPreviewConditionDecision,
+  toUndecidedConditionOutput,
 } from "@/api/mcp/template-condition-decisions";
 import {
   MAX_DOCX_MEGABYTES,
@@ -1134,6 +1141,9 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     unusedValues: v.array(v.string()),
     clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
+    undecidedConditions: v.optional(
+      v.array(TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA),
+    ),
   }),
   v.strictObject({
     action: v.literal("create_version"),
@@ -1144,6 +1154,9 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     unusedValues: v.array(v.string()),
     clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
+    undecidedConditions: v.optional(
+      v.array(TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA),
+    ),
     versionNumber: v.pipe(v.number(), v.integer()),
   }),
 ]);
@@ -1151,22 +1164,21 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
 /**
  * The completion gate both fill tools run over renderer diagnostics. Owning it
  * here is what keeps the transient tool and the persisting one on one policy:
- * a live `{{ placeholder }}` is an error under the default mode whether the
- * document is handed back or written into a matter.
+ * a live `{{ placeholder }}`, a failed AI draft or an undecided AI condition is
+ * an error under the default mode whether the document is handed back or
+ * written into a matter. It reads only the completion decision over the
+ * fill's whole diagnostics record.
  */
 const gateTemplateFillCompletion = ({
   mode,
-  unmatchedPlaceholders,
-  aiFieldErrors,
+  filled,
 }: {
   mode: TemplateFillCompletionMode;
-  unmatchedPlaceholders: readonly string[];
-  aiFieldErrors: readonly AiFieldError[];
+  filled: FillDiagnosticSources;
 }): TemplateFillCompletionGate => {
   const completion = decideTemplateFillCompletion({
     mode,
-    unmatchedPlaceholders,
-    aiFieldErrors,
+    diagnostics: fillDiagnosticsOf(filled),
   });
   if (completion.type !== "rejected_partial") {
     return {
@@ -1175,54 +1187,24 @@ const gateTemplateFillCompletion = ({
     };
   }
 
+  // The summary `message` stays short; the full set of blocking entries
+  // always travels in `issues` so one retry can address every item.
   return {
     type: "rejected",
     result: structuredErrorResult({
       code: "validation_error",
-      message: `Template fill incomplete; ${describeFillShortfall(completion)}`,
-      issues: [
-        ...completion.unmatchedPlaceholders.map((placeholder) => ({
-          path: `values.${placeholder}`,
-          message: "Template placeholder was not filled",
-        })),
-        ...completion.aiFieldErrors.map((error) => ({
-          path: `values.${error.valuePath}`,
-          message: error.message,
-        })),
-      ],
-      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values yourself, or set completion_mode to allow_partial when an incomplete document is intentional.",
+      message: `Template fill incomplete; ${describeFillShortfall(completion.blocking)}`,
+      issues: fillShortfallIssues(completion.blocking),
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values yourself (an undecided AI condition takes true or false under its path), or set completion_mode to allow_partial when an incomplete document is intentional.",
     }),
   };
 };
-/** Summary line for a fill that is not complete. Both shortfalls are named
- *  when both are present: an agent retrying needs to know a placeholder was
- *  never filled AND that a drafted field came back unusable. */
-const describeFillShortfall = ({
-  unmatchedPlaceholders,
-  aiFieldErrors,
-}: {
-  unmatchedPlaceholders: readonly string[];
-  aiFieldErrors: readonly AiFieldError[];
-}): string => {
-  const parts: string[] = [];
-  if (unmatchedPlaceholders.length > 0) {
-    parts.push(`unmatched placeholders: ${previewList(unmatchedPlaceholders)}`);
-  }
-  if (aiFieldErrors.length > 0) {
-    parts.push(
-      `AI-drafted fields that failed: ${previewList(aiFieldErrors.map(({ valuePath }) => valuePath))}`,
-    );
-  }
-  return parts.join("; ");
-};
 
-/** The summary `message` stays short; the full set always travels in `issues`
- *  so one retry can address every item. */
-const previewList = (items: readonly string[]): string => {
-  const preview = items.slice(0, 10);
-  const omitted = items.length - preview.length;
-  return `${preview.join(", ")}${omitted > 0 ? ` (${omitted} more omitted)` : ""}`;
-};
+/** The undecided AI conditions of a fill, in the shape fill_template reports
+ *  its decisions in; the persisting tool returns them and its receipt keeps
+ *  them. */
+const undecidedConditionsOutput = (filled: FillDiagnosticSources) =>
+  fillDiagnosticsOf(filled).undecidedConditions.map(toUndecidedConditionOutput);
 
 type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
 
@@ -1418,10 +1400,7 @@ const handleFillTemplateTool: McpToolHandler<
           organizationId: context.organizationId,
           userId: context.userId,
           format: "docx",
-          unmatchedCount: filled.unmatchedPlaceholders.length,
-          aiFieldErrorCount: filled.aiFieldErrors.length,
-          unusedCount: filled.unusedValues.length,
-          structureErrors: filled.structureErrors,
+          diagnostics: fillDiagnosticsOf(filled),
           recordAuditEvent: context.recordAuditEvent,
         }),
     )
@@ -1429,8 +1408,7 @@ const handleFillTemplateTool: McpToolHandler<
 
   const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
-    unmatchedPlaceholders: filled.unmatchedPlaceholders,
-    aiFieldErrors: filled.aiFieldErrors,
+    filled,
   });
   if (completion.type === "rejected") {
     return completion.result;
@@ -1858,13 +1836,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     await releaseClaim();
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
-  // A live `{{ placeholder }}` is rejected before the document reaches the
-  // matter, not reported afterwards: this tool persists, so it cannot be
-  // laxer than the transient fill_template.
+  // A live `{{ placeholder }}` or an undecided AI condition is rejected before
+  // the document reaches the matter, not reported afterwards: this tool
+  // persists, so it cannot be laxer than the transient fill_template.
   const completion = gateTemplateFillCompletion({
     mode: input.completion_mode,
-    unmatchedPlaceholders: filled.unmatchedPlaceholders,
-    aiFieldErrors: filled.aiFieldErrors,
+    filled,
   });
   if (completion.type === "rejected") {
     await releaseClaim();
@@ -1883,6 +1860,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     reason: error.reason,
     message: error.message,
   }));
+  const undecidedConditions = undecidedConditionsOutput(filled);
   const fileName = resolveFilledDocxName({
     requested: input.name,
     fallback: filled.fileName,
@@ -1901,10 +1879,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       organizationId: context.organizationId,
       userId: context.userId,
       format: "docx",
-      unmatchedCount: filled.unmatchedPlaceholders.length,
-      aiFieldErrorCount: filled.aiFieldErrors.length,
-      unusedCount: filled.unusedValues.length,
-      structureErrors: filled.structureErrors,
+      diagnostics: fillDiagnosticsOf(filled),
       workspaceId,
       entityId: result.entityId,
       entityVersionId: result.entityVersionId,
@@ -1957,6 +1932,9 @@ const handleSaveFilledTemplateTool: McpToolHandler<
               unusedValues: filled.unusedValues,
               clauseWarnings: filled.clauseWarnings,
               ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
+              ...(undecidedConditions.length === 0
+                ? {}
+                : { undecidedConditions }),
             };
             await recordPersistedFill(tx, result);
           },
@@ -1999,6 +1977,9 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             unusedValues: filled.unusedValues,
             clauseWarnings: filled.clauseWarnings,
             ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
+            ...(undecidedConditions.length === 0
+              ? {}
+              : { undecidedConditions }),
             versionNumber: persisted.versionNumber,
           };
           await recordPersistedFill(tx, result);

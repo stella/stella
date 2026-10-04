@@ -4826,6 +4826,7 @@
     "addPart": "Adicionar parte",
     "addTag": "Adicionar etiqueta",
     "aiAdaptHint": "A IA adapta este texto a cada lugar do documento em que ele aparece.",
+    "aiConditionsUndecided": "A IA não conseguiu decidir estas condições; as seções correspondentes foram preenchidas como se não se aplicassem: {list}",
     "aiDecidedConditions": "Decidido pela IA",
     "aiFieldsNotDrafted": "A IA não conseguiu redigir estes campos: {list}",
     "allTemplates": "Todos os modelos",

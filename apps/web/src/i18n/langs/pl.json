@@ -4826,6 +4826,7 @@
     "addPart": "Dodaj część",
     "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
+    "aiConditionsUndecided": "AI nie zdołała rozstrzygnąć tych warunków, więc ich sekcje wypełniono tak, jakby nie miały zastosowania: {list}",
     "aiDecidedConditions": "Decyduje AI",
     "aiFieldsNotDrafted": "AI nie zdołała przygotować tych pól: {list}",
     "allTemplates": "Wszystkie szablony",

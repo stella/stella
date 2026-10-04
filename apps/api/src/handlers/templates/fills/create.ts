@@ -27,6 +27,10 @@ import {
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
+import {
   fillTemplateDocx,
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
@@ -295,12 +299,11 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     const entityId = created.value.entityId;
 
-    // A failed AI draft leaves its field unfilled, so it counts against the
-    // fill the same way an unmatched placeholder does.
-    const fillStatus =
-      filled.unmatchedPlaceholders.length > 0 || filled.aiFieldErrors.length > 0
-        ? "partial"
-        : "success";
+    const diagnostics = fillDiagnosticsOf(filled);
+    // The completion decision over every diagnostic: a failed AI draft, an
+    // undecided AI condition or an unresolved clause counts against the fill
+    // the same way an unmatched placeholder does.
+    const fillStatus = templateFillStatus(diagnostics);
 
     yield* Result.await(
       Result.tryPromise({
@@ -350,6 +353,11 @@ const fillTemplateToWorkspace = createSafeHandler(
       // Fields whose AI draft failed: unfilled in the saved document, so the
       // person who filled the template has to write them.
       aiFieldErrors: filled.aiFieldErrors,
+      // AI-decided conditions nothing settled: their blocks were rendered as
+      // if false, so the person who filled the template has to decide them.
+      undecidedConditions: diagnostics.undecidedConditions.map(
+        ({ path, label, reason }) => ({ path, label, reason }),
+      ),
     });
   },
 );

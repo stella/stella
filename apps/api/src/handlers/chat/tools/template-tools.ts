@@ -29,6 +29,11 @@ import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
 import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
 import {
+  decideTemplateFillCompletion,
+  fillDiagnosticsOf,
+  fillShortfallIssues,
+} from "@/api/lib/templates/template-fill-completion";
+import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/lib/templates/template-fill-service";
@@ -75,9 +80,11 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "omitting or emptying it rejects the fill with the exact missing " +
   "fields instead of guessing a value or leaving a placeholder unfilled " +
   "— ask the user for those values and retry. Returns the rendered text " +
-  "plus any placeholders left unfilled, and `unrestoredFields` naming any " +
-  "field whose value could not be filled with real values; ask the user to " +
-  "review those.";
+  "plus any placeholders left unfilled, `completionStatus` (`partial` " +
+  "with a `shortfall` list when a placeholder, an AI draft or an " +
+  "AI-decided condition was left open; supply those and retry), and " +
+  "`unrestoredFields` naming any field whose value could not be filled " +
+  "with real values; ask the user to review those.";
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -271,29 +278,45 @@ export const createTemplateTools = ({
           missingFields: result.requiredFieldsRejection,
         };
       }
-      if (!("error" in result)) {
-        // Record the execution (fill row + EXECUTE audit) like the REST fill
-        // routes, so agent-driven fills appear in the audit trail.
-        // Best-effort: a successful render is not discarded if the
-        // bookkeeping write fails (it is captured).
-        await scopedDb(
-          async (tx) =>
-            await recordTemplateFill({
-              tx,
-              templateId: branded,
-              organizationId,
-              userId,
-              format: "text",
-              unmatchedCount: result.unmatchedPlaceholders.length,
-              aiFieldErrorCount: result.aiFieldErrors.length,
-              unusedCount: result.unusedValues.length,
-              recordAuditEvent,
-            }),
-        ).catch(captureError);
+      if ("error" in result) {
+        return result;
       }
+      const diagnostics = fillDiagnosticsOf(result);
+      // Record the execution (fill row + EXECUTE audit) like the REST fill
+      // routes, so agent-driven fills appear in the audit trail.
+      // Best-effort: a successful render is not discarded if the
+      // bookkeeping write fails (it is captured).
+      await scopedDb(
+        async (tx) =>
+          await recordTemplateFill({
+            tx,
+            templateId: branded,
+            organizationId,
+            userId,
+            format: "text",
+            diagnostics,
+            recordAuditEvent,
+          }),
+      ).catch(captureError);
+      // The completion decision over the whole diagnostics record: a fill
+      // with an unfilled placeholder, a failed AI draft or an undecided AI
+      // condition is partial, and each shortfall names what to supply.
+      const completion = decideTemplateFillCompletion({
+        mode: "allow_partial",
+        diagnostics,
+      });
+      const graded = {
+        ...result,
+        ...(completion.type === "complete"
+          ? { completionStatus: "complete" as const }
+          : {
+              completionStatus: "partial" as const,
+              shortfall: fillShortfallIssues(completion.blocking),
+            }),
+      };
       return unrestoredFields.size === 0
-        ? result
-        : { ...result, unrestoredFields: [...unrestoredFields].toSorted() };
+        ? graded
+        : { ...graded, unrestoredFields: [...unrestoredFields].toSorted() };
     }),
   };
 };

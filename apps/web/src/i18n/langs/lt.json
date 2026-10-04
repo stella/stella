@@ -4826,6 +4826,7 @@
     "addPart": "Pridėti dalį",
     "addTag": "Pridėti žymą",
     "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
+    "aiConditionsUndecided": "DI nepavyko nuspręsti šių sąlygų, todėl jų dalys užpildytos taip, lyg jos būtų netaikomos: {list}",
     "aiDecidedConditions": "Sprendžia DI",
     "aiFieldsNotDrafted": "DI nepavyko parengti šių laukų: {list}",
     "allTemplates": "Visi šablonai",

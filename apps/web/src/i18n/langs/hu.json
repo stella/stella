@@ -4826,6 +4826,7 @@
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az AI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiConditionsUndecided": "Az AI nem tudta eldönteni ezeket a feltételeket, ezért a hozzájuk tartozó részeket úgy töltötte ki, mintha nem teljesülnének: {list}",
     "aiDecidedConditions": "Az AI dönti el",
     "aiFieldsNotDrafted": "Az AI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",

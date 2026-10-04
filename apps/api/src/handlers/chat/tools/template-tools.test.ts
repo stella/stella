@@ -1,11 +1,20 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import * as tanstackModels from "@/api/lib/tanstack-ai-models";
+import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -113,6 +122,135 @@ describe("createTemplateTools", () => {
     expect(findManyOptions).toMatchObject({
       where: { organizationId: { eq: orgId } },
     });
+  });
+});
+
+describe("fill_template grades the fill", () => {
+  const s3Key = "fake-key-chat-fill";
+  const conditionField: FieldMeta = {
+    path: "is_consumer",
+    label: "Consumer contract",
+    inputType: "boolean",
+    aiPrompt: "Is this a consumer contract?",
+  };
+
+  const gatedDocx = async (): Promise<Uint8Array> => {
+    const body = [
+      "Preamble.",
+      "{% if is_consumer %}",
+      "Consumer notice.",
+      "{% endif %}",
+    ]
+      .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+      .join("");
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    const { file } = await writeFieldFilters(
+      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      [],
+      [
+        {
+          path: conditionField.path,
+          expression: undefined,
+          filters: filtersFromFieldConfig(conditionField),
+        },
+      ],
+    );
+    return new Uint8Array(file.bytes);
+  };
+
+  test("an undecided AI condition records and returns the fill as partial", async () => {
+    // No AI backend of any tier, whatever the environment configures.
+    const providerSpy = spyOn(
+      tanstackModels,
+      "hasTanStackInstanceProvider",
+    ).mockReturnValue(false);
+    const decisionSpy = spyOn(
+      decisionModel,
+      "hasInstanceDecisionModel",
+    ).mockReturnValue(false);
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, await gatedDocx());
+      const rows: Record<string, unknown>[] = [];
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({
+              name: "NDA",
+              fileName: "nda.docx",
+              s3Key,
+              scanState: "scanned",
+              languages: [],
+            }),
+          },
+          businessRegistryCredentials: { findMany: async () => [] },
+          templateClauses: { findMany: async () => [] },
+        },
+        insert: () => ({
+          values: async (row: Record<string, unknown>) => {
+            rows.push(row);
+            await Promise.resolve();
+          },
+        }),
+        update: () => ({
+          set: () => ({
+            where: async () => {
+              await Promise.resolve();
+            },
+          }),
+        }),
+      });
+      const tools = createTemplateTools({
+        orgAIConfig: null,
+        managedAIResidency: "eu" as const,
+        scopedDb,
+        safeDb: stubSafeDb,
+        organizationId: orgId,
+        userId,
+        thirdPartyBoundary: { type: "raw" },
+      });
+      const execute = asTestRaw<
+        (input: unknown, options: unknown) => Promise<Record<string, unknown>>
+      >(tools[FILL_TEMPLATE_TOOL_NAME].execute);
+
+      const result = await execute(
+        { templateId: "00000000-0000-4000-8000-000000000001", values: {} },
+        {},
+      );
+
+      expect(result).toMatchObject({
+        completionStatus: "partial",
+        shortfall: [
+          {
+            path: "values.is_consumer",
+            message:
+              'AI-decided condition "Consumer contract" was left undecided (no-backend); supply true or false for it.',
+          },
+        ],
+        conditionDecisions: [
+          {
+            path: "is_consumer",
+            label: "Consumer contract",
+            state: "undecided",
+            reason: "no-backend",
+          },
+        ],
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows.at(0)).toMatchObject({ status: "partial", format: "text" });
+    } finally {
+      fakeS3.stop();
+      providerSpy.mockRestore();
+      decisionSpy.mockRestore();
+    }
   });
 });
 

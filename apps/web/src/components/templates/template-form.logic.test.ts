@@ -6,6 +6,7 @@ import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
+  readUndecidedConditionLabels,
   runLeadingSingleFlight,
 } from "./template-form.logic";
 
@@ -45,6 +46,49 @@ describe("download AI diagnostics", () => {
           new Headers({
             "X-Ai-Field-Errors": encoded,
           }),
+        ),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("download undecided AI conditions", () => {
+  test("names each condition by its label, falling back to its path", () => {
+    const headers = new Headers({
+      "X-Undecided-Conditions": encodeURIComponent(
+        JSON.stringify([
+          {
+            path: "smlouva.spotřebitel",
+            label: "Spotřebitelská smlouva — ano/ne",
+            reason: "no-backend",
+          },
+          { path: "has_penalty", label: "", reason: "failed" },
+        ]),
+      ),
+    });
+    const result = readUndecidedConditionLabels(headers);
+    expect(Result.isOk(result) && result.value).toEqual([
+      "Spotřebitelská smlouva — ano/ne",
+      "has_penalty",
+    ]);
+  });
+
+  test("an absent header means every condition was decided", () => {
+    const result = readUndecidedConditionLabels(new Headers());
+    expect(Result.isOk(result) && result.value).toEqual([]);
+  });
+
+  test.each([
+    "%",
+    "not-json",
+    "{}",
+    '[{"path":"x","label":"x","reason":"unknown"}]',
+    '[{"path":"","label":"x","reason":"failed"}]',
+  ])("rejects malformed diagnostics: %s", (encoded) => {
+    expect(
+      Result.isError(
+        readUndecidedConditionLabels(
+          new Headers({ "X-Undecided-Conditions": encoded }),
         ),
       ),
     ).toBe(true);

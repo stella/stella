@@ -4,6 +4,8 @@ import * as v from "valibot";
 import {
   CLAUSE_WARNINGS_HEADER,
   clauseWarningCountHeaderSchema,
+  UNDECIDED_CONDITIONS_HEADER,
+  undecidedConditionsHeaderSchema,
 } from "@stll/api-contract/template-fill-headers";
 
 import type { ResolvedField } from "@/components/templates/template-discover-types";
@@ -23,6 +25,19 @@ export const readAiFieldErrorPaths = (headers: Headers) =>
     return v
       .parse(aiFieldErrorPathsSchema, decoded)
       .map(({ fieldPath }) => fieldPath);
+  });
+
+/** The labels of the AI-decided conditions a download left undecided. */
+export const readUndecidedConditionLabels = (headers: Headers) =>
+  Result.try(() => {
+    const encoded = headers.get(UNDECIDED_CONDITIONS_HEADER);
+    if (encoded === null) {
+      return [];
+    }
+    const decoded: unknown = JSON.parse(decodeURIComponent(encoded));
+    return v
+      .parse(undecidedConditionsHeaderSchema, decoded)
+      .map(({ label, path }) => (label === "" ? path : label));
   });
 
 type SingleFlightState = {

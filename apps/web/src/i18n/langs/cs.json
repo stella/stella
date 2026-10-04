@@ -4826,6 +4826,7 @@
     "addPart": "Přidat část",
     "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnout tyto podmínky, proto byly jejich části vyplněny, jako by neplatily: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala vytvořit návrh těchto polí: {list}",
     "allTemplates": "Všechny vzory",

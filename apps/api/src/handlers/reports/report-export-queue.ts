@@ -61,6 +61,12 @@ import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import type { FillDiagnosticSources } from "@/api/lib/templates/template-fill-completion";
+import {
+  decideTemplateFillCompletion,
+  describeFillShortfall,
+  fillDiagnosticsOf,
+} from "@/api/lib/templates/template-fill-completion";
 import type {
   AiFillCollaborators,
   MissingRequiredField,
@@ -506,17 +512,39 @@ type FillReportResult =
   | { usageRejection: unknown };
 
 type FilledReportDocx =
-  | { templateName: string; fileName: string; file: ScannedFile }
+  | ({
+      templateName: string;
+      fileName: string;
+      file: ScannedFile;
+    } & FillDiagnosticSources)
   | Exclude<FillReportResult, { buffer: Buffer }>;
 
-const toFillReportResult = (filled: FilledReportDocx): FillReportResult =>
-  "file" in filled
-    ? {
-        templateName: filled.templateName,
-        fileName: filled.fileName,
-        buffer: Buffer.from(filled.file.bytes),
-      }
-    : filled;
+/**
+ * A report export has no reader to hand a partial document to, so it reads
+ * the fill's completion decision under the strict policy: an unfilled
+ * placeholder, a failed AI draft or an undecided AI condition fails the
+ * export with each shortfall named, instead of completing a document with
+ * that content missing.
+ */
+const toFillReportResult = (filled: FilledReportDocx): FillReportResult => {
+  if (!("file" in filled)) {
+    return filled;
+  }
+  const completion = decideTemplateFillCompletion({
+    mode: "require_complete",
+    diagnostics: fillDiagnosticsOf(filled),
+  });
+  if (completion.type === "rejected_partial") {
+    return {
+      error: `Report template fill incomplete; ${describeFillShortfall(completion.blocking)}`,
+    };
+  }
+  return {
+    templateName: filled.templateName,
+    fileName: filled.fileName,
+    buffer: Buffer.from(filled.file.bytes),
+  };
+};
 
 const fillReport = async ({
   actor,

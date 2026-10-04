@@ -228,15 +228,19 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
 const COMPLETION_GATE_NOTE =
   `Completion gate: both ${FILL_TEMPLATE} and ${SAVE_FILLED_TEMPLATE} take ` +
   "`completion_mode` (default `require_complete`) and run one gate. Under " +
-  "the default, an unfilled placeholder or a failed AI draft is a " +
-  "`validation_error` naming every offending path, and the persisting tool " +
-  "refuses before anything is written. `allow_partial` lets the same fill " +
-  `through instead: ${FILL_TEMPLATE} reports \`completionStatus: "partial"\` ` +
-  `and ${SAVE_FILLED_TEMPLATE} writes the document with the shortfall in ` +
-  "`unmatchedPlaceholders` and `aiFieldErrors`. Set it only when a document " +
-  "with live markers is what the user asked for; otherwise collect the " +
-  "missing values and retry. A missing required value is refused in either " +
-  "mode, before the gate.";
+  "the default, an unfilled placeholder, a failed AI draft, an AI-decided " +
+  "condition left undecided (its blocks render as if false; supply true or " +
+  "false under its path), a clause inserted with unresolved directives, or " +
+  "a template directive that could not be applied is a `validation_error` " +
+  "naming every offending path, and the persisting tool refuses before " +
+  "anything is written. Unused values never block. `allow_partial` lets the " +
+  `same fill through instead: ${FILL_TEMPLATE} reports ` +
+  `\`completionStatus: "partial"\` and ${SAVE_FILLED_TEMPLATE} writes the ` +
+  "document and reports the shortfall in `unmatchedPlaceholders`, " +
+  "`aiFieldErrors`, `undecidedConditions` and `clauseWarnings`. Set it " +
+  "only when an incomplete document is what the user asked for; otherwise " +
+  "collect the missing values and retry. A missing required value is " +
+  "refused in either mode, before the gate.";
 
 const AUTHORING_RULES = [
   {

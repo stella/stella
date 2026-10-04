@@ -28,6 +28,11 @@ import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
+  decideTemplateFillCompletion,
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "./template-fill-completion";
+import {
   describeStoredTemplate,
   fillStoredTemplateDocx,
   fillTemplateDocx,
@@ -722,6 +727,106 @@ describe("fillTemplateDocx condition decisions", () => {
     expect((await extractTexts(result.file)).join("")).not.toContain(
       "Consumer notice.",
     );
+  });
+});
+
+describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
+  const conditionField: FieldMeta = {
+    path: "is_consumer",
+    label: "Consumer contract",
+    inputType: "boolean",
+    aiPrompt: "Is this a consumer contract?",
+  };
+
+  /** One block gated on the condition and one on its negation, around an
+   *  ungated paragraph: whichever way an unset condition renders, one block
+   *  goes and one stays without anyone deciding either. */
+  const negatedDocx = async (): Promise<ScannedFile> =>
+    await authorConditionTags(
+      await makeDocx(
+        WRAP(
+          [
+            P("Preamble."),
+            P("{% if is_consumer %}"),
+            P("Consumer notice."),
+            P("{% endif %}"),
+            P("{% if not is_consumer %}"),
+            P("Business terms."),
+            P("{% endif %}"),
+          ].join(""),
+        ),
+      ),
+      [conditionField],
+    );
+
+  const fill = async (decideAiCondition: AiConditionDecider | undefined) => {
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", file: await negatedDocx() },
+      values: {},
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () =>
+        decideAiCondition === undefined ? {} : { decideAiCondition },
+    });
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    return result;
+  };
+
+  const cases = [
+    { reason: "failed", decide: async () => undefined },
+    { reason: "no-backend", decide: undefined },
+  ] as const;
+
+  for (const { reason, decide } of cases) {
+    test(`a ${reason} condition makes the fill partial and is named with its reason`, async () => {
+      const result = await fill(decide);
+      const diagnostics = fillDiagnosticsOf(result);
+
+      expect(diagnostics.undecidedConditions).toEqual([
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "undecided",
+          reason,
+        },
+      ]);
+      // Nothing else fell short: the undecided condition alone is why.
+      expect(result.unmatchedPlaceholders).toEqual([]);
+      expect(result.aiFieldErrors).toEqual([]);
+      expect(templateFillStatus(diagnostics)).toBe("partial");
+      const decision = decideTemplateFillCompletion({
+        mode: "require_complete",
+        diagnostics,
+      });
+      expect(decision.type).toBe("rejected_partial");
+      if (decision.type === "complete") {
+        throw new Error("expected a shortfall");
+      }
+      expect(decision.blockingKinds).toEqual(["undecidedConditions"]);
+
+      // The renderer still never picks a side for it: the unset condition
+      // reads as false, which the diagnostics above make visible.
+      const text = (await extractTexts(result.file)).join("");
+      expect(text).toContain("Preamble.");
+      expect(text).not.toContain("Consumer notice.");
+      expect(text).toContain("Business terms.");
+    });
+  }
+
+  test("a condition the model decides keeps the fill complete", async () => {
+    const result = await fill(async () => ({
+      decidedBy: "generative_model",
+      value: true,
+    }));
+    const diagnostics = fillDiagnosticsOf(result);
+    expect(diagnostics.undecidedConditions).toEqual([]);
+    expect(templateFillStatus(diagnostics)).toBe("success");
+    const text = (await extractTexts(result.file)).join("");
+    expect(text).toContain("Consumer notice.");
+    expect(text).not.toContain("Business terms.");
   });
 });
 

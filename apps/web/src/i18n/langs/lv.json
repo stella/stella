@@ -4826,6 +4826,7 @@
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
     "aiAdaptHint": "AI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiConditionsUndecided": "AI neizdevās izlemt šos nosacījumus, tāpēc to sadaļas aizpildītas tā, it kā tie nebūtu spēkā: {list}",
     "aiDecidedConditions": "Izlemj AI",
     "aiFieldsNotDrafted": "AI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",

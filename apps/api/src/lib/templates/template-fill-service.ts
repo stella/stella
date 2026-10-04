@@ -1214,6 +1214,7 @@ export type FillTemplateResult =
       text: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      structureErrors: FilledDocx["structureErrors"];
       /** AI-drafted fields the model could not complete; unfilled above. */
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
@@ -1348,6 +1349,7 @@ export const fillStoredTemplate = async (
       .trim(),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
     clauseWarnings: filled.clauseWarnings,

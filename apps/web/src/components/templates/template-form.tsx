@@ -80,6 +80,7 @@ import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
+  readUndecidedConditionLabels,
   runLeadingSingleFlight,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
@@ -1920,6 +1921,24 @@ export const TemplateForm = ({
         });
       }
 
+      const undecidedLabels = readUndecidedConditionLabels(
+        response.response.headers,
+      );
+      if (Result.isError(undecidedLabels)) {
+        getAnalytics().captureError(undecidedLabels.error);
+        stellaToast.add({
+          type: "warning",
+          title: t("common.unexpectedError"),
+        });
+      } else if (undecidedLabels.value.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiConditionsUndecided", {
+            list: undecidedLabels.value.join(", "),
+          }),
+        });
+      }
+
       const clauseWarnings = readClauseWarnings(response.response.headers);
       if (clauseWarnings.isErr()) {
         getAnalytics().captureError(clauseWarnings.error);
@@ -2053,6 +2072,18 @@ export const TemplateForm = ({
           title: t("templates.aiFieldsNotDrafted", {
             list: created.aiFieldErrors
               .map((fieldError) => fieldError.fieldPath)
+              .join(", "),
+          }),
+        });
+      }
+      // A condition nothing decided rendered its sections as if it did not
+      // apply; the person filling the template has to decide it instead.
+      if (created.undecidedConditions.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiConditionsUndecided", {
+            list: created.undecidedConditions
+              .map((condition) => condition.label)
               .join(", "),
           }),
         });
