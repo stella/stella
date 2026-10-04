@@ -5,6 +5,7 @@ import {
   buildBaseline,
   diffBaseline,
   loadRealInput,
+  readBaseBaseline,
   runSelfTest,
   SELF_TEST_CASES,
 } from "./deployment-feature-guard";
@@ -142,7 +143,7 @@ describe("route gates", () => {
     ).toContain(FLAGGED_KEY);
   });
 
-  test("hook, guard, route-level and in-handler checks count as gates", () => {
+  test("hook, guard and route-level checks count as gates", () => {
     const forms = [
       `${IMPORTS}export const r = new Elysia().onBeforeHandle(() => { if (!isDeploymentFeatureEnabled("FEATURE_A")) { throw new Error(); } }).get("/", list.handler);`,
       `${IMPORTS}import { env } from "@/api/env";\nexport const r = new Elysia().onRequest(() => (env.FEATURE_A ? undefined : 404)).get("/", list.handler);`,
@@ -152,13 +153,55 @@ describe("route gates", () => {
     for (const route of forms) {
       expect(keys(input({ routes: { [ROUTE]: route } }))).toEqual([]);
     }
+  });
+
+  test("a flag read inside the handler is not a gate", () => {
+    for (const handlerSource of [
+      `export default () => ({ extra: isDeploymentFeatureEnabled("FEATURE_A") });`,
+      `export default () => { if (!isDeploymentFeatureEnabled("FEATURE_A")) { throw new Error(); } };`,
+    ]) {
+      expect(
+        keys(
+          input({
+            routes: {
+              [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
+            },
+            handlerSource,
+          }),
+        ),
+      ).toContain(FLAGGED_KEY);
+    }
+  });
+
+  test("a chain derived from an instance sees only the gates registered before it", () => {
+    const gate = `app${GATE_A};`;
+    const derived = `export const routes = app.get("/", list.handler);`;
     expect(
       keys(
         input({
           routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
+            [ROUTE]: `${IMPORTS}const app = new Elysia();\n${derived}\n${gate}`,
           },
-          handlerSource: `export default () => isDeploymentFeatureEnabled("FEATURE_A");`,
+        }),
+      ),
+    ).toContain(FLAGGED_KEY);
+    expect(
+      keys(
+        input({
+          routes: {
+            [ROUTE]: `${IMPORTS}const app = new Elysia();\n${gate}\n${derived}`,
+          },
+        }),
+      ),
+    ).toEqual([]);
+    // A base in another module ran every statement before it was imported.
+    expect(
+      keys(
+        input({
+          routes: {
+            [CHILD]: `${IMPORTS}export const app = new Elysia();\n${gate}`,
+            [ROUTE]: `${IMPORTS}import { app } from "./child-routes";\n${derived}`,
+          },
         }),
       ),
     ).toEqual([]);
@@ -359,6 +402,44 @@ describe("baseline", () => {
         baseBaseline: undefined,
       }).malformed,
     ).toBe(true);
+  });
+
+  test("written rows pass the order check for keys that collate differently", () => {
+    const deadFlags = ["FEATURE_AIR", "FEATURE_AI_X", "FEATURE_a", "FEATURE_B"];
+    const findingsByFlag = deadFlags.map((flag) => ({
+      kind: "dead-flag" as const,
+      flag,
+    }));
+    const written = buildBaseline(findingsByFlag);
+    expect(written.map(({ key }) => key)).toEqual(
+      ["FEATURE_AIR", "FEATURE_AI_X", "FEATURE_B", "FEATURE_a"].map(
+        (flag) => `dead-flag:${flag}`,
+      ),
+    );
+    expect(
+      diffBaseline({
+        findings: findingsByFlag,
+        baseline: written,
+        baseBaseline: undefined,
+      }).malformed,
+    ).toBe(false);
+  });
+
+  test("a base revision that does not resolve fails instead of skipping growth", () => {
+    expect(() => readBaseBaseline("refs/heads/no-such-base-revision")).toThrow(
+      "is not a commit",
+    );
+    expect(Array.isArray(readBaseBaseline("HEAD"))).toBe(true);
+  });
+
+  test("an empty or missing --base value fails", () => {
+    const script = new URL("deployment-feature-guard.ts", import.meta.url)
+      .pathname;
+    for (const args of [["--base", ""], ["--base"], ["--base", "--report"]]) {
+      const run = Bun.spawnSync(["bun", script, ...args], { stderr: "pipe" });
+      expect(run.exitCode).not.toBe(0);
+      expect(run.stderr.toString()).toContain("--base needs a revision");
+    }
   });
 });
 

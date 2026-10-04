@@ -14,19 +14,21 @@
 //      surface, a catalog entry's `feature`, or a sanctioned raw `env.FEATURE_X`
 //      read. A declared flag with no reader is dead; a read of an undeclared
 //      flag is an error.
-//   2. Raw reads. `process.env.FEATURE_X`, `Bun.env.FEATURE_X` and
-//      `import.meta.env.FEATURE_X` skip both the env schema and the owner.
+//   2. Raw reads. A `FEATURE_*` key read off `process.env`, `Bun.env` or
+//      `import.meta.env` skips both the env schema and the owner.
 //   3. Routes. Every Elysia instance in the route tree is walked in chain order
 //      (gates apply to routes registered after them, and to child instances
 //      mounted after them). A capability whose catalog entry carries a
 //      deployment flag must be mounted behind a gate that reads that flag, on
-//      every mount, or check the flag inside its handler module. Every gate
+//      every mount; a flag read inside the handler is not a gate. Every gate
 //      must read declared flags. Every route file is either gated, mounts a
 //      flagged capability, or is declared always-on; the rest are
 //      unclassified.
 
 import { panic } from "better-result";
 import ts from "typescript";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { deriveCapabilityId, HANDLERS_ROOT_PREFIX } from "./capability-catalog";
 
@@ -69,7 +71,7 @@ type FlagReadForm =
   | "catalog-feature"
   /** `env.FEATURE_X` on the API env object (lint-sanctioned files only). */
   | "env-read"
-  /** `process.env.FEATURE_X`, `Bun.env.FEATURE_X`, `import.meta.env.FEATURE_X`. */
+  /** A `FEATURE_*` key read off `process.env`, `Bun.env` or `import.meta.env`. */
   | "process-env-read";
 
 type FlagRead = { file: string; flag: string; form: FlagReadForm };
@@ -322,8 +324,30 @@ type Instance = {
   file: string;
   /** Instance this chain continues (`const b = a.get(...)`), if any. */
   base: InstanceKey | undefined;
+  /**
+   * Source position of this chain when its base lives in the same file: only
+   * base statements before it had run when this chain was registered.
+   */
+  basePosition: number | undefined;
+  /** The initializer chain's items. */
   items: ChainItem[];
+  /** Module-level statements that keep chaining onto this instance. */
+  continued: { position: number; items: ChainItem[] }[];
 };
+
+/**
+ * An instance's items in registration order: its initializer chain, then each
+ * continuation statement before `before` (all of them when undefined).
+ */
+const orderedItems = (
+  instance: Instance,
+  before: number | undefined,
+): ChainItem[] => [
+  ...instance.items,
+  ...instance.continued
+    .filter(({ position }) => before === undefined || position < before)
+    .flatMap(({ items }) => items),
+];
 
 type FileContext = {
   file: string;
@@ -730,13 +754,19 @@ const registerInstance = (
     key,
     file: context.file,
     base: undefined,
+    basePosition: undefined,
     items: [],
+    continued: [],
   };
   walk.table.set(key, instance);
   if (!isNewElysia(root)) {
     const ref = resolveInstanceRef(walk.environment, context, root);
     if (ref !== undefined) {
       instance.base = registerInstance(walk, ref.context, ref.local, ref.node);
+      // An imported base's module ran to completion before this one; a base
+      // in the same file has only run the statements above this chain.
+      instance.basePosition =
+        ref.context.file === context.file ? expression.pos : undefined;
     }
   }
   const inner: Walk = { ...walk, context, inline: { owner: local, next: 0 } };
@@ -748,7 +778,10 @@ const registerInstance = (
       const continued = flattenChain(statement);
       const continuedRoot = unwrap(continued.root);
       if (ts.isIdentifier(continuedRoot) && continuedRoot.text === local) {
-        instance.items.push(...chainItems(inner, continued.calls));
+        instance.continued.push({
+          position: statement.pos,
+          items: chainItems(inner, continued.calls),
+        });
       }
     }
   }
@@ -1159,23 +1192,22 @@ const walkItems = ({
   return gates;
 };
 
-/** Gates in force at the end of an instance's chain, through its bases. */
-const finalGates = (
+/** Gates in force where an instance's base chain stopped when it was derived. */
+const baseGates = (
   graph: RouteGraph,
   instance: Instance,
   depth = 0,
 ): ReadonlySet<string> => {
   const base =
     instance.base === undefined ? undefined : graph.table.get(instance.base);
-  const start =
-    base === undefined || depth > MAX_INSTANCE_DEPTH
-      ? new Set<string>()
-      : finalGates(graph, base, depth + 1);
+  if (base === undefined || depth > MAX_INSTANCE_DEPTH) {
+    return new Set<string>();
+  }
   return walkItems({
     graph,
-    instance,
-    items: instance.items,
-    start,
+    instance: base,
+    items: orderedItems(base, instance.basePosition),
+    start: baseGates(graph, base, depth + 1),
     record: false,
   });
 };
@@ -1202,13 +1234,11 @@ const buildRouteGraph = (input: ScanInput): RouteGraph => {
     gateFlagsByFile: new Map(),
   };
   for (const instance of table.values()) {
-    const base =
-      instance.base === undefined ? undefined : table.get(instance.base);
     walkItems({
       graph,
       instance,
-      items: instance.items,
-      start: base === undefined ? new Set() : finalGates(graph, base),
+      items: orderedItems(instance, undefined),
+      start: baseGates(graph, instance),
       record: true,
     });
   }
@@ -1270,26 +1300,6 @@ const inheritedGates = (graph: RouteGraph) => {
 
 // --- Route findings ---------------------------------------------------------------------
 
-const handlerOwnerCalls = (environment: ScanEnvironment) => {
-  const cache = new Map<string, Set<string>>();
-  return (file: string): Set<string> => {
-    const cached = cache.get(file);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const source = environment.readSource(file);
-    const flags = new Set(
-      source === undefined
-        ? []
-        : collectFlagReads(file, parse({ file, source }))
-            .filter(({ form }) => form === "owner-call")
-            .map(({ flag }) => flag),
-    );
-    cache.set(file, flags);
-    return flags;
-  };
-};
-
 type MountScan = {
   findings: Finding[];
   /** Route files that mount at least one flagged capability. */
@@ -1310,7 +1320,6 @@ const scanMounts = (
     attributed: new Map(),
     capabilityMountCount: 0,
   };
-  const inHandler = handlerOwnerCalls(graph.environment);
   for (const mount of graph.mounts) {
     const context = graph.environment.contexts.get(mount.file);
     if (context === undefined) {
@@ -1336,11 +1345,9 @@ const scanMounts = (
       continue;
     }
     scan.flaggedFiles.add(mount.file);
-    if (
-      mount.gates.has(flag) ||
-      inherited(mount.instance).has(flag) ||
-      inHandler(module.file).has(flag)
-    ) {
+    // Only a route gate counts: a flag read inside the handler may shape the
+    // response without rejecting the request.
+    if (mount.gates.has(flag) || inherited(mount.instance).has(flag)) {
       continue;
     }
     scan.findings.push({
@@ -1452,7 +1459,7 @@ export const scanDeploymentFeatures = (input: ScanInput): ScanResult => {
     declared,
     reads: readers.reads,
     findings: [...unique.values()].toSorted((a, b) =>
-      findingKey(a).localeCompare(findingKey(b)),
+      compareCodeUnit(findingKey(a), findingKey(b)),
     ),
     routeFileCount: input.routeFiles.length,
     instanceCount: graph.table.size,

@@ -166,6 +166,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
   ]),
+  fixtureRuleOverride("require-contract-domains.fixture.tsx", [
+    "require-contract-domains/require-contract-domains",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1228,6 +1231,7 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
@@ -3744,7 +3748,12 @@ export default defineConfig({
     {
       // Outside the API, apps and packages read their own env modules; a
       // deployment flag is never read off the raw process environment.
-      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",
@@ -4941,6 +4950,10 @@ export default defineConfig({
       rules: {
         "no-imported-class-constant/no-imported-class-constant": "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: { "require-contract-domains/require-contract-domains": "error" },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables
