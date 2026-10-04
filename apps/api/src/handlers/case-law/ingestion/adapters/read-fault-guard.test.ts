@@ -6,9 +6,15 @@
 // must fail or build exactly the control decision; a build that succeeds with
 // different content stored a failed read as missing or empty fields.
 //
+// Refusals (401, 403) are a separate class: the build must state the refusal
+// typed (a `refused` marker on the decision, a withheld part typed as
+// "secondary-refused", or a typed refused failure). Failing untyped or
+// building unchanged does not count; a typed marker is surfaced, not degraded.
+//
 // Rows in read-fault-guard-baseline.json are the current exceptions: an
-// adapter whose fixture drives no publisher read (`<adapter>::undriven`) or a
-// stage × fault that degrades the decision. New rows fail; rows that no longer
+// adapter whose fixture drives no publisher read (`<adapter>::undriven`), a
+// stage × fault that degrades the decision, or a stage × refusal the build
+// does not state typed. New rows fail; rows that no longer
 // occur must be removed. scripts/failure-as-empty-baseline.ts rejects added
 // rows against the base revision. Regenerate (drops fixed rows only):
 //   READ_FAULT_BASELINE=write bun run test <this file>
@@ -26,8 +32,10 @@ import { writeFileSync } from "node:fs";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
+import type { ReadRefusal } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   atFindokFixture,
   atRisFixture,
@@ -54,9 +62,12 @@ import {
   buildWithFault,
   changedPaths,
   classifyFaultedBuild,
+  classifyRefusedBuild,
   flattenBuilt,
   READ_FAULTS,
+  READ_REFUSALS,
   recordFetchStages,
+  type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -145,6 +156,22 @@ const rowsRecordedFor = (key: string) =>
     .filter((row) => row.startsWith(`${key}::`))
     .toSorted();
 
+const refusalDetail = (
+  outcome: Extract<RefusalOutcome, { type: "untyped" }>,
+): string => {
+  switch (outcome.how) {
+    case "failed":
+      return "the build fails without a typed refusal";
+    case "unchanged":
+      return "the build stores the decision unchanged";
+    case "changed":
+      return `the build stores a different decision: ${outcome.changed.slice(0, 3).join(", ")}`;
+    default:
+      outcome.how satisfies never;
+      return panic(`Unhandled refusal outcome: ${String(outcome.how)}`);
+  }
+};
+
 const observe = (row: string, reason: string) => {
   observedRows.set(row, reason);
   return row;
@@ -186,6 +213,22 @@ for (const adapter of listAdapters()) {
               observe(
                 `${adapter.key}::${stage}::${fault}`,
                 `A failed read builds a different decision (${outcome.changed.slice(0, 3).join(", ")}); pending migration to readPublisher.`,
+              ),
+            );
+          }
+        }
+        for (const fault of READ_REFUSALS) {
+          const outcome = classifyRefusedBuild({
+            control: control.value,
+            faulted: await buildWithFault({ stage, fault, build }),
+            fault,
+            volatile,
+          });
+          if (outcome.type === "untyped") {
+            rows.push(
+              observe(
+                `${adapter.key}::${stage}::${fault}`,
+                `A refused read is not stated as a typed refusal (${refusalDetail(outcome)}); pending migration to readPublisher's refused outcome.`,
               ),
             );
           }
@@ -287,4 +330,139 @@ test("a read through readPublisherText surfaces every fault", async () => {
       }),
     ).toEqual({ type: "surfaced" });
   }
+});
+
+// ── Self-tests: refusals must be stated typed ──
+
+const NOTICE = "https://publisher.invalid/notice/1";
+const servedDocumentAndNotice = () => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+    const href = input instanceof Request ? input.url : String(input);
+    return await Promise.resolve(
+      new Response(href === NOTICE ? "<notice/>" : "<p>decision text</p>"),
+    );
+  });
+};
+const readInit = {
+  adapterKey: ADAPTER_KEYS.CZ_NSS,
+  fetchStage: "listing",
+  timeoutMs: 1000,
+} as const;
+
+const refusalOutcomes = async (
+  build: () => Promise<unknown>,
+  stageIndex = 0,
+): Promise<RefusalOutcome[]> => {
+  const control = await recordFetchStages(build);
+  const stage = control.stages.at(stageIndex) ?? panic("no stage");
+  const outcomes: RefusalOutcome[] = [];
+  for (const fault of READ_REFUSALS) {
+    outcomes.push(
+      classifyRefusedBuild({
+        control: control.value,
+        faulted: await buildWithFault({ stage, fault, build }),
+        fault,
+        volatile: new Set(),
+      }),
+    );
+  }
+  return outcomes;
+};
+
+test("a helper mapping a 403 to an empty document is not a typed refusal", async () => {
+  const outcomes = await refusalOutcomes(async () => {
+    servedDocument();
+    const response = await fetch(PUBLISHER);
+    return { fulltext: response.ok ? await response.text() : "" };
+  });
+  expect(outcomes).toEqual(
+    READ_REFUSALS.map(() => ({
+      type: "untyped",
+      how: "changed",
+      changed: ["fulltext"],
+    })),
+  );
+});
+
+test("a helper failing on a refusal without typing it is not a typed refusal", async () => {
+  const outcomes = await refusalOutcomes(async () => {
+    servedDocument();
+    const outcome = await readPublisherText(PUBLISHER, readInit);
+    return outcome.type === "present"
+      ? { fulltext: outcome.value }
+      : panic(`Publisher read ${outcome.type}`);
+  });
+  expect(outcomes).toEqual(
+    READ_REFUSALS.map(() => ({ type: "untyped", how: "failed", changed: [] })),
+  );
+});
+
+test("a decision storing the typed refused marker surfaces the refusal", async () => {
+  const outcomes = await refusalOutcomes(async () => {
+    servedDocument();
+    const outcome = await readPublisherText(PUBLISHER, readInit);
+    switch (outcome.type) {
+      case "present":
+        return { fulltext: outcome.value };
+      case "refused":
+        return { fulltextRefusal: outcome };
+      case "absent":
+      case "unavailable":
+        return panic(`Publisher read ${outcome.type}`);
+      default:
+        outcome satisfies never;
+        return panic(`Unhandled read outcome: ${String(outcome)}`);
+    }
+  });
+  expect(outcomes).toEqual(READ_REFUSALS.map(() => ({ type: "surfaced" })));
+});
+
+test("a withheld part typed as refused (scope part or secondary-refused) is surfaced", async () => {
+  const buildWith =
+    (mark: (refusal: ReadRefusal) => Record<string, unknown>) => async () => {
+      servedDocumentAndNotice();
+      const document = await readPublisherText(PUBLISHER, readInit);
+      const notice = await readPublisherText(NOTICE, {
+        ...readInit,
+        refusalScope: "part",
+      });
+      const fulltext =
+        document.type === "present" ? document.value : panic("no document");
+      switch (notice.type) {
+        case "present":
+          return { fulltext, notice: notice.value };
+        case "refused":
+          return { fulltext, ...mark(notice) };
+        case "absent":
+        case "unavailable":
+          return panic(`Notice read ${notice.type}`);
+        default:
+          notice satisfies never;
+          return panic(`Unhandled read outcome: ${String(notice)}`);
+      }
+    };
+  for (const build of [
+    buildWith((refusal) => ({ parts: { notice: refusal } })),
+    buildWith(() => ({
+      observationDetail: OBSERVATION_DETAIL.SECONDARY_REFUSED,
+    })),
+  ]) {
+    expect(await refusalOutcomes(build, 1)).toEqual(
+      READ_REFUSALS.map(() => ({ type: "surfaced" })),
+    );
+  }
+});
+
+test("a source-level refusal stop is a typed refusal", async () => {
+  const outcomes = await refusalOutcomes(async () => {
+    servedDocument();
+    const outcome = await readPublisherText(PUBLISHER, {
+      ...readInit,
+      refusalMode: "stop-refusal",
+    });
+    return outcome.type === "present"
+      ? { fulltext: outcome.value }
+      : panic(`Publisher read ${outcome.type}`);
+  });
+  expect(outcomes).toEqual(READ_REFUSALS.map(() => ({ type: "surfaced" })));
 });

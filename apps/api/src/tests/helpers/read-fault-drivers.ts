@@ -8,12 +8,24 @@
  * exactly the decision the control did. A build that succeeds with different
  * content turned a failed read into missing or empty fields.
  *
+ * A refusal (401, 403) is a separate class with a stricter expectation: the
+ * build must state it as a typed refusal, either a typed refused marker on the
+ * decision (`ReadRefusal`, or the pipeline's "secondary-refused" observation
+ * detail for a withheld part) or a typed refused failure (a source-level
+ * `publisher_refusal` stop, or an error carrying a `ReadRefusal`). Failing
+ * untyped, or building unchanged, does not state it.
+ *
  * Fixtures replace `globalThis.fetch` inside their build, so the driver keeps
  * the interception in an accessor that wraps whatever the fixture installs.
  */
 
 import { panic, Result } from "better-result";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
+import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -26,10 +38,28 @@ export const READ_FAULTS = [
 
 export type ReadFault = (typeof READ_FAULTS)[number];
 
+export const READ_REFUSALS = ["refused-401", "refused-403"] as const;
+
+export type ReadRefusalFault = (typeof READ_REFUSALS)[number];
+
+const REFUSAL_STATUS = {
+  "refused-401": 401,
+  "refused-403": 403,
+} as const satisfies Record<ReadRefusalFault, number>;
+
 export type FaultOutcome =
   | { readonly type: "surfaced" }
   | { readonly type: "recovered" }
   | { readonly type: "degraded"; readonly changed: readonly string[] };
+
+/** What a build did with a refused read: stated it typed, or not. */
+export type RefusalOutcome =
+  | { readonly type: "surfaced" }
+  | {
+      readonly type: "untyped";
+      readonly how: "failed" | "unchanged" | "changed";
+      readonly changed: readonly string[];
+    };
 
 type FetchInput = string | URL | Request;
 type Delegate = () => Promise<Response>;
@@ -57,10 +87,13 @@ export const fetchStageOf = (input: FetchInput, init?: RequestInit): string => {
 
 /** The answer a faulted request receives in place of the served one. */
 export const faultedResponse = async (
-  fault: ReadFault,
+  fault: ReadFault | ReadRefusalFault,
   served: Delegate,
 ): Promise<Response> => {
   switch (fault) {
+    case "refused-401":
+    case "refused-403":
+      return new Response("", { status: REFUSAL_STATUS[fault] });
     case "status-500":
       return new Response("", { status: 500 });
     case "timeout":
@@ -135,7 +168,7 @@ export const buildWithFault = async <T>({
   build,
 }: {
   stage: string;
-  fault: ReadFault;
+  fault: ReadFault | ReadRefusalFault;
   build: () => Promise<T>;
 }): Promise<Result<T, unknown>> =>
   await Result.tryPromise({
@@ -224,4 +257,70 @@ export const classifyFaultedBuild = ({
   return changed.length === 0
     ? { type: "recovered" }
     : { type: "degraded", changed };
+};
+
+/** How many typed refusal markers of `status` a built value carries. */
+const refusalMarkers = (value: unknown, status: number): number => {
+  if (value instanceof Map) {
+    return refusalMarkers(Object.fromEntries(value), status);
+  }
+  if (Array.isArray(value)) {
+    return value.reduce<number>(
+      (count, item) => count + refusalMarkers(item, status),
+      0,
+    );
+  }
+  if (!isRecord(value) || value instanceof Uint8Array) {
+    return 0;
+  }
+  if (isReadRefusal(value)) {
+    return value.status === status ? 1 : 0;
+  }
+  // The pipeline's typed marker for a decision stored without a refused part.
+  const secondaryRefused =
+    value["observationDetail"] === OBSERVATION_DETAIL.SECONDARY_REFUSED ? 1 : 0;
+  return Object.values(value).reduce<number>(
+    (count, item) => count + refusalMarkers(item, status),
+    secondaryRefused,
+  );
+};
+
+/** A failure that states a refusal: a source-level stop or a carried marker. */
+const isTypedRefusalFailure = (error: unknown): boolean =>
+  (error instanceof AdapterFetchError &&
+    error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL) ||
+  isReadRefusal(error) ||
+  (error instanceof Error && isReadRefusal(error.cause));
+
+/**
+ * What a build with one stage refused did with the refusal. Only a typed
+ * refusal surfaces it; an untyped failure and an unchanged build do not.
+ */
+export const classifyRefusedBuild = ({
+  control,
+  faulted,
+  fault,
+  volatile,
+}: {
+  control: unknown;
+  faulted: Result<unknown, unknown>;
+  fault: ReadRefusalFault;
+  volatile: ReadonlySet<string>;
+}): RefusalOutcome => {
+  if (Result.isError(faulted)) {
+    return isTypedRefusalFailure(faulted.error)
+      ? { type: "surfaced" }
+      : { type: "untyped", how: "failed", changed: [] };
+  }
+  const status = REFUSAL_STATUS[fault];
+  if (refusalMarkers(faulted.value, status) > refusalMarkers(control, status)) {
+    return { type: "surfaced" };
+  }
+  const changed = changedPaths(
+    flattenBuilt(control),
+    flattenBuilt(faulted.value),
+  ).filter((path) => !volatile.has(path));
+  return changed.length === 0
+    ? { type: "untyped", how: "unchanged", changed }
+    : { type: "untyped", how: "changed", changed };
 };

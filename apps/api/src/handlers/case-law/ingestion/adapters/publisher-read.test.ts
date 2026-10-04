@@ -6,11 +6,15 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-import { readPublisher, readPublisherText } from "./publisher-read";
-import type { PublisherFetchInit } from "./retry";
+import {
+  readPublisher,
+  readPublisherText,
+  type PublisherReadInit,
+} from "./publisher-read";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -20,8 +24,8 @@ afterEach(() => {
 const URL_UNDER_TEST = "https://publisher.invalid/document/1";
 
 const init = (
-  overrides: Partial<PublisherFetchInit> = {},
-): PublisherFetchInit => ({
+  overrides: Partial<PublisherReadInit> = {},
+): PublisherReadInit => ({
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
   timeoutMs: 1000,
@@ -58,8 +62,40 @@ describe("readPublisher", () => {
     }
   });
 
+  test("401, 403 and 451 are typed refusals, never absences or failures", async () => {
+    for (const status of [401, 403, 451] as const) {
+      serve(() => new Response("refused", { status }));
+      const outcome = await readPublisher(URL_UNDER_TEST, init());
+      expect(outcome).toEqual({
+        type: "refused",
+        status,
+        scope: "document",
+        cause: { kind: "http-status", retryAfter: null },
+      });
+      expect(isReadRefusal(outcome)).toBe(true);
+    }
+  });
+
+  test("a refusal names the scope the caller read and the Retry-After it carried", async () => {
+    serve(
+      () =>
+        new Response("refused", {
+          status: 403,
+          headers: { "Retry-After": "3600" },
+        }),
+    );
+    expect(
+      await readPublisherText(URL_UNDER_TEST, init({ refusalScope: "part" })),
+    ).toEqual({
+      type: "refused",
+      status: 403,
+      scope: "part",
+      cause: { kind: "http-status", retryAfter: "3600" },
+    });
+  });
+
   test("a 5xx, a 204 and other 4xx answers are failures to read", async () => {
-    for (const status of [500, 502, 503, 400, 403, 429]) {
+    for (const status of [500, 502, 503, 400, 408, 429]) {
       serve(() => new Response("error", { status }));
       expect(await readPublisher(URL_UNDER_TEST, init())).toEqual({
         type: "unavailable",
@@ -96,13 +132,36 @@ describe("readPublisher", () => {
     expect(rejection).toBeInstanceOf(DOMException);
   });
 
-  test("a publisher refusal stop still ends the cycle by throwing", async () => {
-    serve(() => new Response("slow down", { status: 429 }));
-    const rejection = await rejectionOf(
-      readPublisher(URL_UNDER_TEST, init({ refusalMode: "stop-refusal" })),
-    );
-    expect(rejection).toBeInstanceOf(AdapterFetchError);
+  test("a source-level refusal stop still ends the cycle by throwing", async () => {
+    for (const status of [401, 403, 429]) {
+      serve(() => new Response("refused", { status }));
+      const rejection = await rejectionOf(
+        readPublisher(URL_UNDER_TEST, init({ refusalMode: "stop-refusal" })),
+      );
+      expect(rejection).toBeInstanceOf(AdapterFetchError);
+    }
   });
+});
+
+test("only a refusal with a refusal status and a scope is a refusal marker", () => {
+  const refusal = {
+    type: "refused",
+    status: 403,
+    scope: "part",
+    cause: { kind: "http-status", retryAfter: null },
+  };
+  expect(isReadRefusal(refusal)).toBe(true);
+  for (const value of [
+    { ...refusal, status: 404 },
+    { ...refusal, status: 500 },
+    { ...refusal, scope: "page" },
+    { type: "absent", evidence: "http-404" },
+    { type: "unavailable", cause: { kind: "status", status: 403 } },
+    null,
+    "refused",
+  ]) {
+    expect(isReadRefusal(value)).toBe(false);
+  }
 });
 
 describe("readPublisherText", () => {
@@ -123,11 +182,14 @@ describe("readPublisherText", () => {
   });
 });
 
-test("no publisher status other than 404 and 410 reads as an absence", async () => {
+test("no publisher status other than 404 and 410 reads as an absence, and only 401, 403 and 451 as a refusal", async () => {
   await assertProperty(
-    "no publisher status other than 404 and 410 reads as an absence",
+    "no publisher status other than 404 and 410 reads as an absence, and only 401, 403 and 451 as a refusal",
     fc.asyncProperty(
-      fc.integer({ min: 200, max: 599 }),
+      fc.oneof(
+        fc.integer({ min: 200, max: 599 }),
+        fc.constantFrom(204, 401, 403, 404, 410, 451),
+      ),
       fc.string({ maxLength: 8 }),
       async (status, body) => {
         serve(
@@ -145,8 +207,13 @@ test("no publisher status other than 404 and 410 reads as an absence", async () 
             expect(outcome.value).toBe(body);
             expect(outcome.value.length).toBeGreaterThan(0);
             return;
+          case "refused":
+            expect([401, 403, 451]).toContain(status);
+            expect<number>(outcome.status).toBe(status);
+            expect(outcome.scope).toBe("document");
+            return;
           case "unavailable":
-            expect([404, 410]).not.toContain(status);
+            expect([404, 410, 401, 403, 451]).not.toContain(status);
             return;
           default:
             outcome satisfies never;
