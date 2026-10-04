@@ -110,6 +110,84 @@ const repositoryWorkflows = async () => {
   );
 };
 
+const TURBO_CACHE_ACTION = "rharkor/caching-for-turbo@";
+
+const turboCacheSites = (workflow: unknown) => {
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    return [];
+  }
+  return Object.entries(workflow["jobs"]).flatMap(([job, value]) => {
+    if (!isRecord(value) || !Array.isArray(value["steps"])) {
+      return [];
+    }
+    return value["steps"].flatMap((step: unknown, index) => {
+      if (
+        !isRecord(step) ||
+        typeof step["uses"] !== "string" ||
+        !step["uses"].startsWith(TURBO_CACHE_ACTION)
+      ) {
+        return [];
+      }
+      return [
+        {
+          job,
+          index,
+          port: isRecord(step["with"])
+            ? step["with"]["server-port"]
+            : undefined,
+        },
+      ];
+    });
+  });
+};
+
+const turboCachePortProblems = (workflow: unknown) =>
+  turboCacheSites(workflow).filter(({ port }) => port !== "0");
+
+describe("Turbo cache server port isolation", () => {
+  test("every workflow cache server requests an available port", async () => {
+    const workflows = await repositoryWorkflows();
+    const sites = workflows.flatMap(({ workflow }) =>
+      turboCacheSites(workflow),
+    );
+    expect(sites.length).toBeGreaterThan(0);
+    expect(
+      workflows.flatMap(({ file, workflow }) =>
+        turboCachePortProblems(workflow).map(
+          ({ job, index }) =>
+            `${file}: ${job} step ${index} needs server-port: "0"`,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test.each([
+    ["missing inputs", "", false],
+    ["missing port", "with: {}", false],
+    ["fixed port", 'with: {server-port: "41230"}', false],
+    ["ephemeral port", 'with: {server-port: "0"}', true],
+  ])("detects %s in every job", (_name, inputs, isolated) => {
+    const workflow: unknown = Bun.YAML.parse(`
+jobs:
+  first:
+    steps:
+      - uses: actions/checkout@fixture
+      - uses: rharkor/caching-for-turbo@fixture
+        ${inputs}
+  second:
+    steps:
+      - uses: rharkor/caching-for-turbo@fixture
+        ${inputs}
+`);
+    const sites = turboCacheSites(workflow);
+    expect(sites.map(({ job, index }) => ({ job, index }))).toEqual([
+      { job: "first", index: 1 },
+      { job: "second", index: 0 },
+    ]);
+    expect(turboCachePortProblems(workflow)).toHaveLength(isolated ? 0 : 2);
+  });
+});
+
 describe("pull request workflow concurrency", () => {
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();

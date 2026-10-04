@@ -104,6 +104,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-computed-key-record-assignment(no-computed-key-record-assignment)",
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
     ],
+    [
+      "no-direct-status-set(no-direct-status-set)",
+      "no-direct-status-set/no-direct-status-set",
+    ],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
@@ -122,6 +126,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "no-direct-status-set",
     "eslint",
     ...new Set(
       BUILTIN_LINT_BACKLOG_RULES.map((rule) =>

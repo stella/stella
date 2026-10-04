@@ -4,7 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -26,6 +26,13 @@ const BUN_GLOBAL_STORE_ROOT = path.resolve(
     path.join(homedir(), ".bun/install/cache"),
   "links",
 );
+// Folio editor catalogs load one module per app language (see
+// folioMessageLoaders in src/i18n/i18n-store.ts); one entry per locale file.
+const FOLIO_LOCALE_MESSAGE_ENTRYPOINTS = readdirSync(
+  path.resolve(APP_ROOT, "src/i18n/langs"),
+)
+  .filter((file) => file.endsWith(".json"))
+  .map((file) => `@stll/folio-react/messages/${path.basename(file, ".json")}`);
 const ANALYZE_MODE = "analyze";
 export const REACT_PLUGIN_EXCLUDE = [
   /[/\\]node_modules[/\\]/u,
@@ -538,7 +545,7 @@ export default defineConfig(({ mode }) => {
         "defu",
         "nanostores",
         "@stll/folio-react",
-        "@stll/folio-react/messages",
+        ...FOLIO_LOCALE_MESSAGE_ENTRYPOINTS,
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",

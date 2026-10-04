@@ -13,6 +13,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
@@ -55,6 +56,15 @@ import {
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
+import {
+  isMcpDescriptorFeatureEnabled,
+  resolveMcpDescriptorFeatureId,
+} from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+  scopeSchemaAnnotations,
+} from "@/api/mcp/feature-access-prose";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
   findRemovedInputIssues,
@@ -149,6 +159,8 @@ type CatalogEntry = {
    * and describe/invoke refuse it with `feature_disabled` (see
    * `isCapabilityFeatureEnabled`).
    */
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
   feature?: string;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
@@ -260,6 +272,11 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
       value["additionalScopes"].every(
         (scope): scope is string => typeof scope === "string",
       ))) &&
+  (value["featureId"] === undefined ||
+    typeof value["featureId"] === "string") &&
+  (value["featureAccess"] === undefined ||
+    value["featureAccess"] === "required" ||
+    value["featureAccess"] === "conditional") &&
   (value["feature"] === undefined || typeof value["feature"] === "string") &&
   isCapabilityTransport(value["transport"]) &&
   isMcpDisposition(value["mcp"]);
@@ -367,6 +384,7 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
  * The guard below narrows to this shape at the module boundary.
  */
 type EndpointConfig = {
+  featureAccess?: FeatureAccessRequirement;
   mcp?: unknown;
   body?: TSchema;
   params?: TSchema;
@@ -866,6 +884,40 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
+const capabilityFeatureEnabled = (
+  entry: CatalogEntry,
+  context: McpRequestContext,
+) =>
+  entry.featureAccess === "conditional" ||
+  isMcpDescriptorFeatureEnabled({
+    context,
+    kind: "capabilities",
+    id: entry.id,
+    featureId: entry.featureId,
+  });
+
+export const accessibleFeatureCapabilityIds = async (
+  context: McpRequestContext,
+): Promise<string[]> =>
+  (await getCatalog())
+    .filter(
+      (entry) =>
+        resolveMcpDescriptorFeatureId({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }) !== undefined &&
+        isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }) &&
+        contextFeatureEnabled(entry.feature, context),
+    )
+    .map((entry) => entry.id);
+
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids
  * `list_capabilities` hides and describe/invoke refuse with `feature_disabled`.
@@ -876,9 +928,19 @@ export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
+  context?: McpRequestContext,
 ): Promise<readonly string[]> =>
   (await getCatalog())
-    .filter((entry) => !isFeatureEnabled(entry.feature))
+    .filter(
+      (entry) =>
+        !isFeatureEnabled(entry.feature) &&
+        isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }),
+    )
     .map((entry) => entry.id)
     .toSorted();
 
@@ -916,10 +978,17 @@ const listCapabilitiesHandler: McpToolHandler<
   const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
+      capabilityFeatureEnabled(entry, context) &&
       (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
+  );
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("@/api/mcp/static-tool-definitions");
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
   );
   const page = filtered.slice(0, limit);
   const last = page.at(-1);
@@ -933,8 +1002,11 @@ const listCapabilitiesHandler: McpToolHandler<
     payload: {
       items: page.map((entry) => ({
         id: entry.id,
-        summary: summarizeEntry(entry),
-        description: entry.description ?? null,
+        summary: scopeMcpDescriptorProse(summarizeEntry(entry), hiddenIds),
+        description:
+          entry.description === undefined
+            ? null
+            : scopeMcpDescriptorProse(entry.description, hiddenIds),
         access: entry.access,
         destructive: entry.destructive,
         handlerKind: entry.handlerKind,
@@ -965,8 +1037,14 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 // --- describe_capability -----------------------------------------------------
 
-const notFoundWithHint = async (id: string): Promise<InternalToolErrorResult> =>
-  notFoundResult(`No capability with id "${id}"`, await hintForUnknownId(id));
+const notFoundWithHint = async (
+  id: string,
+  context: McpRequestContext,
+): Promise<InternalToolErrorResult> =>
+  notFoundResult(
+    `No capability with id "${id}"`,
+    await hintForUnknownId(id, context),
+  );
 
 /**
  * Refusal for a capability whose deployment feature flag is off. Same message
@@ -982,10 +1060,19 @@ const featureDisabledResult = (
     hint: featureDisabledHint(feature),
   });
 
-const hintForUnknownId = async (id: string): Promise<string> => {
+const hintForUnknownId = async (
+  id: string,
+  context: McpRequestContext,
+): Promise<string> => {
   const suggestions = closestToolNames(
     id,
-    (await getCatalog()).map((entry) => entry.id),
+    (await getCatalog())
+      .filter(
+        (entry) =>
+          capabilityFeatureEnabled(entry, context) &&
+          contextFeatureEnabled(entry.feature, context),
+      )
+      .map((entry) => entry.id),
   );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
@@ -1058,7 +1145,7 @@ const describeCapabilityHandler: McpToolHandler<
   const id = parsed.output.capability;
   const entry = (await getCatalogById()).get(id);
   if (!entry) {
-    return notFoundWithHint(id);
+    return notFoundWithHint(id, context);
   }
 
   // Match the static-tool surface: a gated-off tool is hidden from the list
@@ -1066,6 +1153,9 @@ const describeCapabilityHandler: McpToolHandler<
   // refused too (never leak a disabled feature's schema by direct id).
   if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult(entry.feature);
+  }
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundResult("Not found");
   }
 
   const loaded = await loadEndpointGuarded(id, "describe_capability");
@@ -1080,13 +1170,33 @@ const describeCapabilityHandler: McpToolHandler<
   // so a snapshot-truncated capability still describes fully, and the same
   // `advertisedSchemas` projection invoke_capability validates against, so an
   // advertised bound is always an enforced bound.
-  const inputSchema = advertisedSchemas(endpoint.config);
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("@/api/mcp/static-tool-definitions");
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
+  const schema = advertisedSchemas(endpoint.config);
+  const requirement = endpoint.config.featureAccess;
+  const inputSchema =
+    requirement?.type === "conditional" &&
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id,
+      featureId: requirement.featureId,
+    })
+      ? requirement.projectInputSchema(schema)
+      : schema;
 
   return {
     egress: "structured",
     payload: {
       id: entry.id,
-      description: entry.description ?? null,
+      description:
+        entry.description === undefined
+          ? null
+          : scopeMcpDescriptorProse(entry.description, hiddenIds),
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
@@ -1102,7 +1212,10 @@ const describeCapabilityHandler: McpToolHandler<
       feature: entry.feature ?? null,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
-      inputSchema,
+      inputSchema:
+        hiddenIds.size === 0
+          ? inputSchema
+          : scopeSchemaAnnotations(inputSchema, hiddenIds),
     },
     textFields: [],
   };
@@ -1455,14 +1568,17 @@ const resolveCapabilityWorkspace = ({
   return { ok: true, workspaceId: branded };
 };
 
-export const invokedCapabilityConsumesServices = async (args: unknown) => {
+export const invokedCapabilityConsumesServices = async (
+  args: unknown,
+  context: McpRequestContext,
+) => {
   const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
   if (!parsed.success || parsed.output.validate_only === true) {
     // Invalid calls reach canonical validation without executing work.
     return Result.ok(false);
   }
   const entry = (await getCatalogById()).get(parsed.output.capability);
-  if (entry === undefined) {
+  if (entry === undefined || !capabilityFeatureEnabled(entry, context)) {
     return Result.ok(false);
   }
   if (typeof entry.consumesServices === "boolean") {
@@ -1513,7 +1629,7 @@ const invokeCapabilityHandler = async ({
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
-    return notFoundWithHint(id);
+    return notFoundWithHint(id, context);
   }
 
   // 2. Deployment feature gate. Mirrors the static-tool dispatch guard
@@ -1522,6 +1638,9 @@ const invokeCapabilityHandler = async ({
   // so a disabled feature leaks nothing about its capabilities.
   if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult(entry.feature);
+  }
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundResult("Not found");
   }
 
   // 3. Disposition / fidelity. token/public capabilities self-authorize from a
@@ -1862,6 +1981,38 @@ const executeInvoke = async ({
         : {}),
       workspaceId: resolved.workspaceId,
     };
+  }
+
+  const requirement = endpoint.config.featureAccess;
+  if (
+    requirement?.type === "conditional" &&
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id,
+      featureId: requirement.featureId,
+    })
+  ) {
+    const scope = context.createOperationDatabaseScope?.();
+    if (
+      !scope ||
+      (workspaceId !== undefined &&
+        !scope.pinServerValidatedWorkspaceId(workspaceId))
+    ) {
+      return notFoundResult("Not found");
+    }
+    const usesFeature = await requirement.usesFeature({
+      body: validatedBody,
+      params: handlerParams,
+      query: validatedQuery,
+      organizationId: context.organizationId,
+      safeDb: scope.safeDb,
+      scopedDb: scope.scopedDb,
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+    });
+    if (usesFeature) {
+      return notFoundResult("Not found");
+    }
   }
 
   // 8. Purpose-dependent requirements. One `uploads.*` domain scope and one

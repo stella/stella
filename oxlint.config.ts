@@ -25,7 +25,7 @@ import {
   SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
-import { OWNERSHIP } from "./scripts/ownership.ts";
+import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -52,7 +52,9 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
-  (entry) => entry.enforcement.kind !== "none",
+  (entry) =>
+    entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "status-set",
 );
 
 // Public route files may build handlers only from the factories whose context
@@ -594,6 +596,19 @@ const uiStandaloneImports = [
       "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
   },
 ];
+
+// The all-locales folio catalog entries (and their `getFolioMessages`) bundle
+// every editor locale into the importing chunk. apps/web loads English eagerly
+// and each other locale on demand through `folioMessageLoaders`.
+const webFolioAllLocalesImports = [
+  "@stll/folio-react/messages",
+  "@stll/folio-core/i18n/messages",
+].map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Import one locale from '@stll/folio-react/messages/<locale>' (see folioMessageLoaders in '@/i18n/i18n-store'); the all-locales entry ships every folio catalog.",
+}));
 
 const webDatePickerImport = {
   // Both spellings: the grouped subpath is a deprecated alias of the flat one
@@ -1525,6 +1540,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-direct-status-set.ts",
+    "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
@@ -1537,6 +1554,56 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-direct-status-set.fixture.ts"],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-discarded-transition-result.fixture.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
     {
       files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
       rules: { "s3-object-boundary/no-etag-content-identity": "error" },
@@ -3238,7 +3305,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3281,7 +3352,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, ...webFolioAllLocalesImports],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3487,7 +3558,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3512,6 +3587,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -3542,7 +3618,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webProtectedRouteImportGroup,
@@ -3586,6 +3666,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -3628,6 +3709,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/routes/-auth-context",
                 message:

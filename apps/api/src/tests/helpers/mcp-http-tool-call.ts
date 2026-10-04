@@ -73,7 +73,7 @@ export const callMcpToolOverHttp = async ({
             context: listContext,
             mode: listMode,
           }),
-          listMode,
+          { mode: listMode, context: listContext },
         ),
       ),
     readMcpResource: () => ({ contents: [] }),

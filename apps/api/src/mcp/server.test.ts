@@ -1524,7 +1524,9 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default");
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
+      type: "mcp-context",
+    });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);
@@ -1565,6 +1567,7 @@ describe("handleMcpHttpRequest", () => {
     expect(readMcpResourceMock).toHaveBeenCalledWith(
       "stella://reference/template-markers",
       "default",
+      { type: "mcp-context" },
     );
     expect(body.result.contents).toEqual([
       {
