@@ -18,6 +18,7 @@ import path from "node:path";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
+import { spawnDevProcess, stopDevProcessGroups } from "./dev-process-groups";
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
@@ -48,9 +49,6 @@ const PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0"] as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
 const DEFAULT_HTTP_READY_TIMEOUT_MS = 120_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
-const CHILD_SHUTDOWN_GRACE_PERIOD_MS = 12_000;
-const CHILD_FORCE_EXIT_TIMEOUT_MS = 2000;
-const FORCE_KILL_SIGNAL = "SIGKILL";
 const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
 const SHARED_DOCKER_HEALTHY_SERVICES = [
   "postgres",
@@ -117,18 +115,6 @@ type Step = {
 
 type RunningStep = Step & {
   child: Bun.Subprocess;
-};
-
-type StoppableChild = Pick<Bun.Subprocess, "exited" | "kill">;
-
-type StoppableStep = {
-  child: StoppableChild;
-  label: string;
-};
-
-type StopChildrenOptions = {
-  children: readonly StoppableStep[];
-  wait?: (durationMs: number) => Promise<void>;
 };
 
 type HttpReadinessCheck = {
@@ -1555,42 +1541,6 @@ const isDevRunnerShutdownSignal = (
 ): error is DevRunnerShutdownSignalError =>
   error instanceof DevRunnerShutdownSignalError;
 
-export const stopChildren = async ({
-  children,
-  wait = async (durationMs) => await Bun.sleep(durationMs),
-}: StopChildrenOptions): Promise<readonly string[]> => {
-  const pending = new Set(children);
-  const allExited = Promise.all(
-    children.map(async (runningStep) => {
-      // `Bun.Subprocess.exited` resolves with the exit status, including for a
-      // process terminated by a signal.
-      await runningStep.child.exited;
-      pending.delete(runningStep);
-    }),
-  );
-
-  for (const runningStep of children) {
-    runningStep.child.kill();
-  }
-
-  const gracefulOutcome = await Promise.race([
-    allExited.then(() => "exited" as const),
-    wait(CHILD_SHUTDOWN_GRACE_PERIOD_MS).then(() => "timed-out" as const),
-  ]);
-  if (gracefulOutcome === "exited") {
-    return [];
-  }
-
-  const forcedSteps = [...pending];
-  for (const runningStep of forcedSteps) {
-    runningStep.child.kill(FORCE_KILL_SIGNAL);
-  }
-
-  // Never let an uncooperative or already-detached child keep the runner open.
-  await Promise.race([allExited, wait(CHILD_FORCE_EXIT_TIMEOUT_MS)]);
-  return forcedSteps.map(({ label }) => label);
-};
-
 const waitForHttpReadiness = async ({
   child,
   label,
@@ -1684,33 +1634,35 @@ const waitForReadinessChecks = async (
   }
 };
 
-const spawnPersistentStep = (step: Step): RunningStep => {
+const spawnPersistentStep = (step: Step, rootDir: string): RunningStep => {
   console.log(`==> Starting ${step.label}...`);
 
   return {
     ...step,
-    child: Bun.spawn(step.cmd, {
+    child: spawnDevProcess({
+      rootDir,
+      cmd: step.cmd,
+      label: step.label,
       cwd: step.cwd,
       env: resolveEnv(step.env),
-      stderr: "inherit",
       stdin: "inherit",
-      stdout: "inherit",
     }),
   };
 };
 
 type BackgroundStep = RunningStep & { startedAt: number };
 
-const startBackgroundStep = (step: Step): BackgroundStep => {
+const startBackgroundStep = (step: Step, rootDir: string): BackgroundStep => {
   console.log(`==> ${step.label}...`);
   return {
     ...step,
-    child: Bun.spawn(step.cmd, {
+    child: spawnDevProcess({
+      rootDir,
+      cmd: step.cmd,
+      label: step.label,
       cwd: step.cwd,
       env: resolveEnv(step.env),
-      stderr: "inherit",
       stdin: "ignore",
-      stdout: "inherit",
     }),
     startedAt: Temporal.Now.instant().epochMilliseconds,
   };
@@ -2331,11 +2283,11 @@ const main = async () => {
     }
 
     isShuttingDown = true;
-    removeDevRuntime(gitContext.currentRoot, process.pid);
     cleanupPromise = (async () => {
-      const forcedChildren = await stopChildren({
-        children: [...children, ...backgroundSteps],
+      const forcedChildren = await stopDevProcessGroups({
+        rootDir: gitContext.currentRoot,
       });
+      removeDevRuntime(gitContext.currentRoot, process.pid);
       if (forcedChildren.length > 0) {
         console.warn(
           `Forced ${forcedChildren.join(", ")} to exit after the graceful shutdown deadline.`,
@@ -2431,7 +2383,7 @@ const main = async () => {
 
     // Register each child immediately so cleanup covers partial startup.
     return steps.map((step) => {
-      const runningStep = spawnPersistentStep(step);
+      const runningStep = spawnPersistentStep(step, gitContext.currentRoot);
       children.push(runningStep);
       return runningStep;
     });
@@ -2530,6 +2482,7 @@ const main = async () => {
             ports,
             rootDir: gitContext.currentRoot,
           }),
+          gitContext.currentRoot,
         ),
       );
     }
