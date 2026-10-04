@@ -4835,6 +4835,7 @@
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
     "aiAdaptHint": "AI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiConditionsUndecided": "AI neizdevās izlemt šos nosacījumus, tāpēc to sadaļas aizpildītas tā, it kā tie nebūtu spēkā: {list}",
     "aiDecidedConditions": "Izlemj AI",
     "aiFieldsNotDrafted": "AI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Cikls: {expression}",
     "directiveIf": "Ja: {expression}",
     "discoveryFailed": "Neizdevās analizēt veidni",
+    "documentCreatedIncomplete": "Dokuments izveidots, bet aizpildījums nav pilnīgs",
     "downloadAnyway": "Tomēr lejupielādēt",
     "downloadDocx": "Lejupielādēt DOCX",
     "downloadPdf": "Lejupielādēt PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Neizdevās saglabāt veidni",
     "savedLookupFormats": "Saglabātie izvades formāti",
     "searchTemplates": "Meklēt veidnes…",
+    "structureErrorsInDocument": "Veidnes direktīvas, kuras neizdevās piemērot: {count}. Pārbaudiet dokumentu.",
     "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {

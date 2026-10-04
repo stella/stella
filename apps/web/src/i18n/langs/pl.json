@@ -4835,6 +4835,7 @@
     "addPart": "Dodaj część",
     "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
+    "aiConditionsUndecided": "AI nie zdołała rozstrzygnąć tych warunków, więc ich sekcje wypełniono tak, jakby nie miały zastosowania: {list}",
     "aiDecidedConditions": "Decyduje AI",
     "aiFieldsNotDrafted": "AI nie zdołała przygotować tych pól: {list}",
     "allTemplates": "Wszystkie szablony",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Pętla: {expression}",
     "directiveIf": "Jeśli: {expression}",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
+    "documentCreatedIncomplete": "Dokument utworzono, ale wypełnienie jest niekompletne",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",
     "downloadPdf": "Pobierz PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Nie udało się zapisać szablonu",
     "savedLookupFormats": "Zapisane formaty wyjściowe",
     "searchTemplates": "Szukaj szablonów…",
+    "structureErrorsInDocument": "Dyrektywy szablonu, których nie udało się zastosować: {count}. Sprawdź dokument.",
     "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {
