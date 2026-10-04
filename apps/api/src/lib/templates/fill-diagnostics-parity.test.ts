@@ -8,18 +8,23 @@
  * `fill_template` tool under both completion modes. Report exports read the
  * same decision under `require_complete`; their DB-backed path is covered in
  * report-export-queue.integration.test.ts, and the `fill-diagnostics` lint
- * keeps every fill module on the decision.
+ * keeps every fill module on the decision. Unrestored anonymization
+ * placeholders reach the record only from the chat tool's anonymizing
+ * boundary, so the chat surface is driven through one.
  *
  * The producer tables below are checked by the type checker: each producer's
  * result fields are either the fill's content or a diagnostic kind, so a
  * producer cannot grow a new outcome field that no kind accounts for.
  */
+import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createTemplateTools } from "@/api/handlers/chat/tools/template-tools";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -43,10 +48,12 @@ import {
 } from "@/api/lib/templates/template-fill-completion";
 import type {
   FillDiagnosticKind,
+  FillDiagnostics,
   FillDiagnosticSources,
 } from "@/api/lib/templates/template-fill-completion";
 import * as templateFillService from "@/api/lib/templates/template-fill-service";
 import type {
+  FilledDocumentMember,
   FillTemplateResult,
   FillTemplateWithDocxResult,
 } from "@/api/lib/templates/template-fill-service";
@@ -80,12 +87,37 @@ const AI_CONDITIONS = {
   conditions: "conditionDecisions",
 } as const satisfies Record<keyof ResolvedAiConditions, ProducerRole>;
 
+/** A field the model could not adapt fills with its stub as written: an AI
+ *  field error (`generation-failed`), blocking like a failed draft. */
 const AI_ADAPTATION = {
   file: "content",
   adaptedPaths: "content",
+  failures: "aiFieldErrors",
 } as const satisfies Record<keyof AdaptAiFieldsResult, ProducerRole>;
 
+/** What the fill's caller observes around the service: the chat tool's
+ *  anonymizing boundary reports values that kept a placeholder. */
+type BoundaryDiagnostics = NonNullable<Parameters<typeof fillDiagnosticsOf>[1]>;
+const FILL_BOUNDARY = {
+  unrestoredFields: "unrestoredFields",
+} as const satisfies Record<keyof BoundaryDiagnostics, ProducerRole>;
+
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+// A producer's channel feeds the kind its table names, in that kind's shape.
+const ADAPTATION_FAILURES_ARE_AI_FIELD_ERRORS: Equal<
+  AdaptAiFieldsResult["failures"][number],
+  FillDiagnostics["aiFieldErrors"][number]
+> = true;
+
+// Every kind is read from a service source or from the fill's boundary, and
+// nothing else: a kind with neither has no producer the record reads.
+const KINDS_HAVE_SOURCES: Equal<
+  FillDiagnosticKind,
+  | Exclude<keyof FillDiagnosticSources, "conditionDecisions">
+  | "undecidedConditions"
+  | keyof BoundaryDiagnostics
+> = true;
 
 type Filled<T> = Exclude<
   T,
@@ -102,7 +134,7 @@ const SERVICE_TEXT_RESULT: Equal<
 const SERVICE_DOCX_RESULT: Equal<
   Exclude<
     keyof Filled<FillTemplateWithDocxResult>,
-    "templateName" | "fileName" | "file" | "text"
+    FilledDocumentMember | "text"
   >,
   keyof FillDiagnosticSources
 > = true;
@@ -110,9 +142,13 @@ const SERVICE_DOCX_RESULT: Equal<
 describe("fill diagnostic producers", () => {
   test("every diagnostic kind has a producer the record reads", () => {
     const produced = new Set<string>(
-      [RENDERED_FILL, AI_FIELDS, AI_CONDITIONS, AI_ADAPTATION].flatMap(
-        (table) => Object.values(table),
-      ),
+      [
+        RENDERED_FILL,
+        AI_FIELDS,
+        AI_CONDITIONS,
+        AI_ADAPTATION,
+        FILL_BOUNDARY,
+      ].flatMap((table) => Object.values(table)),
     );
     // Clause warnings come from the service's clause patching, whose result
     // is the warning list itself; undecided conditions are read from the
@@ -124,7 +160,12 @@ describe("fill diagnostic producers", () => {
     expect(FILL_DIAGNOSTIC_KINDS.filter((kind) => !produced.has(kind))).toEqual(
       [],
     );
-    expect([SERVICE_TEXT_RESULT, SERVICE_DOCX_RESULT]).toEqual([true, true]);
+    expect([
+      SERVICE_TEXT_RESULT,
+      SERVICE_DOCX_RESULT,
+      ADAPTATION_FAILURES_ARE_AI_FIELD_ERRORS,
+      KINDS_HAVE_SOURCES,
+    ]).toEqual([true, true, true, true]);
   });
 });
 
@@ -193,14 +234,25 @@ const fillSources: fc.Arbitrary<ServiceSources> = fc.record({
   unusedValues: few(word),
 });
 
+/** Field paths whose value kept an anonymization placeholder (the chat
+ *  boundary's observation), distinct and in the order the tool reports. */
+const unrestoredPaths: fc.Arbitrary<string[]> = fc
+  .uniqueArray(word, { maxLength: 2 })
+  .map((paths) => paths.toSorted());
+
 /** The grading, restated independently of the owner's table: missing or
- *  misstated content blocks completion; legacy clause warnings and unused
- *  values do not. */
-const oracleComplete = (sources: FillDiagnosticSources): boolean =>
+ *  misstated content blocks completion (an AI draft or adaptation that
+ *  failed, a value that kept a placeholder); legacy clause warnings and
+ *  unused values do not. */
+const oracleComplete = (
+  sources: FillDiagnosticSources,
+  unrestoredFields: readonly string[],
+): boolean =>
   sources.unmatchedPlaceholders.length === 0 &&
   sources.aiFieldErrors.length === 0 &&
   sources.conditionDecisions.every(({ state }) => state === "decided") &&
-  sources.structureErrors.length === 0;
+  sources.structureErrors.length === 0 &&
+  unrestoredFields.length === 0;
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000000";
 const organizationId = toSafeId<"organization">("org_parity");
@@ -220,27 +272,57 @@ const recordingDb = () => {
   return { rows, scopedDb, safeDb };
 };
 
+/** The recorded status of a stored-template fill and of an uploaded one. */
 const recordedStatus = async (
   sources: FillDiagnosticSources,
-): Promise<unknown> => {
+  unrestoredFields: readonly string[],
+): Promise<unknown[]> => {
   const { rows, scopedDb } = recordingDb();
-  await scopedDb(
-    async (tx) =>
-      await recordTemplateFill({
-        tx,
-        templateId: toSafeId<"template">(TEMPLATE_ID),
-        organizationId,
-        userId,
-        format: "docx",
-        diagnostics: fillDiagnosticsOf(sources),
-      }),
-  );
-  return rows.at(0)?.["status"];
+  const diagnostics = fillDiagnosticsOf(sources, { unrestoredFields });
+  await scopedDb(async (tx) => {
+    await recordTemplateFill({
+      tx,
+      templateId: toSafeId<"template">(TEMPLATE_ID),
+      organizationId,
+      userId,
+      format: "docx",
+      diagnostics,
+    });
+    await recordTemplateFill({
+      tx,
+      templateId: null,
+      organizationId,
+      userId,
+      format: "docx",
+      diagnostics,
+    });
+  });
+  return rows.map((row) => row["status"]);
 };
+
+/** A chat turn sent anonymized: a value holding a placeholder the turn never
+ *  sent cannot be restored. */
+const anonymizedBoundary = () =>
+  createChatThirdPartyBoundary({
+    anonymizeFields: async ({ fields }: { fields: string[] }) =>
+      await Promise.resolve(
+        Result.ok({ entityCount: 0, fields, redactionMap: new Map() }),
+      ),
+    anonymizationScopeId: "workspace-parity",
+    organizationId,
+    scopedDb: createScopedDbMock({}).scopedDb,
+    sendMode: CHAT_SEND_MODE.anonymized,
+    threadRestorations: [],
+  });
 
 const chatVerdict = async (
   sources: ServiceSources,
-): Promise<{ completionStatus: unknown; recorded: unknown }> => {
+  unrestoredFields: readonly string[],
+): Promise<{
+  completionStatus: unknown;
+  recorded: unknown;
+  unrestoredFields: unknown;
+}> => {
   const { rows, scopedDb } = recordingDb();
   const fill = spyOn(
     templateFillService,
@@ -256,15 +338,22 @@ const chatVerdict = async (
       }),
       organizationId,
       userId,
-      thirdPartyBoundary: { type: "raw" },
+      thirdPartyBoundary: anonymizedBoundary(),
     });
     const execute = asTestRaw<
       (input: unknown, options: unknown) => Promise<Record<string, unknown>>
     >(tools.fill_template.execute);
-    const result = await execute({ templateId: TEMPLATE_ID, values: {} }, {});
+    // Each unrestored path holds a placeholder the turn never sent; the
+    // others hold plain text.
+    const values = Object.fromEntries([
+      ["plain_value", "Plain text"],
+      ...unrestoredFields.map((path, index) => [path, `[PERSON_${index + 1}]`]),
+    ]);
+    const result = await execute({ templateId: TEMPLATE_ID, values }, {});
     return {
       completionStatus: result["completionStatus"],
       recorded: rows.at(0)?.["status"],
+      unrestoredFields: result["unrestoredFields"],
     };
   } finally {
     fill.mockRestore();
@@ -346,33 +435,45 @@ const mcpVerdict = async (
 describe("fill completion parity across surfaces", () => {
   test("every surface reports the owner's verdict", async () => {
     await fc.assert(
-      fc.asyncProperty(fillSources, async (sources) => {
-        const complete = oracleComplete(sources);
-        const diagnostics = fillDiagnosticsOf(sources);
-        expect(
-          decideTemplateFillCompletion({ mode: "allow_partial", diagnostics })
-            .type === "complete",
-        ).toBe(complete);
-        const status = complete ? "success" : "partial";
-        expect(templateFillStatus(diagnostics)).toBe(status);
-        expect(await recordedStatus(sources)).toBe(status);
+      fc.asyncProperty(
+        fillSources,
+        unrestoredPaths,
+        async (sources, unrestoredFields) => {
+          const complete = oracleComplete(sources, unrestoredFields);
+          const diagnostics = fillDiagnosticsOf(sources, { unrestoredFields });
+          expect(
+            decideTemplateFillCompletion({ mode: "allow_partial", diagnostics })
+              .type === "complete",
+          ).toBe(complete);
+          const status = complete ? "success" : "partial";
+          expect(templateFillStatus(diagnostics)).toBe(status);
+          expect(await recordedStatus(sources, unrestoredFields)).toEqual([
+            status,
+            status,
+          ]);
 
-        const chat = await chatVerdict(sources);
-        expect(chat).toEqual({
-          completionStatus: complete ? "complete" : "partial",
-          recorded: status,
-        });
+          const chat = await chatVerdict(sources, unrestoredFields);
+          expect(chat).toEqual({
+            completionStatus: complete ? "complete" : "partial",
+            recorded: status,
+            unrestoredFields:
+              unrestoredFields.length === 0 ? undefined : unrestoredFields,
+          });
 
-        expect(await mcpVerdict(sources, "require_complete")).toEqual(
-          complete
-            ? { rejected: false, completionStatus: "complete" }
-            : { rejected: true, completionStatus: undefined },
-        );
-        expect(await mcpVerdict(sources, "allow_partial")).toEqual({
-          rejected: false,
-          completionStatus: complete ? "complete" : "partial",
-        });
-      }),
+          // MCP fills run without an anonymizing boundary: nothing is left
+          // unrestored, so the verdict is the sources' alone.
+          const mcpComplete = oracleComplete(sources, []);
+          expect(await mcpVerdict(sources, "require_complete")).toEqual(
+            mcpComplete
+              ? { rejected: false, completionStatus: "complete" }
+              : { rejected: true, completionStatus: undefined },
+          );
+          expect(await mcpVerdict(sources, "allow_partial")).toEqual({
+            rejected: false,
+            completionStatus: mcpComplete ? "complete" : "partial",
+          });
+        },
+      ),
       propertyConfig({ numRuns: 40 }),
     );
   });

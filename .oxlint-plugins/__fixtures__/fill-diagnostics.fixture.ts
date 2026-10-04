@@ -18,6 +18,7 @@ declare const filled: {
   aiFieldErrors: readonly string[];
   unmatchedPlaceholders: readonly string[];
   structureErrors: readonly string[];
+  unrestoredFields: readonly string[];
 };
 const outcome: { status: string; title: string } = { status: "", title: "" };
 
@@ -35,10 +36,21 @@ if (filled.unmatchedPlaceholders.length === 0) {
 const listed =
   filled.structureErrors.length > 0 ? filled.structureErrors : null;
 
+// A placeholder the anonymizing boundary could not restore is a kind too.
+// oxlint-disable-next-line fill-diagnostics/no-raw-diagnostic-decision
+const restored = filled.unrestoredFields.length === 0;
+
+// Passing a base on unchanged when the kind is empty only presents the kind.
+declare const graded: { completionStatus: string };
+// expect-clean: fill-diagnostics/no-raw-diagnostic-decision
+const reported =
+  filled.unrestoredFields.length === 0
+    ? graded
+    : { ...graded, unrestoredFields: filled.unrestoredFields };
+
 // A status word outside a status slot is ordinary text.
 // expect-clean: fill-diagnostics/fill-status-literal-in-owner
 outcome.title = "success";
-
 // A producer returning a new channel beside the diagnostics record.
 type ProducedFill = {
   structureErrors: readonly string[];
@@ -64,6 +76,8 @@ export const __fillDiagnosticsFixture = {
   fillStoredTemplate,
   complete,
   listed,
+  restored,
+  reported,
   produced,
   _row,
   _other,

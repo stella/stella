@@ -9,7 +9,8 @@
 //
 // `fill-consumer-reads-decision`: a module that runs a fill (imports an entry
 //   point of `template-fill-service`) also calls `decideTemplateFillCompletion`
-//   or `templateFillStatus`; the raw producers the service composes
+//   or `templateFillStatus` (or records the fill through `recordTemplateFill`,
+//   which writes that status); the raw producers the service composes
 //   (`fillTemplate`, `resolveAiFields`, `resolveAiConditions`, `adaptAiFields`)
 //   are imported by the service only.
 // `no-raw-diagnostic-decision`: outside the owner, a diagnostic kind
@@ -19,7 +20,10 @@
 //   not a verdict, and stays allowed.
 // `fill-status-literal-in-owner`: in a module that reads fill results, the
 //   fill status literals (`success`, `partial`, `complete`, ...) are not
-//   written into a status or completion slot; they come from the owner.
+//   written into a status or completion slot; they come from the owner. A
+//   conditional that restates an owner reading one to one
+//   (`completion.type === "complete" ? "complete" : "partial"`) is the
+//   owner's word, not a new one.
 // `no-diagnostic-channel-outside-record`: in the fill pipeline, a new
 //   `*Warnings` / `*Errors` / `*Failures` / `*Issues` / `*Diagnostics` key is a
 //   diagnostic channel; it becomes a `FillDiagnostics` kind, graded in
@@ -57,15 +61,22 @@ const OWNER = "apps/api/src/lib/templates/template-fill-completion.ts";
 const SERVICE = "apps/api/src/lib/templates/template-fill-service.ts";
 const RECORDER = "apps/api/src/lib/templates/record-use.ts";
 
-/** The kinds of the `FillDiagnostics` record, plus the service's raw
- *  condition outcomes the record's `undecidedConditions` is read from. */
-export const DIAGNOSTIC_KINDS: ReadonlySet<string> = new Set([
+/** The kinds of the `FillDiagnostics` record (`FILL_DIAGNOSTIC_KINDS`; the
+ *  rule tests fail when the two differ). */
+export const RECORD_KINDS: readonly string[] = [
   "unmatchedPlaceholders",
   "aiFieldErrors",
   "undecidedConditions",
   "clauseWarnings",
   "structureErrors",
   "unusedValues",
+  "unrestoredFields",
+];
+
+/** The record kinds plus the service's raw condition outcomes the record's
+ *  `undecidedConditions` is read from. */
+export const DIAGNOSTIC_KINDS: ReadonlySet<string> = new Set([
+  ...RECORD_KINDS,
   "conditionDecisions",
 ]);
 
@@ -87,10 +98,47 @@ const RAW_PRODUCERS: ReadonlyMap<string, string> = new Map([
   ["adaptAiFields", "adapt-ai-fields"],
 ]);
 
-/** The readers of the decision. */
+/** The readers of the decision. `recordTemplateFill` records the owner's
+ *  `templateFillStatus` as the fill row's status. */
 const DECISION_READERS: ReadonlySet<string> = new Set([
   "decideTemplateFillCompletion",
   "templateFillStatus",
+  "recordTemplateFill",
+]);
+
+/**
+ * The status words a branch may write when it maps an owner reading one to
+ * one, by the reader and the value it is compared with: `completion.type ===
+ * "complete" ? "complete" : "partial"` restates the decision, and so does
+ * `templateFillStatus(d) === "success" ? "complete" : "partial"`. Keyed by
+ * the compared value: the branch that matches it writes `matched`, the other
+ * branch `other`. A decision that is not `complete` is `partial` or
+ * `rejected_partial`, so only `complete` is compared on the decision's type.
+ */
+const DECISION_STATUS_MAPS: ReadonlyMap<
+  string,
+  {
+    member: string | null;
+    words: ReadonlyMap<string, { matched: string; other: string }>;
+  }
+> = new Map([
+  [
+    "decideTemplateFillCompletion",
+    {
+      member: "type",
+      words: new Map([["complete", { matched: "complete", other: "partial" }]]),
+    },
+  ],
+  [
+    "templateFillStatus",
+    {
+      member: null,
+      words: new Map([
+        ["success", { matched: "complete", other: "partial" }],
+        ["partial", { matched: "partial", other: "complete" }],
+      ]),
+    },
+  ],
 ]);
 
 const STATUS_LITERALS: ReadonlySet<string> = new Set([
@@ -360,6 +408,32 @@ const isEmptyBranch = (node: unknown): boolean => {
   }
 };
 
+/** `base` in `x.length === 0 ? base : { ...base, x }`: a branch that passes on
+ *  the value another branch spreads and extends carries nothing of its own. */
+const isPassthroughBranch = (
+  branch: unknown,
+  branches: readonly unknown[],
+): boolean => {
+  const base = unwrapExpression(branch);
+  if (!isIdentifier(base)) {
+    return false;
+  }
+  return branches.some((other) => {
+    const object = unwrapExpression(other);
+    return (
+      object?.type === "ObjectExpression" &&
+      Array.isArray(object.properties) &&
+      object.properties.some((property: unknown) => {
+        if (!isAstNode(property) || property.type !== "SpreadElement") {
+          return false;
+        }
+        const spread = unwrapExpression(property.argument);
+        return isIdentifier(spread) && spread.name === base.name;
+      })
+    );
+  });
+};
+
 /** Whether `node` writes a fill status literal anywhere inside it. */
 const containsStatusLiteral = (node: unknown): boolean => {
   if (!isAstNode(node)) {
@@ -399,7 +473,7 @@ const presentsOnlyItself = (
   }
   let presented = false;
   for (const branch of branches) {
-    if (isEmptyBranch(branch)) {
+    if (isEmptyBranch(branch) || isPassthroughBranch(branch, branches)) {
       continue;
     }
     const read = kindsReadIn(branch, new Set());
@@ -530,6 +604,125 @@ const statusSlot = (literal: AstNode): string | null => {
     }
     return null;
   }
+};
+
+/** A binding initialised from an owner reading (`const completion =
+ *  decideTemplateFillCompletion(...)`), with the reader that produced it. */
+type ReaderBinding = { declarator: AstNode; reader: string };
+
+/** The reader a declarator's initialiser calls, if it is a mapped reader. */
+const readerOfDeclarator = (declarator: AstNode): string | null => {
+  if (!isIdentifier(declarator.id)) {
+    return null;
+  }
+  let init = unwrapExpression(declarator.init);
+  if (init?.type === "AwaitExpression") {
+    init = unwrapExpression(init.argument);
+  }
+  if (init?.type !== "CallExpression") {
+    return null;
+  }
+  const name = calleeName(init);
+  return name !== null && DECISION_STATUS_MAPS.has(name) ? name : null;
+};
+
+const nearestFunction = (node: AstNode): AstNode | null => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (FUNCTION_TYPES.has(current.type)) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+const isAncestorOf = (ancestor: AstNode, node: AstNode): boolean => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+/** The conditional a status literal is a branch of, through wrappers and the
+ *  object property it fills (`cond ? { status: "x" } : ...`). */
+const enclosingBranch = (
+  literal: AstNode,
+): { conditional: AstNode; consequent: boolean } | null => {
+  let current: AstNode = literal;
+  for (;;) {
+    const parent = isAstNode(current.parent) ? current.parent : null;
+    if (parent === null) {
+      return null;
+    }
+    if (
+      TRANSPARENT_WRAPPERS.has(parent.type) ||
+      (parent.type === "Property" && parent.value === current) ||
+      parent.type === "ObjectExpression"
+    ) {
+      current = parent;
+      continue;
+    }
+    if (parent.type === "ConditionalExpression" && parent.test !== current) {
+      return { conditional: parent, consequent: parent.consequent === current };
+    }
+    return null;
+  }
+};
+
+/**
+ * Whether a status literal restates an owner reading one to one (see
+ * {@link DECISION_STATUS_MAPS}): it is a branch of a conditional that
+ * compares a binding of that reading with one of the mapped values, and it
+ * writes the word the map gives that branch.
+ */
+const mapsOwnerReading = (
+  literal: AstNode,
+  bindings: ReadonlyMap<string, readonly ReaderBinding[]>,
+): boolean => {
+  const branch = enclosingBranch(literal);
+  const test = unwrapExpression(branch?.conditional.test);
+  if (
+    branch === null ||
+    test?.type !== "BinaryExpression" ||
+    (test.operator !== "===" && test.operator !== "!==")
+  ) {
+    return false;
+  }
+  const left = unwrapExpression(test.left);
+  const right = unwrapExpression(test.right);
+  const [compared, read] =
+    left?.type === "Literal" ? [left, right] : [right, left];
+  if (compared?.type !== "Literal" || typeof compared.value !== "string") {
+    return false;
+  }
+  const member = read?.type === "MemberExpression" ? read : null;
+  const subject = member === null ? read : unwrapExpression(member.object);
+  if (!isIdentifier(subject)) {
+    return false;
+  }
+  const memberName = member === null ? null : memberPropertyName(member);
+  return (bindings.get(subject.name) ?? []).some(({ declarator, reader }) => {
+    const map = DECISION_STATUS_MAPS.get(reader);
+    const scope = nearestFunction(declarator);
+    if (
+      map === undefined ||
+      map.member !== memberName ||
+      (scope !== null && !isAncestorOf(scope, branch.conditional))
+    ) {
+      return false;
+    }
+    const words = map.words.get(String(compared.value));
+    if (words === undefined) {
+      return false;
+    }
+    const matchesBranch = branch.consequent === (test.operator === "===");
+    return literal.value === (matchesBranch ? words.matched : words.other);
+  });
 };
 
 const isInsideObjectPattern = (node: AstNode): boolean =>
@@ -697,6 +890,7 @@ export default eslintCompatPlugin({
         let exempt = false;
         let readsFills = false;
         let candidates: AstNode[] = [];
+        let readerBindings = new Map<string, ReaderBinding[]>();
         return {
           before() {
             const filename = filenameForContext(context);
@@ -704,6 +898,7 @@ export default eslintCompatPlugin({
             exempt = isFile(filename, OWNER);
             readsFills = false;
             candidates = [];
+            readerBindings = new Map();
           },
           ImportDeclaration(node) {
             if (!isAstNode(node)) {
@@ -727,10 +922,24 @@ export default eslintCompatPlugin({
               candidates.push(node);
             }
           },
+          VariableDeclarator(node) {
+            if (exempt || !isAstNode(node)) {
+              return;
+            }
+            const reader = readerOfDeclarator(node);
+            if (reader !== null && isIdentifier(node.id)) {
+              const list = readerBindings.get(node.id.name) ?? [];
+              list.push({ declarator: node, reader });
+              readerBindings.set(node.id.name, list);
+            }
+          },
           "Program:exit"(node) {
             if (readsFills) {
               for (const literal of candidates) {
-                if (statusSlot(literal) !== null) {
+                if (
+                  statusSlot(literal) !== null &&
+                  !mapsOwnerReading(literal, readerBindings)
+                ) {
                   report(literal, String(literal.value), "statusLiteral");
                 }
               }

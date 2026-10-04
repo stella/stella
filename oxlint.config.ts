@@ -4589,6 +4589,7 @@ export default defineConfig({
         "apps/web/src/**/*.{ts,tsx}",
         "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics-owner-reading.fixture.ts",
       ],
       excludeFiles: [
         "apps/api/src/**/*.test.ts",
