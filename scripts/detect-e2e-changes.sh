@@ -26,7 +26,7 @@ for file in "$@"; do
   case "$scope:$file" in
     core:apps/web/e2e/marketing/*|core:apps/web/e2e/playwright.marketing.config.ts)
       ;;
-    core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
+    core:.github/actions/prepare-network-baseline/*|core:scripts/network-baseline-*|core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
       echo true
       exit 0
       ;;

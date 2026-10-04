@@ -75,7 +75,7 @@ type FileTabViewerProps = {
   isZoomOverlayVisible: boolean;
   markdown: MarkdownFileDraft;
   onPdfColorModeChange: (colorMode: PDFColorMode) => void;
-  onViewerError: () => void;
+  onViewerError: (error: unknown) => void;
   pdfColorMode: PDFColorMode;
   peekPdfViewId: string;
   tab: FileTab;

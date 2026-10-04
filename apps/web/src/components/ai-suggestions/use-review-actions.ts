@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 /**
  * useReviewActions — the single owner of accept / reject / revert /
  * batch / navigate behaviour for AI DOCX suggestions.
@@ -12,8 +13,6 @@
  * applied, rolled back and reverted together; the store and the server keep
  * one row per member.
  */
-
-import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -72,6 +71,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 /**
  * Why an apply could not reach the document, in words. Total over the block
@@ -434,17 +434,11 @@ export const useReviewActions = ({
   const surfaceBatchResolveToast = useLatestCallback(
     (results: readonly DocxWriteResult[]) => {
       if (results.includes("failed")) {
-        stellaToast.add({
-          title: t("docxReview.persistFailed"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("docxReview.persistFailed"));
         return;
       }
       if (results.includes("pending-limit")) {
-        stellaToast.add({
-          title: t("docxReview.pendingLimitReached"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("docxReview.pendingLimitReached"));
         return;
       }
       if (results.includes("stale")) {
@@ -665,7 +659,7 @@ export const useReviewActions = ({
       // The staging bridge re-stages any member already taken out of
       // suggested mode once it is pending again.
       releaseClaim(claimed, "rejected");
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(undefined, t("errors.actionFailed"));
       return;
     }
     for (const { member, rejected } of unstaged) {
@@ -741,7 +735,7 @@ export const useReviewActions = ({
       status === "accepted" &&
       !undoAcceptedMembers(docxEditorRef.current, members)
     ) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(undefined, t("errors.actionFailed"));
       return;
     }
     for (const member of members) {

@@ -38,6 +38,7 @@ import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -348,6 +349,10 @@ export const createApprovalHarness = ({
   });
   const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
+    // An approved write reads the member's role again when it runs; read it
+    // from this test's database, not the shared pools.
+    resolveCurrentMembership: async (lookup) =>
+      await resolveMemberAuthorization(lookup, testDb),
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
@@ -1507,6 +1512,11 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /** A compaction checkpoint landed on `threadId`: its next model call
+     *  starts from the summary rather than extending the calls before it. */
+    compacted: (threadId: SafeId<"chatThread">) => {
+      provider.promptLedgerOf(threadId).compacted();
     },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>

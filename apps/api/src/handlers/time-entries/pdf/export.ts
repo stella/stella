@@ -12,7 +12,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -232,6 +232,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +

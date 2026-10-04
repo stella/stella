@@ -1,5 +1,4 @@
 import { TaggedError } from "better-result";
-import type { RedisOptions } from "bun";
 
 import {
   parseDesktopEditSessionRealtimeEvent,
@@ -212,7 +211,9 @@ const PUBLISH_CONNECT_TIMEOUT_MS = 2000;
 const PUBLISH_COMMAND_TIMEOUT_MS = 2000;
 
 type PublisherClient = Pick<ReturnType<typeof createRedisClient>, "publish">;
-type CreatePublisherClient = (options: RedisOptions) => PublisherClient;
+type CreatePublisherClient = (
+  options: Parameters<typeof createRedisClient>[0],
+) => PublisherClient;
 
 export const createSseBroadcastPublisher = ({
   createClient = createRedisClient,
@@ -220,8 +221,11 @@ export const createSseBroadcastPublisher = ({
   let publisher: PublisherClient | null = null;
   const getPublisher = (): PublisherClient => {
     publisher ??= createClient({
-      connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
-      enableOfflineQueue: false,
+      storeClass: "cache",
+      overrides: {
+        connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
+        enableOfflineQueue: false,
+      },
     });
     return publisher;
   };

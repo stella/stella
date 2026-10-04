@@ -10,6 +10,8 @@ import {
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
+import { visibleHtmlText } from "./shared-inlines";
+
 export type ParseFindokDecisionInput = {
   caseNumber: string;
   court: string;
@@ -206,7 +208,7 @@ export const parseFindokDecisionXml = (
       }
       return;
     }
-    const text = normalizedText(document(node).text());
+    const text = normalizedText(visibleHtmlText(document(node)));
     if (text === "") {
       return;
     }
@@ -241,7 +243,7 @@ export const parseFindokDecisionXml = (
   for (const xhtml of xhtmlSegments) {
     const document = cheerio.load(xhtml);
     const body = document("body").first();
-    const validationText = normalizedText(body.text());
+    const validationText = normalizedText(visibleHtmlText(body));
     if (body.length === 0 || validationText === "") {
       return Result.err(
         new ParseXmlError({

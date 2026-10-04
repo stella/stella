@@ -8,7 +8,7 @@
  * the same deep link cannot both win.
  */
 
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -37,6 +37,7 @@ import {
   isOpaqueTokenShape,
 } from "@/api/lib/entities/opaque-tokens";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
+import { expiredOpenPdfSigningSessionPredicates } from "@/api/lib/files/pdf-signing/session-predicates";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import {
@@ -128,9 +129,7 @@ export const openPdfSigningSession = async ({
         eq(pdfSigningSessions.createdBy, values.createdBy),
         eq(pdfSigningSessions.entityId, values.entityId),
         eq(pdfSigningSessions.propertyId, values.propertyId),
-        eq(pdfSigningSessions.status, "open"),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-        lte(pdfSigningSessions.tokenExpiresAt, now),
+        ...expiredOpenPdfSigningSessionPredicates(now),
       ),
     )
     .returning({ id: pdfSigningSessions.id });

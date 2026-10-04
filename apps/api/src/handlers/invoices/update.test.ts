@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { INVOICE_STATUS } from "@/api/db/schema";
+import { invoices, timeEntries, INVOICE_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createSelectQueryMock,
+  createScopedDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 import updateInvoice from "./update";
 
@@ -37,43 +40,35 @@ const createContext = ({
 
 describe("updateInvoice currency integrity", () => {
   test("rejects a currency change while entries are attached", async () => {
-    let selectCall = 0;
     const { safeDb } = createScopedDbMock({
-      select: () => {
-        selectCall += 1;
-        if (selectCall === 1) {
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({
-                  for: async () => [
-                    {
-                      id: toSafeId<"invoice">("inv_test"),
-                      status: INVOICE_STATUS.DRAFT,
-                      documentType: "invoice",
-                      originalInvoiceId: null,
-                      finalizedAt: null,
-                      currency: "USD",
-                      dueDate: null,
-                      invoiceDate: "2026-06-14",
-                      invoiceNumber: "INV-001",
-                      notes: null,
-                      reference: null,
-                    },
-                  ],
-                }),
-              }),
-            }),
-          };
-        }
-        return {
-          from: () => ({
-            where: () => ({
-              limit: async () => [{ id: toSafeId<"timeEntry">("te_1") }],
-            }),
-          }),
-        };
-      },
+      select: () => ({
+        from: (table: unknown) => {
+          if (table === invoices) {
+            return createSelectQueryMock([
+              {
+                id: toSafeId<"invoice">("inv_test"),
+                status: INVOICE_STATUS.DRAFT,
+                documentType: "invoice",
+                originalInvoiceId: null,
+                finalizedAt: null,
+                billingMode: "hourly",
+                flatFeeAmount: null,
+                currency: "USD",
+                dueDate: null,
+                invoiceDate: "2026-06-14",
+                invoiceNumber: "INV-001",
+                notes: null,
+                reference: null,
+              },
+            ]).from();
+          }
+          return createSelectQueryMock(
+            table === timeEntries
+              ? [{ id: toSafeId<"timeEntry">("te_1") }]
+              : [],
+          ).from();
+        },
+      }),
     });
 
     const result = await updateInvoice.handler(

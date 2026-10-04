@@ -9,6 +9,7 @@ import {
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -56,7 +57,7 @@ const buildContext = ({
   scopedDb?: ScopedDb;
 } = {}): McpRequestContext =>
   buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: toSafeId<"organization">("org_1"),
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,

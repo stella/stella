@@ -200,6 +200,132 @@ test("a failed corpus refresh advances erase state and a retry restores upsert",
   expect(restored).toEqual({ action: "upsert", epoch: 3n });
 });
 
+const bodyState = async (documentId: SafeId<"legislationDocument">) =>
+  (
+    await db
+      .select({
+        title: legislationDocuments.title,
+        fulltext: legislationDocuments.fulltext,
+        textS3Key: legislationDocuments.textS3Key,
+        astS3Key: legislationDocuments.astS3Key,
+        normalizedS3Key: legislationDocuments.normalizedS3Key,
+        contentHash: legislationDocuments.contentHash,
+        action: corpusIndexProjectionStates.desiredAction,
+      })
+      .from(legislationDocuments)
+      .leftJoin(
+        corpusIndexProjectionStates,
+        eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
+      )
+      .where(eq(legislationDocuments.id, documentId))
+  ).at(0);
+
+/**
+ * Runs the corpus write only after `inspect` has seen the database as the
+ * row's own commit left it, i.e. as a reader sees it while the object-storage
+ * copy is still in flight (or never arrives because the process died).
+ */
+const corpusWritingAfter = (
+  inspect: () => Promise<void>,
+): LegislationCorpusDependencies => ({
+  ...corpus,
+  write: async (writeInput) => {
+    await inspect();
+    return await corpusWrite(writeInput);
+  },
+});
+
+test("a changed body is never read through the previous body's corpus pointers", async () => {
+  const eli = "eli/cz/sb/2012/91";
+  const first = await processLegislationDocument(
+    { ...input("current"), eli },
+    scopedDb,
+    { corpus },
+  );
+  if (first.type !== "stored") {
+    throw new Error(`expected stored legislation, got ${first.type}`);
+  }
+  const settled = await bodyState(first.id);
+  expect(settled?.textS3Key).not.toBeNull();
+  expect(settled?.action).toBe("upsert");
+
+  const changed = {
+    ...input("current"),
+    eli,
+    title: "Občanský zákoník (nové znění)",
+    fulltext: "§ 1 Nové znění chrání soukromí.",
+    rawHash: "publisher-new-wording",
+  };
+  const inFlight: Awaited<ReturnType<typeof bodyState>>[] = [];
+  await processLegislationDocument(changed, scopedDb, {
+    corpus: corpusWritingAfter(async () => {
+      inFlight.push(await bodyState(first.id));
+    }),
+  });
+  const after = await bodyState(first.id);
+
+  // While the new body is not yet in object storage, the row's own columns
+  // carry it and no pointer names the old copy; search stops serving it.
+  expect(inFlight).toEqual([
+    {
+      title: changed.title,
+      fulltext: changed.fulltext,
+      textS3Key: null,
+      astS3Key: null,
+      normalizedS3Key: null,
+      contentHash: null,
+      action: "erase",
+    },
+  ]);
+  expect(after?.title).toBe(changed.title);
+  expect(after?.textS3Key).not.toBeNull();
+  expect(after?.textS3Key).not.toBe(settled?.textS3Key);
+  expect(after?.contentHash).not.toBeNull();
+  expect(after?.action).toBe("upsert");
+});
+
+test("a metadata-only refresh keeps serving its unchanged body from the corpus", async () => {
+  const eli = "eli/cz/sb/2012/92";
+  const first = await processLegislationDocument(
+    { ...input("current"), eli },
+    scopedDb,
+    { corpus },
+  );
+  if (first.type !== "stored") {
+    throw new Error(`expected stored legislation, got ${first.type}`);
+  }
+  const settled = await bodyState(first.id);
+
+  const inFlight: Awaited<ReturnType<typeof bodyState>>[] = [];
+  await processLegislationDocument(
+    {
+      ...input("current"),
+      eli,
+      title: "Občanský zákoník (opravený název)",
+      rawHash: "publisher-new-title",
+    },
+    scopedDb,
+    {
+      corpus: corpusWritingAfter(async () => {
+        inFlight.push(await bodyState(first.id));
+      }),
+    },
+  );
+
+  // The same body: its pointers and hash stay, so nothing falls back to the
+  // columns and the projection keeps its upsert.
+  expect(inFlight).toMatchObject([
+    {
+      title: "Občanský zákoník (opravený název)",
+      textS3Key: settled?.textS3Key,
+      astS3Key: settled?.astS3Key,
+      normalizedS3Key: settled?.normalizedS3Key,
+      contentHash: settled?.contentHash,
+      action: "upsert",
+    },
+  ]);
+});
+
 const withdrawalState = async (documentId: SafeId<"legislationDocument">) =>
   (
     await db
@@ -323,4 +449,103 @@ test("a withdrawn version erases, a replay of its stored payload keeps it withdr
     fingerprint: listed?.fingerprint,
   });
   expect(relistedAgain).toMatchObject({ id: first.id, skipped: true });
+});
+
+test("refresh sequences keep database metadata and corpus text on one revision", async () => {
+  const eli = "revision-sequence-matrix";
+  const base = { ...input("current"), eli, metadata: { revision: "initial" } };
+  const first = await processLegislationDocument(base, scopedDb, { corpus });
+  if (first.type !== "stored") {
+    throw new Error(`expected stored legislation, got ${first.type}`);
+  }
+  const objects = new Map<string, string | null>();
+  const initial = await bodyState(first.id);
+  if (initial?.textS3Key) {
+    objects.set(initial.textS3Key, base.fulltext ?? null);
+  }
+  const steps = [
+    { input: base, failure: false },
+    {
+      input: {
+        ...base,
+        title: "Second",
+        fulltext: "Second text",
+        metadata: { revision: "second" },
+        rawHash: "second",
+      },
+      failure: false,
+    },
+    {
+      input: {
+        ...base,
+        title: "Third",
+        fulltext: "Third text",
+        metadata: { revision: "third" },
+        rawHash: "third",
+      },
+      failure: true,
+    },
+    {
+      input: {
+        ...base,
+        title: "Third",
+        fulltext: "Third text",
+        metadata: { revision: "third" },
+        rawHash: "third",
+      },
+      failure: false,
+    },
+    {
+      input: {
+        ...base,
+        title: "Corrected third title",
+        fulltext: "Third text",
+        metadata: { revision: "third-correction" },
+        rawHash: "third-correction",
+      },
+      failure: false,
+    },
+  ];
+  for (const step of steps) {
+    const result = await processLegislationDocument(step.input, scopedDb, {
+      corpus: {
+        ...corpus,
+        write: async (writeInput) => {
+          const inFlight = await bodyState(first.id);
+          expect(inFlight?.title).toBe(step.input.title);
+          expect(inFlight?.fulltext).toBe(step.input.fulltext);
+          if (inFlight?.textS3Key) {
+            expect(objects.get(inFlight.textS3Key)).toBe(step.input.fulltext);
+          }
+          if (step.failure) {
+            throw new Error("sequence corpus write failed");
+          }
+          const outcome = await corpusWrite(writeInput);
+          if (outcome.written) {
+            objects.set(outcome.written.textKey, writeInput.text);
+          }
+          return outcome;
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      type: "stored",
+      corpusWriteFailed: step.failure,
+    });
+    const settled = await bodyState(first.id);
+    expect(settled?.title).toBe(step.input.title);
+    expect(settled?.fulltext).toBe(step.input.fulltext);
+    if (settled?.textS3Key) {
+      expect(objects.get(settled.textS3Key)).toBe(step.input.fulltext);
+    } else {
+      expect(step.failure).toBe(true);
+    }
+    const row = (
+      await db
+        .select({ metadata: legislationDocuments.metadata })
+        .from(legislationDocuments)
+        .where(eq(legislationDocuments.id, first.id))
+    ).at(0);
+    expect(row?.metadata).toEqual(step.input.metadata);
+  }
 });

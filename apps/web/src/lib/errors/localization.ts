@@ -1,7 +1,7 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ActionAdmissionCode } from "@stll/api-contract/action-admission";
 
-import { getTranslator } from "@/i18n/i18n-store";
+import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 
 export const STATUS_ERROR_KEYS = {
