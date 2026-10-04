@@ -465,7 +465,7 @@ const holdPublisherRefusalTx = async (
       .limit(1)
   ).at(0);
   const batch =
-    control === undefined || control.batch === null
+    control?.batch === undefined || control.batch === null
       ? initialBatchState()
       : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
           .batch;
@@ -517,7 +517,7 @@ const preparePublisherRefusalTx = async (
       .limit(1)
   ).at(0);
   const batch =
-    control === undefined || control.batch === null
+    control?.batch === undefined || control.batch === null
       ? initialBatchState()
       : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
           .batch;
@@ -1629,7 +1629,7 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
     ) {
       panic("Completion control requires explicit operator attribution");
     }
-    return await transaction(async (tx) => {
+    await transaction(async (tx) => {
       await tx
         .insert(euCompletionControls)
         .values({
@@ -1673,7 +1673,7 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
           .where(eq(euCompletionControls.key, sourceControl(sourceId)))
           .limit(1)
       ).at(0);
-      return row === undefined || row.batch === null
+      return row?.batch === undefined || row.batch === null
         ? initialBatchState()
         : decodeCheckpoint({ cursor: row.cursor, batch: row.batch }).batch;
     });
@@ -1841,7 +1841,7 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
           .limit(1)
       ).at(0);
       const sourceBatch =
-        progress === undefined || progress.batch === null
+        progress?.batch === undefined || progress.batch === null
           ? null
           : decodeCheckpoint({ cursor: progress.cursor, batch: progress.batch })
               .batch;
