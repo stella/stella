@@ -175,6 +175,9 @@ describe("a matter handler's declared resource sets", () => {
         );
         expect(attempts).toBe(1);
         expect(analytics.exceptions()).toHaveLength(1);
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.cause.class": "DatabaseError",
+        });
         expect(logs.at("ERROR").at(0)?.attributes).toMatchObject({
           "failure.sink": "resource-set-realtime.announce",
         });
