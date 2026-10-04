@@ -4580,6 +4580,39 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
+    test("a court stored under two spellings filters by both", async () => {
+      const baseContext = createContext();
+      const result = await handleMcpToolCall({
+        args: { queries: ["náhrada škody"], country: "CZE", court: "NS" },
+        context: {
+          ...baseContext,
+          testDependencies: {
+            ...baseContext.testDependencies,
+            readCaseLawCourtNames: async () => [
+              "Krajský soud v Brně",
+              "Nejvyšší soud",
+              "Nejvyšší soud České republiky",
+              "Ústavní soud",
+            ],
+          },
+        },
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["court"]).toBeUndefined();
+      expect(searchedBody()["courts"]).toEqual([
+        "Nejvyšší soud",
+        "Nejvyšší soud České republiky",
+      ]);
+      const warnings = searchWarnings(result);
+      expect(warnings).toContainEqual(
+        expect.objectContaining({ code: "filter_read" }),
+      );
+      expect(warnings).not.toContainEqual(
+        expect.objectContaining({ code: "filter_dropped" }),
+      );
+    });
+
     test.each([
       ["Česká republika", "Ústavní soud"],
       ["Krajský soud", "Krajský soud v Brně"],
