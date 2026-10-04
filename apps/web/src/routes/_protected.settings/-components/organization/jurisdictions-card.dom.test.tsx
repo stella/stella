@@ -138,14 +138,20 @@ const mountCard = async () => {
         ?.status,
     ).toBe("success");
   });
-  const countryButton = (name: RegExp) => view.getByRole("button", { name });
+  const countryButton = (name: RegExp) => {
+    const button = view.getByText(name).closest("button");
+    if (!button) {
+      throw new Error("Expected a country selection button");
+    }
+    return button;
+  };
   return { client, view, countryButton };
 };
 
 // The picker renders a "make primary" star for every selected country once
 // two or more are selected; its pressed styling marks the primary one.
 const displayedSelection = (view: ReturnType<typeof testing.render>) =>
-  view.queryAllByRole("button", { name: /^Make .* primary/u }).map((star) => ({
+  view.queryAllByLabelText(/^Make .* primary/u).map((star) => ({
     name: star.getAttribute("aria-label"),
     isPrimary: star.className.split(/\s+/u).includes("text-primary"),
   }));
