@@ -29,6 +29,7 @@ import {
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -168,6 +169,11 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
             type: "item_build_failed",
             count: 1,
           });
+          // Only the row whose record could not be read is listing-only, so
+          // it never overwrites a stored row's detail with absences.
+          expect(
+            page.value.decisions.map(({ isListingOnly }) => isListingOnly),
+          ).toEqual([...Array.from({ length: 99 }, () => undefined), true]);
           expect(page.value.nextCursor).toBe(
             cursor.startsWith("backfill:")
               ? "backfill:100"
@@ -712,7 +718,52 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
       expect(parts?.["listing"]).toBe(JSON.stringify(listing));
       expect(parts?.["detail"]).toBeUndefined();
+      expect(decision?.isListingOnly).toBe(true);
       expect(page.nextCursor).not.toBeNull();
+    },
+  );
+
+  test.each([
+    ["500", () => new Response("", { status: 500 })],
+    ["204", () => new Response(null, { status: 204 })],
+    ["empty 200", () => new Response("")],
+    ["404", () => new Response("", { status: 404 })],
+  ] as const)(
+    "a detail read answering %s keeps a listing-only row the reconciliation refuses",
+    async (_label, answer) => {
+      const stored = await storedDecision(TRANSFERRED_FILE_ID);
+      const raw: unknown = JSON.parse(stored.sourceRaw);
+      const listing = isRecord(raw) ? raw["listItem"] : undefined;
+      if (!isRecord(listing)) {
+        panic("the recorded decision has no listing item");
+      }
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.searchParams.has("page")) {
+          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+        }
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response("registry unavailable", { status: 404 });
+        }
+        return await Promise.resolve(answer());
+      });
+
+      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+      expect(page.decisions.map(({ isListingOnly }) => isListingOnly)).toEqual([
+        true,
+      ]);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+
+      const reconciliation = requireReconciliation(skCourtsAdapter);
+      expect(reconciliation.heldRequiresDetail).toBe(true);
+      expect(await reconciliation.buildDecision(listing)).toEqual({
+        type: "detail-unavailable",
+      });
     },
   );
 });

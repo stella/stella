@@ -67,12 +67,11 @@ test("document downloads identify the client and preserve the caller's abort and
   });
   const fetch = spyOn(globalThis, "fetch").mockResolvedValue(response);
   const controller = new AbortController();
-  expect(
-    await skCourtsDocumentFetch(
-      new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
-      { signal: controller.signal },
-    ),
-  ).toBe(response);
+  const read = await skCourtsDocumentFetch(
+    new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
+    { signal: controller.signal },
+  );
+  expect(read.type === "present" ? read.value : read).toBe(response);
   expect(fetch).toHaveBeenCalledTimes(1);
   const call = fetch.mock.calls.at(0);
   expect(call).toBeDefined();
@@ -83,4 +82,34 @@ test("document downloads identify the client and preserve the caller's abort and
   expect(init?.redirect).toBe("error");
   controller.abort();
   expect(init?.signal?.aborted).toBe(true);
+});
+
+test("a document the publisher cannot serve is typed by what the request established", async () => {
+  const url = new URL(
+    "https://obcan.justice.sk/content/public/item/fixture-document",
+  );
+  const signal = new AbortController().signal;
+  for (const [answer, expected] of [
+    [
+      new Response(null, { status: 404 }),
+      { type: "absent", evidence: "http-404" },
+    ],
+    [
+      new Response(null, { status: 204 }),
+      { type: "unavailable", cause: { kind: "no-content", status: 204 } },
+    ],
+    [
+      new Response("", { status: 503 }),
+      { type: "unavailable", cause: { kind: "status", status: 503 } },
+    ],
+  ] as const) {
+    spyOn(globalThis, "fetch").mockResolvedValue(answer);
+    expect(await skCourtsDocumentFetch(url, { signal })).toEqual(expected);
+    mock.restore();
+  }
+  expect(
+    await skCourtsDocumentFetch(new URL("https://example.invalid/document"), {
+      signal,
+    }),
+  ).toMatchObject({ type: "refused-target" });
 });

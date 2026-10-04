@@ -1,5 +1,6 @@
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: [sk-courts] failed publisher reads fail the item or page, and a detail-less row is listing-only; served reads build the same decision.
 import { panic, Result } from "better-result";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
@@ -49,8 +50,11 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import {
+  readPublisher,
+  readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
   createSkCourtRegistryReader,
@@ -81,7 +85,17 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  readPresent,
+  readUnavailable,
+  type AbsenceEvidence,
+  type ReadOutcome,
+  type ReadUnavailableCause,
+} from "@/api/lib/errors/read-outcome";
+import {
+  AdapterFetchError,
+  FetchBoundaryError,
+} from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -162,11 +176,11 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       reason: target.error.message,
       url: target.error.url,
     });
-    return undefined;
+    return { type: "refused-target", reason: target.error.message };
   }
   const fetched = await Result.tryPromise({
     try: async () =>
-      await fetchPublisher(target.value, {
+      await readPublisher(target.value, {
         fetchStage: "document",
         expectedContentType: "pdf",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
@@ -184,15 +198,35 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     );
     throw fetched.error;
   }
-  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
-  if (
-    !fetched.value.ok ||
-    (diagnostics.contentTypeClass !== "pdf" &&
-      diagnostics.contentTypeClass !== "binary")
-  ) {
-    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  const read = fetched.value;
+  switch (read.type) {
+    case "present": {
+      const diagnostics = skDocumentResponseDiagnostics(read.value);
+      if (
+        diagnostics.contentTypeClass !== "pdf" &&
+        diagnostics.contentTypeClass !== "binary"
+      ) {
+        logger.warn(
+          "case_law.ingestion.sk_document_fetch_response",
+          diagnostics,
+        );
+      }
+      return read;
+    }
+    case "absent":
+      return read;
+    case "unavailable":
+      if (read.cause.kind === "thrown") {
+        logger.warn(
+          "case_law.ingestion.sk_document_fetch_failed",
+          skDocumentErrorDiagnostics(read.cause.error),
+        );
+      }
+      return read;
+    default:
+      read satisfies never;
+      return panic(`Unhandled document read: ${String(read)}`);
   }
-  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
@@ -381,30 +415,54 @@ const parseSkDate = (raw: string | null | undefined): string | undefined => {
 const fetchDetail = async (
   guid: string,
   signal?: AbortSignal,
-): Promise<SkDetailItem | null> => {
+): Promise<ReadOutcome<SkDetailItem>> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
-  const response = await fetchPublisher(url, {
+  const read = await readPublisherText(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: { Accept: "application/json" },
   });
-
-  if (!response.ok) {
+  if (read.type !== "present") {
     logger.warn("case_law.ingestion.detail_fetch_failed", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       guid,
-      httpStatus: response.status,
+      ...readDiagnostics(read),
     });
-    return null;
+    return read;
   }
-
-  const json: unknown = await response.json();
+  const json: unknown = Result.try({
+    try: (): unknown => JSON.parse(read.value),
+    catch: () => null,
+  }).unwrapOr(null);
   if (!isSkDetailItem(json) || Object.keys(json).length === 0) {
-    return null;
+    return readUnavailable({
+      kind: "thrown",
+      error: new FetchBoundaryError({
+        url,
+        message: "SK courts detail response is not a decision record",
+      }),
+    });
   }
-  return json;
+  return readPresent(json);
+};
+
+/** What a read that established no value states, for a warning. */
+const readDiagnostics = (
+  read: Exclude<ReadOutcome<unknown>, { type: "present" }>,
+): { outcome: string; httpStatus?: number } => {
+  switch (read.type) {
+    case "absent":
+      return { outcome: read.evidence };
+    case "unavailable":
+      return read.cause.kind === "thrown"
+        ? { outcome: read.cause.kind }
+        : { outcome: read.cause.kind, httpStatus: read.cause.status };
+    default:
+      read satisfies never;
+      return panic(`Unhandled read: ${String(read)}`);
+  }
 };
 
 /**
@@ -540,8 +598,10 @@ type SkCourtsDetailFetch =
   | { type: "detail"; detail: SkDetailItem }
   /** The item names no record to ask about. */
   | { type: "listing-only" }
-  /** A record was asked about and nothing came back. */
-  | { type: "unavailable" };
+  /** The publisher stated the record does not exist. */
+  | { type: "absent"; evidence: AbsenceEvidence }
+  /** A record was asked about and could not be read. */
+  | { type: "unavailable"; cause: ReadUnavailableCause };
 
 const fetchDetailForItem = async (
   item: SkApiItem,
@@ -551,8 +611,18 @@ const fetchDetailForItem = async (
   if (guid === undefined || guid.length === 0) {
     return { type: "listing-only" };
   }
-  const detail = await fetchDetail(guid, signal);
-  return detail === null ? { type: "unavailable" } : { type: "detail", detail };
+  const read = await fetchDetail(guid, signal);
+  switch (read.type) {
+    case "present":
+      return { type: "detail", detail: read.value };
+    case "absent":
+      return { type: "absent", evidence: read.evidence };
+    case "unavailable":
+      return { type: "unavailable", cause: read.cause };
+    default:
+      read satisfies never;
+      return panic(`Unhandled detail read: ${String(read)}`);
+  }
 };
 
 type SkCourtsMetadata = Record<string, unknown> & {
@@ -571,6 +641,11 @@ type SkCourtsDecisionParts = {
   /** The per-decision record, where one was read. */
   detail: SkDetailItem | null;
   courtRegistry?: SkCourtRegistryObservation | null | undefined;
+  /**
+   * Set where a response the decision is built from could not be read, so a
+   * stored row is never overwritten with the absences of this one.
+   */
+  isListingOnly?: true | undefined;
 };
 
 /**
@@ -618,6 +693,7 @@ const skCourtsSourceRaw = ({
 export const assembleSkCourtsDecision = ({
   courtRegistry,
   detail,
+  isListingOnly,
   item,
 }: SkCourtsDecisionParts): IngestionResult | null => {
   const fields = skCourtsIdentityFields(item);
@@ -755,6 +831,7 @@ export const assembleSkCourtsDecision = ({
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
+      ...(isListingOnly === undefined ? {} : { isListingOnly }),
       ...skCourtsSourceRaw({ item, detail, courtRegistry }),
     },
     SK_COURTS_METADATA_URL_SCHEMA,
@@ -813,15 +890,19 @@ export const buildSkCourtsDecision = async (
     });
   }
   const courtRegistry = registry.unwrapOr(null);
+  const detailUnread =
+    fetched.type === "unavailable" || fetched.type === "absent";
+  const unread = detailUnread || registry.isErr();
   const decision = assembleSkCourtsDecision({
     item,
     detail: fetched.type === "detail" ? fetched.detail : null,
     courtRegistry,
+    ...(unread ? { isListingOnly: true } : {}),
   });
   if (decision === null) {
     return { type: "unkeyable" };
   }
-  return fetched.type === "unavailable" || registry.isErr()
+  return unread
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
 };
@@ -1033,6 +1114,96 @@ type ListedDayPage = {
  * and everything else — a 5xx, a timeout, a body without a count — is an error
  * the engine retries on a later pass.
  */
+type ServedListingOptions = {
+  read: ReadOutcome<Response>;
+  cursor: string;
+};
+
+/**
+ * The served listing response, or the error a listing request that served
+ * none stands for: with its status, so the engine reads a refusal or an
+ * outage as it did, and the original error where the request threw.
+ */
+const servedListing = ({ read, cursor }: ServedListingOptions): Response => {
+  switch (read.type) {
+    case "present":
+      return read.value;
+    case "absent":
+      throw listingStatusError({
+        status: absenceStatus(read.evidence),
+        cursor,
+      });
+    case "unavailable":
+      throw listingFailureError({ cause: read.cause, cursor });
+    default:
+      read satisfies never;
+      return panic(`Unhandled listing read: ${String(read)}`);
+  }
+};
+
+const listingStatusError = ({
+  status,
+  cursor,
+}: {
+  status: number;
+  cursor: string;
+}): AdapterFetchError =>
+  new AdapterFetchError({
+    message: `SK courts listing API error: ${status}`,
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor,
+    httpStatus: status,
+  });
+
+const listingFailureError = ({
+  cause,
+  cursor,
+}: {
+  cause: ReadUnavailableCause;
+  cursor: string;
+}): Error => {
+  switch (cause.kind) {
+    case "thrown":
+      return thrownReadError(cause.error);
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return listingStatusError({ status: cause.status, cursor });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
+};
+
+/** The error a publisher request threw, as it was thrown. */
+const thrownReadError = (error: unknown): Error =>
+  error instanceof Error
+    ? error
+    : new AdapterFetchError({
+        message: "SK courts publisher request failed",
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        cause: error,
+      });
+
+/** The status an HTTP absence was stated with. */
+const absenceStatus = (evidence: AbsenceEvidence): number => {
+  switch (evidence) {
+    case "http-404":
+      return 404;
+    case "http-410":
+      return 410;
+    case "stated-zero":
+    case "publisher-typed-absence":
+      return panic(
+        `A publisher request stated a non-HTTP absence: ${evidence}`,
+      );
+    default:
+      evidence satisfies never;
+      return panic(`Unhandled absence evidence: ${String(evidence)}`);
+  }
+};
+
 const listSkCourtsDayPage = async ({
   day,
   page,
@@ -1052,7 +1223,7 @@ const listSkCourtsDayPage = async ({
     vydaniaDo: day,
   }).toString()}`;
 
-  const response = await fetchPublisher(url, {
+  const read = await readPublisher(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
@@ -1062,15 +1233,7 @@ const listSkCourtsDayPage = async ({
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
-
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `SK courts listing API error: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: day,
-      httpStatus: response.status,
-    });
-  }
+  const response = servedListing({ read, cursor: day });
 
   const json: unknown = await response.json();
   if (!isSkApiResponse(json)) {
@@ -1780,7 +1943,7 @@ export const skCourtsAdapter = defineSourceAdapter({
    * largest we hold — has no completeness signal at all.
    */
   async getTotalCount(signal) {
-    const response = await fetchPublisher(
+    const read = await readPublisher(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
         fetchStage: "listing",
@@ -1790,10 +1953,13 @@ export const skCourtsAdapter = defineSourceAdapter({
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
     );
-    if (!response.ok) {
+    if (read.type === "unavailable" && read.cause.kind === "thrown") {
+      throw thrownReadError(read.cause.error);
+    }
+    if (read.type !== "present") {
       return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
     }
-    const json: unknown = await response.json();
+    const json: unknown = await read.value.json();
     if (!isRecord(json)) {
       return sourceTotalProbeFailed(
         SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -1826,6 +1992,9 @@ export const skCourtsAdapter = defineSourceAdapter({
             povaha: payload["povaha"],
           }
         : null,
+    // A row the crawl stored without its record is not held: the walk asks
+    // for it again until the record is read.
+    heldRequiresDetail: true,
     firstSlice: SK_COURTS_FIRST_SLICE,
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,

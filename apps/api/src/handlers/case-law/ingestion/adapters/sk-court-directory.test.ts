@@ -346,9 +346,16 @@ describe("court registry enrichment", () => {
         reason,
       });
     }
-    for (const status of [408, 425, 429, 503]) {
+    for (const answer of [
+      ...[408, 425, 429, 503].map(
+        (status) => () => new Response("retry", { status }),
+      ),
+      // A served answer with no record states nothing about the court.
+      () => new Response(null, { status: 204 }),
+      () => new Response(""),
+    ]) {
       globalThis.fetch = asFetchMock(
-        async () => new Response("retry", { status }),
+        async () => await Promise.resolve(answer()),
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.isErr()).toBe(true);

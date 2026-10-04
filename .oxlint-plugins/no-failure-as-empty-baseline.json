@@ -15,8 +15,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts::fetchCzRegionalAffectingDocs::not-ok-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts::fetchFinaldoc::catch-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts::getTotalCount::not-ok-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
-    "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts::fetchDetail::not-ok-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
-    "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts::skCourtsDocumentFetch::result-error-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts::fetchJson::not-ok-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts::fetchJson::result-catch-empty#1": "Case-law publisher read pending migration to readPublisher.",
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts::fetchPdfBytes::catch-returns-empty#1": "Case-law publisher read pending migration to readPublisher.",

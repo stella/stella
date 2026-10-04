@@ -68,6 +68,10 @@ import {
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import type {
+  ReadOutcome,
+  ReadUnavailableCause,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
@@ -159,13 +163,18 @@ type ClaimedPendingDocument = PendingDocument & {
  * be counted against that publisher's budget. The gate lives in the ingestion
  * slice, which `lib` may not import, so the caller supplies it — required, and
  * never defaulted, because a call site that forgot it would download outside
- * the budget and nothing would say so. `undefined` when the gate refuses the
- * URL as off the publisher's hosts.
+ * the budget and nothing would say so. `refused-target` when the gate refuses
+ * the URL as off the publisher's hosts.
  */
 export type SkDocumentFetch = (
   url: URL,
   init: { signal?: AbortSignal },
-) => Promise<Response | undefined>;
+) => Promise<SkDocumentRead>;
+
+/** What one gated download established. */
+export type SkDocumentRead =
+  | ReadOutcome<Response>
+  | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;
@@ -263,44 +272,81 @@ export const fetchPdfBytes = async ({
     return { type: "absent" };
   }
 
-  const response = await fetchDocument(target, { signal });
-  if (response === undefined) {
-    return { type: "absent" };
+  const read = await fetchDocument(target, { signal });
+  switch (read.type) {
+    case "refused-target":
+    case "absent":
+      return { type: "absent" };
+    case "present":
+      return await servedPdfBytes(async () => await read.value.arrayBuffer());
+    case "unavailable":
+      return unavailablePdf(read.cause);
+    default:
+      read satisfies never;
+      return panic(`Unhandled document read: ${String(read)}`);
   }
-  const { ok, status } = response;
-  if (ok) {
-    const body = await Result.tryPromise({
-      try: async () => await response.arrayBuffer(),
-      catch: (error) => error,
-    });
-    if (Result.isOk(body)) {
-      return { type: "document", bytes: new Uint8Array(body.value) };
-    }
-    await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
-    const detail = brokenBodyDetail(body.error);
-    if (detail === undefined) {
-      throw body.error;
-    }
-    return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
-  }
-  // Only a response that says the document does not exist proves
-  // unavailability.
-  if (status === 404 || status === 410) {
-    return { type: "absent" };
-  }
-  if (isDocumentOwnStatus(status)) {
-    return {
-      type: "failed",
-      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
-      detail: `http-${status}`,
-    };
-  }
-  throw new AdapterFetchError({
-    message: `Document fetch returned ${status}`,
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    cursor: null,
-    httpStatus: status,
+};
+
+/** The body of a served download, or the failure of reading it. */
+const servedPdfBytes = async (
+  readBody: () => Promise<ArrayBuffer>,
+): Promise<PdfFetchResult> => {
+  const body = await Result.tryPromise({
+    try: readBody,
+    catch: (error) => error,
   });
+  if (Result.isOk(body)) {
+    return { type: "document", bytes: new Uint8Array(body.value) };
+  }
+  await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
+  const detail = brokenBodyDetail(body.error);
+  if (detail === undefined) {
+    throw body.error;
+  }
+  return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
+};
+
+/**
+ * A download that served no document. Only a 404 or 410 proves there is
+ * none, and those arrive as `absent`; an empty 204 is this document's own
+ * failure, and a request that threw is rethrown as it was.
+ */
+const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
+  switch (cause.kind) {
+    case "thrown":
+      throw cause.error instanceof Error
+        ? cause.error
+        : new AdapterFetchError({
+            message: "Document fetch failed",
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            cursor: null,
+            cause: cause.error,
+          });
+    case "no-content":
+      return {
+        type: "failed",
+        failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+        detail: `http-${cause.status}`,
+      };
+    case "status":
+    case "empty-body":
+      if (isDocumentOwnStatus(cause.status)) {
+        return {
+          type: "failed",
+          failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+          detail: `http-${cause.status}`,
+        };
+      }
+      throw new AdapterFetchError({
+        message: `Document fetch returned ${cause.status}`,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        httpStatus: cause.status,
+      });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
 };
 
 export type BackfilledDocument = {
