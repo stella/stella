@@ -405,6 +405,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_query_data_state_guard() {
+  bun test scripts/query-data-state-baseline.test.ts || return 1
+  BASE_SHA="$base_ref" bun run check:query-data-state
+}
+run_step "Query data state baseline" run_query_data_state_guard
 run_failure_as_empty_guard() {
   bun test scripts/failure-as-empty-baseline.test.ts || return 1
   BASE_SHA="$base_ref" bun run check:failure-as-empty
