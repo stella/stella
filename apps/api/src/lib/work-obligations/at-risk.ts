@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { Temporal } from "@stll/time";
+import { todayFor } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { WORK_OBLIGATION_STATUS, workObligations } from "@/api/db/schema";
@@ -17,8 +17,7 @@ import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
  * today" resolves the day here.
  */
 export const resolveWorkAsOf = (asOf: string | undefined): string =>
-  asOf ??
-  Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }).slice(0, 10);
+  asOf ?? todayFor("UTC").toString();
 
 const OPEN_WORK_OBLIGATION_STATUSES = [
   WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,

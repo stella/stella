@@ -11,20 +11,43 @@ import { LIMITS } from "@/api/lib/limits";
 
 describe("image thumbnail eligibility", () => {
   test("accepts only supported unencrypted image formats", () => {
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/jpeg" })).toBe(true);
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/png" })).toBe(true);
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/gif" })).toBe(true);
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/webp" })).toBe(true);
+    expect(
+      shouldGenerateImageThumbnail({
+        encrypted: false,
+        mimeType: "image/jpeg",
+      }),
+    ).toBe(true);
+    expect(
+      shouldGenerateImageThumbnail({ encrypted: false, mimeType: "image/png" }),
+    ).toBe(true);
+    expect(
+      shouldGenerateImageThumbnail({ encrypted: false, mimeType: "image/gif" }),
+    ).toBe(true);
+    expect(
+      shouldGenerateImageThumbnail({
+        encrypted: false,
+        mimeType: "image/webp",
+      }),
+    ).toBe(true);
 
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/avif" })).toBe(
-      false,
-    );
-    expect(shouldGenerateImageThumbnail({ mimeType: "image/heic" })).toBe(
-      false,
-    );
-    expect(shouldGenerateImageThumbnail({ mimeType: "application/pdf" })).toBe(
-      false,
-    );
+    expect(
+      shouldGenerateImageThumbnail({
+        encrypted: false,
+        mimeType: "image/avif",
+      }),
+    ).toBe(false);
+    expect(
+      shouldGenerateImageThumbnail({
+        encrypted: false,
+        mimeType: "image/heic",
+      }),
+    ).toBe(false);
+    expect(
+      shouldGenerateImageThumbnail({
+        encrypted: false,
+        mimeType: "application/pdf",
+      }),
+    ).toBe(false);
   });
 
   test("rejects encrypted images and prototype names", () => {

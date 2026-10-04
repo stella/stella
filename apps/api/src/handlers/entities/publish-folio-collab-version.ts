@@ -44,6 +44,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -67,6 +68,9 @@ import {
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+/** A collaboration room publishes the DOCX its editors produced. */
+const PUBLISHED_FILE_ENCRYPTION = officeFileEncryption(DOCX_MIME_TYPE);
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
@@ -771,6 +775,7 @@ const publishCheckpointInTransaction = async ({
     fileId: source.fileId,
     fileName: checkpointRoom.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: PUBLISHED_FILE_ENCRYPTION,
     organizationId,
     recordAuditEvent,
     scanWarnings: checkpointRoom.checkpointScanWarnings ?? undefined,
@@ -840,7 +845,7 @@ const startPublicationFollowUps = async ({
     captureError(error, { entityId: publication.entityId });
   });
   enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
+    encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
     entityId: publication.entityId,
     fieldId: publication.fieldId,
     mimeType: DOCX_MIME_TYPE,

@@ -2271,6 +2271,7 @@
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
+      "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
