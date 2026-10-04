@@ -91,6 +91,7 @@ import {
   buildWireSnapshot,
   unsafeFixture,
 } from "@/api/tests/helpers/chat-fixtures";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -1330,10 +1331,13 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
-      workspaceId: toSafeId<"workspace">(
-        "44444444-4444-4444-8444-444444444444",
-      ),
-      entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      access: memberDocumentWriteAccess({
+        type: "new_version",
+        workspaceId: toSafeId<"workspace">(
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      }),
       fileFieldId: toSafeId<"field">("77777777-7777-4777-8777-777777777777"),
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",

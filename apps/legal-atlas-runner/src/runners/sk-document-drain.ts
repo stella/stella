@@ -84,6 +84,7 @@ const emptySummary = (): SkDocumentDrainSummary => ({
   failures: {
     "publisher-status": 0,
     network: 0,
+    "too-large": 0,
     unparseable: 0,
   } satisfies Record<DocumentFetchFailure, number>,
   filled: 0,

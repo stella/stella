@@ -640,6 +640,31 @@ export const installPgliteTimeEntryTimerSignals = async (
   }
 };
 
+/** Install the trigger that derives a playbook's document type key from scope. */
+export const installPglitePlaybookDocumentTypeKey = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125200_playbook_document_type_reference",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the playbook document type key function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteMigration = async ({
   db,
   migrationPath,

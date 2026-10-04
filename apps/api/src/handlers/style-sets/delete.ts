@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +25,7 @@ const config = {
     "behind it. Documents and templates already created from the style set are " +
     "unaffected, because they copied its styles at creation time.",
   permissions: { styleSet: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

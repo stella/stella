@@ -7,7 +7,7 @@ import {
   legalListGenerationRuns,
 } from "@/api/db/schema";
 import { commitSettledRun } from "@/api/handlers/lists/generation-candidates/commit-settled-run";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +25,7 @@ const config = {
     "flips to committed once nothing is left pending. Nothing is deleted: " +
     "the candidate stays in the run with status rejected.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",
