@@ -7,15 +7,8 @@ import { useLocale } from "@/i18n/formatting-context";
 
 const DatePickerPopover = ({
   clearLabel,
-  dialogLabel,
   locale,
-  nextDecadeLabel,
-  nextMonthLabel,
-  nextYearLabel,
   placeholderLabel,
-  previousDecadeLabel,
-  previousMonthLabel,
-  previousYearLabel,
   todayLabel,
   ...props
 }: DatePickerPopoverProps) => {
@@ -26,21 +19,8 @@ const DatePickerPopover = ({
     <UIDatePickerPopover
       {...props}
       clearLabel={clearLabel ?? t("common.clearDate")}
-      dialogLabel={dialogLabel ?? t("common.datePicker.label")}
       locale={locale ?? appLocale}
-      nextDecadeLabel={nextDecadeLabel ?? t("common.datePicker.nextDecade")}
-      nextMonthLabel={nextMonthLabel ?? t("common.datePicker.nextMonth")}
-      nextYearLabel={nextYearLabel ?? t("common.datePicker.nextYear")}
       placeholderLabel={placeholderLabel ?? t("common.selectDate")}
-      previousDecadeLabel={
-        previousDecadeLabel ?? t("common.datePicker.previousDecade")
-      }
-      previousMonthLabel={
-        previousMonthLabel ?? t("common.datePicker.previousMonth")
-      }
-      previousYearLabel={
-        previousYearLabel ?? t("common.datePicker.previousYear")
-      }
       todayLabel={todayLabel ?? t("common.today")}
     />
   );
