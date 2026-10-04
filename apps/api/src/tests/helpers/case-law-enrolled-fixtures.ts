@@ -113,7 +113,7 @@ import {
   PL_UOKIK_LABEL,
   plUokikRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
-import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
@@ -1318,25 +1318,37 @@ const SK_COURTS_DETAIL_RECORD = {
   povodnaSpisovaZnacka: "7C/221/1991",
 };
 
+/** The court registry record for the listing row's court. */
+const SK_COURTS_REGISTRY_RECORD = {
+  registreGuid: "sud_105",
+  nazov: "Mestský súd Bratislava IV",
+  typSudu: "Mestský súd",
+  nadriadenySudId: "101",
+  ukonceny_string: "false",
+  skratka_string: "MSBA4",
+};
+
+/**
+ * Built through the adapter's own fetch path: the per-decision record and
+ * the court registry record are read from the publisher the way the crawl
+ * reads them, so the read-fault guard drives both reads.
+ */
 export const skCourtsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      assembleSkCourtsDecision({
-        item: { ...SK_COURTS_LISTING_ROW },
-        detail: { ...SK_COURTS_DETAIL_RECORD },
-        courtRegistry: {
-          status: "available",
-          record: {
-            registreGuid: "sud_105",
-            nazov: "Mestský súd Bratislava IV",
-            typSudu: "Mestský súd",
-            nadriadenySudId: "101",
-            ukonceny_string: "false",
-            skratka_string: "MSBA4",
-          },
-        },
-      }) ?? panic("sk-courts fixture did not build"),
-    ),
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const body = url.pathname.includes("/sud/")
+        ? SK_COURTS_REGISTRY_RECORD
+        : SK_COURTS_DETAIL_RECORD;
+      return await Promise.resolve(Response.json(body));
+    });
+
+    const built = await buildSkCourtsDecision({ ...SK_COURTS_LISTING_ROW });
+    if (built.type !== "built") {
+      return panic(`sk-courts fixture did not build: ${built.type}`);
+    }
+    return built.decision;
+  },
 });
 
 // ── SK ÚS fixture ────────────────────────────────────────
