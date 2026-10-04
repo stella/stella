@@ -2,41 +2,22 @@
 // guard, compare exact sets: both new violations and stale entries fail.
 // Regenerate after migrating entries: bun scripts/query-data-state-baseline.ts --write.
 import { panic } from "better-result";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
+import { exactSetDifference, ruleCensusDiagnostics } from "./rule-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE = BASELINE_PATHS.queryDataState;
 const RULE = "query-data-requires-state";
-const OUTPUT = v.object({
-  diagnostics: v.array(
-    v.object({
-      code: v.string(),
-      message: v.string(),
-      filename: v.string(),
-      labels: v.array(v.object({ span: v.object({ line: v.number() }) })),
-    }),
-  ),
-});
 const BASELINE_SCHEMA = v.object({
   entries: v.record(v.string(), v.pipe(v.string(), v.nonEmpty())),
 });
 const KEY = /Query binding: (?<key>.+)\.$/u;
 
 export const queryStateCensus = () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "query-state-census-"));
-  const config = path.join(directory, "oxlint.config.ts");
-  const report = path.join(directory, "report.json");
   const sources = Bun.spawnSync(
     ["git", "ls-files", "--", "apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
     { cwd: ROOT },
@@ -44,56 +25,24 @@ export const queryStateCensus = () => {
   if (sources.exitCode !== 0) {
     panic("Cannot enumerate web query source files");
   }
-  for (const file of sources.stdout.toString().trim().split("\n")) {
-    const source = readFileSync(path.join(ROOT, file), "utf-8");
-    if (
-      !source.includes("@tanstack/react-query") &&
-      !source.includes("use-chrome-query")
-    ) {
-      continue;
-    }
-    const destination = path.join(directory, file);
-    mkdirSync(path.dirname(destination), { recursive: true });
-    // Suppressions must not remove entries from the enumerating pass. Renaming
-    // directive tokens preserves syntax and source locations in scratch copies.
-    writeFileSync(
-      destination,
-      source.replaceAll(
-        /\b(?:oxlint|eslint)-(?:disable|enable)\b/gu,
-        "query-census-directive",
-      ),
-    );
-  }
-  writeFileSync(
-    config,
-    `export default ${JSON.stringify({ categories: { correctness: "off" }, jsPlugins: [path.join(ROOT, ".oxlint-plugins", `${RULE}.ts`)], rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] } })};\n`,
-  );
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      config,
-      "--format=json",
-      "apps/web/src",
-    ],
-    { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
-  );
-  const output = readFileSync(report, "utf-8");
-  rmSync(directory, { recursive: true, force: true });
-  if (result.exitCode !== 0 && result.exitCode !== 1) {
-    panic(`Query state census failed: ${result.stderr.toString()}`);
-  }
-  if (!output.trim()) {
-    panic(`Query state census produced no report: ${result.stderr.toString()}`);
-  }
-  const diagnostics = v.parse(OUTPUT, JSON.parse(output)).diagnostics;
-  return diagnostics
+  const files = sources.stdout
+    .toString()
+    .trim()
+    .split("\n")
+    .filter((file) => {
+      const source = readFileSync(path.join(ROOT, file), "utf-8");
+      return (
+        source.includes("@tanstack/react-query") ||
+        source.includes("use-chrome-query")
+      );
+    });
+  return ruleCensusDiagnostics({
+    rule: RULE,
+    files,
+    lintTarget: "apps/web/src",
+    label: "query-state",
+  })
     .map((diagnostic) => {
-      if (!diagnostic.code.startsWith(`${RULE}(`)) {
-        panic(`Unexpected query state diagnostic: ${diagnostic.code}`);
-      }
       const key = KEY.exec(diagnostic.message)?.groups?.["key"];
       if (!key) {
         panic(
@@ -109,32 +58,6 @@ export const queryStateCensus = () => {
       };
     })
     .toSorted((left, right) => left.key.localeCompare(right.key));
-};
-
-type QueryStateBaselineComparison = {
-  observed: readonly string[];
-  recorded: readonly string[];
-  committed: readonly string[] | null;
-};
-
-export const queryStateBaselineDifference = ({
-  observed,
-  recorded,
-  committed,
-}: QueryStateBaselineComparison) => {
-  const actual = new Set(observed);
-  const expected = new Set(recorded);
-  return {
-    added: [...actual].filter((key) => !expected.has(key)).toSorted(),
-    stale: [...expected].filter((key) => !actual.has(key)).toSorted(),
-    duplicates: observed.filter(
-      (key, index) => observed.indexOf(key) !== index,
-    ),
-    grown:
-      committed === null
-        ? []
-        : recorded.filter((key) => !committed.includes(key)).toSorted(),
-  };
 };
 
 if (import.meta.main) {
@@ -178,7 +101,7 @@ if (import.meta.main) {
     );
     committed = Object.keys(base.entries);
   }
-  const difference = queryStateBaselineDifference({
+  const difference = exactSetDifference({
     observed,
     recorded: Object.keys(baseline.entries),
     committed,

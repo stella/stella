@@ -1,17 +1,17 @@
 import { expect, test } from "bun:test";
 
-import { queryStateBaselineDifference } from "./query-data-state-baseline.ts";
+import { exactSetDifference } from "./rule-census.ts";
 
 test("query state entries must match the observed set in both directions", () => {
   expect(
-    queryStateBaselineDifference({
+    exactSetDifference({
       observed: ["file::List::data"],
       recorded: ["file::List::data"],
       committed: null,
     }),
   ).toEqual({ added: [], stale: [], duplicates: [], grown: [] });
   expect(
-    queryStateBaselineDifference({
+    exactSetDifference({
       observed: ["file::List::data", "file::New::data"],
       recorded: ["file::List::data"],
       committed: null,
@@ -23,7 +23,7 @@ test("query state entries must match the observed set in both directions", () =>
     grown: [],
   });
   expect(
-    queryStateBaselineDifference({
+    exactSetDifference({
       observed: [],
       recorded: ["file::List::data"],
       committed: null,
@@ -38,7 +38,7 @@ test("query state entries must match the observed set in both directions", () =>
 
 test("query bindings cannot collapse into a duplicate baseline key", () => {
   expect(
-    queryStateBaselineDifference({
+    exactSetDifference({
       observed: ["file::List::data", "file::List::data"],
       recorded: ["file::List::data"],
       committed: null,
@@ -49,7 +49,7 @@ test("query bindings cannot collapse into a duplicate baseline key", () => {
 test("a new committed baseline key fails even when the observed set matches", () => {
   const recorded = ["file::List::data", "file::New::data"];
   expect(
-    queryStateBaselineDifference({
+    exactSetDifference({
       observed: recorded,
       recorded,
       committed: ["file::List::data"],
