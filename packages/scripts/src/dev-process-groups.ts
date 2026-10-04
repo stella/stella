@@ -37,15 +37,13 @@ const sessionSchema = v.object({
 });
 type ProcessGroup = v.InferOutput<typeof groupSchema>;
 
-export class DevProcessInspectionError extends TaggedError(
+class DevProcessInspectionError extends TaggedError(
   "DevProcessInspectionError",
 )<{
   message: string;
   cause?: unknown;
 }> {}
-export class DevProcessOwnershipError extends TaggedError(
-  "DevProcessOwnershipError",
-)<{
+class DevProcessOwnershipError extends TaggedError("DevProcessOwnershipError")<{
   message: string;
 }> {}
 export class DevProcessRegistrationError extends TaggedError(
@@ -54,9 +52,7 @@ export class DevProcessRegistrationError extends TaggedError(
   message: string;
   cause?: unknown;
 }> {}
-export class DevProcessSignalError extends TaggedError(
-  "DevProcessSignalError",
-)<{
+class DevProcessSignalError extends TaggedError("DevProcessSignalError")<{
   message: string;
   pgid: number;
   signal: NodeJS.Signals;

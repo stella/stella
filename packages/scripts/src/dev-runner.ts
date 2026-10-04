@@ -1640,18 +1640,19 @@ const waitForReadinessChecks = async (
 
 const spawnPersistentStep = (step: Step, rootDir: string) => {
   console.log(`==> Starting ${step.label}...`);
+  const env = resolveEnv(step.env);
 
   return spawnDevProcess({
     rootDir,
     cmd: step.cmd,
     label: step.label,
     cwd: step.cwd,
-    env: resolveEnv(step.env),
+    env,
     stdin: "inherit",
   }).map((child) => ({
     cmd: step.cmd,
     cwd: step.cwd,
-    env: step.env,
+    env,
     label: step.label,
     child,
   }));
@@ -1661,17 +1662,18 @@ type BackgroundStep = RunningStep & { startedAt: number };
 
 const startBackgroundStep = (step: Step, rootDir: string) => {
   console.log(`==> ${step.label}...`);
+  const env = resolveEnv(step.env);
   return spawnDevProcess({
     rootDir,
     cmd: step.cmd,
     label: step.label,
     cwd: step.cwd,
-    env: resolveEnv(step.env),
+    env,
     stdin: "ignore",
   }).map((child) => ({
     cmd: step.cmd,
     cwd: step.cwd,
-    env: step.env,
+    env,
     label: step.label,
     child,
     startedAt: Temporal.Now.instant().epochMilliseconds,
