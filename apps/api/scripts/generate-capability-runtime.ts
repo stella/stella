@@ -65,7 +65,7 @@ export const generateCapabilityRuntime = async (
   });
   await writeFile(
     new URL("capability-feature-bindings.ts", directory),
-    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${JSON.stringify(features)});\n`,
+    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : JSON.stringify(features)});\n`,
   );
   const dispatchImports = ids
     .map(

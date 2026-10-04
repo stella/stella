@@ -36,6 +36,7 @@ export const GENERATORS = [
     outputs: [
       "packages/cli/capabilities/**",
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
+      "apps/api/src/mcp/generated/capability-feature-bindings.ts",
       "docs/capability-coverage.md",
     ],
     inputs: [
@@ -60,7 +61,6 @@ export const GENERATORS = [
     outputKind: "derived",
     outputs: [
       "apps/api/src/mcp/generated/capability-catalog.ts",
-      "apps/api/src/mcp/generated/capability-feature-bindings.ts",
       "apps/api/src/mcp/generated/capability-dispatch.ts",
     ],
     inputs: [
