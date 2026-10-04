@@ -207,10 +207,7 @@ const run = async () => {
   process.stdout.write(stdout);
   process.stderr.write(stderr);
 
-  if (
-    processHandle.signalCode !== undefined &&
-    processHandle.signalCode !== null
-  ) {
+  if (processHandle.signalCode !== null) {
     process.exit(exitCode);
   }
 
