@@ -175,7 +175,7 @@ describe("a matter handler's declared resource sets", () => {
         expect(attempts).toBe(1);
         expect(analytics.exceptions()).toHaveLength(1);
         expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-          context: "resource-set-realtime.announce",
+          "failure.sink": "resource-set-realtime.announce",
         });
       } finally {
         analytics.restore();

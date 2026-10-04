@@ -16,10 +16,7 @@ import {
   memberAssignmentRequiredError,
   orgAIConfigStatusError,
 } from "@/api/lib/ai-config-response";
-import {
-  captureError,
-  captureObservedError,
-} from "@/api/lib/analytics/capture";
+import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
@@ -51,6 +48,7 @@ import {
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
   causeChainAttributes,
+  failureSink,
   identityFields,
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
@@ -62,6 +60,7 @@ import {
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
@@ -1132,6 +1131,11 @@ type HandlerAdmissionDependencies = {
   announce?: typeof announceResourceSetUpdates;
 };
 
+const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
+  event: "resource-set-realtime.announce",
+  expected: [],
+});
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -1229,8 +1233,8 @@ const createSafeScopedHandler = <
         }),
       );
       if (Result.isError(announcement)) {
-        captureError(announcement.error, {
-          context: "resource-set-realtime.announce",
+        observeFailure(announcement.error, {
+          sink: REALTIME_ANNOUNCEMENT_FAILURE,
         });
       }
     }
