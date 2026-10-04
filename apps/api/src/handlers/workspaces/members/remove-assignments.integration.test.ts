@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -10,15 +11,20 @@ import {
   auditLogs,
   entities,
   taskAssignees,
+  timeEntries,
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import calendarTasks from "@/api/handlers/tasks/calendar/list";
 import { listTasksPage } from "@/api/handlers/tasks/list-query";
+import { isAccountDeletionActiveTaskStatus } from "@/api/lib/account-deletion-reassignment";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
+import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { taskAssigneeCondition } from "@/api/lib/tasks/assigned";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -279,14 +285,24 @@ test.each([
   },
 );
 
-test("removal preserves every task status and assignee role", async () => {
+test("removal moves open work and keeps finished work's former assignee", async () => {
   await assertProperty(
     "membership-removal.task-preservation",
     fc.asyncProperty(
-      fc.constantFrom("open", "done", "completed", "cancelled"),
+      fc.constantFrom(
+        null,
+        TASK_STATUS.OPEN,
+        TASK_STATUS.IN_PROGRESS,
+        TASK_STATUS.IN_REVIEW,
+        TASK_STATUS.DONE,
+        TASK_STATUS.CANCELLED,
+      ),
       fc.constantFrom("assignee", "reviewer"),
-      async (status, role) => {
+      fc.boolean(),
+      async (status, role, reassign) => {
         const { testDb, ids } = fixture;
+        const open =
+          status === null || isAccountDeletionActiveTaskStatus(status);
         const result = await Result.tryPromise(
           async () =>
             await testDb.transaction(async (tx) => {
@@ -317,6 +333,7 @@ test("removal preserves every task status and assignee role", async () => {
                   workspaceId: ids.wsA2,
                   userId: ids.userA1,
                   actorUserId: ids.userA2,
+                  reassignTo: reassign ? ids.userA2 : undefined,
                   recordAuditEvent: createAuditRecorder({
                     organizationId: ids.orgA,
                     workspaceId: ids.wsA2,
@@ -337,15 +354,26 @@ test("removal preserves every task status and assignee role", async () => {
                   .from(entities)
                   .where(eq(entities.id, taskId)),
               ).toEqual([{ status }]);
+              // Finished work keeps its former assignee; open work moves
+              // to the replacement or returns to the matter.
+              let expected: { userId: string; role: typeof role }[] = [];
+              if (!open) {
+                expected = [{ userId: ids.userA1, role }];
+              } else if (reassign) {
+                expected = [{ userId: ids.userA2, role }];
+              }
               expect(
-                await tx.$count(
-                  taskAssignees,
-                  eq(taskAssignees.entityId, taskId),
-                ),
-              ).toBe(0);
+                await tx
+                  .select({
+                    userId: taskAssignees.userId,
+                    role: taskAssignees.role,
+                  })
+                  .from(taskAssignees)
+                  .where(eq(taskAssignees.entityId, taskId)),
+              ).toEqual(expected);
               expect(
                 await tx.$count(auditLogs, eq(auditLogs.resourceId, taskId)),
-              ).toBe(1);
+              ).toBe(open ? 1 : 0);
               throw new TransactionRollbackError();
             }),
         );
@@ -357,8 +385,118 @@ test("removal preserves every task status and assignee role", async () => {
         }
       },
     ),
-    { numRuns: 12 },
+    { numRuns: 24 },
   );
+});
+
+test("matter removal returns only that matter's pending approvals to the pool", async () => {
+  const { testDb, ids } = fixture;
+  const result = await Result.tryPromise(
+    async () =>
+      await testDb.transaction(async (tx) => {
+        const entry = (
+          workspaceId: typeof ids.wsA2 | null,
+          status: "draft" | "approved",
+        ) => ({
+          id: createSafeId<"timeEntry">(),
+          organizationId: ids.orgA,
+          workspaceId,
+          activityGroup:
+            workspaceId === null
+              ? TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
+              : TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+          userId: ids.userA2,
+          approverUserId: ids.userA1,
+          status,
+          dateWorked: "2026-10-01",
+          timezoneId: "UTC",
+          durationMinutes: 30,
+          billedMinutes: 30,
+          rateAtEntry: cents(10_000),
+          currency: "EUR",
+          narrative: "Review",
+        });
+        const pending = entry(ids.wsA2, "draft");
+        const approved = entry(ids.wsA2, "approved");
+        const elsewhere = entry(ids.wsA1, "draft");
+        const internal = {
+          ...entry(null, "draft"),
+          billable: false,
+          billedMinutes: 0,
+          rateAtEntry: cents(0),
+          currency: UNPRICED_TIME_ENTRY_CURRENCY,
+        };
+        await tx
+          .insert(timeEntries)
+          .values([pending, approved, elsewhere, internal]);
+        const safeDb = asTestRaw<SafeDb>(
+          createMembershipSafeDb(markRlsDatabase(tx), {
+            organizationId: ids.orgA,
+            serverValidatedWorkspaceIds: [ids.wsA2],
+            userId: ids.userA2,
+          }),
+        );
+        const removed = await Result.gen(() =>
+          removeWorkspaceMemberHandler({
+            safeDb,
+            workspaceId: ids.wsA2,
+            userId: ids.userA1,
+            actorUserId: ids.userA2,
+            recordAuditEvent: createAuditRecorder({
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              userId: ids.userA2,
+              request: new Request("https://example.test/remove"),
+              server: null,
+            }),
+            dependencies,
+          }),
+        );
+        if (Result.isError(removed)) {
+          throw removed.error;
+        }
+        await tx.execute(sql`RESET ROLE`);
+        const approvers = new Map(
+          (
+            await tx
+              .select({
+                id: timeEntries.id,
+                approverUserId: timeEntries.approverUserId,
+              })
+              .from(timeEntries)
+              .where(
+                inArray(timeEntries.id, [
+                  pending.id,
+                  approved.id,
+                  elsewhere.id,
+                  internal.id,
+                ]),
+              )
+          ).map((row) => [row.id, row.approverUserId]),
+        );
+        expect(approvers.get(pending.id)).toBeNull();
+        expect(approvers.get(approved.id)).toBe(ids.userA1);
+        expect(approvers.get(elsewhere.id)).toBe(ids.userA1);
+        expect(approvers.get(internal.id)).toBe(ids.userA1);
+        expect(
+          await tx
+            .select({ changes: auditLogs.changes })
+            .from(auditLogs)
+            .where(eq(auditLogs.resourceId, pending.id)),
+        ).toEqual([
+          expect.objectContaining({
+            changes: { approverUserId: { old: ids.userA1, new: null } },
+          }),
+        ]);
+        throw new TransactionRollbackError();
+      }),
+  );
+  if (
+    Result.isError(result) &&
+    !(result.error.cause instanceof TransactionRollbackError)
+  ) {
+    throw result.error.cause;
+  }
 });
 
 test("member cleanup drains more than one bounded assignment batch", async () => {

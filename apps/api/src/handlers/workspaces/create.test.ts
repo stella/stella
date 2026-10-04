@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { member } from "@/api/db/auth-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,10 +52,18 @@ describe("createWorkspaces", () => {
         }),
       }),
     };
+    const lockedMemberOrder: unknown[] = [];
     const membersSelect = {
       from: () => ({
         where: () => ({
-          for: async () => [{ userId: validTeamMemberId }],
+          orderBy: (column: unknown) => {
+            lockedMemberOrder.push(column);
+            return {
+              limit: () => ({
+                for: async () => [{ userId: validTeamMemberId }],
+              }),
+            };
+          },
         }),
       }),
     };
@@ -98,6 +107,8 @@ describe("createWorkspaces", () => {
         message: "Some users are not members of this organization",
       },
     });
+    // Granted memberships lock in the order organization removal uses.
+    expect(lockedMemberOrder).toEqual([member.userId]);
     expect(getCallCount()).toBe(1);
   });
 
@@ -133,7 +144,11 @@ describe("createWorkspaces", () => {
         return {
           from: () => ({
             where: () => ({
-              for: async () => [{ userId: "user_test123" }],
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () => [{ userId: "user_test123" }],
+                }),
+              }),
             }),
           }),
         };
@@ -171,7 +186,7 @@ describe("createWorkspaces", () => {
     const { safeDb, scopedDb } = createScopedDbMock({
       select: (fields: Record<string, unknown>) => ({
         from: () => ({
-          where: () => {
+          where: (): unknown => {
             if ("total" in fields) {
               return Promise.resolve([{ total: 0 }]);
             }
@@ -179,10 +194,14 @@ describe("createWorkspaces", () => {
               return Promise.resolve([]);
             }
             return {
-              for: async (lock: string) => {
-                strength = lock;
-                return [];
-              },
+              orderBy: () => ({
+                limit: () => ({
+                  for: async (lock: string) => {
+                    strength = lock;
+                    return [];
+                  },
+                }),
+              }),
             };
           },
         }),

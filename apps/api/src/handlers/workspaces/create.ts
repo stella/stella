@@ -146,6 +146,9 @@ export const createWorkspaceHandler = async function* ({
                 inArray(member.userId, grantedUserIds),
               ),
             )
+            // Same order as organization removal's membership locks.
+            .orderBy(member.userId)
+            .limit(grantedUserIds.length)
             .for("update"),
         ]);
 

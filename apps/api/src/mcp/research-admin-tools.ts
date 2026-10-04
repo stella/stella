@@ -964,7 +964,7 @@ const handleRemoveMember = async ({
   context: McpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
-  reassignTo?: string;
+  reassignTo?: string | undefined;
 }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");

@@ -19,7 +19,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 type LockTaskAssignmentMembersOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  userIds: readonly SafeId<"user">[];
+  userIds: readonly string[];
 };
 
 export const lockTaskAssignmentMembers = async ({
@@ -79,7 +79,7 @@ type WriteTaskAssignmentsOptions = {
   workspaceId: SafeId<"workspace">;
   assignments: readonly {
     entityId: SafeId<"entity">;
-    userId: SafeId<"user">;
+    userId: string;
     role: "assignee" | "reviewer";
   }[];
 };
@@ -116,7 +116,7 @@ type RemoveTaskAssignmentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
-  userId: SafeId<"user">;
+  userId: string;
 };
 
 export const removeTaskAssignment = async ({

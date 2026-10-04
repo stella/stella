@@ -1337,7 +1337,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             parseAuthProviderId<"user">(input) === null)
         ) {
           throw new APIError("BAD_REQUEST", {
-            message: "User is not a member of this workspace",
+            message: "User is not a member of this organization",
           });
         }
         const reassignTo =
@@ -1359,8 +1359,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                   error.status === 409 ? "CONFLICT" : "BAD_REQUEST",
                   {
                     message: error.message,
-                    code: error.code,
-                    retryable: error.retryable,
+                    ...(error.code === undefined ? {} : { code: error.code }),
+                    ...(error.retryable === undefined
+                      ? {}
+                      : { retryable: error.retryable }),
                   },
                 )
               : mapMembershipInvariantError(error),

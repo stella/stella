@@ -1,17 +1,27 @@
 import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
+import { apikey, member, session } from "@/api/db/auth-schema";
 import {
   auditLogs,
   contacts,
   entities,
   taskAssignees,
+  timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { getAuth } from "@/api/lib/auth";
+import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
+import { canApproveAssignedTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import { createSafeId } from "@/api/lib/branded-types";
+import { TASK_STATUS } from "@/api/lib/entity-constants";
+import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
+import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -70,7 +80,7 @@ test.each([
     await db.insert(workspaces).values(
       workspaceIds.map((id) => ({
         id,
-        organizationId: org.id,
+        organizationId: brandPersistedOrganizationId(org.id),
         name: "Assignment matter",
         reference: id,
       })),
@@ -111,7 +121,7 @@ test.each([
     });
     const otherMembership = await auth.api.addMember({
       body: {
-        organizationId: otherOrg.id,
+        organizationId: brandPersistedOrganizationId(otherOrg.id),
         userId: leaver.userId,
         role: "member",
       },
@@ -121,7 +131,7 @@ test.each([
     const otherTaskId = createSafeId<"entity">();
     await db.insert(workspaces).values({
       id: otherWorkspaceId,
-      organizationId: otherOrg.id,
+      organizationId: brandPersistedOrganizationId(otherOrg.id),
       name: "Other matter",
       reference: otherWorkspaceId,
     });
@@ -143,7 +153,7 @@ test.each([
     const contactId = createSafeId<"contact">();
     await db.insert(contacts).values({
       id: contactId,
-      organizationId: org.id,
+      organizationId: brandPersistedOrganizationId(org.id),
       type: "person",
       displayName: "Assignment contact",
       originatingAttorneyId: leaver.userId,
@@ -167,7 +177,7 @@ test.each([
         method: "POST",
         headers,
         body: JSON.stringify({
-          organizationId: org.id,
+          organizationId: brandPersistedOrganizationId(org.id),
           memberIdOrEmail: added.id,
           ...(disposition === "unassigned"
             ? {}
@@ -263,3 +273,197 @@ test.each([
     );
   },
 );
+
+const removeMemberRequest = (
+  headers: Headers,
+  body: Record<string, unknown>,
+) => {
+  headers.set("content-type", "application/json");
+  headers.set("origin", "http://localhost:3001");
+  return new Request(
+    "http://localhost:3001/api/auth/organization/remove-member",
+    { method: "POST", headers, body: JSON.stringify(body) },
+  );
+};
+
+test("a re-invited member returns without credentials, matters or approvals", async () => {
+  const owner = await signInHuman(
+    `rejoin-owner-${Bun.randomUUIDv7()}@stella.dev`,
+  );
+  const leaver = await signInHuman(
+    `rejoin-leaver-${Bun.randomUUIDv7()}@stella.dev`,
+  );
+  const auth = getAuth();
+  const org = await auth.api.createOrganization({
+    body: { name: "Rejoin fixture", slug: `rejoin-${Bun.randomUUIDv7()}` },
+    headers: owner.headers(),
+  });
+  const organizationId = brandPersistedOrganizationId(org.id);
+  const leaverId = brandPersistedUserId(leaver.userId);
+  const added = await auth.api.addMember({
+    body: { organizationId: org.id, userId: leaver.userId, role: "member" },
+    headers: owner.headers(),
+  });
+  await leaver.setActiveOrganization(org.id);
+  const workspaceId = createSafeId<"workspace">();
+  const openTaskId = createSafeId<"entity">();
+  const doneTaskId = createSafeId<"entity">();
+  const entryId = createSafeId<"timeEntry">();
+  const apiKeyId = Bun.randomUUIDv7();
+  await db.insert(workspaces).values({
+    id: workspaceId,
+    organizationId: brandPersistedOrganizationId(org.id),
+    name: "Rejoin matter",
+    reference: workspaceId,
+    leadUserId: leaver.userId,
+  });
+  await db
+    .insert(workspaceMembers)
+    .values(
+      [owner.userId, leaver.userId].map((userId) => ({ workspaceId, userId })),
+    );
+  await db.insert(entities).values([
+    {
+      id: openTaskId,
+      workspaceId,
+      kind: "task",
+      name: "Open work",
+      status: TASK_STATUS.IN_PROGRESS,
+    },
+    {
+      id: doneTaskId,
+      workspaceId,
+      kind: "task",
+      name: "Finished work",
+      status: TASK_STATUS.DONE,
+    },
+  ]);
+  await db.insert(taskAssignees).values(
+    [openTaskId, doneTaskId].map((entityId) => ({
+      entityId,
+      workspaceId,
+      userId: leaver.userId,
+      role: "assignee" as const,
+    })),
+  );
+  await db.insert(timeEntries).values({
+    id: entryId,
+    organizationId,
+    workspaceId,
+    userId: owner.userId,
+    approverUserId: leaver.userId,
+    dateWorked: new Date().toISOString().slice(0, 10),
+    timezoneId: "UTC",
+    durationMinutes: 30,
+    billedMinutes: 30,
+    rateAtEntry: cents(10_000),
+    currency: "EUR",
+    narrative: "Drafted the brief",
+  });
+  await db.insert(apikey).values({
+    id: apiKeyId,
+    configId: MACHINE_API_KEY_CONFIG_ID,
+    key: `rejoin-${apiKeyId}`,
+    referenceId: leaver.userId,
+    metadata: JSON.stringify({ organizationId: org.id }),
+  });
+  const outsider = await auth.handler(
+    removeMemberRequest(owner.headers(), {
+      organizationId: brandPersistedOrganizationId(org.id),
+      memberIdOrEmail: added.id,
+      reassign_to: `not-${leaver.userId}`,
+    }),
+  );
+  expect(outsider.status).toBe(400);
+  expect(await outsider.json()).toMatchObject({
+    message: "User is not a member of this organization",
+  });
+  expect(await db.$count(member, eq(member.id, added.id))).toBe(1);
+
+  const removed = await auth.handler(
+    removeMemberRequest(owner.headers(), {
+      organizationId: brandPersistedOrganizationId(org.id),
+      memberIdOrEmail: added.id,
+      reassign_to: owner.userId,
+    }),
+  );
+  expect(removed.status).toBe(200);
+  const reinvited = await auth.api.addMember({
+    body: { organizationId: org.id, userId: leaver.userId, role: "member" },
+    headers: owner.headers(),
+  });
+  expect(reinvited.id).not.toBe(added.id);
+
+  // Credentials of the first membership stay ended after the second begins.
+  expect(
+    await auth.api.getSession({
+      headers: leaver.headers(),
+      query: { disableCookieCache: true },
+    }),
+  ).toBeNull();
+  expect(
+    await db.$count(
+      session,
+      and(
+        eq(session.userId, leaver.userId),
+        eq(session.activeOrganizationId, org.id),
+      ),
+    ),
+  ).toBe(0);
+  expect(
+    await db
+      .select({ enabled: apikey.enabled })
+      .from(apikey)
+      .where(eq(apikey.id, apiKeyId)),
+  ).toEqual([{ enabled: false }]);
+
+  // The authorization layer grants the rejoined member no matter access.
+  const authorization = await resolveMemberAuthorization(
+    { organizationId, userId: leaverId, workspaceId },
+    db,
+  );
+  expect(authorization).toMatchObject({ role: "member", workspace: null });
+
+  // Pending approval went back to the approver pool, with history kept.
+  const [entry] = await db
+    .select({ approverUserId: timeEntries.approverUserId })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, entryId));
+  expect(entry).toEqual({ approverUserId: null });
+  expect(
+    canApproveAssignedTimeEntry({
+      memberRole: sessionMemberRole("member"),
+      currentUserId: leaverId,
+      approverUserId: entry?.approverUserId ?? null,
+    }),
+  ).toBe(false);
+  expect(
+    await db
+      .select({ changes: auditLogs.changes })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, entryId)),
+  ).toEqual([
+    expect.objectContaining({
+      changes: { approverUserId: { old: leaver.userId, new: null } },
+    }),
+  ]);
+
+  // Open work moved; finished work keeps its former assignee as history.
+  const assignments = await db
+    .select({ entityId: taskAssignees.entityId, userId: taskAssignees.userId })
+    .from(taskAssignees)
+    .where(eq(taskAssignees.workspaceId, workspaceId));
+  expect(assignments).toHaveLength(2);
+  expect(assignments).toEqual(
+    expect.arrayContaining([
+      { entityId: openTaskId, userId: owner.userId },
+      { entityId: doneTaskId, userId: leaver.userId },
+    ]),
+  );
+  expect(
+    await db
+      .select({ lead: workspaces.leadUserId })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId)),
+  ).toEqual([{ lead: null }]);
+});

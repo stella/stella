@@ -1,13 +1,177 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 
-import { ORGANIZATION_MEMBER_CLEANUP_TABLES } from "./member-assignment-offboarding";
+import {
+  ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
+  WORKSPACE_MEMBER_CLEANUP_COLUMNS,
+} from "./member-assignment-offboarding";
 
+/**
+ * A column names a member when it references the user or member table, when
+ * its name says so, or when it is a JSON column listed as holding member ids.
+ * Every such column needs a disposition on every removal path: cleared or
+ * reassigned (from the path's own cleanup list) or retained with a reason.
+ */
+const MEMBER_REFERENCE_NAME =
+  /(?:user|member|owner|assignee|inviter|author|reviewer|actor|approver|attorney)_ids?$|(?:^|_)by$/u;
+
+/** JSON columns whose documents can hold user or member ids. */
+const JSON_MEMBER_REFERENCE_COLUMNS = [
+  "audit_logs.metadata",
+  "audit_logs.changes",
+  "cell_metadata.metadata",
+  "chat_messages.content",
+  "chat_run_log_entries.chunk",
+  "entity_versions.collaboration_contributor_user_ids",
+  "fields.content",
+  "flow_run_steps.output",
+  "flow_runs.trigger_source",
+  "legal_list_generation_candidates.suggested_assignee_user_ids",
+  "saved_searches.criteria",
+  "signal_events.payload",
+  "signals.evidence",
+  "work_obligation_events.details",
+  "usage_provider_webhook_events.payload",
+  "time_entry_suggestions.evidence",
+] as const;
+
+/** JSON columns read and found to hold no user or member id. */
+const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
+  "account_deletion_requests.storage_cleanup",
+  "agent_skills.metadata",
+  "anonymization_blacklist_entries.variants",
+  "bilingual_translation_rows.warnings",
+  "bilingual_translation_runs.glossary",
+  "case_law_decision_supplements.document_ast",
+  "case_law_decision_supplements.metadata",
+  "case_law_decisions.sections",
+  "case_law_decisions.document_ast",
+  "case_law_decisions.analysis",
+  "case_law_decisions.metadata",
+  "case_law_judges.external_refs",
+  "case_law_polarity_rules.surface_forms",
+  "case_law_provision_extractions.unresolved_counts",
+  "case_law_reconciliation_items.payload",
+  "case_law_research_answers.answer",
+  "case_law_research_answers.run",
+  "case_law_research_columns.content",
+  "case_law_research_columns.tool",
+  "case_law_sources.config",
+  "case_law_sources.descriptor",
+  "chat_thread_compactions.summary",
+  "chat_thread_names.target",
+  "clause_variants.body",
+  "clause_versions.body",
+  "clauses.body",
+  "clauses.metadata",
+  "contact_import_requests.result",
+  "contacts.emails",
+  "contacts.phones",
+  "contacts.addresses",
+  "contacts.metadata",
+  "contacts.bank_accounts",
+  "contacts.billing_address",
+  "correspondence.original_signature",
+  "correspondence.sender",
+  "correspondence.recipients_to",
+  "correspondence.recipients_cc",
+  "correspondence.references",
+  "correspondence_allowed_senders.approved_by_display",
+  "correspondence_filers.filed_by_display",
+  "database_backfill_states.batch",
+  "desktop_edit_handoffs.linked_account",
+  "desktop_edit_sessions.checkpoint_scan_warnings",
+  "document_review_findings.payload",
+  "document_review_parties.parties",
+  "document_review_runs.basis",
+  "document_review_runs.skipped",
+  "document_translation_runs.warnings",
+  "document_translation_units.application",
+  "document_translation_units.warnings",
+  "docx_suggestions.op_payload",
+  "entities.organizer",
+  "entities.attendees",
+  "entities.recurrence",
+  "entities.external_data",
+  "entities.metadata",
+  "entity_versions.source",
+  "entity_views.layout",
+  "feedback_reports.context",
+  "feedback_reports.deliveries",
+  "flow_definitions.steps",
+  "flow_definitions.trigger",
+  "flow_runs.definition_snapshot",
+  "folio_collab_room_tokens.permissions",
+  "folio_collab_rooms.docx_checkpoint_scan_warnings",
+  "usage_provider_webhook_events.replay_audit",
+  "justifications.content",
+  "justifications.bounding_boxes",
+  "legal_list_claim_review_events.payload",
+  "legal_list_claims.anchor",
+  "legal_list_claims.refs",
+  "legal_list_claims.record_conflict",
+  "legal_list_generation_candidate_sources.locator",
+  "legal_list_item_sources.locator",
+  "legal_list_verification_runs.evidence",
+  "legislation_documents.sections",
+  "legislation_documents.document_ast",
+  "legislation_documents.metadata",
+  "legislation_sources.config",
+  "legislation_sources.descriptor",
+  "mcp_connector_authorization_reviews.observed_endpoint_origins",
+  "mcp_connector_authorization_reviews.approved_endpoint_origins",
+  "mcp_connectors.oauth_confirmed_endpoint_origins",
+  "mcp_oauth_clients.registration_response",
+  "mcp_user_connections.cached_tools",
+  "notifications.metadata",
+  "organization_settings.practice_jurisdictions",
+  "organization_settings.native_tool_overrides",
+  "organization_settings.disabled_native_tools",
+  "pdf_signing_sessions.signer_certificate_chain",
+  "pdf_signing_sessions.stamp",
+  "pending_uploads.purpose_data",
+  "pending_uploads.finalized_result",
+  "pending_uploads.rejection_details",
+  "playbook_definition_versions.scope",
+  "playbook_definition_versions.positions",
+  "playbook_definitions.scope",
+  "playbook_definitions.positions",
+  "properties.content",
+  "properties.tool",
+  "property_dependencies.condition",
+  "report_exports.template_ref",
+  "report_exports.layout",
+  "sanctions_entry_payloads.payload",
+  "scheduler_jobs.schedule",
+  "scheduler_jobs.payload",
+  "signals.subject",
+  "signals.suggestions",
+  "signals.accepted_result",
+  "template_fills.structure_errors",
+  "template_persistence_requests.result",
+  "template_recipes.definition",
+  "template_versions.manifest",
+  "templates.manifest",
+  "templates.origin",
+  "workspace_view_templates.layout",
+  "workspace_view_templates.template_properties",
+  "workspace_views.layout",
+  "oauth_access_token.confirmation",
+  "oauth_client.metadata",
+  "oauth_client_resource.metadata",
+  "oauth_refresh_token.confirmation",
+  "oauth_resource.custom_claims",
+  "oauth_resource.metadata",
+  "agent_trusted_issuer.attestation_policy",
+] as const;
+
+/** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
@@ -23,10 +187,6 @@ const RETAINED_MEMBER_COLUMNS = {
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
 
-  "agent_delegation.user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
-  "agent_registration.bound_user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
   "account_deletion_requests.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
@@ -75,8 +235,6 @@ const RETAINED_MEMBER_COLUMNS = {
     "Short-lived operation; current membership is revalidated before use.",
   "contact_import_requests.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
-  "correspondence.assignee_id":
-    "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "correspondence_allowed_senders.owner_user_id":
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "correspondence_allowed_senders.approved_by":
@@ -115,8 +273,6 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "folio_collab_contributions.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
-  "folio_collab_room_tokens.user_id":
-    "Short-lived operation; current membership is revalidated before use.",
   "folio_collab_rooms.seed_claimed_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "infosoud_tracked_cases.created_by":
@@ -191,8 +347,6 @@ const RETAINED_MEMBER_COLUMNS = {
     "Target configuration; active membership is required to use the time APIs.",
   "time_entries.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
-  "time_entries.approver_user_id":
-    "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
   "time_entry_suggestions.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
   "time_entry_timer_states.user_id":
@@ -221,68 +375,290 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "account.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
-  "apikey.reference_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
-  "oauth_access_token.user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
   "oauth_client.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
-  "oauth_consent.user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
-  "oauth_refresh_token.user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
-  "session.user_id":
-    "Credential revocation remains owned by auth-artifacts in the existing removal hooks.",
   "two_factor.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
+  "audit_logs.metadata": "Audit history.",
+  "audit_logs.changes": "Audit history.",
+  "cell_metadata.metadata":
+    "Flag and lock attribution history; grants no matter membership.",
+  "chat_messages.content":
+    "Conversation history; tool payloads name members as they were.",
+  "chat_run_log_entries.chunk":
+    "Run log history; tool payloads name members as they were.",
+  "fields.content":
+    "A person property value; it names someone and grants nothing.",
+  "flow_run_steps.output": "Review gate decision attribution history.",
+  "saved_searches.criteria":
+    "A filter value that names people; it grants nothing.",
+  "signal_events.payload": "Signal assignment history.",
+  "signals.evidence":
+    "Derived from the obligation owner, which removal reassigns or clears.",
+  "work_obligation_events.details": "Ownership change history.",
+  "usage_provider_webhook_events.payload":
+    "Provider entitlement record; active seat assignment is membership-bound.",
+  "time_entry_suggestions.evidence":
+    "Suggestion evidence history; names a membership row as it was.",
+  "contacts.created_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "entity_versions.created_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "entity_versions.deleted_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "work_obligations.created_by_user_id":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "scheduler_jobs.paused_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "scheduler_jobs.locked_by": "A runner lease token, not a person.",
+  "document_processing_runs.claimed_by": "A worker claim token, not a person.",
+  "work_obligations.acknowledged_by_user_id":
+    "Acknowledgement attribution; an ownership change resets it with the owner.",
 } satisfies Record<string, string>;
 
-test("every schema member reference has an organization removal disposition", () => {
-  const cleanup = new Set(
-    ORGANIZATION_MEMBER_CLEANUP_TABLES.map(
-      (table) => getTableConfig(table).name,
-    ),
-  );
-  const classified = new Map(Object.entries(RETAINED_MEMBER_COLUMNS));
-  const seen = new Set<string>();
-  const missing: string[] = [];
-  const tables = new Set(
-    Object.values({ ...schema, ...authSchema, ...agentSchema }),
-  );
-  for (const value of tables) {
-    if (!is(value, PgTable)) {
-      continue;
-    }
-    const config = getTableConfig(value);
-    const memberColumns = new Set(
-      config.columns
-        .filter(({ name }) => /(?:user_ids?|member_ids?)$/u.test(name))
-        .map(({ name }) => name),
+/**
+ * Member references organization removal clears and matter removal keeps:
+ * the person stays a member of the organization.
+ */
+const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "member.user_id": "Organization membership outlives a matter removal.",
+  "contacts.originating_attorney_id":
+    "Organization-level attorney; the person stays an organization member.",
+  "contacts.responsible_attorney_id":
+    "Organization-level attorney; the person stays an organization member.",
+  "flow_runs.trigger_source":
+    "Every run step re-checks its actor's matter membership before it acts.",
+  "mcp_user_connections.user_id":
+    "Organization-scoped connection; the person stays an organization member.",
+  "mcp_oauth_state.user_id":
+    "Organization-scoped connection; the person stays an organization member.",
+  "sharepoint_connections.user_id":
+    "Organization-scoped connection; the person stays an organization member.",
+  "sharepoint_oauth_state.user_id":
+    "Organization-scoped connection; the person stays an organization member.",
+  "invitation.inviter_id":
+    "Organization invitation; the person stays an organization member.",
+  "session.user_id":
+    "Organization credential; the person stays an organization member.",
+  "apikey.reference_id":
+    "Organization credential; the person stays an organization member.",
+  "oauth_access_token.user_id":
+    "Organization credential; the person stays an organization member.",
+  "oauth_refresh_token.user_id":
+    "Organization credential; the person stays an organization member.",
+  "oauth_consent.user_id":
+    "Organization credential; the person stays an organization member.",
+  "agent_registration.bound_user_id":
+    "Organization credential; the person stays an organization member.",
+  "agent_delegation.user_id":
+    "Organization credential; the person stays an organization member.",
+  "folio_collab_room_tokens.user_id":
+    "Short-lived room token; current matter membership is revalidated before use.",
+} satisfies Record<string, string>;
+
+type CensusTable = {
+  name: string;
+  columns: readonly { name: string; json: boolean }[];
+  memberForeignKeyColumns: readonly string[];
+};
+
+type RemovalPath = {
+  name: string;
+  cleanup: ReadonlySet<string>;
+  retained: ReadonlyMap<string, string>;
+};
+
+const schemaTables = [
+  ...new Set(Object.values({ ...schema, ...authSchema, ...agentSchema })),
+].filter((value) => is(value, PgTable));
+
+const COLUMN_KEYS = new Map<PgColumn, string>(
+  schemaTables.flatMap((table) => {
+    const config = getTableConfig(table);
+    return config.columns.map(
+      (column) => [column, `${config.name}.${column.name}`] as const,
     );
-    for (const fk of config.foreignKeys) {
-      const reference = fk.reference();
-      if (
-        !["user", "member"].includes(
+  }),
+);
+
+const columnKey = (column: PgColumn) => {
+  const key = COLUMN_KEYS.get(column);
+  if (key === undefined) {
+    throw new Error(`${column.name} is not a column of the schema`);
+  }
+  return key;
+};
+
+const schemaCensus = (): CensusTable[] =>
+  schemaTables.map((table) => {
+    const config = getTableConfig(table);
+    return {
+      name: config.name,
+      columns: config.columns.map((column) => ({
+        name: column.name,
+        json: column.getSQLType().startsWith("json"),
+      })),
+      memberForeignKeyColumns: config.foreignKeys.flatMap((fk) => {
+        const reference = fk.reference();
+        return ["user", "member"].includes(
           getTableConfig(reference.foreignTable).name,
         )
+          ? reference.columns.map(({ name }) => name)
+          : [];
+      }),
+    };
+  });
+
+/** Every gap between the schema and the removal paths' dispositions. */
+const memberReferenceGaps = ({
+  tables,
+  paths,
+  jsonWithMembers,
+  jsonWithoutMembers,
+}: {
+  tables: readonly CensusTable[];
+  paths: readonly RemovalPath[];
+  jsonWithMembers: ReadonlySet<string>;
+  jsonWithoutMembers: ReadonlySet<string>;
+}): string[] => {
+  const gaps: string[] = [];
+  const references = new Set<string>();
+  const jsonColumns = new Set<string>();
+  for (const table of tables) {
+    for (const column of table.columns) {
+      const key = `${table.name}.${column.name}`;
+      if (column.json) {
+        jsonColumns.add(key);
+        if (!jsonWithMembers.has(key) && !jsonWithoutMembers.has(key)) {
+          gaps.push(`unclassified JSON column ${key}`);
+        }
+      }
+      if (
+        MEMBER_REFERENCE_NAME.test(column.name) ||
+        table.memberForeignKeyColumns.includes(column.name) ||
+        jsonWithMembers.has(key)
       ) {
-        continue;
-      }
-      for (const column of reference.columns) {
-        memberColumns.add(column.name);
-      }
-    }
-    for (const columnName of memberColumns) {
-      const key = `${config.name}.${columnName}`;
-      seen.add(key);
-      if (!cleanup.has(config.name) && !classified.has(key)) {
-        missing.push(key);
+        references.add(key);
       }
     }
   }
+  for (const key of [...jsonWithMembers, ...jsonWithoutMembers]) {
+    if (!jsonColumns.has(key)) {
+      gaps.push(`stale JSON classification ${key}`);
+    }
+  }
+  for (const path of paths) {
+    for (const key of references) {
+      const cleared = path.cleanup.has(key);
+      const retained = path.retained.has(key);
+      if (!cleared && !retained) {
+        gaps.push(`${path.name}: no disposition for ${key}`);
+      }
+      if (cleared && retained) {
+        gaps.push(`${path.name}: ${key} is both cleared and retained`);
+      }
+    }
+    for (const key of [...path.cleanup, ...path.retained.keys()]) {
+      if (!references.has(key)) {
+        gaps.push(`${path.name}: stale disposition ${key}`);
+      }
+    }
+  }
+  return gaps.toSorted();
+};
 
-  expect(missing).toEqual([]);
-  expect([...classified.keys()].filter((key) => !seen.has(key))).toEqual([]);
-  // JSON actor grants have no FK; they belong to the same cleanup census.
-  expect(cleanup.has(getTableConfig(schema.flowRuns).name)).toBe(true);
+const organizationPath: RemovalPath = {
+  name: "organization",
+  cleanup: new Set(
+    ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
+  ),
+  retained: new Map(Object.entries(RETAINED_MEMBER_COLUMNS)),
+};
+const matterPath: RemovalPath = {
+  name: "matter",
+  cleanup: new Set(
+    WORKSPACE_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
+  ),
+  retained: new Map([
+    ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS),
+  ]),
+};
+/** The schema census with one table replaced by a deliberately wrong fixture. */
+const withTable = (
+  name: string,
+  change: (table: CensusTable) => CensusTable,
+): CensusTable[] =>
+  schemaCensus().map((table) => (table.name === name ? change(table) : table));
+
+const census = {
+  paths: [organizationPath, matterPath],
+  jsonWithMembers: new Set<string>(JSON_MEMBER_REFERENCE_COLUMNS),
+  jsonWithoutMembers: new Set<string>(JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES),
+};
+
+describe("member removal schema coverage", () => {
+  test("every column naming a member has a disposition on both removal paths", () => {
+    expect(memberReferenceGaps({ ...census, tables: schemaCensus() })).toEqual(
+      [],
+    );
+  });
+
+  test("a new member column on a covered table needs its own disposition", () => {
+    const tables = withTable("workspaces", (table) => ({
+      name: table.name,
+      columns: [
+        ...table.columns,
+        { name: "approver_user_id", json: false },
+        { name: "reviewed_by", json: false },
+      ],
+      memberForeignKeyColumns: table.memberForeignKeyColumns,
+    }));
+    expect(memberReferenceGaps({ ...census, tables })).toEqual([
+      "matter: no disposition for workspaces.approver_user_id",
+      "matter: no disposition for workspaces.reviewed_by",
+      "organization: no disposition for workspaces.approver_user_id",
+      "organization: no disposition for workspaces.reviewed_by",
+    ]);
+  });
+
+  test("a member foreign key and a new JSON column are both caught", () => {
+    const tables = withTable("contacts", (table) => ({
+      name: table.name,
+      columns: [
+        ...table.columns,
+        { name: "partner", json: false },
+        { name: "grants", json: true },
+      ],
+      memberForeignKeyColumns: [...table.memberForeignKeyColumns, "partner"],
+    }));
+    expect(memberReferenceGaps({ ...census, tables })).toEqual([
+      "matter: no disposition for contacts.partner",
+      "organization: no disposition for contacts.partner",
+      "unclassified JSON column contacts.grants",
+    ]);
+  });
+
+  test("a column one path clears still needs a reason on the other path", () => {
+    const matterOnly = new Map(
+      Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS).filter(
+        ([key]) => key !== "contacts.originating_attorney_id",
+      ),
+    );
+    expect(
+      memberReferenceGaps({
+        ...census,
+        tables: schemaCensus(),
+        paths: [
+          {
+            ...matterPath,
+            retained: new Map([
+              ...Object.entries(RETAINED_MEMBER_COLUMNS),
+              ...matterOnly,
+            ]),
+          },
+        ],
+      }),
+    ).toEqual(["matter: no disposition for contacts.originating_attorney_id"]);
+  });
 });

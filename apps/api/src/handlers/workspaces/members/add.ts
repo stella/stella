@@ -51,81 +51,81 @@ export const addWorkspaceMemberHandler = async function* ({
   body,
 }: AddWorkspaceMemberProps) {
   const txResult = yield* Result.await(
-    (
-      await safeDb(async (tx) => {
-        // Lock the workspace row first so concurrent workspace
-        // deletion or promotion cannot race this membership insert.
-        const workspaceRows = await tx
-          .select({ id: workspaces.id })
-          .from(workspaces)
-          .where(eq(workspaces.id, workspaceId))
-          .for("update");
-        const workspace = workspaceRows.at(0);
+    safeDb(async (tx) => {
+      // Lock the workspace row first so concurrent workspace
+      // deletion or promotion cannot race this membership insert.
+      const workspaceRows = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .for("update");
+      const workspace = workspaceRows.at(0);
 
-        if (!workspace) {
-          return { ok: false as const, reason: "not_found" as const };
-        }
+      if (!workspace) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
 
-        // Workspace -> organization membership -> matter memberships, matching promotion.
-        const orgMembers = await tx
-          .select({ id: member.id })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, organizationId),
-              eq(member.userId, body.userId),
-            ),
-          )
-          .for("key share");
-        if (orgMembers.length === 0) {
-          return { ok: false as const, reason: "not_member" as const };
-        }
-        // Lock workspace_members rows then count to serialize concurrent adds.
-        // PG rejects FOR UPDATE with aggregate functions, so
-        // we select rows first and count in application code.
-        const lockedRows = await tx
-          .select({ id: workspaceMembers.id })
-          .from(workspaceMembers)
-          .where(eq(workspaceMembers.workspaceId, workspaceId))
-          .for("update");
+      // Workspace -> organization membership -> matter memberships, matching promotion.
+      const orgMembers = await tx
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, body.userId),
+          ),
+        )
+        .for("key share");
+      if (orgMembers.length === 0) {
+        return { ok: false as const, reason: "not_member" as const };
+      }
+      // Lock workspace_members rows then count to serialize concurrent adds.
+      // PG rejects FOR UPDATE with aggregate functions, so
+      // we select rows first and count in application code.
+      const lockedRows = await tx
+        .select({ id: workspaceMembers.id })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, workspaceId))
+        .for("update");
 
-        if (lockedRows.length >= LIMITS.workspaceMembersCount) {
-          return { ok: false as const, reason: "limit" as const };
-        }
+      if (lockedRows.length >= LIMITS.workspaceMembersCount) {
+        return { ok: false as const, reason: "limit" as const };
+      }
 
-        const rows = await tx
-          .insert(workspaceMembers)
-          .values({
-            workspaceId,
-            userId: body.userId,
-          })
-          .returning({
-            id: workspaceMembers.id,
-            userId: workspaceMembers.userId,
-            createdAt: workspaceMembers.createdAt,
-          });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            membersAdded: {
-              old: null,
-              new: [body.userId],
-            },
-          },
+      const rows = await tx
+        .insert(workspaceMembers)
+        .values({
+          workspaceId,
+          userId: body.userId,
+        })
+        .returning({
+          id: workspaceMembers.id,
+          userId: workspaceMembers.userId,
+          createdAt: workspaceMembers.createdAt,
         });
 
-        return { ok: true as const, rows };
-      })
-    ).mapError((error) =>
-      DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
-        ? new HandlerError({
-            status: 409,
-            message: "User is already a member of this workspace",
-          })
-        : error,
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: workspaceId,
+        changes: {
+          membersAdded: {
+            old: null,
+            new: [body.userId],
+          },
+        },
+      });
+
+      return { ok: true as const, rows };
+    }).then((result) =>
+      result.mapError((error) =>
+        DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+          ? new HandlerError({
+              status: 409,
+              message: "User is already a member of this workspace",
+            })
+          : error,
+      ),
     ),
   );
 

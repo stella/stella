@@ -52,7 +52,7 @@ export type RemoveWorkspaceMemberProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
-  reassignTo?: SafeId<"user">;
+  reassignTo?: SafeId<"user"> | undefined;
   recordAuditEvent: AuditRecorder;
   dependencies?: RemoveWorkspaceMemberDependencies | undefined;
 };

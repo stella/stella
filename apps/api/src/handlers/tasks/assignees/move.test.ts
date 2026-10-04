@@ -52,7 +52,7 @@ const createMock = ({
           rows = [{ userId: toUserId }];
         }
         return {
-          where: () =>
+          where: (): unknown =>
             table === member
               ? Promise.resolve(rows)
               : {

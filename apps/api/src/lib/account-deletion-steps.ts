@@ -1,14 +1,4 @@
-import {
-  and,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
@@ -94,7 +84,7 @@ import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
-  tryLockMemberCleanupWorkspace,
+  tryLockAccountMemberCleanup,
 } from "@/api/lib/member-assignment-offboarding";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
@@ -407,51 +397,9 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
-  // Assignment validation locks organization membership before matter
-  // membership. Match that order before deleting either membership.
-  await tx
-    .select({ id: member.id })
-    .from(member)
-    .where(eq(member.userId, currentUserId))
-    .for("update");
-  // Organization membership -> workspace -> matter membership -> obligation/entity.
-  // Taking the workspace prefix also keeps audit FKs consistent with flow writes.
-  let afterWorkspaceId: SafeId<"workspace"> | undefined;
-  while (true) {
-    // db-await-in-loop: acquire the workspace prefix in bounded ascending pages.
-    const departingMatters = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .innerJoin(
-        workspaceMembers,
-        eq(workspaceMembers.workspaceId, workspaces.id),
-      )
-      .where(
-        and(
-          eq(workspaceMembers.userId, currentUserId),
-          afterWorkspaceId ? gt(workspaces.id, afterWorkspaceId) : undefined,
-        ),
-      )
-      .orderBy(workspaces.id)
-      .limit(LIMITS.memberRemovalCleanupBatchSize);
-    if (departingMatters.length === 0) {
-      break;
-    }
-    for (const { id } of departingMatters) {
-      // db-await-in-loop: retain existing org-member locks without inverse waiting.
-      await tryLockMemberCleanupWorkspace(tx, id);
-    }
-    afterWorkspaceId = departingMatters.at(-1)?.id;
-  }
-  // Delegation locks a requested workspace membership before locking its
-  // obligation. Hold the departing user's membership rows first so a
-  // concurrent delegation either lands before this cleanup and is cleared,
-  // or observes the committed membership deletion and fails validation.
-  await tx
-    .select({ id: workspaceMembers.id })
-    .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, currentUserId))
-    .for("update");
+  // Organization membership -> affected matters (try) -> matter membership ->
+  // obligation/entity. Re-entrant when the caller already holds the prefix.
+  await tryLockAccountMemberCleanup(tx, currentUserId);
 
   const currentTaskAssignments = await selectActiveTaskAssignments(
     tx,

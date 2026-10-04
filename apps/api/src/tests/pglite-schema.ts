@@ -577,7 +577,10 @@ const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE TRIGGER",
 ] as const;
 
-/** Install membership capacity and ownership guards omitted by schema push. */
+/**
+ * Install membership capacity, ownership and matter-membership reference
+ * guards omitted by schema push.
+ */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -587,6 +590,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261004001000_matter_membership_organization_membership",
         "migration.sql",
       ),
     ),

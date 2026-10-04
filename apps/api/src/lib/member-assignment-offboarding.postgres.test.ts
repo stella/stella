@@ -33,13 +33,17 @@ import { moveAssigneeHandler } from "@/api/handlers/tasks/assignees/move";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
-import { getAuth } from "@/api/lib/auth";
+import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import {
   tryLockMemberCleanupWorkspace,
   removeOrganizationMemberInTransaction,
 } from "@/api/lib/member-assignment-offboarding";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -94,7 +98,7 @@ if (!databaseUrl || !runPostgresTests) {
           const organizationId = mintAuthProviderId<"organization">();
           const actorUserId = mintAuthProviderId<"user">();
           const leaverUserId = mintAuthProviderId<"user">();
-          const memberId = mintAuthProviderId<"member">();
+          const memberId = Bun.randomUUIDv7();
           const workspaceId = createSafeId<"workspace">();
           const taskId = createSafeId<"entity">();
           const contactId = createSafeId<"contact">();
@@ -125,7 +129,7 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             await checkDb.insert(member).values([
               {
-                id: mintAuthProviderId<"member">(),
+                id: Bun.randomUUIDv7(),
                 organizationId,
                 userId: actorUserId,
                 role: "owner",
@@ -186,7 +190,10 @@ if (!databaseUrl || !runPostgresTests) {
                     return value;
                   }),
               );
-            const assignment = async (db: GatedTestDb, hold: boolean) => {
+            const assignment = async (
+              db: GatedTestDb,
+              hold: boolean,
+            ): Promise<Result<unknown, unknown>> => {
               const safeDb = safe(db, hold);
               if (kind === "membership") {
                 return await Result.gen(() =>
@@ -250,7 +257,10 @@ if (!databaseUrl || !runPostgresTests) {
                 }),
               );
             };
-            const removal = async (db: GatedTestDb, hold: boolean) => {
+            const removal = async (
+              db: GatedTestDb,
+              hold: boolean,
+            ): Promise<Result<unknown, unknown>> => {
               const safeDb = safe(db, hold);
               if (!contactWrite && kind !== "membership") {
                 return await Result.gen(() =>
@@ -396,7 +406,7 @@ if (!databaseUrl || !runPostgresTests) {
         body: { organizationId: org.id, userId: leaver.userId, role: "admin" },
         headers: owner.headers(),
       });
-      const organizationId = org.id;
+      const organizationId = brandPersistedOrganizationId(org.id);
       const workspaceId = createSafeId<"workspace">();
       const taskId = createSafeId<"entity">();
       const versionId = createSafeId<"entityVersion">();
@@ -406,8 +416,8 @@ if (!databaseUrl || !runPostgresTests) {
       const definitionId = createSafeId<"flowDefinition">();
       const runId = createSafeId<"flowRun">();
       const connectorId = createSafeId<"mcpConnector">();
-      const inviteId = mintAuthProviderId<"invitation">();
-      const retainedInviteId = mintAuthProviderId<"invitation">();
+      const inviteId = Bun.randomUUIDv7();
+      const retainedInviteId = Bun.randomUUIDv7();
       try {
         await db.insert(workspaces).values({
           id: workspaceId,
@@ -631,22 +641,31 @@ if (!databaseUrl || !runPostgresTests) {
             .from(desktopEditSessions)
             .where(eq(desktopEditSessions.id, sessionId)),
         ).toEqual([{ status: "cancelled" }]);
-        const handoffs = await db
-          .select({ expiresAt: desktopEditHandoffs.expiresAt })
-          .from(desktopEditHandoffs)
-          .where(eq(desktopEditHandoffs.id, handoffId));
-        expect(handoffs.at(0)?.expiresAt.getTime()).toBeLessThanOrEqual(
-          Date.now(),
-        );
+        // Credential revocation in the same transaction deletes the
+        // leaver's handoffs and signing sessions outright.
         expect(
-          await db
-            .select({
-              status: pdfSigningSessions.status,
-              reason: pdfSigningSessions.closeReason,
-            })
-            .from(pdfSigningSessions)
-            .where(eq(pdfSigningSessions.id, signingId)),
-        ).toEqual([{ status: "cancelled", reason: "expired" }]);
+          await db.$count(
+            desktopEditHandoffs,
+            eq(desktopEditHandoffs.id, handoffId),
+          ),
+        ).toBe(0);
+        expect(
+          await db.$count(
+            pdfSigningSessions,
+            eq(pdfSigningSessions.id, signingId),
+          ),
+        ).toBe(0);
+        // The authorization layer, not only the rows, refuses the matter.
+        expect(
+          await resolveMemberAuthorization(
+            {
+              organizationId,
+              userId: brandPersistedUserId(leaver.userId),
+              workspaceId,
+            },
+            db,
+          ),
+        ).toMatchObject({ role: "member", workspace: null });
         expect(
           await db
             .select({ status: flowRuns.status })
@@ -756,7 +775,7 @@ if (!databaseUrl || !runPostgresTests) {
       try {
         await db.insert(member).values(
           [actorUserId, userId].map((id) => ({
-            id: mintAuthProviderId<"member">(),
+            id: Bun.randomUUIDv7(),
             organizationId,
             userId: id,
             role: id === actorUserId ? "owner" : "admin",
@@ -777,7 +796,7 @@ if (!databaseUrl || !runPostgresTests) {
         await db.insert(entities).values({
           id: entityId,
           workspaceId,
-          kind: "file",
+          kind: "document",
           name: "Fixture file",
         });
         await db
@@ -885,7 +904,7 @@ if (!databaseUrl || !runPostgresTests) {
         const organizationId = mintAuthProviderId<"organization">();
         const actorUserId = mintAuthProviderId<"user">();
         const userId = mintAuthProviderId<"user">();
-        const memberId = mintAuthProviderId<"member">();
+        const memberId = Bun.randomUUIDv7();
         const workspaceId = createSafeId<"workspace">();
         const contactId = createSafeId<"contact">();
         const taskId = createSafeId<"entity">();
@@ -908,7 +927,7 @@ if (!databaseUrl || !runPostgresTests) {
         try {
           await holdingDb.insert(member).values([
             {
-              id: mintAuthProviderId<"member">(),
+              id: Bun.randomUUIDv7(),
               organizationId,
               userId: actorUserId,
               role: "owner",

@@ -3435,10 +3435,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "assignee": {
           "enum": [
             "me",
-            "any"
+            "any",
+            "unassigned"
           ],
           "type": "string",
-          "description": "'me': only tasks assigned to you. Default 'any'"
+          "description": "'me': your assignments; 'unassigned': tasks with no assignee. Default 'any'"
         },
         "date_from": {
           "type": "string",
@@ -5278,6 +5279,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "User id to add or remove for the member actions"
+        },
+        "reassign_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
         },
         "matter_number_pattern": {
           "type": "string",
@@ -7759,10 +7765,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "assignee": {
           "enum": [
             "me",
-            "any"
+            "any",
+            "unassigned"
           ],
           "type": "string",
-          "description": "'me': only tasks assigned to you. Default 'any'"
+          "description": "'me': your assignments; 'unassigned': tasks with no assignee. Default 'any'"
         },
         "date_from": {
           "type": "string",

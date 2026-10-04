@@ -279,7 +279,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       email: `${userId}@example.com`,
     });
     await testDb.insert(member).values({
-      id: mintAuthProviderId<"member">(),
+      id: Bun.randomUUIDv7(),
       organizationId,
       userId,
       role: "owner",
@@ -1468,7 +1468,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         email: `${reviewer}@example.test`,
       });
       await testDb.insert(member).values({
-        id: mintAuthProviderId<"member">(),
+        id: Bun.randomUUIDv7(),
         organizationId,
         userId: reviewer,
         role: "member",
@@ -1597,7 +1597,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       email: `${departed}@example.test`,
     });
     await testDb.insert(member).values({
-      id: mintAuthProviderId<"member">(),
+      id: Bun.randomUUIDv7(),
       organizationId,
       userId: departed,
       role: "member",
