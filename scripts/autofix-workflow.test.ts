@@ -42,7 +42,7 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).not.toContain("contents: write");
     expect(workflow).not.toContain("secrets.");
 
-    expect(workflow).toContain("github.actor == 'dependabot[bot]'");
+    expect(workflow).toContain("github.actor != 'autofix-ci[bot]'");
     expect(workflow).toContain(
       "github.event.pull_request.user.login == 'dependabot[bot]'",
     );

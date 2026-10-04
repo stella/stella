@@ -1479,7 +1479,7 @@ jobs:
             required=$(bun scripts/check-tauri-package-alignment.ts --requires-check "${files[@]}")
           fi
           if [[ "$required" == true ]]; then
-            bun test scripts/check-tauri-package-alignment.test.ts
+            bun test scripts/check-tauri-package-alignment.test.ts scripts/fix-tauri-package-alignment.test.ts
             bun scripts/check-tauri-package-alignment.ts
           fi
 

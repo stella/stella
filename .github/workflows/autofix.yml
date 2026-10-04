@@ -1,9 +1,7 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
-# No `paths` filter: each job scopes itself. The Dependabot job runs only on
-# dependabot/bun/* heads, which always carry a bun.lock or
-# packages/*/package.json change, and the regeneration job reads the whole
-# source tree.
+# No `paths` filter: each job scopes itself. Dependency updates and ordinary
+# same-repository PRs share the Tauri alignment fixer and existing App push.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -17,12 +15,13 @@ permissions:
 
 jobs:
   dependabot-bun-autofix:
-    name: Autofix Dependabot Bun update
+    name: Autofix Dependabot dependency update
     if: >-
-      github.actor == 'dependabot[bot]'
+      github.actor != 'autofix-ci[bot]'
       && github.event.pull_request.user.login == 'dependabot[bot]'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
+      && (startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
+          || startsWith(github.event.pull_request.head.ref, 'dependabot/cargo/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -30,6 +29,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: stable
 
     steps:
       - name: Checkout Dependabot head
@@ -64,6 +64,22 @@ jobs:
           scripts/fix-resolution-ranges.ts
           scripts/json-text-edit.ts
           scripts/resolution-ranges.ts
+          scripts/bun-lock-text.ts
+          scripts/check-tauri-package-alignment.ts
+          scripts/fix-tauri-package-alignment.ts
+
+      - name: Align Tauri counterparts
+        id: tauri
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/tauri-paths"
+          mapfile -t paths < "$RUNNER_TEMP/tauri-paths"
+          required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
+          if [[ "$required" == true ]]; then
+            bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
+          fi
 
       # A bump can move a dependent's declared floor above a root `resolutions`
       # pin. bun applies the pin anyway, so the graph installs and only breaks
@@ -96,6 +112,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -105,10 +122,16 @@ jobs:
             exit 1
           fi
 
-          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
+          IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
+          tauri_excludes=()
+          for path in "${tauri_paths[@]}"; do
+            [[ -n "$path" ]] || continue
+            tauri_excludes+=(":(exclude,literal)$path")
+          done
+          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH" "${tauri_excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Autofix changed files outside bun.lock, package.json and $DEPENDABOT_CHANGESET_PATH."
+            echo "::error::Autofix changed files outside dependency repair outputs."
             git status --short
             exit 1
           fi
@@ -126,14 +149,14 @@ jobs:
       - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
-          commit-message: "chore: autofix Dependabot Bun update"
+          commit-message: "chore: autofix dependency update"
 
   regenerate-scope:
     name: Scope autofixes
     # Same-repository pull requests only: the generators run the pull
     # request's own code, and the result lands on that pull request's branch,
-    # which its author can already push to. Fork and Dependabot pull requests
-    # keep the CI drift guards alone.
+    # which its author can already push to. Dependabot uses the dependency
+    # job above; fork pull requests keep the CI drift guards alone.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
       && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -220,6 +243,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: stable
 
     steps:
       - name: Checkout pull request head
@@ -247,6 +271,24 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
+
+      - name: Align Tauri counterparts
+        id: tauri
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
+            scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
+            mapfile -d '' -t paths < "$RUNNER_TEMP/autofix-changed-paths"
+            required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
+            if [[ "$required" == true ]]; then
+              bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
+            fi
+          else
+            echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
+          fi
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -302,6 +344,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
+          TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -320,6 +363,7 @@ jobs:
 
           mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
+          IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
           excludes=()
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
@@ -330,6 +374,10 @@ jobs:
           for path in "${generated[@]}"; do
             [[ -n "$path" ]] || continue
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
+          done
+          for path in "${tauri_paths[@]}"; do
+            [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,literal)$path")
           done
 
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
