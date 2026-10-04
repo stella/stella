@@ -13,13 +13,14 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   documentTypes,
   playbookDefinitions,
   playbookDefinitionVersions,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createScopedDb } from "@/api/db/scoped";
 import deleteDocumentType from "@/api/handlers/document-types/delete";
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "@/api/handlers/playbooks/assert-document-type";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
@@ -45,6 +46,7 @@ import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   createTestIds,
   setupRlsTestData,
@@ -80,7 +82,11 @@ const orgContext = (organizationId = ids.orgA) => {
     recordAuditEvent: createAuditRecorder(bindings),
     request: bindings.request,
     route: "/playbooks",
-    safeDb: createSafeDb(testDb, [], organizationId, ids.userA1),
+    safeDb: toSafeDbMock(
+      asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [], organizationId, ids.userA1),
+      ),
+    ),
     session: { activeOrganizationId: organizationId },
     user: { id: ids.userA1 },
   });
