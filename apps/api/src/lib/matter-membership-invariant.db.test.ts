@@ -324,7 +324,7 @@ describe("matter membership requires organization membership", () => {
       }),
     );
     await assertProperty(
-      "matter-membership.organization-reference",
+      "no sequence of membership changes leaves a matter member outside the organization",
       fc.asyncProperty(
         fc.array(operation, { minLength: 1, maxLength: 12 }),
         async (operations) => {
