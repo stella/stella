@@ -216,20 +216,21 @@ export const createCreateWorkspaceDocumentTools = ({
       access,
       safeDb: safeDbFromScoped(scopedDb),
     });
-    const created = Result.isError(authorized)
-      ? Result.err(authorized.error)
-      : await createEntity({
-          scopedDb,
-          organizationId,
-          workspaceId: authorized.value.operation.workspaceId,
-          userId,
-          recordAuditEvent,
-          buffer: docxResult.value,
-          fileName,
-          mimeType: DOCX_MIME_TYPE,
-          parentId: null,
-        });
+    if (Result.isError(authorized)) {
+      throw toChatToolError(authorized.error);
+    }
 
+    const created = await createEntity({
+      scopedDb,
+      organizationId,
+      workspaceId: authorized.value.operation.workspaceId,
+      userId,
+      recordAuditEvent,
+      buffer: docxResult.value,
+      fileName,
+      mimeType: DOCX_MIME_TYPE,
+      parentId: null,
+    });
     if (Result.isError(created)) {
       throw toChatToolError(created.error);
     }
