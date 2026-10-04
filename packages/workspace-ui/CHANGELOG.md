@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.11.21
+
+### Patch Changes
+
+- Updated dependencies [[`b8a1d41`](https://github.com/stella/stella/commit/b8a1d41da558c4c148fd696a714d56621ecb2db3)]:
+  - @stll/money@0.3.0
+  - @stll/calculations@0.1.2
+
 ## 0.11.20
 
 ### Patch Changes
