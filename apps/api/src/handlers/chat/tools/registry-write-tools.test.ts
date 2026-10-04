@@ -50,6 +50,7 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     refRegistry: createChatRefRegistry(),
     registryDispatch: BUSINESS_REGISTRY_DISPATCH,
     requestWorkspaceId: null,
+    resolveCurrentMembership: async () => ({ role: "owner" }),
     safeDb: unusedSafeDb,
     scopedDb: unusedScopedDb,
     thirdPartyBoundary: { type: "raw" },

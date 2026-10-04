@@ -59,7 +59,7 @@ export const MEMBER_RUN_SCHEDULER_TASKS = [
  *   or the platform's own work and returns nothing to a member that the
  *   member could not already read.
  */
-type QueueAuthority = "member-run" | "org-automation";
+export type QueueAuthority = "member-run" | "org-automation";
 
 export type QueueAuthorityEntry = {
   authority: QueueAuthority;

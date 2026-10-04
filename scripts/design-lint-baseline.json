@@ -869,7 +869,6 @@
     "apps/api/src/handlers/time-entries/batch/update.ts": 1,
     "apps/api/src/handlers/time-entries/split.ts": 1,
     "apps/api/src/handlers/time-entries/update.ts": 1,
-    "apps/api/src/handlers/uploads/entity-version.ts": 1,
     "apps/api/src/handlers/work-obligations/update.ts": 2,
     "apps/api/src/handlers/workspaces/create.ts": 1,
     "apps/api/src/handlers/workspaces/duplicate.ts": 3,
