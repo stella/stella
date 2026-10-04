@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
-import type { ElysiaCustomStatusResponse } from "elysia";
+import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -11,7 +10,6 @@ import {
   isWholeEntryIdentifier,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
-import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
@@ -44,6 +42,7 @@ import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
+import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
@@ -175,14 +174,12 @@ const expandCaseLawSearch = createSafeRootHandler(
     safeDb,
     session,
     user,
-  }): SafeHandlerGenerator<
-    ExpansionAnswer | ElysiaCustomStatusResponse<503, PublicCountryUnavailable>
-  > {
+  }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });
     if (countryRead.kind === "unavailable") {
-      return Result.ok(status(503, countryRead.response));
+      return Result.ok(countryRead.answer);
     }
     if (countryRead.kind === "unreadable") {
       return yield* Result.err(
