@@ -320,6 +320,8 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     "Show the user each redline's openUrl or download link.",
   inputSchema: COMPARE_DOCUMENTS_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "compare_documents",
   scope: "stella:documents_write",

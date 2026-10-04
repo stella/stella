@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
@@ -34,6 +33,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 
@@ -188,7 +188,7 @@ export const MessageExportMenu = ({
 
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("common.export.failed"), type: "error" });
+      notifyUserError(result.error, t("common.export.failed"));
       return;
     }
 

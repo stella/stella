@@ -70,9 +70,13 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+  "$TURBO_ROOT$/scripts/derived-attributes.ts",
+  "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+  "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

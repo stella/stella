@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
+import {
+  normalizeMcpConnectorUrl,
+  mcpConnectorUrlIdentity,
+} from "@/api/handlers/mcp-connectors/url-normalization";
+
+test("normalizes repeated root slashes consistently", () => {
+  expect(normalizeMcpConnectorUrl("https://mcp.example.com///").unwrap()).toBe(
+    "https://mcp.example.com",
+  );
+});
 
 describe("mcpConnectorUrlIdentity scheme handling", () => {
   test("defaults a bare host to https", () => {

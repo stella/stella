@@ -8,12 +8,16 @@ import {
   readSkillDisplayName,
 } from "@stll/skills";
 
+import { member, user } from "@/api/db/auth-schema";
 import {
+  agentSkillRevisions,
   agentSkills,
   AGENT_SKILL_SCOPES,
+  type AgentSkillOrigin,
   type AgentSkillScope,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -28,6 +32,7 @@ import {
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const listSkillsQuerySchema = t.Object({
   limit: t.Optional(
@@ -45,9 +50,13 @@ const config = {
     "plus your own private ones, enabled first and then by scope and name, " +
     "with cursor pagination, alongside the skills shipped with stella " +
     "(`builtIn`). Instruction bodies come back only for skills that carry a slash " +
-    "command; read one skill in full with skills.get. Also reports whether " +
-    "you may manage team skills.",
+    "command; read one skill in full with skills.get. Each installed skill " +
+    "carries `lastEdit`: who wrote its newest revision and when, or " +
+    "`stella` for an unedited stella starter skill, `unattributed` for other system " +
+    "writes and former members. Also reports " +
+    "whether you may manage team skills.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
@@ -94,9 +103,65 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
   return { enabled, scope, name, id: brandPersistedAgentSkillId(id) };
 };
 
+/**
+ * Who wrote a skill's newest revision. `stella` is a starter skill (origin
+ * `default`) whose newest revision is a system write that still holds the
+ * starter body, so no member has edited it; an authorless revision with
+ * another body was written by an account since deleted. `unattributed` covers other system writes, deleted accounts, and authors
+ * who have left the organization: names resolve through the membership so they
+ * never leak across organizations. `null` means the skill has no recorded
+ * revision.
+ */
+type SkillLastEdit =
+  | {
+      type: "user";
+      user: { id: string; name: string; image: string | null };
+      at: Date;
+    }
+  | { type: "stella"; at: Date }
+  | { type: "unattributed"; at: Date };
+
+type ReadSkillLastEditInput = {
+  at: Date | null;
+  origin: AgentSkillOrigin;
+  authorId: string | null;
+  isStarterBody: boolean | null;
+  editorId: string | null;
+  editorName: string | null;
+  editorImage: string | null;
+};
+
+const readSkillLastEdit = ({
+  at,
+  authorId,
+  editorId,
+  editorName,
+  editorImage,
+  isStarterBody,
+  origin,
+}: ReadSkillLastEditInput): SkillLastEdit | null => {
+  if (at === null) {
+    return null;
+  }
+  if (authorId === null) {
+    return origin === "default" && isStarterBody === true
+      ? { type: "stella", at }
+      : { type: "unattributed", at };
+  }
+  // An author with no membership here has left the organization.
+  if (editorId === null || editorName === null) {
+    return { type: "unattributed", at };
+  }
+  return {
+    type: "user",
+    user: { id: editorId, name: editorName, image: editorImage },
+    at,
+  };
+};
+
 const listSkills = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, memberRole, query }) {
+  async function* ({ safeDb, session, user: currentUser, memberRole, query }) {
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.agentSkillsPageSizeDefault,
     );
@@ -105,7 +170,7 @@ const listSkills = createSafeRootHandler(
       eq(agentSkills.organizationId, session.activeOrganizationId),
       or(
         eq(agentSkills.scope, AGENT_SKILL_SCOPES[0]), // "team"
-        eq(agentSkills.userId, user.id),
+        eq(agentSkills.userId, currentUser.id),
       ),
     );
     const conditions = [visibilityFilter];
@@ -147,8 +212,42 @@ const listSkills = createSafeRootHandler(
     }
 
     const installedRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb((tx) => {
+        // The newest revision per skill: one probe of the unique
+        // (skill_id, revision_number) index for each row on the page.
+        const latestRevision = tx
+          .select({
+            createdBy: agentSkillRevisions.createdBy,
+            // A revision absorbs its author's consecutive saves, so its
+            // update time is when the body last changed.
+            updatedAt: agentSkillRevisions.updatedAt,
+            // Compared here so the body never leaves the database.
+            isStarterBody: sql<boolean>`coalesce(
+              ${agentSkillRevisions.body} = ${sqlCaseFragment({
+                operand: sql`${agentSkills.slug}`,
+                branches: [...DEFAULT_SKILL_BODY_BY_SLUG].map(
+                  ([slug, body]) => sql`when ${slug} then ${body}`,
+                ),
+                fallback: sql`null`,
+              })},
+              false
+            )`.as("is_starter_body"),
+          })
+          .from(agentSkillRevisions)
+          .where(
+            and(
+              eq(agentSkillRevisions.skillId, agentSkills.id),
+              eq(
+                agentSkillRevisions.organizationId,
+                session.activeOrganizationId,
+              ),
+            ),
+          )
+          .orderBy(desc(agentSkillRevisions.revisionNumber))
+          .limit(1)
+          .as("latest_revision");
+
+        return tx
           .select({
             id: agentSkills.id,
             scope: agentSkills.scope,
@@ -171,8 +270,23 @@ const listSkills = createSafeRootHandler(
             `.as("body"),
             userId: agentSkills.userId,
             createdAt: agentSkills.createdAt,
+            lastEditAt: latestRevision.updatedAt,
+            lastEditAuthorId: latestRevision.createdBy,
+            lastEditIsStarterBody: latestRevision.isStarterBody,
+            editorId: user.id,
+            editorName: user.name,
+            editorImage: user.image,
           })
           .from(agentSkills)
+          .leftJoinLateral(latestRevision, sql`true`)
+          .leftJoin(
+            member,
+            and(
+              eq(member.userId, latestRevision.createdBy),
+              eq(member.organizationId, session.activeOrganizationId),
+            ),
+          )
+          .leftJoin(user, eq(user.id, member.userId))
           .where(and(...conditions))
           .orderBy(
             desc(agentSkills.enabled),
@@ -180,8 +294,8 @@ const listSkills = createSafeRootHandler(
             asc(agentSkills.name),
             asc(agentSkills.id),
           )
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+      }),
     );
     const installedPage = createCursorPage({
       rows: installedRows,
@@ -207,7 +321,29 @@ const listSkills = createSafeRootHandler(
         enabled: true,
         resourceCount: listSkillResources(skill.name).length,
       })),
-      installed: installedPage.items,
+      installed: installedPage.items.map(
+        ({
+          lastEditAt,
+          lastEditAuthorId,
+          lastEditIsStarterBody,
+          editorId,
+          editorName,
+          editorImage,
+          ...skill
+        }) => ({
+          ...skill,
+          lastEdit: readSkillLastEdit({
+            at: lastEditAt,
+            authorId: lastEditAuthorId,
+            // Null only when the skill has no revision, which `at` reports.
+            isStarterBody: lastEditIsStarterBody,
+            editorId,
+            editorName,
+            editorImage,
+            origin: skill.origin,
+          }),
+        }),
+      ),
       limit: installedPage.limit,
       nextCursor: installedPage.nextCursor,
     });

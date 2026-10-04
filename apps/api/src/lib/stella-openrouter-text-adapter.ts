@@ -28,6 +28,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { isRecord } from "@/api/lib/type-guards";
 
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
 type OpenRouterTextOptions = Parameters<
@@ -62,6 +63,62 @@ const documentFilename = (part: ContentPart): string | undefined => {
  * remains on the stable upstream adapter.
  */
 export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRouterModel> {
+  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+    super(config, model);
+    const sendRequest = this.orClient.chat.send.bind(this.orClient.chat);
+    type SendRequest = Parameters<typeof sendRequest>[0];
+    type SendOptions = Parameters<typeof sendRequest>[1];
+    type SendResponse = Awaited<ReturnType<typeof sendRequest>>;
+    type SendStreamResponse = Extract<SendResponse, AsyncIterable<unknown>>;
+    function sendWithRequestId(
+      request: SendRequest & { chatRequest: { stream?: false | undefined } },
+      options?: SendOptions,
+    ): Promise<Exclude<SendResponse, SendStreamResponse>>;
+    function sendWithRequestId(
+      request: SendRequest & { chatRequest: { stream: true } },
+      options?: SendOptions,
+    ): Promise<SendStreamResponse>;
+    function sendWithRequestId(
+      request: SendRequest,
+      options?: SendOptions,
+    ): Promise<SendResponse>;
+    async function sendWithRequestId(
+      request: SendRequest,
+      options?: SendOptions,
+    ) {
+      const result = await Result.tryPromise({
+        try: async () => await sendRequest(request, options),
+        catch: (error) => {
+          if (!isRecord(error) || !(error["rawResponse"] instanceof Response)) {
+            return error;
+          }
+          const requestId =
+            error["rawResponse"].headers.get("x-request-id") ??
+            error["rawResponse"].headers.get("request-id");
+          if (requestId === null) {
+            return error;
+          }
+          // The adapter carries provider-owned evidence through rawEvent.
+          // Project the request id here, while the SDK response is available.
+          Object.defineProperty(error, "rawEvent", {
+            configurable: true,
+            value: {
+              requestId,
+              status: readProviderStatus(error)?.status,
+              cause: error["rawEvent"] ?? error["error"] ?? error["metadata"],
+            },
+          });
+          return error;
+        },
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      return result.value;
+    }
+    this.orClient.chat.send = sendWithRequestId;
+  }
+
   // Some routes treat every declared tool field as one to fill, and write ""
   // or invented text into an optional one. On the wire an optional field
   // also admits null, so the model can say "not set"; the stream contract

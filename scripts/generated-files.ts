@@ -441,6 +441,7 @@ export const GENERATORS = [
       "apps/api/.env.example",
       "apps/web/.env.example",
       "apps/collab/.env.example",
+      "packages/runtime-mode/src/secret-examples.generated.ts",
       "apps/web/build-env-contract.json",
     ],
     inputs: [

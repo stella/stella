@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
@@ -15,6 +15,7 @@ const readTaskById = createSafeHandler(
       "events, its child tasks with their assignees, its links in both " +
       "directions, and who created it.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",
     params: readTaskByIdParamsSchema,

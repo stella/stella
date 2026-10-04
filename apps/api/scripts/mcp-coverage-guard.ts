@@ -80,14 +80,13 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  * globs). The `mcp` disposition on each inline endpoint stays typecheck-enforced;
  * only enumeration into the ratchet is waived.
  */
-const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
+export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // The subject-gate wrapper: its one `createSafePublicHandler` call builds
   // the gated definition returned to callers, so it is a factory, not an
   // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
   // in their own files.
   "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
   "apps/api/src/handlers/case-law/public-routes.ts": 11,
-  "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/legislation/public-routes.ts": 11,
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.

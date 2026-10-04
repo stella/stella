@@ -89,6 +89,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
   providerSafeJsonSchemaOptionsForTanStackProvider,
@@ -106,6 +107,7 @@ import {
   buildCreatedDocumentToolOutput,
   createWorkspaceTools,
 } from "./workspace-tools";
+import type { ChatFieldWriter } from "./workspace-tools";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -130,6 +132,13 @@ const unusedSafeDb: SafeDb = async () => {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+const activeMatterFieldWriter: ChatFieldWriter = {
+  authority: sessionMemberRole("owner"),
+  recordAuditEvent: noopAuditRecorder,
+  userId,
+  workspaceStatusById: new Map([[workspaceId, "active"]]),
+};
 
 const getChatTools = (
   props: Omit<
@@ -284,7 +293,7 @@ const buildFullCoverageChatTools = (
   return getChatTools({
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId,
     requestWorkspaceId: workspaceId,
     thirdPartyBoundary,
@@ -376,7 +385,7 @@ const autoApplyBaseArgs = {
 const buildAutoApplySuggestChangesChatTools = () =>
   getChatTools({
     ...autoApplyBaseArgs,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     editApplyMode: "auto",
     workspaceStatusById: new Map([[workspaceId, "active"]]),
   });
@@ -638,6 +647,7 @@ describe("chat tool schemas", () => {
     expect(() =>
       createWorkspaceTools({
         allowedWorkspaceIds: [workspaceId],
+        fieldWriter: activeMatterFieldWriter,
         refRegistry: createChatRefRegistry(),
         scopedDb: unusedScopedDb,
       }),
@@ -656,17 +666,24 @@ describe("chat tool schemas", () => {
     const scopedDb = asTestRaw<ScopedDb>(
       async (run: (tx: unknown) => Promise<unknown>) =>
         await run({
+          select: () => {
+            entityLookups += 1;
+            return {
+              from: () => ({
+                where: () => ({
+                  for: async () => [
+                    {
+                      currentVersionId: "88888888-8888-4888-8888-888888888888",
+                      id: entityId,
+                      kind: "document",
+                      readOnly: true,
+                    },
+                  ],
+                }),
+              }),
+            };
+          },
           query: {
-            entities: {
-              findFirst: async () => {
-                entityLookups += 1;
-                return {
-                  currentVersionId: "88888888-8888-4888-8888-888888888888",
-                  id: entityId,
-                  readOnly: true,
-                };
-              },
-            },
             properties: {
               findFirst: async () => ({
                 content: { type: "date", version: 1 },
@@ -678,6 +695,7 @@ describe("chat tool schemas", () => {
     );
     const tool = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry,
       scopedDb,
     })["update-entity-fields"];
@@ -756,6 +774,7 @@ describe("chat tool schemas", () => {
     const registry = createChatRefRegistry();
     const tools = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry: registry,
       scopedDb: unusedScopedDb,
     });
@@ -822,7 +841,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -893,7 +912,7 @@ describe("chat tool schemas", () => {
     const baseArgs = {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner" as const,
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" as const },
@@ -933,7 +952,7 @@ describe("chat tool schemas", () => {
     const baseArgs = {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1095,7 +1114,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1155,7 +1174,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1201,7 +1220,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2232,7 +2251,7 @@ describe("chat tool schemas", () => {
     test("registers create_matter_document for a role with entity:create in an active matter", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
       expect(tools).toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
@@ -2245,10 +2264,28 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document for a role without entity:create", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "intern",
+        memberRole: sessionMemberRole("intern"),
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
+    });
+
+    test("offers field updates only to a role that may edit documents", () => {
+      const statuses = new Map([[workspaceId, "active" as const]]);
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: sessionMemberRole("owner"),
+          workspaceStatusById: statuses,
+        }),
+      ).toHaveProperty("update-entity-fields");
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: sessionMemberRole("intern"),
+          workspaceStatusById: statuses,
+        }),
+      ).not.toHaveProperty("update-entity-fields");
     });
 
     // `toolWorkspaceIds` includes archived matters (only "deleting" is
@@ -2257,7 +2294,7 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document for an archived matter", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
@@ -2266,7 +2303,7 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document when no workspace status is known", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
@@ -2314,7 +2351,7 @@ describe("chat tool schemas", () => {
       expectApplyVariant(
         getChatTools({
           ...autoApplyBaseArgs,
-          memberRole: "owner",
+          memberRole: sessionMemberRole("owner"),
           editApplyMode: "auto",
           workspaceStatusById: new Map([[workspaceId, "active"]]),
         }),
@@ -2327,7 +2364,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes for a role without entity:update", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "intern",
+        memberRole: sessionMemberRole("intern"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2337,7 +2374,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes for an archived matter", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
@@ -2348,7 +2385,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes when no workspace status is known", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
       });
       expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
@@ -2358,7 +2395,7 @@ describe("chat tool schemas", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
         activeFile: { entityId: autoApplyActiveFile.entityId },
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2372,7 +2409,7 @@ describe("chat tool schemas", () => {
           entityId: autoApplyActiveFile.entityId,
           supportsDocxEdits: true,
         },
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2385,7 +2422,7 @@ describe("chat tool schemas", () => {
     describe("mutual exclusion between the apply and queue variants", () => {
       const mutualExclusionArgs = {
         ...autoApplyBaseArgs,
-        memberRole: "owner" as const,
+        memberRole: sessionMemberRole("owner"),
         hasActiveDocxEditClient: true,
         workspaceStatusById: new Map([[workspaceId, "active" as const]]),
       };
@@ -2452,7 +2489,7 @@ describe("registry write tool approval policy", () => {
     getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2541,7 +2578,7 @@ describe("registry write tool approval policy", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2582,13 +2619,13 @@ describe("a subagent's code-mode script", () => {
   test("is told a tool its projection dropped is unavailable, not that it can call it directly", async () => {
     const full = getChatTools({
       ...autoApplyBaseArgs,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       editApplyMode: "manual",
       delegationDepth: 1,
     });
     const tools = getChatTools({
       ...autoApplyBaseArgs,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       editApplyMode: "manual",
       delegationDepth: 1,
       projectToolSet: (registered) =>

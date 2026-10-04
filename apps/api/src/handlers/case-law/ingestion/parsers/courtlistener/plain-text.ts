@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Unmarked opinion text: the `plain_text` column, and the preformatted
  * bodies CourtListener serves as `<pre>` runs with citation links between
@@ -18,6 +19,7 @@ import { type AnyNode, isTag, isText } from "domhandler";
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
+import { isExcludedHtmlTag, visibleHtmlText } from "../shared-inlines";
 import { conservesText, createUnitBuilder, graphicsIn } from "./blocks";
 import type { FormatInput } from "./harvard-xml";
 import { unitClass } from "./opinion-class";
@@ -194,13 +196,11 @@ export const parsePlainText = (input: FormatInput): FormatParse =>
 /** The elements a preformatted body is made of: text runs and citation links. */
 const PREFORMATTED_PARTS = new Set(["pre", "span", "a"]);
 
-const IGNORED = new Set(["script", "style"]);
-
 const textOf = (node: AnyNode): string => {
   if (isText(node)) {
     return node.data;
   }
-  if (!isTag(node) || IGNORED.has(node.name.toLowerCase())) {
+  if (!isTag(node) || isExcludedHtmlTag(node.name.toLowerCase())) {
     return "";
   }
   if (node.name.toLowerCase() === "br") {
@@ -226,7 +226,7 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
       (part) =>
         isTag(part) &&
         !PREFORMATTED_PARTS.has(part.name.toLowerCase()) &&
-        !IGNORED.has(part.name.toLowerCase()),
+        !isExcludedHtmlTag(part.name.toLowerCase()),
     );
   if (foreign) {
     return null;
@@ -246,13 +246,12 @@ export const parsePreformatted = (input: FormatInput): FormatParse | null => {
   // The retention check reads the source through cheerio's own text, not
   // through the walk above.
   const visible = cheerio.load(input.text, null, false);
-  visible("script, style").remove();
   return parseLayoutText(
     input,
     $.root().contents().toArray().map(textOf).join(""),
     {
       publisherLinks: $("a[href]").length,
-      visibleText: visible.root().text(),
+      visibleText: visibleHtmlText(visible.root()),
     },
   );
 };

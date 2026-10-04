@@ -10,6 +10,7 @@ import {
   managedProviderUnavailable,
   fetchManagedProviderCatalog,
 } from "@/api/lib/chat/provider-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -27,7 +28,7 @@ export const checkManagedOpenRouterModel = (
   model: string,
   residency: ManagedAIResidency,
 ) => {
-  if (!env.FEATURE_MANAGED_PROVIDER_CHECKS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_MANAGED_PROVIDER_CHECKS")) {
     return Result.ok(undefined);
   }
   return (
@@ -39,7 +40,7 @@ export const checkManagedOpenRouterModel = (
 export const startManagedProviderChecks = async (
   schedule = startNonOverlappingInterval,
 ) => {
-  if (!env.FEATURE_MANAGED_PROVIDER_CHECKS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_MANAGED_PROVIDER_CHECKS")) {
     return async () => await Promise.resolve(undefined);
   }
   const intervalMs = env.MANAGED_PROVIDER_CHECK_INTERVAL_MS;

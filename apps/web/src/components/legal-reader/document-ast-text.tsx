@@ -36,6 +36,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { forceReflow } from "@/lib/utils";
 
 import "./reader.css";
@@ -848,7 +849,7 @@ const BlockPermalink = ({
     const copied = await copyToClipboard(url.href);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });

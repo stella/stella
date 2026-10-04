@@ -60,6 +60,7 @@ export const STATUS_COLUMNS = {
   legalListVerificationRuns: ["status"],
   legislationDocuments: ["status"],
   legislationIndexJobs: ["status"],
+  mcpConnectorAuthorizationReviews: ["status"],
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
   officeFileEvidence: ["status"],

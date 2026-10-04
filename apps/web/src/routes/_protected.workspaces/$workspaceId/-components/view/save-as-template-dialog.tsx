@@ -18,6 +18,7 @@ import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ViewLayout } from "@/lib/types";
 import { useCreateViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
 
@@ -64,11 +65,8 @@ export const SaveAsTemplateDialog = ({
           });
           onOpenChange(false);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToSaveTemplate"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToSaveTemplate"));
         },
       },
     );

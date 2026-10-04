@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Számsorozat hozzáadása",
       "advance": "Előleg",
+      "allSellers": "Minden eladó",
       "archiveConfirm": "Archiválja ezt a számsorozatot? Új bizonylatokhoz többé nem lesz elérhető.",
       "creditNote": "Jóváírás",
       "default": "Alapértelmezett sorozat",
@@ -562,6 +563,9 @@
       "preview": "Következő szám",
       "previewAllocated": "Ez a szám már ki van osztva.",
       "previewHelp": "Az előnézet a mentett sablont használja, és nem foglal le számot.",
+      "sellerProfile": "Eladói profil",
+      "sellerUnavailable": "Az eladó archivált vagy nem érhető el",
+      "sellerUnavailableHelp": "Ez az eladó archivált vagy nem érhető el. Tartsa meg a hozzárendelést, vagy válasszon másik eladót.",
       "setDefault": "Beállítás alapértelmezett sorozatként",
       "title": "Számsorozatok"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Még nincsenek készségek",
       "pinnedMatters": "Kitűzött ügyek",
       "recentChats": "Legutóbbi csevegések",
+      "skillEditedBy": "{name} szerkesztette · {time}",
       "skills": "Készségek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
+    "threadFiles": {
+      "title": "Fájlok ebben a csevegésben"
+    },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
@@ -1566,6 +1574,7 @@
       "socialSecurityNumber": "Társadalombiztosítási szám",
       "taxIdentificationNumber": "Adóazonosító"
     },
+    "approve": "Jóváhagyás",
     "archive": "Archiválás",
     "ask": "Kérdezés",
     "askAI": "AI megkérdezése",
@@ -1849,12 +1858,14 @@
   },
   "consent": {
     "allow": "Engedélyezés",
+    "appIdentity": "Alkalmazás azonosítása",
     "completeSetup": "Beállítás befejezése",
     "defaultClientName": "Egy alkalmazás",
     "description": "A(z) {clientName} hozzá szeretne férni a stella munkaterületéhez",
     "error": "Hiba történt. Kérjük, próbálja újra.",
     "missingJurisdictions": "A stella-szervezete még nem állította be a praxis joghatóságait. Egyes joghatóságfüggő eszközök addig nem lesznek elérhetők, amíg be nem fejezi a beállítást.",
     "permissions": "Ez lehetővé teszi az alkalmazás számára, hogy:",
+    "redirectDestination": "Átirányítás célja",
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
@@ -1875,7 +1886,8 @@
     "scopeSkills": "A mentett stella-készségek használata",
     "scopeTemplates": "Dokumentumsablonok listázása, kitöltése és létrehozása",
     "scopeTemplatesAnonymized": "A dokumentumsablonok anonimizált változatainak listázása, kitöltése és létrehozása",
-    "title": "Hozzáférés engedélyezése"
+    "title": "Hozzáférés engedélyezése",
+    "unverifiedApp": "Nem ellenőrzött alkalmazás"
   },
   "contacts": {
     "alsoPartyIn": "Félként is megjelenik {count, plural, one {# másik ügyben} other {# másik ügyben}}",
@@ -2258,10 +2270,12 @@
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
+      "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
+      "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
@@ -3393,6 +3407,8 @@
         "none": "Nincs hitelesítés",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Jóváhagyás előtt ellenőrizze az engedélyezési kiszolgálót és a végpontok eredetét.",
+      "authorizationServer": "Engedélyezési kiszolgáló",
       "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
       "connectedToast": "MCP csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
@@ -3403,9 +3419,11 @@
       "emptyDescription": "A válogatott jogi integrációk itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
       "emptyTitle": "Még nincsenek integrációk",
       "enable": "Bekapcsolás",
+      "endpointOrigins": "Végpontok eredete",
       "errorDescription": "Az integrációt nem sikerült frissíteni.",
       "errorTitle": "MCP sikertelen",
       "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a csevegéshez, amelyekkel az AI dolgozhat.",
+      "needsReapproval": "Új jóváhagyás szükséges",
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
@@ -4817,6 +4835,7 @@
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az AI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiConditionsUndecided": "Az AI nem tudta eldönteni ezeket a feltételeket, ezért a hozzájuk tartozó részeket úgy töltötte ki, mintha nem teljesülnének: {list}",
     "aiDecidedConditions": "Az AI dönti el",
     "aiFieldsNotDrafted": "Az AI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",
@@ -4908,6 +4927,7 @@
     "directiveFor": "Ciklus: {expression}",
     "directiveIf": "Ha: {expression}",
     "discoveryFailed": "Nem sikerült elemezni a sablont",
+    "documentCreatedIncomplete": "A dokumentum létrejött, de a kitöltés hiányos",
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",
     "downloadPdf": "Letöltés PDF-ként",
@@ -5003,6 +5023,7 @@
     "saveFailed": "Nem sikerült menteni a sablont",
     "savedLookupFormats": "Mentett kimeneti formátumok",
     "searchTemplates": "Sablonok keresése…",
+    "structureErrorsInDocument": "Nem alkalmazható sablonutasítások: {count}. Ellenőrizze a dokumentumot.",
     "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {

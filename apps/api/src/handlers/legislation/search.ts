@@ -20,6 +20,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { projectLegislationSearchHit } from "@/api/handlers/legislation/search-response";
 import {
   PUBLIC_JURISDICTIONS_DESCRIPTION,
   searchLegislationBodySchema,
@@ -27,7 +28,7 @@ import {
   type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
@@ -1290,7 +1291,7 @@ export const searchLegislationHandler = async (
     : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   const response: Static<typeof searchLegislationSuccessResponseSchema> = {
-    items,
+    items: items.map(projectLegislationSearchHit),
     nextCursor,
     paginationOutcome,
     total: SEARCH_TOTAL_NOT_COUNTED,
@@ -1309,6 +1310,7 @@ const config = {
     "legislation.boe.search to query the Spanish BOE service directly " +
     "instead.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "search_legislation" },
   access: "read",
   body: searchLegislationBodySchema,

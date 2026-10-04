@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -436,7 +437,10 @@ describe("templateDecideConditionsLogic access", () => {
     expect(modelSignal?.aborted).toBe(false);
     controller.abort(new DOMException("Request cancelled", "AbortError"));
     expect(modelSignal?.aborted).toBe(true);
-    expect(result).rejects.toThrow("Request cancelled");
+    expect(await rejectionOf(result)).toHaveProperty(
+      "message",
+      expect.stringContaining("Request cancelled"),
+    );
   });
 });
 

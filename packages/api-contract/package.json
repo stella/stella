@@ -7,6 +7,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./currency-code": "./src/currency-code.ts",
+    "./limits": "./src/limits.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
@@ -27,6 +29,7 @@
     "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
+    "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
@@ -43,6 +46,7 @@
     "./legislation-publication": "./src/legislation-publication.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./provision-key": "./src/provision-key.ts",
     "./provision-link-status": "./src/provision-link-status.ts",
     "./safe-id": "./src/safe-id.ts",
     "./public-country-capability": "./src/public-country-capability.ts",
@@ -59,7 +63,9 @@
     "./statute-route": "./src/statute-route.ts",
     "./workflow-status": "./src/workflow-status.ts",
     "./statute-gazette": "./src/statute-gazette.ts",
+    "./statute-acts": "./src/statute-acts.ts",
     "./statute-aliases": "./src/statute-aliases.ts",
+    "./statute-query-capability": "./src/statute-query-capability.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts"
   },
   "scripts": {

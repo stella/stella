@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import approveMcpAuthorization from "@/api/handlers/mcp-connectors/approve-authorization";
 import connectMcpConnector from "@/api/handlers/mcp-connectors/connect";
 import createMcpConnection from "@/api/handlers/mcp-connectors/create-connection";
 import createMcpConnector from "@/api/handlers/mcp-connectors/create-connector";
@@ -50,6 +51,16 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
     params: connectMcpConnector.config.params,
     permissions: connectMcpConnector.config.permissions,
   })
+  .post(
+    "/connectors/:slug/approve-authorization",
+    approveMcpAuthorization.handler,
+    {
+      resourceSetUpdated: mcpConnectorRealtimeUpdates,
+      params: approveMcpAuthorization.config.params,
+      body: approveMcpAuthorization.config.body,
+      permissions: approveMcpAuthorization.config.permissions,
+    },
+  )
   .delete("/connectors/:slug", deleteMcpConnector.handler, {
     resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: deleteMcpConnector.config.params,

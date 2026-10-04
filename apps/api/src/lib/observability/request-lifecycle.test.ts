@@ -19,7 +19,10 @@ import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   DatabaseError,
@@ -54,6 +57,7 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;

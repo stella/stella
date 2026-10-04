@@ -7,7 +7,6 @@ import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
@@ -42,6 +41,7 @@ import {
   parseDataUrl,
   toDataUrl,
 } from "@/api/lib/data-url";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
@@ -54,8 +54,12 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
+  detectFileEncryption,
+  encryptedContentError,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   generateImageThumbnail,
-  shouldGenerateImageThumbnail,
+  isThumbnailableMimeType,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
@@ -650,6 +654,23 @@ const chatAttachmentStoreError = (
         cause: error,
       });
 
+/**
+ * No send mode can hand an encrypted attachment's content to the model: its
+ * text cannot be extracted and providers refuse the encrypted bytes. PDF and
+ * Office attachments share the detector's answer.
+ */
+const refuseEncryptedAttachment = async (
+  scanned: ScannedFile,
+): Promise<Result<void, HandlerError<422>>> => {
+  const detection = await detectFileEncryption({
+    mimeType: scanned.mimeType,
+    scanned,
+  });
+  return detection.encryption.encrypted
+    ? Result.err(encryptedContentError())
+    : Result.ok();
+};
+
 type UploadUserFileInput = {
   dependencies?: UploadUserFileDependencies;
   file: {
@@ -714,7 +735,7 @@ export const uploadUserFile = async ({
     });
 
     let organizationId: SafeId<"organization"> | undefined;
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       const thread = yield* Result.await(
         safeDb(
           async (tx) =>
@@ -762,6 +783,7 @@ export const uploadUserFile = async ({
 
     const scanned = scanResult.value;
     const scanWarnings = scanned.scanWarnings;
+    yield* Result.await(refuseEncryptedAttachment(scanned));
 
     const extractedText =
       file.mimeType === XLSX_MIME_TYPE
@@ -797,7 +819,8 @@ export const uploadUserFile = async ({
       key: string;
       placeholder: string;
     } | null = null;
-    if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
+    // Image types carry no encryption, so the type alone decides here.
+    if (isThumbnailableMimeType(file.mimeType)) {
       const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
         captureError(thumbnailResult.error, {
@@ -863,7 +886,9 @@ export const uploadUserFile = async ({
           timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
         },
       );
-    const writeSourceResult = env.FEATURE_FILE_USAGE_LIMITS
+    const writeSourceResult = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? await writeOrganizationFile({
           organizationId: organizationId ?? panic("Missing chat organization"),
           objectKey: s3Key,
@@ -932,7 +957,9 @@ export const uploadUserFile = async ({
             timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
           },
         );
-      const writeThumbnailResult = env.FEATURE_FILE_USAGE_LIMITS
+      const writeThumbnailResult = isDeploymentFeatureEnabled(
+        "FEATURE_FILE_USAGE_LIMITS",
+      )
         ? await writeOrganizationFile({
             organizationId:
               organizationId ?? panic("Missing chat organization"),

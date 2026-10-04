@@ -484,7 +484,11 @@ with the exact `sourceDocumentId`, source URL and a structured reason in
 metadata. Archive the verbatim listing row as `sourceRaw` when no detail
 payload exists, so future parsers can repair historical metadata without
 depending on a steady-state cursor rediscovering that slice. Transient network
-and server failures must fail the page so its cursor is retried.
+and server failures on a listed document's detail fail the page so its cursor
+is retried, for at most `UNAVAILABLE_CYCLES_BEFORE_MARKING` consecutive cycles
+(`apps/api/src/lib/errors/read-outcome.ts`); then the pipeline records the typed
+`unavailable` outcome, never downgrading a stored row, and the page advances.
+Reconciliation retries the read.
 When several publisher responses form one observation, archive all of them —
 listing, detail, abstract, export or equivalent — in a structured raw payload
 with the matching content type. Keeping only the preferred detail response

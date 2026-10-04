@@ -19,6 +19,8 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/long-running-connection",
   "@/api/db/rls",
   "@/api/db/root",
+  "@/api/db/registration-budget-schema",
+  "@/api/db/retention",
   "@/api/db/safe-db",
   "@/api/db/schema",
   "@/api/db/schema-validators",

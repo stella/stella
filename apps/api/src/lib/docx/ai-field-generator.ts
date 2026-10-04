@@ -257,6 +257,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    model,
     adapter: textAdapterWithNormalizedStops(model),
     messages,
     abortController,

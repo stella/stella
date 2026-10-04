@@ -14,7 +14,7 @@ type MarkdownFileViewerProps = {
 };
 
 export const MarkdownFileViewer = ({
-  draft: { setDraft, text, textQuery },
+  draft: { editorRef, isSaving, setDraft, text, textQuery },
   readOnly,
   tabId,
 }: MarkdownFileViewerProps) => {
@@ -52,7 +52,8 @@ export const MarkdownFileViewer = ({
       key={tabId}
       markdown={text}
       onMarkdownChange={setDraft}
-      readOnly={readOnly}
+      readOnly={readOnly || isSaving}
+      ref={editorRef}
     />
   );
 };

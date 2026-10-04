@@ -1,11 +1,14 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import type {
+  createEntityFromBuffer,
+  CreateEntityFromBufferResult,
+} from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
@@ -110,7 +113,8 @@ if (!databaseUrl || !enabled) {
                 entityVersionId: createSafeId<"entityVersion">(),
                 fieldId: createSafeId<"field">(),
                 fileName,
-              };
+                renamed: false,
+              } satisfies InferOk<CreateEntityFromBufferResult>;
               attemptedIds.push(result.entityId);
               // Model the real creator's transaction and lock order; the
               // external upload is the barrier above, outside the transaction.

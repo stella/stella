@@ -1,4 +1,22 @@
-// parser-output-unchanged: for parsers that do not adopt the new row and text helpers, the inline walk excludes the same script/style tags as before.
+// parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [sk-us] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-sn] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-nsa] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-vfgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-vwgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-bvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-lvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-asylgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-ubas] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-uvs] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-verg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-umse] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-bks] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [hu-bhgy] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-uodo] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [us-courtlistener] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 /**
  * Shared inline-tree utilities for case-law HTML parsers.
  *
@@ -31,6 +49,11 @@ export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
   copy.find(EXCLUDED_HTML_SELECTOR).remove();
   return copy.not(EXCLUDED_HTML_SELECTOR).text();
 };
+
+/** Repair-only projection for quarantine identities stored before visible text. */
+export const legacyQuarantineHtmlText = (
+  el: cheerio.Cheerio<AnyNode>,
+): string => el.text();
 
 /** Nested table text belongs to the outer cell's inline tree, once. */
 export const ownTableRows = (table: cheerio.Cheerio<AnyNode>) =>

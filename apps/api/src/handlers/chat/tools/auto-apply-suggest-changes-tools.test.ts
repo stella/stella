@@ -26,11 +26,13 @@ import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDepen
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { ScanResult } from "@/api/lib/file-scan/types";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -91,6 +93,11 @@ const workspaceId = toSafeId<"workspace">(
 );
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000004");
+const access = memberDocumentWriteAccess({
+  type: "new_version",
+  workspaceId,
+  entityId,
+});
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000005");
 const fileFieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000007");
 const otherFileFieldId = toSafeId<"field">(
@@ -366,6 +373,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       fileName: "oversized.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      encryption: serverBuiltFileEncryption(),
       source: null,
       writePolicy: {
         type: "automatic-docx-edit",
@@ -390,8 +398,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -404,6 +411,59 @@ describe("createAutoApplySuggestChangesTools", () => {
     expect(tool.execute).toBeDefined();
   });
 
+  test("refuses a read-only document before reading, editing, or storing it", async () => {
+    const { tx, insertedTables } = buildTx({
+      preferredName: "Jana Nováková",
+      readOnly: true,
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    sourceDocx = await seedSourceDocx();
+    const tools = createAutoApplySuggestChangesTools({
+      safeDb,
+      organizationId,
+      userId,
+      access,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("suggest_changes must be server-executed here");
+    }
+
+    const block = await firstBlock(sourceDocx);
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await execute(
+          {
+            documentVersion: entityVersionId,
+            operations: [
+              {
+                id: "op-1",
+                type: "replaceInBlock",
+                blockId: block.id,
+                find: "quick",
+                replace: "slow",
+              },
+            ],
+          },
+          asTestRaw<Parameters<typeof execute>[1]>({}),
+        ),
+      catch: (error: unknown) => error,
+    });
+
+    expect(Result.isError(outcome) ? outcome.error : null).toMatchObject({
+      _tag: "ChatToolError",
+      kind: "invalid-input",
+      message: "Entity is read-only",
+    });
+    expect(requestKeys("GET")).toEqual([]);
+    expect(requestKeys("PUT")).toEqual([]);
+    expect(insertedTables).toEqual([]);
+  });
+
   test("returns a structured author_name_required outcome (no version written) when no author name is configured", async () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
@@ -412,8 +472,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -460,8 +519,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "direct",
@@ -543,8 +601,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async (_tx, event) => {
         recordedAuditEvents.push(event);
@@ -652,8 +709,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -712,8 +768,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -769,8 +824,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -828,8 +882,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "direct",
@@ -879,8 +932,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -937,8 +989,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -996,8 +1047,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async (_tx, event) => {
         recordedAuditEvents.push(event);
@@ -1054,8 +1104,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -1110,8 +1159,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       safeDb,
       organizationId,
       userId,
-      workspaceId,
-      entityId,
+      access,
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",

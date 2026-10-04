@@ -9,20 +9,24 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { bufferObjectCleanupIntents, templates } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const uuid = () => Bun.randomUUIDv7();
-const organizationId = toSafeId<"organization">(uuid());
-const otherOrganizationId = toSafeId<"organization">(uuid());
-const userId = toSafeId<"user">(uuid());
-const otherUserId = toSafeId<"user">(uuid());
+const organizationId = mintAuthProviderId<"organization">();
+const otherOrganizationId = mintAuthProviderId<"organization">();
+const userId = mintAuthProviderId<"user">();
+const otherUserId = mintAuthProviderId<"user">();
 const templateId = createSafeId<"template">();
 const otherTemplateId = createSafeId<"template">();
 
@@ -34,7 +38,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260906130000_template_write_cleanup_intents/migration.sql",
+  "../../../drizzle/20261004000100_template_creation_cleanup_intents/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(
@@ -105,21 +109,21 @@ beforeAll(async () => {
   ]);
   await testDb.insert(member).values([
     {
-      id: uuid(),
+      id: mintAuthProviderIdValue(),
       organizationId,
       userId,
       role: "owner",
       createdAt: new Date(),
     },
     {
-      id: uuid(),
+      id: mintAuthProviderIdValue(),
       organizationId: otherOrganizationId,
       userId,
       role: "owner",
       createdAt: new Date(),
     },
     {
-      id: uuid(),
+      id: mintAuthProviderIdValue(),
       organizationId,
       userId: otherUserId,
       role: "owner",
@@ -189,6 +193,12 @@ describe("template write cleanup intent RLS", () => {
     expect(migratedPolicyExpression).toBe(schemaPolicyExpression);
   });
 
+  test("admits a new template object before the template exists", async () => {
+    const objectKey = `${organizationId}/templates/${createSafeId<"template">()}.docx`;
+    const result = await reserve(objectKey);
+    expect(Result.isOk(result)).toBeTrue();
+  });
+
   test("admits only a unique attempt key under an existing tenant template", async () => {
     const result = await reserve(
       `${organizationId}/templates/${templateId}/write-${uuid()}.docx`,
@@ -198,6 +208,36 @@ describe("template write cleanup intent RLS", () => {
   });
 
   test.each([
+    [
+      "current published template object",
+      () => `${organizationId}/templates/${templateId}.docx`,
+    ],
+    [
+      "another organization creation key",
+      () =>
+        `${otherOrganizationId}/templates/${createSafeId<"template">()}.docx`,
+    ],
+    [
+      "malformed creation identity",
+      () => `${organizationId}/templates/not-a-uuid.docx`,
+    ],
+    [
+      "unseparated creation identity",
+      () => `${organizationId}/templates/${"a".repeat(36)}.docx`,
+    ],
+    [
+      "arbitrary creation prefix",
+      () => `${organizationId}/style-sets/${createSafeId<"template">()}.docx`,
+    ],
+    [
+      "nested creation key",
+      () =>
+        `${organizationId}/templates/${createSafeId<"template">()}.docx/extra`,
+    ],
+    [
+      "trailing-slash creation key",
+      () => `${organizationId}/templates/${createSafeId<"template">()}.docx/`,
+    ],
     [
       "cross-organization template",
       () =>

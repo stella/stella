@@ -1,5 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
@@ -37,6 +35,7 @@ import { Result, panic } from "better-result";
  * between their rows, and nothing here merges or deletes either side.
  */
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -91,6 +90,10 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -291,6 +294,28 @@ type PlKioListingPage = {
   rows: PlKioListingItem[];
 };
 
+const readPlKioListingItem = (
+  node: cheerio.Cheerio<AnyNode>,
+  readText = visibleHtmlText,
+): PlKioListingItem => {
+  const item: PlKioListingItem = { html: node.toString() };
+  const labels = node.find("label");
+  labels.each((index) => {
+    const label = labels.eq(index);
+    const name = collapse(readText(label)).replace(/:$/u, "");
+    if (!isListingLabel(name)) {
+      return;
+    }
+    const parent = label.parent().clone();
+    parent.find("label").remove();
+    item[LISTING_LABELS[name]] = presentText(readText(parent));
+  });
+  const href = node.find("a.link-details").attr("href");
+  item.id =
+    href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"];
+  return item;
+};
+
 /**
  * Read a listing page, or `null` for anything that is not one.
  *
@@ -311,25 +336,7 @@ export const readPlKioListing = (html: string): PlKioListingPage | null => {
 
   const rows = $(".search-list-item")
     .toArray()
-    .map((element) => {
-      const item: PlKioListingItem = { html: $.html(element) };
-      const node = $(element);
-      node.find("label").each((_, label) => {
-        const name = collapse($(label).text()).replace(/:$/u, "");
-        if (!isListingLabel(name)) {
-          return;
-        }
-        const parent = $(label).parent().clone();
-        parent.find("label").remove();
-        item[LISTING_LABELS[name]] = presentText(parent.text());
-      });
-      const href = node.find("a.link-details").attr("href");
-      item.id =
-        href === undefined
-          ? undefined
-          : DETAILS_HREF.exec(href)?.groups?.["id"];
-      return item;
-    });
+    .map((element) => readPlKioListingItem($(element)));
 
   return { counts: [all, kio, so, sa, sn], rows };
 };
@@ -368,6 +375,19 @@ const plKioQuarantineId = (item: PlKioListingItem): string =>
       issueDate: item.issueDate,
     }),
   )}`;
+
+// Raw-text digests are repair aliases only; newly quarantined rows use visible fields.
+const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
+  const canonicalId = plKioQuarantineId(item);
+  if (item.html === undefined) {
+    return [canonicalId];
+  }
+  const $ = cheerio.load(item.html);
+  const legacyId = plKioQuarantineId(
+    readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
+  );
+  return [...new Set([canonicalId, legacyId])];
+};
 
 /** The database's own record id, where the row states a usable one. */
 const publisherIdOf = (item: PlKioListingItem): string | undefined => {
@@ -470,13 +490,14 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   }
 
   const heading = presentText(
-    $("#pageContent h2.section-title")
-      .first()
-      .clone()
-      .children()
-      .remove()
-      .end()
-      .text(),
+    visibleHtmlText(
+      $("#pageContent h2.section-title")
+        .first()
+        .clone()
+        .children()
+        .remove()
+        .end(),
+    ),
   );
   const kindHref = $('a[href^="/Home/PdfMetrics/"]').attr("href");
   const kindText =
@@ -489,7 +510,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   const fields = new Map<string, string>();
   const cases: PlKioCase[] = [];
   metrics.find("label").each((_, element) => {
-    const label = collapse($(element).text());
+    const label = collapse(visibleHtmlText($(element)));
     const container = $(element).parent();
     if (isCaseListLabel(label)) {
       // Recorded even when empty, so the inventory sees the label.
@@ -497,7 +518,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
       container.find("li").each((__, item) => {
         cases.push(
           ...plKioCaseOf(
-            $(item).text(),
+            visibleHtmlText($(item)),
             label === "Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia",
           ),
         );
@@ -506,18 +527,18 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
     }
     const value = container.clone();
     value.find("label").remove();
-    fields.set(label, collapse(value.text()));
+    fields.set(label, collapse(visibleHtmlText(value)));
   });
 
   const lists = new Map<string, string[]>();
   metrics.find("b").each((_, element) => {
-    const title = collapse($(element).text());
+    const title = collapse(visibleHtmlText($(element)));
     const items = $(element)
       .nextAll("p")
       .first()
       .find("a")
       .toArray()
-      .flatMap((anchor) => $(anchor).text().split("|"))
+      .flatMap((anchor) => visibleHtmlText($(anchor)).split("|"))
       .map((item) => presentText(item))
       .filter((item) => item !== undefined);
     lists.set(title, items);
@@ -991,7 +1012,7 @@ export const assemblePlKioDecision = ({
     // quarantined, so the repair enriches that row.
     ...(id === undefined
       ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
+      : { sourceDocumentIdRepairAliases: plKioQuarantineRepairIds(item) }),
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
     language: PL_KIO_LANGUAGE,
     fulltext,

@@ -59,6 +59,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import {
   bodyKey,
@@ -300,9 +301,7 @@ export const ClauseEditor = ({
             detached(
               settleReviewPersist(persistReviewedBody, (error) => {
                 getAnalytics().captureError(error);
-                stellaToast.add({
-                  type: "error",
-                  title: t("clauses.saveFailed"),
+                notifyUserError(error, t("clauses.saveFailed"), {
                   description: userErrorFromThrown(
                     error,
                     t("common.unexpectedError"),
@@ -437,9 +436,7 @@ export const ClauseEditor = ({
     }
     if (rewrittenResult.isErr()) {
       getAnalytics().captureError(rewrittenResult.error.cause);
-      stellaToast.add({
-        type: "error",
-        title: t("ai.editWithAI"),
+      notifyUserError(rewrittenResult.error, t("ai.editWithAI"), {
         description: userErrorFromThrown(
           rewrittenResult.error.cause,
           t("common.unexpectedError"),
@@ -458,9 +455,7 @@ export const ClauseEditor = ({
 
     const rewritten = rewrittenResult.value;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
-      stellaToast.add({
-        type: "error",
-        title: t("ai.editWithAI"),
+      notifyUserError(undefined, t("ai.editWithAI"), {
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });

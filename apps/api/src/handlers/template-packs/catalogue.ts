@@ -7,6 +7,7 @@
 
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
+import type { PermissionInput } from "@stll/permissions";
 import {
   createBundledTemplatePackCatalogue,
   type TemplatePackCatalogue,
@@ -17,7 +18,11 @@ import type {
 } from "@stll/template-packs/schema";
 
 import { env } from "@/api/env";
-import type { MemberRole } from "@/api/lib/member-roles";
+import {
+  hasManagementPermission,
+  hasMemberPermission,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 let catalogue: TemplatePackCatalogue | null = null;
 
@@ -34,13 +39,17 @@ export const getTemplatePackCatalogue = (): TemplatePackCatalogue => {
   return catalogue;
 };
 
-const TEMPLATE_PACK_INSTALL_ROLES = ["admin", "owner"] as const;
+/** The route permission an install needs; the install route declares it. */
+export const TEMPLATE_PACK_INSTALL_PERMISSIONS = {
+  template: ["create"],
+} as const satisfies PermissionInput;
 
-/** Installing copies content into the shared library: owners and admins. */
-export const canInstallTemplatePacks = (memberRole: {
-  role: MemberRole;
-}): boolean =>
-  TEMPLATE_PACK_INSTALL_ROLES.some((role) => role === memberRole.role);
+/** Every grant an install needs: the route permission plus management. */
+export const canInstallTemplatePacks = (
+  memberRole: AuthorizedMemberRole,
+): boolean =>
+  hasMemberPermission(memberRole, TEMPLATE_PACK_INSTALL_PERMISSIONS) &&
+  hasManagementPermission(memberRole, { organizationSettings: ["update"] });
 
 /** File paths are how the deployment finds the bytes, not part of the API. */
 export type TemplatePackTemplateView = Omit<
