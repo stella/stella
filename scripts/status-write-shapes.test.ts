@@ -21,6 +21,27 @@ const measure = (content: string) =>
   statusWriteCalls({ content, file: "writer.ts", columns }).length;
 
 describe("lifecycle write shapes", () => {
+  test("import forms cannot hide opaque lifecycle table handles", () => {
+    for (const declaration of [
+      'import rows from "./table-facade";',
+      'import rows, { other } from "./table-facade";',
+      'import { table as rows } from "./table-facade";',
+      'import rows = require("./table-facade");',
+      "import rows = facade.table;",
+    ]) {
+      for (const [table, keys] of Object.entries(columns)) {
+        for (const key of keys) {
+          const content = `${declaration}\nconst handle = rows; db.update(handle).set({ ${key}: "running" });`;
+          expect({ declaration, table, key, count: measure(content) }).toEqual({
+            declaration,
+            table,
+            key,
+            count: 1,
+          });
+        }
+      }
+    }
+  });
   test("the syntactic class covers every declared lifecycle column and each static property spelling", () => {
     for (const [table, keys] of Object.entries(columns)) {
       for (const key of keys) {

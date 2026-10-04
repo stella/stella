@@ -47,10 +47,13 @@ test("validation releases the prerequisite's exclusive lock before scanning", as
   const begin = statements.indexOf("BEGIN;\nSET lock_timeout = '1s';");
   expect(commit).toBeGreaterThanOrEqual(0);
   expect(begin).toBeGreaterThan(commit);
+  const scanTimeout = statements.indexOf("SET LOCAL statement_timeout = 0;");
+  expect(scanTimeout).toBeGreaterThan(begin);
   for (const statement of statements.filter((sql) =>
     sql.includes("VALIDATE CONSTRAINT"),
   )) {
     expect(statements.indexOf(statement)).toBeGreaterThan(begin);
+    expect(statements.indexOf(statement)).toBeGreaterThan(scanTimeout);
   }
   expect(
     statements.filter((sql) => sql.includes("VALIDATE CONSTRAINT")),

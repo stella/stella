@@ -13,6 +13,21 @@ const ruleOptions = {
     agentRegistration: ["status"],
   },
 };
+
+test("default and import-equals handles reach the lifecycle ownership rule", async () => {
+  const source = [
+    'import rows from "./table-facade";',
+    'import otherRows = require("./table-facade");',
+    'import schema = require("@/api/db/schema");',
+    'db.update(rows).set({ status: "running" });',
+    'db.update(otherRows).set({ status: "running" });',
+    'db.update(schema.flowRuns).set({ status: "running" });',
+    'db.update(schema.users).set({ status: "active" });',
+  ].join("\n");
+  expect(
+    await lintSingleRule("no-direct-status-set", source, { ruleOptions }),
+  ).toEqual([4, 5, 6]);
+});
 const writerSource = [
   'import { flowRuns as runs, requestJobs, users } from "@/api/db/schema";',
   'import * as schema from "@/api/db/schema/flows";',

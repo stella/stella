@@ -95,6 +95,14 @@ const bindingsFor = (source: ts.SourceFile) => {
       ts.isStringLiteralLike(node.moduleSpecifier)
     ) {
       const importSource = node.moduleSpecifier.text;
+      const defaultName = node.importClause?.name;
+      if (defaultName !== undefined) {
+        declare(node, defaultName, {
+          type: "import",
+          source: importSource,
+          name: "default",
+        });
+      }
       const named = node.importClause?.namedBindings;
       if (named !== undefined && ts.isNamedImports(named)) {
         for (const item of named.elements) {
@@ -111,6 +119,18 @@ const bindingsFor = (source: ts.SourceFile) => {
           name: "*",
         });
       }
+    }
+    if (ts.isImportEqualsDeclaration(node)) {
+      const reference = node.moduleReference;
+      declare(
+        node,
+        node.name,
+        ts.isExternalModuleReference(reference) &&
+          reference.expression !== undefined &&
+          ts.isStringLiteralLike(reference.expression)
+          ? { type: "import", source: reference.expression.text, name: "*" }
+          : { type: "shadow" },
+      );
     }
     if (ts.isVariableDeclaration(node)) {
       declare(
