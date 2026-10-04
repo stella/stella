@@ -1295,6 +1295,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
@@ -1925,6 +1926,14 @@ export default defineConfig({
       files: [".oxlint-plugins/__fixtures__/no-bare-chrome-query.fixture.tsx"],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-data-requires-state.fixture.tsx",
+      ],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
       },
     },
     {
@@ -3543,6 +3552,12 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/web/src/**"],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
+      },
+    },
+    {
       // Persistent chrome that mounts on every route: defer cold-cache fetches
       // past mount via useChromeQuery so they cannot warn on a not-yet-mounted
       // fiber. See apps/web/src/hooks/use-chrome-query.ts.
@@ -3767,9 +3782,25 @@ export default defineConfig({
       },
     },
     {
+      // Outside the API, apps and packages read their own env modules; a
+      // deployment flag is never read off the raw process environment.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          { processEnvOnly: true },
+        ],
+      },
+    },
+    {
       // Deployment feature flags are read through `isDeploymentFeatureEnabled`
       // so every surface shares one local-development policy per flag.
-      files: ["apps/api/src/**/*.ts"],
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",
@@ -4310,11 +4341,10 @@ export default defineConfig({
       },
     },
     {
-      // A computed-key write onto an object literal sends `__proto__` through
-      // the prototype setter, so a record rebuilt from client, model or
-      // parsed-JSON keys loses that entry. Existing debt is carried per file
-      // in scripts/design-lint-baseline.json and switched off there by
-      // `designLintBacklogOverrides` below.
+      // Dynamic record writes use own-property builders; open module tables
+      // require an own-key check. Existing sites covered by these syntax checks
+      // carry count ceilings in scripts/design-lint-baseline.json and are
+      // switched off here by `designLintBacklogOverrides` below.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",

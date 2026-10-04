@@ -25,6 +25,11 @@ const clauseSlotsParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "List the clause slots of one template together with the resolved body " +
     "of the clause linked to each, using the same resolution the fill path " +
