@@ -373,12 +373,29 @@ const SHEET_SOURCES = [
   "recorded-sheet",
   "published-reference",
   "stored-docket",
+  "other-file-recorded-sheet",
   "unknown",
 ] as const;
 
 type SheetSource = (typeof SHEET_SOURCES)[number];
 
+/**
+ * Whether the sheet a source states is a sheet of `SHEET_FILE`. One recorded
+ * off another file's docket is not, even on a decision `SHEET_FILE` reaches
+ * through a parallel file number.
+ */
+const STATES_A_SHEET_OF_THE_FILE = {
+  ecli: true,
+  "parallel-identifier": true,
+  "recorded-sheet": true,
+  "published-reference": true,
+  "stored-docket": true,
+  "other-file-recorded-sheet": false,
+  unknown: false,
+} as const satisfies Record<SheetSource, boolean>;
+
 const SHEET_FILE = "3 Afs 41/2008";
+const OTHER_FILE = "5 As 12/2009";
 
 /** A sibling of `SHEET_FILE` whose sheet only `source` states. */
 const siblingWithSheetIn = (id: string, source: SheetSource, sheet: number) => {
@@ -398,6 +415,16 @@ const siblingWithSheetIn = (id: string, source: SheetSource, sheet: number) => {
       return { ...bare, publishedCaseNumber: full };
     case "stored-docket":
       return { ...bare, caseNumber: full };
+    case "other-file-recorded-sheet":
+      // Stored and published under another file, its sheet split off there,
+      // and reached here only through the parallel file number.
+      return {
+        ...bare,
+        caseNumber: OTHER_FILE,
+        publishedCaseNumber: `${OTHER_FILE}-${String(sheet)}`,
+        sheetNumber: String(sheet),
+        identifiers: [{ type: "case-number", value: SHEET_FILE }],
+      };
     case "unknown":
       return bare;
     default: {
@@ -436,7 +463,7 @@ test(
           const modelled = siblings.map(
             ({ reached, sheet, source }, index) => ({
               id: `sibling-${String(index)}`,
-              sheet: source === "unknown" ? null : sheet,
+              sheet: STATES_A_SHEET_OF_THE_FILE[source] ? sheet : null,
               present:
                 reached || source !== "stored-docket" || sheet === requested,
               hit: siblingWithSheetIn(

@@ -620,11 +620,35 @@ const ECLI_IDENTIFIER = "ecli";
 type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
+ * The sheet a hit's source recorded, as a sheet of the file asked about, or
+ * null. Ingestion splits the recorded sheet off the reference as the court
+ * published it, or off the stored docket where none was kept
+ * (`splitCaseReference`), so it is a sheet of that docket's file only: a hit
+ * reached through a parallel file number does not carry it in that file.
+ */
+const statedSheetOf = (
+  hit: DecisionHitIdentity,
+  familyCanonical: string,
+  grammar: DecisionDocketGrammar,
+): string | null => {
+  const stated = hit.sheetNumber?.trim();
+  if (stated === undefined || !/^\d{1,8}$/u.test(stated)) {
+    return null;
+  }
+  const source = readDecisionDocketReference(
+    hit.publishedCaseNumber ?? hit.caseNumber,
+    { grammar },
+  );
+  return source?.family.canonical === familyCanonical ? numeral(stated) : null;
+};
+
+/**
  * Every selector a hit is known to carry within the file: from each docket
  * spelling of the file it stores (its own stored docket, which keeps a sheet
  * the row was written with, the reference as the court published it, and a
  * full file number a publisher supplied beside it), from the sheet its source
- * recorded, and from each ECLI whose scheme ends on the sheet.
+ * recorded off a docket of this file, and from each ECLI whose scheme ends on
+ * the sheet.
  *
  * The one place a sibling's known sheet is derived: every source counts
  * alike, so where a sheet is stored never changes what a sheet selects.
@@ -666,9 +690,9 @@ const selectorsOfHit = (
       sheets.add(sheet);
     }
   }
-  const stated = hit.sheetNumber?.trim();
-  if (stated !== undefined && /^\d{1,8}$/u.test(stated)) {
-    sheets.add(numeral(stated));
+  const stated = statedSheetOf(hit, familyCanonical, grammar);
+  if (stated !== null) {
+    sheets.add(stated);
   }
   return { sheets, parts };
 };
