@@ -178,6 +178,7 @@ test.each([
         }
         return yield* finalizeEntityVersion({
           ...domainArgs,
+          scanned: scanned.value,
           fileBuffer: bytes.buffer,
           purposeData: { type: purpose, entityId: ids.entityA1 },
         });

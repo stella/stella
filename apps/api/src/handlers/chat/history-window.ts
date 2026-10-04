@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -22,6 +22,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
 export type WindowedThreadMessage = {
@@ -49,6 +50,44 @@ const toWindowedMessage = (row: {
       version: 2,
     }),
   };
+};
+
+/**
+ * PostgreSQL's version of the row: every insert and every update writes a new
+ * one, so two reads that agree on it read the same content.
+ */
+const chatMessageRowVersion = sql<string>`${chatMessages}.xmin::text`;
+
+/** The range of a thread's rows one history read covered. */
+type ChatHistoryScope =
+  | { type: "thread" }
+  | {
+      cursor: TimestampIdCursor<SafeId<"chatMessage">>;
+      type: "after-cursor";
+    }
+  | { messageId: SafeId<"chatMessage">; type: "from-message" };
+
+/**
+ * The rows a decision about a thread's history read, oldest-first, each with
+ * the version it read. A turn accepted on that decision must find them
+ * unchanged under the thread's turn lock (`isChatHistorySnapshotCurrentOnTx`):
+ * a turn that settled in between would otherwise be missing from the model's
+ * history, or be deleted by a replay that no longer targets the latest turn.
+ */
+export type ChatHistorySnapshot = {
+  rows: readonly { id: SafeId<"chatMessage">; version: string }[];
+  scope: ChatHistoryScope;
+};
+
+type WindowedThreadHistory = {
+  messages: WindowedThreadMessage[];
+  snapshot: ChatHistorySnapshot;
+};
+
+/** The history of a thread with no messages, as its creator knows it. */
+export const EMPTY_CHAT_HISTORY_SNAPSHOT: ChatHistorySnapshot = {
+  rows: [],
+  scope: { type: "thread" },
 };
 
 type LoadWindowedThreadMessagesOnTxArgs = {
@@ -80,12 +119,12 @@ type LoadWindowedThreadMessagesOnTxArgs = {
  * them on its next run and advances the cursor past them, so the loss is
  * transient and the read stays bounded either way.
  */
-const loadWindowedThreadMessagesOnTx = async ({
+const loadWindowedThreadHistoryOnTx = async ({
   tx,
   threadId,
   limit = LIMITS.chatSendHistoryWindowMax,
   checkpoint,
-}: LoadWindowedThreadMessagesOnTxArgs): Promise<WindowedThreadMessage[]> => {
+}: LoadWindowedThreadMessagesOnTxArgs): Promise<WindowedThreadHistory> => {
   const resolvedCheckpoint =
     checkpoint === undefined
       ? await readLatestChatCompactionOnTx({ threadId, tx })
@@ -97,6 +136,7 @@ const loadWindowedThreadMessagesOnTx = async ({
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
+      version: chatMessageRowVersion,
     })
     .from(chatMessages)
     .where(
@@ -118,24 +158,55 @@ const loadWindowedThreadMessagesOnTx = async ({
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(limit);
 
-  return rows.toReversed().map(toWindowedMessage);
+  const ascending = rows.toReversed();
+  return {
+    messages: ascending.map(toWindowedMessage),
+    snapshot: {
+      rows: ascending.map(({ id, version }) => ({ id, version })),
+      scope: windowScope({ ascending, cursor, limit }),
+    },
+  };
+};
+
+/**
+ * Where a window's rows begin: at its oldest row when the row cap cut it,
+ * otherwise after the checkpoint cursor it was read from, or at the start of
+ * the thread.
+ */
+const windowScope = ({
+  ascending,
+  cursor,
+  limit,
+}: {
+  ascending: readonly { id: SafeId<"chatMessage"> }[];
+  cursor: TimestampIdCursor<SafeId<"chatMessage">> | null;
+  limit: number;
+}): ChatHistoryScope => {
+  const oldest = ascending.at(0);
+  if (oldest !== undefined && ascending.length === limit) {
+    return { messageId: oldest.id, type: "from-message" };
+  }
+  return cursor === null
+    ? { type: "thread" }
+    : { cursor, type: "after-cursor" };
 };
 
 type LoadWindowedThreadMessagesArgs = SafeDbOrTx &
   Omit<LoadWindowedThreadMessagesOnTxArgs, "tx">;
 
-export const loadWindowedThreadMessages = async ({
+/** The per-send window with the snapshot a decision made from it holds. */
+export const loadWindowedThreadHistory = async ({
   threadId,
   limit,
   checkpoint,
   ...handle
 }: LoadWindowedThreadMessagesArgs): Promise<
-  Result<WindowedThreadMessage[], SafeDbError>
+  Result<WindowedThreadHistory, SafeDbError>
 > =>
   await withScopedTx(
     handle,
     async (tx) =>
-      await loadWindowedThreadMessagesOnTx({
+      await loadWindowedThreadHistoryOnTx({
         tx,
         threadId,
         limit,
@@ -143,15 +214,62 @@ export const loadWindowedThreadMessages = async ({
       }),
   );
 
+export const loadWindowedThreadMessages = async (
+  args: LoadWindowedThreadMessagesArgs,
+): Promise<Result<WindowedThreadMessage[], SafeDbError>> =>
+  (await loadWindowedThreadHistory(args)).map(({ messages }) => messages);
+
+/**
+ * Whether the rows a history decision read are still exactly the thread's
+ * rows in that read's range: none added, removed, or rewritten. A caller that
+ * holds the thread's turn lock gets an answer no later write can change until
+ * it commits.
+ */
+export const isChatHistorySnapshotCurrentOnTx = async ({
+  snapshot,
+  threadId,
+  tx,
+}: {
+  snapshot: ChatHistorySnapshot;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> => {
+  const current = await tx
+    .select({ id: chatMessages.id, version: chatMessageRowVersion })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        chatHistoryScopePredicate({ scope: snapshot.scope, threadId }),
+      ),
+    )
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    // One row past the snapshot is enough to see that the range grew.
+    .limit(snapshot.rows.length + 1);
+  return (
+    current.length === snapshot.rows.length &&
+    current.every(({ id, version }, index) => {
+      const read = snapshot.rows.at(index);
+      return read?.id === id && read.version === version;
+    })
+  );
+};
+
+const BOUNDARY_COMPARISON = {
+  after: ">",
+  "at-or-after": ">=",
+  "at-or-before": "<=",
+} as const;
+
 /**
  * `(created_at, id)` keyset boundary for the prefix ending at one message,
  * resolved in-database from the target row.
  *
  * The boundary is NOT built from a JS-Date-truncated value: a target whose
  * `created_at` carries PostgreSQL microseconds would fall before a truncated
- * boundary and drop out of its own prefix. `inclusive` keeps the target row
- * (retained prefix, forked history); the exclusive form selects only the tail
- * a replay discards.
+ * boundary and drop out of its own prefix. `at-or-before` keeps the target
+ * row (retained prefix, forked history); `after` selects only the tail a
+ * replay discards; `at-or-after` is a window that starts at the target.
  *
  * The subselect binds the boundary row to the thread being read: a target
  * that belongs to another thread, or that was deleted since the caller last
@@ -159,15 +277,44 @@ export const loadWindowedThreadMessages = async ({
  * thread's timestamp.
  */
 const chatMessagePrefixBoundary = ({
-  inclusive,
+  side,
   targetMessageId,
   threadId,
 }: {
-  inclusive: boolean;
+  side: keyof typeof BOUNDARY_COMPARISON;
   targetMessageId: SafeId<"chatMessage">;
   threadId: SafeId<"chatThread">;
 }): SQL =>
-  sql`(${chatMessages.createdAt}, ${chatMessages.id}) ${sql.raw(inclusive ? "<=" : ">")} (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId} and b.thread_id = ${threadId})`;
+  sql`(${chatMessages.createdAt}, ${chatMessages.id}) ${sql.raw(BOUNDARY_COMPARISON[side])} (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId} and b.thread_id = ${threadId})`;
+
+/** The rows a history snapshot covers, as the read that took it bounded them. */
+const chatHistoryScopePredicate = ({
+  scope,
+  threadId,
+}: {
+  scope: ChatHistoryScope;
+  threadId: SafeId<"chatThread">;
+}): SQL | undefined => {
+  switch (scope.type) {
+    case "thread":
+      return undefined;
+    case "after-cursor":
+      return chatMessageCursorCodec.keysetAfter({
+        cursor: scope.cursor,
+        direction: "ascending",
+        idColumn: chatMessages.id,
+      });
+    case "from-message":
+      return chatMessagePrefixBoundary({
+        side: "at-or-after",
+        targetMessageId: scope.messageId,
+        threadId,
+      });
+    default:
+      scope satisfies never;
+      return panic(`Unhandled history scope: ${JSON.stringify(scope)}`);
+  }
+};
 
 type LoadChatMessagePrefixOnTxArgs = {
   targetMessageId: SafeId<"chatMessage">;
@@ -181,6 +328,8 @@ export type ChatMessagePrefixRow = {
   id: SafeId<"chatMessage">;
   memoryExtractionEligible: boolean;
   role: ChatMessageRole;
+  /** See `chatMessageRowVersion`. */
+  version: string;
   workspaceId: SafeId<"workspace"> | null;
 };
 
@@ -207,6 +356,7 @@ export const loadChatMessagePrefixOnTx = async ({
       id: chatMessages.id,
       memoryExtractionEligible: chatMessages.memoryExtractionEligible,
       role: chatMessages.role,
+      version: chatMessageRowVersion,
       workspaceId: chatMessages.workspaceId,
     })
     .from(chatMessages)
@@ -214,7 +364,7 @@ export const loadChatMessagePrefixOnTx = async ({
       and(
         eq(chatMessages.threadId, threadId),
         chatMessagePrefixBoundary({
-          inclusive: true,
+          side: "at-or-before",
           targetMessageId,
           threadId,
         }),
@@ -241,6 +391,8 @@ export type TruncationTarget = {
   deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[];
   /** Whether replaying this target would discard a newer user turn. */
   hasLaterUserMessage: boolean;
+  /** The whole thread as this resolution read it. */
+  snapshot: ChatHistorySnapshot;
 };
 
 /**
@@ -270,13 +422,17 @@ export const resolveTruncationTarget = async ({
     }
 
     const idsAfterTarget = await tx
-      .select({ id: chatMessages.id, role: chatMessages.role })
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        version: chatMessageRowVersion,
+      })
       .from(chatMessages)
       .where(
         and(
           eq(chatMessages.threadId, threadId),
           chatMessagePrefixBoundary({
-            inclusive: false,
+            side: "after",
             targetMessageId,
             threadId,
           }),
@@ -292,6 +448,15 @@ export const resolveTruncationTarget = async ({
       messagesForPersistence: retainedPrefix.map(toWindowedMessage),
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
       hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
+      // Exactly the rows every decision above came from, so whenever the
+      // snapshot still matches the thread, so do they.
+      snapshot: {
+        rows: [...retainedPrefix, ...idsAfterTarget].map(({ id, version }) => ({
+          id,
+          version,
+        })),
+        scope: { type: "thread" },
+      },
     };
   });
 

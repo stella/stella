@@ -101,6 +101,10 @@ export const importSkillsBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Imports skills without delivering stored-file bytes.",
+  },
   description:
     "Import one or more discovered skills from source URLs into the selected " +
     "scope. Each installed skill lists the package files it does not keep " +

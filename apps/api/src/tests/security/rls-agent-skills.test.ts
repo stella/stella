@@ -129,14 +129,22 @@ describe("agent skill RLS", () => {
 const migrationPath = (name: string) =>
   nodePath.resolve(import.meta.dir, `../../../drizzle/${name}/migration.sql`);
 
+// The runner wraps each file in a transaction; a file that commits midway
+// reopens one with its own BEGIN and relies on that wrapper to close it. Such
+// a file sets its timeouts per session, so they are reset for the shared
+// fixture connection afterwards.
 const applyMigration = async (name: string) => {
   const statements = readFileSync(migrationPath(name), "utf-8")
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
+  await testDb.execute(sql`BEGIN`);
   for (const statement of statements) {
     await testDb.execute(sql.raw(statement));
   }
+  await testDb.execute(sql`COMMIT`);
+  await testDb.execute(sql`RESET lock_timeout`);
+  await testDb.execute(sql`RESET statement_timeout`);
 };
 
 const readPolicies = async (policyNames: readonly string[]) =>
@@ -275,7 +283,7 @@ describe("agent skill domain values", () => {
     ]);
   });
 
-  test("the migration adds the checks the schema declares", async () => {
+  test("the migrations add the checks the schema declares", async () => {
     const fromSchema = await readDomainChecks();
     for (const { table, constraint } of DOMAIN_CHECKS) {
       await testDb.execute(
@@ -283,6 +291,7 @@ describe("agent skill domain values", () => {
       );
     }
     await applyMigration("20260925230200_agent_skill_domain_checks");
+    await applyMigration("20261003123500_agent_skill_default_origin");
     const migrated = await readDomainChecks();
 
     expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);
@@ -308,21 +317,23 @@ describe("agent skill anchor lock", () => {
         }),
       ids.userA1,
     );
-    // No update policy on revisions: even a manager's update matches no row.
-    const updated = await scopedQuery(
+    // Revisions are read-only to the request role: even a manager's update is
+    // refused before any row policy is consulted.
+    const updateError = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       async (tx) =>
-        await tx
-          .update(agentSkillRevisions)
-          .set({ body: "rewritten" })
-          .where(eq(agentSkillRevisions.skillId, skillId))
-          .returning({ id: agentSkillRevisions.id }),
+        await tryCatch(async () => {
+          await tx
+            .update(agentSkillRevisions)
+            .set({ body: "rewritten" })
+            .where(eq(agentSkillRevisions.skillId, skillId));
+        }),
       ids.userAdmin,
     );
 
     expect(lockError).toBeNull();
-    expect(updated).toEqual([]);
+    expect(isPgError(updateError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
   test("a skill the caller cannot see is refused", async () => {

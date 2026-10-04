@@ -34,6 +34,7 @@ const scoutCursor = (
  */
 export const runWorkAttentionScoutTask: SchedulerTask = async ({
   db,
+  dueAt,
   job,
   logger,
   signal,
@@ -47,6 +48,10 @@ export const runWorkAttentionScoutTask: SchedulerTask = async ({
     job.lockedBy ?? panic("Work-attention scout requires a scheduler lease");
   const outcome = await runWorkAttentionScout({
     cursor: scoutCursor(job.payload),
+    // The page is judged at the claim, not at an older due slot: the cursor is
+    // checkpointed past this page, so an obligation judged against a stale
+    // instant would not be reconsidered until the sweep wraps.
+    now: dueAt.claimedAtDate(),
     dependencies: { db, createScopedDb: createRootScopedDb },
   });
 

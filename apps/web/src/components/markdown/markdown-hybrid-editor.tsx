@@ -4,6 +4,7 @@ import type { MarkdownHybridEditorProps } from "./markdown-hybrid-editor.impl";
 
 export type {
   MarkdownEditorComment,
+  MarkdownHybridEditorHandle,
   MarkdownHybridEditorProps,
 } from "./markdown-hybrid-editor.impl";
 

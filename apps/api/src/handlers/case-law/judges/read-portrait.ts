@@ -15,6 +15,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contentDelivery: {
+    type: "public",
+    reason: "Returns public judicial portraits.",
+  },
   cache: { kind: "public", maxAge: 86_400 },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },

@@ -39,9 +39,9 @@
       "severity": "high",
       "package": "http-cache-semantics",
       "title": "http-cache-semantics max-stale handling can disclose cross-user cached responses",
-      "reason": "No patched http-cache-semantics release exists (advisory range <=4.2.0; accepted 2026-10-03). Its only dependency path is Astro in @stll/landing, which is a static build (output: \"static\"): Astro uses it for fetch caching during the build and the local dev server, and the deployed site is static files with no Astro server, so no shared cache serves cross-user responses. It is not in the API, web or collab runtime. The acceptance lapses on 2026-11-01, once a patched release is published, or once the advisory is no longer reported, whichever comes first.",
-      "expiresOn": "2026-11-01",
-      "untilPatched": true
+      "reason": "Its only dependency path is Astro in @stll/landing, which is a static build (output: \"static\"): Astro uses it for fetch caching during the build and the local dev server, and the deployed site is static files with no Astro server, so no shared cache serves cross-user responses. It is not in the API, web or collab runtime. The patched release 4.3.0 is inside the five-day install quarantine until 2026-10-09; the acceptance expires on 2026-10-10, by which time the dependency is updated and this entry removed.",
+      "expiresOn": "2026-10-10",
+      "untilPatched": false
     }
   ]
 }
