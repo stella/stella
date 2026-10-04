@@ -915,37 +915,46 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // MEASURING ONLY (removed before review): off in the repository lint.
-    "react/jsx-no-duplicate-props": "off",
-    "react/jsx-no-undef": "off",
-    "react/no-children-prop": "off",
-    "react/no-did-mount-set-state": "off",
-    "react/no-did-update-set-state": "off",
-    "react/no-direct-mutation-state": "off",
-    "react/no-find-dom-node": "off",
-    "react/no-is-mounted": "off",
-    "react/no-render-return-value": "off",
-    "react/no-string-refs": "off",
-    "react/no-this-in-sfc": "off",
-    "react/no-unsafe": "off",
-    "react/no-will-update-set-state": "off",
-    "eslint/no-unexpected-multiline": "off",
-    "eslint/no-use-before-define": "off",
+    // Preset style rules, decided by cost: each fires far more often than
+    // its fix is worth, so it stays off.
+    // Route files, React components and generated modules follow their
+    // framework's names, not one case (54 files).
     "unicorn/filename-case": "off",
+    // Closures stay next to their only caller (1004 findings).
     "unicorn/consistent-function-scoping": "off",
+    // Its fix drops the `undefined` that `useRef<T | undefined>(undefined)`
+    // needs (2767 findings).
     "unicorn/no-useless-undefined": "off",
+    // Style only: an if/else of statements reads as well (40 findings).
     "unicorn/prefer-ternary": "off",
+    // Wrapping callback and event APIs needs `new Promise` (365 findings).
     "promise/avoid-new": "off",
+    // Event handlers and stream callbacks are callbacks by design (507
+    // findings).
     "promise/prefer-await-to-callbacks": "off",
+    // Effects and fire-and-forget calls run outside an async function (485
+    // findings).
     "promise/prefer-await-to-then": "off",
-    "eslint/func-names": "off",
-    "eslint/func-style": "off",
-    "eslint/no-plusplus": "off",
-    "eslint/no-negated-condition": "off",
-    "eslint/prefer-destructuring": "off",
-    "eslint/class-methods-use-this": "off",
-    "eslint/max-classes-per-file": "off",
-    "eslint/no-inline-comments": "off",
+    // Arrow functions take the name of their binding (1086 findings).
+    "func-names": "off",
+    // Style only; `function-component-definition` owns component style (343
+    // findings).
+    "func-style": "off",
+    // `i++` in a loop has no ASI hazard under the formatter (733 findings).
+    "no-plusplus": "off",
+    // As with unicorn/no-negated-condition: the negated form is often clearer
+    // (237 findings).
+    "no-negated-condition": "off",
+    // `const x = object.x` is as clear; the fix churns without catching bugs
+    // (2273 findings).
+    "prefer-destructuring": "off",
+    // Methods that implement an interface need not read `this` (26 findings).
+    "class-methods-use-this": "off",
+    // A TaggedError family lives beside the module that raises it (86
+    // findings).
+    "max-classes-per-file": "off",
+    // Trailing comments document table rows and literal values (962 findings).
+    "no-inline-comments": "off",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
     // It has no fix-only option.

@@ -169,15 +169,20 @@ test(
     // guard checks against `oxlint --print-config`, so the two cannot disagree
     // on what a base entry replaces.
     const presetLayers = flattenLayers(config, "oxlint.config.ts").slice(0, -1);
-    const presetState = new Map(
-      [
+    // JS plugin rules have no category or alias to resolve: the last preset
+    // that names one decides it.
+    const presetState = new Map([
+      ...presetLayers.flatMap(({ rules: layerRules }) => [
+        ...stateOf(layerRules),
+      ]),
+      ...[
         ...declaredBaseRules({
           layers: presetLayers,
           builtins: rules,
           canonical,
         }).rules,
       ].map(([id, { severity }]) => [id, severity !== SEVERITY.off] as const),
-    );
+    ]);
 
     const noOps: string[] = [];
     const scopes = readScopes(config);

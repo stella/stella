@@ -20,7 +20,6 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 // its own entry, else the last preset that names the rule. Both spellings of
 // an ESLint core rule count.
 const repositoryRuleLayers = flattenLayers(repository, "oxlint.config.ts")
-  .slice(0, -1)
   .map(({ rules }) => rules)
   .toReversed();
 const repositoryRule = (rule: string) => {
