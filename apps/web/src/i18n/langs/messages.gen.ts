@@ -1904,6 +1904,7 @@ type Messages = {
       "addBankAccount": "Add bank account";
       "noBillingData": "No billing details set.";
       "removeBankAccount": "Remove bank account";
+      "selectCurrencyForRate": "Select a currency to set an hourly rate.";
       "title": "Billing details";
     };
     "columns": {

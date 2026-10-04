@@ -1901,6 +1901,7 @@
       "addBankAccount": "Pridėti banko sąskaitą",
       "noBillingData": "Atsiskaitymo duomenų nėra.",
       "removeBankAccount": "Pašalinti banko sąskaitą",
+      "selectCurrencyForRate": "Norėdami nustatyti valandinį įkainį, pasirinkite valiutą.",
       "title": "Atsiskaitymo duomenys"
     },
     "columns": {

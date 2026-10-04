@@ -1901,6 +1901,7 @@
       "addBankAccount": "Přidat bankovní účet",
       "noBillingData": "Žádné fakturační údaje.",
       "removeBankAccount": "Odebrat bankovní účet",
+      "selectCurrencyForRate": "Pro nastavení hodinové sazby vyberte měnu.",
       "title": "Fakturační údaje"
     },
     "columns": {
