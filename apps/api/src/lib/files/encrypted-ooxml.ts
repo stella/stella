@@ -11,7 +11,9 @@ import { Result } from "better-result";
  * storage are the signature; nothing else in an OOXML file looks like that.
  *
  * Read through `detectFileEncryption` (what a file row records) and the upload
- * scan (which accepts such a container under its declared Office type).
+ * scan, which accepts such a container under its declared Office type and
+ * skips its compound-file warning only when the whole directory is exactly
+ * the encrypted layout (`isExactEncryptedOoxmlLayout`).
  */
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
@@ -73,6 +75,80 @@ export const probeEncryptedOoxml = (bytes: Uint8Array): EncryptedOoxmlProbe => {
     rootStreams.has(ENCRYPTED_PACKAGE_STREAM)
     ? { status: "encrypted" }
     : NOT_ENCRYPTED;
+};
+
+/**
+ * The complete directory of a password-protected OOXML package as Office
+ * writes it (MS-OFFCRYPTO 2.3.4.x, the "StrongEncryptionDataSpace" data
+ * space): the two encryption streams and the `\u0006DataSpaces` storage with
+ * its fixed children. Keys are `[kind, ...path]`, so a name containing `/`
+ * cannot pass for a nested entry.
+ */
+const ENCRYPTED_OOXML_LAYOUT: ReadonlySet<string> = new Set(
+  (
+    [
+      ["stream", "EncryptionInfo"],
+      ["stream", "EncryptedPackage"],
+      ["storage", "\u0006DataSpaces"],
+      ["stream", "\u0006DataSpaces", "Version"],
+      ["stream", "\u0006DataSpaces", "DataSpaceMap"],
+      ["storage", "\u0006DataSpaces", "DataSpaceInfo"],
+      [
+        "stream",
+        "\u0006DataSpaces",
+        "DataSpaceInfo",
+        "StrongEncryptionDataSpace",
+      ],
+      ["storage", "\u0006DataSpaces", "TransformInfo"],
+      [
+        "storage",
+        "\u0006DataSpaces",
+        "TransformInfo",
+        "StrongEncryptionTransform",
+      ],
+      [
+        "stream",
+        "\u0006DataSpaces",
+        "TransformInfo",
+        "StrongEncryptionTransform",
+        "\u0006Primary",
+      ],
+    ] as const
+  ).map((key) => JSON.stringify(key)),
+);
+
+/**
+ * Whether the bytes, declared as an OOXML type, are a compound file whose
+ * whole directory is exactly `ENCRYPTED_OOXML_LAYOUT`: every entry reachable
+ * from the root, with its kind and nesting, and no allocated entry outside
+ * the tree. Anything else (an extra or missing entry, a macro storage, a
+ * malformed container, a reader limit) is not that layout.
+ */
+export const isExactEncryptedOoxmlLayout = (
+  declaredMimeType: string,
+  bytes: Uint8Array,
+): boolean => {
+  if (
+    !OOXML_MIME_TYPES.has(declaredMimeType) ||
+    !hasCompoundFileSignature(bytes)
+  ) {
+    return false;
+  }
+  const parsed = Result.try({
+    try: () => new CompoundFile(bytes),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(parsed) || parsed.value.unreachableEntryCount !== 0) {
+    return false;
+  }
+  const keys = parsed.value.tree.map(({ kind, path }) =>
+    JSON.stringify([kind, ...path]),
+  );
+  return (
+    keys.length === ENCRYPTED_OOXML_LAYOUT.size &&
+    new Set(keys).size === keys.length &&
+    keys.every((key) => ENCRYPTED_OOXML_LAYOUT.has(key))
+  );
 };
 
 /** The upload scan's question: a declared Office type in its encrypted form. */

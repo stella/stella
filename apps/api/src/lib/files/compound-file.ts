@@ -70,6 +70,12 @@ export type CompoundFileStream = {
   path: string[];
 };
 
+/** One storage or stream reachable from the root, with its full path. */
+export type CompoundFileTreeEntry = {
+  path: string[];
+  kind: "storage" | "stream" | "other";
+};
+
 const malformed = (message: string): CompoundFileParseError =>
   new CompoundFileParseError({ message, limitReached: false });
 
@@ -98,6 +104,13 @@ export class CompoundFile {
   private miniParts: { miniStream: Uint8Array; miniFat: number[] } | null =
     null;
   readonly streamEntries: CompoundFileStream[];
+  /** Every entry reachable from the root storage (traversal order). */
+  readonly tree: CompoundFileTreeEntry[];
+  /**
+   * Allocated directory entries (storages and streams) the root's tree does
+   * not reach. Readers ignore them; a caller matching an exact layout may not.
+   */
+  readonly unreachableEntryCount: number;
 
   /** @throws {CompoundFileParseError} when the bytes are malformed or a limit is reached */
   constructor(bytes: Uint8Array) {
@@ -135,7 +148,15 @@ export class CompoundFile {
       throw malformed("Compound file is missing the root storage");
     }
     this.rootEntry = rootEntry;
-    this.streamEntries = this.collectStreamEntries();
+    const { streams, tree } = this.collectTree();
+    this.streamEntries = streams;
+    this.tree = tree;
+    const allocated = this.directoryEntries.filter(
+      (entry) =>
+        entry.type === CFB_OBJECT_TYPE.storage ||
+        entry.type === CFB_OBJECT_TYPE.stream,
+    ).length;
+    this.unreachableEntryCount = allocated - tree.length;
   }
 
   /** @throws {CompoundFileParseError} when the bytes are malformed or a limit is reached */
@@ -281,11 +302,15 @@ export class CompoundFile {
    * right) with an explicit stack. An entry is visited once, so a tree that
    * links back to itself ends instead of looping.
    */
-  private collectStreamEntries(): CompoundFileStream[] {
+  private collectTree(): {
+    streams: CompoundFileStream[];
+    tree: CompoundFileTreeEntry[];
+  } {
     type Task =
       | { kind: "visit"; id: number; path: string[] }
       | { kind: "emit"; entry: CompoundFileEntry; path: string[] };
     const streamEntries: CompoundFileStream[] = [];
+    const tree: CompoundFileTreeEntry[] = [];
     const visited = new Set<number>();
     const stack: Task[] = [
       { kind: "visit", id: this.rootEntry.childId, path: [] },
@@ -307,6 +332,10 @@ export class CompoundFile {
         continue;
       }
       visited.add(task.id);
+      tree.push({
+        path: [...task.path, entry.name],
+        kind: treeEntryKind(entry.type),
+      });
 
       stack.push({ kind: "visit", id: entry.rightSiblingId, path: task.path });
       if (entry.type === CFB_OBJECT_TYPE.storage) {
@@ -325,7 +354,7 @@ export class CompoundFile {
       stack.push({ kind: "visit", id: entry.leftSiblingId, path: task.path });
     }
 
-    return streamEntries;
+    return { streams: streamEntries, tree };
   }
 
   private readRegularStream(entry: CompoundFileEntry): Uint8Array {
@@ -420,6 +449,16 @@ export class CompoundFile {
     return this.view.getUint32(offset, true);
   }
 }
+
+const treeEntryKind = (type: number): CompoundFileTreeEntry["kind"] => {
+  if (type === CFB_OBJECT_TYPE.storage) {
+    return "storage";
+  }
+  if (type === CFB_OBJECT_TYPE.stream) {
+    return "stream";
+  }
+  return "other";
+};
 
 const readDirectoryStreamSize = (view: DataView): number => {
   const low = view.getUint32(120, true);

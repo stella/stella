@@ -6,7 +6,13 @@ import type { ScanContext } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
 import { aggregateVerdict } from "@/api/lib/file-scan/verdict";
 import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
-import { isEncryptedOoxmlContainer } from "@/api/lib/files/encrypted-ooxml";
+import {
+  isEncryptedOoxmlContainer,
+  isExactEncryptedOoxmlLayout,
+} from "@/api/lib/files/encrypted-ooxml";
+
+/** `yara/office-macros.yar`: any CFB container warns. */
+const OLE2_CONTAINER_RULE = "ole2_container";
 
 class FileScanError extends TaggedError("FileScanError")<{
   message: string;
@@ -69,8 +75,19 @@ export const scanFile = async ({
         mimeType: declaredMimeType,
       };
       const matches = await scanner(buffer, ctx);
+      // The compound-file warning is about what the container may hide. A
+      // password-protected Office document whose directory is exactly the
+      // encrypted layout hides nothing beyond the encrypted package, so it is
+      // treated like an encrypted PDF; any other entry keeps the warning.
+      const exemptCompoundFileWarning = isExactEncryptedOoxmlLayout(
+        declaredMimeType,
+        buffer,
+      );
 
       for (const m of matches) {
+        if (exemptCompoundFileWarning && m.rule === OLE2_CONTAINER_RULE) {
+          continue;
+        }
         findings.push(mapMatchFinding(m));
       }
 

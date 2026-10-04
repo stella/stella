@@ -17,6 +17,8 @@ const FREE_SECTOR = 4_294_967_295;
 export type CompoundFileFixtureStream = {
   path: string[];
   bytes: Uint8Array;
+  /** `storage` makes the last path segment an (empty) storage, not a stream. */
+  kind?: "storage" | "stream";
 };
 
 type DirectoryRecord = {
@@ -127,18 +129,23 @@ const buildDirectoryRecords = (
   streams: CompoundFileFixtureStream[],
 ): DirectoryRecord[] => {
   const records: DirectoryRecord[] = [directoryRecord("Root Entry", 5)];
-  // Children per storage, keyed by the storage's path ("" is the root).
-  const childIds = new Map<string, number[]>([["", []]]);
-  const storageIds = new Map<string, number>([["", 0]]);
+  // Children per storage, keyed by the storage's path ("[]" is the root).
+  const rootKey = JSON.stringify([]);
+  const childIds = new Map<string, number[]>([[rootKey, []]]);
+  const storageIds = new Map<string, number>([[rootKey, 0]]);
 
   for (const stream of streams) {
     const streamName = stream.path.at(-1);
     if (streamName === undefined) {
       panic("test fixture stream must have a name");
     }
-    let parentKey = "";
-    for (const storageName of stream.path.slice(0, -1)) {
-      const key = `${parentKey}/${storageName}`;
+    const isStorage = stream.kind === "storage";
+    let parentKey = rootKey;
+    for (const [depth, storageName] of (isStorage
+      ? stream.path
+      : stream.path.slice(0, -1)
+    ).entries()) {
+      const key = JSON.stringify(stream.path.slice(0, depth + 1));
       if (!storageIds.has(key)) {
         const id = records.length;
         records.push(directoryRecord(storageName, 1));
@@ -147,6 +154,9 @@ const buildDirectoryRecords = (
         childIds.get(parentKey)?.push(id);
       }
       parentKey = key;
+    }
+    if (isStorage) {
+      continue;
     }
     const id = records.length;
     records.push(streamRecord(streamName, stream.bytes));
@@ -299,5 +309,92 @@ const concatAndPad = (chunks: Uint8Array[], blockSize: number): Uint8Array => {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return bytes;
+};
+
+/** Byte offsets of every directory slot of a small compound file. */
+const directorySlots = (bytes: Uint8Array): number[] => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sectorSize = 2 ** view.getUint16(30, true);
+  const sectorOffset = (sector: number) => (sector + 1) * sectorSize;
+  const fat: number[] = [];
+  for (let index = 0; index < view.getUint32(44, true); index += 1) {
+    const fatSector = view.getUint32(76 + index * 4, true);
+    for (let at = 0; at < sectorSize; at += 4) {
+      fat.push(view.getUint32(sectorOffset(fatSector) + at, true));
+    }
+  }
+  const slots: number[] = [];
+  for (
+    let sector = view.getUint32(48, true);
+    sector !== END_OF_CHAIN;
+    sector = fat[sector] ?? END_OF_CHAIN
+  ) {
+    for (let at = 0; at < sectorSize; at += DIRECTORY_ENTRY_BYTES) {
+      slots.push(sectorOffset(sector) + at);
+    }
+  }
+  return slots;
+};
+
+const findEntry = (bytes: Uint8Array, slots: number[], name: string) => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const nameOf = (offset: number) =>
+    Buffer.from(
+      bytes.subarray(
+        offset,
+        offset + Math.max(0, view.getUint16(offset + 64, true) - 2),
+      ),
+    ).toString("utf16le");
+  return (
+    slots.find(
+      (offset) => view.getUint8(offset + 66) !== 0 && nameOf(offset) === name,
+    ) ?? panic(`fixture has no entry named ${JSON.stringify(name)}`)
+  );
+};
+
+type InjectedEntry = {
+  /** Name of the storage (or "Root Entry") that receives the new entry. */
+  parentName: string;
+  name: string;
+  kind: "storage" | "stream";
+};
+
+/**
+ * Adds one empty entry to an existing compound file (a real fixture) by
+ * filling a free directory slot and linking it under `parentName`. Assumes
+ * the FAT is reachable from the header's DIFAT, as in small files.
+ */
+export const injectDirectoryEntry = (
+  source: Uint8Array,
+  { parentName, name, kind }: InjectedEntry,
+): Uint8Array => {
+  const bytes = source.slice();
+  const view = new DataView(bytes.buffer);
+  const slots = directorySlots(bytes);
+  const parent = findEntry(bytes, slots, parentName);
+  const freeIndex = slots.findIndex(
+    (offset) => view.getUint8(offset + 66) === 0,
+  );
+  const free = slots.at(freeIndex);
+  if (free === undefined) {
+    return panic("fixture has no free directory slot");
+  }
+  writeDirectoryRecord(bytes, free, {
+    ...directoryRecord(name, kind === "storage" ? 1 : 2),
+    rightSiblingId: view.getUint32(parent + 76, true),
+  });
+  view.setUint32(parent + 76, freeIndex, true);
+  return bytes;
+};
+
+/** Cuts a storage's children out of the tree (they stay allocated). */
+export const detachChildren = (
+  source: Uint8Array,
+  storageName: string,
+): Uint8Array => {
+  const bytes = source.slice();
+  const storage = findEntry(bytes, directorySlots(bytes), storageName);
+  new DataView(bytes.buffer).setUint32(storage + 76, NO_STREAM, true);
   return bytes;
 };
