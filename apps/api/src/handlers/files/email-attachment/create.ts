@@ -6,6 +6,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  ACCOUNT_ACCESS,
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
@@ -32,6 +33,7 @@ const config = {
   description:
     "Save one attachment from an email into an accessible matter as a document. Returns the created entity and file field identifiers.",
   permissions: { workspace: ["read"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
     fieldId: tSafeId("field"),
