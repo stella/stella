@@ -5,7 +5,11 @@ import type { Static } from "elysia";
 import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { personDateOfBirth } from "@/api/lib/business-registries/entity-checks";
@@ -13,6 +17,7 @@ import { nationalityCodesSchema } from "@/api/lib/business-registries/nationalit
 import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { sanctionsPublicReadDb } from "@/api/lib/lists/sanctions/public-read-owner";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import {
@@ -24,7 +29,6 @@ import type {
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { logger } from "@/api/lib/observability/logger";
-import { sanctionsPublicReadDb } from "@/api/lib/root-scoped-db";
 
 const bodySchema = t.Object(
   {
@@ -145,9 +149,11 @@ export const createPublicSanctionsSearchHandler = ({
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },
       body: bodySchema,
+      response: publicSanctionsResponseSchema,
     },
     async function* ({
       body,

@@ -10,8 +10,6 @@ import {
 } from "@/api/db/scoped";
 import type { CurrentMembershipScope, RlsDatabase } from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
-import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
@@ -223,7 +221,3 @@ export const createRootRunActor = <TRun extends SafeIdType>(
     inputSafeDb: createRootMembershipSafeDb(member, database),
   };
 };
-
-/** Anonymous sanctions reads run under a column-restricted, read-only role. */
-export const sanctionsPublicReadDb: SanctionsPublicReadDb =
-  createSanctionsPublicReadDb(rlsDb);
