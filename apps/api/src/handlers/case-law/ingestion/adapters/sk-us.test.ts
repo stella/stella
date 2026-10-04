@@ -184,9 +184,63 @@ type MockOptions = {
   onSearch?: (body: SearchBody, headers: Headers) => void;
   /** Judges the per-docket facet query reports as dissenting. */
   dissenters?: readonly string[];
-  /** Every supplementary surface answers nothing, as this service does under load. */
-  supplementaryUnavailable?: boolean;
+  /** How each supplementary surface answers; unnamed ones serve their response. */
+  supplementary?: Partial<Record<SupplementarySurface, SurfaceAnswer>>;
   collection?: SearchStub;
+};
+
+/** The responses served for one decision beside its listing row and its file. */
+const SUPPLEMENTARY_SURFACES = [
+  "content",
+  "facets",
+  "collection",
+  "file",
+  "codelist",
+] as const;
+
+type SupplementarySurface = (typeof SUPPLEMENTARY_SURFACES)[number];
+
+/** How a surface answers in place of the response it serves. */
+type SurfaceAnswer =
+  | { type: "status"; status: number }
+  | { type: "empty-200" }
+  | { type: "timeout" };
+
+/** The answers that are failures to read, not the service stating an absence. */
+const FAILED_READS = [
+  { type: "status", status: 500 },
+  { type: "status", status: 204 },
+  { type: "empty-200" },
+  { type: "timeout" },
+] as const satisfies readonly SurfaceAnswer[];
+
+const surfaceAnswer = (
+  answer: SurfaceAnswer | undefined,
+  served: () => Response,
+): Promise<Response> => {
+  if (answer === undefined) {
+    return Promise.resolve(served());
+  }
+  switch (answer.type) {
+    case "status":
+      return Promise.resolve(
+        new Response(answer.status === 204 ? null : "", {
+          status: answer.status,
+        }),
+      );
+    case "empty-200":
+      return Promise.resolve(new Response("", { headers: JSON_HEADERS }));
+    case "timeout":
+      return Promise.reject(
+        new DOMException("The operation timed out.", "TimeoutError"),
+      );
+    default: {
+      const exhaustive: never = answer;
+      throw new Error(
+        `unhandled surface answer: ${JSON.stringify(exhaustive)}`,
+      );
+    }
+  }
 };
 
 /**
@@ -271,31 +325,28 @@ const mockFetch = ({
   onSearch,
   search,
   searchFor,
-  supplementaryUnavailable = false,
+  supplementary = {},
   collection = { type: "page", documents: [], numFound: 0 },
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
   let facetCall = 0;
-  const unavailable = () => new Response(null, { status: 204 });
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
         if (body.docType === "USSR_ZNAU") {
-          return Promise.resolve(
-            supplementaryUnavailable
-              ? unavailable()
-              : searchResponse(collection),
+          return surfaceAnswer(supplementary.collection, () =>
+            searchResponse(collection),
           );
         }
         if (isFacetQuery(body)) {
           facetCall += 1;
-          return Promise.resolve(
-            supplementaryUnavailable
-              ? unavailable()
-              : new Response(facetsBody(dissenters), { headers: JSON_HEADERS }),
+          return surfaceAnswer(
+            supplementary.facets,
+            () =>
+              new Response(facetsBody(dissenters), { headers: JSON_HEADERS }),
           );
         }
         onSearch?.(body, new Headers(init?.headers));
@@ -310,29 +361,27 @@ const mockFetch = ({
         );
       }
       if (url.pathname === CONTENT_PATH) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(
-                JSON.stringify({
-                  content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
-                }),
-                { headers: JSON_HEADERS },
-              ),
+        return surfaceAnswer(
+          supplementary.content,
+          () =>
+            new Response(
+              JSON.stringify({
+                content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+              }),
+              { headers: JSON_HEADERS },
+            ),
         );
       }
       if (url.pathname === CODELIST_PATH) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
+        return surfaceAnswer(
+          supplementary.codelist,
+          () => new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(COURT_FILE_PREFIX)) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(COURT_FILE_BODY, { headers: JSON_HEADERS }),
+        return surfaceAnswer(
+          supplementary.file,
+          () => new Response(COURT_FILE_BODY, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(DOWNLOAD_PREFIX)) {
@@ -964,68 +1013,32 @@ describe("sk-us buildDecision", () => {
     });
   });
 
-  test.each([204, 500])(
-    "collection listing failure (%s) remains visible beside the publisher inclusion flag",
-    async (status) => {
-      const logs = installRecordingLogger();
-      try {
-        for (const [includeToZnaU, publicationStatus] of [
-          [true, "selected"],
-          [false, "not_included"],
-        ] as const) {
-          mockFetch({ search: [], collection: { type: "status", status } });
-          const built = await buildSkUsDecision({
-            ...PLENARY_OPINION,
-            mkIncludeToZnaU: includeToZnaU,
-          });
-          if (built.type !== "built") {
-            throw new Error(`expected a built decision, got ${built.type}`);
-          }
-          expect(
-            Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
-              status: publicationStatus,
-              reason: "unavailable",
-            }),
-          ).toBe(true);
-          expect(
-            decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
-              "collection-listing"
-            ],
-          ).toBeUndefined();
-        }
-        expect(
-          logs
-            .at("WARN")
-            .filter(
-              ({ message }) =>
-                message === "case_law.ingestion.collection_fetch_failed",
-            ),
-        ).toHaveLength(2);
-        expect(
-          logs
-            .at("WARN")
-            .filter(
-              ({ message }) =>
-                message === "case_law.ingestion.collection_fetch_failed",
-            )
-            .map(({ attributes }) => attributes),
-        ).toEqual([
-          expect.objectContaining({
-            adapterKey: "sk-us",
-            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
-            reason: "unavailable",
-          }),
-          expect.objectContaining({
-            adapterKey: "sk-us",
-            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
-            reason: "unavailable",
-          }),
-        ]);
-      } finally {
-        logs.restore();
+  test("a collection listing the service states nothing for stays visible beside the publisher inclusion flag", async () => {
+    for (const [includeToZnaU, publicationStatus] of [
+      [true, "selected"],
+      [false, "not_included"],
+    ] as const) {
+      mockFetch({ search: [], collection: { type: "status", status: 404 } });
+      const built = await buildSkUsDecision({
+        ...PLENARY_OPINION,
+        mkIncludeToZnaU: includeToZnaU,
+      });
+      if (built.type !== "built") {
+        throw new Error(`expected a built decision, got ${built.type}`);
       }
-    },
-  );
+      expect(
+        Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
+          status: publicationStatus,
+          reason: "unavailable",
+        }),
+      ).toBe(true);
+      expect(
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
+          "collection-listing"
+        ],
+      ).toBeUndefined();
+    }
+  });
 
   test("the judges the source states structurally reach the row", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
@@ -1105,22 +1118,75 @@ describe("sk-us buildDecision", () => {
     ).toBe(true);
   });
 
-  test("a decision the supplementary surfaces answer nothing for still builds", async () => {
-    mockFetch({ search: [], supplementaryUnavailable: true });
+  /** The envelope part each per-decision surface is kept as. */
+  const SURFACE_PART = {
+    content: "document",
+    facets: "facets",
+    collection: "collection-listing",
+    file: "file",
+    codelist: "codelists",
+  } as const satisfies Record<SupplementarySurface, string>;
 
-    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
-    if (outcome.type !== "built") {
-      throw new Error(`expected a built decision, got ${outcome.type}`);
-    }
-    // A surface the service will not serve leaves its part out rather than
-    // halting the crawl: the listing row still names the decision, and the
-    // envelope states exactly what arrived.
-    expect(
-      Object.keys(
-        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "") ?? {},
-      ),
-    ).toEqual(["listing"]);
+  const PER_DECISION_SURFACES = SUPPLEMENTARY_SURFACES.filter(
+    (surface) => surface !== "codelist",
+  );
+
+  test.each(
+    PER_DECISION_SURFACES.flatMap((surface) =>
+      FAILED_READS.map((answer) => [surface, answer] as const),
+    ),
+  )("a %s read that fails builds nothing (%o)", async (surface, answer) => {
+    mockFetch({ search: [], supplementary: { [surface]: answer } });
+    expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
+      type: "read-unavailable",
+      part: SURFACE_PART[surface],
+    });
+
+    mockFetch({ search: [], supplementary: { [surface]: answer } });
+    expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
+      type: "detail-unavailable",
+    });
   });
+
+  test.each(FAILED_READS)(
+    "a codelist read that fails fails the build, not the decision (%o)",
+    async (answer) => {
+      mockFetch({ search: [], supplementary: { codelist: answer } });
+      expect(
+        await rejectionOf(buildSkUsDecision(PLENARY_OPINION)),
+      ).toBeInstanceOf(AdapterFetchError);
+
+      mockFetch({ search: [], supplementary: { codelist: answer } });
+      expect(
+        await rejectionOf(reconciliation.buildDecision(PLENARY_OPINION)),
+      ).toBeInstanceOf(AdapterFetchError);
+    },
+  );
+
+  test.each(SUPPLEMENTARY_SURFACES)(
+    "a %s surface that states it holds nothing builds without its part",
+    async (surface) => {
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 404 } },
+      });
+
+      const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+      if (outcome.type !== "built") {
+        throw new Error(`expected a built decision, got ${outcome.type}`);
+      }
+      const parts = Object.keys(
+        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "") ?? {},
+      );
+      expect(parts).not.toContain(SURFACE_PART[surface]);
+      expect(parts.toSorted()).toEqual(
+        Object.values(SURFACE_PART)
+          .filter((part) => part !== SURFACE_PART[surface])
+          .concat("listing")
+          .toSorted(),
+      );
+    },
+  );
 
   test("the identity the walk keys is the identity the build stores", async () => {
     mockFetch({ search: [] });
@@ -1269,6 +1335,60 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
+  });
+
+  test("the crawl stores nothing for a document whose text read fails and counts it", async () => {
+    mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [PLENARY_OPINION, CHAMBER_RESOLUTION],
+          numFound: 2,
+        },
+      ],
+    });
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (
+          url.pathname === CONTENT_PATH &&
+          typeof init?.body === "string" &&
+          init.body.includes(CHAMBER_RESOLUTION.documentId)
+        ) {
+          return new Response("", { status: 500 });
+        }
+        return await served(input, init);
+      },
+    );
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    expect(page.decisions.map((decision) => decision.sourceDocumentId)).toEqual(
+      [PLENARY_OPINION.documentId],
+    );
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+  });
+
+  test("a codelist read that fails fails the page, so its cursor is kept", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      supplementary: { codelist: { type: "status", status: 500 } },
+    });
+
+    const page = await skUsAdapter.fetchPage("2021:0", {});
+
+    expect(page.isErr()).toBe(true);
+    if (page.isOk()) {
+      return;
+    }
+    expect(page.error).toBeInstanceOf(AdapterFetchError);
+    expect(page.error.message).toBe("SK ÚS codelist unavailable");
   });
 
   test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {

@@ -115,6 +115,11 @@ const installPublisherStub = (): (() => void) => {
           }),
         );
       }
+      if (url.pathname.startsWith("/o/v1/")) {
+        // The ÚS supplementary surfaces state nothing for these documents;
+        // the identity under test is read from the listing row.
+        return Promise.resolve(new Response(null, { status: 404 }));
+      }
       if (url.hostname === "vyhledavac.nssoud.cz") {
         return Promise.resolve(
           new Response(NSS_SESSION_PAGE, {
