@@ -2110,7 +2110,7 @@ type ManyRequiredTermsOptions = {
  * read from the page already returned. A continuation is not asked about: it
  * is short at the end of every result set. A short first page that still
  * carries a cursor (a ranked row gone before hydration) has unread results,
- * so it is not exhausted either.
+ * so it is not exhausted either. A quoted phrase requires each of its words.
  */
 const manyRequiredTermsWarnings = ({
   guidance,
@@ -2128,10 +2128,22 @@ const manyRequiredTermsWarnings = ({
   ) {
     return [];
   }
-  const terms = tokenizeCorpusFreeText(queryUsed).map(({ value }) => value);
-  return terms.length < MANY_REQUIRED_TERMS_THRESHOLD
+  const tokens = tokenizeCorpusFreeText(queryUsed);
+  const wordCount = tokens.reduce(
+    (count, { value }) => count + value.split(" ").length,
+    0,
+  );
+  return wordCount < MANY_REQUIRED_TERMS_THRESHOLD
     ? []
-    : [manyRequiredTermsWarning({ terms, slots })];
+    : [
+        manyRequiredTermsWarning({
+          terms: tokens.map((token) =>
+            token.type === "phrase" ? `"${token.value}"` : token.value,
+          ),
+          wordCount,
+          slots,
+        }),
+      ];
 };
 
 const caseLawSearchResult = ({

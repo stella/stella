@@ -4447,6 +4447,7 @@ describe("OpenAI-compatible MCP tools", () => {
   describe("search_case_law warns about a long phrasing that came back short", () => {
     const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
     const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
+    const SIX_WORD_PHRASE = `"${SIX_TERMS}"`;
 
     const searchFor = async ({
       guidance,
@@ -4513,6 +4514,19 @@ describe("OpenAI-compatible MCP tools", () => {
       );
       // Read from the page already returned: one engine call per phrasing.
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("a quoted six-word phrase counts each of its words", async () => {
+      const warnings = await searchFor({
+        guidance: "v1",
+        queryUsed: SIX_WORD_PHRASE,
+        hits: 2,
+        limit: 3,
+      });
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 
     test.each([

@@ -159,15 +159,18 @@ export const filterDroppedWarning = ({
 
 export const manyRequiredTermsWarning = ({
   terms,
+  wordCount,
   slots,
 }: {
-  /** The words the phrasing required, as `queryUsed` spells them. */
+  /** The terms and quoted phrases the phrasing required, as `queryUsed` spells them. */
   terms: readonly string[];
+  /** The words those terms hold, a phrase counting each of its words. */
+  wordCount: number;
   /** The result slots the phrasing was given on this page. */
   slots: number;
 }): AgentCaseLawSearchWarning => ({
   code: "many_required_terms",
-  message: `This phrasing required ${String(terms.length)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
+  message: `This phrasing required ${String(wordCount)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
   hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
 });
 
@@ -231,6 +234,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
         "lhůta",
         "vědomost",
       ],
+      wordCount: 6,
       slots: 5,
     }),
 } as const satisfies Record<
