@@ -24,6 +24,7 @@ import {
   dynamicToolNamespacePrefix,
   isDynamicToolNamespace,
 } from "@/api/lib/mcp-upstream/namespace";
+import { pickDefined } from "@/api/lib/pick-defined";
 import { CHATGPT_APP_SUBMISSION_PROFILE } from "@/api/mcp/chatgpt-app-submission-profile";
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -44,15 +45,19 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
+  type McpToolDefinition,
 } from "@/api/mcp/tool-types";
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
 const deriveCliAnnotation = (
-  tool: StaticMcpToolDefinition,
+  tool: McpToolDefinition & { name: StaticMcpToolDefinition["name"] },
 ): McpCliToolAnnotation => {
-  const annotation: McpCliToolAnnotation =
-    DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
+  const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
+  const annotation = {
+    ...declared,
+    ...pickDefined(tool, ["featureId"]),
+  };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
   if (behavior === undefined || behavior.type === "always") {
@@ -64,6 +69,12 @@ const deriveCliAnnotation = (
     // target decides its own risk at dispatch, and an outbound call is refused
     // by the same server-side gate a destructive one is.
     return { ...annotation, confirmPassthrough: true };
+  }
+
+  if (behavior.type === "upstream") {
+    return panic(
+      `${tool.name} static CLI metadata cannot use upstream behavior`,
+    );
   }
 
   const discriminator = annotation.discriminator;

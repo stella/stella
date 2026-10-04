@@ -210,6 +210,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
+  API_FEATURE_ACCESS_GRANTS: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -398,6 +399,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
+  API_FEATURE_ACCESS_GRANTS:
+    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FILE_USAGE_LIMITS:
@@ -698,6 +701,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
+  API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,

@@ -7,7 +7,6 @@
     "eu-ecj::decision": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects.",
     "pl-courts::decision": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects.",
     "pl-courts::search": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects.",
-    "sk-us::decision": "rawHash is derived from the envelope only; pass the objects stored beside it to sourceFingerprint.",
     "us-courtlistener::decision": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects."
   },
   "files": {
@@ -28,8 +27,7 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",
-    "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",
-    "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": "Hand-written rawHash that differs from sourceFingerprint for the enrolled fixture (see drivers); migrating changes stored hashes, so each source moves in its own change with a refresh plan."
+    "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path."
   },
   "writers": {
     "apps/api/src/lib/infosoud/agenda-import.ts::external-id-write::importInfoSoudAgendaItems/values": "Writes a row keyed by an external id without the change marker; store and compare one on upsert.",

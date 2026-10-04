@@ -3194,6 +3194,51 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
 };
 
 describe("verified merge handoff", () => {
+  test("GitHub refuses a head moved between verification and enable", () => {
+    const result = armAndVerify({
+      pullRequestId: "PR_fixture",
+      expectedHeadSha: HEAD_SHA,
+      jump: false,
+      checksSucceeded: false,
+      readState: () => ({
+        id: "PR_fixture",
+        headRefOid: HEAD_SHA,
+        updatedAt: "2026-10-02T09:00:00Z",
+        autoMergeRequest: null,
+        mergeQueueEntry: null,
+      }),
+      readRemovals: () => [],
+      mutate: (query, variables) => {
+        // The server head changed after the read. Omitting the pin would
+        // accept that unverified head, so this fake models both outcomes.
+        if (
+          query.includes("expectedHeadOid:$sha") &&
+          variables.sha !== OTHER_SHA
+        ) {
+          throw new Error("expectedHeadOid does not match current head");
+        }
+        return {
+          data: {
+            enablePullRequestAutoMerge: {
+              pullRequest: {
+                id: "PR_fixture",
+                headRefOid: HEAD_SHA,
+                updatedAt: "2026-10-02T09:00:00Z",
+                autoMergeRequest: { enabledAt: "2026-10-02T10:00:00Z" },
+                mergeQueueEntry: null,
+              },
+            },
+          },
+        };
+      },
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "expectedHeadOid does not match current head",
+      );
+    }
+  });
   test.each([
     { initialEnabledAt: "2026-10-02T08:41:00Z" },
     {
