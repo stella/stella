@@ -1,3 +1,4 @@
+// parser-output-unchanged: reporter suffix moved to shared owner; citation matches and emitted references are unchanged
 /**
  * How each jurisdiction prints a statute citation, and where it links.
  *
@@ -17,6 +18,7 @@
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
 import type {
   ProvisionReference,
   ProvisionUnit,
@@ -484,7 +486,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         `https://www.e-sbirka.cz/eli/cz/sb/${year}/${number}`,
       // Reporters (`Sb. NSS`, `Sb. rozh.`) and the treaty collection
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
-      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
+      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|${CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE}))`,
     },
     jurisdiction: "CZE",
     levels: [

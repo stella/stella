@@ -16,13 +16,21 @@ import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObserver,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
+  claimDocumentFetch,
   countParkedDocuments,
   fetchDecisionDocument,
   loadPendingDocuments,
@@ -89,6 +97,15 @@ const SEEDS: readonly Seed[] = [
 
 let testDb: TestDatabase;
 let scopedDb: ScopedDb;
+const claimFor = async (id: SafeId<"caseLawDecision">) => {
+  const claim = await claimDocumentFetch(id, scopedDb);
+  expect(claim.status).toBe("claimed");
+  if (claim.status !== "claimed") {
+    throw new Error("expected claimed snapshot");
+  }
+  return claim.decision;
+};
+
 let sourceId: SafeId<"caseLawSource">;
 /** Whether this file inserted the source, and so must remove it. */
 let sourceOwnership: "created" | "borrowed" = "borrowed";
@@ -223,8 +240,7 @@ test("parking takes a decision out of the walk at once and keeps it pending", as
 
   expect(
     await parkDocumentFetch({
-      claimedSourceHash: null,
-      decisionId: idFor("to-park"),
+      decision: await claimFor(idFor("to-park")),
       scopedDb,
     }),
   ).toBe("parked");
@@ -272,22 +288,19 @@ const fetchState = async (label: string) =>
 type FetchSeededOptions = {
   label: string;
   answer: () => Promise<Response>;
+  observe?: DocumentStageObserver;
 };
 
 /** One pass of the unit the walk runs, over a seeded decision. */
-const fetchSeeded = async ({ answer, label }: FetchSeededOptions) =>
+const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
   await fetchDecisionDocument({
-    decision: {
-      id: idFor(label),
-      caseNumber: `parking-${suffix}-${label}`,
-      ecli: null,
-      court: "Okresný súd",
-      country: "SVK",
-      decisionDate: "2026-05-01",
-      decisionType: null,
-      documentUrl: PUBLISHER_URL,
-    },
-    fetchDocument: answer,
+    onDocumentObservation: observe,
+    decisionId: idFor(label),
+    fetchDocument: async () =>
+      await observePublisherDocumentFetch({
+        source: ADAPTER_KEYS.SK_COURTS,
+        fetch: answer,
+      }),
     scopedDb,
     signal: new AbortController().signal,
   });
@@ -307,6 +320,52 @@ const insertFetchable = async (
 };
 
 describe("a failure that may affect every document", () => {
+  test("post-response body faults retain their typed outcome without an ok event", async () => {
+    const failures = [
+      {
+        error: new DOMException("private", "TimeoutError"),
+        outcome: "timeout",
+      },
+      {
+        error: Object.assign(new TypeError("private"), { code: "ECONNRESET" }),
+        outcome: "connection",
+      },
+    ] as const;
+    for (const { error, outcome } of failures) {
+      const label = `body-${outcome}`;
+      await insertFetchable(label);
+      const observations: DocumentStageObservation[] = [];
+      const result = await fetchSeeded({
+        label,
+        observe: (event) => {
+          observations.push(event);
+        },
+        answer: async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start: (controller) => {
+                controller.error(error);
+              },
+            }),
+            { headers: { "content-type": "application/pdf" } },
+          ),
+      });
+      expect(result).toMatchObject({ status: "deferred", failure: "network" });
+      expect(await fetchState(label)).toEqual({
+        fulltext: null,
+        documentFetchAttempts: 1,
+      });
+      expect(observations).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+          source: ADAPTER_KEYS.SK_COURTS,
+          outcome,
+          http_status: 200,
+        },
+      ]);
+    }
+  });
+
   test("a publisher that is down or refusing this client throws and parks nothing", async () => {
     const parkedBefore = await countParkedDocuments(scopedDb, sourceId);
 
@@ -360,18 +419,30 @@ describe("a failure that may affect every document", () => {
 
   test("a body that is not a PDF throws and parks nothing", async () => {
     await insertFetchable("not-a-pdf");
+    const observations: DocumentStageObservation[] = [];
 
     const thrown = await rejectionOf(
       fetchSeeded({
         label: "not-a-pdf",
+        observe: (event) => {
+          observations.push(event);
+        },
         answer: async () =>
-          await Promise.resolve(
-            new Response("<html><body>Údržba</body></html>"),
-          ),
+          new Response("<html><body>Údržba</body></html>", {
+            headers: { "content-type": "application/pdf" },
+          }),
       }),
     );
 
     expect(thrown).toBeInstanceOf(AdapterFetchError);
+    expect(observations).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source: ADAPTER_KEYS.SK_COURTS,
+        outcome: "body_shape",
+        http_status: 200,
+      },
+    ]);
     expect(await fetchState("not-a-pdf")).toEqual({
       fulltext: null,
       documentFetchAttempts: 1,
@@ -380,6 +451,96 @@ describe("a failure that may affect every document", () => {
 });
 
 describe("a stale claim", () => {
+  test("buffered decisions fetch only the claimed URL", async () => {
+    const currentUrl = PUBLISHER_URL.replace("3c4f2a8e", "4c4f2a8e");
+    for (const oldStatus of [200, 404]) {
+      const label = `buffered-${oldStatus}`;
+      await insertFetchable(label, "source-v1");
+      const buffered = (
+        await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT)
+      ).find(({ id }) => id === idFor(label));
+      if (buffered === undefined) {
+        throw new Error("expected buffered decision");
+      }
+      const metadata = {
+        caseNumber: `current-${suffix}-${oldStatus}`,
+        ecli: "ECLI:SK:OSBA1:2026:1234567890.1",
+        court: "Current court",
+        country: "SVK",
+        decisionDate: "2026-06-01",
+        decisionType: "ROZSUDOK",
+      };
+      await testDb
+        .update(caseLawDecisions)
+        .set({
+          ...metadata,
+          documentUrl: currentUrl,
+          sourceHash: "source-v2",
+        })
+        .where(eq(caseLawDecisions.id, buffered.id));
+      expect(buffered.documentUrl).not.toBe(currentUrl);
+      expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
+      const urls: string[] = [];
+      const outcome = await fetchDecisionDocument({
+        decisionId: buffered.id,
+        fetchDocument: async (url) => {
+          urls.push(url.href);
+          return url.href === currentUrl
+            ? new Response(
+                new ReadableStream({
+                  start(controller) {
+                    controller.error(
+                      new DOMException("body timeout", "TimeoutError"),
+                    );
+                  },
+                }),
+              )
+            : new Response(oldStatus === 200 ? UNREADABLE_PDF : null, {
+                status: oldStatus,
+              });
+        },
+        scopedDb,
+        signal: new AbortController().signal,
+      });
+      expect(urls).toEqual([currentUrl]);
+      expect(outcome).toEqual({
+        status: "deferred",
+        failure: "network",
+        detail: "TimeoutError",
+      });
+      expect(await fetchState(label)).toEqual({
+        fulltext: null,
+        documentFetchAttempts: 1,
+      });
+    }
+  });
+
+  test("the atomic claim returns every processing field from the current row", async () => {
+    const label = "claim-snapshot";
+    await insertFetchable(label, "source-v1");
+    const current = {
+      caseNumber: `snapshot-${suffix}`,
+      ecli: "ECLI:SK:OSBA1:2026:1234567890.2",
+      court: "Snapshot court",
+      country: "SVK",
+      decisionDate: "2026-07-01",
+      decisionType: "UZNESENIE",
+      documentUrl: PUBLISHER_URL.replace("3c4f2a8e", "5c4f2a8e"),
+      sourceHash: "source-v2",
+    };
+    await testDb
+      .update(caseLawDecisions)
+      .set(current)
+      .where(eq(caseLawDecisions.id, idFor(label)));
+    const claim = await claimDocumentFetch(idFor(label), scopedDb);
+    expect(claim.status).toBe("claimed");
+    if (claim.status !== "claimed") {
+      throw new Error("expected claimed snapshot");
+    }
+    expect(claim.decision).toMatchObject({ id: idFor(label), ...current });
+    expect(claim.attempts).toBe(1);
+  });
+
   const VERSIONS = [null, "source-v1", "source-v2"] as const;
 
   test("a failure write lands only on the source version its fetch claimed", async () => {
@@ -389,18 +550,24 @@ describe("a stale claim", () => {
     for (const claimed of VERSIONS) {
       for (const current of VERSIONS) {
         const label = `stale-${claimed ?? "none"}-${current ?? "none"}`;
-        await insertFetchable(`${label}-park`, current ?? undefined);
-        await insertFetchable(`${label}-mark`, current ?? undefined);
+        await insertFetchable(`${label}-park`, claimed ?? undefined);
+        await insertFetchable(`${label}-mark`, claimed ?? undefined);
+        const parkDecision = await claimFor(idFor(`${label}-park`));
+        const markDecision = await claimFor(idFor(`${label}-mark`));
+        await testDb
+          .update(caseLawDecisions)
+          .set({ sourceHash: current })
+          .where(
+            inArray(caseLawDecisions.id, [parkDecision.id, markDecision.id]),
+          );
         const applies = claimed === current;
 
         const parked = await parkDocumentFetch({
-          claimedSourceHash: claimed,
-          decisionId: idFor(`${label}-park`),
+          decision: parkDecision,
           scopedDb,
         });
         await markDocumentUnavailable({
-          claimedSourceHash: claimed,
-          decisionId: idFor(`${label}-mark`),
+          decision: markDecision,
           scopedDb,
         });
 
@@ -414,9 +581,9 @@ describe("a stale claim", () => {
           parked: applies ? "parked" : "superseded",
           park: {
             fulltext: null,
-            documentFetchAttempts: applies ? MAX_DOCUMENT_FETCH_ATTEMPTS : 0,
+            documentFetchAttempts: applies ? MAX_DOCUMENT_FETCH_ATTEMPTS : 1,
           },
-          mark: { fulltext: applies ? "" : null, documentFetchAttempts: 0 },
+          mark: { fulltext: applies ? "" : null, documentFetchAttempts: 1 },
         });
       }
     }

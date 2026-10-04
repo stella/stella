@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   getGatewayMcpToolDefinition,
@@ -111,6 +112,7 @@ const contextFor = (
   const writeTools = buildChatWriteTools(
     asTestRaw<Parameters<typeof buildChatWriteTools>[0]>({
       ...context,
+      memberRole: sessionMemberRole(context.memberRole),
       toolWorkspaceIds: resolveToolWorkspaceIds({
         accessibleWorkspaceIds: [],
         pinnedIds: [],
@@ -199,7 +201,8 @@ describe("feature descriptor discovery and admission", () => {
         ),
       ).toBe(false);
       const resourceRead = await Result.tryPromise({
-        try: () => readMcpResource("stella://about", "default", context),
+        try: async () =>
+          await readMcpResource("stella://about", "default", context),
         catch: (cause) => cause,
       });
       expect(resourceRead).toMatchObject({

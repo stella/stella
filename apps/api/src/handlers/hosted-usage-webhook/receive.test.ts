@@ -147,6 +147,47 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
     };
   };
 
+  test("records handled delivery without provider customer details", async () => {
+    await withWebhookConfig(async () => {
+      const eventId = `evt_minimal_${Bun.randomUUIDv7()}`;
+      const data = {
+        id: "subscription-fixture",
+        status: "active",
+        account_ref: "customer-fixture",
+        policy_ref: "missing-policy-fixture",
+        current_period_start: "2026-10-01T00:00:00Z",
+        current_period_end: "2026-11-01T00:00:00Z",
+        created_at: "2026-10-01T00:00:00Z",
+      };
+      const body = JSON.stringify({
+        type: "entitlement.created",
+        customer: { email: "person@example.test" },
+        data: {
+          ...data,
+          customer: { name: "Example Person", address: "Example Street" },
+          card: { last4: "1234" },
+          tax_id: "fixture-tax-id",
+        },
+      });
+      expect((await deliver(eventId, body)).status).toBe(200);
+      const stored = (
+        await db
+          .select()
+          .from(hostedUsageWebhookEvents)
+          .where(eq(hostedUsageWebhookEvents.eventId, eventId))
+      ).at(0);
+      expect(stored?.payload).toEqual({
+        type: "entitlement.created",
+        data,
+        signatureVerified: true,
+        payloadDigest: new Bun.CryptoHasher("sha256")
+          .update(body)
+          .digest("hex"),
+      });
+      expect(stored?.result).toBe("ignored");
+    });
+  });
+
   test("records an event whose payload carries a NUL character", async () => {
     await withWebhookConfig(async () => {
       const eventId = `evt_unknown_${Bun.randomUUIDv7()}`;
@@ -163,13 +204,16 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         .from(hostedUsageWebhookEvents)
         .where(eq(hostedUsageWebhookEvents.eventId, eventId));
       expect(stored?.payload).toEqual({
-        type: "customer.note_added",
-        data: { note: "before\u2400after", "key\u2400": "value" },
+        signatureVerified: true,
+        payloadDigest: new Bun.CryptoHasher("sha256")
+          .update(body)
+          .digest("hex"),
+        data: {},
       });
     });
   });
 
-  test("keeps every value when keys differ only by a NUL character", async () => {
+  test("omits arbitrary provider fields including colliding keys", async () => {
     await withWebhookConfig(async () => {
       const eventId = `evt_unknown_${Bun.randomUUIDv7()}`;
       const body = JSON.stringify({
@@ -189,12 +233,11 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         .from(hostedUsageWebhookEvents)
         .where(eq(hostedUsageWebhookEvents.eventId, eventId));
       expect(stored?.payload).toEqual({
-        type: "customer.note_added",
-        data: {
-          a: "plain",
-          "a\u2400": "with the NUL symbol",
-          "a\u2400~2": "with NUL",
-        },
+        signatureVerified: true,
+        payloadDigest: new Bun.CryptoHasher("sha256")
+          .update(body)
+          .digest("hex"),
+        data: {},
       });
     });
   });

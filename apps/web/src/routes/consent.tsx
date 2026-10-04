@@ -8,6 +8,7 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import {
@@ -17,15 +18,16 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
-import { stellaToast } from "@stll/ui/toast";
 
+import { OAuthClientDetails } from "@/components/auth/oauth-client-details";
 import { StellaMark } from "@/components/stella-mark";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  oauthConsentInfoSchema,
   getOauthHashFragment,
   getOauthClientDisplayName,
   getOauthRedirectUrl,
@@ -36,8 +38,8 @@ import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
-import { managementRoles } from "@/lib/organization/consts";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -93,17 +95,17 @@ function ConsentPage() {
     staleTime: Number.POSITIVE_INFINITY,
   });
   const canManageOrganization =
-    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
+    hasOrganizationManagementAccess(currentUserRole);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,
-    queryKey: ["oauth-client-public", clientId],
+    queryKey: ["oauth-consent-info", clientId],
     queryFn: async () => {
       if (!clientId) {
         return null;
       }
 
-      const result = await authClient.oauth2.publicClient({
+      const result = await authClient.$fetch("/oauth2/consent-info", {
         query: { client_id: clientId },
       });
 
@@ -111,7 +113,7 @@ function ConsentPage() {
         throw toAuthClientError(result.error);
       }
 
-      return result.data;
+      return v.parse(oauthConsentInfoSchema, result.data);
     },
   });
 
@@ -148,13 +150,7 @@ function ConsentPage() {
     if (result.error) {
       setHasError(true);
       setIsPending(false);
-      stellaToast.add({
-        title: userErrorFromThrown(
-          toAuthClientError(result.error),
-          t("consent.error"),
-        ),
-        type: "error",
-      });
+      notifyUserError(toAuthClientError(result.error), t("consent.error"));
       return;
     }
 
@@ -162,10 +158,7 @@ function ConsentPage() {
     if (!redirectUrl) {
       setHasError(true);
       setIsPending(false);
-      stellaToast.add({
-        title: t("consent.error"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("consent.error"));
       return;
     }
 
@@ -189,6 +182,14 @@ function ConsentPage() {
           </div>
         </FrameHeader>
         <FramePanel className="flex flex-col gap-5 p-4 sm:p-5">
+          {clientQuery.data ? (
+            <OAuthClientDetails info={clientQuery.data} />
+          ) : null}
+          {clientQuery.isError ? (
+            <p role="alert" className="text-destructive text-sm">
+              {t("consent.error")}
+            </p>
+          ) : null}
           {organizationName ? (
             <div className="bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2.5">
               <p className="text-muted-foreground text-sm">
@@ -250,7 +251,7 @@ function ConsentPage() {
             </Button>
             <Button
               className="w-full sm:w-auto"
-              disabled={isPending}
+              disabled={isPending || !clientQuery.data}
               loading={isPending}
               onClick={() => {
                 detached(handleConsent(true), "consent.allow");

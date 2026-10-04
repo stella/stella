@@ -30,6 +30,7 @@ import type {
   HandlerOutputsMatchByName,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -198,9 +199,10 @@ export const applyChatApprovalConfirmation = ({
  *   `context.recordAuditEvent`. Chat threads its real audit recorder into
  *   `buildMcpContextFromChat`, so a projected write leaves the same audit trail
  *   an MCP or REST write would; there is no separate audit step here.
- * - Role and workspace-status gating are the handler's own (`roles[...]
- *   .authorize`, `ensureActiveWorkspace`), exactly as MCP dispatch relies on;
- *   this orchestrator adds only the feature-flag gate MCP dispatch also applies.
+ * - The definition's declared write permissions are enforced here exactly as
+ *   MCP dispatch enforces them; the handler keeps its input-specific role and
+ *   workspace-status checks (`ensureActiveWorkspace`). This orchestrator also
+ *   applies the feature-flag gate MCP dispatch applies.
  * - Approval is enforced upstream by the chat tool policy (`mutation` ->
  *   `needsApproval`), not here. Because the MCP handler re-validates existence
  *   and access against current state at execution time, a stale approval (the
@@ -274,6 +276,16 @@ export const runRegistryWriteTool = async (
       new ChatToolError({
         kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
+      }),
+    );
+  }
+  // Registration already withholds the tool from a member without its
+  // declared permissions; this keeps the refusal on the execution path.
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }

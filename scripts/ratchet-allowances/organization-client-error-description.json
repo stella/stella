@@ -1,0 +1,5 @@
+{
+  "metric": "direct-error-message-display",
+  "delta": 1,
+  "reason": "Organization setup preserves provider validation reasons through notifyAuthClientError at the shared toast owner. Only client error responses below status 500 may display the provider message; server failures retain generic copy."
+}

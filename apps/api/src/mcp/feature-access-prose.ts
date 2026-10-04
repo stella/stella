@@ -1,10 +1,9 @@
-import capabilityCatalog from "@stll/cli/capability-catalog.json";
-
 import { isRecord } from "@/api/lib/type-guards";
 import {
   isMcpDescriptorFeatureEnabled,
   type McpFeatureAccessContext,
 } from "@/api/mcp/feature-access";
+import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feature-bindings";
 
 export const hiddenMcpDescriptorIds = (
   context: McpFeatureAccessContext | undefined,
@@ -22,20 +21,23 @@ export const hiddenMcpDescriptorIds = (
           }),
       )
       .map(({ name }) => name),
-    ...capabilityCatalog
+    ...Array.from(
+      new Map([
+        ...CAPABILITY_FEATURE_BINDINGS,
+        ...(context?.testDependencies?.featureAccessBindings?.capabilities ??
+          []),
+      ]).entries(),
+    )
       .filter(
-        (entry) =>
+        ([id, featureId]) =>
           !isMcpDescriptorFeatureEnabled({
             context,
             kind: "capabilities",
-            id: entry.id,
-            featureId:
-              "featureId" in entry && typeof entry.featureId === "string"
-                ? entry.featureId
-                : undefined,
+            id,
+            featureId,
           }),
       )
-      .map(({ id }) => id),
+      .map(([id]) => id),
   ]);
 
 export const scopeMcpDescriptorProse = (

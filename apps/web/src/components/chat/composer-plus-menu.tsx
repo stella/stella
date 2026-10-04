@@ -38,7 +38,6 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -109,6 +108,7 @@ import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
@@ -1235,9 +1235,13 @@ const ComposerContextMatterSub = ({
       return [];
     }
     return entitiesData.entities.map((entity) =>
-      buildEntityMentionOption({ entity, sourceWorkspaceId }),
+      buildEntityMentionOption({
+        entity,
+        matterId: matter.id,
+        sourceWorkspaceId,
+      }),
     );
-  }, [entitiesData, sourceWorkspaceId]);
+  }, [entitiesData, matter.id, sourceWorkspaceId]);
   const matterMentionOption = useMemo<ChatMentionOption | undefined>(
     () =>
       buildWorkspaceMentionOptions({
@@ -1396,7 +1400,7 @@ const ComposerMcpSubmenu = ({
       return unwrapEden(response);
     });
     if (Result.isError(result)) {
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }
     detached(

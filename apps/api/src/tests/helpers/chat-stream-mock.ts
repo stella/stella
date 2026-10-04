@@ -30,6 +30,6 @@ export const createChatStreamMock = () => {
     } finally {
       reader.releaseLock();
     }
-    return sseResponse(source);
+    return { type: "streaming", response: sseResponse(source) } as const;
   });
 };

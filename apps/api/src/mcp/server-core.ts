@@ -19,8 +19,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
-import { env } from "@/api/env";
 import { detached } from "@/api/lib/analytics/capture";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -85,7 +86,6 @@ import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
   McpToolDefinition,
-  McpToolFeatureFlag,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
@@ -258,7 +258,7 @@ export const mcpOmittedToolNamesByReason = ({
 }: {
   context?: McpFeatureAccessContext;
   grantedScopes: readonly string[];
-  isFeatureEnabled?: (feature: McpToolFeatureFlag | undefined) => boolean;
+  isFeatureEnabled?: (feature: DeploymentFeatureFlag | undefined) => boolean;
   mode: McpMode;
 }): Record<McpToolOmissionReason, readonly string[]> => {
   const feature: string[] = [];
@@ -290,7 +290,7 @@ export const mcpOmittedToolNamesByReason = ({
   return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
-const withMcpCors = (
+const withMcpCors = async (
   response: Response,
   session?: McpSession,
   mode: McpMode = "default",
@@ -319,7 +319,7 @@ const withMcpCors = (
     }
     headers.set(
       STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
-      featureOmittedCapabilityIds().join(" "),
+      (await featureOmittedCapabilityIds()).join(" "),
     );
   }
   const answer = new Response(response.body, {
@@ -695,7 +695,7 @@ const boundMcpToolResult = async ({
       (typeof result.structuredContent !== "object" ||
         Object.keys(result.structuredContent).length > 0));
   const fenced =
-    env.FEATURE_MCP_READ_FENCE &&
+    isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE") &&
     (readClass !== undefined || definition.access === "read") &&
     result.isError !== true &&
     hasOutput;
@@ -811,7 +811,7 @@ export const createMcpHttpRequestHandler = ({
         tools,
         _meta: {
           featureAccess: {
-            capabilities: accessibleFeatureCapabilityIds(context),
+            capabilities: await accessibleFeatureCapabilityIds(context),
             tools: tools
               .filter((tool) => typeof tool._meta?.["featureId"] === "string")
               .map(({ name }) => name),
@@ -916,7 +916,7 @@ export const createMcpHttpRequestHandler = ({
       }
 
       const resultDisposition = toolResultDisposition(definition.annotations);
-      const readClass = env.FEATURE_MCP_READ_FENCE
+      const readClass = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")
         ? await resolveMcpReadClass(
             definition,
             toolRequest.params.arguments ?? {},
@@ -942,10 +942,6 @@ export const createMcpHttpRequestHandler = ({
           captureError,
         });
       };
-      if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
-        return await run();
-      }
-
       let consumesServices = definition.consumesServices;
       if (toolName === "invoke_capability") {
         const classified = await invokedCapabilityConsumesServices(
@@ -1353,7 +1349,7 @@ export const createMcpHttpRequestHandler = ({
           ? await withCappedRequestBody(incomingRequest)
           : { request: framedRequest, status: "within_limit" as const };
       if (frame.status === "too_large") {
-        return withMcpCors(payloadTooLargeResponse(), session, mode);
+        return await completeResponse(payloadTooLargeResponse(), session);
       }
       const request = withTransportAcceptHeader(frame.request);
 

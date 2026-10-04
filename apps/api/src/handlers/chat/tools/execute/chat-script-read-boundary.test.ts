@@ -34,7 +34,7 @@ for (const kind of CHAT_TOOL_ERROR_KINDS) {
       read,
     } as const;
     const firstRead = await Result.tryPromise({
-      try: () => runChatScriptRead(props),
+      try: async () => await runChatScriptRead(props),
       catch: (cause) => cause,
     });
     expect(firstRead.isErr() && firstRead.error).toBe(error);
@@ -42,7 +42,7 @@ for (const kind of CHAT_TOOL_ERROR_KINDS) {
       kind === "server-defect",
     );
     const repeatedRead = await Result.tryPromise({
-      try: () => runChatScriptRead(props),
+      try: async () => await runChatScriptRead(props),
       catch: (cause) => cause,
     });
     expect(repeatedRead.isErr() && repeatedRead.error).toBeInstanceOf(

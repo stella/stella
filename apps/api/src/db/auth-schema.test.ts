@@ -54,7 +54,11 @@ const PRODUCT_AUTH_MODEL_NAMES = [
 ] as const;
 
 const OAUTH_PROVIDER_MODEL_TABLES = [
-  ["oauthClient", authSchema.oauthClient, ["public", "type"]],
+  [
+    "oauthClient",
+    authSchema.oauthClient,
+    ["public", "type", "registrationOrigin"],
+  ],
   ["oauthResource", authSchema.oauthResource, []],
   ["oauthClientResource", authSchema.oauthClientResource, []],
   ["oauthRefreshToken", authSchema.oauthRefreshToken, []],
@@ -427,11 +431,10 @@ describe("auth schema", () => {
     expect(Object.keys(dependencySchema).toSorted()).toEqual(
       OAUTH_PROVIDER_MODEL_TABLES.map(([model]) => model).toSorted(),
     );
-    for (const [model, table, rollbackColumns] of OAUTH_PROVIDER_MODEL_TABLES) {
+    for (const [model, table, hostColumns] of OAUTH_PROVIDER_MODEL_TABLES) {
       const dependencyFields = Object.keys(dependencySchema[model].fields);
       const hostFields = Object.keys(getColumns(table)).filter(
-        (field) =>
-          !rollbackColumns.some((rollbackColumn) => rollbackColumn === field),
+        (field) => !hostColumns.some((hostColumn) => hostColumn === field),
       );
       expect(hostFields.toSorted(), model).toEqual(
         ["id", ...dependencyFields].toSorted(),
@@ -569,6 +572,10 @@ describe("auth schema", () => {
               predicate: null,
               unique: false,
             },
+          ],
+          // Bounds the expired-row sweep.
+          verification: [
+            { fields: ["expiresAt"], predicate: null, unique: false },
           ],
         },
         models: PRODUCT_AUTH_MODEL_NAMES,

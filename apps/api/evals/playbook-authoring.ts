@@ -1052,7 +1052,7 @@ const chatMatterTools = ({
         message: `${toolName} has nothing to read in this eval.`,
       });
       record({ name: toolName, input: args, error: error.message });
-      throw error;
+      return Result.err(error);
     }
     const result = await runRegistryReadTool({
       toolName,
@@ -1067,10 +1067,10 @@ const chatMatterTools = ({
         input: handlerArgs ?? args,
         error: `${result.error.kind}: ${result.error.message}`,
       });
-      throw result.error;
+      return result;
     }
     record({ name: toolName, input: handlerArgs ?? args });
-    return result.value;
+    return result;
   };
   const { tool, discoveryTool } = createChatCodeModeSurface({
     concurrencyKey: EVAL_SANDBOX_KEY,
@@ -1524,22 +1524,28 @@ const renderContractReport = (runs: readonly EvalRun[]): string => {
 };
 
 const resolveModels = async (modelIds: readonly string[]) => {
-  const { getTanStackTextModelById, hasTanStackInstanceProvider } =
+  const { resolveTanStackTextModel } =
+    await import("@/api/lib/tanstack-ai-generate");
+  const { hasTanStackInstanceProvider } =
     await import("@/api/lib/tanstack-ai-models");
   if (!hasTanStackInstanceProvider()) {
     return panic(
       "No instance AI provider is configured; set a provider key in .env",
     );
   }
-  return modelIds.map((id) => ({
-    id,
-    model: getTanStackTextModelById(id, null, {
-      dataClass: "customer",
-      managedAIResidency: "eu",
-      role: "fast",
-      organizationId: null,
-    }),
-  }));
+  return await Promise.all(
+    modelIds.map(async (id) => ({
+      id,
+      model: await resolveTanStackTextModel({
+        modelId: id,
+        orgAIConfig: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        role: "fast",
+        organizationId: null,
+      }),
+    })),
+  );
 };
 
 const main = async () => {

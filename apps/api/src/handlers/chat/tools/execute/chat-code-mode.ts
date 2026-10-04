@@ -37,6 +37,7 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -204,7 +205,7 @@ const buildChatReadTools = ({
 export type ChatCodeModeReadRunner = (
   toolName: RegistryReadToolName,
   args: Record<string, unknown>,
-) => Promise<unknown>;
+) => Promise<Result<unknown, ChatToolError>>;
 
 type CreateChatCodeModeSurfaceProps = {
   featureAccessContext?: McpFeatureAccessContext | undefined;
@@ -234,8 +235,12 @@ export const createChatCodeModeSurface = ({
     tools: buildChatReadTools({
       featureAccessContext,
       documentedReads,
-      runReadTool: async (toolName, args) =>
-        await runReadTool(toolName, isRecord(args) ? args : {}),
+      runReadTool: async (toolName, args) => {
+        const result = await runReadTool(toolName, isRecord(args) ? args : {});
+        return Result.isError(result)
+          ? raiseChatToolError(result.error)
+          : result.value;
+      },
     }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });

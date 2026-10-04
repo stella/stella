@@ -128,6 +128,7 @@ export const PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION =
         "Whitespace is normalised by the runtime schema; what the server may fetch is decided by the outbound-fetch reader, which names the side it refuses, not by a spelling rule on the field.",
     },
     access: "write",
+    permissions: { type: "all", permissions: { entity: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: FILE_COMPARISON_TRANSPORT.linksToolName,
     scope: "stella:documents_write",

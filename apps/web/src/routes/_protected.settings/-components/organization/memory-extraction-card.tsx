@@ -10,6 +10,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -53,10 +54,7 @@ export const MemoryExtractionCard = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: errorsT("actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, errorsT("actionFailed"));
     },
   });
 

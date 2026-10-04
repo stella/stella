@@ -15,6 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   catalogueKeys,
   catalogueOptions,
@@ -83,10 +84,8 @@ export function MemberToolsPage({
           );
           return;
         }
-        stellaToast.add({
-          title: t("knowledge.mcp.errorTitle"),
+        notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
           description: t("knowledge.mcp.errorDescription"),
-          type: "error",
         });
       }),
     [organizationId, queryClient, t],

@@ -41,6 +41,11 @@ import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispat
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizedMemberRole,
+  roleForDisplay,
+  SESSION_CREDENTIAL,
+} from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -163,7 +168,11 @@ const buildRunScenarios = (): RunToolsProps[] => {
                   null,
                   editableActiveSkillContext,
                 ]) {
-                  for (const memberRole of ["owner", "intern"] as const) {
+                  for (const role of ["owner", "intern"] as const) {
+                    const memberRole = authorizedMemberRole({
+                      role,
+                      credential: SESSION_CREDENTIAL,
+                    });
                     for (const pastChatScope of PAST_CHAT_SCOPES) {
                       scenarios.push({
                         ...surface,
@@ -303,7 +312,8 @@ describe("chat validation tool set", () => {
   test("loses only the tools of a gate that closed between two requests", () => {
     const run = buildRunScenarios().find(
       (scenario) =>
-        scenario.webSearchEnabled && scenario.memberRole === "owner",
+        scenario.webSearchEnabled &&
+        roleForDisplay(scenario.memberRole) === "owner",
     );
     if (run === undefined) {
       throw new Error("Expected a web-search-enabled owner scenario");

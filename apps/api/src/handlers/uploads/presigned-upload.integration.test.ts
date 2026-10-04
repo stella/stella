@@ -25,6 +25,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { largeDocx } from "@/api/tests/helpers/large-ooxml";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -323,6 +324,70 @@ describe("presigned upload mutation flow", () => {
       rejectionDetails,
       status: "rejected",
     });
+    expect(
+      [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
+    ).toEqual([]);
+  });
+
+  test("rejects a rule match deep inside a large document and stores nothing", async () => {
+    const bytes = await largeDocx({
+      trailer:
+        "<w:p><w:r><w:instrText>DDEAUTO marker</w:instrText></w:r></w:p>",
+    });
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "large.docx",
+            mimeType: DOCX_MIME,
+            size: bytes.byteLength,
+            sha256Hex: new Bun.CryptoHasher("sha256")
+              .update(bytes)
+              .digest("hex"),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+
+    const grant = readPresignedUpload(presignResult);
+    const staged = await fetch(grant.url, {
+      method: "PUT",
+      body: bytes,
+      headers: grant.headers,
+    });
+    expect(staged.status).toBe(200);
+
+    const finalized = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(finalized).toMatchObject({
+      code: 422,
+      response: {
+        code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+        issues: [{ code: "ooxml_dde", path: "file" }],
+      },
+    });
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { status: true },
+      }),
+    ).toEqual({ status: "rejected" });
     expect(
       [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
     ).toEqual([]);

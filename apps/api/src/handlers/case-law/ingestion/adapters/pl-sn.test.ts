@@ -25,6 +25,8 @@ import {
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -46,7 +48,7 @@ const listingRows = async (): Promise<PlSnListingRow[]> => {
 };
 
 type RecordedPage = {
-  page: { decisions: IngestionResult[]; nextCursor: string | null };
+  page: { decisions: RawIngestionResult[]; nextCursor: string | null };
 };
 
 const recordedDecision = async (): Promise<IngestionResult> => {
@@ -58,7 +60,7 @@ const recordedDecision = async (): Promise<IngestionResult> => {
   if (decision === undefined) {
     throw new TypeError("the recorded page holds no decision");
   }
-  return decision;
+  return plainTextIngestionResult(decision);
 };
 
 const envelope = (payload: unknown): string =>
@@ -588,10 +590,12 @@ describe("replaying a stored envelope", () => {
       expect(outcome.result.rawHash).toBe(decision.rawHash);
       expect(outcome.result.fulltext).toBe(decision.fulltext);
       // The recording predates the ruling key; everything it stored is kept.
-      expect(outcome.result.metadata).toEqual({
-        ...decision.metadata,
-        rulingKeys: ["sn|IIIARN36/94|1993-06-23|wyrok"],
-      });
+      expect(
+        Bun.deepEquals(outcome.result.metadata, {
+          ...decision.metadata,
+          rulingKeys: ["sn|IIIARN36/94|1993-06-23|wyrok"],
+        }),
+      ).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }

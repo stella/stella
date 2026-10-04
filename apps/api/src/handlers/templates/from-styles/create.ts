@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -12,7 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
@@ -114,6 +114,7 @@ const config = {
     "enter the template. Any upload whose file name ends in .docx is " +
     "accepted whatever media type it declares.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

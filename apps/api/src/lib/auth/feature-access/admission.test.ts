@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -132,7 +133,7 @@ describe("feature access safe-handler admission", () => {
     const decisions = new Map(supplied.decisions);
     const mismatchedSnapshot = { ...supplied, decisions };
     const enabled = supplied.decisions.get(featureId);
-    if (enabled === undefined || enabled.status !== "enabled") {
+    if (enabled?.status !== "enabled") {
       throw new Error("Expected an enabled fixture decision");
     }
     expect(enabled.status).toBe("enabled");
@@ -224,25 +225,22 @@ describe("feature access safe-handler admission", () => {
         return Result.ok({ ok: true });
       },
     );
-    const app = new Elysia().get("/fixture", async ({ set }) =>
+    const app = new Elysia().get("/fixture", async ({ request, set }) =>
       endpoint.handler(
-        asTestRaw({
+        createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
           set,
-          request: new Request("https://example.test/fixture"),
+          request,
           route: "/fixture",
           user: { id: toSafeId<"user">(userId), email: "invited@example.test" },
           session: {
             activeOrganizationId: toSafeId<"organization">(organizationId),
           },
-          memberRole: "owner",
+          memberRole: sessionMemberRole("owner"),
           featureAccessSnapshot: snapshot(userId, organizationId, invited),
           safeDb: async () => {
             reads += 1;
             return Result.ok(undefined);
           },
-          orgAIConfig: null,
-          orgAIConfigStatus: "ok",
-          managedAIResidency: "eu",
         }),
       ),
     );

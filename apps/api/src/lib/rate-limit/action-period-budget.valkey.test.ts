@@ -5,6 +5,10 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
+import {
+  createAdmissionRedis,
+  type AdmissionRedisClient,
+} from "@/api/lib/admission-redis";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createRedisClient } from "@/api/lib/redis-client";
@@ -28,16 +32,22 @@ const userId = toSafeId<"user">("period_user");
 const withStore = async (
   run: (store: {
     client: ReturnType<typeof createRedisClient>;
+    admissionClient: AdmissionRedisClient;
     organizationId: ReturnType<typeof newOrganizationId>;
   }) => Promise<void>,
 ) => {
-  const client = createRedisClient();
+  const client = createRedisClient({ storeClass: "cache" });
   const organizationId = newOrganizationId();
   await client.connect();
+  const admission = createAdmissionRedis({
+    ready: async () => client,
+    close: () => client.close(),
+  });
   try {
-    await run({ client, organizationId });
+    const admissionClient = (await admission.ready()).unwrap();
+    await run({ client, admissionClient, organizationId });
   } finally {
-    client.close();
+    admission.close();
   }
 };
 const newOrganizationId = () =>
@@ -283,7 +293,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             userId,
             admit,
           });
-          if (Result.isError(phase) || phase.value === undefined) {
+          if (Result.isError(phase)) {
             panic("Expected chat phase admission");
           }
           try {
@@ -347,7 +357,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           actionKind: "chat.send",
           admit,
         });
-        if (Result.isError(phase) || phase.value === undefined) {
+        if (Result.isError(phase)) {
           panic("Expected chat phase admission");
         }
         try {
@@ -365,7 +375,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             actionKind: "chat.generate-thread-title",
             admit,
           });
-          if (Result.isError(title) || title.value === undefined) {
+          if (Result.isError(title)) {
             panic("Expected detached title admission");
           }
           try {
@@ -387,7 +397,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
     });
 
     test("atomically caps concurrent distinct phases and lets replays count once", async () => {
-      await withStore(async ({ client, organizationId }) => {
+      await withStore(async ({ client, admissionClient, organizationId }) => {
         let ran = 0;
         const admit = async (logicalPhaseId: string) =>
           await withActionAdmission({
@@ -400,7 +410,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               actionKind: "chat.improve-prompt",
               logicalPhaseId,
             },
-            redis: client,
+            redis: admissionClient,
             run: async () => {
               ran += 1;
             },
@@ -454,7 +464,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 actionKind: "chat.suggest-thread-title",
                 logicalPhaseId: "run",
               },
-              redis: client,
+              redis: admissionClient,
               run: async () => "ok",
             }),
           ),
@@ -642,7 +652,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               },
             }),
         });
-        if (Result.isError(result) || result.value === undefined) {
+        if (Result.isError(result)) {
           panic("Expected chat phase admission");
         }
         try {
@@ -686,7 +696,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
     });
 
     test("concurrency rejection does not consume a period action", async () => {
-      await withStore(async ({ client, organizationId }) => {
+      await withStore(async ({ client, admissionClient, organizationId }) => {
         const { promise: entered, resolve: enter } =
           Promise.withResolvers<undefined>();
         const { promise: finish, resolve: complete } =
@@ -706,7 +716,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             actionKind: "chat.improve-prompt",
             logicalPhaseId: "first",
           },
-          redis: client,
+          redis: admissionClient,
           run: async () => {
             enter(undefined);
             await finish;
@@ -724,7 +734,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               actionKind: "chat.improve-prompt",
               logicalPhaseId: "refused",
             },
-            redis: client,
+            redis: admissionClient,
             run: async () => {
               throw new Error("Must not execute");
             },
@@ -756,6 +766,84 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           await first;
         }
       });
+    });
+
+    test("organization and user lease caps independently reject contenders in the store", async () => {
+      for (const limiting of ["organization", "user"] as const) {
+        await withStore(async ({ admissionClient, organizationId }) => {
+          const { promise: entered, resolve: enter } =
+            Promise.withResolvers<undefined>();
+          const { promise: finish, resolve: complete } =
+            Promise.withResolvers<undefined>();
+          const contenderUser =
+            limiting === "organization"
+              ? toSafeId<"user">("independent_user")
+              : userId;
+          const asymmetricPolicy = {
+            organizationConcurrency: limiting === "organization" ? 1 : 2,
+            userConcurrency: limiting === "user" ? 1 : 2,
+            leaseMs: 120_000,
+          };
+          const common = {
+            organizationId,
+            enabled: true,
+            policy: asymmetricPolicy,
+            periodPolicy: { periodMs: 86_400_000, limit: 10 },
+            serviceBudgetsEnabled: false,
+            redis: admissionClient,
+          };
+          const owner = withActionAdmission({
+            ...common,
+            userId,
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "owner",
+            },
+            run: async () => {
+              enter(undefined);
+              await finish;
+              return "owner-completed";
+            },
+          });
+          await entered;
+          let ran = false;
+          try {
+            const contender = await withActionAdmission({
+              ...common,
+              userId: contenderUser,
+              periodIdentity: {
+                actionKind: "chat.improve-prompt",
+                logicalPhaseId: "contender",
+              },
+              run: async () => {
+                ran = true;
+              },
+            });
+            expect(Result.isError(contender)).toBe(true);
+            if (Result.isError(contender)) {
+              expect(contender.error).toMatchObject({
+                reason: "busy",
+                code: ACTION_ADMISSION_CODES.concurrencyBusy,
+              });
+            }
+            expect(ran).toBe(false);
+          } finally {
+            complete(undefined);
+            expect(await owner).toEqual(Result.ok("owner-completed"));
+          }
+
+          const afterRelease = await withActionAdmission({
+            ...common,
+            userId: contenderUser,
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "after-release",
+            },
+            run: async () => "admitted",
+          });
+          expect(afterRelease).toEqual(Result.ok("admitted"));
+        });
+      }
     });
   });
 }

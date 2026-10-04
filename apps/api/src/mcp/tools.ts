@@ -52,6 +52,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { mcpToolAuthorityDenial } from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -302,23 +303,33 @@ type McpToolCallArgs = {
   mode?: McpMode;
   toolName: string;
 };
+/**
+ * The refusal for a tool the request's authority does not cover. A credential
+ * narrower than the role needs a different credential, not a role change, so
+ * the two are told apart.
+ */
+const authorityRefusal = (
+  toolName: string,
+  denial: "member-role" | "credential",
+) =>
+  denial === "member-role"
+    ? {
+        code: "permission_denied" as const,
+        message: `Your member role does not permit ${toolName}`,
+      }
+    : {
+        code: "permission_denied" as const,
+        message: `This credential's permissions do not include ${toolName}`,
+        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+      };
 
-export const handleMcpToolCall = async ({
+const callGatewayTool = async ({
   args,
   context,
   mode = "default",
   toolName,
-}: McpToolCallArgs): Promise<CallToolResult> => {
+}: McpToolCallArgs): Promise<CallToolResult | undefined> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
-  const unavailableResult = featureUnavailableToolResult({
-    context,
-    mode,
-    toolName,
-  });
-  if (unavailableResult !== undefined) {
-    return unavailableResult;
-  }
-
   const gatewayResult = await dispatchGatewayToolCall({
     args,
     context,
@@ -348,6 +359,35 @@ export const handleMcpToolCall = async ({
           error: serialized.error,
         })
       : serialized.value;
+  }
+
+  return undefined;
+};
+
+export const handleMcpToolCall = async ({
+  args,
+  context,
+  mode = "default",
+  toolName,
+}: McpToolCallArgs): Promise<CallToolResult> => {
+  const serializeForSurface = createSurfaceSerializer({ context, mode });
+  const unavailableResult = featureUnavailableToolResult({
+    context,
+    mode,
+    toolName,
+  });
+  if (unavailableResult !== undefined) {
+    return unavailableResult;
+  }
+
+  const gatewayResult = await callGatewayTool({
+    args,
+    context,
+    mode,
+    toolName,
+  });
+  if (gatewayResult !== undefined) {
+    return gatewayResult;
   }
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
@@ -390,6 +430,15 @@ export const handleMcpToolCall = async ({
         message: FEATURE_DISABLED_MESSAGE,
         hint: featureDisabledHint(staticTool.feature),
       }),
+    );
+  }
+
+  // Discovery already withholds the tool; this keeps the refusal on the call
+  // path for any caller that reaches dispatch by name.
+  const authorityDenial = mcpToolAuthorityDenial(context, staticTool);
+  if (authorityDenial !== null) {
+    return serializeForSurface(
+      structuredErrorResult(authorityRefusal(toolName, authorityDenial)),
     );
   }
 

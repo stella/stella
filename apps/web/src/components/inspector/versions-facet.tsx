@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
@@ -9,8 +10,6 @@
  * version operations stay owned by one inspector facet.
  */
 
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -19,7 +18,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { CompareVersionsPanel } from "@/components/inspector/compare-versions-panel";
@@ -31,6 +29,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
 import {
   entityVersionsOptions,
@@ -146,10 +145,7 @@ export const VersionsFacet = ({
       // instead of looping the request.
       getAnalytics().captureError(result.error);
       setLoadOlderError(true);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }
 

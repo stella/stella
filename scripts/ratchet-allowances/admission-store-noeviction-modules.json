@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 2,
+  "reason": "One module owns the testable non-eviction policy and command facade; the other owns deployed connection construction and diagnostics. Admission, read fences, and publisher reservations share them without giving policy tests connection initialization side effects."
+}

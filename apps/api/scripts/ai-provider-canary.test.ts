@@ -402,7 +402,7 @@ describe("AI provider canary tool contract", () => {
         provider: "anthropic",
       },
       // A scripted Anthropic model: nothing here reaches a provider.
-      resolveTextModel: (): ResolvedTanStackTextModel => ({
+      resolveTextModel: async (): Promise<ResolvedTanStackTextModel> => ({
         adapter,
         keySource: "instance",
         modelId: "claude-opus-5-5",

@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { legislationDocuments } from "@/api/db/schema";
+import { projectStatuteVersion } from "@/api/handlers/legislation/reader-response";
 import {
   selectDefaultVersionId,
   selectWorkKey,
@@ -143,7 +144,7 @@ export const listStatuteVersionsHandler = async ({
       .limit(limit + 1);
 
     return page.map((row) =>
-      Object.assign(row, { isDefault: row.id === defaultId }),
+      projectStatuteVersion({ ...row, isDefault: row.id === defaultId }),
     );
   });
 

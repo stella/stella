@@ -281,7 +281,9 @@ export const initEntityDeletionCleanupWorker = ({
       );
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency: WORKER_CONCURRENCY,
     },
   );

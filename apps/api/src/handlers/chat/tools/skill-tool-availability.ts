@@ -12,11 +12,13 @@ import {
   type ChatToolScope,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import type { MemberRole } from "@/api/lib/member-roles";
+import { roleForDisplay } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { isMemberAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 /**
  * A registry tool counts as offered only where its own registry gates pass:
@@ -29,7 +31,7 @@ const isRegistryToolUsable = ({
   context,
 }: {
   toolName: string;
-  memberRole: MemberRole;
+  memberRole: AuthorizedMemberRole;
   context: McpFeatureAccessContext;
 }): boolean => {
   const definition = getStaticMcpToolDefinition(toolName);
@@ -48,7 +50,8 @@ const isRegistryToolUsable = ({
       featureId: definition.featureId,
     }) &&
     isMcpToolFeatureEnabled(definition.feature) &&
-    (definition.isVisibleToMemberRole?.(memberRole) ?? true)
+    isMemberAuthorizedForMcpTool(memberRole, definition) &&
+    (definition.isVisibleToMemberRole?.(roleForDisplay(memberRole)) ?? true)
   );
 };
 
@@ -64,7 +67,7 @@ const chatOfferedToolNames = ({
   tools,
 }: {
   context: McpFeatureAccessContext;
-  memberRole: MemberRole;
+  memberRole: AuthorizedMemberRole;
   tools: ChatToolMap;
 }): ReadonlySet<string> => {
   const names = Object.entries(tools).flatMap(([name, tool]) =>

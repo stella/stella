@@ -160,6 +160,11 @@ export const ROOT_CONNECTION_DOORS = [
           reason:
             "The review-gate resolver files the notice when an approval finishes the run.",
         },
+        {
+          path: "apps/api/src/handlers/fields/kanban-placement/update.ts",
+          reason:
+            "Kanban collects the resolver's run-derived notice and files it after its outer transaction commits.",
+        },
       ],
     },
   },
@@ -197,7 +202,6 @@ export const ROOT_CONNECTION_DOORS = [
       kind: "import",
       specifiers: ["@/api/lib/search/projection-repair-flush"],
       allowed: [
-        "apps/api/src/handlers/chat/tools/workspace-tools.ts",
         "apps/api/src/handlers/contacts/create.ts",
         "apps/api/src/handlers/contacts/delete.ts",
         "apps/api/src/handlers/contacts/import.ts",
@@ -206,10 +210,9 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/entities/copy.ts",
         "apps/api/src/handlers/entities/create.ts",
         "apps/api/src/handlers/entities/duplicate.ts",
-        "apps/api/src/handlers/entities/rename.ts",
+        "apps/api/src/handlers/entities/rename-operation.ts",
         "apps/api/src/handlers/entities/versions/delete.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
-        "apps/api/src/handlers/fields/upsert.ts",
         "apps/api/src/handlers/signals/acceptances/create.ts",
         "apps/api/src/handlers/uploads/entity-create-tree.ts",
         "apps/api/src/handlers/workspaces/contacts/create.ts",
@@ -217,6 +220,7 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/workspaces/create.ts",
         "apps/api/src/handlers/workspaces/duplicate.ts",
         "apps/api/src/handlers/workspaces/update.ts",
+        "apps/api/src/lib/fields/write-field.ts",
         "apps/api/src/lib/flows/flow-executor.ts",
         "apps/api/src/lib/tasks/create-task-entity.ts",
       ].map((importer) => ({
@@ -334,6 +338,32 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+// Case-law modules that still call the raw publisher fetch. Each migrates to
+// `readPublisher` and leaves this list; nothing is added to it.
+const UNMIGRATED_PUBLISHER_READERS = [
+  "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
+  "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
+  "handlers/case-law/ingestion/adapters/cz-ns.ts",
+  "handlers/case-law/ingestion/adapters/cz-nss.ts",
+  "handlers/case-law/ingestion/adapters/cz-regional.ts",
+  "handlers/case-law/ingestion/adapters/eu-ecj.ts",
+  "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "handlers/case-law/ingestion/adapters/pagination.ts",
+  "handlers/case-law/ingestion/adapters/pl-courts.ts",
+  "handlers/case-law/ingestion/adapters/pl-kio.ts",
+  "handlers/case-law/ingestion/adapters/pl-kis.ts",
+  "handlers/case-law/ingestion/adapters/pl-ncourt.ts",
+  "handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+  "handlers/case-law/ingestion/adapters/pl-sn.ts",
+  "handlers/case-law/ingestion/adapters/pl-tk.ts",
+  "handlers/case-law/ingestion/adapters/pl-uodo.ts",
+  "handlers/case-law/ingestion/adapters/pl-uokik.ts",
+  "handlers/case-law/ingestion/adapters/sk-collections.ts",
+  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
+  "handlers/case-law/ingestion/adapters/sk-courts.ts",
+  "handlers/case-law/ingestion/adapters/sk-us.ts",
+] as const;
+
 export const OWNERSHIP = [
   {
     id: "feature-access",
@@ -347,6 +377,159 @@ export const OWNERSHIP = [
     summary:
       "The feature registry declares enrolment and ownership. One principal-bound policy decides admission and discovery; the catalog declaration guard and real discovery tests enforce the boundary.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "entity-sibling-naming",
+    capability: "Resolving names for new sibling entities",
+    owner: [
+      "apps/api/src/lib/entities/sibling-name.ts",
+      "apps/api/src/lib/entities/sibling-name-insert.ts",
+    ],
+    summary:
+      "The insert owner reads current matter and parent names, reserves pending batch names, and supplies a resolved display name plus a derived sanitized file name to single and batch inserts. The existing typed extraction-file selector identifies each current version's primary file; secondary attachment names remain independent. The pure producer is confined to that owner so callers cannot substitute an empty sibling set.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/entities/sibling-name"],
+      names: ["resolveSiblingName"],
+      allowed: [],
+    },
+  },
+  {
+    id: "provider-event-records",
+    capability: "Minimal verified provider event persistence",
+    owner: [
+      "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
+      "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    ],
+    summary:
+      "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
+      names: ["hostedUsageWebhookEvents"],
+      allowed: [
+        {
+          path: "apps/api/src/db/schema.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/db/high-volume-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/db/plan-guard-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/pglite-test-db.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/schema-invariants.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/test-utils.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/pglite-role-grants.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/account-deletion-coverage.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/workspace-deletion-coverage.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/workflow/straggler-catchup.db.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/entity-filters.differential.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/handlers/hosted-usage-webhook/receive.test.ts",
+          reason: "Asserts the persisted delivery projection.",
+        },
+        {
+          path: "apps/api/src/handlers/hosted-usage-webhook/contract.postgres.test.ts",
+          reason: "Asserts dispatch and receipt outcomes in PostgreSQL.",
+        },
+        {
+          path: "apps/api/src/lib/hosted-usage-provider/replay.postgres.test.ts",
+          reason:
+            "Asserts selected receipt replay and durable audit outcomes in PostgreSQL.",
+        },
+        {
+          path: "apps/api/src/lib/hosted-usage-provider/webhook-retention.postgres.test.ts",
+          reason: "Asserts retention against isolated PostgreSQL receipts.",
+        },
+      ],
+    },
+  },
+  {
+    id: "legislation-revision-row-write",
+    capability: "Persisting a legislation revision's body and version metadata",
+    owner: ["apps/api/src/handlers/legislation/ingestion.ts"],
+    summary:
+      "The ingestion owner publishes revision values together. " +
+      "`no-direct-legislation-revision-write` rejects separate row mutations; " +
+      "withdrawal, expression-ID backfill and projection-epoch owners may update " +
+      "only their exact unrelated columns through explicit object literals.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "legislation-revision-corpus-write",
+    capability: "Writing a legislation revision's corpus payload",
+    owner: ["apps/api/src/handlers/legislation/revision.ts"],
+    summary:
+      "The revision owner writes the normalized payload that its metadata describes. " +
+      "Ingestion supplies a complete revision; callers cannot independently replace its corpus body.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/legal-search/corpus-storage"],
+      names: ["writeCorpusDocument"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/legal-search/corpus-pack-batch.ts",
+          reason:
+            "The shared corpus maintenance writer republishes stored payloads across both document families.",
+        },
+      ],
+    },
+  },
+  {
+    id: "api-test-memory-planner",
+    capability: "Measured API test memory and batch composition",
+    owner: ["apps/api/scripts/test-batch-plan.ts"],
+    summary:
+      "The planner owns measured peak RSS, conservative unknown weights and automatic process isolation. Batch plans must fit their execution-class memory caps before a test starts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["apps/api/scripts/test-peak-rss.json"],
+      allowed: [],
+    },
   },
   {
     id: "model-request-send-mode",
@@ -503,18 +686,171 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "pinned-workspace-handles",
+    capability: "Database handles pinned to stored workspace ids",
+    owner: ["apps/api/src/lib/root-scoped-db.ts"],
+    summary:
+      "A pinned handle reaches the workspaces it names whether or not its user " +
+      "is still a member of them, so it is built only for writes and lookups an " +
+      "earlier check already proved. A run a member queued goes through " +
+      "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
+      "and field readers (`ContentReadDb`) refuse.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/root-scoped-db"],
+      names: ["createRootScopedDb", "createRootSafeDb"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/research/answers-run.ts",
+          reason:
+            "A research run that outlives its request, pinned to no workspace.",
+        },
+        {
+          path: "apps/api/src/handlers/uploads/entity-version.ts",
+          reason: "Computes diff stats for the version the upload just wrote.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+          reason: "Scopes a claimed desktop connection to its stored grant.",
+        },
+        {
+          path: "apps/api/src/lib/desktop-edit-sessions.ts",
+          reason: "Writes back through a live desktop editing session.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/runtime.ts",
+          reason: "Files inbound mail into the matter its routing resolved.",
+        },
+        {
+          path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
+          reason: "Writes a new version into a workspace its caller proved.",
+        },
+        {
+          path: "apps/api/src/lib/file-derivative-queue.ts",
+          reason: "Derivative generation is organization automation.",
+        },
+        {
+          path: "apps/api/src/lib/files/pdf-signing/sessions.ts",
+          reason: "Scopes a signing session to its stored workspace.",
+        },
+        {
+          path: "apps/api/src/lib/flows/flow-executor.ts",
+          reason:
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
+        },
+        {
+          path: "apps/api/src/lib/folio-collab-rooms.ts",
+          reason:
+            "Persists a collaboration room re-checked on every token use.",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
+          reason: "Scheduled organization automation.",
+        },
+        {
+          path: "apps/api/src/lib/scouts/document-deadlines.ts",
+          reason: "Scheduled organization automation.",
+        },
+        {
+          path: "apps/api/src/lib/scouts/work-attention.ts",
+          reason: "Takes the constructor as an injected dependency type.",
+        },
+        {
+          path: "apps/api/src/lib/workflow-queue.ts",
+          reason:
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
+        },
+      ],
+    },
+  },
+  {
+    id: "member-run-actor",
+    capability: "Acting for the member who queued a run",
+    owner: ["apps/api/src/lib/root-scoped-db.ts"],
+    summary:
+      "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
+      "workspace pinned for the run's own rows and its output, and `inputDb` " +
+      "reads under the requester's membership as it stands when the run " +
+      "executes. Member-run queues are listed in " +
+      "`apps/api/src/lib/member-run-queues.ts`.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/root-scoped-db"],
+      names: ["createRootRunActor"],
+      allowed: [
+        // Kept equal to MEMBER_RUN_QUEUES by scripts/ownership.test.ts.
+        ...[
+          "apps/api/src/lib/document-review/run-queue.ts",
+          "apps/api/src/lib/document-translation/run-queue.ts",
+          "apps/api/src/lib/bilingual/run-queue.ts",
+          "apps/api/src/handlers/reports/report-export-queue.ts",
+          "apps/api/src/lib/lists/verification/run-queue.ts",
+        ].map((modulePath) => ({
+          path: modulePath,
+          reason: "Member run; reads its inputs through inputDb.",
+        })),
+      ],
+    },
+  },
+  {
+    id: "admission-redis",
+    capability: "Non-evicting admission coordination",
+    owner: [
+      "apps/api/src/lib/admission-redis.ts",
+      "apps/api/src/lib/non-evicting-redis.ts",
+    ],
+    summary:
+      "Admission, reservations, and fences use a checked command facade. A reported evicting policy refuses work; uninspectable policies warn. These callers cannot import the unchecked connection factory.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/admission-redis"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "Shared concurrency leases, period reservations, and service budgets.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
+          reason: "Shared emitted-byte windows and cancellation fences.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
+          reason: "Shared publisher pacing reservations and cooldowns.",
+        },
+      ],
+    },
+  },
+  {
     id: "redis-client",
     capability: "Valkey/Redis connections for ephemeral coordination",
     owner: ["apps/api/src/lib/redis-client.ts"],
     summary:
-      "One module builds every Valkey client, so the uncapped reconnect ladder, " +
-      "the error classification, and the connection options hold for all of them. " +
+      "The API factory requires a storage class for every client and owns the " +
+      "reconnect ladder, error classification, and connection options. " +
+      "Shared policy inspection covers durable coordination; the construction " +
+      "guard checks both the API and collaboration factories. " +
       "Valkey may carry only ephemeral coordination, and each allowed consumer " +
       "states the degraded path it takes during an outage.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/redis-client"],
       allowed: [
+        {
+          path: "apps/api/src/lib/admission-redis.ts",
+          reason:
+            "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
+        },
         {
           path: "apps/api/src/lib/bullmq-queue.ts",
           reason:
@@ -606,16 +942,6 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
-          path: "apps/api/src/lib/rate-limit/action-admission.ts",
-          reason:
-            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
-        },
-        {
-          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
-          reason:
-            "TTL'd shared emitted-byte windows; authenticated reads fail closed when Valkey is unreachable.",
-        },
-        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -647,11 +973,6 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/health/readiness.ts",
           reason: "Liveness probe: PINGs the connection it is reporting on.",
-        },
-        {
-          path: "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
-          reason:
-            "Publisher pacing: uses an expiring shared reservation, fails closed on a deployed outage to protect the publisher, and uses a process-local gate outside deployed environments.",
         },
       ],
     },
@@ -700,6 +1021,21 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "case-law-source-fingerprint",
+    capability:
+      "The change-detection hash of a case-law decision's stored source",
+    owner: ["apps/api/src/handlers/case-law/ingestion/source-fingerprint.ts"],
+    summary:
+      "`sourceFingerprint` is the only constructor of `SourceFingerprint`, " +
+      "derived from the stored envelope and every object stored beside it, so " +
+      "`rawHash` changes whenever a stored byte does. The " +
+      "`raw-hash-from-source-fingerprint` rule rejects a hand-written `rawHash` " +
+      "in adapters, and `scripts/source-fingerprint-baseline.ts` enumerates " +
+      "every registered source, every exempt file and every external-id writer " +
+      "against a shrink-only baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "bulk-row-insert",
     capability:
       "Inserting an unbounded row set whose inserted rows are not read back",
@@ -729,6 +1065,39 @@ export const OWNERSHIP = [
       "`no-native-s3-object-read` and `no-native-s3-object-write` rules already " +
       "enforce this boundary.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "audited-download-grant",
+    capability: "Granting a user a signed URL to stored file content",
+    owner: ["apps/api/src/lib/audited-download.ts"],
+    summary:
+      "A signed URL hands the caller the stored bytes, whether the browser " +
+      "saves them or renders them inline. `auditedPresignDownload` records a " +
+      "download or an access in the caller's transaction before it signs, so a grant " +
+      "and its audit row commit together. The bare signer stays with modules " +
+      "that sign an object whose access an audited operation already recorded.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/s3-presign"],
+      names: ["presignDownloadUrl"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/reports/exports/get.ts",
+          reason:
+            "Signs the result of the requester's own report export, audited when the export runs.",
+        },
+        {
+          path: "apps/api/src/lib/entity-versions/desktop-edit-session-utils.ts",
+          reason:
+            "Signs the working copy of a desktop edit session or collaboration room, audited when it opens.",
+        },
+        {
+          path: "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts",
+          reason:
+            "Signs a temporary redline produced by an audited comparison run.",
+        },
+      ],
+    },
   },
   {
     id: "transactional-email",
@@ -781,9 +1150,72 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "member-authority-context",
+    capability: "Building the authority a request context carries",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "Context builders construct opaque member authority once; handlers spend it through the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["sessionMemberRole", "authorizedMemberRole"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/auth.ts",
+          reason: "Builds the authenticated session context.",
+        },
+        {
+          path: "apps/api/src/mcp/effective-authority.ts",
+          reason: "Builds authority for the MCP request context.",
+        },
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason:
+            "Validates a credential's grants against its current membership.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/auth.ts",
+          reason: "Builds the authenticated desktop account context.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+          reason: "Builds the linked desktop account context.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+      ],
+    },
+  },
+  {
+    id: "current-member-permission",
+    capability:
+      "Revalidating a persisted membership during an authorized operation",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "The request spends its credential at the handler boundary; a locked membership is revalidated by the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["hasCurrentMemberPermission"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/workspace-deletion.ts",
+          reason:
+            "Revalidates the actor's locked membership after the handler authorizes deletion.",
+        },
+      ],
+    },
+  },
+  {
     id: "member-authorization",
     capability: "Deciding what a request's member role and credential may do",
-    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    owner: [
+      "apps/api/src/lib/permission-authorization.ts",
+      "apps/web/src/lib/organization/role-assignment.logic.ts",
+    ],
     summary:
       "Every permission decision reads the request's `AuthorizedMemberRole`: " +
       "the member role together with the credential behind the request. A " +
@@ -792,7 +1224,9 @@ export const OWNERSHIP = [
       "`hasManagementPermission` are the reads, and every handler context " +
       "builder sets the credential once, so no handler-level check can fall " +
       "back to the role's full authority. Reading the role table directly " +
-      "skips the credential.",
+      "skips the credential. The web organization role-policy owner derives " +
+      "session UI visibility and assignable roles from the shared role policy; " +
+      "API decisions still enforce the request credential.",
     enforcement: {
       kind: "import",
       specifiers: ["@stll/permissions"],
@@ -817,11 +1251,6 @@ export const OWNERSHIP = [
           path: "packages/scripts/src/agent-session.ts",
           reason:
             "Local development tooling seeds an owner's key with the owner's full statement set.",
-        },
-        {
-          path: "apps/api/src/handlers/chat/tools/chat-tools.ts",
-          reason:
-            "Chat tools run only inside a person's own chat session, which carries no narrower credential.",
         },
         {
           path: "apps/api/src/mcp/billing-tools.ts",
@@ -1336,6 +1765,23 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "case-law-plain-text",
+    capability:
+      "Sanitizing publisher labels and metadata into branded plain text",
+    owner: [
+      "apps/api/src/lib/case-law/plain-text.ts",
+      "apps/api/src/lib/legal-search/plain-text-assembly.ts",
+      "apps/api/src/lib/case-law/plain-text-markup.ts",
+    ],
+    summary:
+      "The shared sanitizer owns the private PlainText brand, markup removal, " +
+      "and structural whitespace normalization. Adapters pass publisher text " +
+      "through this boundary; no-forged-plain-text rejects casts, type predicates, " +
+      "and parallel brand declarations outside the owner. The markup module " +
+      "shares the language-blind output predicate used by ingestion guards.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "search-total",
     capability: "Declaring whether a search result total was counted",
     owner: [
@@ -1485,6 +1931,20 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "field-value-write",
+    capability: "Setting a document's field value for a member",
+    owner: ["apps/api/src/lib/fields/write-field.ts"],
+    summary:
+      "REST, MCP, Kanban moves and chat all set a cell through `writeFieldValue`, " +
+      "which checks the member's effective authority, takes the entity row lock " +
+      "before the cell lock, marks the cell as manually edited and records the " +
+      "audit event in one transaction. Writes to the field tables are table " +
+      "writes, not imports, so the `no-direct-field-write/no-direct-field-write` " +
+      "rule holds this row instead of `confine-owner`; it lists the modules " +
+      "that write those tables for other operations.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "gated-test-database",
     capability: "Opening a database client in a test",
     owner: ["apps/api/src/tests/gated-test-database.ts"],
@@ -1519,6 +1979,72 @@ export const OWNERSHIP = [
       "the transient metric. The direct-failure-sinks ratchet counts the " +
       "emissions still outside it, per file.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "unchecked-public-response-handler",
+    capability: "Public route handlers without the 200-schema exactness guard",
+    owner: ["apps/api/src/lib/api-handlers.ts"],
+    summary:
+      "`createSafeBoundedPublicHandler` requires a route's 200 schema and its " +
+      "handler's success payload to be mutually assignable, so the schema Eden " +
+      "types the client from cannot be looser than the data. The unchecked " +
+      "core exists for a factory whose result type is still generic where it " +
+      "builds the handler; that factory applies the guard on its own entry points.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/api-handlers"],
+      names: ["createSafeUncheckedBoundedPublicHandler"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/decisions/public-subject.ts",
+          reason:
+            "Builds gated subject handlers generically and guards both entry points.",
+        },
+        {
+          path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
+          reason:
+            "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
+      ],
+    },
+  },
+  {
+    id: "publisher-read",
+    capability: "Reading a case-law publisher response",
+    owner: [
+      "apps/api/src/lib/errors/read-outcome.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+    ],
+    summary:
+      "readPublisher sends the gated publisher request and returns a ReadOutcome: " +
+      "the response, an absence only the publisher stated (404 or 410), or a " +
+      "failure to read, so no helper can return a failed read as an empty " +
+      "result. Raw fetchPublisher and fetchWithRetry callers are the adapters " +
+      "not yet migrated; the list only shrinks. The read-fault guard drives " +
+      "every enrolled adapter's reads with failures.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/handlers/case-law/ingestion/adapters/retry"],
+      names: ["fetchPublisher", "fetchWithRetry"],
+      allowed: [
+        ...UNMIGRATED_PUBLISHER_READERS.map((file) => ({
+          path: `apps/api/src/${file}`,
+          reason:
+            "Reads its publisher raw; pending migration to readPublisher.",
+        })),
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
+          reason:
+            "Types the injected publisher fetch of its RIS walk; sends no request itself.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
+        },
+      ],
+    },
   },
   ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
