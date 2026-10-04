@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 
+import messages from "@/i18n/langs/en.json";
+
 import {
   APIError,
   internalToolErrorMessage,
@@ -51,11 +53,11 @@ describe("toAPIError", () => {
   test.each([
     [
       "matter_contact_capacity_reached",
-      "This matter has reached its contact limit. Remove a contact link before adding another.",
+      messages.errors.apiCodes.matterContactCapacityReached,
     ],
     [
       "matter_contact_capacity_exceeded",
-      "This matter has more contacts than can be displayed. Remove contact links before opening the list.",
+      messages.errors.apiCodes.matterContactCapacityExceeded,
     ],
   ])("localizes matter contact capacity code %s", (code, expected) => {
     const error = toAPIError({
