@@ -1512,7 +1512,7 @@ describe("a failed publisher read is never built", () => {
     },
   );
 
-  test("a chain the publisher answers 404 for is absent, and a non-list is unread", async () => {
+  test("a chain the publisher answers 404 for is absent, and a non-list or non-JSON body is unread", async () => {
     globalThis.fetch = asFetchMock(
       async () => await Promise.resolve(new Response("", { status: 404 })),
     );
@@ -1523,6 +1523,13 @@ describe("a failed publisher read is never built", () => {
 
     globalThis.fetch = asFetchMock(
       async () => await Promise.resolve(new Response('{"items":[]}')),
+    );
+    expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
+      { type: "unavailable" },
+    );
+
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response("<html>busy</html>")),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
       { type: "unavailable" },
