@@ -29,7 +29,10 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const RULE = "require-audit-on-mutation";
 const CENSUS_DIRECTORIES = ["apps/api/src/mcp", "apps/api/src/lib"] as const;
-const OWNER_MESSAGE = /^(?<owner>\S+) holds (?<count>\d+) unaudited/u;
+const OWNER_MESSAGE =
+  /^(?<owner>\S+) holds \d+ unaudited (?<target>\S+) writes/u;
+
+type TargetCounts = Readonly<Record<string, number>>;
 
 /**
  * Why a baselined owner writes without an audit row, by where it lives. The
@@ -81,8 +84,8 @@ const reasonFor = (file: string): string =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/** Current unaudited writes per `<file>::<owner>`. */
-const census = (): Map<string, number> => {
+/** Current unaudited writes per `<file>::<owner>` and target. */
+const census = (): Map<string, TargetCounts> => {
   const directory = mkdtempSync(path.join(tmpdir(), "audit-mutation-ledger-"));
   try {
     const configPath = path.join(directory, "census.json");
@@ -119,7 +122,7 @@ const census = (): Map<string, number> => {
         : panic(
             `oxlint census produced no report: ${result.stderr.toString()}`,
           );
-    const counts = new Map<string, number>();
+    const counts = new Map<string, Record<string, number>>();
     for (const diagnostic of diagnostics) {
       if (
         !isRecord(diagnostic) ||
@@ -136,11 +139,15 @@ const census = (): Map<string, number> => {
       if (file.endsWith(".test.ts")) {
         continue;
       }
-      const owner =
-        OWNER_MESSAGE.exec(diagnostic["message"])?.groups?.["owner"] ??
+      const groups =
+        OWNER_MESSAGE.exec(diagnostic["message"])?.groups ??
         panic(`unexpected census message: ${diagnostic["message"]}`);
+      const owner = groups["owner"] ?? panic("census message has no owner");
+      const target = groups["target"] ?? panic("census message has no target");
       const id = `${file}::${owner}`;
-      counts.set(id, (counts.get(id) ?? 0) + 1);
+      const targets = counts.get(id) ?? {};
+      targets[target] = (targets[target] ?? 0) + 1;
+      counts.set(id, targets);
     }
     return counts;
   } finally {
@@ -159,16 +166,24 @@ const readLedger = (): AuditMutationLedgerRow[] => {
   );
 };
 
+const sortedCounts = (counts: TargetCounts): TargetCounts =>
+  Object.fromEntries(
+    Object.entries(counts).toSorted(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
+
 /**
- * The next ledger: current counts, existing reasons kept. Without `seed`, an
- * owner the ledger does not hold, or holds at a lower count, is refused.
+ * The next ledger: current counts, existing reasons kept. Without `seed`, a
+ * target the ledger does not budget for that owner, or budgets at a lower
+ * count, is refused.
  */
 export const nextAuditMutationLedger = ({
   current,
   previous,
   seed,
 }: {
-  current: ReadonlyMap<string, number>;
+  current: ReadonlyMap<string, TargetCounts>;
   previous: readonly AuditMutationLedgerRow[];
   seed: boolean;
 }): { rows: AuditMutationLedgerRow[]; refused: string[] } => {
@@ -177,12 +192,23 @@ export const nextAuditMutationLedger = ({
   const refused: string[] = [];
   for (const [id, writes] of current) {
     const known = previousById.get(id);
-    if (!seed && (known === undefined || writes > known.writes)) {
-      refused.push(`${id}: ${known?.writes ?? 0} -> ${writes}`);
+    const grown = Object.entries(writes).filter(
+      ([target, count]) => count > (known?.writes[target] ?? 0),
+    );
+    if (!seed && grown.length > 0) {
+      for (const [target, count] of grown) {
+        refused.push(
+          `${id} ${target}: ${known?.writes[target] ?? 0} -> ${count}`,
+        );
+      }
       continue;
     }
     const file = id.slice(0, id.indexOf("::"));
-    rows.push({ id, writes, reason: known?.reason ?? reasonFor(file) });
+    rows.push({
+      id,
+      writes: sortedCounts(writes),
+      reason: known?.reason ?? reasonFor(file),
+    });
   }
   return {
     rows: rows.toSorted((left, right) => left.id.localeCompare(right.id)),
@@ -216,7 +242,12 @@ if (import.meta.main) {
     path.join(REPO_ROOT, AUDIT_MUTATION_LEDGER_REL),
     `${JSON.stringify(rows, null, 2)}\n`,
   );
-  const writes = rows.reduce((sum, row) => sum + row.writes, 0);
+  const writes = rows.reduce(
+    (sum, row) =>
+      sum +
+      Object.values(row.writes).reduce((total, count) => total + count, 0),
+    0,
+  );
   console.log(
     `${AUDIT_MUTATION_LEDGER_REL}: ${rows.length} owners, ${writes} writes`,
   );
