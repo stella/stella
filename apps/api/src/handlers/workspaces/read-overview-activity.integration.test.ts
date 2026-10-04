@@ -22,6 +22,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -314,7 +315,7 @@ describe("matter overview activity", () => {
   test("exports one bounded workspace-scoped download", async () => {
     const context = {
       memberRole: sessionMemberRole("owner"),
-      recordAuditEvent: async () => undefined,
+      recordAuditEvent: auditRecorderDouble(),
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
