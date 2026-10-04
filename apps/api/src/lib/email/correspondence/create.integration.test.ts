@@ -595,6 +595,17 @@ describe("matter correspondence", () => {
       handlingState: "new",
       assigneeId: null,
     });
+    // Leaving the organization also ends its matter memberships; keep them
+    // to restore the shared fixture afterwards.
+    const departedMatters = await testDb
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.userId, ids.userA1),
+          inArray(workspaceMembers.workspaceId, [ids.wsA1, ids.wsA2]),
+        ),
+      );
     const departed = await testDb
       .delete(member)
       .where(
@@ -602,7 +613,7 @@ describe("matter correspondence", () => {
       )
       .returning();
     try {
-      // A stale workspace membership must not restore an offboarded assignee.
+      // An offboarded member cannot be assigned again.
       expect(await patch({ assigneeId: ids.userA1 })).toMatchObject({
         code: 400,
       });
@@ -615,6 +626,12 @@ describe("matter correspondence", () => {
     } finally {
       if (departed.length) {
         await testDb.insert(member).values(departed);
+      }
+      if (departedMatters.length) {
+        await testDb
+          .insert(workspaceMembers)
+          .values(departedMatters)
+          .onConflictDoNothing();
       }
     }
   });
@@ -778,6 +795,18 @@ describe("matter correspondence", () => {
         expect((await read(filed.id)).filers).toContainEqual(actor);
         expect((await read(mailbox.id)).filers).toContainEqual(approver);
         expect(await readDisplays()).toEqual(originalDisplays);
+        // Leaving the organization also ends these matter memberships.
+        removedAssignments.push(
+          ...(await testDb
+            .select()
+            .from(workspaceMembers)
+            .where(
+              and(
+                inArray(workspaceMembers.workspaceId, [ids.wsA1, ids.wsA2]),
+                inArray(workspaceMembers.userId, [ids.userA1, ids.userAdmin]),
+              ),
+            )),
+        );
         removedMemberships.push(
           ...(await testDb
             .delete(member)
@@ -789,17 +818,15 @@ describe("matter correspondence", () => {
             )
             .returning()),
         );
-        removedAssignments.push(
-          ...(await testDb
-            .delete(workspaceMembers)
-            .where(
-              and(
-                eq(workspaceMembers.workspaceId, ids.wsA1),
-                eq(workspaceMembers.userId, ids.userA1),
-              ),
-            )
-            .returning()),
-        );
+        expect(
+          await testDb.$count(
+            workspaceMembers,
+            and(
+              eq(workspaceMembers.workspaceId, ids.wsA1),
+              eq(workspaceMembers.userId, ids.userA1),
+            ),
+          ),
+        ).toBe(0);
         expect((await read(filed.id)).filers).toContainEqual(actor);
         expect((await read(mailbox.id)).filers).toContainEqual(approver);
         expect(await readDisplays()).toEqual(originalDisplays);
@@ -883,7 +910,10 @@ describe("matter correspondence", () => {
           await testDb.insert(member).values(removedMemberships);
         }
         if (removedAssignments.length) {
-          await testDb.insert(workspaceMembers).values(removedAssignments);
+          await testDb
+            .insert(workspaceMembers)
+            .values(removedAssignments)
+            .onConflictDoNothing();
         }
         await testDb.delete(user).where(eq(user.id, retainedOwnerId));
       }

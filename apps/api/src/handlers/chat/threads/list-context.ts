@@ -25,25 +25,25 @@ export const CHAT_THREAD_CONTEXT_PREVIEW_LIMIT = 8;
  */
 const CHAT_THREAD_OPEN_FILES_LIMIT = 50;
 /** Most recent user messages per thread read for mentions and uploads. */
-export const CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT = 25;
+const CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT = 25;
 /** Most pinned and most data matter ids per thread read from its arrays. */
 export const CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT = 50;
 
-export type ChatThreadContextMatter = {
+type ChatThreadContextMatter = {
   color: string | null;
   id: string;
   name: string;
 };
 
 /** Where a thread's file comes from, which decides how it opens. */
-export const CHAT_THREAD_FILE_TYPE = {
+const CHAT_THREAD_FILE_TYPE = {
   /** A matter document the thread is bound to or a user message mentioned. */
   entity: "entity",
   /** A file uploaded to a user message, served from the user-file store. */
   upload: "upload",
 } as const;
 
-export type ChatThreadContextFile =
+type ChatThreadContextFile =
   | {
       id: string;
       kind: EntityKind;

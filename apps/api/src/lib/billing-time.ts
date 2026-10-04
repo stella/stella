@@ -101,7 +101,7 @@ export const roundToBillingIncrement = (
   minimumUnitMinutes: number,
 ): number => Math.ceil(minutes / minimumUnitMinutes) * minimumUnitMinutes;
 
-export const getTimeEntryDateValidationError = ({
+const getTimeEntryDateValidationError = ({
   dateWorked,
   today,
   editWindowDays,

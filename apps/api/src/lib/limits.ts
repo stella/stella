@@ -365,6 +365,8 @@ export const LIMITS = {
   workspaceMemberPreviewMembersMax: 4,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,
+  /** Rows read and audited per iteration of atomic member cleanup. */
+  memberRemovalCleanupBatchSize: 500,
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,

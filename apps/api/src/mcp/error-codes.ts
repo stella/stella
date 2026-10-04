@@ -58,7 +58,7 @@ export const MCP_ERROR_CODES = [
 
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 
-export const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
+const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
   MCP_ERROR_CODES.some((candidate) => candidate === code);
 
 /**

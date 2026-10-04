@@ -309,6 +309,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella organization remove-member`
   - `--matter-id` — Matter ID for add_member and remove_member. (string)
   - `--user-id` — User id to add or remove for the member actions (string)
+  - optional: --reassign-to
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text)
@@ -330,7 +331,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task delete`
   - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
-  - optional: --matter-id, --task-id, --assignee (me|any), --date-from, --date-to, --status
+  - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
