@@ -230,14 +230,14 @@ const COMPLETION_GATE_NOTE =
   "`completion_mode` (default `require_complete`) and run one gate. Under " +
   "the default, an unfilled placeholder, a failed AI draft, an AI-decided " +
   "condition left undecided (its blocks render as if false; supply true or " +
-  "false under its path), a clause inserted with unresolved directives, or " +
-  "a template directive that could not be applied is a `validation_error` " +
-  "naming every offending path, and the persisting tool refuses before " +
-  "anything is written. Unused values never block. `allow_partial` lets the " +
-  `same fill through instead: ${FILL_TEMPLATE} reports ` +
-  `\`completionStatus: "partial"\` and ${SAVE_FILLED_TEMPLATE} writes the ` +
-  "document and reports the shortfall in `unmatchedPlaceholders`, " +
-  "`aiFieldErrors`, `undecidedConditions` and `clauseWarnings`. Set it " +
+  "false under its path), or a template directive that could not be " +
+  "applied is a `validation_error` naming every offending path, and the " +
+  "persisting tool refuses before anything is written. Unused values and " +
+  "`clauseWarnings` (a stored clause kept as written) are reported but " +
+  "never block. `allow_partial` lets the same fill through instead: " +
+  `${FILL_TEMPLATE} reports \`completionStatus: "partial"\` and ` +
+  `${SAVE_FILLED_TEMPLATE} writes the document and reports the shortfall ` +
+  "in `unmatchedPlaceholders`, `aiFieldErrors` and `undecidedConditions`. Set it " +
   "only when an incomplete document is what the user asked for; otherwise " +
   "collect the missing values and retry. A missing required value is " +
   "refused in either mode, before the gate.";

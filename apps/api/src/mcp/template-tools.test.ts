@@ -1014,7 +1014,7 @@ describe("MCP template tools", () => {
   });
 
   test.each(["text", "docx"])(
-    "fill_template retains clause warnings in %s output under the partial policy",
+    "fill_template retains nonfatal clause warnings in %s output",
     async (output_mode) => {
       const warning = {
         code: "CLAUSE_LEGACY_DIRECTIVES",
@@ -1036,31 +1036,13 @@ describe("MCP template tools", () => {
         aiFieldErrors: [],
         structureErrors: [],
       });
-      // A clause inserted with its legacy markers unresolved altered the
-      // document, so the default policy refuses it and names the clause.
-      const refused = await handleMcpToolCall({
-        args: { template_id: TEMPLATE_ID, values: {}, output_mode },
-        context: createContext(),
-        toolName: "fill_template",
-      });
-      expect(refused.isError).toBe(true);
-      expect(validationEnvelope(refused)["issues"]).toEqual([
-        { path: "clauses.Terms", message: warning.message },
-      ]);
-
       const result = await handleMcpToolCall({
-        args: {
-          template_id: TEMPLATE_ID,
-          values: {},
-          output_mode,
-          completion_mode: "allow_partial",
-        },
+        args: { template_id: TEMPLATE_ID, values: {}, output_mode },
         context: createContext(),
         toolName: "fill_template",
       });
       expect(result.isError).not.toBe(true);
       expect(parseToolPayload(result)).toMatchObject({
-        completionStatus: "partial",
         clauseWarnings: [warning],
       });
     },

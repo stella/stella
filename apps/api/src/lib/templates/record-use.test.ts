@@ -74,7 +74,7 @@ describe("recordTemplateFill status", () => {
     });
   });
 
-  test("a clause kept with literal directives records the fill as partial", async () => {
+  test("a clause kept with literal directives records the fill as a success (informational)", async () => {
     const { row } = await record({
       ...EMPTY_DIAGNOSTICS,
       clauseWarnings: [
@@ -86,6 +86,16 @@ describe("recordTemplateFill status", () => {
             "Clause Terms version 2 retains literal legacy directive markers.",
           issues: [],
         },
+      ],
+    });
+    expect(row).toMatchObject({ status: "success" });
+  });
+
+  test("a directive the renderer could not apply records the fill as partial", async () => {
+    const { row } = await record({
+      ...EMPTY_DIAGNOSTICS,
+      structureErrors: [
+        { message: "Unclosed if", paragraphIndex: 0, directive: "{% if x %}" },
       ],
     });
     expect(row).toMatchObject({ status: "partial" });

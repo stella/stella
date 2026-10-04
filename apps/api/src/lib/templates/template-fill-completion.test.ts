@@ -93,7 +93,6 @@ const hasBlockingEntry = (diagnostics: FillDiagnostics): boolean =>
   diagnostics.unmatchedPlaceholders.length > 0 ||
   diagnostics.aiFieldErrors.length > 0 ||
   diagnostics.undecidedConditions.length > 0 ||
-  diagnostics.clauseWarnings.length > 0 ||
   diagnostics.structureErrors.length > 0;
 
 const undecided = (
@@ -131,11 +130,15 @@ describe("template fill completion policy", () => {
           // Every blocking kind is named, and only those.
           expect([...decision.blockingKinds]).toEqual(
             FILL_DIAGNOSTIC_KINDS.filter(
-              (kind) => kind !== "unusedValues" && diagnostics[kind].length > 0,
+              (kind) =>
+                kind !== "unusedValues" &&
+                kind !== "clauseWarnings" &&
+                diagnostics[kind].length > 0,
             ),
           );
-          // The informational channel never enters the shortfall.
+          // The informational channels never enter the shortfall.
           expect(decision.blocking.unusedValues).toEqual([]);
+          expect(decision.blocking.clauseWarnings).toEqual([]);
           expect(decision.blocking.undecidedConditions).toEqual(
             diagnostics.undecidedConditions,
           );
@@ -202,7 +205,7 @@ describe("template fill completion policy", () => {
     });
   }
 
-  test("a stored clause kept with literal legacy directives makes a fill incomplete", () => {
+  test("a stored clause kept with literal legacy directives fills as before, reported but not blocking", () => {
     const diagnostics = {
       ...EMPTY_DIAGNOSTICS,
       clauseWarnings: [
@@ -221,11 +224,10 @@ describe("template fill completion policy", () => {
       mode: "require_complete",
       diagnostics,
     });
-    expect(decision.type).toBe("rejected_partial");
-    if (decision.type === "complete") {
-      throw new Error("expected a shortfall");
-    }
-    expect(fillShortfallIssues(decision.blocking)).toEqual([
+    // Never refused, and still carried in the diagnostics it reports.
+    expect(decision).toEqual({ type: "complete", diagnostics });
+    expect(templateFillStatus(diagnostics)).toBe("success");
+    expect(fillShortfallIssues(diagnostics)).toEqual([
       {
         path: "clauses.@clause:Terms",
         message:

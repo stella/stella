@@ -76,9 +76,12 @@ export type FillDiagnosticGrades = {
 
 /** One grade per clause warning code, so a new code cannot land ungraded. */
 const CLAUSE_WARNING_SEVERITY = {
-  // The stored body is inserted unresolved: directive markers appear as text
-  // and its conditions and placeholders are not applied.
-  CLAUSE_LEGACY_DIRECTIVES: "blocking",
+  // Deliberately informational: a stored clause whose directives no longer
+  // validate still fills as before (inserted as written) with a typed
+  // warning, and is never refused. Historical content stays usable; only new
+  // publication validates directives. The warning is still reported on every
+  // surface and recorded in the diagnostics.
+  CLAUSE_LEGACY_DIRECTIVES: "informational",
 } as const satisfies Record<
   ClauseDirectiveWarning["code"],
   FillDiagnosticSeverity
