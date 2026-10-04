@@ -1267,6 +1267,19 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Deployment feature guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every declared deployment flag has a reader and every flag read is
+        # declared; no flag is read off the raw process environment; across the
+        # real route tree a capability tagged with a flag is mounted behind a
+        # gate on that flag, and every route file is classified. Existing gaps
+        # sit in apps/api/deployment-feature-baseline.json, which may only
+        # shrink against the measured base. The --self-test run first proves
+        # each detector fires on mutated copies of the real tree.
+        run: |
+          bun apps/api/scripts/deployment-feature-guard.ts --self-test
+          bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
+
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every direct dependency must have an exact llms.txt source or a
