@@ -105,8 +105,6 @@ import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
-
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
  * `type: "covered"` disposition references one of these; the coverage guard

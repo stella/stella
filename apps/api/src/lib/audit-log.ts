@@ -23,10 +23,7 @@ import type { AuditAction, AuditResourceType } from "./audit-log.constants";
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 export type { AuditAction, AuditResourceType } from "./audit-log.constants";
-export type {
-  ChatAuditChanges,
-  NonChatAuditResourceType,
-} from "./audit-log-details";
+export type { NonChatAuditResourceType } from "./audit-log-details";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
