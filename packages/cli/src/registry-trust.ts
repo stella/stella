@@ -11,7 +11,9 @@
 
 import { Result } from "better-result";
 import { createHash } from "node:crypto";
+import * as v from "valibot";
 
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import type { RegistryToolListing } from "./route-types.js";
 import { compileSchemaPattern } from "./schema-pattern.js";
 
@@ -58,7 +60,12 @@ const ALLOWED_ANNOTATION_KEYS: ReadonlySet<string> = new Set([
 
 /** The success/failure result of validating a fetched tools/list body. */
 export type TrustResult =
-  | { ok: true; listings: RegistryToolListing[]; toolsListHash: string }
+  | {
+      ok: true;
+      listings: RegistryToolListing[];
+      toolsListHash: string;
+      featureAccess?: CallerFeatureAccess;
+    }
   | { ok: false; violation: string };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -124,6 +131,27 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = [
 ] as const;
 
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
+const featureAccessSnapshotSchema = v.object({
+  capabilities: v.pipe(
+    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+    v.maxLength(10_000),
+  ),
+  tools: v.pipe(
+    v.array(v.pipe(v.string(), v.regex(TOOL_NAME_PATTERN))),
+    v.maxLength(MAX_TOOLS),
+  ),
+});
+
+const extractFeatureAccess = (parsed: unknown) => {
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const result = parsed["result"];
+  const response = isRecord(result) ? result : parsed;
+  const meta = response["_meta"];
+  return isRecord(meta) ? meta["featureAccess"] : undefined;
+};
+
 const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   if (isUnknownArray(parsed)) {
     return parsed;
@@ -407,9 +435,22 @@ const validateEntry = (
     return { ok: false, violation: `tool ${name}: ${schemaViolation}` };
   }
 
+  const meta = entry["_meta"];
+  const featureId = isRecord(meta) ? meta["featureId"] : undefined;
+  if (
+    featureId !== undefined &&
+    (typeof featureId !== "string" ||
+      featureId.length === 0 ||
+      featureId.length > 128)
+  ) {
+    return { ok: false, violation: "tool feature identity is invalid" };
+  }
   return {
     ok: true,
-    listing: projectListing(entry, name, description, inputSchema),
+    listing: {
+      ...projectListing(entry, name, description, inputSchema),
+      ...(typeof featureId === "string" ? { featureId } : {}),
+    },
   };
 };
 
@@ -451,5 +492,21 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
 
   const toolsListHash = createHash("sha256").update(rawBody).digest("hex");
 
-  return { ok: true, listings, toolsListHash };
+  const featureAccessRaw = extractFeatureAccess(parsed.value);
+  if (featureAccessRaw === undefined) {
+    return { ok: true, listings, toolsListHash };
+  }
+  const featureAccess = v.safeParse(
+    featureAccessSnapshotSchema,
+    featureAccessRaw,
+  );
+  if (!featureAccess.success) {
+    return { ok: false, violation: "feature access snapshot is invalid" };
+  }
+  return {
+    ok: true,
+    listings,
+    toolsListHash,
+    featureAccess: featureAccess.output,
+  };
 };
