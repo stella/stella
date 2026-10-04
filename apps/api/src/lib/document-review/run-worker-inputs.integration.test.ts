@@ -130,6 +130,9 @@ const analytics = installRecordingAnalytics();
 
 beforeEach(async () => {
   preparationSpy.mockClear();
+  preparationSpy.mockImplementation(async () =>
+    panic("Unexpected review file preparation"),
+  );
   modelSpy.mockClear();
   fetchSpy.mockClear();
   fetchSpy.mockImplementation(
@@ -231,6 +234,27 @@ const expectStoppedBeforeReading = async () => {
 };
 
 describe("document review run revocation", () => {
+  // Control for the revocation cases below: with every membership intact the
+  // worker resolves both pins and hands them to preparation, so a stopped run
+  // there is caused by the removed membership, not by inputs that never
+  // resolve. Preparation returns nothing, which ends the run before any model
+  // or storage call.
+  test("a run resolves its inputs while its requester keeps access", async () => {
+    preparationSpy.mockImplementation(async () => []);
+    await processDocumentReviewRun(actor);
+    expect(
+      preparationSpy.mock.calls.map(([files]) =>
+        files.map(({ workspaceId }) => workspaceId),
+      ),
+    ).toEqual([[targetPin.workspaceId, referencePin.workspaceId]]);
+    expect(await readRun()).toMatchObject({
+      status: "failed",
+      errorCode: "unsupported_format",
+    });
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   test("a run stops when its requester no longer has access to the matter", async () => {
     await testDb
       .delete(workspaceMembers)
