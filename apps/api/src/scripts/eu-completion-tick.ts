@@ -434,6 +434,13 @@ const runCompletionSession = async (
           report.status === "held" ||
           report.status === "off" ||
           report.status === "approval-required",
+        counts: {
+          attempted: report.attempted,
+          applied: report.applied,
+          unchanged: report.unchanged,
+          reviewRequired: report.reviewRequired,
+          failed: report.failed,
+        },
       });
     }
     // Admission holds do not trigger queue probes or bookkeeping sweeps.

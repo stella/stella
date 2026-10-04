@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { TextField } from "@stll/api-contract/case-law-text-field";
+
 import {
   ecjCompletionFingerprint,
   ECJ_COMPLETION_PROTECTED_COLUMNS,
@@ -15,6 +17,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import {
   encodeSourceRawEnvelope,
+  type DecisionJudgeInput,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -93,7 +96,8 @@ describe("completion preserves stated values", () => {
       return expect.unreachable();
     }
     expect(outcome.candidate.decisionDate).toBe("2024-01-01");
-    expect(outcome.candidate.metadata).toEqual({
+    const metadata: Record<string, unknown> = outcome.candidate.metadata;
+    expect(metadata).toEqual({
       provenance: { source: "listing", format: "Formex" },
     });
     expect(outcome.candidate.sourceRaw).toBe("new raw");
@@ -161,12 +165,12 @@ describe("completion preserves stated values", () => {
     if (outcome.type !== "accepted") {
       return expect.unreachable();
     }
-    expect(outcome.candidate.ecli).toBe(existing.ecli);
+    const ecli: string | undefined = outcome.candidate.ecli;
+    expect(ecli).toBe(existing.ecli);
     expect(existing.fulltext).not.toBeNull();
     expect(outcome.candidate.fulltext ?? null).toBe(existing.fulltext);
-    expect(outcome.candidate.textFields.headnote).toEqual(
-      presentTextField("Stored headnote"),
-    );
+    const headnote: TextField = outcome.candidate.textFields.headnote;
+    expect(headnote).toEqual(presentTextField("Stored headnote"));
     expect(outcome.candidate.metadata).toEqual({});
   });
 
@@ -504,7 +508,9 @@ describe("additional stated boundaries", () => {
     if (outcome.type !== "accepted") {
       return expect.unreachable();
     }
-    expect(outcome.candidate.judges).toEqual(judges);
+    const candidateJudges: readonly DecisionJudgeInput[] | undefined =
+      outcome.candidate.judges;
+    expect(candidateJudges).toEqual(judges);
   });
 
   test("fingerprint includes role, metadata, raw content and redaction state", () => {
