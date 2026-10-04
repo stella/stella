@@ -141,6 +141,7 @@ describe("readInvoiceDocumentLines", () => {
           rateAtEntry: cents(200_000),
           narrative: "Already lined",
           invoiceNarrative: null,
+          noCharge: false,
           invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
         },
         {
@@ -149,6 +150,7 @@ describe("readInvoiceDocumentLines", () => {
           rateAtEntry: cents(300_000),
           narrative: "Hearing",
           invoiceNarrative: null,
+          noCharge: false,
           invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
         },
       ],
