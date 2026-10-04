@@ -2,6 +2,7 @@
 export * from "./registration-budget-schema";
 export * from "./schema/contacts";
 export * from "./schema/backfill-state";
+export * from "./schema/system-audit";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
@@ -140,3 +141,5 @@ export type {
   ViewLayout,
   ViewTemplateProperty,
 } from "./schema/common";
+
+export * from "./schema/soft-law";

@@ -412,6 +412,20 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "time-entry-amount",
+    capability: "Price recorded time with its no-charge disposition",
+    owner: ["packages/money/"],
+    summary:
+      "timeEntryAmount requires the noCharge field and returns zero for no-charge time. " +
+      "Invoice lines, exports and displayed time amounts use this calculation.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/money"],
+      names: ["prorateHourlyCents"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
@@ -793,11 +807,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason:
-            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
           reason: "Scheduled organization automation.",
         },
@@ -820,7 +829,7 @@ export const OWNERSHIP = [
       "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
       "workspace pinned for the run's own rows and its output, and `inputDb` " +
       "reads under the requester's membership as it stands when the run " +
-      "executes. Member-run queues are listed in " +
+      "executes. Member-run queues and scheduler tasks are listed in " +
       "`apps/api/src/lib/member-run-queues.ts`.",
     enforcement: {
       kind: "import",
@@ -839,6 +848,12 @@ export const OWNERSHIP = [
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
+        // Kept equal to MEMBER_RUN_SCHEDULER_TASKS by scripts/ownership.test.ts.
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Member-run scheduler task; reads each compaction through its owner's inputDb.",
+        },
       ],
     },
   },

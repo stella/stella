@@ -123,3 +123,77 @@ export const save = () => {
     ).toHaveLength(1);
   });
 });
+
+const MEMBER_RUN_PATH = "apps/api/src/lib/flows/flow-executor.ts";
+// Every write in the fixture, reported when no budget or registration covers
+// the file; a rejected registration also reports the program (line 2).
+const FIXTURE_WRITE_LINES = [10, 11, 16, 19, 20];
+
+const lintSystemModule = async (
+  sourcePath: string,
+  systemModules: Record<string, string>,
+) =>
+  await lintSingleRule(RULE, source, {
+    sourcePath,
+    ruleOptionsForRoot: (root: string) => ({ root, systemModules }),
+  });
+
+describe("require-audit-on-mutation system modules", () => {
+  test("a registered system module's writes are audited by its actor's run", async () => {
+    expect(
+      await lintSystemModule(SOURCE_PATH, {
+        [SOURCE_PATH]: "system:file-comparison-sweep",
+      }),
+    ).toEqual([]);
+  });
+
+  test("a module registered to an unknown actor is reported and stays held to the rule", async () => {
+    expect(
+      await lintSystemModule(SOURCE_PATH, {
+        [SOURCE_PATH]: "system:not-an-actor",
+      }),
+    ).toEqual([2, ...FIXTURE_WRITE_LINES]);
+  });
+
+  test("a member-run module cannot be registered as a system module", async () => {
+    expect(
+      await lintSystemModule(MEMBER_RUN_PATH, {
+        [MEMBER_RUN_PATH]: "system:file-comparison-sweep",
+      }),
+    ).toEqual([2, ...FIXTURE_WRITE_LINES]);
+  });
+
+  test("another file's registration does not cover this one", async () => {
+    expect(
+      await lintSystemModule(SOURCE_PATH, {
+        "apps/api/src/lib/other-store.ts": "system:file-comparison-sweep",
+      }),
+    ).toEqual(FIXTURE_WRITE_LINES);
+  });
+
+  test("a function that records through recordSystemAudit is audited; a local namesake is not", async () => {
+    const recorded = `
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
+
+type Writer = { insert: (value: unknown) => void };
+
+export const sweep = async (db: Writer) => {
+  db.insert({ id: "one" });
+  await recordSystemAudit(db, "system:file-comparison-sweep", {
+    subject: "run",
+    counts: { sweptUploads: 1 },
+  });
+};
+
+const recordSystemAuditLocally = async (_db: Writer) => {};
+
+export const unaudited = async (db: Writer) => {
+  db.insert({ id: "two" });
+  await recordSystemAuditLocally(db);
+};
+`;
+    expect(
+      await lintSingleRule(RULE, recorded, { sourcePath: SOURCE_PATH }),
+    ).toEqual([17]);
+  });
+});
