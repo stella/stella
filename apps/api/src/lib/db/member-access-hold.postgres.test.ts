@@ -91,9 +91,9 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("member access hold (postgres)", () => {
-    test.each(Object.keys(REMOVALS) as (keyof typeof REMOVALS)[])(
+    test.each(Object.entries(REMOVALS))(
       "a %s membership removal waits for the transaction holding it",
-      async (removal) => {
+      async (_removal, remove) => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { db: holderDb } = openClient({ max: 1 });
           const { db: removerDb } = openClient({ max: 1 });
@@ -126,7 +126,7 @@ if (!databaseUrl || !runPostgresTests) {
             const holderPid = await held.promise;
             let removed = false;
             const removing = (async () => {
-              await REMOVALS[removal](removerDb, seeded);
+              await remove(removerDb, seeded);
               removed = true;
             })();
 
