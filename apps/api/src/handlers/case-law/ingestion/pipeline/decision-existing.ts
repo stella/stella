@@ -56,6 +56,12 @@ export type ObservationShape = {
   storesUnpublishedWithoutDocument: boolean;
   /** A partial observation of a row that was enriched from detail before. */
   preservesExistingDetail: boolean;
+  /**
+   * An observation that carries more detail than the stored row, such as a
+   * complete one of a listing-only row. It is always written: a source
+   * fingerprint that leaves the detail out cannot tell the two apart.
+   */
+  upgradesStoredDetail: boolean;
 };
 
 type ClassifyObservationOptions = {
@@ -78,17 +84,26 @@ export const classifyObservation = ({
   const storesUnpublishedWithoutDocument =
     !incomingCarriesDocument &&
     result.documentDelivery !== DOCUMENT_DELIVERY.DEFERRED;
+  const incomingDetailRank =
+    OBSERVATION_DETAIL_RANK[observationDetailOf(result)];
+  const storedDetailRank =
+    OBSERVATION_DETAIL_RANK[storedPartialObservation.detail];
   const preservesExistingDetail =
     existing !== undefined &&
     ((result.caseNumberIsPlaceholder === true &&
       !storedPartialObservation.caseNumberIsPlaceholder) ||
-      OBSERVATION_DETAIL_RANK[observationDetailOf(result)] <
-        OBSERVATION_DETAIL_RANK[storedPartialObservation.detail]);
+      incomingDetailRank < storedDetailRank);
   return {
     storedPartialObservation,
     incomingCarriesDocument,
     storesUnpublishedWithoutDocument,
     preservesExistingDetail,
+    // An observation stored under the listing-only marker for want of a
+    // document upgrades nothing.
+    upgradesStoredDetail:
+      existing !== undefined &&
+      !storesUnpublishedWithoutDocument &&
+      incomingDetailRank > storedDetailRank,
   };
 };
 
@@ -361,6 +376,7 @@ export const resolveExistingDecisionPolicy = async ({
     preservesExistingDetail,
     storedPartialObservation,
     storesUnpublishedWithoutDocument,
+    upgradesStoredDetail,
   },
   observedAt,
   observationOrder,
@@ -402,6 +418,9 @@ export const resolveExistingDecisionPolicy = async ({
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+    // A matching publisher hash cannot settle a row this observation
+    // completes: the hash may leave out the detail that completes it.
+    !upgradesStoredDetail &&
     // A matching publisher hash cannot settle a row whose stored document
     // is gone when this observation can restore it.
     !(incomingCarriesDocument && !existing.hasStoredDocument) &&

@@ -36,7 +36,6 @@ import {
   taskAssignees,
   fields,
   flowDefinitions,
-  flowRuns,
   flowRunSteps,
   notifications,
   properties,
@@ -320,14 +319,22 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
 
   const createWaitingGate = async (
     governedWorkflow: boolean,
-    nextStep: FlowStep = CREATE_DOCUMENT_STEP,
+    {
+      nextStep = CREATE_DOCUMENT_STEP,
+      initialStep = REVIEW_GATE_STEP,
+      initialRunStatus = "awaiting_review",
+    }: {
+      nextStep?: FlowStep;
+      initialStep?: FlowStep;
+      initialRunStatus?: "pending" | "awaiting_review";
+    } = {},
   ) => {
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({
       id: definitionId,
       organizationId,
       name: "Task-owned review flow",
-      steps: [REVIEW_GATE_STEP, nextStep],
+      steps: [initialStep, nextStep],
       trigger: MANUAL_TRIGGER,
       enabled: true,
       createdByUserId: userId,
@@ -349,29 +356,58 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     const { runId } = started.value;
     expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
-    await executeFlowStep(
-      { runId, stepIndex: 0 },
-      new AbortController().signal,
-      {
-        database: flowDatabase,
-        makeScopedDb,
-        makeSafeDb,
-        enqueueStep: enqueueFlowStepMock,
-        broadcastUpdate,
-        taskFeatures: { governedWorkflow, legalLists: false },
-        flushSearchRepairs,
-      },
-    );
+    if (initialRunStatus === "pending") {
+      const taskEntityId = createSafeId<"entity">();
+      await testDb.insert(entities).values({
+        id: taskEntityId,
+        workspaceId,
+        kind: "task",
+        name: "Review task",
+        status: "open",
+      });
+      if (governedWorkflow) {
+        await testDb.insert(workObligations).values({
+          entityId: taskEntityId,
+          workspaceId,
+          sourceType: WORK_OBLIGATION_SOURCE.FLOW,
+          status: WORK_OBLIGATION_STATUS.ACTIVE,
+          ownerUserId: userId,
+          acknowledgedAt: new Date(),
+          acknowledgedByUserId: userId,
+          createdByUserId: userId,
+        });
+      }
+      await testDb
+        .update(flowRunSteps)
+        .set({ reviewTaskEntityId: taskEntityId })
+        .where(and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, 0)));
+    } else {
+      await executeFlowStep(
+        { runId, stepIndex: 0 },
+        new AbortController().signal,
+        {
+          database: flowDatabase,
+          makeScopedDb,
+          makeSafeDb,
+          enqueueStep: enqueueFlowStepMock,
+          broadcastUpdate,
+          taskFeatures: { governedWorkflow, legalLists: false },
+          flushSearchRepairs,
+        },
+      );
+    }
     const gate = await testDb.query.flowRunSteps.findFirst({
       where: { runId: { eq: runId }, index: { eq: 0 } },
       columns: { status: true, reviewTaskEntityId: true },
     });
-    expect(gate?.status).toBe("awaiting_review");
+    expect(gate?.status).toBe(initialRunStatus);
     const taskEntityId = gate?.reviewTaskEntityId;
     if (!taskEntityId) {
       throw new Error("expected the waiting gate to own a task");
     }
-    expect(flushedEntityIds.at(-1)).toEqual([taskEntityId]);
+    if (initialRunStatus === "awaiting_review") {
+      expect(flushedEntityIds.at(-1)).toEqual([taskEntityId]);
+    }
     const obligation = await testDb.query.workObligations.findFirst({
       where: { entityId: { eq: taskEntityId } },
     });
@@ -839,10 +875,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   });
 
   test("a previous review task cannot decide the run's next waiting gate", async () => {
-    const { runId, taskEntityId, safeDb } = await createWaitingGate(
-      true,
-      REVIEW_GATE_STEP,
-    );
+    const { runId, taskEntityId, safeDb } = await createWaitingGate(true, {
+      nextStep: REVIEW_GATE_STEP,
+    });
     const approved = await resolveFlowReviewGate({
       safeDb,
       workspaceId,
@@ -909,15 +944,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   test.each(["before start", "before pause", "before failure"] as const)(
     "worker preserves cancellation committed %s",
     async (boundary) => {
-      const { runId, taskEntityId, safeDb } = await createWaitingGate(false);
-      await testDb
-        .update(flowRuns)
-        .set({ status: "pending", currentStepIndex: 0 })
-        .where(eq(flowRuns.id, runId));
-      await testDb
-        .update(flowRunSteps)
-        .set({ status: "pending", startedAt: null, finishedAt: null })
-        .where(eq(flowRunSteps.runId, runId));
+      const { runId, taskEntityId, safeDb } = await createWaitingGate(false, {
+        initialRunStatus: "pending",
+      });
       const entered = Promise.withResolvers<undefined>();
       const release = Promise.withResolvers<undefined>();
       let transactionIndex = 0;
@@ -1024,22 +1053,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   );
 
   test("worker completion preserves cancellation committed during generation", async () => {
-    const { runId, taskEntityId, safeDb } = await createWaitingGate(false);
-    await testDb
-      .update(flowRuns)
-      .set({
-        status: "pending",
-        currentStepIndex: 0,
-        definitionSnapshot: {
-          name: "Task-owned review flow",
-          steps: [AI_STEP, CREATE_DOCUMENT_STEP],
-        },
-      })
-      .where(eq(flowRuns.id, runId));
-    await testDb
-      .update(flowRunSteps)
-      .set({ kind: "ai", status: "pending", startedAt: null, finishedAt: null })
-      .where(and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, 0)));
+    const { runId, taskEntityId, safeDb } = await createWaitingGate(false, {
+      initialRunStatus: "pending",
+      initialStep: AI_STEP,
+    });
     const entered = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();
     const generateTextForRole: typeof generateTanStackTextForRole =

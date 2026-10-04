@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
@@ -30,6 +31,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "status-set";
+      readonly columns: Readonly<Record<string, readonly string[]>>;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "import";
       readonly specifiers: readonly string[];
@@ -338,6 +344,14 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+export const STATUS_TRANSITION_OWNERSHIP = {
+  id: "status-transition",
+  capability: "Changing a row's lifecycle state",
+  owner: ["apps/api/src/lib/db/transitions.ts"],
+  summary:
+    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
+  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+} as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
 const UNMIGRATED_PUBLISHER_READERS = [
@@ -359,11 +373,10 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/pl-uodo.ts",
   "handlers/case-law/ingestion/adapters/pl-uokik.ts",
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
-  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
-  "handlers/case-law/ingestion/adapters/sk-courts.ts",
 ] as const;
 
 export const OWNERSHIP = [
+  STATUS_TRANSITION_OWNERSHIP,
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -383,6 +396,11 @@ export const OWNERSHIP = [
       ],
       names: ["taskAssignees"],
       allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
+        },
         {
           path: "apps/api/src/db/",
           reason: "Schema and relation declarations.",
@@ -465,6 +483,11 @@ export const OWNERSHIP = [
       specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
       names: ["hostedUsageWebhookEvents"],
       allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
+        },
         {
           path: "apps/api/src/db/schema.ts",
           reason:
@@ -2401,6 +2424,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "status-set": {
+      return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
     }
     default: {
       enforcement satisfies never;

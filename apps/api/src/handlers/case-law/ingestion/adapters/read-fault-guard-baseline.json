@@ -44,7 +44,6 @@
     "pl-sn::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-tk::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-uodo::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "pl-uokik::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "sk-courts::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven."
+    "pl-uokik::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven."
   }
 }
