@@ -37,6 +37,7 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
 import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
@@ -985,6 +986,7 @@ export const presignDownloadUrl = async (
     throw result.error;
   }
 
+  markContentDeliveryIntent();
   return result.value;
 };
 
