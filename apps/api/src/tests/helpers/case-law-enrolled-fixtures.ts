@@ -58,13 +58,13 @@ import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vw
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
-  assembleCzRegionalDecision,
+  buildCzRegionalDecision,
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
-  readCzRegionalDocument,
+  fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
   ecjRawParts,
@@ -113,6 +113,10 @@ import {
   PL_UOKIK_LABEL,
   plUokikRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
+import {
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
@@ -219,6 +223,23 @@ const CZ_NS_PRINT_PAGE =
   `<p>Odůvodnění: Soud prvního stupně rozsudkem zamítl žalobu, kterou se žalobkyně domáhala zaplacení částky.</p>` +
   `<p>JUDr. Pavel Horák, Ph.D.<br />předseda senátu</p></body></html>`;
 
+/**
+ * A build the adapter reported unread, failed with the outcome it carries: a
+ * refusal fails typed, as the crawl reports it.
+ */
+const unreadBuild = async (
+  adapterKey: string,
+  outcome: UnreadPublisherOutcome,
+): Promise<never> =>
+  await Promise.reject(
+    unreadPublisherError({
+      outcome,
+      message: `${adapterKey} fixture did not build`,
+      adapterKey,
+      cursor: null,
+    }),
+  );
+
 export const czNsFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
@@ -235,9 +256,17 @@ export const czNsFixture = (): EnrolledAdapterFixture => ({
       unid: "0000000000000000000000000000000A",
       caseNumber: "30 Cdo 3000/2025",
     });
-    return built.type === "built"
-      ? built.decision
-      : panic(`cz-ns fixture did not build: ${built.type}`);
+    switch (built.type) {
+      case "built":
+        return built.decision;
+      case "detail-unavailable":
+        return await unreadBuild("cz-ns", built.read);
+      case "unkeyable":
+        return panic("cz-ns fixture did not build: unkeyable");
+      default:
+        built satisfies never;
+        return panic("Unhandled cz-ns fixture build");
+    }
   },
 });
 
@@ -412,9 +441,8 @@ export const czNssFixture = (): EnrolledAdapterFixture => ({
       session: { cookies: "", token: "", formFields: new Map() },
       signal: AbortSignal.timeout(30_000),
     });
-    return built.type === "built"
-      ? built.decision
-      : panic(`cz-nss fixture did not build: ${built.type}`);
+    // A row held listing-only states its typed read outcome.
+    return built.decision;
   },
 });
 
@@ -580,18 +608,28 @@ const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
 
 /**
  * Built through the two paths that write this source's envelope: the crawl
- * assembles the listing row with the document, and the chain pass adds the
- * part it alone fetches and re-parses the result. Driving both is what makes
- * the `chain` part evidence of a pass that exists rather than of a payload
- * written by hand.
+ * reads the listed row's document and assembles the two, and the chain pass
+ * reads the part it alone fetches and re-parses the result. Driving both
+ * reads is what makes the `chain` part evidence of a pass that exists rather
+ * than of a payload written by hand.
  */
 export const czRegionalFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const crawled = assembleCzRegionalDecision({
-      item: CZ_REGIONAL_LISTING_ROW,
-      document: readCzRegionalDocument(CZ_REGIONAL_DOCUMENT_PAYLOAD),
-      chain: null,
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url.includes("/finalDocChain/affectingDocs/")
+        ? CZ_REGIONAL_CHAIN_PAYLOAD
+        : CZ_REGIONAL_DOCUMENT_PAYLOAD;
+      return await Promise.resolve(
+        new Response(body, { headers: { "Content-Type": "application/json" } }),
+      );
     });
+
+    const crawled = await buildCzRegionalDecision(CZ_REGIONAL_LISTING_ROW);
+    // A row held listing-only states its typed read outcome.
+    if (crawled.type === "detail-unavailable") {
+      return crawled.decision;
+    }
     if (crawled.type !== "built") {
       return panic(`cz-regional fixture did not build: ${crawled.type}`);
     }
@@ -599,10 +637,19 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
     if (parts === null) {
       return panic("the cz-regional fixture stored no envelope");
     }
+    const chain = await fetchCzRegionalAffectingDocs(
+      crawled.decision.sourceDocumentId ??
+        panic("the cz-regional fixture states no publisher id"),
+    );
+    // The chain pass writes nothing for a chain it did not read, and asks
+    // again on a later run.
+    if (chain.type !== "present") {
+      return await unreadBuild("cz-regional", chain);
+    }
 
     const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(
-        czRegionalEnvelopeWithChain(parts, CZ_REGIONAL_CHAIN_PAYLOAD),
+        czRegionalEnvelopeWithChain(parts, chain.value.raw),
       ),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: crawled.decision.caseNumber,
@@ -1147,16 +1194,52 @@ const CZ_US_LISTING_ROW = {
   ecli: "ECLI:CZ:US:2026:Pl.US.9.26.1",
 } as const satisfies ListedDecision;
 
+/** What the court serves on each page one listed record is built from. */
+const CZ_US_PAGES: Readonly<Record<string, string>> = {
+  // The search form, whose only part a record build reads is its session.
+  "/Search/Search.aspx": "<html><body><form></form></body></html>",
+  "/Search/GetText.aspx": CZ_US_TEXT_PAGE,
+  "/Search/ResultDetail.aspx": CZ_US_RECORD_CARD,
+  "/Search/GetAbstract.aspx": CZ_US_ABSTRACT_PAGE,
+};
+
+/**
+ * Built the way the reconciliation builds a listed record: a session, then
+ * the text, the record card and the abstract, each read from the court.
+ */
 export const czUsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      buildCzUsDecision({
-        listed: { ...CZ_US_LISTING_ROW },
-        textHtml: CZ_US_TEXT_PAGE,
-        recordCard: { type: "read", html: CZ_US_RECORD_CARD },
-        abstractHtml: CZ_US_ABSTRACT_PAGE,
-      }) ?? panic("cz-us fixture did not build"),
-    ),
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const { pathname } = new URL(
+        input instanceof Request ? input.url : String(input),
+      );
+      return await Promise.resolve(
+        new Response(
+          CZ_US_PAGES[pathname] ?? panic(`cz-us fixture serves no ${pathname}`),
+          {
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Set-Cookie": "ASP.NET_SessionId=fixture-session; Path=/",
+            },
+          },
+        ),
+      );
+    });
+
+    // The court's gate paces requests seconds apart; the build is the same
+    // decision without the wait.
+    const sleep = Bun.sleep;
+    Bun.sleep = async () => {
+      await Promise.resolve();
+    };
+    const built = await buildCzUsListedRecord({
+      ...CZ_US_LISTING_ROW,
+    }).finally(() => {
+      Bun.sleep = sleep;
+    });
+    // A record held listing-only states its typed read outcome.
+    return built.decision;
+  },
 });
 
 // ── EU ECJ fixture ───────────────────────────────────────
