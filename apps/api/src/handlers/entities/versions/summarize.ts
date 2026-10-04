@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -16,6 +16,7 @@ const config = {
     "entities.versions.diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

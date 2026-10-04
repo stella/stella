@@ -13,7 +13,7 @@ import {
   WORKSPACE_VIEWS_CORRESPONDENCE_INDEX,
   workspaceViews,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -47,6 +47,7 @@ const config = {
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
   permissions: { view: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

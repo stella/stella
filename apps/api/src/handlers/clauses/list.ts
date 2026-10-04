@@ -1,4 +1,4 @@
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 import { listClausesHandler, listClausesQuerySchema } from "./read";
@@ -12,6 +12,7 @@ const config = {
     "title, category, language, description, and current version but not the " +
     "body: read that with clauses.get.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_clauses" },
   access: "read",
   query: listClausesQuerySchema,

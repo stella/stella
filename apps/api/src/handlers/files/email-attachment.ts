@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
@@ -31,6 +31,7 @@ const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   query: t.Object({

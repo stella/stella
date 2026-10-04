@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { status } from "elysia";
 import type { ElysiaCustomStatusResponse } from "elysia/error";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
@@ -26,6 +26,7 @@ const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
   params: workspaceParams({ fieldId: tSafeId("field") }),
