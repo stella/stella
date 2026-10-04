@@ -115,8 +115,6 @@ import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
-
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
  * `type: "covered"` disposition references one of these; the coverage guard
@@ -170,7 +168,7 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
  */
-export type McpCapabilityReason =
+type McpCapabilityReason =
   | "template_authoring_ui"
   | "workspace_schema"
   | "knowledge_library_admin"
@@ -236,7 +234,7 @@ export type McpCapabilityReason =
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
  */
-export type McpInternalReason =
+type McpInternalReason =
   | "auth_plumbing"
   | "upload_mechanics"
   | "realtime_stream"
@@ -449,7 +447,7 @@ export const ACCOUNT_ACCESS = {
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+const requiresStandardAccount = (accountAccess: AccountAccess) =>
   accountAccess === ACCOUNT_ACCESS.standard;
 
 type SandboxAccountAccess = {
@@ -629,7 +627,7 @@ type SafeErrorBody = {
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
-export const safeHandlerErrorResponseSchema = t.Object(
+const safeHandlerErrorResponseSchema = t.Object(
   {
     message: t.String(),
     code: t.Optional(t.String()),
@@ -1578,7 +1576,7 @@ export const assertUsageAvailableForHandler = async ({
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
  */
-export const RUN_CONFIRMATION_UNITS = 50;
+const RUN_CONFIRMATION_UNITS = 50;
 
 type RunSizePreflightInput = UsagePreflightInput & {
   /** Units the initiator expects the whole run to consume. */

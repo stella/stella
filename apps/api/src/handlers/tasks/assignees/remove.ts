@@ -1,10 +1,8 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { taskAssignees } from "@/api/db/schema";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,6 +10,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { removeTaskAssignment } from "@/api/lib/tasks/assignment-membership";
 
 const removeAssigneeBodySchema = t.Object({
   taskId: tSafeId("entity"),
@@ -58,15 +57,12 @@ export const removeAssigneeHandler = async function* ({
 
   yield* Result.await(
     safeDb(async (tx) => {
-      await tx
-        .delete(taskAssignees)
-        .where(
-          and(
-            eq(taskAssignees.entityId, body.taskId),
-            eq(taskAssignees.userId, body.userId),
-            eq(taskAssignees.workspaceId, workspaceId),
-          ),
-        );
+      await removeTaskAssignment({
+        tx,
+        workspaceId,
+        entityId: body.taskId,
+        userId: body.userId,
+      });
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,

@@ -47,7 +47,7 @@ export { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip-config";
  */
 export { ORIGIN_VERIFY_HEADER } from "@/api/lib/client-ip-config";
 
-export const EDGE_ADDRESS_FORMAT = {
+const EDGE_ADDRESS_FORMAT = {
   withPort: "with-port",
   bare: "bare",
 } as const;

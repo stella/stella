@@ -1,8 +1,12 @@
 # API test memory measurements
 
-The API test memory workflow measures each test file in its own process, with one lane per shard. It runs in four shards on Sundays at 02:23 UTC and supports manual dispatch. Each shard also measures an empty test with the same preload. Its versioned JSON receipt records that baseline, operating system, architecture, Bun version, runner image, run ID, job, shard, the number of files the shard owns, and failed measurements. The workflow never writes commits.
+The API test memory workflow measures each test file in its own process, with one lane per shard. It runs in four shards on Sundays at 02:23 UTC and supports manual dispatch. Each shard also measures an empty test with the same preload. Its versioned JSON receipt records that baseline, operating system, architecture, Bun version, runner image, run ID, job, measurement time, shard, the number of files the shard owns, and failed measurements.
 
-Download all four artifacts from the same successful run into `rss-artifacts`, then refresh from the repository root:
+When every shard of a run on `main` succeeds, the workflow's refresh job runs the command below on that run's receipts against current `main` and opens a pull request titled `chore(ci): refresh API test memory profile` from `chore/refresh-api-test-memory`. The job fails if anything other than `apps/api/scripts/test-peak-rss.json` changed. A later run replaces the open pull request instead of opening another. Review the change report in the pull request body and the job summary before merging.
+
+The table records when its run finished measuring (`measuredAt`). Once that is more than 14 days old, the API test runner (first shard only) emits a non-blocking `API test memory profile is stale` warning: merge the open refresh pull request or rerun the workflow.
+
+To refresh by hand, download all four artifacts from the same successful run into `rss-artifacts`, then run from the repository root:
 
 ```sh
 bun apps/api/scripts/refresh-test-peak-rss.ts rss-artifacts apps/api/scripts/test-peak-rss.json

@@ -39,7 +39,7 @@ const UINT32_RANGE = 4_294_967_296n;
 const SUPPORTED_SECTOR_SHIFTS = new Set([9, 12]);
 const SUPPORTED_MINI_SECTOR_SHIFT = 6;
 
-export const CFB_OBJECT_TYPE = {
+const CFB_OBJECT_TYPE = {
   storage: 1,
   stream: 2,
   root: 5,

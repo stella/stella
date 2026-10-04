@@ -2,9 +2,14 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
-import { flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
+import {
+  flowRuns,
+  flowRunSteps,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -54,11 +59,23 @@ beforeAll(async () => {
   await db
     .insert(user)
     .values({ id: userId, name: "Reviewer", email: `${userId}@example.test` });
+  await db.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId,
+    userId,
+    role: "owner",
+    createdAt: new Date(),
+  });
   await db.insert(workspaces).values({
     id: workspaceId,
     organizationId,
     name: "Lifecycle matter",
     reference: workspaceId,
+  });
+  await db.insert(workspaceMembers).values({
+    id: createSafeId<"workspaceMember">(),
+    workspaceId,
+    userId,
   });
 });
 afterAll(async () => {

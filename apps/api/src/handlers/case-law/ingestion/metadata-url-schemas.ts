@@ -13,7 +13,7 @@ import {
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
-export const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
+const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
   documentSupplements: { items: { sourceUrl: "url" } },
 } as const;
 

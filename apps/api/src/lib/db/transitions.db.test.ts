@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { pgTable, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -14,7 +15,11 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
-import { transition } from "@/api/lib/db/transitions";
+import {
+  defineKeyedTransitions,
+  transition,
+  transitionBatch,
+} from "@/api/lib/db/transitions";
 import { isPgError } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -147,4 +152,136 @@ test("a real audit insert failure rolls back the already applied transition", as
   expect(isPgError(error, "23503")).toBe(true);
   expect((await db.select().from(flowRuns)).at(0)?.status).toBe("pending");
   expect(await db.select().from(auditLogs)).toEqual([]);
+});
+
+test("a batch records exactly its successful rows in one audit call", async () => {
+  const missingId = createSafeId<"flowRun">();
+  const recordAuditEvent = recorderFor(organizationId);
+  let auditCalls = 0;
+  const changed = await db.transaction(async (tx) => {
+    const transactional = withBunRows(tx);
+    return await transitionBatch({
+      tx: transactional,
+      spec: TRANSITIONS.flowRuns,
+      ids: [runId, missingId],
+      options: {
+        from: ["pending"],
+        to: "cancelled",
+        set: { finishedAt: new Date() },
+      },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        expect(auditTx).toBe(transactional);
+        expect(rows).toEqual([{ id: runId, status: "cancelled" }]);
+        auditCalls += 1;
+        await recordAuditEvent(
+          auditTx,
+          rows.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+            resourceId: row.id,
+            changes: { status: { old: "pending", new: row.status } },
+          })),
+        );
+      },
+    });
+  });
+  expect(changed).toEqual([{ id: runId, status: "cancelled" }]);
+  expect(auditCalls).toBe(1);
+  expect(await db.$count(auditLogs)).toBe(1);
+  expect((await db.select().from(flowRuns)).at(0)?.finishedAt).toBeInstanceOf(
+    Date,
+  );
+});
+
+test("an audit failure rolls back every row in a batch", async () => {
+  const secondId = createSafeId<"flowRun">();
+  await db.insert(flowRuns).values({
+    id: secondId,
+    workspaceId,
+    status: "pending",
+    definitionSnapshot: { name: "Second transition", steps: [] },
+    triggerSource: { type: "schedule" },
+  });
+  const recordAuditEvent = recorderFor(mintAuthProviderId<"organization">());
+  const error = await rejectionOf(
+    db.transaction(async (tx) => {
+      const transactional = withBunRows(tx);
+      await transitionBatch({
+        tx: transactional,
+        spec: TRANSITIONS.flowRuns,
+        ids: [runId, secondId],
+        options: { from: ["pending"], to: "cancelled" },
+        recordTransitionAuditEvent: async (auditTx, rows) => {
+          expect(rows).toHaveLength(2);
+          await recordAuditEvent(
+            auditTx,
+            rows.map((row) => ({
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+              resourceId: row.id,
+            })),
+          );
+        },
+      });
+    }),
+  );
+  expect(isPgError(error, "23503")).toBe(true);
+  expect(
+    await db
+      .select({ status: flowRuns.status })
+      .from(flowRuns)
+      .where(inArray(flowRuns.id, [runId, secondId])),
+  ).toEqual([{ status: "pending" }, { status: "pending" }]);
+  expect(await db.$count(auditLogs)).toBe(0);
+  await db.delete(flowRuns).where(eq(flowRuns.id, secondId));
+});
+
+test("a domain primary key changes ownership metadata and its status together", async () => {
+  const keyed = pgTable("transition_keyed_fixture", {
+    entityId: text("entity_id").primaryKey(),
+    status: text({ enum: ["owned", "unassigned"] }).notNull(),
+    owner: text(),
+  });
+  const spec = defineKeyedTransitions({
+    table: keyed,
+    key: "entityId",
+    edges: { owned: ["unassigned"], unassigned: [] },
+    options: { terminal: ["unassigned"] },
+  });
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`CREATE TEMP TABLE transition_keyed_fixture (entity_id text PRIMARY KEY, status text NOT NULL, owner text)`,
+    );
+    await tx.insert(keyed).values([
+      { entityId: "task", status: "owned", owner: actor },
+      { entityId: "closed", status: "unassigned", owner: "historical" },
+    ]);
+    const transactional = withBunRows(tx);
+    const changed = await transitionBatch({
+      tx: transactional,
+      spec,
+      ids: ["task", "closed"],
+      options: { from: ["owned"], to: "unassigned", set: { owner: null } },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        expect(
+          await auditTx.select().from(keyed).orderBy(keyed.entityId),
+        ).toEqual([
+          { entityId: "closed", status: "unassigned", owner: "historical" },
+          { entityId: "task", status: "unassigned", owner: null },
+        ]);
+        await recorderFor(organizationId)(
+          auditTx,
+          rows.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+            resourceId: row.id,
+            changes: { status: { old: "owned", new: row.status } },
+          })),
+        );
+      },
+    });
+    expect(changed).toEqual([{ id: "task", status: "unassigned" }]);
+    await tx.execute(sql`DROP TABLE transition_keyed_fixture`);
+  });
+  expect(await db.$count(auditLogs)).toBe(1);
 });
