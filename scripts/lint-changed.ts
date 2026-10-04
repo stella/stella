@@ -12,6 +12,7 @@
 import { $ } from "bun";
 import { existsSync } from "node:fs";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { isChangedLintPath } from "./lint-paths";
 
 const mergeBase = (
@@ -49,10 +50,10 @@ for (const f of files) {
 
 const generated = await $`bun --cwd=packages/cli run codegen:runtime`.nothrow();
 if (generated.exitCode !== 0) {
-  process.exit(generated.exitCode);
+  process.exit(childExitStatus(generated));
 }
 
 const result =
   await $`bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware ${files}`.nothrow();
 
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));

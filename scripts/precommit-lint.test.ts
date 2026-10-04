@@ -6,7 +6,14 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -88,6 +95,51 @@ afterAll(() => {
 });
 
 describe("pre-commit lint", () => {
+  test("the CLI preserves lint exit codes and fails when lint is terminated by a signal", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "precommit-lint-exit-"));
+    const source = "export const answer = 42;\n";
+    writeFileSync(path.join(directory, "fixture.ts"), source);
+    writeFileSync(
+      path.join(directory, "bun"),
+      '#!/bin/sh\ncase "$LINT_EXIT" in\n  signal) kill -TERM $$ ;;\n  *) exit "$LINT_EXIT" ;;\nesac\n',
+      { mode: 0o755 },
+    );
+    try {
+      for (const { lintExit, expectedExit } of [
+        { lintExit: "0", expectedExit: 0 },
+        { lintExit: "2", expectedExit: 2 },
+        { lintExit: "signal", expectedExit: 1 },
+      ]) {
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            path.join(ROOT, "scripts/precommit-lint.ts"),
+            "fixture.ts",
+          ],
+          {
+            cwd: directory,
+            env: {
+              ...process.env,
+              PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+              LINT_EXIT: lintExit,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        expect(
+          result.exitCode,
+          `${lintExit}: ${result.stderr.toString()}`,
+        ).toBe(expectedExit);
+        expect(readFileSync(path.join(directory, "fixture.ts"), "utf-8")).toBe(
+          source,
+        );
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("the fix pass leaves code whose receiver type a fix would assume untouched", () => {
     const files = Object.entries(RECEIVER_FIXTURES).map(([rule, body]) =>
       writeFixture(rule, body),
