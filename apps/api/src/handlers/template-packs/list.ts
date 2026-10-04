@@ -5,7 +5,7 @@ import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -61,6 +61,7 @@ const config = {
     "many of its templates are already installed. Also reports whether the " +
     "organization hides pack offers and whether the caller may install.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

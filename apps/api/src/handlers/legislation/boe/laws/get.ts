@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { getConsolidatedLaw } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 
 const paramsSchema = t.Object({
   lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
@@ -25,6 +25,7 @@ const boeGetLaw = createSafeRootHandler(
       "which blocks the BOE returns; this queries the BOE service directly " +
       "rather than the stella legislation corpus.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,

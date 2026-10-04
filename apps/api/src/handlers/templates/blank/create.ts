@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -84,6 +84,7 @@ const config = {
     "document and storing it with templates.document.update. Use " +
     "templates.create to upload a DOCX that already has {{field}} markers.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // Not reachable through create_template (which requires a DOCX).
   mcp: {
     type: "capability",

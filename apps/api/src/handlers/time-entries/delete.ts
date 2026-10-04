@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
@@ -266,6 +266,7 @@ const deleteTimeEntryById = createSafeHandler(
       "excluded from billing). A billed entry cannot be deleted until its " +
       "invoice is reverted. Returns whether the entry was hard-deleted.",
     permissions: { timeEntry: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,
   },
