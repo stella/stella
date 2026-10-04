@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { collectMissingAncestorIds } from "@/api/handlers/entities/filesystem-tree/get.logic";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -38,6 +38,7 @@ const config = {
     "full path can still be resolved without those folders entering the tree " +
     "itself.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   body: readFilesystemTreeBodySchema,
