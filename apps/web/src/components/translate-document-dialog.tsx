@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 /**
  * Unified document translation trigger and background run dialog.
  *
@@ -5,8 +6,6 @@
  * while the run is in progress; the mounted toolbar keeps polling and posts a
  * toast with an Open action when the output is ready.
  */
-
-import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -61,6 +60,7 @@ import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
@@ -219,10 +219,8 @@ export const TranslateDocumentDialog = (
     }
 
     analytics.captureError(result.error);
-    stellaToast.add({
-      title: t("translate.error.title"),
+    notifyUserError(result.error, t("translate.error.title"), {
       description: userErrorFromThrown(result.error, t("errors.actionFailed")),
-      type: "error",
     });
     setDialogOpen(true);
   });
@@ -243,13 +241,11 @@ export const TranslateDocumentDialog = (
     ) {
       pollingErrorRunRef.current = runId;
       analytics.captureError(runQuery.error);
-      stellaToast.add({
-        title: t("translate.error.title"),
+      notifyUserError(runQuery.error, t("translate.error.title"), {
         description: userErrorFromThrown(
           runQuery.error,
           t("errors.actionFailed"),
         ),
-        type: "error",
       });
       return;
     }
@@ -289,10 +285,8 @@ export const TranslateDocumentDialog = (
     }
     if (run.status === "failed" || run.status === "cancelled") {
       terminalNotifiedRunRef.current = runId;
-      stellaToast.add({
-        title: t("translate.error.title"),
+      notifyUserError(undefined, t("translate.error.title"), {
         description: t(documentTranslationRunFailureKey(run.errorCode)),
-        type: "error",
       });
     }
   }, [
@@ -373,10 +367,8 @@ export const TranslateDocumentDialog = (
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("translate.error.title"),
+      notifyUserError(error, t("translate.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });

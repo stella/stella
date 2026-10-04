@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { loadCatalogue } from "./loader";
-import { catalogueSlugSchema } from "./schema";
+import { catalogueSlugSchema, mcpEntrySchema } from "./schema";
 
 const UUIDS = [
   "550e8400-e29b-41d4-a716-446655440000",
@@ -35,4 +35,34 @@ describe("catalogue slugs", () => {
       .filter((slug) => !v.safeParse(catalogueSlugSchema, slug).success);
     expect(refused).toEqual([]);
   });
+});
+
+test("catalogue authorization definitions use endpoint origins", () => {
+  const entry = {
+    kind: "mcp",
+    slug: "example",
+    displayName: "Example",
+    description: "Example connector",
+    url: "https://connector.example.com/mcp",
+    authType: "oauth",
+    cost: "free",
+    setup: "account",
+    jurisdictions: [],
+    author: "Example",
+    tags: [],
+    license: "MIT",
+  };
+  for (const origin of [
+    "https://authorization.example.com",
+    "https://authorization.example.com/token",
+  ]) {
+    const parsed = v.safeParse(mcpEntrySchema, {
+      ...entry,
+      oauthAuthorization: {
+        issuer: "https://authorization.example.com",
+        endpointOrigins: [origin],
+      },
+    });
+    expect(parsed.success).toBe(origin === "https://authorization.example.com");
+  }
 });

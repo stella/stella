@@ -16,13 +16,12 @@ import {
 } from "@stll/ui/dialog";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type StyleSelection =
   | { type: "stella" }
@@ -89,11 +88,7 @@ const StyleSetPickerDialogBody = ({
     submit().catch((error: unknown) => {
       getAnalytics().captureError(error);
       setCreating(false);
-      stellaToast.add({
-        type: "error",
-        title: t("errors.actionFailed"),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     });
   };
 

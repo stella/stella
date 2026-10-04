@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/notifications";
 
 import { env } from "@/api/env";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +33,7 @@ const config = {
   // permissions-exempt: the real gate is the deployment operator allowlist
   // enforced inside the handler; organization-role grants cannot model it.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // Internal on purpose: the gate here is deployment configuration, not an
   // organization role, so no agent consent scope can express who may call it.
   // Promoting it to a catalog capability would need a reviewed

@@ -26,7 +26,9 @@ import { stellaToast } from "@stll/ui/toast";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 import { ClauseEditor, type ClauseEditorReviewStatus } from "./clause-editor";
@@ -148,9 +150,7 @@ const ClauseFormDialogBody = ({
       setSaving(false);
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.updateFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.updateFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -184,9 +184,7 @@ const ClauseFormDialogBody = ({
       setSaving(false);
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.createFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.createFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),

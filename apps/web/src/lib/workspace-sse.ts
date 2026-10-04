@@ -5,13 +5,13 @@ import { useTranslations } from "use-intl";
 
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
@@ -124,7 +124,7 @@ export const useWorkspaceSSE = (
     );
   });
   const leaveEndedMatter = useLatestCallback(async () => {
-    stellaToast.add({ title: t("errors.matterNotFound"), type: "error" });
+    notifyUserError(undefined, t("errors.matterNotFound"));
     // Leave first: dropping the cache while the matter's views are still
     // mounted would only make them refetch into the same refusal.
     await navigate({ to: "/workspaces", replace: true });

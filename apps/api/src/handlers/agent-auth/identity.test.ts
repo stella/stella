@@ -7,8 +7,10 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import * as v from "valibot";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
@@ -18,6 +20,8 @@ import {
   AGENT_AUTH_TOKEN_PATH,
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
+import { oauthClient } from "@/api/db/auth-schema";
+import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -124,6 +128,66 @@ const createHumanSession = async () =>
 const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
 
 describe("agent registration configuration", () => {
+  test("daily registration admission returns a service response before creating rows", async () => {
+    const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
+    const day = new Date(Math.floor(Date.now() / DAY_IN_MS) * DAY_IN_MS);
+    const condition = and(
+      eq(registrationDailyBudget.day, day),
+      eq(registrationDailyBudget.kind, "agent"),
+    );
+    const previous = (
+      await rootDb
+        .select()
+        .from(registrationDailyBudget)
+        .where(condition)
+        .limit(1)
+    ).at(0);
+    await rootDb
+      .insert(registrationDailyBudget)
+      .values({ day, kind: "agent", count: env.AGENT_REGISTRATION_DAILY_LIMIT })
+      .onConflictDoUpdate({
+        target: [registrationDailyBudget.day, registrationDailyBudget.kind],
+        set: { count: env.AGENT_REGISTRATION_DAILY_LIMIT },
+      });
+    const before = await rootDb
+      .select({ count: count() })
+      .from(agentRegistration);
+    const clientsBefore = await rootDb
+      .select({ count: count() })
+      .from(oauthClient);
+    try {
+      for (const body of [
+        { type: "anonymous" },
+        { type: "service_auth", login_hint: "member@example.test" },
+      ]) {
+        expect((await postIdentity(body)).status).toBe(503);
+      }
+      const upgrade = await postClaim({
+        claim_token: String(anonymous["claim_token"]),
+        email: unclaimedHint(),
+      });
+      expect(upgrade.status).toBe(503);
+      expect((await readJson(upgrade))["message"]).toBe(
+        "Registration is temporarily unavailable.",
+      );
+      expect(
+        await rootDb.select({ count: count() }).from(agentRegistration),
+      ).toEqual(before);
+      expect(await rootDb.select({ count: count() }).from(oauthClient)).toEqual(
+        clientsBefore,
+      );
+    } finally {
+      if (previous) {
+        await rootDb
+          .update(registrationDailyBudget)
+          .set({ count: previous.count })
+          .where(condition);
+      } else {
+        await rootDb.delete(registrationDailyBudget).where(condition);
+      }
+    }
+  });
+
   test("returns a service error when the selected storage format is unavailable", async () => {
     const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
     const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;

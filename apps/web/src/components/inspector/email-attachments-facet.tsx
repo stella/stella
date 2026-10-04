@@ -62,6 +62,7 @@ import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   emailAttachmentPreviewOptions,
   emailHtmlPreviewOptions,
@@ -164,10 +165,7 @@ export const EmailAttachmentsFacet = ({
         if (Result.isError(resolved)) {
           savingRef.current = false;
           setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.idle });
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyUserError(resolved.error, t("errors.actionFailed"));
           return;
         }
         if (destination.type === "pending") {
@@ -200,10 +198,7 @@ export const EmailAttachmentsFacet = ({
         savingRef.current = false;
         setSaveState({ status: EMAIL_ATTACHMENT_SAVE_STATUS.idle });
         if (Result.isError(result)) {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyUserError(result.error, t("errors.actionFailed"));
           return;
         }
         setSaveTargetId(null);

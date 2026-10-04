@@ -19,7 +19,6 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -37,6 +36,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -733,7 +733,8 @@ export const createSearchSummaryChatThread = async ({
           version: 1,
           data: [{ type: "text", text: userText }],
         },
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: now,
       },
       {
@@ -750,7 +751,8 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

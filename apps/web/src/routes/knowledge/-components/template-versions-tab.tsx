@@ -3,15 +3,15 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { templateVersionsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
@@ -53,9 +53,7 @@ export const TemplateVersionsTab = ({
       .get();
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.loadFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.loadFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

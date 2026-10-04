@@ -7,7 +7,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/connection.ts"
+    ".": "./src/connection.ts",
+    "./store-policy": "./src/store-policy.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -18,6 +19,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/time": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

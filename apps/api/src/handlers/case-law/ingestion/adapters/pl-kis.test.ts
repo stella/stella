@@ -40,6 +40,7 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
@@ -555,6 +556,35 @@ describe("every ingested category, as the service served it", () => {
       ({ id }) => plKisCategoryById(id) === undefined,
     );
     expect(undecided).toEqual([]);
+  });
+});
+
+describe("pl-kis nested tables", () => {
+  test("a nested table row appears once in the parsed decision", () => {
+    const parsed = parsePlKisDocumentHtml({
+      caseNumber: "0114-KDIP2-1.4010.1.2024.1.KS",
+      court: "Dyrektor Krajowej Informacji Skarbowej",
+      decisionDate: "2024-01-01",
+      decisionType: "Interpretacja indywidualna",
+      sourceUrl: "https://eureka.mf.gov.pl/",
+      documentUrl: "https://eureka.mf.gov.pl/",
+      documentId: "nested-table-fixture",
+      keywords: [],
+      statutes: [],
+      html: [
+        "<p>WYROK</p>",
+        "<table><tbody><tr><td><p>Outer cell</p>",
+        "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
+        "</td></tr></tbody></table>",
+      ].join(""),
+    });
+
+    expect(parsed.fulltext.split("Nested cell")).toHaveLength(2);
+    const tables = parsed.documentAst.blocks.filter(
+      (block) => block.type === "table",
+    );
+    expect(tables).toHaveLength(1);
+    expect(tables.at(0)?.rows).toHaveLength(1);
   });
 });
 

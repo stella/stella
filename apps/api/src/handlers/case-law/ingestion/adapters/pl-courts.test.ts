@@ -340,6 +340,29 @@ describe("pl-courts document the parser cannot read", () => {
   });
 });
 
+describe("pl-courts nested tables", () => {
+  test("a nested table row appears once in the assembled decision", async () => {
+    const row = await rowById(DUMP_PAGE, 332_735);
+    const nestedTable = [
+      "<table><tbody><tr><td><p>Outer cell</p>",
+      "<table><tbody><tr><td><p>Nested cell</p></td></tr></tbody></table>",
+      "</td></tr></tbody></table>",
+    ].join("");
+    const decision = decisionFrom({
+      listingRow: { ...row, textContent: nestedTable },
+      detail: null,
+    });
+
+    expect(decision.fulltext?.split("Nested cell")).toHaveLength(2);
+    const tables =
+      "blocks" in decision.documentAst
+        ? decision.documentAst.blocks.filter((block) => block.type === "table")
+        : [];
+    expect(tables).toHaveLength(1);
+    expect(tables.at(0)?.rows).toHaveLength(1);
+  });
+});
+
 describe("pl-courts replays a stored row", () => {
   const reparse =
     plCourtsAdapter.reparseStoredRaw ??
