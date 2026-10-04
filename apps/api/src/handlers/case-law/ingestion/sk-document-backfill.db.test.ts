@@ -33,11 +33,13 @@ import {
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 /**
@@ -921,6 +923,57 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(text?.fulltext).toBeNull();
+      });
+
+      /** A body one byte over the ceiling that starts with `head`. */
+      const oversizedBody = (head: string): Uint8Array => {
+        const bytes = new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1);
+        bytes.set(new TextEncoder().encode(head));
+        return bytes;
+      };
+
+      test("a PDF over the byte ceiling parks the decision with nothing stored", async () => {
+        const id = await insertPending("too-large");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(new Response(oversizedBody("%PDF-1.7\n"))),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+          detail: `over-${MAX_DOCUMENT_PDF_BYTES}-bytes`,
+        });
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
+        const [stored] = await db
+          .select({ fulltext: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        expect(stored).toEqual({ fulltext: null });
+      });
+
+      test("a body over the byte ceiling that is not a PDF throws as any non-PDF body does", async () => {
+        const id = await insertPending("too-large-html");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(oversizedBody("<!doctype html><title>error")),
+            ),
+        ).then(
+          (value: unknown) => ({ resolved: value }),
+          (error: unknown) => error,
+        );
+
+        expect(outcome).toBeInstanceOf(SkDocumentNonPdfError);
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBeLessThan(
+          MAX_DOCUMENT_FETCH_ATTEMPTS,
+        );
       });
 
       test("a refused download defers the decision behind its own cooldown", async () => {

@@ -1,332 +1,66 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { statements } from "@stll/permissions";
+
 import { env } from "@/api/env";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
-import { resolveAccess } from "../../../scripts/lib/capability-catalog";
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
 
 const configSchema = v.object({
-  permissions: v.record(v.string(), v.array(v.string())),
-  accountAccess: v.optional(v.literal("standard")),
-  access: v.optional(v.picklist(["read", "write"])),
+  permissions: v.optional(v.record(v.string(), v.array(v.string()))),
+  accountAccess: v.picklist(Object.values(ACCOUNT_ACCESS)),
 });
 
-// New sandbox mutations require an explicit account-policy review.
-const REVIEWED_SANDBOX_MUTATIONS = [
-  "apps/api/src/handlers/ai-autocomplete/stream.ts",
-  "apps/api/src/handlers/bilingual-translations/create-run.ts",
-  "apps/api/src/handlers/bilingual-translations/prepare.ts",
-  "apps/api/src/handlers/billing-codes/create.ts",
-  "apps/api/src/handlers/billing-codes/delete.ts",
-  "apps/api/src/handlers/billing-codes/update.ts",
-  "apps/api/src/handlers/case-law/analysis/generate.ts",
-  "apps/api/src/handlers/case-law/decisions/search-expand.ts",
-  "apps/api/src/handlers/case-law/decisions/search-refine.ts",
-  "apps/api/src/handlers/case-law/matter-links/batch/create.ts",
-  "apps/api/src/handlers/case-law/matter-links/create.ts",
-  "apps/api/src/handlers/case-law/matter-links/delete.ts",
-  "apps/api/src/handlers/case-law/research/answers-run.ts",
-  "apps/api/src/handlers/case-law/research/columns-create.ts",
-  "apps/api/src/handlers/case-law/research/columns-delete.ts",
-  "apps/api/src/handlers/case-law/research/columns-reorder.ts",
-  "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts",
-  "apps/api/src/handlers/case-law/research/columns-update.ts",
-  "apps/api/src/handlers/catalogue/install.ts",
-  "apps/api/src/handlers/chat/fork/create.ts",
-  "apps/api/src/handlers/chat/get-model-options.ts",
-  "apps/api/src/handlers/chat/get-suggested-prompts.ts",
-  "apps/api/src/handlers/chat/get-thread-recap.ts",
-  "apps/api/src/handlers/chat/get-thread-title.ts",
-  "apps/api/src/handlers/chat/improve-prompt.ts",
-  "apps/api/src/handlers/chat/read-file-thread.ts",
-  "apps/api/src/handlers/chat/resolve-file-thread.ts",
-  "apps/api/src/handlers/chat/resolve-template-thread.ts",
-  "apps/api/src/handlers/chat/rotate-template-thread.ts",
-  "apps/api/src/handlers/chat/send-message.ts",
-  "apps/api/src/handlers/chat/skill-availability/list.ts",
-  "apps/api/src/handlers/chat/suggest-thread-title.ts",
-  "apps/api/src/handlers/chat/threads/delete.ts",
-  "apps/api/src/handlers/chat/threads/rename.ts",
-  "apps/api/src/handlers/chat/threads/update.ts",
-  "apps/api/src/handlers/chat/turns/cancel.ts",
-  "apps/api/src/handlers/chat/update-thread-model.ts",
-  "apps/api/src/handlers/clauses/categories/create.ts",
-  "apps/api/src/handlers/clauses/categories/delete.ts",
-  "apps/api/src/handlers/clauses/categories/update.ts",
-  "apps/api/src/handlers/clauses/create.ts",
-  "apps/api/src/handlers/clauses/delete.ts",
-  "apps/api/src/handlers/clauses/import.ts",
-  "apps/api/src/handlers/clauses/rewrite.ts",
-  "apps/api/src/handlers/clauses/update.ts",
-  "apps/api/src/handlers/clauses/variants/create.ts",
-  "apps/api/src/handlers/clauses/variants/delete.ts",
-  "apps/api/src/handlers/clauses/variants/update.ts",
-  "apps/api/src/handlers/clauses/versions/restore.ts",
-  "apps/api/src/handlers/clauses/versions/summarize.ts",
-  "apps/api/src/handlers/contacts/create.ts",
-  "apps/api/src/handlers/contacts/delete.ts",
-  "apps/api/src/handlers/contacts/extract-procuracao.ts",
-  "apps/api/src/handlers/contacts/import-inspect.ts",
-  "apps/api/src/handlers/contacts/import-preview.ts",
-  "apps/api/src/handlers/contacts/import-validate.ts",
-  "apps/api/src/handlers/contacts/import.ts",
-  "apps/api/src/handlers/contacts/presign-procuracao.ts",
-  "apps/api/src/handlers/contacts/update.ts",
-  "apps/api/src/handlers/document-reviews/create-run.ts",
-  "apps/api/src/handlers/document-reviews/decide-finding.ts",
-  "apps/api/src/handlers/document-translations/runs/create.ts",
-  "apps/api/src/handlers/documents/compare.ts",
-  "apps/api/src/handlers/docx-suggestions/create.ts",
-  "apps/api/src/handlers/docx-suggestions/reject-pending.ts",
-  "apps/api/src/handlers/docx-suggestions/resolve.ts",
-  "apps/api/src/handlers/docx-suggestions/revert.ts",
-  "apps/api/src/handlers/entities/bilingual/create.ts",
-  "apps/api/src/handlers/entities/blank-document/create.ts",
-  "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts",
-  "apps/api/src/handlers/entities/clip.ts",
-  "apps/api/src/handlers/entities/copy.ts",
-  "apps/api/src/handlers/entities/create-document-from-style-set.ts",
-  "apps/api/src/handlers/entities/create.ts",
-  "apps/api/src/handlers/entities/delete.ts",
-  "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
-  "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#readDesktopEditHandoffStatus",
-  "apps/api/src/handlers/entities/duplicate.ts",
-  "apps/api/src/handlers/entities/from-legal-source/create.ts",
-  "apps/api/src/handlers/entities/join-folio-collab-room.ts",
-  "apps/api/src/handlers/entities/move.ts",
-  "apps/api/src/handlers/entities/ocr/create.ts",
-  "apps/api/src/handlers/entities/open-desktop-edit-session.ts",
-  "apps/api/src/handlers/entities/pdf-signing-handoffs.ts",
-  "apps/api/src/handlers/entities/pdf-signing-sessions.ts#cancelPdfSigningSession",
-  "apps/api/src/handlers/entities/pdf-signing-sessions.ts#readPdfSigningSessionStatus",
-  "apps/api/src/handlers/entities/placements/suggest.ts",
-  "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
-  "apps/api/src/handlers/entities/release-desktop-edit-lock.ts",
-  "apps/api/src/handlers/entities/rename.ts",
-  "apps/api/src/handlers/entities/request-desktop-edit-takeover.ts",
-  "apps/api/src/handlers/entities/upload.ts",
-  "apps/api/src/handlers/entities/upload.ts#uploadGeneratedDocument",
-  "apps/api/src/handlers/entities/versions/delete.ts",
-  "apps/api/src/handlers/entities/versions/description/update.ts",
-  "apps/api/src/handlers/entities/versions/label/update.ts",
-  "apps/api/src/handlers/entities/versions/restore.ts",
-  "apps/api/src/handlers/entities/versions/summarize.ts",
-  "apps/api/src/handlers/entities/versions/upload.ts",
-  "apps/api/src/handlers/entity-views/create.ts",
-  "apps/api/src/handlers/entity-views/delete.ts",
-  "apps/api/src/handlers/entity-views/reorder.ts",
-  "apps/api/src/handlers/entity-views/update.ts",
-  "apps/api/src/handlers/expenses/create.ts",
-  "apps/api/src/handlers/expenses/delete.ts",
-  "apps/api/src/handlers/expenses/update.ts",
-  "apps/api/src/handlers/fields/cell-metadata/update.ts",
-  "apps/api/src/handlers/fields/column-flag/update.ts",
-  "apps/api/src/handlers/fields/kanban-placement/update.ts",
-  "apps/api/src/handlers/fields/upsert.ts",
-  "apps/api/src/handlers/files/email-attachment/create.ts",
-  "apps/api/src/handlers/files/routes.ts#updateDocumentPropertiesEndpoint",
-  "apps/api/src/handlers/flows/create.ts",
-  "apps/api/src/handlers/flows/delete.ts",
-  "apps/api/src/handlers/flows/runs/cancel.ts",
-  "apps/api/src/handlers/flows/runs/review.ts",
-  "apps/api/src/handlers/flows/runs/start.ts",
-  "apps/api/src/handlers/flows/update.ts",
-  "apps/api/src/handlers/invoices/create.ts",
-  "apps/api/src/handlers/invoices/delete.ts",
-  "apps/api/src/handlers/invoices/entries/add.ts",
-  "apps/api/src/handlers/invoices/entries/remove.ts",
-  "apps/api/src/handlers/invoices/lines/create.ts",
-  "apps/api/src/handlers/invoices/lines/delete.ts",
-  "apps/api/src/handlers/invoices/lines/update.ts",
-  "apps/api/src/handlers/invoices/transition.ts",
-  "apps/api/src/handlers/invoices/update.ts",
-  "apps/api/src/handlers/legal-reader/annotations/create.ts",
-  "apps/api/src/handlers/legal-reader/annotations/delete.ts",
-  "apps/api/src/handlers/legal-reader/annotations/update.ts",
-  "apps/api/src/handlers/lists/columns/create.ts",
-  "apps/api/src/handlers/lists/create.ts",
-  "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-  "apps/api/src/handlers/lists/generation-candidates/create.ts",
-  "apps/api/src/handlers/lists/generation-candidates/rejection/create.ts",
-  "apps/api/src/handlers/lists/generations/create.ts",
-  "apps/api/src/handlers/lists/items/comments/create.ts",
-  "apps/api/src/handlers/lists/items/fact-details/update.ts",
-  "apps/api/src/handlers/lists/items/reviews/update.ts",
-  "apps/api/src/handlers/lists/items/sources/create.ts",
-  "apps/api/src/handlers/lists/items/sources/verification/update.ts",
-  "apps/api/src/handlers/lists/items/update.ts",
-  "apps/api/src/handlers/lists/sections/create.ts",
-  "apps/api/src/handlers/lists/update.ts",
-  "apps/api/src/handlers/lists/verifications/claim-reviews/bulk/create.ts",
-  "apps/api/src/handlers/lists/verifications/claim-reviews/create.ts",
-  "apps/api/src/handlers/lists/verifications/create.ts",
-  "apps/api/src/handlers/memories/create-firm.ts",
-  "apps/api/src/handlers/memories/create.ts",
-  "apps/api/src/handlers/memories/list.ts",
-  "apps/api/src/handlers/memories/update.ts",
-  "apps/api/src/handlers/notifications/announce.ts",
-  "apps/api/src/handlers/notifications/read-all.ts",
-  "apps/api/src/handlers/notifications/read.ts",
-  "apps/api/src/handlers/playbooks/applicable/run.ts",
-  "apps/api/src/handlers/playbooks/approve.ts",
-  "apps/api/src/handlers/playbooks/create.ts",
-  "apps/api/src/handlers/playbooks/delete.ts",
-  "apps/api/src/handlers/playbooks/from-run/create.ts",
-  "apps/api/src/handlers/playbooks/from-starter/create.ts",
-  "apps/api/src/handlers/playbooks/run.ts",
-  "apps/api/src/handlers/playbooks/update.ts",
-  "apps/api/src/handlers/playbooks/versions/restore.ts",
-  "apps/api/src/handlers/properties/batch/create.ts",
-  "apps/api/src/handlers/properties/create.ts",
-  "apps/api/src/handlers/properties/delete.ts",
-  "apps/api/src/handlers/properties/preview.ts",
-  "apps/api/src/handlers/properties/prompt/suggest.ts",
-  "apps/api/src/handlers/properties/update.ts",
-  "apps/api/src/handlers/rates/arrangement/update.ts",
-  "apps/api/src/handlers/rates/create.ts",
-  "apps/api/src/handlers/rates/delete.ts",
-  "apps/api/src/handlers/rates/entries/create.ts",
-  "apps/api/src/handlers/rates/entries/delete.ts",
-  "apps/api/src/handlers/rates/entries/update.ts",
-  "apps/api/src/handlers/rates/update.ts",
-  "apps/api/src/handlers/reports/builtins/clone.ts",
-  "apps/api/src/handlers/saved-searches/create.ts",
-  "apps/api/src/handlers/saved-searches/delete.ts",
-  "apps/api/src/handlers/saved-searches/update.ts",
-  "apps/api/src/handlers/saved-time-narratives/create.ts",
-  "apps/api/src/handlers/saved-time-narratives/delete.ts",
-  "apps/api/src/handlers/saved-time-narratives/update.ts",
-  "apps/api/src/handlers/signals/acceptances/create.ts",
-  "apps/api/src/handlers/signals/assignments/create.ts",
-  "apps/api/src/handlers/signals/dismissals/create.ts",
-  "apps/api/src/handlers/signals/requests/create.ts",
-  "apps/api/src/handlers/signals/snoozes/create.ts",
-  "apps/api/src/handlers/skills/comments/create.ts",
-  "apps/api/src/handlers/skills/comments/delete.ts",
-  "apps/api/src/handlers/skills/comments/update.ts",
-  "apps/api/src/handlers/skills/create.ts",
-  "apps/api/src/handlers/skills/delete.ts",
-  "apps/api/src/handlers/skills/discover.ts",
-  "apps/api/src/handlers/skills/drafts/generate.ts",
-  "apps/api/src/handlers/skills/from-blueprint/create.ts",
-  "apps/api/src/handlers/skills/from-url/import.ts",
-  "apps/api/src/handlers/skills/import.ts",
-  "apps/api/src/handlers/skills/proposals/create.ts",
-  "apps/api/src/handlers/skills/proposals/delete.ts",
-  "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
-  "apps/api/src/handlers/skills/proposals/review.ts",
-  "apps/api/src/handlers/skills/proposals/update.ts",
-  "apps/api/src/handlers/skills/resources/create.ts",
-  "apps/api/src/handlers/skills/resources/delete.ts",
-  "apps/api/src/handlers/skills/resources/rename.ts",
-  "apps/api/src/handlers/skills/resources/rewrite.ts",
-  "apps/api/src/handlers/skills/resources/update.ts",
-  "apps/api/src/handlers/skills/resources/upload.ts",
-  "apps/api/src/handlers/skills/update.ts",
-  "apps/api/src/handlers/skills/upload.ts",
-  "apps/api/src/handlers/style-sets/create.ts",
-  "apps/api/src/handlers/style-sets/delete.ts",
-  "apps/api/src/handlers/style-sets/from-editor/create.ts",
-  "apps/api/src/handlers/style-sets/from-editor/update.ts",
-  "apps/api/src/handlers/style-sets/replace.ts",
-  "apps/api/src/handlers/style-sets/update.ts",
-  "apps/api/src/handlers/tasks/assignees/add.ts",
-  "apps/api/src/handlers/tasks/assignees/move.ts",
-  "apps/api/src/handlers/tasks/assignees/remove.ts",
-  "apps/api/src/handlers/tasks/create.ts",
-  "apps/api/src/handlers/tasks/entity-links/create.ts",
-  "apps/api/src/handlers/tasks/entity-links/delete.ts",
-  "apps/api/src/handlers/tasks/update.ts",
-  "apps/api/src/handlers/template-packs/installs/create.ts",
-  "apps/api/src/handlers/template-recipes/create.ts",
-  "apps/api/src/handlers/template-recipes/delete.ts",
-  "apps/api/src/handlers/templates/blank/create.ts",
-  "apps/api/src/handlers/templates/categories/create.ts",
-  "apps/api/src/handlers/templates/categories/delete.ts",
-  "apps/api/src/handlers/templates/categories/update.ts",
-  "apps/api/src/handlers/templates/clause-slots/update.ts",
-  "apps/api/src/handlers/templates/clauses/link.ts",
-  "apps/api/src/handlers/templates/clauses/sync.ts",
-  "apps/api/src/handlers/templates/clauses/unlink.ts",
-  "apps/api/src/handlers/templates/create.ts",
-  "apps/api/src/handlers/templates/delete.ts",
-  "apps/api/src/handlers/templates/document/update.ts",
-  "apps/api/src/handlers/templates/fields/suggest.ts",
-  "apps/api/src/handlers/templates/fill.ts",
-  "apps/api/src/handlers/templates/fills/create.ts",
-  "apps/api/src/handlers/templates/from-style-set/create.ts",
-  "apps/api/src/handlers/templates/from-styles/create.ts",
-  "apps/api/src/handlers/templates/lookup-formats/create.ts",
-  "apps/api/src/handlers/templates/lookup-formats/default/update.ts",
-  "apps/api/src/handlers/templates/lookup-formats/delete.ts",
-  "apps/api/src/handlers/templates/lookup-formats/my-default/update.ts",
-  "apps/api/src/handlers/templates/outdated-clauses/sync.ts",
-  "apps/api/src/handlers/templates/prefill.ts",
-  "apps/api/src/handlers/templates/prepare.ts",
-  "apps/api/src/handlers/templates/update.ts",
-  "apps/api/src/handlers/templates/versions/summarize.ts",
-  "apps/api/src/handlers/time-entries/approval-queue/approve.ts",
-  "apps/api/src/handlers/time-entries/approval-queue/return.ts",
-  "apps/api/src/handlers/time-entries/batch/delete.ts",
-  "apps/api/src/handlers/time-entries/batch/update.ts",
-  "apps/api/src/handlers/time-entries/create.ts",
-  "apps/api/src/handlers/time-entries/delete.ts",
-  "apps/api/src/handlers/time-entries/internal/create.ts",
-  "apps/api/src/handlers/time-entries/me/daily-target/update.ts",
-  "apps/api/src/handlers/time-entries/polish-narrative.ts",
-  "apps/api/src/handlers/time-entries/split.ts",
-  "apps/api/src/handlers/time-entries/suggestions/decisions/create.ts",
-  "apps/api/src/handlers/time-entries/update.ts",
-  "apps/api/src/handlers/time-timers/admin/stop.ts",
-  "apps/api/src/handlers/time-timers/confirm.ts",
-  "apps/api/src/handlers/time-timers/discard.ts",
-  "apps/api/src/handlers/time-timers/pause.ts",
-  "apps/api/src/handlers/time-timers/resume.ts",
-  "apps/api/src/handlers/time-timers/start.ts",
-  "apps/api/src/handlers/time-timers/update.ts",
-  "apps/api/src/handlers/uploads/create.ts",
-  "apps/api/src/handlers/uploads/delete.ts",
-  "apps/api/src/handlers/uploads/entity-create-tree.ts",
-  "apps/api/src/handlers/uploads/update.ts",
-  "apps/api/src/handlers/user-files/read-content.ts",
-  "apps/api/src/handlers/user-files/read-thumbnail.ts",
-  "apps/api/src/handlers/view-templates/create.ts",
-  "apps/api/src/handlers/view-templates/delete.ts",
-  "apps/api/src/handlers/views/convert.ts",
-  "apps/api/src/handlers/views/create.ts",
-  "apps/api/src/handlers/views/delete.ts",
-  "apps/api/src/handlers/views/reorder.ts",
-  "apps/api/src/handlers/views/update.ts",
-  "apps/api/src/handlers/work-obligations/acknowledgements/create.ts",
-  "apps/api/src/handlers/work-obligations/transition.ts",
-  "apps/api/src/handlers/work-obligations/update.ts",
-  "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts",
-  "apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts",
-  "apps/api/src/handlers/workspaces/anonymization-terms/create.ts",
-  "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts",
-  "apps/api/src/handlers/workspaces/archive.ts",
-  "apps/api/src/handlers/workspaces/cells/retry.ts",
-  "apps/api/src/handlers/workspaces/contacts/create.ts",
-  "apps/api/src/handlers/workspaces/contacts/delete.ts",
-  "apps/api/src/handlers/workspaces/correspondence/update.ts",
-  "apps/api/src/handlers/workspaces/create.ts",
-  "apps/api/src/handlers/workspaces/delete.ts",
-  "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts",
-  "apps/api/src/handlers/workspaces/infosoud-import-agenda.ts",
-  "apps/api/src/handlers/workspaces/members/add.ts",
-  "apps/api/src/handlers/workspaces/members/remove.ts",
-  "apps/api/src/handlers/workspaces/unarchive.ts",
-  "apps/api/src/handlers/workspaces/update-active.ts",
-  "apps/api/src/handlers/workspaces/update.ts",
-  "apps/api/src/handlers/workspaces/workflow/start.ts",
-] as const;
+// The least access a handler may declare when it grants a non-read action on
+// the resource: organization administration stays with standard accounts.
+const RESOURCE_WRITE_ACCOUNT_ACCESS = {
+  organization: ACCOUNT_ACCESS.standard,
+  member: ACCOUNT_ACCESS.standard,
+  invitation: ACCOUNT_ACCESS.standard,
+  team: ACCOUNT_ACCESS.standard,
+  ac: ACCOUNT_ACCESS.standard,
+  workspace: ACCOUNT_ACCESS.sandbox,
+  organizationSettings: ACCOUNT_ACCESS.standard,
+  integration: ACCOUNT_ACCESS.standard,
+  contact: ACCOUNT_ACCESS.sandbox,
+  invoice: ACCOUNT_ACCESS.sandbox,
+  template: ACCOUNT_ACCESS.sandbox,
+  styleSet: ACCOUNT_ACCESS.sandbox,
+  clause: ACCOUNT_ACCESS.sandbox,
+  entity: ACCOUNT_ACCESS.sandbox,
+  timeEntry: ACCOUNT_ACCESS.sandbox,
+  expense: ACCOUNT_ACCESS.sandbox,
+  view: ACCOUNT_ACCESS.sandbox,
+  property: ACCOUNT_ACCESS.sandbox,
+  playbook: ACCOUNT_ACCESS.sandbox,
+  flow: ACCOUNT_ACCESS.sandbox,
+  signal: ACCOUNT_ACCESS.sandbox,
+  billingCode: ACCOUNT_ACCESS.sandbox,
+  rate: ACCOUNT_ACCESS.sandbox,
+  chat: ACCOUNT_ACCESS.sandbox,
+  auditLog: ACCOUNT_ACCESS.sandbox,
+  agentSkill: ACCOUNT_ACCESS.sandbox,
+  firmMemory: ACCOUNT_ACCESS.sandbox,
+  caseLawResearch: ACCOUNT_ACCESS.sandbox,
+  legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
+  savedSearch: ACCOUNT_ACCESS.sandbox,
+} as const satisfies Record<keyof typeof statements, AccountAccess>;
 
+const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>
+  Object.entries(RESOURCE_WRITE_ACCOUNT_ACCESS).some(
+    ([resource, access]) =>
+      access === ACCOUNT_ACCESS.standard &&
+      (permissions[resource] ?? []).some((action) => action !== "read"),
+  );
+
+// Every endpoint refused to the demo account; a change here is a policy change.
 const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/agent-auth/confirm.ts",
+  "apps/api/src/handlers/ai-config/validate-provider.ts",
   "apps/api/src/handlers/api-keys/create.ts",
   "apps/api/src/handlers/api-keys/list.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
@@ -356,6 +90,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
   "apps/api/src/handlers/mcp-connectors/update-connection.ts",
   "apps/api/src/handlers/mcp-connectors/update-native-tool.ts",
+  "apps/api/src/handlers/me/disconnect-oauth-connection.ts",
+  "apps/api/src/handlers/me/verify-delete.ts",
   "apps/api/src/handlers/number-series/archive.ts",
   "apps/api/src/handlers/number-series/create.ts",
   "apps/api/src/handlers/number-series/default/update.ts",
@@ -398,6 +134,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/sharepoint/set-enablement.ts",
   "apps/api/src/handlers/style-sets/download.ts",
   "apps/api/src/handlers/template-packs/visibility/update.ts",
+  "apps/api/src/handlers/templates/fill.ts",
   "apps/api/src/handlers/templates/fills/download.ts",
   "apps/api/src/handlers/time-entries/csv/export.ts",
   "apps/api/src/handlers/time-entries/ledes/export.ts",
@@ -419,84 +156,38 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/workspaces/correspondence/address/delete.ts",
   "apps/api/src/handlers/workspaces/duplicate.ts",
   "apps/api/src/handlers/workspaces/export-overview-activity.ts",
+  "apps/api/src/handlers/workspaces/members/add.ts",
+  "apps/api/src/handlers/workspaces/members/remove.ts",
 ] as const;
 
-const REVIEWED_LOCAL_ENDPOINT_COUNTS = {
-  "apps/api/src/handlers/case-law/decisions/public-subject.ts": {
-    calls: 1,
-    exported: 0,
-  },
-  "apps/api/src/handlers/case-law/public-routes.ts": {
-    calls: 12,
-    exported: 1,
-  },
-  "apps/api/src/handlers/legislation/public-routes.ts": {
-    calls: 11,
-    exported: 0,
-  },
-  "apps/api/src/handlers/public-knowledge/endpoints.ts": {
-    calls: 6,
-    exported: 0,
-  },
-  "apps/api/src/handlers/search/routes.ts": {
-    calls: 5,
-    exported: 0,
-  },
-  "apps/api/src/handlers/workspaces/routes.ts": {
-    calls: 4,
-    exported: 0,
-  },
-} as const;
-
 describe("handler account policy census", () => {
-  test("every sandbox mutation and standard operation has a current decision", async () => {
+  test("every endpoint declares its account access", async () => {
     const discovery = await discoverSafeHandlers();
     expect(discovery.importErrors).toEqual([]);
-    const sandboxMutations: string[] = [];
+    expect(discovery.endpoints.length).toBeGreaterThan(0);
+    const undeclared: string[] = [];
+    const sandboxResourceWrites: string[] = [];
     const standardOperations: string[] = [];
     for (const endpoint of discovery.endpoints) {
-      if (endpoint.config["permissions"] === undefined) {
+      const parsed = v.safeParse(configSchema, endpoint.config);
+      if (!parsed.success) {
+        undeclared.push(endpoint.id);
         continue;
       }
-      const config = v.parse(configSchema, endpoint.config);
-      if (requiresStandardAccount(config.permissions, config.accountAccess)) {
+      const { accountAccess, permissions = {} } = parsed.output;
+      if (accountAccess === ACCOUNT_ACCESS.standard) {
         standardOperations.push(endpoint.id);
         continue;
       }
-      const classification = resolveAccess({
-        id: endpoint.id,
-        verbs: Object.values(config.permissions).flat(),
-        hasPermissions: true,
-        overrides:
-          config.access === undefined
-            ? {}
-            : {
-                [endpoint.id]: { access: config.access, destructive: false },
-              },
-      });
-      if (classification.status !== "resolved") {
-        panic(`Unclassified permission actions: ${endpoint.id}`);
-      }
-      if (classification.access === "write") {
-        sandboxMutations.push(endpoint.id);
+      if (requiresStandardResourceWrite(permissions)) {
+        sandboxResourceWrites.push(endpoint.id);
       }
     }
-    expect(sandboxMutations.length).toBeGreaterThan(0);
-    expect(sandboxMutations.toSorted()).toEqual([
-      ...REVIEWED_SANDBOX_MUTATIONS,
-    ]);
+    expect(undeclared).toEqual([]);
+    expect(sandboxResourceWrites).toEqual([]);
     expect(standardOperations.toSorted()).toEqual([
       ...REVIEWED_STANDARD_OPERATIONS,
     ]);
-    const localEndpointCounts = Object.fromEntries(
-      discovery.files
-        .filter((file) => file.callCount !== file.enumerableCount)
-        .map((file) => [
-          file.id,
-          { calls: file.callCount, exported: file.enumerableCount },
-        ]),
-    );
-    expect(localEndpointCounts).toEqual(REVIEWED_LOCAL_ENDPOINT_COUNTS);
   });
 
   test("standard operations apply account access before their implementation", async () => {

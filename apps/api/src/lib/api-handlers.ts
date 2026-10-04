@@ -20,12 +20,10 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -376,7 +374,7 @@ export type HandlerConfig = InputSchema &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
-    accountAccess?: "standard";
+    accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
@@ -398,10 +396,34 @@ type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
 
 export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
+/**
+ * Factories without an organization-scoped caller run no account check, so
+ * their handlers admit the demo account and can only declare `sandbox`.
+ */
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
+
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;
+
+type SandboxAccountAccess = {
+  accountAccess: typeof ACCOUNT_ACCESS.sandbox;
+};
+
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    accountAccess: AccountAccess;
     mcp: McpExposure;
   };
 
@@ -996,12 +1018,6 @@ export const admitFiniteAction = async function* <
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")
-  ) {
-    return yield* handler(ctx);
-  }
   return yield* runAdmittedFiniteHandler({
     actionKind,
     ctx,
@@ -1037,7 +1053,7 @@ const createSafeScopedHandler = <
       });
     }
 
-    if (requiresStandardAccount(config.permissions, config.accountAccess)) {
+    if (requiresStandardAccount(config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {
@@ -1082,11 +1098,7 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
-    if (
-      admission === undefined ||
-      (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS"))
-    ) {
+    if (admission === undefined) {
       return await runSafeHandler(ctx, handler);
     }
 
@@ -1516,14 +1528,34 @@ export const createSafeHandler = <
     return handler(ctx);
   });
 
+type SessionHandlerDependencies = {
+  checkAccountOperation?: typeof checkDemoAccountOperation;
+};
+
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+  {
+    checkAccountOperation = checkDemoAccountOperation,
+  }: SessionHandlerDependencies = {},
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
+    if (requiresStandardAccount(config.accountAccess)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
+    return await runSafeHandler(ctx, handler);
+  },
+});
 
 /**
  * Config for self-authorizing (token) routes. The `body`, `query`, and
@@ -1539,7 +1571,8 @@ export type TokenHandlerConfig = Omit<
   "body" | "query" | "params"
 > &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  SandboxAccountAccess & {
     body?: AnyPermissiveRouteSchema;
     query?: AnyPermissiveRouteSchema;
     params?: AnyPermissiveRouteSchema;
@@ -1569,7 +1602,8 @@ export const createSafeTokenHandler = <
 
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  SandboxAccountAccess & {
     cache: CachePolicy;
     mcp: McpExposure;
   };
