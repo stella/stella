@@ -84,7 +84,10 @@ type HolderSpec = {
   citationKey?: string | null;
   /** Overrides the case key as the holder's stored docket. */
   caseNumber?: string;
-  /** The sheet the holder's source recorded, in its column. */
+  /**
+   * A sheet in the `sheet_number` column, which a lookup cannot read; the
+   * adapter's recorded sheet is `metadata.sheetNumber`.
+   */
   sheetNumber?: string;
   metadata?: Record<string, unknown>;
 };
@@ -291,8 +294,20 @@ const cases: Case[] = [
     name: "the printed sheet recorded on one holder",
     docket: "8 As 3/2020",
     reference: { hints: { sheetNumber: "014" } },
-    holders: [{ name: "sheet", sheetNumber: "14" }, { sheetNumber: "15" }],
+    holders: [
+      { name: "sheet", metadata: { sheetNumber: "14" } },
+      { metadata: { sheetNumber: "15" } },
+    ],
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+  },
+  {
+    // A lookup reads the recorded sheet from the metadata only, so a
+    // citation must not resolve on a sheet a lookup cannot see.
+    name: "the printed sheet only in one holder's sheet column",
+    docket: "8 As 6/2020",
+    reference: { hints: { sheetNumber: "14" } },
+    holders: [{ sheetNumber: "14" }, { sheetNumber: "15" }],
+    expect: { status: "ambiguous" },
   },
   {
     name: "the printed sheet on one holder's published reference",

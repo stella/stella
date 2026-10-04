@@ -626,17 +626,17 @@ export type DecisionSheetReading = "docket" | "ecli" | "stated";
 
 /**
  * Every place a decision's sheet can be known from, and how each is read.
- * Where the sheet is stored never changes which decision a reference names,
- * so a lookup (`resolveDecisionIdentity`) and the citation resolver's SQL
- * each map over this one list with a total map of their own: a source added
- * here without a reader on either side fails typecheck.
+ * Which of these carries the sheet never changes which decision a reference
+ * names, so a lookup (`resolveDecisionIdentity`) and the citation resolver's
+ * SQL each map over this one list with a total map of their own: a source
+ * added here without a reader on either side fails typecheck.
  *
  * - `case-number`: the stored docket, which keeps a sheet the row was
  *   written with (`DECISION_DOCKETS_STORED_WITH_SHEETS`).
  * - `published-case-number`: the reference as the court published it.
  * - `case-number-identifier`: a full file number a publisher supplied.
- * - `recorded-sheet`: the sheet the source's adapter split off and recorded,
- *   a sheet of the file it was split from only.
+ * - `recorded-sheet`: the sheet the source's adapter split off and recorded
+ *   in the decision's metadata, a sheet of the file it was split from only.
  * - `ecli`, `ecli-identifier`: an ECLI whose scheme ends on the sheet
  *   (`DECISION_ECLI_SHEET_SCHEMES`).
  */

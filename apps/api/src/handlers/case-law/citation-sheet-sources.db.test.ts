@@ -1,14 +1,18 @@
 /**
  * A decision's sheet is known from any of `DECISION_SHEET_SOURCES`, and
- * where it is stored never changes which decision a reference names. The
- * citation resolver reads the sources in SQL (`holderAnswersSheetSql`) and a
- * lookup reads them in TypeScript (`resolveDecisionIdentity`); each maps the
- * one declared list with a total map of its own, and this file holds the two
+ * which of them carries it never changes which decision a reference names.
+ * The citation resolver reads the sources in SQL (`holderAnswersSheetSql`) and
+ * a lookup reads them in TypeScript (`resolveDecisionIdentity`) over the rows
+ * `readDecisionIdentityHits` returns as the public reader; each maps the one
+ * declared list with a total map of its own, and this file holds the two
  * readings to one answer.
  *
  * Decisions are written with sheets in random sources, of this file and of
  * another, in every dash style and storage, and the set of decisions the SQL
- * admits for a printed sheet must be the set the lookup says carries it.
+ * admits for a printed sheet must be the set the lookup says carries it. The
+ * lookup reads the rows as production does, so a sheet stored where the
+ * public reader cannot see it (the `sheet_number` column) must not be
+ * admitted by the SQL either.
  */
 
 import { panic } from "better-result";
@@ -34,14 +38,19 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { holderAnswersSheetSql } from "@/api/handlers/case-law/citation-resolution";
+import { readDecisionIdentityHits } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   bareCitationKey,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 /** Files whose dockets and ECLIs the decisions are spelled from. */
 const FILES = [
@@ -211,15 +220,6 @@ type WrittenDecision = {
   id: SafeId<"caseLawDecision">;
   row: typeof caseLawDecisions.$inferInsert;
   identifiers: IdentifierRow[];
-  /** The decision as a lookup reads it. */
-  hit: {
-    id: string;
-    caseNumber: string;
-    ecli: string | null;
-    identifiers: { type: string; value: string }[];
-    publishedCaseNumber: string | null;
-    sheetNumber: string | null;
-  };
 };
 
 const identifierRow = (
@@ -291,18 +291,6 @@ const writtenDecisionOf = (
       metadata,
     },
     identifiers: [...identifiers.values()],
-    hit: {
-      id,
-      caseNumber,
-      ecli,
-      identifiers: [...identifiers.values()].map(({ type, value }) => ({
-        type,
-        value,
-      })),
-      publishedCaseNumber: published,
-      // Wherever it is stored, the lookup's sheet is the one recorded.
-      sheetNumber: recorded,
-    },
   };
 };
 
@@ -335,11 +323,23 @@ const admittedBySql = async (
 const citedSheetOf = ({ cited }: Scenario): string =>
   `${cited.zero ? "0" : ""}${String(cited.value)}`;
 
+/** The decisions as a lookup reads them: as the public reader, in production's read. */
+const readAsLookup = async (written: readonly WrittenDecision[]) =>
+  await withPublicLawReaderRole(db, async (roleTx) => {
+    // SAFETY: the role transaction supplies the select surface the read uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+    const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+    return await readDecisionIdentityHits(
+      tx,
+      written.map(({ id }) => id),
+    );
+  });
+
 /** The decisions a lookup of the printed reference says carry its sheet. */
-const carriedByLookup = (
+const carriedByLookup = async (
   scenario: Scenario,
   written: readonly WrittenDecision[],
-): string[] => {
+): Promise<string[]> => {
   const intent = parseDecisionQuery(
     `${fileOf(scenario, "own")}-${citedSheetOf(scenario)}`,
     { grammar: DECISION_DOCKET_GRAMMARS.CZE },
@@ -351,10 +351,11 @@ const carriedByLookup = (
   ) {
     return panic(`the printed reference must read as a sheet of its file`);
   }
-  const resolution = resolveDecisionIdentity(
-    intent,
-    written.map(({ hit }) => hit),
-  );
+  const hits = await readAsLookup(written);
+  if (hits.length !== written.length) {
+    return panic("the public reader must see every written decision");
+  }
+  const resolution = resolveDecisionIdentity(intent, hits);
   switch (resolution.status) {
     case "none":
       return panic("every written decision holds the file's docket");
@@ -435,7 +436,7 @@ const SINGLE_SOURCE_DECISIONS = {
   },
   "recorded-sheet": {
     ...NOTHING_ELSE,
-    recorded: { value: CITED, zero: false, padded: false, storage: "column" },
+    recorded: { value: CITED, zero: false, padded: false, storage: "metadata" },
   },
   ecli: { ...NOTHING_ELSE, ecli: CITED_ECLI },
   "ecli-identifier": { ...NOTHING_ELSE, ecliIdentifiers: [CITED_ECLI] },
@@ -461,7 +462,10 @@ describe("a decision's sheet from any source", () => {
         source,
         admitted: await admittedBySql(scenario, written),
       }).toEqual({ source, admitted: [carrier] });
-      expect({ source, carried: carriedByLookup(scenario, written) }).toEqual({
+      expect({
+        source,
+        carried: await carriedByLookup(scenario, written),
+      }).toEqual({
         source,
         carried: [carrier],
       });
@@ -476,7 +480,7 @@ describe("a decision's sheet from any source", () => {
         fc.asyncProperty(scenarioArb, async (scenario) => {
           const written = await writeScenario(scenario, scenario.decisions);
           const admitted = await admittedBySql(scenario, written);
-          const carried = carriedByLookup(scenario, written);
+          const carried = await carriedByLookup(scenario, written);
           expect(admitted.toSorted()).toEqual(carried.toSorted());
         }),
         { numRuns: 150 },

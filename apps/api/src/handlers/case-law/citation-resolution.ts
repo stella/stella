@@ -265,9 +265,10 @@ const identifierValuesSql = (
 
 /**
  * Where each sheet source is stored on a candidate, as a relation of text
- * values. The recorded sheet is read from its column and from the metadata
- * the adapter wrote it to, which is where a lookup reads it: where the sheet
- * sits never changes the answer.
+ * values. Each is read where a lookup (`readDecisionIdentityHits`) reads it,
+ * so a citation resolves only on what a lookup of the same reference sees:
+ * the recorded sheet is the metadata the adapter wrote, never the
+ * `sheet_number` column, which the public reader is not granted.
  */
 const HOLDER_SHEET_SOURCE_VALUES_SQL = {
   "case-number": (holder) => sql`VALUES (${holder}.case_number::text)`,
@@ -276,7 +277,7 @@ const HOLDER_SHEET_SOURCE_VALUES_SQL = {
   "case-number-identifier": (holder) =>
     identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
   "recorded-sheet": (holder) =>
-    sql`VALUES (${holder}.sheet_number::text), (${holder}.metadata ->> 'sheetNumber')`,
+    sql`VALUES (${holder}.metadata ->> 'sheetNumber')`,
   ecli: (holder) => sql`VALUES (${holder}.ecli::text)`,
   "ecli-identifier": (holder) =>
     identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.ECLI),
@@ -286,11 +287,7 @@ const HOLDER_SHEET_SOURCE_VALUES_SQL = {
  * The candidate columns `holderAnswersSheetSql` reads, which every relation
  * it is applied to must carry.
  */
-const HOLDER_SHEET_COLUMNS = [
-  "case_number",
-  "sheet_number",
-  "metadata",
-] as const;
+const HOLDER_SHEET_COLUMNS = ["case_number", "metadata"] as const;
 
 const holderSheetColumnsSql = (holder: SQL): SQL =>
   sql.join(
