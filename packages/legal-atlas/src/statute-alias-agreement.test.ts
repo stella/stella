@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
-import {
-  isStatuteQueryCountry,
-  resolveStatuteAlias,
-} from "@stll/api-contract/statute-aliases";
+import { resolveStatuteAlias } from "@stll/api-contract/statute-aliases";
 import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
+import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import { foldStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
 import type {
@@ -35,11 +33,14 @@ describe("statute box aliases and citation-reader profiles", () => {
   test("read every spelling both know as the same act today", () => {
     const divergences: string[] = [];
     for (const profile of PROFILES) {
-      const country = profile.jurisdiction.toLowerCase();
-      if (!isStatuteQueryCountry(country)) {
-        divergences.push(`${country}: no statute box aliases`);
+      const scope = readStatuteQueryScope(profile.jurisdiction.toLowerCase());
+      if (scope.type === "unsupported") {
+        divergences.push(
+          `${profile.jurisdiction}: no statute box aliases (${scope.reason})`,
+        );
         continue;
       }
+      const { country } = scope;
       for (const entry of [...profile.aliases, ...profile.titles]) {
         // An entry with an end date is a historical reading, not today's.
         if (entry.citedUntil !== undefined) {
