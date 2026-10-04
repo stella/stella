@@ -209,6 +209,7 @@ const persistMonitoringDiff = async (
   tx: Transaction,
   { matches, events }: ReturnType<typeof buildMonitoringDiff>,
 ) => {
+  // audit: skip - sanctions match state and its append-only transition trail written atomically in sanctions_screening_events
   if (matches.length > 0) {
     await tx.execute(sql`
       INSERT INTO sanctions_contact_matches
@@ -460,6 +461,7 @@ export const commitSanctionsMonitoringBatch = async ({
       if (rows.length === 0) {
         return;
       }
+      // audit: skip — derived screening coverage checkpoint; match transitions are audited atomically in sanctions_screening_events
       await tx
         .insert(sanctionsContactScreenings)
         .values(rows)
