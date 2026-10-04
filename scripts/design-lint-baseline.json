@@ -867,6 +867,8 @@
     "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 15,
     "apps/api/src/lib/legal-search/reconciliation-store.ts": 4,
     "apps/api/src/lib/legal-search/sk-document-backfill.ts": 3,
+    "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts": 11,
+    "apps/api/src/lib/lists/sanctions/monitoring-diff.ts": 2,
     "apps/api/src/lib/lists/sanctions/refresh.ts": 5,
     "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
     "apps/api/src/lib/lists/verification/run-queue.ts": 3,

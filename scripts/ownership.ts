@@ -436,6 +436,11 @@ export const OWNERSHIP = [
       names: ["hostedUsageWebhookEvents"],
       allowed: [
         {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
+        },
+        {
           path: "apps/api/src/db/schema.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
