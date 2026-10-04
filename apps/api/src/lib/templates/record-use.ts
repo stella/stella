@@ -7,7 +7,8 @@ import { templateFills, templates } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { TemplateStructureError } from "@/api/lib/docx/types";
+import { templateFillStatus } from "@/api/lib/templates/template-fill-completion";
+import type { FillDiagnostics } from "@/api/lib/templates/template-fill-completion";
 
 type RecordTemplateUseOptions = {
   tx: Transaction;
@@ -46,10 +47,9 @@ type RecordTemplateFillOptions = {
   entityVersionId?: SafeId<"entityVersion"> | undefined;
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
-  unmatchedCount: number;
-  aiFieldErrorCount: number;
-  unusedCount: number;
-  structureErrors?: TemplateStructureError[] | undefined;
+  /** The fill's diagnostics: the recorded status is their completion
+   *  decision, and the recorded counts are read from them. */
+  diagnostics: FillDiagnostics;
   /** Records the `EXECUTE` audit event when present (chat tools may run without
    *  one); the fill row is always written. */
   recordAuditEvent?: AuditRecorder | undefined;
@@ -70,14 +70,11 @@ export const recordTemplateFill = async ({
   entityId,
   entityVersionId,
   format,
-  unmatchedCount,
-  aiFieldErrorCount,
-  unusedCount,
-  structureErrors,
+  diagnostics,
   recordAuditEvent,
 }: RecordTemplateFillOptions): Promise<void> => {
-  const status =
-    unmatchedCount > 0 || aiFieldErrorCount > 0 ? "partial" : "success";
+  const status = templateFillStatus(diagnostics);
+  const unmatchedCount = diagnostics.unmatchedPlaceholders.length;
   await tx.insert(templateFills).values({
     organizationId,
     templateId,
@@ -85,10 +82,10 @@ export const recordTemplateFill = async ({
     format,
     status,
     unmatchedCount,
-    unusedCount,
+    unusedCount: diagnostics.unusedValues.length,
     structureErrors:
-      structureErrors !== undefined && structureErrors.length > 0
-        ? structureErrors
+      diagnostics.structureErrors.length > 0
+        ? [...diagnostics.structureErrors]
         : null,
   });
   await recordAuditEvent?.(tx, {
@@ -100,7 +97,8 @@ export const recordTemplateFill = async ({
       format,
       status,
       unmatchedCount,
-      aiFieldErrorCount,
+      aiFieldErrorCount: diagnostics.aiFieldErrors.length,
+      undecidedConditionCount: diagnostics.undecidedConditions.length,
       ...(entityId !== undefined && { entityId }),
       ...(entityVersionId !== undefined && { entityVersionId }),
     },

@@ -4835,6 +4835,7 @@
     "addPart": "Adicionar parte",
     "addTag": "Adicionar etiqueta",
     "aiAdaptHint": "A IA adapta este texto a cada lugar do documento em que ele aparece.",
+    "aiConditionsUndecided": "A IA não conseguiu decidir estas condições; as seções correspondentes foram preenchidas como se não se aplicassem: {list}",
     "aiDecidedConditions": "Decidido pela IA",
     "aiFieldsNotDrafted": "A IA não conseguiu redigir estes campos: {list}",
     "allTemplates": "Todos os modelos",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Repetição: {expression}",
     "directiveIf": "Se: {expression}",
     "discoveryFailed": "Falha ao analisar o modelo",
+    "documentCreatedIncomplete": "Documento criado, mas o preenchimento está incompleto",
     "downloadAnyway": "Baixar mesmo assim",
     "downloadDocx": "Baixar DOCX",
     "downloadPdf": "Baixar PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Falha ao salvar o modelo",
     "savedLookupFormats": "Formatos de saída salvos",
     "searchTemplates": "Pesquisar modelos…",
+    "structureErrorsInDocument": "Diretivas do modelo que não puderam ser aplicadas: {count}. Verifique o documento.",
     "structureWarningParagraph": "Parágrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# aviso de estrutura} many {# avisos de estrutura} other {# avisos de estrutura}}",
     "studio": {

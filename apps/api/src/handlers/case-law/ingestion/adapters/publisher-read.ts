@@ -9,6 +9,11 @@
  * refusal cannot be mistaken for an absence, so a helper built on it cannot
  * hand its caller "nothing here" for a 500, a timeout, an empty 204 or a 403.
  *
+ * Bodies are read through {@link readPublisherText} or
+ * {@link readPublisherBytes}, which stop at a byte ceiling. The `Response`
+ * that {@link readPublisher} returns is for its headers or a bounded stream
+ * reader; `no-unbounded-response-body` reports a whole-body read of it.
+ *
  * Where a refusal ends the cycle and where it describes one read:
  * - It ends the cycle (rejects) when it is a source-level stop: the caller
  *   opted into `refusalMode: "stop-refusal"` (a session workflow, where a
@@ -29,6 +34,8 @@
  */
 
 import { panic, Result } from "better-result";
+
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
   readAbsent,
@@ -80,7 +87,7 @@ export const readPublisher = async (
 ): Promise<ReadOutcome<Response>> => {
   const fetched = await readStep(
     async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher, readPublisherBytes or readPublisherText is called
       await fetchPublisher(url, {
         ...init,
         refusalMode: refusalMode ?? "stop-rate-limit",
@@ -119,26 +126,60 @@ export const readPublisher = async (
 };
 
 /**
- * One publisher request whose body is text. A served but empty body is a
- * failure to read, not an empty document.
+ * The most a publisher body read through this module may hold in memory. It
+ * matches the largest per-adapter ceiling (a full listing export) and the raw
+ * payload verification ceiling, so anything larger could not be stored and
+ * verified as a raw source payload anyway.
+ */
+export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * One publisher request whose body is read whole, up to
+ * {@link PUBLISHER_BODY_MAX_BYTES}. A body over the ceiling stops the read at
+ * the ceiling and is `too-large`; a served but empty body is `empty-body`; a
+ * body that fails after the headers is `thrown`. All three are failures to
+ * read, never a document.
+ */
+export const readPublisherBytes = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<Uint8Array>> => {
+  const outcome = await readPublisher(url, init);
+  if (outcome.type !== "present") {
+    return outcome;
+  }
+  const { body, status } = outcome.value;
+  if (body === null) {
+    return readUnavailable({ kind: "empty-body", status });
+  }
+  const bytes = await readStep(
+    async () => await readCappedBytes(body, PUBLISHER_BODY_MAX_BYTES),
+    init.signal ?? undefined,
+  );
+  if (Result.isError(bytes)) {
+    return bytes.error;
+  }
+  if (bytes.value === null) {
+    return readUnavailable({
+      kind: "too-large",
+      maxBytes: PUBLISHER_BODY_MAX_BYTES,
+    });
+  }
+  return bytes.value.length === 0
+    ? readUnavailable({ kind: "empty-body", status })
+    : readPresent(bytes.value);
+};
+
+/**
+ * One publisher request whose body is UTF-8 text, with the bounds and
+ * failures of {@link readPublisherBytes}. Decoding matches `Response.text()`.
  */
 export const readPublisherText = async (
   url: string | URL,
   init: PublisherReadInit,
 ): Promise<ReadOutcome<string>> => {
-  const outcome = await readPublisher(url, init);
-  if (outcome.type !== "present") {
-    return outcome;
-  }
-  const response = outcome.value;
-  const text = await readStep(
-    async () => await response.text(),
-    init.signal ?? undefined,
-  );
-  if (Result.isError(text)) {
-    return text.error;
-  }
-  return text.value.length === 0
-    ? readUnavailable({ kind: "empty-body", status: response.status })
-    : readPresent(text.value);
+  const outcome = await readPublisherBytes(url, init);
+  return outcome.type === "present"
+    ? readPresent(new TextDecoder().decode(outcome.value))
+    : outcome;
 };

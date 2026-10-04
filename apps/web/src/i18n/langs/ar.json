@@ -4835,6 +4835,7 @@
     "addPart": "إضافة جزء",
     "addTag": "إضافة وسم",
     "aiAdaptHint": "يكيّف الذكاء الاصطناعي هذه الصياغة لتلائم كل موضع تظهر فيه داخل المستند.",
+    "aiConditionsUndecided": "تعذّر على الذكاء الاصطناعي البتّ في هذه الشروط، لذا مُلئت أقسامها كما لو أنها لا تنطبق: {list}",
     "aiDecidedConditions": "يقرّره الذكاء الاصطناعي",
     "aiFieldsNotDrafted": "لم يتمكن الذكاء الاصطناعي من صياغة هذه الحقول: {list}",
     "allTemplates": "جميع القوالب",
@@ -4926,6 +4927,7 @@
     "directiveFor": "حلقة: {expression}",
     "directiveIf": "إذا: {expression}",
     "discoveryFailed": "تعذّر تحليل القالب",
+    "documentCreatedIncomplete": "تم إنشاء المستند، لكن التعبئة غير مكتملة",
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "تعذّر حفظ القالب",
     "savedLookupFormats": "تنسيقات الإخراج المحفوظة",
     "searchTemplates": "البحث في القوالب…",
+    "structureErrorsInDocument": "توجيهات القالب التي تعذّر تطبيقها: {count}. راجع المستند.",
     "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {

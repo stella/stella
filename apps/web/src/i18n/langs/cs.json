@@ -4835,6 +4835,7 @@
     "addPart": "Přidat část",
     "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnout tyto podmínky, proto byly jejich části vyplněny, jako by neplatily: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala vytvořit návrh těchto polí: {list}",
     "allTemplates": "Všechny vzory",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Smyčka: {expression}",
     "directiveIf": "Pokud: {expression}",
     "discoveryFailed": "Nepodařilo se analyzovat vzor",
+    "documentCreatedIncomplete": "Dokument byl vytvořen, ale vyplnění není úplné",
     "downloadAnyway": "Přesto stáhnout",
     "downloadDocx": "Stáhnout DOCX",
     "downloadPdf": "Stáhnout PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Nepodařilo se uložit vzor",
     "savedLookupFormats": "Uložené výstupní formáty",
     "searchTemplates": "Hledat vzory…",
+    "structureErrorsInDocument": "Direktivy vzoru, které nebylo možné použít: {count}. Zkontrolujte dokument.",
     "structureWarningParagraph": "Odstavec {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {

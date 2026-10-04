@@ -4835,6 +4835,7 @@
     "addPart": "Ajouter une partie",
     "addTag": "Ajouter une étiquette",
     "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
+    "aiConditionsUndecided": "L'IA n'a pas pu trancher ces conditions ; leurs sections ont été remplies comme si elles ne s'appliquaient pas : {list}",
     "aiDecidedConditions": "Décidé par l’IA",
     "aiFieldsNotDrafted": "L'IA n'a pas pu rédiger ces champs : {list}",
     "allTemplates": "Tous les modèles",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Boucle : {expression}",
     "directiveIf": "Si : {expression}",
     "discoveryFailed": "Impossible d'analyser le modèle",
+    "documentCreatedIncomplete": "Document créé, mais le remplissage est incomplet",
     "downloadAnyway": "Télécharger quand même",
     "downloadDocx": "Télécharger en DOCX",
     "downloadPdf": "Télécharger en PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Impossible d'enregistrer le modèle",
     "savedLookupFormats": "Formats de sortie enregistrés",
     "searchTemplates": "Rechercher des modèles…",
+    "structureErrorsInDocument": "Directives du modèle qui n'ont pas pu être appliquées : {count}. Vérifiez le document.",
     "structureWarningParagraph": "Paragraphe {paragraph, number}",
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",
     "studio": {
