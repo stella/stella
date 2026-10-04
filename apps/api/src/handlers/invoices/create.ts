@@ -302,6 +302,7 @@ const createDraftInvoice = async (
       rateAtEntry: timeEntries.rateAtEntry,
       narrative: timeEntries.narrative,
       invoiceNarrative: timeEntries.invoiceNarrative,
+      noCharge: timeEntries.noCharge,
     });
 
   const linkedCount = updated.length;

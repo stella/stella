@@ -366,6 +366,20 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   {
+    id: "time-entry-amount",
+    capability: "Price recorded time with its no-charge disposition",
+    owner: ["packages/money/"],
+    summary:
+      "timeEntryAmount requires the noCharge field and returns zero for no-charge time. " +
+      "Invoice lines, exports and displayed time amounts use this calculation.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/money"],
+      names: ["prorateHourlyCents"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
