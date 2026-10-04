@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { hashKey, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -31,12 +31,22 @@ type UseSettingsMutationOptions<TVariables, TData> = {
   onError?: (error: unknown, variables: TVariables) => void;
 };
 
+/** Scope id shared by every settings write that invalidates `key`. */
+const settingsMutationScopeId = (key: QueryKey): string =>
+  `settings:${hashKey(key)}`;
+
 /**
  * Shared plumbing for organization-settings mutations: always captures the
  * error (telemetry) and invalidates the affected query, and optionally shows a
  * success/error toast. Each card supplies its mutation fn, invalidation key, and
  * toast copy; the helper owns the identical `captureError + invalidate + toast`
  * boilerplate and makes the missing-`onError` class structurally impossible.
+ *
+ * Writes to the same settings resource (same `invalidate` key) share one
+ * mutation scope, so they reach the server strictly in submission order and
+ * the latest submitted value is the one persisted last. A write submitted
+ * while an earlier one is in flight waits (paused, `isPending`) until the
+ * earlier one settles, whether it succeeded or failed.
  */
 export const useSettingsMutation = <TVariables = void, TData = unknown>(
   options: UseSettingsMutationOptions<TVariables, TData>,
@@ -59,6 +69,7 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   const invalidatesOnSettle = options.invalidateOn === "settled";
 
   return useMutation({
+    scope: { id: settingsMutationScopeId(options.invalidate) },
     mutationFn: options.mutationFn,
     onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {
