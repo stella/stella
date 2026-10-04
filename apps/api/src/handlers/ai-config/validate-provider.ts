@@ -26,7 +26,7 @@ export const validateProviderBody = t.Object({
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.sandbox,
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;

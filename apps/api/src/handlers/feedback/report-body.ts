@@ -5,12 +5,28 @@
  * email, no instance name. Who filed a report is private and lives in
  * `feedback_reports` and in the maintainer email; the receipt is the only
  * thread between the two.
+ *
+ * Every value that is not authored here goes through the GitHub outbound owner
+ * (`@/api/lib/github/outbound-text`): reporter text renders as code, so it can
+ * neither ping accounts, cross-link issues, nor reshape the body around it.
  */
 
 import type {
   FeedbackReportContext,
   FeedbackReportInput,
 } from "@stll/api-contract/feedback";
+
+import {
+  githubMarkdown,
+  joinGithubMarkdownLines,
+  toGithubUserInline,
+  toGithubUserText,
+  toGithubUserTitle,
+} from "@/api/lib/github/outbound-text";
+import type {
+  GithubSafeText,
+  GithubSafeTitle,
+} from "@/api/lib/github/outbound-text";
 
 type ContextLabelKey = keyof FeedbackReportContext;
 
@@ -20,12 +36,12 @@ type ContextLabelKey = keyof FeedbackReportContext;
  * not a silently dropped line.
  */
 const CONTEXT_LABELS = {
-  client: "Client",
-  clientVersion: "Client version",
-  requestId: "Request id",
-  route: "Route",
-  errorReference: "Error reference",
-} as const satisfies Record<ContextLabelKey, string>;
+  client: githubMarkdown`Client`,
+  clientVersion: githubMarkdown`Client version`,
+  requestId: githubMarkdown`Request id`,
+  route: githubMarkdown`Route`,
+  errorReference: githubMarkdown`Error reference`,
+} as const satisfies Record<ContextLabelKey, GithubSafeText>;
 
 // Derived from the label map rather than hand-listed, so a context key added
 // to the contract is rendered as soon as it has a label and cannot be dropped
@@ -34,35 +50,44 @@ const CONTEXT_KEYS = Object.keys(CONTEXT_LABELS).filter(
   (key): key is ContextLabelKey => key in CONTEXT_LABELS,
 );
 
-const section = (heading: string, body: string | undefined): string[] =>
+const BLANK_LINE = githubMarkdown``;
+
+const section = (
+  heading: GithubSafeText,
+  body: string | undefined,
+): GithubSafeText[] =>
   body === undefined || body.length === 0
     ? []
-    : [`## ${heading}`, "", body, ""];
+    : [
+        githubMarkdown`## ${heading}`,
+        BLANK_LINE,
+        toGithubUserText(body),
+        BLANK_LINE,
+      ];
 
-const contextLines = (context: FeedbackReportContext | undefined): string[] => {
+const contextLines = (
+  context: FeedbackReportContext | undefined,
+): GithubSafeText[] => {
   if (context === undefined) {
     return [];
   }
   const lines = CONTEXT_KEYS.flatMap((key) => {
     const value = context[key];
-    return value === undefined ? [] : [`- ${CONTEXT_LABELS[key]}: ${value}`];
+    return value === undefined
+      ? []
+      : [
+          githubMarkdown`- ${CONTEXT_LABELS[key]}: ${toGithubUserInline(value)}`,
+        ];
   });
-  return lines.length === 0 ? [] : ["## Context", "", ...lines, ""];
+  return lines.length === 0
+    ? []
+    : [githubMarkdown`## Context`, BLANK_LINE, ...lines, BLANK_LINE];
 };
 
-const ZERO_WIDTH_SPACE = "\u200B";
-
-/**
- * The server files issues under the maintainers' token, so reporter text must
- * not be able to ping accounts or cross-link issues through it. A zero-width
- * space after the sigil keeps the text readable and stops the tracker from
- * resolving `@name` and `#123`.
- */
-export const neutralizeGithubReferences = (text: string): string =>
-  text.replaceAll(
-    /[@#](?=[A-Za-z0-9])/gu,
-    (sigil) => `${sigil}${ZERO_WIDTH_SPACE}`,
-  );
+/** The issue title: the report's title with every live sigil broken. */
+export const composeGithubIssueTitle = (
+  report: FeedbackReportInput,
+): GithubSafeTitle => toGithubUserTitle(report.title);
 
 export type ComposeGithubIssueBodyOptions = {
   receipt: string;
@@ -74,22 +99,18 @@ export const composeGithubIssueBody = ({
   receipt,
   report,
   serverVersion,
-}: ComposeGithubIssueBodyOptions): string =>
-  neutralizeGithubReferences(
-    [
-      `- Kind: ${report.kind}`,
-      `- Area: ${report.area}`,
-      `- Receipt: ${receipt}`,
-      `- Server version: ${serverVersion}`,
-      "",
-      ...section("What happened", report.whatHappened),
-      ...section("Expected", report.expected),
-      ...section("Steps", report.steps),
-      ...section("Evidence", report.evidence),
-      ...contextLines(report.context),
-      "---",
-      "Filed through the stella feedback pipeline. Content is sanitized " +
-        "server-side; the reporter's identity is held privately and is not " +
-        "published here. Quote the receipt to correlate.",
-    ].join("\n"),
-  );
+}: ComposeGithubIssueBodyOptions): GithubSafeText =>
+  joinGithubMarkdownLines([
+    githubMarkdown`- Kind: ${toGithubUserInline(report.kind)}`,
+    githubMarkdown`- Area: ${toGithubUserInline(report.area)}`,
+    githubMarkdown`- Receipt: ${toGithubUserInline(receipt)}`,
+    githubMarkdown`- Server version: ${toGithubUserInline(serverVersion)}`,
+    BLANK_LINE,
+    ...section(githubMarkdown`What happened`, report.whatHappened),
+    ...section(githubMarkdown`Expected`, report.expected),
+    ...section(githubMarkdown`Steps`, report.steps),
+    ...section(githubMarkdown`Evidence`, report.evidence),
+    ...contextLines(report.context),
+    githubMarkdown`---`,
+    githubMarkdown`Filed through the stella feedback pipeline. Content is sanitized server-side; the reporter's identity is held privately and is not published here. Quote the receipt to correlate.`,
+  ]);

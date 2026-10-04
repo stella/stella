@@ -1,9 +1,13 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
-import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
+import {
+  assertPlaybookDocumentType,
+  mapPlaybookDocumentTypeError,
+} from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -76,12 +80,8 @@ export const updatePlaybookDefinitionHandler = async function* ({
     promptCachingEnabled,
   });
 
-  yield* Result.await(
-    assertPlaybookDocumentType({ safeDb, organizationId, scope: body.scope }),
-  );
-
   const updated = yield* Result.await(
-    safeDb(async (tx) => {
+    resultTx(safeDb, async (tx) => {
       // Lock before comparing `updatedAt`: a check outside the row lock
       // races the very overwrite it is meant to reject.
       const [locked] = await tx
@@ -96,7 +96,9 @@ export const updatePlaybookDefinitionHandler = async function* ({
         .for("update");
 
       if (!locked) {
-        return { type: "not-found" as const };
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
       }
 
       const conflict = assertUnchangedSince({
@@ -105,7 +107,16 @@ export const updatePlaybookDefinitionHandler = async function* ({
         resource: "Playbook",
       });
       if (conflict) {
-        return { type: "version-conflict" as const, error: conflict };
+        return Result.err(conflict);
+      }
+
+      const documentType = await assertPlaybookDocumentType({
+        tx,
+        organizationId,
+        scope: body.scope,
+      });
+      if (documentType.isErr()) {
+        return Result.err(documentType.error);
       }
 
       const updatedAt = new Date();
@@ -133,7 +144,9 @@ export const updatePlaybookDefinitionHandler = async function* ({
         .returning({ updatedAt: playbookDefinitions.updatedAt });
 
       if (!row) {
-        return { type: "not-found" as const };
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
       }
 
       await recordAuditEvent(tx, {
@@ -148,24 +161,10 @@ export const updatePlaybookDefinitionHandler = async function* ({
         },
       });
 
-      return { type: "updated" as const, updatedAt: row.updatedAt };
-    }),
+      return Result.ok({ updatedAt: row.updatedAt });
+    }).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
   );
 
-  switch (updated.type) {
-    case "updated":
-      // Handed back so a writer reseeds its concurrency token in place,
-      // without a refetch, and the next save still guards.
-      return Result.ok({ updatedAt: updated.updatedAt.toISOString() });
-    case "not-found":
-      return Result.err(
-        new HandlerError({ status: 404, message: "Playbook not found" }),
-      );
-    case "version-conflict":
-      return Result.err(updated.error);
-    default: {
-      updated satisfies never;
-      return panic(`Unhandled updated: ${String(updated)}`);
-    }
-  }
+  // Return the new concurrency token without a refetch.
+  return Result.ok({ updatedAt: updated.updatedAt.toISOString() });
 };
