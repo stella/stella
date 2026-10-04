@@ -57,6 +57,13 @@ export type WorkIdentifier = {
   collection: string;
 };
 
+/** The canonical work spelling used for provision identity and persistence. */
+export const formatWorkIdentifier = ({
+  number,
+  year,
+  collection,
+}: WorkIdentifier): string => `${String(number)}/${String(year)} ${collection}`;
+
 /** The jurisdictions this build can read. Corpus country codes (ISO alpha-3). */
 export const PROVISION_CITATION_JURISDICTIONS = ["CZE", "SVK"] as const;
 

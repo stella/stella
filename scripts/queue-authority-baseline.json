@@ -3,12 +3,6 @@
   "members": {
     "flow-run::pinned-handles::apps/api/src/lib/flows/flow-executor.ts": "Member-run module still allowed pinned workspace handles; move its reads to the run actor and drop it from the pinned-workspace-handles allowlist.",
     "flow-run::revocation-test": "No integration test removes the requester's access after the run is queued; add one per revocation case and name it in revocationTest.",
-    "flow-run::run-actor": "Member run on pinned handles; build them with createRootRunActor, read inputs through inputDb, and list the queue in MEMBER_RUN_QUEUES.",
-    "workflow-flex::pinned-handles::apps/api/src/lib/workflow-queue.ts": "Member-run module still allowed pinned workspace handles; move its reads to the run actor and drop it from the pinned-workspace-handles allowlist.",
-    "workflow-flex::revocation-test": "No integration test removes the requester's access after the run is queued; add one per revocation case and name it in revocationTest.",
-    "workflow-flex::run-actor": "Member run on pinned handles; build them with createRootRunActor, read inputs through inputDb, and list the queue in MEMBER_RUN_QUEUES.",
-    "workflow::pinned-handles::apps/api/src/lib/workflow-queue.ts": "Member-run module still allowed pinned workspace handles; move its reads to the run actor and drop it from the pinned-workspace-handles allowlist.",
-    "workflow::revocation-test": "No integration test removes the requester's access after the run is queued; add one per revocation case and name it in revocationTest.",
-    "workflow::run-actor": "Member run on pinned handles; build them with createRootRunActor, read inputs through inputDb, and list the queue in MEMBER_RUN_QUEUES."
+    "flow-run::run-actor": "Member run on pinned handles; build them with createRootRunActor, read inputs through inputDb, and list the queue in MEMBER_RUN_QUEUES."
   }
 }

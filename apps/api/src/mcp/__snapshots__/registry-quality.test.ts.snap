@@ -1199,7 +1199,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
@@ -1291,7 +1291,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
       }

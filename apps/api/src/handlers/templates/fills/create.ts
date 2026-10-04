@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   DOCX_EXT_RE,
   sanitizeFilename,
@@ -31,6 +32,10 @@ import {
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -70,6 +75,11 @@ const resolveDocumentFileName = (
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Fill a stored template and save the result as a new document in a " +
     "matter rather than returning bytes. Same values and clauseOverrides " +
@@ -282,6 +292,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             buffer: filled.file.bytes,
             fileName,
             mimeType: DOCX_MIME_TYPE,
+            encryption: serverBuiltFileEncryption(),
             parentId,
           }),
         catch: (cause) =>
@@ -303,12 +314,11 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     const entityId = created.value.entityId;
 
-    // A failed AI draft leaves its field unfilled, so it counts against the
-    // fill the same way an unmatched placeholder does.
-    const fillStatus =
-      filled.unmatchedPlaceholders.length > 0 || filled.aiFieldErrors.length > 0
-        ? "partial"
-        : "success";
+    const diagnostics = fillDiagnosticsOf(filled);
+    // The completion decision over every diagnostic: a failed AI draft, an
+    // undecided AI condition or an unresolved clause counts against the fill
+    // the same way an unmatched placeholder does.
+    const fillStatus = templateFillStatus(diagnostics);
 
     yield* Result.await(
       Result.tryPromise({
@@ -352,12 +362,31 @@ const fillTemplateToWorkspace = createSafeHandler(
       entityId,
       fieldId: created.value.fieldId,
       fileName: created.value.fileName,
+      // The recorded completion decision: `partial` when any diagnostic
+      // below is blocking, so the client reports the document as incomplete
+      // instead of as created.
+      completionStatus:
+        fillStatus === "success" ? ("complete" as const) : ("partial" as const),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
       clauseWarnings: filled.clauseWarnings,
       // Fields whose AI draft failed: unfilled in the saved document, so the
       // person who filled the template has to write them.
       aiFieldErrors: filled.aiFieldErrors,
+      // AI-decided conditions nothing settled: their blocks were rendered as
+      // if false, so the person who filled the template has to decide them.
+      undecidedConditions: diagnostics.undecidedConditions.map(
+        ({ path, label, reason }) => ({ path, label, reason }),
+      ),
+      // Directives the renderer could not apply: the saved document renders
+      // them wrong, so the person who filled the template has to fix them.
+      structureErrors: diagnostics.structureErrors.map(
+        ({ directive, message, paragraphIndex }) => ({
+          directive,
+          message,
+          paragraphIndex,
+        }),
+      ),
     });
   },
 );

@@ -9,18 +9,12 @@
 //   (drops migrated entries; seeds a reason per new key only while the base
 //   revision has no committed baseline)
 import { panic } from "better-result";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
+import { exactSetDifference, ruleCensusDiagnostics } from "./rule-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE = BASELINE_PATHS.failureAsEmpty;
@@ -37,15 +31,6 @@ const TEST_SOURCE =
 const CANDIDATE = /\bcatch\b|\.ok\b|\bstatus(?:Code)?\b|\bisErr(?:or)?\b/u;
 const ADAPTERS = "apps/api/src/handlers/case-law/ingestion/adapters/";
 
-const OUTPUT = v.object({
-  diagnostics: v.array(
-    v.object({
-      code: v.string(),
-      message: v.string(),
-      filename: v.string(),
-    }),
-  ),
-});
 const BASELINE_SCHEMA = v.object({
   entries: v.record(v.string(), v.pipe(v.string(), v.nonEmpty())),
 });
@@ -55,9 +40,6 @@ const FAULT_BASELINE_SCHEMA = v.object({
 const KEY = /Failure-as-empty site: (?<key>.+)\.$/u;
 
 export const failureAsEmptyCensus = (): string[] => {
-  const directory = mkdtempSync(path.join(tmpdir(), "failure-as-empty-"));
-  const config = path.join(directory, "oxlint.config.ts");
-  const report = path.join(directory, "report.json");
   // `:(glob)` so `**/` also matches no directory (files directly in `src/`).
   const sources = Bun.spawnSync(
     [
@@ -71,90 +53,29 @@ export const failureAsEmptyCensus = (): string[] => {
   if (sources.exitCode !== 0) {
     panic("Cannot enumerate failure-as-empty source files");
   }
-  for (const file of sources.stdout.toString().trim().split("\n")) {
-    if (!file || TEST_SOURCE.test(file) || file.endsWith(".d.ts")) {
-      continue;
-    }
-    const source = readFileSync(path.join(ROOT, file), "utf-8");
-    if (!CANDIDATE.test(source)) {
-      continue;
-    }
-    const destination = path.join(directory, file);
-    mkdirSync(path.dirname(destination), { recursive: true });
-    // Suppressions must not remove entries from the enumerating pass. Renaming
-    // directive tokens preserves syntax and source locations in scratch copies.
-    writeFileSync(
-      destination,
-      source.replaceAll(
-        /\b(?:oxlint|eslint)-(?:disable|enable)\b/gu,
-        "failure-census-directive",
-      ),
+  const files = sources.stdout
+    .toString()
+    .trim()
+    .split("\n")
+    .filter(
+      (file) =>
+        file !== "" &&
+        !TEST_SOURCE.test(file) &&
+        !file.endsWith(".d.ts") &&
+        CANDIDATE.test(readFileSync(path.join(ROOT, file), "utf-8")),
     );
-  }
-  writeFileSync(
-    config,
-    `export default ${JSON.stringify({ categories: { correctness: "off" }, jsPlugins: [path.join(ROOT, ".oxlint-plugins", `${RULE}.ts`)], rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] } })};\n`,
-  );
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      config,
-      "--format=json",
-      ".",
-    ],
-    { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
-  );
-  const output = readFileSync(report, "utf-8");
-  rmSync(directory, { recursive: true, force: true });
-  if (result.exitCode !== 0 && result.exitCode !== 1) {
-    panic(`Failure-as-empty census failed: ${result.stderr.toString()}`);
-  }
-  if (!output.trim()) {
-    panic(
-      `Failure-as-empty census produced no report: ${result.stderr.toString()}`,
-    );
-  }
-  return v
-    .parse(OUTPUT, JSON.parse(output))
-    .diagnostics.map((diagnostic) => {
-      if (!diagnostic.code.startsWith(`${RULE}(`)) {
-        panic(`Unexpected failure-as-empty diagnostic: ${diagnostic.code}`);
-      }
-      return (
+  return ruleCensusDiagnostics({
+    rule: RULE,
+    files,
+    lintTarget: ".",
+    label: "failure-as-empty",
+  })
+    .map(
+      (diagnostic) =>
         KEY.exec(diagnostic.message)?.groups?.["key"] ??
-        panic(`Failure-as-empty diagnostic has no key: ${diagnostic.message}`)
-      );
-    })
+        panic(`Failure-as-empty diagnostic has no key: ${diagnostic.message}`),
+    )
     .toSorted();
-};
-
-type BaselineComparison = {
-  observed: readonly string[];
-  recorded: readonly string[];
-  committed: readonly string[] | null;
-};
-
-export const failureAsEmptyDifference = ({
-  observed,
-  recorded,
-  committed,
-}: BaselineComparison) => {
-  const actual = new Set(observed);
-  const expected = new Set(recorded);
-  return {
-    added: [...actual].filter((key) => !expected.has(key)).toSorted(),
-    stale: [...expected].filter((key) => !actual.has(key)).toSorted(),
-    duplicates: observed.filter(
-      (key, index) => observed.indexOf(key) !== index,
-    ),
-    grown:
-      committed === null
-        ? []
-        : recorded.filter((key) => !committed.includes(key)).toSorted(),
-  };
 };
 
 /** The reason a seeded entry carries: who migrates it, and to what. */
@@ -222,7 +143,7 @@ if (import.meta.main) {
   const committed = committedKeys(baseRevision, BASELINE, (json) =>
     Object.keys(v.parse(BASELINE_SCHEMA, json).entries),
   );
-  const difference = failureAsEmptyDifference({
+  const difference = exactSetDifference({
     observed,
     recorded: Object.keys(baseline.entries),
     committed,

@@ -307,3 +307,101 @@ test("stored-template download preserves the typed clause refusal", async () => 
     fakeS3.stop();
   }
 });
+
+describe("fillByIdLogic records the completion decision", () => {
+  /** A stub that also records the fill row and the audit event the route
+   *  writes, so the recorded status can be read back. */
+  const recordingDb = (fileName: string) => {
+    const rows: Record<string, unknown>[] = [];
+    const audits: Record<string, unknown>[] = [];
+    const db = createScopedDbMock({
+      query: {
+        templates: {
+          findFirst: async () => ({
+            name: "Template",
+            fileName,
+            s3Key,
+            scanState: "scanned",
+            languages: [],
+          }),
+        },
+        businessRegistryCredentials: { findMany: async () => [] },
+        templateClauses: { findMany: async () => [] },
+      },
+      insert: () => ({
+        values: async (row: Record<string, unknown>) => {
+          rows.push(row);
+          await Promise.resolve();
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {
+            await Promise.resolve();
+          },
+        }),
+      }),
+    });
+    const recordAudit: AuditRecorder = async (_tx, event) => {
+      for (const each of Array.isArray(event) ? event : [event]) {
+        audits.push(each.metadata ?? {});
+      }
+      await Promise.resolve();
+    };
+    return { ...db, rows, audits, recordAudit };
+  };
+
+  const fillById = async (
+    paragraphs: string[],
+    values: Record<string, unknown>,
+  ) => {
+    const docx = await makeDocx(WRAP(paragraphs.map(P).join("")));
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
+      const db = recordingDb("nda.docx");
+      const result = await Result.gen(() =>
+        fillByIdLogic({
+          safeDb: db.safeDb,
+          scopedDb: db.scopedDb,
+          organizationId,
+          userId,
+          templateId,
+          body: { values },
+          query: {},
+          recordAuditEvent: db.recordAudit,
+        }),
+      );
+      if (Result.isError(result)) {
+        throw new TypeError("expected a filled document", {
+          cause: result.error,
+        });
+      }
+      return { db, response: result.value };
+    } finally {
+      fakeS3.stop();
+    }
+  };
+
+  test("a directive the renderer could not apply records the fill as partial", async () => {
+    const { db, response } = await fillById(
+      ["Broken{% if oops %} span without closer."],
+      { oops: true },
+    );
+    expect(db.rows).toHaveLength(1);
+    expect(db.rows.at(0)).toMatchObject({ status: "partial" });
+    expect(db.audits.at(0)).toMatchObject({ status: "partial" });
+    // The message carries characters outside ISO-8859-1, so the header
+    // travels URI-encoded instead of failing the download.
+    const header = response.additionalHeaders.get("X-Structure-Errors");
+    expect(JSON.parse(decodeURIComponent(header ?? "[]"))).toMatchObject([
+      { paragraphIndex: 0, directive: "{% if oops %}" },
+    ]);
+  });
+
+  test("a complete fill records success", async () => {
+    const { db } = await fillById(["Governed by {{law}}."], { law: "Czech" });
+    expect(db.rows.at(0)).toMatchObject({ status: "success" });
+    expect(db.audits.at(0)).toMatchObject({ status: "success" });
+  });
+});

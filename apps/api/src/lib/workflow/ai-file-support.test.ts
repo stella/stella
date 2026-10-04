@@ -44,4 +44,17 @@ describe("AI file support", () => {
     ).toBe(false);
     expect(isAISupportedFile(resolvedFile("application/zip"))).toBe(false);
   });
+
+  test("rejects every encrypted file, whatever its type", () => {
+    for (const mimeType of [
+      PDF_MIME_TYPE,
+      DOCX_MIME_TYPE,
+      XLSX_MIME_TYPE,
+      PPTX_MIME_TYPE,
+    ]) {
+      expect(
+        isAISupportedFile({ ...resolvedFile(mimeType), encrypted: true }),
+      ).toBe(false);
+    }
+  });
 });

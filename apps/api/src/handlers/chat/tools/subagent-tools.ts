@@ -104,7 +104,7 @@ export const projectToolMapForSubagent = (
   tools: ChatToolMap,
   proposalSink: SubagentProposalSink,
 ): ChatToolMap => {
-  const projected: ChatToolMap = {};
+  const projected: [string, ChatTool][] = [];
   for (const [name, tool] of Object.entries(tools)) {
     if (!tool) {
       continue;
@@ -129,10 +129,10 @@ export const projectToolMapForSubagent = (
     // `needsApproval` field: an approval-requiring tool never gets a live
     // server `execute` inside a subagent, only a non-executing proposal.
     if (getChatToolPolicy(tool).needsApproval) {
-      projected[name] = buildProposalWrapper(tool, proposalSink);
+      projected.push([name, buildProposalWrapper(tool, proposalSink)]);
       continue;
     }
-    projected[name] = cloneWithoutApprovalGate(tool);
+    projected.push([name, cloneWithoutApprovalGate(tool)]);
   }
-  return projected;
+  return Object.fromEntries(projected);
 };

@@ -15,6 +15,11 @@ const templateVersionDiffParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Return a plain-text, line-level diff of one template version against " +
     "its predecessor; the first version is diffed against an empty document. " +
