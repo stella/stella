@@ -7,7 +7,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import {
   DocumentWriteRefusedError,
@@ -42,6 +42,7 @@ export default createSafeHandler(
       "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "document_processing",

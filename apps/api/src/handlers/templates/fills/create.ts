@@ -5,6 +5,7 @@ import { templateFills } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -76,6 +77,7 @@ const config = {
     ".docx extension is appended when missing) and a parent folder; the " +
     "created entity is returned.",
   permissions: { template: ["use"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "covered", by: "save_filled_template" },
   params: fillToWorkspaceParamsSchema,

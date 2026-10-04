@@ -9,7 +9,7 @@ import {
   clauseVariants,
   clauseVersions,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -476,6 +476,7 @@ const config = {
     "capped, and clauses beyond the organization's remaining capacity are " +
     "reported as skipped instead of failing the import.",
   permissions: { clause: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

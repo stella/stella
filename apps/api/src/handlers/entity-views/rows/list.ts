@@ -10,7 +10,7 @@ import {
   inboxEntityCondition,
   inboxSignalCondition,
 } from "@/api/handlers/entity-views/rows/inbox-view";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -48,6 +48,7 @@ const config = {
     "by the same sorts under one cursor, and limits tasks to the view's " +
     "lifecycle slice. Task rows carry their governed-work risk as of `asOf`.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: t.Object({

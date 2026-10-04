@@ -325,8 +325,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-field-write.fixture.ts", [
     "no-direct-field-write/no-direct-field-write",
   ]),
+  fixtureRuleOverride("no-chat-table-write.fixture.ts", [
+    "no-chat-table-write/no-chat-table-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
+  ]),
+  fixtureRuleOverride("no-direct-entity-insert.fixture.ts", [
+    "no-direct-entity-insert/no-direct-entity-insert",
   ]),
   fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
     "no-unvalidated-clause-write/no-unvalidated-clause-write",
@@ -958,6 +964,7 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
@@ -1338,9 +1345,11 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-entity-insert.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
@@ -2451,6 +2460,15 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Chat tools write rows through the shared write primitives in
+      // `apps/api/src/lib`, which own each write's checks and audit event.
+      files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/chat/tools/**/*.test.ts"],
+      rules: {
+        "no-chat-table-write/no-chat-table-write": "error",
       },
     },
     {

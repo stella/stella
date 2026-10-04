@@ -23,7 +23,7 @@ import {
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -91,6 +91,7 @@ const config = {
     "import rules, duplicates, and over-limit rows are skipped; all " +
     "accepted rows commit atomically.",
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_contact" },
   body: importContactsBodySchema,
 } satisfies HandlerConfig;

@@ -141,7 +141,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
 
   test("registers a single server-executed create_matter_document tool", () => {
     const { tx } = buildTx();
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
       organizationId,
@@ -160,7 +160,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
 
   test("creates the entity from the rendered DOCX and returns a ref-mediated mention", async () => {
     const { tx, getInsertedFileName } = buildTx();
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const recordedAuditEvents: unknown[] = [];
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
@@ -212,7 +212,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
       query: { properties: { findMany: async () => [] } },
       $count: async () => 0,
     };
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
       organizationId,
