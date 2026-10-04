@@ -7,6 +7,7 @@ import { listApiTestPaths } from "./api-test-plan";
 import {
   measuredTestRssTable,
   readTestRssEnvironment,
+  readTestRssInstant,
   readTestRssSource,
   TEST_RSS_RECEIPT_VERSION,
   type TestRssEnvironment,
@@ -108,6 +109,10 @@ const parseReceipt = ({
   }
   const environment = readTestRssEnvironment(payload["environment"]);
   const source = readTestRssSource(payload["source"]);
+  const measuredAt = readTestRssInstant(
+    payload["measuredAt"],
+    `measurement time in ${receipt}`,
+  );
   const shard = parseShard(payload["shard"], receipt);
   const plannedFiles = payload["plannedFiles"];
   if (!positiveInteger(plannedFiles)) {
@@ -131,6 +136,7 @@ const parseReceipt = ({
   return {
     environment,
     source,
+    measuredAt,
     shard,
     baselineMb,
     measurements: payload["measurements"],
@@ -218,6 +224,7 @@ export const refreshTestPeakRss = ({
   let environment: TestRssEnvironment | undefined;
   let runId: string | undefined;
   let baselineMb = 0;
+  let measuredAt: string | undefined;
   const receipts = [
     ...new Bun.Glob("**/*.json").scanSync({
       cwd: artifactDirectory,
@@ -251,6 +258,12 @@ export const refreshTestPeakRss = ({
     }
     shardIndexes.add(shard.shard.index);
     baselineMb = Math.max(baselineMb, shard.baselineMb);
+    if (
+      measuredAt === undefined ||
+      Date.parse(shard.measuredAt) > Date.parse(measuredAt)
+    ) {
+      measuredAt = shard.measuredAt;
+    }
     for (const value of shard.measurements) {
       const { file, row } = parseMeasurement({
         value,
@@ -269,7 +282,11 @@ export const refreshTestPeakRss = ({
       }
     }
   }
-  if (shardCount === undefined || environment === undefined) {
+  if (
+    shardCount === undefined ||
+    environment === undefined ||
+    measuredAt === undefined
+  ) {
     return reject("No validated measurement receipt");
   }
   const missingShards = Array.from(
@@ -283,6 +300,7 @@ export const refreshTestPeakRss = ({
   }
   const table = {
     environment,
+    measuredAt,
     baselineMb,
     files: Object.fromEntries(
       files.flatMap((file) => {

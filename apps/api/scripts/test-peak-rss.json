@@ -5,6 +5,7 @@
     "bunVersion": "1.4.2",
     "runnerImage": "ubuntu24:20260927.320.1"
   },
+  "measuredAt": "2026-10-04T03:43:42.000Z",
   "baselineMb": 183,
   "files": {
     "evals/lib/cli-flag-score.test.ts": {

@@ -15,6 +15,8 @@ const ENVIRONMENT = {
   runnerImage: "ubuntu24:20261001",
 };
 const SOURCE = { runId: "123", job: "measure-1" };
+const MEASURED_AT = "2026-10-04T03:10:00.000Z";
+const LATER_MEASURED_AT = "2026-10-04T03:40:00.000Z";
 const ONLY_SHARD = { index: 1, count: 1 };
 const measurement = (file = FIRST, peakMb = 42, exitCode = 0) => ({
   file,
@@ -25,6 +27,7 @@ type ArtifactOptions = {
   measurements?: ReturnType<typeof measurement>[];
   baselineMb?: number;
   source?: typeof SOURCE;
+  measuredAt?: string;
   shard?: TestRssShard;
   plannedFiles?: number;
 };
@@ -32,12 +35,14 @@ const artifact = ({
   measurements = [measurement()],
   baselineMb = 30,
   source = SOURCE,
+  measuredAt = MEASURED_AT,
   shard = ONLY_SHARD,
   plannedFiles = measurements.length,
 }: ArtifactOptions = {}) => ({
-  version: 2,
+  version: 3,
   environment: ENVIRONMENT,
   source,
+  measuredAt,
   shard,
   plannedFiles,
   baselineMb,
@@ -71,10 +76,12 @@ test("refresh preserves per-shard baselines and provenance in stable sorted byte
     const secondArtifact = artifact({
       measurements: [measurement(SECOND, 99.5)],
       source: secondSource,
+      measuredAt: LATER_MEASURED_AT,
       shard: { index: 2, count: 2 },
     });
     const table = {
       environment: ENVIRONMENT,
+      measuredAt: LATER_MEASURED_AT,
       baselineMb: 50,
       files: {
         [FIRST]: { peakMb: 42, baselineMb: 50, source: SOURCE },
@@ -174,7 +181,7 @@ test.each(
     null,
     [],
     {},
-    { ...artifact(), version: 1 },
+    { ...artifact(), version: 2 },
     { ...artifact(), measurements: "invalid" },
     artifact({ measurements: [] }),
     { ...artifact(), measurements: [null] },
@@ -317,6 +324,24 @@ test("malformed source and environment snapshots fail closed", () => {
       });
       expect(() => f.refresh()).toThrow("Mixed measurement environments");
     }
+  } finally {
+    f.clean();
+  }
+});
+
+test.each([
+  null,
+  1_759_547_400_000,
+  "",
+  "yesterday",
+  "2026-10-04",
+  "2026-10-04T03:10:00Z",
+  "2026-02-30T03:10:00.000Z",
+])("invalid measurement time %j is refused", (measuredAt) => {
+  const f = fixture();
+  try {
+    f.receipt("a.json", { ...artifact(), measuredAt });
+    expect(() => f.refresh()).toThrow("Invalid measurement time in a.json");
   } finally {
     f.clean();
   }
