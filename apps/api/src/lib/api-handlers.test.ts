@@ -12,6 +12,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
   createSafeRootHandler,
@@ -55,6 +56,7 @@ describe("createSafeHandler workspace audit binding", () => {
     const endpoint = createSafeHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* ({ recordAuditEvent }) {
@@ -146,6 +148,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -184,6 +187,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -218,6 +222,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", modelRole: "fast" },
         },
@@ -313,6 +318,7 @@ describe("createSafeRootHandler member AI access", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", laneRouting: true },
         },
@@ -346,6 +352,7 @@ describe("createSafeRootHandler member AI access", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -369,6 +376,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -401,6 +409,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -428,6 +437,7 @@ describe("request.failed severity", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         async function* () {
@@ -516,6 +526,7 @@ describe("a mapped status survives the transport wrapper", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         body,
@@ -950,6 +961,7 @@ describe("provider failure HTTP response", () => {
         const endpoint = createSafeRootHandler(
           {
             permissions: { workspace: ["read"] },
+            accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "health_infra" },
           },
           async function* () {

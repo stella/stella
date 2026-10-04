@@ -18,7 +18,7 @@ import { and, eq } from "drizzle-orm";
 
 import { documentReviewFindings } from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -37,6 +37,7 @@ const config = {
   // edit to the reviewed document; workspace:read alone would let a member
   // with no document-processing grant record and apply review decisions.
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // A disposition is a durable judgment on the workspace's review record, so
   // it must never be reachable through a read-only consent even though the
   // permission gate fronting the review surface is a workspace read.
