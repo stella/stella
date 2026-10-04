@@ -183,13 +183,11 @@ type DrainHarnessOptions = {
 };
 
 const filedStore: InboundDeliveryStore = async () =>
-  await Promise.resolve(
-    Result.ok({ status: "filed", correspondenceId: "correspondence-1" }),
-  );
+  Result.ok({ status: "filed", correspondenceId: "correspondence-1" });
 
 const drainHarness = ({
   persist = filedStore,
-  readObject = async () => await Promise.resolve(Result.ok(raw)),
+  readObject = async () => Result.ok(raw),
   onReceive,
 }: DrainHarnessOptions = {}) => {
   const queue = createFakeSqsQueue();
@@ -231,16 +229,14 @@ describe("queue drain", () => {
     const { queue, drain } = drainHarness({
       readObject: async ({ key }) => {
         objectReads += 1;
-        return await Promise.resolve(
-          key === "mail/unreadable"
-            ? Result.err(
-                new SesInboundError({
-                  message: "Inbound object could not be read",
-                  reason: "object-unavailable",
-                }),
-              )
-            : Result.ok(raw),
-        );
+        return key === "mail/unreadable"
+          ? Result.err(
+              new SesInboundError({
+                message: "Inbound object could not be read",
+                reason: "object-unavailable",
+              }),
+            )
+          : Result.ok(raw);
       },
     });
     queue.enqueue(snsBody({ message: sesEvent("filed") }));
@@ -353,12 +349,10 @@ describe("queue drain", () => {
     const { queue, drain } = drainHarness({
       persist: async () => {
         persisted += 1;
-        return await Promise.resolve(
-          Result.ok({
-            status: persisted === 1 ? "filed" : "duplicate",
-            correspondenceId: "correspondence-1",
-          }),
-        );
+        return Result.ok({
+          status: persisted === 1 ? "filed" : "duplicate",
+          correspondenceId: "correspondence-1",
+        });
       },
     });
     queue.enqueue(snsBody({ message: sesEvent("redelivered") }));
