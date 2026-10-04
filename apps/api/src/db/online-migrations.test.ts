@@ -1087,12 +1087,13 @@ const createHarness = ({
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
   let released = false;
-  const managedIndexes = [
+  const onlineIndexes = [
     ...ONLINE_MIGRATION_INDEXES,
-    ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
-      final,
-      staged,
-    ]),
+    ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ staged }) => staged),
+  ];
+  const managedIndexes = [
+    ...onlineIndexes,
+    ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
 
   return {
@@ -1100,7 +1101,7 @@ const createHarness = ({
       reserve: async () => ({
         execute: async (query: string) => {
           statements.push(query);
-          for (const { name, createSql } of managedIndexes) {
+          for (const { name, createSql } of onlineIndexes) {
             if (query === createSql) {
               pendingIndexes.delete(name);
             }
