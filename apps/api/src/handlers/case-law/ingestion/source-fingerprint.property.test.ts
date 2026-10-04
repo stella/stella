@@ -75,10 +75,12 @@ test("changing one byte of the envelope or of any stored object changes the fing
 test("an envelope with no objects keeps the digest adapters already store", () => {
   fc.assert(
     fc.property(fc.string(), (sourceRaw) => {
-      expect(sourceFingerprint({ sourceRaw })).toBe(hashContent(sourceRaw));
-      expect(sourceFingerprint({ sourceRaw, sourceRawObjects: {} })).toBe(
+      expect<string>(sourceFingerprint({ sourceRaw })).toBe(
         hashContent(sourceRaw),
       );
+      expect<string>(
+        sourceFingerprint({ sourceRaw, sourceRawObjects: {} }),
+      ).toBe(hashContent(sourceRaw));
     }),
     propertyConfig({ numRuns: 200 }),
   );
@@ -87,7 +89,7 @@ test("an envelope with no objects keeps the digest adapters already store", () =
 test("objects contribute the digest of their bytes in the order they are listed", () => {
   const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
   const pdfDigest = new Bun.CryptoHasher("sha256").update(pdf).digest("hex");
-  expect(
+  expect<string>(
     sourceFingerprint({
       sourceRaw: "envelope",
       sourceRawObjects: {

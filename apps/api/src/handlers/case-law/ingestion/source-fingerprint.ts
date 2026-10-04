@@ -14,6 +14,8 @@
  * hashed and what is stored cannot drift apart.
  */
 
+import { panic } from "better-result";
+
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 declare const sourceFingerprintProof: unique symbol;
@@ -33,6 +35,11 @@ export type StoredSourceRaw = {
 const sha256Hex = (input: string | Uint8Array): string =>
   new Bun.CryptoHasher("sha256").update(input).digest("hex");
 
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
+
+const isSourceFingerprint = (digest: string): digest is SourceFingerprint =>
+  SHA256_HEX.test(digest);
+
 /**
  * Fingerprint the envelope and every object stored beside it.
  *
@@ -48,6 +55,9 @@ export const sourceFingerprint = ({
   const objects = Object.values(sourceRawObjects ?? {}).map(({ bytes }) =>
     sha256Hex(bytes),
   );
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the brand's only constructor
-  return sha256Hex([sourceRaw, ...objects].join("\n")) as SourceFingerprint;
+  const digest = sha256Hex([sourceRaw, ...objects].join("\n"));
+  if (!isSourceFingerprint(digest)) {
+    panic("SHA-256 produced a digest that is not 64 lowercase hex characters");
+  }
+  return digest;
 };

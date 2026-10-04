@@ -176,8 +176,17 @@ const writerMembersOf = ({
     true,
   );
   const members: WriterMember[] = [];
+  // A second write of the same kind in one function gets its own ordinal key
+  // (`#2`, …), so it is a new member rather than a duplicate of a listed one.
+  const seen = new Map<string, number>();
   const add = (node: ts.Node, kind: WriterKind, name = enclosingName(node)) => {
-    members.push({ key: `${file}::${kind}::${name}`, kind });
+    const base = `${file}::${kind}::${name}`;
+    const ordinal = (seen.get(base) ?? 0) + 1;
+    seen.set(base, ordinal);
+    members.push({
+      key: ordinal === 1 ? base : `${base}#${ordinal}`,
+      kind,
+    });
   };
   const visit = (node: ts.Node): void => {
     if (ts.isObjectLiteralExpression(node)) {
@@ -400,9 +409,9 @@ const driverCensus = (): { key: string; reason: string }[] => {
     },
   );
   const rows =
-    result.exitCode === 0 || Bun.file(out).size > 0
+    result.exitCode === 0 && Bun.file(out).size > 0
       ? v.parse(DRIVER_ROWS, JSON.parse(readFileSync(out, "utf-8")))
-      : panic("The source fingerprint guard test wrote no census");
+      : panic("The source fingerprint guard test failed or wrote no census");
   rmSync(directory, { recursive: true, force: true });
   return rows;
 };
@@ -510,6 +519,10 @@ const SELF_TEST_SOURCES: readonly SourceFile[] = [
     source: `
       export const importItems = (items) =>
         items.map((item) => ({ externalSource: "x", externalId: item.id }));
+      export const importPair = (left, right) => [
+        { externalSource: "x", externalId: left.id },
+        { externalSource: "x", externalId: right.id },
+      ];
       export const clearIdentity = () => ({ externalSource: null, externalId: null });
       export const syncItems = (items) =>
         items.map((item) => ({ externalSource: "x", externalId: item.id, externalChangeKey: item.etag }));
@@ -538,6 +551,8 @@ const selfTest = (): number => {
     "apps/api/src/lib/example/import.ts::external-id-dedupe-key::itemDedupeKey",
     "apps/api/src/lib/example/import.ts::external-id-dedupe-key::notify",
     "apps/api/src/lib/example/import.ts::external-id-write::importItems",
+    "apps/api/src/lib/example/import.ts::external-id-write::importPair",
+    "apps/api/src/lib/example/import.ts::external-id-write::importPair#2",
   ];
   if (JSON.stringify(keys) !== JSON.stringify(expected)) {
     failures.push(
