@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 
 import { diffDesignBacklog, emptyBacklog } from "./design-lint-baseline.ts";
 import {
-  BUILTIN_LINT_BACKLOG_RULES,
   DESIGN_LINT_BACKLOG_RULES,
   DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE,
   DESIGN_LINT_TRACKED_PLUGINS,
@@ -111,14 +110,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
-    ...BUILTIN_LINT_BACKLOG_RULES.map((rule) => [
-      rule.replace(/^(?<plugin>[a-z]+)\/(?<name>.+)$/u, "$<plugin>($<name>)"),
-      rule,
-    ]),
+    ["react(no-children-prop)", "react/no-children-prop"],
+    ["eslint(no-unexpected-multiline)", "eslint/no-unexpected-multiline"],
+    ["eslint(no-use-before-define)", "eslint/no-use-before-define"],
   ]);
-  expect(
-    DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.get("react(no-children-prop)"),
-  ).toBe("react/no-children-prop");
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
@@ -128,11 +123,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "no-computed-key-record-assignment",
     "no-direct-status-set",
     "eslint",
-    ...new Set(
-      BUILTIN_LINT_BACKLOG_RULES.map((rule) =>
-        rule.slice(0, rule.indexOf("/")),
-      ).filter((plugin) => plugin !== "eslint"),
-    ),
+    "react",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
     DESIGN_LINT_BACKLOG_RULES.length,
