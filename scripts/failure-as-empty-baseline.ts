@@ -58,9 +58,16 @@ export const failureAsEmptyCensus = (): string[] => {
   const directory = mkdtempSync(path.join(tmpdir(), "failure-as-empty-"));
   const config = path.join(directory, "oxlint.config.ts");
   const report = path.join(directory, "report.json");
-  const sources = Bun.spawnSync(["git", "ls-files", "--", ...SOURCE_PATTERNS], {
-    cwd: ROOT,
-  });
+  // `:(glob)` so `**/` also matches no directory (files directly in `src/`).
+  const sources = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "--",
+      ...SOURCE_PATTERNS.map((pattern) => `:(glob)${pattern}`),
+    ],
+    { cwd: ROOT },
+  );
   if (sources.exitCode !== 0) {
     panic("Cannot enumerate failure-as-empty source files");
   }

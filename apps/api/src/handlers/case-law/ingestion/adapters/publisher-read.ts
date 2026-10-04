@@ -25,8 +25,6 @@
 
 import { panic, Result } from "better-result";
 
-import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
-
 import {
   readAbsent,
   readOutcomeOfStatus,
@@ -36,15 +34,12 @@ import {
   type ReadOutcome,
   type ReadRefusalScope,
 } from "@/api/lib/errors/read-outcome";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
-import { fetchPublisher, type PublisherFetchInit } from "./retry";
-
-/** Errors that stop the cycle instead of describing one read. */
-const endsTheCycle = (error: unknown, signal: AbortSignal | undefined) =>
-  signal?.aborted === true ||
-  (error instanceof AdapterFetchError &&
-    error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL);
+import {
+  fetchPublisher,
+  rethrowCycleStop,
+  type PublisherFetchInit,
+} from "./retry";
 
 /**
  * Run one step of a read: its value, or the failure as `unavailable`. Errors
@@ -62,9 +57,7 @@ const readStep = async <T>(
     return Result.ok(result.value);
   }
   const { error } = result;
-  if (endsTheCycle(error, signal)) {
-    throw error;
-  }
+  rethrowCycleStop(error, signal);
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 

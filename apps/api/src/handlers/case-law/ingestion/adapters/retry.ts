@@ -478,3 +478,23 @@ export const retryPublisherRequest = async (
   }
   return panic("retryPublisherRequest: unreachable");
 };
+
+/**
+ * Rejects with `error` when it ends the ingestion cycle rather than describing
+ * one read: the caller's cancellation, or a source-level publisher refusal
+ * stop (an opted-in `stop-refusal`, or the gate's rate-limit refusal). The
+ * typed read owner (`publisher-read.ts`) keeps the publisher's rejection
+ * contract for these through this boundary.
+ */
+export const rethrowCycleStop = (
+  error: unknown,
+  signal: AbortSignal | undefined,
+): void => {
+  if (
+    signal?.aborted === true ||
+    (error instanceof AdapterFetchError &&
+      error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL)
+  ) {
+    throw error;
+  }
+};
