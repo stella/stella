@@ -245,16 +245,13 @@ describe("policy coverage", () => {
       ) AS definition
     `);
     const definition = result.rows.at(0)?.definition ?? "";
-    const byRole = (a: string, b: string) => a.localeCompare(b);
     const roleLists = [
       ...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu),
     ].map(([, list = ""]) =>
-      [...list.matchAll(/'([^']*)'/gu)]
-        .map(([, role = ""]) => role)
-        .toSorted(byRole),
+      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
     );
 
-    expect(roleLists).toEqual([CLIENT_MATTER_ADMIN_ROLES.toSorted(byRole)]);
+    expect(roleLists).toEqual([new Set(CLIENT_MATTER_ADMIN_ROLES)]);
   });
 
   test("every table with workspace_id has workspace policies", async () => {
