@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { Transaction } from "@/api/db/root";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -145,6 +148,7 @@ describe("handler content delivery", () => {
           });
           const endpoint = createSafePublicHandler(
             {
+              accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },
               contentDelivery: { type: "audited" },
@@ -215,6 +219,7 @@ describe("handler content delivery", () => {
           });
           const endpoint = createSafePublicHandler(
             {
+              accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },
               contentDelivery: { type: "audited" },
@@ -276,6 +281,7 @@ describe("handler content delivery", () => {
         for (const receipt of ["recorded", "missing"] as const) {
           const endpoint = createSafePublicHandler(
             {
+              accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },
               contentDelivery: { type: "audited" },

@@ -1903,7 +1903,10 @@ jobs:
 
       - name: Content delivery declarations
         if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
         run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
           bun apps/api/scripts/content-delivery-guard.ts --self-test
           bun apps/api/scripts/content-delivery-guard.ts
 
