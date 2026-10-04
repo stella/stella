@@ -10,7 +10,14 @@
 //     `env` or imported from `@/api/env` under another local name
 //     (`env.FEATURE_X`, `env?.FEATURE_X`, `env["FEATURE_X"]`, `config.FEATURE_X`);
 //   - a destructuring of a `FEATURE_*` key from that object
-//     (`const { FEATURE_X } = env`).
+//     (`const { FEATURE_X } = env`);
+//   - the same reads on the process environment (`process.env`,
+//     `globalThis.process.env`, `Bun.env`, `import.meta.env`), which skip the
+//     env schema as well as the owner.
+//
+// With `processEnvOnly`, only the process-environment reads are reported: an
+// app or package outside the API reads its own env module, which the API owner
+// does not govern, but never the raw process environment.
 //
 // Test files are exempt. An intentional raw read is an `allowedReads` entry
 // (`{ file, flags }`, with its reason as a config comment), never a
@@ -40,6 +47,9 @@ type AllowedRead = { file: string; flags: readonly string[] };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const readProcessEnvOnly = (options: unknown): boolean =>
+  isRecord(options) && options.processEnvOnly === true;
+
 const readAllowedReads = (options: unknown): AllowedRead[] => {
   if (!isRecord(options) || !Array.isArray(options.allowedReads)) {
     return [];
@@ -64,9 +74,46 @@ const featureKey = (name: string | null): string | null =>
 
 type RuleContext = Parameters<typeof isImportedFrom>[0]["context"];
 
+const unwrapChain = (node: unknown): unknown =>
+  isAstNode(node) && node.type === "ChainExpression" ? node.expression : node;
+
+// `process`, `Bun`, or either through `globalThis`.
+const isRuntimeGlobal = (node: unknown): boolean => {
+  const target = unwrapChain(node);
+  if (isIdentifier(target, "process") || isIdentifier(target, "Bun")) {
+    return true;
+  }
+  return (
+    isAstNode(target) &&
+    target.type === "MemberExpression" &&
+    isIdentifier(target.object, "globalThis") &&
+    ["process", "Bun"].includes(memberPropertyName(target) ?? "")
+  );
+};
+
+// `process.env`, `globalThis.process.env`, `Bun.env`, `import.meta.env`.
+const isProcessEnvObject = (node: unknown): boolean => {
+  const target = unwrapChain(node);
+  if (
+    !isAstNode(target) ||
+    target.type !== "MemberExpression" ||
+    memberPropertyName(target) !== "env"
+  ) {
+    return false;
+  }
+  const holder = unwrapChain(target.object);
+  return (
+    isRuntimeGlobal(holder) ||
+    (isAstNode(holder) &&
+      holder.type === "MetaProperty" &&
+      isIdentifier(holder.meta, "import") &&
+      isIdentifier(holder.property, "meta"))
+  );
+};
+
 // The API env object: the import resolved through any local alias, or a
 // binding literally named `env`.
-const isEnvObject = (context: RuleContext, node: unknown): boolean =>
+const isApiEnvObject = (context: RuleContext, node: unknown): boolean =>
   isIdentifier(node, ENV_IDENTIFIER) ||
   (isAstNode(node) &&
     node.type === "Identifier" &&
@@ -77,20 +124,30 @@ const isEnvObject = (context: RuleContext, node: unknown): boolean =>
       names: ENV_EXPORTS,
     }));
 
+const isEnvObject = (
+  context: RuleContext,
+  node: unknown,
+  processEnvOnly: boolean,
+): boolean =>
+  isProcessEnvObject(node) ||
+  (!processEnvOnly && isApiEnvObject(context, node));
+
 const featureMemberRead = (
   context: RuleContext,
   node: AstNode,
+  processEnvOnly: boolean,
 ): string | null =>
-  isEnvObject(context, node.object)
+  isEnvObject(context, node.object, processEnvOnly)
     ? featureKey(memberPropertyName(node))
     : null;
 
 const destructuredFeatureKeys = (
   context: RuleContext,
   node: AstNode,
+  processEnvOnly: boolean,
 ): string[] => {
   if (
-    !isEnvObject(context, node.init) ||
+    !isEnvObject(context, node.init, processEnvOnly) ||
     !isAstNode(node.id) ||
     node.id.type !== "ObjectPattern" ||
     !Array.isArray(node.id.properties)
@@ -116,6 +173,7 @@ export default eslintCompatPlugin({
           {
             type: "object",
             properties: {
+              processEnvOnly: { type: "boolean" },
               allowedReads: {
                 type: "array",
                 items: {
@@ -139,6 +197,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         let allowedFlags: ReadonlySet<string> = new Set();
+        let processEnvOnly = false;
         const report = (node: AstNode, flag: string) => {
           if (!allowedFlags.has(flag)) {
             context.report({ node, messageId: "rawRead", data: { flag } });
@@ -148,6 +207,7 @@ export default eslintCompatPlugin({
           before() {
             const filename = repoRelativeFilename(context);
             const entries = readAllowedReads(context.options.at(0));
+            processEnvOnly = readProcessEnvOnly(context.options.at(0));
             allowedFlags = new Set(
               entries
                 .filter((entry) => filename.endsWith(entry.file))
@@ -159,7 +219,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(node)) {
               return;
             }
-            const flag = featureMemberRead(context, node);
+            const flag = featureMemberRead(context, node, processEnvOnly);
             if (flag !== null) {
               report(node, flag);
             }
@@ -168,7 +228,11 @@ export default eslintCompatPlugin({
             if (!isAstNode(node)) {
               return;
             }
-            for (const flag of destructuredFeatureKeys(context, node)) {
+            for (const flag of destructuredFeatureKeys(
+              context,
+              node,
+              processEnvOnly,
+            )) {
               report(node, flag);
             }
           },

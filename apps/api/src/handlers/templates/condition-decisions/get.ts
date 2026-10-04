@@ -20,6 +20,11 @@ const decideConditionsParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Ask the organization's decision model about every AI-decided boolean " +
     "condition of a stored template, given the values entered so far, and " +
