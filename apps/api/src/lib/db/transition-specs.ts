@@ -104,6 +104,9 @@ export const TRANSITIONS = {
   legalListVerificationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   legislationDocuments: { unmanaged: UNMANAGED_REASONS.projection },
   legislationIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
+  mcpConnectorAuthorizationReviews: {
+    unmanaged: UNMANAGED_REASONS.userDecision,
+  },
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },

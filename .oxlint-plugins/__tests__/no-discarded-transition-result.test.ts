@@ -5,6 +5,22 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 setDefaultTimeout(20_000);
 
 describe.serial("transition result handling", () => {
+  test("accepts returned and handled results through imported aliases", async () => {
+    const source = [
+      'import { transition as change } from "@/api/lib/db/transitions";',
+      'import * as owner from "./transitions";',
+      "const alias = change;",
+      "async function forwarding() { return await alias(tx, spec, id, options); }",
+      "async function handling() { const result = await owner.transition(tx, spec, id, options);",
+      'if (result.type === "stale") { return result; }',
+      "consume(result.row); }",
+    ].join("\n");
+    expect(
+      await lintSingleRule("no-discarded-transition-result", source, {
+        sourcePath: "apps/api/src/lib/db/caller.ts",
+      }),
+    ).toEqual([]);
+  });
   test("rejects discarded results through named, namespace and const aliases", async () => {
     const source = [
       'import { transition as change } from "@/api/lib/db/transitions";',
