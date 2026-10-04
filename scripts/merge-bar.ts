@@ -58,12 +58,15 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readRuntimeMode } from "@stll/runtime-mode";
+
 import { findMigrationIdentityViolation } from "./check-migration-order";
 import {
   extractPlanSelector,
   type PlanSelectorError,
   runPlanScopes,
 } from "./ci-plan-selector";
+import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -2914,6 +2917,27 @@ export const ratchetFreshnessFor = ({
 
 if (import.meta.main) {
   const options = parseOptions(Bun.argv.slice(2));
+  // Before any read: a stale checkout runs a bar main has since fixed. The
+  // CLI tests drive this script offline with a fake gh; only a local test
+  // run can skip the check.
+  const repositoryRoot = path.dirname(import.meta.dir);
+  const barFreshness =
+    process.env["STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS"] === "1" &&
+    readRuntimeMode().isLocalTestRun
+      ? ({ type: "current" } as const)
+      : decideBarFreshness(
+          readBarFreshness({
+            repositoryRoot,
+            entry: path.relative(repositoryRoot, import.meta.filename),
+          }),
+        );
+  if (barFreshness.type === "refuse") {
+    console.error(barFreshness.message);
+    process.exit(1);
+  }
+  if (barFreshness.type === "branch-bar") {
+    console.log(barFreshness.message);
+  }
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,

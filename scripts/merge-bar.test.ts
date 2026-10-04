@@ -50,6 +50,15 @@ import {
 } from "./merge-bar";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
 
+// The CLI runs below spawn the real script offline against a fake gh, as a
+// local test run; its source freshness check is covered in
+// merge-bar-freshness.test.ts.
+const CLI_TEST_ENV = {
+  NODE_ENV: "test",
+  STELLA_LOCAL_DEV: "1",
+  STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
+};
+
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
 const BASE_MIGRATION = "apps/api/drizzle/20260801120000_original/migration.sql";
@@ -131,6 +140,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
@@ -224,6 +234,7 @@ esac
         ],
         env: {
           ...process.env,
+          ...CLI_TEST_ENV,
           PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           GH_READ_TOKEN: "read-fixture",
           GH_TOKEN: "write-fixture",
@@ -284,6 +295,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -441,6 +453,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -529,6 +542,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -1539,6 +1553,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -2480,6 +2495,7 @@ esac
             ],
             env: {
               ...process.env,
+              ...CLI_TEST_ENV,
               PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
               FIXTURE_PULL_REQUEST: JSON.stringify({
                 data: {
@@ -2761,6 +2777,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_WRITES: writes,
         FIXTURE_PULL_REQUEST: JSON.stringify({
@@ -3481,6 +3498,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         GH_READ_TOKEN: "read-fixture",
         GH_TOKEN: "write-fixture",
@@ -3580,6 +3598,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         GH_READ_TOKEN: "read-fixture",
         GH_TOKEN: "write-fixture",
