@@ -30,6 +30,7 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -700,7 +701,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
       reassign_to: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
+          v.minLength(tUserId.minLength),
           v.description(
             "Replacement matter member for remove_member; omit to leave tasks unassigned",
           ),
@@ -909,6 +910,15 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { workspace: ["update"] },
+      { organizationSettings: ["update"] },
+    ],
+    reason:
+      "action selects matter membership changes (a matter update) or organization settings.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: {
     type: "input-discriminator",

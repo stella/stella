@@ -60,6 +60,7 @@ const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>
 // Every endpoint refused to the demo account; a change here is a policy change.
 const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/agent-auth/confirm.ts",
+  "apps/api/src/handlers/ai-config/validate-provider.ts",
   "apps/api/src/handlers/api-keys/create.ts",
   "apps/api/src/handlers/api-keys/list.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
@@ -89,6 +90,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
   "apps/api/src/handlers/mcp-connectors/update-connection.ts",
   "apps/api/src/handlers/mcp-connectors/update-native-tool.ts",
+  "apps/api/src/handlers/me/disconnect-oauth-connection.ts",
+  "apps/api/src/handlers/me/verify-delete.ts",
   "apps/api/src/handlers/number-series/archive.ts",
   "apps/api/src/handlers/number-series/create.ts",
   "apps/api/src/handlers/number-series/default/update.ts",
@@ -131,6 +134,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/sharepoint/set-enablement.ts",
   "apps/api/src/handlers/style-sets/download.ts",
   "apps/api/src/handlers/template-packs/visibility/update.ts",
+  "apps/api/src/handlers/templates/fill.ts",
   "apps/api/src/handlers/templates/fills/download.ts",
   "apps/api/src/handlers/time-entries/csv/export.ts",
   "apps/api/src/handlers/time-entries/ledes/export.ts",
@@ -152,6 +156,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/workspaces/correspondence/address/delete.ts",
   "apps/api/src/handlers/workspaces/duplicate.ts",
   "apps/api/src/handlers/workspaces/export-overview-activity.ts",
+  "apps/api/src/handlers/workspaces/members/add.ts",
+  "apps/api/src/handlers/workspaces/members/remove.ts",
 ] as const;
 
 describe("handler account policy census", () => {

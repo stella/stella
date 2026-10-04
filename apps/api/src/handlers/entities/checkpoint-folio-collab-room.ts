@@ -51,7 +51,10 @@ import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
+import type {
+  S3ObjectWriteOwnership,
+  S3ObjectWriteCertainty,
+} from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
@@ -97,7 +100,9 @@ export const writeFolioCollabCheckpointObject = async ({
   checkpointKey,
   fileUsageDb,
   organizationId,
+  ownership,
 }: {
+  ownership: S3ObjectWriteOwnership;
   checkpointBytes: Uint8Array;
   checkpointKey: string;
   fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
@@ -111,11 +116,14 @@ export const writeFolioCollabCheckpointObject = async ({
   !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: checkpointBytes,
-            key: checkpointKey,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: checkpointBytes,
+              key: checkpointKey,
+            },
+            ownership,
+          ),
         catch: (cause) => new UnhandledException({ cause }),
       })
     : Result.mapError(
@@ -124,11 +132,14 @@ export const writeFolioCollabCheckpointObject = async ({
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: checkpointBytes,
-              key: checkpointKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: checkpointBytes,
+                key: checkpointKey,
+              },
+              ownership,
+            ),
           ...(fileUsageDb ? { db: fileUsageDb } : {}),
         }),
         organizationFileUsageHandlerError,
@@ -136,6 +147,10 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: checkpointFolioCollabRoomBodySchema,
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -365,6 +380,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
       }
     };
     const written = await writeFolioCollabCheckpointObject({
+      ownership: { type: "cleanup-intent", intent: cleanupIntentId },
       checkpointBytes,
       checkpointKey,
       organizationId: session.activeOrganizationId,

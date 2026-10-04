@@ -338,6 +338,32 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+// Case-law modules that still call the raw publisher fetch. Each migrates to
+// `readPublisher` and leaves this list; nothing is added to it.
+const UNMIGRATED_PUBLISHER_READERS = [
+  "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
+  "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
+  "handlers/case-law/ingestion/adapters/cz-ns.ts",
+  "handlers/case-law/ingestion/adapters/cz-nss.ts",
+  "handlers/case-law/ingestion/adapters/cz-regional.ts",
+  "handlers/case-law/ingestion/adapters/eu-ecj.ts",
+  "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "handlers/case-law/ingestion/adapters/pagination.ts",
+  "handlers/case-law/ingestion/adapters/pl-courts.ts",
+  "handlers/case-law/ingestion/adapters/pl-kio.ts",
+  "handlers/case-law/ingestion/adapters/pl-kis.ts",
+  "handlers/case-law/ingestion/adapters/pl-ncourt.ts",
+  "handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+  "handlers/case-law/ingestion/adapters/pl-sn.ts",
+  "handlers/case-law/ingestion/adapters/pl-tk.ts",
+  "handlers/case-law/ingestion/adapters/pl-uodo.ts",
+  "handlers/case-law/ingestion/adapters/pl-uokik.ts",
+  "handlers/case-law/ingestion/adapters/sk-collections.ts",
+  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
+  "handlers/case-law/ingestion/adapters/sk-courts.ts",
+  "handlers/case-law/ingestion/adapters/sk-us.ts",
+] as const;
+
 export const OWNERSHIP = [
   {
     id: "task-assignment-membership",
@@ -384,6 +410,17 @@ export const OWNERSHIP = [
         },
       ],
     },
+  },
+  {
+    id: "query-view",
+    capability: "Presenting non-suspense query results",
+    owner: [
+      "apps/web/src/lib/query-view.logic.ts",
+      "apps/web/src/lib/use-query-view.ts",
+    ],
+    summary:
+      "useQueryView separates pending reads, initial errors with retry, successful empty results and cached items with refetch errors. The query-data-requires-state lint rule rejects data reads without state handling and hooks that discard query state; its exact-set baseline only shrinks.",
+    enforcement: { kind: "none" },
   },
   {
     id: "entity-sibling-naming",
@@ -743,7 +780,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/flows/flow-executor.ts",
           reason:
-            "Flow steps; their authority model is still to be classified.",
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/folio-collab-rooms.ts",
@@ -752,11 +789,13 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
@@ -773,7 +812,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/workflow-queue.ts",
           reason:
-            "Workflow property generation; its authority model is still to be classified.",
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -1026,6 +1065,21 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "case-law-source-fingerprint",
+    capability:
+      "The change-detection hash of a case-law decision's stored source",
+    owner: ["apps/api/src/handlers/case-law/ingestion/source-fingerprint.ts"],
+    summary:
+      "`sourceFingerprint` is the only constructor of `SourceFingerprint`, " +
+      "derived from the stored envelope and every object stored beside it, so " +
+      "`rawHash` changes whenever a stored byte does. The " +
+      "`raw-hash-from-source-fingerprint` rule rejects a hand-written `rawHash` " +
+      "in adapters, and `scripts/source-fingerprint-baseline.ts` enumerates " +
+      "every registered source, every exempt file and every external-id writer " +
+      "against a shrink-only baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "bulk-row-insert",
     capability:
       "Inserting an unbounded row set whose inserted rows are not read back",
@@ -1057,6 +1111,168 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "stored-file-read",
+    capability: "Reading stored file bytes",
+    owner: ["apps/api/src/lib/file-scan/stored-file.ts"],
+    summary:
+      "`readStoredFile` owns stored file reads for request delivery. Named " +
+      "processing, maintenance, and transport-test consumers use the raw " +
+      "readers for their specific operations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/s3"],
+      names: [
+        "getS3ObjectWithSignal",
+        "readS3ObjectIfPresent",
+        "readS3ObjectBounded",
+        "readS3ObjectBoundedIfPresent",
+        "readS3ArrayBuffer",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
+          reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/chat/chat-prompt.ts",
+          reason: "Loads document bytes for prompt preparation.",
+        },
+        {
+          path: "apps/api/src/handlers/files/document-properties.ts",
+          reason: "Reads office bytes to extract document properties.",
+        },
+        {
+          path: "apps/api/src/handlers/files/update-document-properties.ts",
+          reason: "Reads office bytes before updating document properties.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+          reason:
+            "Reads a collaboration checkpoint before publishing a document version.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts",
+          reason:
+            "Reads a collaboration snapshot before storing its checkpoint.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts",
+          reason:
+            "Reads an edit checkpoint before finalizing the document version.",
+        },
+        {
+          path: "apps/api/src/handlers/reports/builtin-templates.ts",
+          reason: "Loads stored templates for report rendering.",
+        },
+        {
+          path: "apps/api/src/handlers/uploads/update.ts",
+          reason: "Reads the staged upload for processing and verification.",
+        },
+        {
+          path: "apps/api/src/mcp/file-comparison-run.ts",
+          reason: "Loads comparison inputs for document processing.",
+        },
+        {
+          path: "apps/api/src/scripts/replay-case-law-source.ts",
+          reason: "Loads persisted source bytes for replay.",
+        },
+        {
+          path: "apps/api/src/scripts/case-law-source-backfill.ts",
+          reason: "Loads persisted source bytes for backfill.",
+        },
+        {
+          path: "apps/api/scripts/backfill-image-thumbnails.ts",
+          reason: "Loads stored image bytes to build missing thumbnails.",
+        },
+        {
+          path: "apps/api/src/lib/folio-collab-rooms.ts",
+          reason: "Loads the persisted collaboration room snapshot.",
+        },
+        {
+          path: "apps/api/src/lib/lists/verification/document-text.ts",
+          reason: "Extracts stored document text for list verification.",
+        },
+        {
+          path: "apps/api/src/lib/health/readiness.ts",
+          reason:
+            "Reads the dedicated readiness object to check storage connectivity.",
+        },
+        {
+          path: "apps/api/src/lib/legal-search/raw-source-storage.ts",
+          reason: "Loads persisted legal source bytes for processing.",
+        },
+        {
+          path: "apps/api/src/lib/legal-search/case-law-raw-layout.ts",
+          reason: "Loads source layout bytes for case-law processing.",
+        },
+        {
+          path: "apps/api/src/lib/workflow/generate-batch.ts",
+          reason: "Loads workflow document inputs for generation.",
+        },
+        {
+          path: "apps/api/src/lib/file-scan/stored-object.ts",
+          reason: "Loads bounded object bytes for scanning.",
+        },
+        {
+          path: "apps/api/src/lib/file-derivative-queue.ts",
+          reason: "Loads source bytes for derivative generation.",
+        },
+        {
+          path: "apps/api/src/lib/files/organization-file-usage.ts",
+          reason: "Verifies stored object bytes during usage reconciliation.",
+        },
+        {
+          path: "apps/api/src/lib/bbox/generate-b-boxes-shared.ts",
+          reason: "Loads source bytes for bounding-box generation.",
+        },
+        {
+          path: "apps/api/src/lib/files/office-evidence.ts",
+          reason: "Loads office bytes to extract stored file evidence.",
+        },
+        {
+          path: "apps/api/src/lib/s3.test.ts",
+          reason: "Exercises the object-read transport.",
+        },
+        {
+          path: "apps/api/src/tests/helpers/fake-s3.test.ts",
+          reason: "Exercises the stored-object test adapter.",
+        },
+      ],
+    },
+  },
+  {
+    id: "stored-tenant-file-read",
+    capability: "Reading tenant-scoped stored file bytes",
+    owner: ["apps/api/src/lib/file-scan/stored-file.ts"],
+    summary:
+      "`readStoredFile` owns stored file reads for request delivery. Named " +
+      "processing, maintenance, and transport-test consumers use the raw " +
+      "readers for their specific operations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/s3-presign"],
+      names: ["readTenantS3ArrayBuffer"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/contacts/extract-procuracao.ts",
+          reason: "Loads an authorized document for contact extraction.",
+        },
+        {
+          path: "apps/api/src/lib/document-processing-queue.ts",
+          reason: "Loads tenant-scoped source bytes for document processing.",
+        },
+        {
+          path: "apps/api/src/lib/ocr-local/recognize-local.ts",
+          reason: "Loads tenant-scoped source bytes for local recognition.",
+        },
+        {
+          path: "apps/api/src/lib/s3-presign.test.ts",
+          reason: "Exercises tenant-scoped object reads.",
+        },
+      ],
+    },
+  },
+  {
     id: "audited-download-grant",
     capability: "Granting a user a signed URL to stored file content",
     owner: ["apps/api/src/lib/audited-download.ts"],
@@ -1085,6 +1301,81 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts",
           reason:
             "Signs a temporary redline produced by an audited comparison run.",
+        },
+      ],
+    },
+  },
+  {
+    id: "content-delivery-intent",
+    capability: "Recording stored-content delivery intent",
+    owner: ["apps/api/src/lib/files/content-delivery.ts"],
+    summary:
+      "The handler invocation owns the delivery scope; response and audit " +
+      "owners record their corresponding events through named entry points.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/files/content-delivery"],
+      names: ["markContentDeliveryIntent"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/api-handlers.ts",
+          reason:
+            "Records intent for file bodies and disposition headers at the response boundary.",
+        },
+        {
+          path: "apps/api/src/lib/secure-document-response.ts",
+          reason: "Records intent when constructing a stored-content response.",
+        },
+        {
+          path: "apps/api/src/lib/s3-presign.ts",
+          reason: "Records intent when granting a stored-content URL.",
+        },
+      ],
+    },
+  },
+  {
+    id: "content-delivery-receipt",
+    capability: "Recording a content-delivery audit receipt",
+    owner: ["apps/api/src/lib/files/content-delivery.ts"],
+    summary:
+      "The handler invocation owns the delivery scope; response and audit " +
+      "owners record their corresponding events through named entry points.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/files/content-delivery"],
+      names: ["recordContentDeliveryReceipt"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/audited-download.ts",
+          reason: "Records a receipt after the content-grant audit write.",
+        },
+        {
+          path: "apps/api/src/lib/audit-log.ts",
+          reason: "Records a receipt after a content-access audit write.",
+        },
+        {
+          path: "apps/api/src/tests/helpers/audit-recorder-double.ts",
+          reason:
+            "The handler-test audit recorder double issues the receipt the production recorder issues for an access event.",
+        },
+      ],
+    },
+  },
+  {
+    id: "content-delivery-scope",
+    capability: "Running and checking the content-delivery scope",
+    owner: ["apps/api/src/lib/files/content-delivery.ts"],
+    summary:
+      "The handler invocation owns the delivery scope; response and audit " +
+      "owners record their corresponding events through named entry points.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/files/content-delivery"],
+      names: ["runWithContentDeliveryScope", "getContentDeliveryReceiptError"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/api-handlers.ts",
+          reason: "Runs and checks the scope around the handler invocation.",
         },
       ],
     },
@@ -1994,6 +2285,44 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
           reason:
             "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
+      ],
+    },
+  },
+  {
+    id: "publisher-read",
+    capability: "Reading a case-law publisher response",
+    owner: [
+      "apps/api/src/lib/errors/read-outcome.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+    ],
+    summary:
+      "readPublisher sends the gated publisher request and returns a ReadOutcome: " +
+      "the response, an absence only the publisher stated (404 or 410), or a " +
+      "failure to read, so no helper can return a failed read as an empty " +
+      "result. Raw fetchPublisher and fetchWithRetry callers are the adapters " +
+      "not yet migrated; the list only shrinks. The read-fault guard drives " +
+      "every enrolled adapter's reads with failures.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/handlers/case-law/ingestion/adapters/retry"],
+      names: ["fetchPublisher", "fetchWithRetry"],
+      allowed: [
+        ...UNMIGRATED_PUBLISHER_READERS.map((file) => ({
+          path: `apps/api/src/${file}`,
+          reason:
+            "Reads its publisher raw; pending migration to readPublisher.",
+        })),
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
+          reason:
+            "Types the injected publisher fetch of its RIS walk; sends no request itself.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
         },
       ],
     },
