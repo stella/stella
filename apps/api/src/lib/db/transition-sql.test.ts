@@ -44,9 +44,18 @@ test("validation releases the prerequisite's exclusive lock before scanning", as
     .split("--> statement-breakpoint")
     .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
   const commit = statements.indexOf("COMMIT;");
-  const begin = statements.indexOf("BEGIN;\nSET lock_timeout = '1s';");
+  const begin = statements.indexOf("BEGIN;\nSET LOCAL lock_timeout = '1s';");
   expect(commit).toBeGreaterThanOrEqual(0);
   expect(begin).toBeGreaterThan(commit);
+  const timeoutAssignments = statements.filter((sql) =>
+    /^SET (?:LOCAL )?(?:lock_timeout|statement_timeout) =/u.test(sql),
+  );
+  expect(timeoutAssignments.length).toBeGreaterThan(0);
+  for (const assignment of timeoutAssignments) {
+    expect(assignment).toMatch(
+      /^SET LOCAL (?:lock_timeout|statement_timeout) =/u,
+    );
+  }
   const scanTimeout = statements.indexOf("SET LOCAL statement_timeout = 0;");
   expect(scanTimeout).toBeGreaterThan(begin);
   for (const statement of statements.filter((sql) =>

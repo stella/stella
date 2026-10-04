@@ -35,6 +35,10 @@ const fenced = defineTransitions(jobs, graph, {
   fence: "attempt",
 });
 const dialect = new PgDialect();
+const noAudit = async () => await Promise.resolve();
+const rollback = (): never => {
+  throw new Error("unexpected transaction rollback");
+};
 
 const assertTransitionRejected = async (
   operation: Promise<unknown>,
@@ -84,14 +88,25 @@ describe("conditional status transitions", () => {
         captured.push(dialect.sqlToQuery(query));
         return [];
       },
+      rollback,
     };
+    let auditCalls = 0;
     expect(
-      await transition(tx, spec, "job", {
-        from: ["queued", "running"],
-        to: "failed",
-        set: { description: "Failure" },
+      await transition({
+        tx,
+        spec,
+        id: "job",
+        options: {
+          from: ["queued", "running"],
+          to: "failed",
+          set: { description: "Failure" },
+        },
+        recordTransitionAuditEvent: async () => {
+          auditCalls += 1;
+        },
       }),
     ).toEqual({ type: "stale" });
+    expect(auditCalls).toBe(0);
     const query = captured.at(0);
     expect(query?.params).toEqual([
       "failed",
@@ -112,18 +127,21 @@ describe("conditional status transitions", () => {
         expect(built.params).toEqual(["running", "job", "queued", 3]);
         return [];
       },
+      rollback,
     };
     expect(
-      await transition(tx, fenced, "job", {
-        from: ["queued"],
-        to: "running",
-        fence: 3,
+      await transition({
+        tx,
+        spec: fenced,
+        id: "job",
+        options: { from: ["queued"], to: "running", fence: 3 },
+        recordTransitionAuditEvent: noAudit,
       }),
     ).toEqual({ type: "stale" });
   });
 
   test("untyped callers cannot bypass graph, metadata or fence validation", async () => {
-    const tx = { execute: async () => [] };
+    const tx = { execute: async () => [], rollback };
     const reopen = { from: ["completed"], to: "running" } as const;
     const mixed = { from: ["queued", "failed"], to: "running" } as const;
     const empty = { from: [], to: "running" } as const;
@@ -143,48 +161,102 @@ describe("conditional status transitions", () => {
       set: { id: "other", description: "metadata" },
     } as const;
     await assertTransitionRejected(
-      // @ts-expect-error a terminal source cannot reopen
-      transition(tx, spec, "job", reopen),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error a terminal source cannot reopen
+        options: reopen,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "Illegal status transition",
     );
     await assertTransitionRejected(
-      // @ts-expect-error every source must permit the target
-      transition(tx, spec, "job", mixed),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error every source must permit the target
+        options: mixed,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "Illegal status transition",
     );
     await assertTransitionRejected(
-      // @ts-expect-error an empty source list cannot claim a transition
-      transition(tx, spec, "job", empty),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error an empty source list cannot claim a transition
+        options: empty,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "Illegal status transition",
     );
     await assertTransitionRejected(
-      // @ts-expect-error configured fences are required
-      transition(tx, fenced, "job", missingFence),
+      transition({
+        tx,
+        spec: fenced,
+        id: "job",
+        // @ts-expect-error configured fences are required
+        options: missingFence,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "requires its declared fence",
     );
     await assertTransitionRejected(
-      // @ts-expect-error unfenced tables reject unexpected fences
-      transition(tx, spec, "job", extraFence),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error unfenced tables reject unexpected fences
+        options: extraFence,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "has no fence",
     );
     await assertTransitionRejected(
-      // @ts-expect-error metadata cannot override the owner's status
-      transition(tx, spec, "job", overrideStatus),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error metadata cannot override the owner's status
+        options: overrideStatus,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "cannot set status",
     );
     await assertTransitionRejected(
-      // @ts-expect-error metadata cannot replace the fence
-      transition(tx, fenced, "job", overrideFence),
+      transition({
+        tx,
+        spec: fenced,
+        id: "job",
+        // @ts-expect-error metadata cannot replace the fence
+        options: overrideFence,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "cannot set attempt",
     );
     await assertTransitionRejected(
-      // @ts-expect-error metadata must be table columns
-      transition(tx, spec, "job", unknownColumn),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error metadata must be table columns
+        options: unknownColumn,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "cannot set unknown",
     );
     await assertTransitionRejected(
-      // @ts-expect-error metadata cannot replace the primary key
-      transition(tx, spec, "job", overrideId),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        // @ts-expect-error metadata cannot replace the primary key
+        options: overrideId,
+        recordTransitionAuditEvent: noAudit,
+      }),
       "cannot set id",
     );
   });
@@ -229,10 +301,41 @@ describe("conditional status transitions", () => {
       execute: async () => {
         throw failure;
       },
+      rollback,
     };
     await assertTransitionRejected(
-      transition(tx, spec, "job", { from: ["queued"], to: "running" }),
+      transition({
+        tx,
+        spec,
+        id: "job",
+        options: { from: ["queued"], to: "running" },
+        recordTransitionAuditEvent: noAudit,
+      }),
       failure,
     );
+  });
+
+  test("transaction rollback and audit recording are required by the type", () => {
+    const tx = { execute: async () => [], rollback };
+    const noRollback = { execute: async () => [] };
+    const missingRollback = async () =>
+      await transition({
+        // @ts-expect-error a transaction must expose rollback(): never
+        tx: noRollback,
+        spec,
+        id: "job",
+        options: { from: ["queued"], to: "running" },
+        recordTransitionAuditEvent: noAudit,
+      });
+    expect(missingRollback).toBeFunction();
+    const missingRecorder = async () =>
+      // @ts-expect-error every transition requires an audit recorder
+      await transition({
+        tx,
+        spec,
+        id: "job",
+        options: { from: ["queued"], to: "running" },
+      });
+    expect(missingRecorder).toBeFunction();
   });
 });

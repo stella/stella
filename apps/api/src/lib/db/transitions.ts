@@ -141,25 +141,46 @@ export type TransitionResult<TId, TStatus> =
   | { type: "transitioned"; row: { id: TId; status: TStatus } }
   | { type: "stale" };
 
-/** One conditional statement; a missing, moved or superseded row is stale. */
-export const transition = async <
+type TransitionTransaction = {
+  execute: (query: SQL) => PromiseLike<Record<string, unknown>[]>;
+  rollback: () => never;
+};
+
+type TransitionArgs<
+  TTx extends TransitionTransaction,
   TTable extends LifecycleTable,
-  const TEdges extends Readonly<Record<string, readonly string[]>>,
+  TEdges extends Readonly<Record<string, readonly string[]>>,
   TOptions extends { terminal: readonly string[]; fence?: string },
->(
-  tx: {
-    execute: <TRow extends Record<string, unknown>>(
-      query: SQL,
-    ) => PromiseLike<TRow[]>;
-  },
-  spec: DefinedTransitions<TTable, TEdges, TOptions>,
-  id: GetColumnData<TTable["id"]>,
+> = {
+  tx: TTx;
+  spec: DefinedTransitions<TTable, TEdges, TOptions>;
+  id: GetColumnData<TTable["id"]>;
   options: TransitionOptions<
     NoInfer<TTable>,
     NoInfer<TEdges>,
     NoInfer<TOptions>
-  >,
-): Promise<TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>> => {
+  >;
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    row: { id: GetColumnData<TTable["id"]>; status: Status<TTable> },
+  ) => Promise<void>;
+};
+
+/** The update and required audit share the caller's transaction. */
+export const transition = async <
+  TTx extends TransitionTransaction,
+  TTable extends LifecycleTable,
+  const TEdges extends Readonly<Record<string, readonly string[]>>,
+  TOptions extends { terminal: readonly string[]; fence?: string },
+>({
+  tx,
+  spec,
+  id,
+  options,
+  recordTransitionAuditEvent,
+}: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
+  TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
+> => {
   if (
     options.from.length === 0 ||
     options.from.some((from) => !permitsTransition(spec, from, options.to))
@@ -212,10 +233,7 @@ export const transition = async <
   if (spec.fence === undefined && expectedFence !== undefined) {
     panic("This transition table has no fence");
   }
-  const rows = await tx.execute<{
-    id: unknown;
-    status: unknown;
-  }>(sql`
+  const rows = await tx.execute(sql`
     UPDATE ${spec.table}
     SET ${sql.join(assignments, sql`, `)}
     WHERE ${spec.table.id} = ${sql.param(id, spec.table.id)}
@@ -237,11 +255,13 @@ export const transition = async <
   > = spec.table.id;
   const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
     .status;
-  return {
+  const transitioned = {
     type: "transitioned",
     row: {
-      id: idDecoder.mapFromDriverValue(row.id),
-      status: statusDecoder.mapFromDriverValue(row.status),
+      id: idDecoder.mapFromDriverValue(row["id"]),
+      status: statusDecoder.mapFromDriverValue(row["status"]),
     },
-  };
+  } as const;
+  await recordTransitionAuditEvent(tx, transitioned.row);
+  return transitioned;
 };

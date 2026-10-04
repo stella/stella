@@ -9,6 +9,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
@@ -23,6 +28,7 @@ import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const noAudit = async () => await Promise.resolve();
 const encodedId = customType<{ data: string; driverData: string }>({
   dataType: () => "text",
   toDriver: (value) => `stored:${value}`,
@@ -55,6 +61,19 @@ if (!databaseUrl || !enabled) {
           intermediate: false,
           initialRunStatus: "pending",
         });
+        const recordTransitionAuditEvent = createBackgroundAuditRecorder({
+          execution: {
+            performer: {
+              id: "transition-test",
+              name: "Transition test",
+              type: "service",
+            },
+            trigger: { type: "system" },
+          },
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+          workspaceId: fixture.workspaceId,
+        });
         try {
           const start = Promise.withResolvers<undefined>();
           const ready = Promise.withResolvers<undefined>();
@@ -66,9 +85,18 @@ if (!databaseUrl || !enabled) {
                 ready.resolve(undefined);
               }
               await start.promise;
-              return await transition(tx, TRANSITIONS.flowRuns, fixture.runId, {
-                from: ["pending"],
-                to: "running",
+              return await transition({
+                tx,
+                spec: TRANSITIONS.flowRuns,
+                id: fixture.runId,
+                options: { from: ["pending"], to: "running" },
+                recordTransitionAuditEvent: async (auditTx, row) =>
+                  await recordTransitionAuditEvent(auditTx, {
+                    action: AUDIT_ACTION.UPDATE,
+                    resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+                    resourceId: row.id,
+                    metadata: { status: row.status },
+                  }),
               });
             });
           const results = [move(db), move(competitor)];
@@ -209,6 +237,19 @@ if (!databaseUrl || !enabled) {
         const fixture = await flowReviewGateFixture(db, {
           intermediate: false,
         });
+        const recordTransitionAuditEvent = createBackgroundAuditRecorder({
+          execution: {
+            performer: {
+              id: "transition-test",
+              name: "Transition test",
+              type: "service",
+            },
+            trigger: { type: "system" },
+          },
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+          workspaceId: fixture.workspaceId,
+        });
         try {
           const checkPair = async (
             from: (typeof FLOW_RUN_STATUSES)[number],
@@ -256,8 +297,23 @@ if (!databaseUrl || !enabled) {
             const move = { from: [from], to } as const;
             const owned = await Result.tryPromise(
               async () =>
-                // @ts-expect-error arbitrary external pairs exercise runtime validation too
-                await transition(db, TRANSITIONS.flowRuns, ownerId, move),
+                await db.transaction(
+                  async (tx) =>
+                    await transition({
+                      tx,
+                      spec: TRANSITIONS.flowRuns,
+                      id: ownerId,
+                      // @ts-expect-error arbitrary external pairs exercise runtime validation too
+                      options: move,
+                      recordTransitionAuditEvent: async (auditTx, row) =>
+                        await recordTransitionAuditEvent(auditTx, {
+                          action: AUDIT_ACTION.UPDATE,
+                          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+                          resourceId: row.id,
+                          metadata: { status: row.status },
+                        }),
+                    }),
+                ),
             );
             expect(owned.isOk()).toBe(expected);
             if (owned.isOk()) {
@@ -303,9 +359,22 @@ if (!databaseUrl || !enabled) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         await db.transaction(async (tx) => {
+          // This isolated custom-codec table has no flow fixture or audit tenant context.
+          // A temporary journal still proves the audit callback is transaction-bound.
           await tx.execute(
             sql`CREATE TEMPORARY TABLE transition_fenced_jobs (id text PRIMARY KEY, status text NOT NULL, attempt integer NOT NULL, lease_token text, claimed_at timestamptz, description text, payload jsonb, updated_at timestamptz) ON COMMIT DROP`,
           );
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE transition_test_audit_events (resource_id text NOT NULL, status text NOT NULL) ON COMMIT DROP`,
+          );
+          const recordTempAuditEvent = async (
+            auditTx: typeof tx,
+            row: { id: string; status: "queued" | "running" | "done" },
+          ) => {
+            await auditTx.execute(
+              sql`INSERT INTO transition_test_audit_events (resource_id, status) VALUES (${row.id}, ${row.status})`,
+            );
+          };
           const attempt = defineTransitions(fencedJobs, jobEdges, {
             terminal: ["done"],
             fence: "attempt",
@@ -331,62 +400,92 @@ if (!databaseUrl || !enabled) {
             description: "original",
           });
           expect(
-            await transition(tx, attempt, "missing", {
-              from: ["queued"],
-              to: "running",
-              fence: 2,
+            await transition({
+              tx,
+              spec: attempt,
+              id: "missing",
+              options: { from: ["queued"], to: "running", fence: 2 },
+              recordTransitionAuditEvent: noAudit,
             }),
           ).toEqual({ type: "stale" });
           expect(
-            await transition(tx, attempt, "job", {
-              from: ["queued"],
-              to: "running",
-              fence: 1,
-              set: { description: "wrong attempt" },
+            await transition({
+              tx,
+              spec: attempt,
+              id: "job",
+              options: {
+                from: ["queued"],
+                to: "running",
+                fence: 1,
+                set: { description: "wrong attempt" },
+              },
+              recordTransitionAuditEvent: noAudit,
             }),
           ).toEqual({ type: "stale" });
           expect(
-            await transition(tx, lease, "job", {
-              from: ["queued"],
-              to: "running",
-              fence: "old-lease",
+            await transition({
+              tx,
+              spec: lease,
+              id: "job",
+              options: { from: ["queued"], to: "running", fence: "old-lease" },
+              recordTransitionAuditEvent: noAudit,
             }),
           ).toEqual({ type: "stale" });
           expect(
-            await transition(tx, claimed, "job", {
-              from: ["queued"],
-              to: "running",
-              fence: new Date("2025-01-01T00:00:00Z"),
+            await transition({
+              tx,
+              spec: claimed,
+              id: "job",
+              options: {
+                from: ["queued"],
+                to: "running",
+                fence: new Date("2025-01-01T00:00:00Z"),
+              },
+              recordTransitionAuditEvent: noAudit,
             }),
           ).toEqual({ type: "stale" });
           expect(
-            await transition(tx, unfenced, "job", {
-              from: ["running"],
-              to: "done",
+            await transition({
+              tx,
+              spec: unfenced,
+              id: "job",
+              options: { from: ["running"], to: "done" },
+              recordTransitionAuditEvent: noAudit,
             }),
           ).toEqual({ type: "stale" });
+          expect(
+            await tx.execute(sql`SELECT * FROM transition_test_audit_events`),
+          ).toEqual([]);
           const before = (await tx.select().from(fencedJobs)).at(0);
           expect(before?.status).toBe("queued");
           expect(before?.description).toBe("original");
           expect(
-            await transition(tx, claimed, "job", {
-              from: ["queued"],
-              to: "running",
-              fence: date,
-              set: {
-                description: "claimed",
-                payload: { labels: ["a", "b"], count: 2 },
+            await transition({
+              tx,
+              spec: claimed,
+              id: "job",
+              options: {
+                from: ["queued"],
+                to: "running",
+                fence: date,
+                set: {
+                  description: "claimed",
+                  payload: { labels: ["a", "b"], count: 2 },
+                },
               },
+              recordTransitionAuditEvent: recordTempAuditEvent,
             }),
           ).toEqual({
             type: "transitioned",
             row: { id: "job", status: "running" },
           });
           expect(
-            await transition(tx, lease, "job", {
-              from: ["running"],
-              to: "done",
-              fence: "new-lease",
+            await transition({
+              tx,
+              spec: lease,
+              id: "job",
+              options: { from: ["running"], to: "done", fence: "new-lease" },
+              recordTransitionAuditEvent: recordTempAuditEvent,
             }),
           ).toEqual({
             type: "transitioned",
@@ -406,10 +505,12 @@ if (!databaseUrl || !enabled) {
             .insert(fencedJobs)
             .values({ id: "attempt-success", status: "queued", attempt: 2 });
           expect(
-            await transition(tx, attempt, "attempt-success", {
-              from: ["queued"],
-              to: "running",
-              fence: 2,
+            await transition({
+              tx,
+              spec: attempt,
+              id: "attempt-success",
+              options: { from: ["queued"], to: "running", fence: 2 },
+              recordTransitionAuditEvent: recordTempAuditEvent,
             }),
           ).toEqual({
             type: "transitioned",
@@ -419,15 +520,27 @@ if (!databaseUrl || !enabled) {
             .insert(fencedJobs)
             .values({ id: "null-lease", status: "queued", attempt: 1 });
           expect(
-            await transition(tx, lease, "null-lease", {
-              from: ["queued"],
-              to: "running",
-              fence: null,
+            await transition({
+              tx,
+              spec: lease,
+              id: "null-lease",
+              options: { from: ["queued"], to: "running", fence: null },
+              recordTransitionAuditEvent: recordTempAuditEvent,
             }),
           ).toEqual({
             type: "transitioned",
             row: { id: "null-lease", status: "running" },
           });
+          expect(
+            await tx.execute(
+              sql`SELECT resource_id, status FROM transition_test_audit_events ORDER BY resource_id, status`,
+            ),
+          ).toEqual([
+            { resource_id: "attempt-success", status: "running" },
+            { resource_id: "job", status: "done" },
+            { resource_id: "job", status: "running" },
+            { resource_id: "null-lease", status: "running" },
+          ]);
         });
       });
     });
