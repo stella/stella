@@ -23,6 +23,7 @@ import {
   readableReferencePassageIds,
   readReferencePassageTexts,
 } from "@/api/lib/document-review/reference-passages";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -50,9 +51,10 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 const rootHandlerContext = (safeDb: ReturnType<typeof createSafeDb>) => ({
   createAuditRecorder: () => noopAuditRecorder,
   getWorkspaceAccess: async () => null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/document-reviews/passages"),
@@ -229,7 +231,9 @@ describe("reference passage isolation", () => {
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
+          accessibleWorkspaceIds: [ids.wsA1],
           positions: positionsPinning(PASSAGE_A_ID),
+          storedPositions: null,
         }),
       );
 
@@ -252,7 +256,9 @@ describe("reference passage isolation", () => {
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
+          accessibleWorkspaceIds: [ids.wsA1],
           positions: positionsPinning(PASSAGE_B_ID),
+          storedPositions: null,
         }),
       );
 

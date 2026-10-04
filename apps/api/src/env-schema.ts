@@ -9,8 +9,18 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
-import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  ORIGIN_VERIFY_HEADER,
+  SIGNUP_RATE_LIMIT_IP_SOURCE,
+} from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
+import {
+  DEFAULT_POLAR_API_VERSION,
+  polarApiVersionSchema,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
+import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -25,7 +35,10 @@ type EmailProviderInput = {
 };
 
 // Keep retention cutoffs in positive ISO years supported by timestamptz.
-const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+const MAX_RETENTION_DAYS = 365_000;
+// Larger timer delays are clamped to one millisecond by the runtime.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS = 30_000;
 
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
@@ -78,6 +91,37 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_AUDIENCE: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_STS_REGION: v.optional(
+    v.pipe(v.string(), v.trim(), v.regex(/^[a-z]+(?:-[a-z]+)+-\d+$/u)),
+  ),
+  /** Checks the regional model catalog before accepting managed requests. */
+  FEATURE_MANAGED_PROVIDER_CHECKS: featureFlagSchema,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_TIMER_DELAY_MS),
+    ),
+  ),
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS),
+    ),
+  ),
   OPENAI_API_KEY: v.optional(v.string()),
   AZURE_API_KEY: v.optional(v.string()),
   AZURE_RESOURCE_NAME: v.optional(v.string()),
@@ -149,6 +193,8 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
+  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
@@ -260,6 +306,9 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+  DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
 
   /**
    * Plain-text token served at `/.well-known/openai-apps-challenge` so an
@@ -290,6 +339,39 @@ export const envApiServerSchema = {
       v.trim(),
       v.toLowerCase(),
       v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+      v.check(
+        (name) =>
+          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
+        "must not be a header the API sets or verifies itself",
+      ),
+    ),
+  ),
+
+  /**
+   * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
+   * `cloudfront-viewer-address` does) or `bare`.
+   */
+  STELLA_CLIENT_ADDRESS_FORMAT: v.optional(
+    v.picklist(["with-port", "bare"]),
+    "with-port",
+  ),
+
+  /**
+   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
+   * first, then the next one during a rotation). When set, the client address
+   * header is read only from requests carrying one of them.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) =>
+          value
+            .split(",")
+            .map((part) => part.trim())
+            .every((part) => part.length >= 32),
+        "each value must be at least 32 characters",
+      ),
     ),
   ),
 
@@ -321,38 +403,191 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
+  MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
-  FEATURE_CHAT: featureFlagSchema,
   CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
-  FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
-  FEATURE_CASE_LAW: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
-  FEATURE_CONTACTS: featureFlagSchema,
-  FEATURE_CALENDAR: featureFlagSchema,
-  FEATURE_TODOS: featureFlagSchema,
-  FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  MCP_READ_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_WINDOW_MAX_ENTRIES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MCP_READ_MAX_ENTRIES),
+    ),
+  ),
   ACTION_LIMIT_CONTACT_URL: v.optional(
     v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
   ),
   FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
   ACTION_COST_ESTIMATES: v.optional(v.string()),
   ACTION_COST_CALL_RATES: v.optional(v.string()),
+  UNUSED_CLIENT_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(365),
+    ),
+    "30",
+  ),
+  AGENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
   ACTION_COST_RETENTION_DAYS: v.optional(
     v.pipe(
       v.string(),
       v.toNumber(),
       v.integer(),
       v.minValue(1),
-      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
+      v.maxValue(MAX_RETENTION_DAYS),
+    ),
+  ),
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_RETENTION_DAYS),
+    ),
+  ),
+  ACTION_REQUEST_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_RESPONSE_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_PAGE_SIZE_MAX: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  FEATURE_CONFIGURED_ACCESS: featureFlagSchema,
+  PAYMENT_RETRY_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
     ),
   ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
   ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
   // Operators must set the lease above the admission store's failover window.
@@ -379,7 +614,6 @@ export const envApiServerSchema = {
       v.maxValue(Number.MAX_SAFE_INTEGER),
     ),
   ),
-  FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
@@ -497,6 +731,10 @@ export const envApiServerSchema = {
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: v.optional(
     v.pipe(v.string(), v.minLength(16)),
   ),
+  HOSTED_USAGE_PROVIDER_API_VERSION: v.optional(
+    polarApiVersionSchema,
+    DEFAULT_POLAR_API_VERSION,
+  ),
   HOSTED_USAGE_PROVIDER_API_KEY: v.optional(v.pipe(v.string(), v.minLength(8))),
   HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
   /**
@@ -527,6 +765,8 @@ export const envApiServerSchema = {
   ORG_EVALUATION_PERIOD_DAYS: v.optional(
     v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+
+  AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
@@ -608,11 +848,24 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = {
+  AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
+  FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
+  OPENROUTER_API_KEY?: string | undefined;
+  OPENROUTER_WIF_POLICY_ID?: string | undefined;
+  OPENROUTER_WIF_AUDIENCE?: string | undefined;
+  OPENROUTER_WIF_STS_REGION?: string | undefined;
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+  FEATURE_USAGE?: boolean | undefined;
+  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -631,12 +884,73 @@ type EnvApiInvariantInput = {
   runtimeMode: RuntimeMode;
 };
 
+type ManagedProviderCheckInvariantInput = Pick<
+  EnvApiInvariantInput,
+  | "AI_PROVIDER"
+  | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
+  | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
+  | "OPENROUTER_API_KEY"
+  | "OPENROUTER_WIF_POLICY_ID"
+  | "OPENROUTER_WIF_AUDIENCE"
+  | "OPENROUTER_WIF_STS_REGION"
+>;
+
+const managedProviderCheckInvariantViolation = ({
+  AI_PROVIDER,
+  FEATURE_MANAGED_PROVIDER_CHECKS,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+  OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
+}: ManagedProviderCheckInvariantInput): string | null => {
+  const configuredWifFields = [
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
+  ].filter((value) => value !== undefined).length;
+  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
+    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (FEATURE_MANAGED_PROVIDER_CHECKS) {
+    if (AI_PROVIDER !== "openrouter") {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
+    }
+    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
+    }
+    if (
+      MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
+      MANAGED_PROVIDER_CHECK_TIMEOUT_MS === undefined ||
+      MANAGED_PROVIDER_CHECK_TIMEOUT_MS >= MANAGED_PROVIDER_CHECK_INTERVAL_MS
+    ) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires positive MANAGED_PROVIDER_CHECK_INTERVAL_MS and MANAGED_PROVIDER_CHECK_TIMEOUT_MS; timeout must be shorter than interval.";
+    }
+  }
+  return null;
+};
+
 export const envApiInvariantViolation = ({
+  AI_PROVIDER,
+  FEATURE_MANAGED_PROVIDER_CHECKS,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+  OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
+  FEATURE_CONFIGURED_ACCESS,
+  FEATURE_USAGE,
+  PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -654,6 +968,30 @@ export const envApiInvariantViolation = ({
   nodeEnv,
   runtimeMode,
 }: EnvApiInvariantInput): string | null => {
+  if (
+    FEATURE_CONFIGURED_ACCESS &&
+    ![
+      FEATURE_ORG_ACCESS_STATE,
+      FEATURE_ORG_SERVICE_BUDGETS,
+      FEATURE_USAGE,
+      PAYMENT_RETRY_WINDOW_MS !== undefined,
+    ].every(Boolean)
+  ) {
+    return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
+  }
+  const managedViolation = managedProviderCheckInvariantViolation({
+    AI_PROVIDER,
+    FEATURE_MANAGED_PROVIDER_CHECKS,
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+    OPENROUTER_API_KEY,
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
+  });
+  if (managedViolation !== null) {
+    return managedViolation;
+  }
   const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
   if (REPORT_SPECS_DIR !== undefined && REPORT_SPECS_S3_PREFIX !== undefined) {
     return "REPORT_SPECS_DIR and REPORT_SPECS_S3_PREFIX are exclusive; set one.";
@@ -695,6 +1033,9 @@ export const envApiInvariantViolation = ({
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {
     return "ORG_EVALUATION_PERIOD_DAYS is required when FEATURE_ORG_ACCESS_STATE is true.";
+  }
+  if (FEATURE_ORG_SERVICE_BUDGETS && !FEATURE_ACTION_ADMISSION) {
+    return "FEATURE_ORG_SERVICE_BUDGETS requires FEATURE_ACTION_ADMISSION.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&

@@ -9,6 +9,7 @@ import {
 
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -62,7 +63,7 @@ const listWorkspacesAs = async ({
 }): Promise<ListedWorkspace[]> => {
   const result = await readWorkspaces.handler(
     asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
       session: { activeOrganizationId: organizationId },
       user: { id: userId },

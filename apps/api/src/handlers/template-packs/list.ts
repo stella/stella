@@ -5,7 +5,7 @@ import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -14,13 +14,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import type { MemberRole } from "@/api/lib/member-roles";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
   type Page,
 } from "@/api/lib/pagination";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
   canInstallTemplatePacks,
@@ -60,8 +61,10 @@ const config = {
     "many of its templates are already installed. Also reports whether the " +
     "organization hides pack offers and whether the caller may install.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "template_authoring_ui",
     consumesServices: false,
   },
@@ -89,7 +92,7 @@ export type ListTemplatePacksProps = {
   catalogue: TemplatePackCatalogue;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   query: { limit?: number; cursor?: string; locale?: string };
 };
 
@@ -100,7 +103,9 @@ export const listTemplatePacksHandler = async function* ({
   memberRole,
   query,
 }: ListTemplatePacksProps): SafeHandlerGenerator<TemplatePackListResult> {
-  const limit = query.limit ?? LIMITS.templatePacksPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.templatePacksPageSizeDefault,
+  );
   const start = query.cursor ? decodeIndexCursor(query.cursor) : 0;
   if (start === null) {
     return Result.err(

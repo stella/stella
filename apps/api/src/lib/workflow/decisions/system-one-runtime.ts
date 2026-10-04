@@ -9,19 +9,19 @@ import { env } from "@/api/env";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
-let client: SystemOneClient | null | undefined;
+let client: SystemOneClient | undefined;
 
 /** Null when `TYPESAFE_API_KEY` is unset: every System One path is then skipped. */
 export const getSystemOneClient = (): SystemOneClient | null => {
+  if (env.TYPESAFE_API_KEY === undefined) {
+    return null;
+  }
   if (client !== undefined) {
     return client;
   }
-  client =
-    env.TYPESAFE_API_KEY === undefined
-      ? null
-      : createSystemOneClient({
-          apiKey: env.TYPESAFE_API_KEY,
-          model: env.TYPESAFE_MODEL,
-        });
+  client = createSystemOneClient({
+    apiKey: env.TYPESAFE_API_KEY,
+    model: env.TYPESAFE_MODEL,
+  });
   return client;
 };

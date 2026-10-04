@@ -7,13 +7,15 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -30,6 +32,7 @@ export type MoveEntityHandlerProps = {
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
+  syncSearchActivity?: typeof syncWorkspaceSearchActivity;
 };
 
 type LockMoveOptions = {
@@ -166,9 +169,13 @@ export const moveEntityHandler = async function* ({
   workspaceId,
   recordAuditEvent,
   body,
+  syncSearchActivity = syncWorkspaceSearchActivity,
 }: MoveEntityHandlerProps) {
   const moved = yield* Result.await(
     safeDb(async (tx) => {
+      // Serialize ancestry decisions before taking any entity locks. Disjoint
+      // source/target row pairs can still join into a cycle across two moves.
+      await lockWorkspacesForEntityCap(tx, [workspaceId]);
       const locked = await lockMove({ tx, workspaceId, body });
       if (Result.isError(locked)) {
         return locked;
@@ -203,7 +210,7 @@ export const moveEntityHandler = async function* ({
   );
   yield* moved;
 
-  syncWorkspaceSearchActivity(workspaceId).catch(captureError);
+  syncSearchActivity(workspaceId).catch(captureError);
 
   return Result.ok({});
 };
@@ -280,6 +287,8 @@ const config = {
     "must be a folder in this matter, a folder may not be moved into itself " +
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;

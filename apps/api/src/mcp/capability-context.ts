@@ -8,8 +8,10 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { MemberRole } from "@/api/lib/member-roles";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
 
 /**
@@ -34,7 +36,7 @@ export type SynthesizedCapabilityContext = {
   request: Request;
   route: string;
   set: { headers: Record<string, string> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; email: string };
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   safeDb: SafeDb;
@@ -44,10 +46,11 @@ export type SynthesizedCapabilityContext = {
     workspaceId: SafeId<"workspace">,
   ) => Promise<AccessibleWorkspace | null>;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   recordAuditEvent: AuditRecorder;
   createAuditRecorder: (opts?: {
     workspaceId?: SafeId<"workspace"> | null;
@@ -64,7 +67,8 @@ export const capabilityRoute = (capabilityId: string): string =>
  * export expects. Mirrors what the REST `validateAuth` resolve assembles per
  * request, sourced from the already-resolved MCP session context: identity and
  * DB accessors are rebound to an operation-local authorization snapshot, the
- * member role is reshaped to `{ role }`, the org AI config is loaded lazily (one
+ * member role carries the credential's own permission set (`mcpMemberAuthority`),
+ * the org AI config is loaded lazily (one
  * indexed `organization_settings` read, paid only on an actual invoke), and the
  * audit recorder is bound to the resolved workspace exactly as
  * `workspaceAccessMacro` does. `workspaceId` is set only for workspace-kind
@@ -108,11 +112,15 @@ export const synthesizeCapabilityContext = async ({
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      operationDatabaseScope.scopedDb(
-        async (tx) => await loadOrgSettingsForAuth(tx, reader),
-      ));
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    operationDatabaseScope.scopedDb(
+      async (tx) => await loadOrgSettingsForAuth(tx, reader),
+    ));
 
   return {
     body: input.body,
@@ -121,7 +129,7 @@ export const synthesizeCapabilityContext = async ({
     request,
     route: capabilityRoute(capabilityId),
     set: { headers: {} },
-    user: { id: context.userId },
+    user: { id: context.userId, email: context.userEmail },
     session: { activeOrganizationId: context.organizationId },
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -144,10 +152,13 @@ export const synthesizeCapabilityContext = async ({
     },
     pinServerValidatedWorkspaceId:
       operationDatabaseScope.pinServerValidatedWorkspaceId,
-    memberRole: { role: context.memberRole },
+    // The credential's attenuation travels with the role, so every check the
+    // handler makes spends only what this credential was granted.
+    memberRole: mcpMemberAuthority(context),
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    managedAIResidency,
     recordAuditEvent,
     createAuditRecorder: (opts) =>
       createAuditRecorder({

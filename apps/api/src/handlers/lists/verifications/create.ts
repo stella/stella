@@ -11,6 +11,7 @@ import { t } from "elysia";
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -19,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
 import {
   VERIFICATION_PIPELINE_VERSION,
   VERIFICATION_RUN_ACTIVE_STATUSES,
@@ -47,6 +49,7 @@ const config = {
     "lists.verifications.get. A document holds one unfinished verification " +
     "at a time.",
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -127,6 +130,9 @@ const createVerification = createSafeHandler(
       );
     }
     const file = field.content;
+    if (file.encrypted) {
+      return Result.err(encryptedContentError());
+    }
     if (!isVerifiableFile(file)) {
       return Result.err(
         new HandlerError({
@@ -156,7 +162,7 @@ const createVerification = createSafeHandler(
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
-      { organizationId },
+      { dataClass: "customer", organizationId },
     );
     const sizeError = await assertRunSizeConfirmedForHandler({
       metering: {

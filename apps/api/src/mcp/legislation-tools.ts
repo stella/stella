@@ -11,6 +11,7 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   publicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -26,12 +27,17 @@ import {
   READ_STATUTE_PROVISIONS_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -231,7 +237,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     cursor: cursorInput({
       description: "Opaque cursor from a previous search_legislation call",
-      maxLength: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+      maxLength: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   }),
 );
@@ -351,6 +357,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       language: FILTER_NORMALIZATION,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
     // same surface the public routes gate behind the same feature flag.
@@ -379,6 +386,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_statute",
@@ -414,6 +422,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_statute_provisions",
@@ -437,6 +446,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_provision_history",
@@ -529,8 +539,14 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     query,
     status,
   } = parsed.output;
-  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
+  );
 
+  const unavailable = publicCountryUnavailable(country);
+  if (unavailable !== null) {
+    return toolDataResult(unavailable);
+  }
   const jurisdiction = publicLegislationCountry(country);
   if (jurisdiction === null) {
     return notFoundResult(
@@ -539,6 +555,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     );
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const result = await (
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler
@@ -555,6 +575,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(dateTo === undefined ? {} : { dateTo }),
     },
     legislationPublicReadDb,
+    observer,
   );
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
@@ -565,6 +586,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
   return toolDataResult({
     nextCursor: result.nextCursor,
+    paginationOutcome: result.paginationOutcome,
     results: result.items.map((hit) => ({
       appUrl: buildLegislationDocumentAppUrl({
         country: hit.country,
@@ -578,6 +600,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       effectiveDate: hit.effectiveDate,
       eli: hit.eli,
       language: hit.language,
+      match: hit.match,
       resourceName: legislationResourceName(hit.documentId),
       score: hit.score,
       snippet: toPlainTextSnippet(hit.headline),
@@ -668,7 +691,11 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     defaultListStatuteVersionsHandler
   )({
     documentId: resolved.id,
-    query: { limit: LIMITS.legislationVersionsPageSizeDefault },
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
     legislationDb: legislationPublicReadDb,
   });
   if (!isStatuteVersionsPage(versionsPage)) {
@@ -1002,8 +1029,9 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { anchor, cursor, eli, language } = parsed.output;
-  const limit =
-    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
+  );
 
   // The history walks the whole Work, so it resolves the Work rather than a
   // consolidation applicable today: a repealed, expired or not-yet-effective

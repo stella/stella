@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -23,6 +23,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: requestBody,
 } satisfies HandlerConfig;
@@ -67,6 +68,7 @@ const autocompleteStream = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     session,
@@ -79,9 +81,11 @@ const autocompleteStream = createSafeRootHandler(
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForRole({
+          dataClass: "customer",
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

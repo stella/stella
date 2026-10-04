@@ -1,9 +1,14 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import type {
   CorpusIndexClient,
   CorpusIndexHit,
 } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_QUERY_VARIANTS,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import { corpusIndexQueryDiffClientForGeneration } from "@/api/scripts/corpus-index-query-diff-client";
@@ -44,6 +49,8 @@ const USAGE = `Usage: bun run src/scripts/corpus-index-query-diff.ts [options]
   --queries <path>         Query list file (JSON; see script doc comment). Required.
   --base <generation>      Baseline generation prefix, e.g. case_law_v5. Required.
   --candidate <generation> Candidate generation prefix. Required.
+  --base-query-variant <variant>      Baseline query variant (default off).
+  --candidate-query-variant <variant> Candidate query variant (default off).
   --top <n>                Compared document depth per query (default ${DEFAULT_DEPTH}).
   --max-divergence <0..1>  Per-query divergence (1 - overlap) above which the
                            run exits 1 (default ${DEFAULT_MAX_DIVERGENCE}).`;
@@ -72,6 +79,8 @@ const KNOWN_FLAGS = new Set([
   "candidate",
   "top",
   "max-divergence",
+  "base-query-variant",
+  "candidate-query-variant",
 ]);
 
 /**
@@ -118,6 +127,20 @@ const generationFlag = (name: string): string => {
   }
   return value;
 };
+
+const queryVariantFlag = (name: string): CorpusIndexQueryVariant => {
+  const value = flagValue(name) ?? "off";
+  const parsed = v.safeParse(v.picklist(CORPUS_INDEX_QUERY_VARIANTS), value);
+  if (!parsed.success) {
+    fail(
+      `--${name} must be one of ${CORPUS_INDEX_QUERY_VARIANTS.join(", ")}, got: ${value}`,
+    );
+  }
+  return parsed.output;
+};
+
+const baseQueryVariant = queryVariantFlag("base-query-variant");
+const candidateQueryVariant = queryVariantFlag("candidate-query-variant");
 
 const DECIMAL_INTEGER = /^\d+$/u;
 
@@ -174,13 +197,21 @@ if (Result.isError(queries)) {
  * index may hold several jurisdictions, and the query then carries the
  * jurisdiction clause the search paths carry.
  */
-const runQuery = async (
-  client: CorpusIndexClient,
-  generation: string,
-  query: GoldenQuery,
-): Promise<QueryRunOutcome> => {
+type RunQueryOptions = {
+  client: CorpusIndexClient;
+  generation: string;
+  query: GoldenQuery;
+  queryVariant: CorpusIndexQueryVariant;
+};
+
+const runQuery = async ({
+  client,
+  generation,
+  query,
+  queryVariant,
+}: RunQueryOptions): Promise<QueryRunOutcome> => {
   const request =
-    goldenQueryRequest(generation, query) ??
+    goldenQueryRequest({ generation, query, queryVariant }) ??
     fail(`query ${query.id} holds no searchable term: ${query.text}`);
   const { indexId, engineQuery } = request;
   const scanned: CorpusIndexHit[] = [];
@@ -189,6 +220,7 @@ const runQuery = async (
   let ranked = rankDocumentHits(scanned, depth);
   for (;;) {
     const searched = await client.search({
+      observer: "unobserved",
       indexId,
       query: engineQuery,
       maxHits: LIMITS.corpusIndexSearchCandidateLimit,
@@ -223,8 +255,18 @@ const candidateClient =
   corpusIndexQueryDiffClientForGeneration(candidateGeneration);
 for (const query of queries.value) {
   const [base, candidate] = await Promise.all([
-    runQuery(baseClient, baseGeneration, query),
-    runQuery(candidateClient, candidateGeneration, query),
+    runQuery({
+      client: baseClient,
+      generation: baseGeneration,
+      query,
+      queryVariant: baseQueryVariant,
+    }),
+    runQuery({
+      client: candidateClient,
+      generation: candidateGeneration,
+      query,
+      queryVariant: candidateQueryVariant,
+    }),
   ]);
   rows.push({
     query,

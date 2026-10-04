@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {
@@ -344,6 +345,7 @@ export type GradeTierMatchArgs = {
   entityVersionId: SafeId<"entityVersion">;
   propertyId: SafeId<"property">;
   orgAIConfig: OrgAIConfig | null | undefined;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
@@ -358,6 +360,7 @@ export const gradeTierMatch = async ({
   entityVersionId,
   propertyId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -376,6 +379,7 @@ export const gradeTierMatch = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "playbook.verdict",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
@@ -393,8 +397,10 @@ export const gradeTierMatch = async ({
   return await Result.tryPromise({
     try: async (): Promise<TierMatchVerdict> => {
       const result = await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "pdf",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -484,6 +490,7 @@ export const gradeTierMatches = async ({
   workspaceId,
   entityVersionId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -504,6 +511,7 @@ export const gradeTierMatches = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "playbook.verdict",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
@@ -521,8 +529,10 @@ export const gradeTierMatches = async ({
   return await Result.tryPromise({
     try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
       const result = await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "pdf",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -621,6 +631,7 @@ export type ComputeVerdictBatchArgs = {
   // properties whose values are read to grade each verdict.
   inputPropertyIds: SafeId<"property">[];
   orgAIConfig?: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
@@ -650,6 +661,7 @@ export const computeVerdictBatch = async ({
   verdictProperties,
   inputPropertyIds,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -764,6 +776,7 @@ export const computeVerdictBatch = async ({
           entityVersionId,
           propertyId: property.id,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           serviceTier,
           usageMetering,

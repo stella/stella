@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
 
 import { docxSuggestions } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tSafeId,
@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import { docxSuggestionCursor } from "./cursor";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT } from "./schemas";
@@ -55,6 +56,7 @@ const suggestionOrigin = (
 const listDocxSuggestions = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },
     access: "read",
     params: workspaceParams({ entityId: tSafeId("entity") }),
@@ -73,7 +75,9 @@ const listDocxSuggestions = createSafeHandler(
     }),
   },
   async function* ({ workspaceId, params, query, safeDb }) {
-    const limit = query.limit ?? DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT,
+    );
 
     const conditions = [
       eq(docxSuggestions.workspaceId, workspaceId),

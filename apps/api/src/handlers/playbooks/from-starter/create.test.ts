@@ -21,6 +21,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
@@ -68,7 +69,8 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
-    memberRole: { role: "owner" as const },
+    getActiveWorkspaceIds: async () => [],
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
@@ -200,7 +202,9 @@ describe("starter playbook content", () => {
       const result = await assertPositionsValid({
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
+        accessibleWorkspaceIds: [],
         positions: starter.positions,
+        storedPositions: null,
       });
       expect(Result.isError(result)).toBe(false);
     }
@@ -231,6 +235,7 @@ describe("starter playbook content", () => {
         organizationId: ids.orgA,
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
         generate,
       });

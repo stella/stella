@@ -47,7 +47,7 @@ const servingGeneration: ServingCorpusIndexGeneration = {
 const corpusIndexBrowseFacets = async (
   query: Parameters<typeof readCorpusIndexBrowseFacets>[0],
 ) =>
-  await readCorpusIndexBrowseFacets(query, {
+  await readCorpusIndexBrowseFacets(query, "unobserved", {
     readServingTarget: async (jurisdiction) => {
       // No enrolled group is attested in these cases.
       const resolution = corpusIndexReadTarget({

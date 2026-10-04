@@ -95,14 +95,16 @@ describe("SAOS reasons published apart from their ruling", () => {
       caseNumber: ruling.decision.caseNumber,
       language: ruling.decision.language,
     });
-    expect(ruling.decision.decisionType).toBe("wyrok");
+    expect(ruling.decision.decisionType === "wyrok").toBe(true);
     // A row holding the reasons alone says what it is.
-    expect(supplement.document.decisionType).toBe(
-      PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-    );
-    expect(supplement.document.metadata["decisionType"]).toBe(
-      PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-    );
+    expect(
+      supplement.document.decisionType ===
+        PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+    ).toBe(true);
+    expect(
+      supplement.document.metadata["decisionType"] ===
+        PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+    ).toBe(true);
     expect(supplement.document.fulltext ?? "").toContain("UZASADNIENIE");
     expect(
       Object.keys(

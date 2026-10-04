@@ -3,7 +3,7 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListItemSources } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
@@ -18,6 +18,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListItemSourceId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
@@ -36,9 +37,11 @@ const config = {
     "with the document version it points at, its locator, its quote, and its " +
     "verification status with who verified it and when.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workspace_schema",
     consumesServices: false,
   },
@@ -49,7 +52,9 @@ const config = {
 const readItemSources = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListSourcesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListSourcesPageSizeDefault,
+    );
     const cursorParts = query.cursor
       ? decodePaginationCursor(query.cursor)
       : null;

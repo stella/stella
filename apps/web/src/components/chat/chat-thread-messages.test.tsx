@@ -5,8 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
+import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
   PersistedChatMessage,
@@ -18,6 +24,8 @@ import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 const { buildMessageTurns } =
@@ -53,7 +61,7 @@ const renderWithProviders = (children: ReactNode) =>
                 handleDeny: () => {},
               }}
             >
-              {children}
+              <ChatEditorProvider>{children}</ChatEditorProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
         </IntlProvider>
@@ -62,6 +70,46 @@ const renderWithProviders = (children: ReactNode) =>
   );
 
 describe("chat thread messages", () => {
+  test("renders every reloaded admission refusal with its recovery action", () => {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const refusal = {
+        code,
+        ...ACTION_ADMISSION_REFUSALS[code],
+        contactUrl: "https://example.test/contact",
+      };
+      const stored = {
+        id: "assistant-refused",
+        role: "assistant",
+        parts: [],
+        metadata: {
+          turnOutcome: { type: "failed", error: "unknown", refusal },
+        },
+      } satisfies PersistedChatMessage;
+      const reloaded = structuredClone(stored);
+      const html = renderWithProviders(
+        <ChatThreadMessages
+          approvalPendingMessageId={null}
+          messages={[reloaded]}
+          error={getChatAssistantTurnError(reloaded)}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+      expect(html).toContain('role="status"');
+      expect(html).toContain(refusal.message);
+      expect(html.includes(messages.common.tryAgain)).toBe(refusal.retryable);
+      expect(html.includes('href="https://example.test/contact"')).toBe(
+        refusal.status === 403,
+      );
+      expect(html).not.toContain(messages.chat.sendError);
+    }
+  });
+
   test("does not flash TipTap paragraph tags for an optimistic user message", () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -158,7 +206,6 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Draft answer");
     expect(html).toContain('aria-label="Copy"');
-    expect(html).toContain(">Copy</button>");
   });
 
   test("renders persisted audio, video, and sandboxed app output", () => {
@@ -295,10 +342,12 @@ describe("chat thread messages", () => {
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(1);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
   });
 
-  test("shows provider-reported reasoning tokens without a thinking part", () => {
+  // Providers that hide their reasoning report only a token count; a
+  // "Reasoning trace" label with nothing to open would read as broken.
+  test("omits the reasoning label when the provider sent no trace", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
@@ -328,7 +377,8 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).toContain("8 reasoning tokens");
+    expect(html).not.toContain("Reasoning trace");
+    expect(html).not.toContain("reasoning tokens");
     expect(html).toContain("The answer is ready.");
   });
 
@@ -842,7 +892,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(2);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(2);
     expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
   });
 
@@ -876,7 +926,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
-    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(1);
+    expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
     expect(html).not.toContain(">Retry</button>");
   });
 
@@ -905,7 +955,7 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain("Streaming answer");
-    expect(html).toContain(">Copy</button>");
+    expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain(">Retry</button>");
   });
 

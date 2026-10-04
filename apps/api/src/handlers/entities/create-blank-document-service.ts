@@ -3,9 +3,14 @@ import { Result } from "better-result";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -53,6 +58,7 @@ export const createBlankDocument = async ({
     buffer,
     fileName: `${name}.docx`,
     mimeType: DOCX_MIME_TYPE,
+    encryption: serverBuiltFileEncryption(),
     parentId,
   }).then((result) => Result.mapError(result, toHandlerError));
 };
@@ -63,10 +69,14 @@ const toHandlerError = (
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError"; message: string }
-    | { _tag: "MissingFilePropertyError" },
+    | { _tag: "MissingFilePropertyError" }
+    | DocumentWriteRefusedError,
 ): HandlerError => {
   if (error instanceof OrganizationFileUsageError) {
     return organizationFileUsageHandlerError(error);
+  }
+  if (DocumentWriteRefusedError.is(error)) {
+    return documentWriteRefusalHandlerError(error);
   }
   switch (error._tag) {
     case "DocumentTooLargeError":

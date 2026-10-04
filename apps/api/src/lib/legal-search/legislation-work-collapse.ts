@@ -1,6 +1,4 @@
-import { createHash } from "node:crypto";
-
-import { CORPUS_CURSOR_GROUP_TOKEN_CHARS } from "@/api/lib/legal-search/corpus-search-cursor";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 
 /**
@@ -28,11 +26,10 @@ import type { RankedHit } from "@/api/lib/legal-search/rerank";
  *   than the scan, or else the best version's, which only an out-scoring
  *   version could change, and none can once the Work is emitted;
  * - a named Work's score depends on the query alone.
- * The Work the page cursor names is left out entirely, because the scan skips
- * the cursor's own document, which can be the version that gave the Work its
- * score. So is every Work an earlier scan window showed: when a capped scan
+ * The Work the page cursor names is left out entirely; the displayed version
+ * may differ from the version that gave the Work its score. So is every Work an earlier scan window showed: when a capped scan
  * moves on to the next window of the engine's order, the cursor carries the
- * tokens of the Works the finished window held (`legislationWorkToken`),
+ * tokens of the Works the finished window held (`corpusSearchGroupToken`),
  * because a deeper version of one of them would otherwise bring it back.
  */
 
@@ -42,18 +39,6 @@ export type LegislationWorkRepresentative = {
   /** In force today, and the current version of its Work. */
   isCurrent: boolean;
 };
-
-/**
- * A short, fixed-width stand-in for a Work key, for a cursor to carry: the
- * first base64url characters of its sha256 (36 bits). Two Works sharing a
- * token is a 2^-36 event per pair, and its cost is one act left off a later
- * page, never one shown twice.
- */
-export const legislationWorkToken = (workKey: string): string =>
-  createHash("sha256")
-    .update(workKey)
-    .digest("base64url")
-    .slice(0, CORPUS_CURSOR_GROUP_TOKEN_CHARS);
 
 /**
  * The id a Work's hit shows: its current version when it has one, else the
@@ -111,7 +96,7 @@ type CollapsedLegislationHits = {
   ranked: RankedHit[];
   /** The Work key of each emitted hit id. */
   workOfHit: Map<string, string>;
-  /** Tokens of every emitted Work, for a cursor that leaves this window. */
+  /** Tokens of emitted Works and the cursor Work, for a window move. */
   workTokens: string[];
 };
 
@@ -136,7 +121,7 @@ export const collapseLegislationHitsByWork = ({
 }: CollapseLegislationHitsByWorkOptions): CollapsedLegislationHits => {
   const isExcluded = (work: string): boolean =>
     work === excludedWork ||
-    (excludedWorkTokens?.has(legislationWorkToken(work)) ?? false);
+    (excludedWorkTokens?.has(corpusSearchGroupToken(work)) ?? false);
 
   const bestByWork = new Map<string, RankedHit>();
   for (const hit of ranked) {
@@ -189,8 +174,11 @@ export const collapseLegislationHitsByWork = ({
   return {
     ranked: out,
     workOfHit,
-    workTokens: [...new Set(workOfHit.values())].map((work) =>
-      legislationWorkToken(work),
-    ),
+    workTokens: [
+      ...new Set([
+        ...workOfHit.values(),
+        ...(excludedWork === null ? [] : [excludedWork]),
+      ]),
+    ].map((work) => corpusSearchGroupToken(work)),
   };
 };

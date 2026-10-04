@@ -31,7 +31,14 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  actionAdmissionRefusal,
+  type ActionAdmissionError,
+} from "@/api/lib/rate-limit/action-admission";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -280,9 +287,10 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [activeWorkspaceId],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
@@ -419,6 +427,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
         externalMcpToolsLoader:
           externalMcpToolsModule.createLazyExternalMcpToolsLoader(async () => {
@@ -431,6 +440,7 @@ describe("send message disconnect handling", () => {
           return Result.ok(undefined);
         },
         safeDb,
+        scopedDb: createScopedDbMock({}).scopedDb,
         threadId,
         userId,
         workspaceId: activeWorkspaceId,
@@ -811,7 +821,9 @@ describe("send message disconnect handling", () => {
         table === chatTurns
           ? {
               onConflictDoNothing: () => ({
-                returning: async () => [{ id: turnId }],
+                returning: async () => [
+                  { id: turnId, cancelRequestedAt: null },
+                ],
               }),
             }
           : undefined,
@@ -829,7 +841,9 @@ describe("send message disconnect handling", () => {
             turnClaimed = true;
           }
           return {
-            where: () => ({ returning: async () => [{ id: turnId }] }),
+            where: () => ({
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            }),
           };
         }
         return { where: async () => undefined };
@@ -930,7 +944,7 @@ describe("send message disconnect handling", () => {
         acceptanceTransaction = safeDbTransaction;
         return {
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: turnId }],
+            returning: async () => [{ id: turnId, cancelRequestedAt: null }],
           }),
         };
       },
@@ -948,7 +962,9 @@ describe("send message disconnect handling", () => {
             claimTransaction = safeDbTransaction;
           }
           return {
-            where: () => ({ returning: async () => [{ id: turnId }] }),
+            where: () => ({
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            }),
           };
         }
         return { where: async () => undefined };
@@ -1031,7 +1047,7 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId }],
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
             }),
           };
         }
@@ -1044,7 +1060,9 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           turnUpdates.push(values);
           return {
-            where: () => ({ returning: async () => [{ id: turnId }] }),
+            where: () => ({
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            }),
           };
         }
         return { where: async () => undefined };
@@ -1139,7 +1157,9 @@ describe("send message disconnect handling", () => {
         table === chatTurns
           ? {
               onConflictDoNothing: () => ({
-                returning: async () => [{ id: turnId }],
+                returning: async () => [
+                  { id: turnId, cancelRequestedAt: null },
+                ],
               }),
             }
           : undefined,
@@ -1149,7 +1169,9 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           turnUpdates.push(values);
           return {
-            where: () => ({ returning: async () => [{ id: turnId }] }),
+            where: () => ({
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            }),
           };
         }
         return { where: async () => undefined };
@@ -1218,11 +1240,225 @@ describe("send message disconnect handling", () => {
     );
   });
 
+  const refusalReasons = {
+    busy: "busy",
+    period_exhausted: "period_exhausted",
+    daily_exhausted: "daily_exhausted",
+    not_enabled: "not_enabled",
+    unavailable: "unavailable",
+  } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
+  for (const reason of Object.values(refusalReasons)) {
+    for (const phase of ["period", "context", "dispatch"] as const) {
+      test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
+        const refusal = actionAdmissionRefusal(
+          actionAdmissionErrorFor(reason, "Admission refused"),
+        );
+        const admission = new AbortController();
+        const loseAdmission = () =>
+          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
+        const turnUpdates: unknown[] = [];
+        const selectWithThreadLock = () => ({
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+            where: () => ({
+              for: async () => [{ id: threadId }],
+              limit: async () => [],
+              orderBy: emptyOrderedRows,
+            }),
+          }),
+        });
+        const insert = (table: unknown) => ({
+          values: () =>
+            table === chatTurns
+              ? {
+                  onConflictDoNothing: () => ({
+                    returning: async () => [
+                      { id: turnId, cancelRequestedAt: null },
+                    ],
+                  }),
+                }
+              : undefined,
+        });
+        const update = (table: unknown) => ({
+          set: (values: unknown) => {
+            if (table === chatTurns) {
+              turnUpdates.push(values);
+              if (
+                phase === "dispatch" &&
+                typeof values === "object" &&
+                values !== null &&
+                "leaseExpiresAt" in values &&
+                "runId" in values
+              ) {
+                loseAdmission();
+              }
+              return {
+                where: () => ({
+                  returning: async () => [
+                    { id: turnId, cancelRequestedAt: null },
+                  ],
+                }),
+              };
+            }
+            return { where: async () => undefined };
+          },
+        });
+        const lookup = mock(async (statement: SQL) => {
+          expect(new PgDialect().sqlToQuery(statement).sql).toContain(
+            "chat_turn_run_id_taken",
+          );
+          return { rows: [{ taken: false }] };
+        });
+        compactMessagesForContextMock.mockClear();
+        loadExternalMcpToolsForUserMock.mockClear();
+
+        let acquisitions = 0;
+        let releases = 0;
+        const insertedMessages: unknown[] = [];
+        const loadTools = mock(async () => {
+          if (phase === "context") {
+            loseAdmission();
+          }
+          const close = async () => undefined;
+          return {
+            close,
+            connectors: [],
+            source: externalMcpToolsModule.createStellaMcpToolSource({
+              closeClients: close,
+              sourceTools: {},
+            }),
+            tools: {},
+          };
+        });
+        const refusedSend = createSendMessage({
+          compactMessagesForContext: compactMessagesForContextMock,
+          createRefRegistry: createChatRefRegistry,
+          indexThread: upsertChatThreadSearchDocumentMock,
+          loadExternalMcpTools: loadTools,
+          loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+          rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+          streamResponse: streamChat,
+          uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+          startAdmission: async (options) => {
+            expect(options.mode).toBe("concurrency-only");
+            acquisitions += 1;
+            return Result.ok({
+              signal: admission.signal,
+              release: async () => {
+                releases += 1;
+              },
+              reservePeriod: async (identity: AdmittedActionIdentity) => {
+                expect(turnUpdates).toContainEqual({ runId: "run-test" });
+                expect(identity).toEqual({
+                  actionKind: "chat.send",
+                  logicalPhaseId: JSON.stringify([turnId, "run-test"]),
+                });
+                if (phase !== "period") {
+                  return Result.ok(undefined);
+                }
+                return Result.err(
+                  new HandlerError({
+                    ...refusal,
+                  }),
+                );
+              },
+            });
+          },
+        });
+        const result = await refusedSend.handler(
+          createContext({
+            contextMatterIds: [],
+            transaction: {
+              execute: lookup,
+              insert: withRunLogInsert((table) => {
+                const original = insert(table);
+                return {
+                  values: (values: unknown) => {
+                    if (table === chatMessages) {
+                      insertedMessages.push(values);
+                    }
+                    return original.values();
+                  },
+                };
+              }),
+              query: {
+                chatMessages: { findFirst: async () => null },
+                chatThreadCompactions: { findFirst: async () => null },
+                chatThreads: {
+                  findFirst: async () => ({
+                    chatModel: null,
+                    contextMatterIds: [],
+                    dataWorkspaceIds: [],
+                    id: threadId,
+                    messages: [],
+                    rollbackToken: null,
+                    title: "Existing thread",
+                    webSearchEnabled: false,
+                    workspaceId: null,
+                  }),
+                },
+                chatTurns: {
+                  findFirst: async ({
+                    where,
+                  }: {
+                    where?: { status?: { eq?: string } };
+                  }) =>
+                    where?.status?.eq === "running"
+                      ? undefined
+                      : { id: turnId },
+                },
+                organizationSettings: { findFirst: async () => null },
+              },
+              select: withThreadNameReads(selectWithThreadLock),
+              update: withRunLogUpdate(update),
+            },
+          }),
+        );
+
+        expect(result).toEqual({
+          code: refusal.status,
+          response: {
+            message: refusal.message,
+            code: refusal.code,
+            retryable: refusal.retryable,
+            hint: refusal.hint,
+            ...(refusal.contactUrl === undefined
+              ? {}
+              : { contactUrl: refusal.contactUrl }),
+          },
+        });
+        expect(acquisitions).toBe(1);
+        expect(releases).toBe(1);
+        expect(insertedMessages).toHaveLength(2);
+        const stored = structuredClone(insertedMessages).flat();
+        expect(stored).toContainEqual(
+          expect.objectContaining({
+            role: "assistant",
+            content: expect.objectContaining({
+              metadata: expect.objectContaining({
+                turnOutcome: { type: "failed", error: "unknown", refusal },
+              }),
+            }),
+          }),
+        );
+        expect(lookup).toHaveBeenCalledTimes(1);
+        expect(loadTools).toHaveBeenCalledTimes(phase === "period" ? 0 : 1);
+        expect(turnUpdates).toContainEqual(
+          expect.objectContaining({
+            failureCode: "boundary-refusal",
+            failureRetryable: false,
+            status: "failed",
+          }),
+        );
+      });
+    }
+  }
+
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
       onConflictDoNothing: () => ({
-        returning: async () => [{ id: turnId }],
+        returning: async () => [{ id: turnId, cancelRequestedAt: null }],
       }),
     }));
     const updateWhere = mock(async () => {
@@ -1291,7 +1527,11 @@ describe("send message disconnect handling", () => {
             if (table === chatTurns) {
               return {
                 set: () => ({
-                  where: () => ({ returning: async () => [{ id: turnId }] }),
+                  where: () => ({
+                    returning: async () => [
+                      { id: turnId, cancelRequestedAt: null },
+                    ],
+                  }),
                 }),
               };
             }
@@ -1500,9 +1740,12 @@ describe("assistant turn settlement", () => {
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
-      return new Response("", {
-        headers: { "content-type": "text/event-stream" },
-      });
+      return {
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      } as const;
     });
     const send = createSendMessage({
       compactMessagesForContext: compactMessagesForContextMock,
@@ -1531,7 +1774,7 @@ describe("assistant turn settlement", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId }],
+              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
             }),
           };
         }
@@ -1609,7 +1852,7 @@ describe("assistant turn settlement", () => {
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (
-    settle: Promise<void> | void,
+    settle: Promise<unknown>,
   ): Promise<unknown> => {
     const settled = await Result.tryPromise({
       try: async () => await settle,

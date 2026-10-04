@@ -12,11 +12,18 @@
 // cacheable Turbo root task. Inconsistent affected-workspace output still
 // fails safe to the full check.
 
-import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { panic, Result, TaggedError } from "better-result";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
+import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+  type CodeCheckLeg,
+} from "../packages/scripts/src/code-quality-partition";
 import { isChangedLintPath } from "./lint-paths";
+import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
   isResultConventionSourceFile,
@@ -25,50 +32,6 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
-const RESULT_BOUNDARY_BASELINE_PATH = path.join(
-  REPO_ROOT,
-  "scripts/ratchet-baseline.json",
-);
-const RESULT_BOUNDARY_METRICS = [
-  "throw-outside-boundary",
-  "try-catch-outside-boundary",
-] as const;
-
-type JsonRecord = Record<string, unknown>;
-
-const isJsonRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * Files already tracked by the result ratchet carry deliberate legacy debt.
- * The ratchet rejects any increase; running the strict lint over those files
- * rejects every existing violation as well, so a change unrelated to that
- * debt cannot pass the affected-file gate. Keep the two guards monotone by
- * linting only files with no baseline entry here.
- */
-const readResultBoundaryBaselineFiles = (): ReadonlySet<string> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(RESULT_BOUNDARY_BASELINE_PATH, "utf-8"),
-  );
-  if (!isJsonRecord(parsed)) {
-    panic("result-boundary ratchet baseline must be an object");
-  }
-
-  const files = new Set<string>();
-  for (const metric of RESULT_BOUNDARY_METRICS) {
-    const snapshot = parsed[metric];
-    if (!isJsonRecord(snapshot) || !isJsonRecord(snapshot["files"])) {
-      panic(`result-boundary ratchet baseline is missing ${metric}.files`);
-    }
-    for (const file of Object.keys(snapshot["files"])) {
-      files.add(file);
-    }
-  }
-  return files;
-};
-
-const RESULT_BOUNDARY_BASELINE_FILES = readResultBoundaryBaselineFiles();
-
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
   "$TURBO_ROOT$/bun.lock",
@@ -105,9 +68,14 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+  "$TURBO_ROOT$/scripts/derived-attributes.ts",
+  "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+  "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -338,12 +306,23 @@ export const planCheck = ({
 
 type CheckScope = { type: "all" } | { type: "affected"; base: string };
 
+export const codeCheckExclusions = (
+  workspaces: ReadonlySet<string>,
+  leg: CodeCheckLeg,
+): string[] =>
+  [...workspaces]
+    .filter((workspace) => !ownsCodeCheckPath(workspace, leg))
+    .toSorted()
+    .map((workspace) => `--filter=!./${workspace}`);
+
 type Options = {
+  leg?: CodeCheckLeg;
   scope: CheckScope;
   dryRun: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
+  let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
   let all = false;
   let dryRun = false;
@@ -356,6 +335,14 @@ const parseArgs = (args: readonly string[]): Options => {
     }
     if (argument === "--all") {
       all = true;
+      continue;
+    }
+    if (argument === "--leg") {
+      const value = argv.next().value;
+      leg = CODE_CHECK_LEGS.find((candidate) => candidate === value);
+      if (leg === undefined) {
+        panic("--leg requires api, web or rest");
+      }
       continue;
     }
     if (argument === "--base") {
@@ -373,6 +360,7 @@ const parseArgs = (args: readonly string[]): Options => {
     panic("--all checks every tracked file and takes no --base");
   }
   return {
+    ...(leg === undefined ? {} : { leg }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
@@ -380,24 +368,246 @@ const parseArgs = (args: readonly string[]): Options => {
   };
 };
 
-const run = (
+export class CommandFailedError extends TaggedError("CommandFailedError")<{
+  message: string;
+  command: readonly string[];
+  exitCode: number;
+  output: string;
+}> {}
+
+type CommandFailure = {
+  command: readonly string[];
+  exitCode: number;
+  output: string;
+};
+
+const commandFailed = (failure: CommandFailure): CommandFailedError =>
+  new CommandFailedError({
+    message: `Command failed (${failure.exitCode}): ${failure.command.join(" ")}`,
+    ...failure,
+  });
+
+const capture = (
   command: readonly string[],
-  options: { capture?: boolean; env?: Record<string, string | undefined> } = {},
-): string => {
-  const capture = options.capture ?? false;
+  env?: Record<string, string | undefined>,
+): Result<string, CommandFailedError> => {
   const result = Bun.spawnSync([...command], {
     cwd: REPO_ROOT,
-    ...(options.env === undefined ? {} : { env: options.env }),
-    stdout: capture ? "pipe" : "inherit",
-    stderr: capture ? "pipe" : "inherit",
+    ...(env === undefined ? {} : { env }),
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  const stdout = result.stdout?.toString() ?? "";
-  const stderr = result.stderr?.toString() ?? "";
+  const stdout = result.stdout.toString();
   if (result.exitCode !== 0) {
-    const output = capture ? `\n${stderr}${stdout}` : "";
-    panic(`Command failed (${result.exitCode}): ${command.join(" ")}${output}`);
+    return Result.err(
+      commandFailed({
+        command,
+        exitCode: result.exitCode,
+        output: `${stdout}\n${result.stderr.toString()}`,
+      }),
+    );
   }
-  return stdout;
+  return Result.ok(stdout);
+};
+
+const tee = async (
+  stream: ReadableStream<Uint8Array>,
+  sink: NodeJS.WriteStream,
+): Promise<string> => {
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  for await (const chunk of stream) {
+    sink.write(chunk);
+    chunks.push(decoder.decode(chunk, { stream: true }));
+  }
+  chunks.push(decoder.decode());
+  return chunks.join("");
+};
+
+// Streams the check's output live and keeps a copy, so a failure can be
+// summarized from the failed task's own lines.
+const runCheck = async (
+  command: readonly string[],
+): Promise<Result<void, CommandFailedError>> => {
+  const child = Bun.spawn([...command], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    tee(child.stdout, process.stdout),
+    tee(child.stderr, process.stderr),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    return Result.err(
+      commandFailed({ command, exitCode, output: `${stdout}\n${stderr}` }),
+    );
+  }
+  return Result.ok();
+};
+
+type FailedTask = { task: string; errors: string[] };
+
+type CheckFailureSummary = {
+  command: string;
+  exitCode: number;
+  tasks: FailedTask[];
+};
+
+const TURBO_FAILED_TASKS = /^\s*Failed:\s+(?<tasks>\S.*)$/u;
+const TURBO_RUN_SUMMARY = /^\s*Tasks:\s+\d+ successful/u;
+const GROUP_START = /^::group::(?<task>.+)$/u;
+const GROUP_END = "::endgroup::";
+const STACK_FRAME = /^\s*at\s|node_modules\/|\.bun\/install\/cache\//u;
+const EXIT_NOISE = /exited \(\d+\)|exited with code \d+/u;
+const ERROR_LINE =
+  /error TS\d+|^::error\b|^##\[error\]|^\s*[x×!] [\w@/.-]+\([\w@/.-]+\): |^\s*,-\[[^\]]+\]$|^error\b|^Found \d+ warnings? and \d+ errors?/u;
+const ANNOTATION = /^::error(?: (?<properties>[^:]*))?::(?<message>.*)$/u;
+const ANNOTATION_TITLE = /(?:^|,)title=(?<title>[^,]*)/u;
+const MAX_ERROR_LINES = 20;
+const FALLBACK_TAIL_LINES = 10;
+
+const decodeAnnotation = (value: string): string =>
+  value
+    .replaceAll("%2C", ",")
+    .replaceAll("%3A", ":")
+    .replaceAll("%0A", " ")
+    .replaceAll("%0D", "")
+    .replaceAll("%25", "%");
+
+// A tool's own GitHub annotation reads as "title: message" in the summary.
+const readableErrorLine = (line: string): string => {
+  const annotation = ANNOTATION.exec(line)?.groups;
+  if (annotation === undefined) {
+    return line.trim();
+  }
+  const message = decodeAnnotation(annotation["message"] ?? "");
+  const title = ANNOTATION_TITLE.exec(annotation["properties"] ?? "")?.groups?.[
+    "title"
+  ];
+  return title === undefined
+    ? message
+    : `${decodeAnnotation(title)}: ${message}`;
+};
+
+const errorLines = (lines: readonly string[]): string[] => {
+  const meaningful = lines.filter(
+    (line) =>
+      line.trim() !== "" && !STACK_FRAME.test(line) && !EXIT_NOISE.test(line),
+  );
+  const matched = meaningful.filter((line) => ERROR_LINE.test(line));
+  const picked = (
+    matched.length > 0 ? matched : meaningful.slice(-FALLBACK_TAIL_LINES)
+  ).map(readableErrorLine);
+  if (picked.length <= MAX_ERROR_LINES) {
+    return picked;
+  }
+  return [
+    ...picked.slice(0, MAX_ERROR_LINES),
+    `... ${picked.length - MAX_ERROR_LINES} more error lines above`,
+  ];
+};
+
+/**
+ * Names each failed Turbo task with its own error lines. Turbo prefixes task
+ * output with `<package>:<task>: ` locally and puts it under a task header on
+ * GitHub Actions; both shapes attribute lines to a task. A command that is not
+ * a Turbo run is its own single task.
+ */
+export const summarizeCheckFailure = ({
+  command,
+  exitCode,
+  output,
+}: CommandFailedError): CheckFailureSummary => {
+  const commandText = command.join(" ");
+  const lines = stripVTControlCharacters(output).split(/\r?\n/u);
+  const failedTasks = lines.flatMap(
+    (line) =>
+      TURBO_FAILED_TASKS.exec(line)
+        ?.groups?.["tasks"]?.split(",")
+        .map((task) => task.trim())
+        .filter(Boolean) ?? [],
+  );
+  if (failedTasks.length === 0) {
+    return {
+      command: commandText,
+      exitCode,
+      tasks: [{ task: commandText, errors: errorLines(lines) }],
+    };
+  }
+
+  // Turbo reports `<package>#<task>` but labels output `<package>:<task>`.
+  const taskByLabel = new Map(
+    failedTasks.map((task) => [task.replace("#", ":"), task]),
+  );
+  const taskLines = new Map<string, string[]>();
+  for (const task of failedTasks) {
+    taskLines.set(task, []);
+  }
+  let current: string | undefined;
+  for (const line of lines) {
+    if (line === GROUP_END || TURBO_RUN_SUMMARY.test(line)) {
+      current = undefined;
+      continue;
+    }
+    const header = GROUP_START.exec(line)?.groups?.["task"] ?? line.trim();
+    if (taskByLabel.has(header) || GROUP_START.test(line)) {
+      current = taskByLabel.get(header);
+      continue;
+    }
+    const prefixed = [...taskByLabel].find(([label]) =>
+      line.startsWith(`${label}:`),
+    );
+    if (prefixed !== undefined) {
+      const [label, task] = prefixed;
+      taskLines.get(task)?.push(line.slice(label.length + 1).trimStart());
+      continue;
+    }
+    if (current !== undefined) {
+      taskLines.get(current)?.push(line);
+    }
+  }
+  return {
+    command: commandText,
+    exitCode,
+    tasks: failedTasks.map((task) => ({
+      task,
+      errors: errorLines(taskLines.get(task) ?? []),
+    })),
+  };
+};
+
+const escapeAnnotationData = (value: string): string =>
+  value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+const escapeAnnotationProperty = (value: string): string =>
+  escapeAnnotationData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
+
+type FormatCheckFailureOptions = {
+  summary: CheckFailureSummary;
+  annotations: boolean;
+};
+
+export const formatCheckFailure = ({
+  summary,
+  annotations,
+}: FormatCheckFailureOptions): string => {
+  const lines = [
+    "",
+    `code-check: failed (exit ${summary.exitCode}): ${summary.command}`,
+  ];
+  for (const { task, errors } of summary.tasks) {
+    lines.push(`  ${task}`, ...errors.map((error) => `    ${error}`));
+  }
+  if (annotations) {
+    for (const { task, errors } of summary.tasks) {
+      lines.push(
+        `::error title=${escapeAnnotationProperty(`code-check: ${task} failed`)}::${escapeAnnotationData(errors.join("\n"))}`,
+      );
+    }
+  }
+  return `${lines.join("\n")}\n`;
 };
 
 const workspacePaths = (): Set<string> => {
@@ -418,28 +628,31 @@ const workspacePaths = (): Set<string> => {
   return workspaces;
 };
 
-const repositoryPaths = (): string[] =>
-  run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
-    capture: true,
-  })
-    .split("\0")
-    .filter(Boolean);
+const repositoryPaths = (): Result<string[], CommandFailedError> =>
+  capture([
+    "git",
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ]).map((output) => output.split("\0").filter(Boolean));
 
-const changedPaths = (base: string): { mergeBase: string; paths: string[] } => {
-  const mergeBase = run(["git", "merge-base", base, "HEAD"], {
-    capture: true,
-  }).trim();
-  if (mergeBase === "") {
-    panic(`Could not find merge base for ${base}`);
-  }
-  const output = run(["git", "diff", "--name-only", "-z", mergeBase, "HEAD"], {
-    capture: true,
+type ChangedPaths = { mergeBase: string; paths: string[] };
+
+const changedPaths = (base: string): Result<ChangedPaths, CommandFailedError> =>
+  capture(["git", "merge-base", base, "HEAD"]).andThen((output) => {
+    const mergeBase = output.trim();
+    if (mergeBase === "") {
+      panic(`Could not find merge base for ${base}`);
+    }
+    return capture(["git", "diff", "--name-only", "-z", mergeBase, "HEAD"]).map(
+      (diff) => ({
+        mergeBase,
+        paths: diff.split("\0").filter(Boolean),
+      }),
+    );
   });
-  return {
-    mergeBase,
-    paths: output.split("\0").filter(Boolean),
-  };
-};
 
 type TurboOutput = {
   packages?: {
@@ -447,18 +660,16 @@ type TurboOutput = {
   };
 };
 
-const affectedWorkspacePaths = (mergeBase: string): string[] => {
-  const output = run(
-    ["bun", "--bun", "turbo", "ls", "--affected", "--output=json"],
-    {
-      capture: true,
-      env: {
-        ...process.env,
-        TURBO_SCM_BASE: mergeBase,
-        TURBO_SCM_HEAD: "HEAD",
-      },
-    },
-  );
+const affectedWorkspacePaths = (
+  mergeBase: string,
+): Result<string[], CommandFailedError> =>
+  capture(["bun", "--bun", "turbo", "ls", "--affected", "--output=json"], {
+    ...process.env,
+    TURBO_SCM_BASE: mergeBase,
+    TURBO_SCM_HEAD: "HEAD",
+  }).map(parseAffectedWorkspacePaths);
+
+const parseAffectedWorkspacePaths = (output: string): string[] => {
   const jsonStart = output.indexOf("{");
   if (jsonStart === -1) {
     panic("Turbo affected output did not contain JSON");
@@ -506,11 +717,12 @@ const hasTargets = (scope: TaskScope): boolean =>
 
 export const resultBoundaryLintCommand = (
   changedFiles: readonly string[],
+  debtFiles: ReadonlySet<string>,
 ): string[] | null => {
   const paths = [...new Set(changedFiles)]
     .filter(isResultConventionSourceFile)
     .filter((file) => !isResultConventionExcludedFile(file))
-    .filter((file) => !RESULT_BOUNDARY_BASELINE_FILES.has(file))
+    .filter((file) => !debtFiles.has(file))
     .toSorted();
   if (paths.length === 0) {
     return null;
@@ -526,7 +738,63 @@ export const resultBoundaryLintCommand = (
   ];
 };
 
-export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
+type PlanResultBoundaryLintOptions = {
+  files: readonly string[];
+  mergeBase: string | null;
+  resolveMergeBase: () => string | null;
+  measureDebt: (base: string) => ReadonlySet<string>;
+  report: (message: string) => void;
+};
+
+export const planResultBoundaryLint = ({
+  files,
+  mergeBase,
+  resolveMergeBase,
+  measureDebt,
+  report,
+}: PlanResultBoundaryLintOptions): string[] | null => {
+  const candidates = files
+    .filter(isResultConventionSourceFile)
+    .filter((file) => !isResultConventionExcludedFile(file));
+  if (candidates.length === 0) {
+    return null;
+  }
+  const base = mergeBase ?? resolveMergeBase();
+  if (base === null) {
+    report(
+      `code-check: skipping exact result boundary lint; no merge base for ${DEFAULT_BASE} (normal lint checks still run)\n`,
+    );
+    return null;
+  }
+  return resultBoundaryLintCommand(candidates, measureDebt(base));
+};
+
+type ScopedCommandsOptions = {
+  leg: CodeCheckLeg;
+  workspaces: ReadonlySet<string>;
+};
+
+export const scopedCommands = (
+  plan: ScopedCheckPlan,
+  partition?: ScopedCommandsOptions,
+): string[][] => {
+  if (partition !== undefined) {
+    const ownsRoot = partition.leg === "rest";
+    const commands = scopedCommands({
+      type: "scoped",
+      lint: plan.lint,
+      typecheck: plan.typecheck,
+      rootLintPaths: ownsRoot ? plan.rootLintPaths : [],
+      rootChecks: ownsRoot ? plan.rootChecks : [],
+    });
+    return commands.map((command) =>
+      command[2] === "turbo" && !command.includes("typecheck:repo")
+        ? command.concat(
+            codeCheckExclusions(partition.workspaces, partition.leg),
+          )
+        : command,
+    );
+  }
   const commands: string[][] = [];
   const rootChecks = new Set(plan.rootChecks);
   if (rootChecks.has(ROOT_CHECKS.env)) {
@@ -551,6 +819,11 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
     commands.push(["bash", "scripts/lint-root-scripts.sh"]);
   }
   if (plan.rootLintPaths.length > 0) {
+    if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
+      commands.push(["bun", "run", "generate"]);
+      commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
+    }
     commands.push([
       "bun",
       "--bun",
@@ -627,32 +900,45 @@ export const planFullCheck = ({
 const presentPaths = (paths: readonly string[]): string[] =>
   paths.filter((file) => existsSync(path.join(REPO_ROOT, file)));
 
-type ScopeCheck = { plan: CheckPlan; presentChangedPaths: string[] };
+type ScopeCheck = {
+  plan: CheckPlan;
+  presentChangedPaths: string[];
+  mergeBase: string | null;
+};
 
-const planScope = (scope: CheckScope): ScopeCheck => {
+const planScope = (
+  scope: CheckScope,
+): Result<ScopeCheck, CommandFailedError> => {
   switch (scope.type) {
     case "all": {
-      const files = presentPaths(repositoryPaths());
-      return {
-        plan: planFullCheck({
-          files,
-          workspacePaths: workspacePaths(),
-        }),
-        presentChangedPaths: files,
-      };
+      return repositoryPaths().map((paths) => {
+        const files = presentPaths(paths);
+        return {
+          plan: planFullCheck({
+            files,
+            workspacePaths: workspacePaths(),
+          }),
+          presentChangedPaths: files,
+          mergeBase: null,
+        };
+      });
     }
     case "affected": {
-      const changed = changedPaths(scope.base);
-      const presentChangedPaths = presentPaths(changed.paths);
-      return {
-        plan: planCheck({
-          changedPaths: changed.paths,
-          presentChangedPaths,
-          affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
-          workspacePaths: workspacePaths(),
+      return changedPaths(scope.base).andThen((changed) =>
+        affectedWorkspacePaths(changed.mergeBase).map((affected) => {
+          const presentChangedPaths = presentPaths(changed.paths);
+          return {
+            plan: planCheck({
+              changedPaths: changed.paths,
+              presentChangedPaths,
+              affectedWorkspacePaths: affected,
+              workspacePaths: workspacePaths(),
+            }),
+            presentChangedPaths,
+            mergeBase: changed.mergeBase,
+          };
         }),
-        presentChangedPaths,
-      };
+      );
     }
     default: {
       scope satisfies never;
@@ -661,16 +947,93 @@ const planScope = (scope: CheckScope): ScopeCheck => {
   }
 };
 
-const main = () => {
+// The full-repository fallback is another code-check run, which prints its
+// own failure summary.
+class DelegatedCheckFailedError extends TaggedError(
+  "DelegatedCheckFailedError",
+)<{
+  message: string;
+  exitCode: number;
+}> {}
+
+type CodeCheckError = CommandFailedError | DelegatedCheckFailedError;
+
+const runFullFallback = (
+  leg: CodeCheckLeg | undefined,
+): Result<void, DelegatedCheckFailedError> => {
+  const command = [
+    "bun",
+    "run",
+    "code-check",
+    ...(leg === undefined ? [] : ["--leg", leg]),
+  ];
+  const { exitCode } = Bun.spawnSync(command, {
+    cwd: REPO_ROOT,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (exitCode !== 0) {
+    return Result.err(
+      new DelegatedCheckFailedError({
+        message: `Command failed (${exitCode}): ${command.join(" ")}`,
+        exitCode,
+      }),
+    );
+  }
+  return Result.ok();
+};
+
+const main = async (): Promise<Result<void, CodeCheckError>> => {
   const options = parseArgs(process.argv.slice(2));
-  const { plan, presentChangedPaths } = planScope(options.scope);
-  const resultBoundaryCommand = resultBoundaryLintCommand(presentChangedPaths);
+  const scoped = planScope(options.scope);
+  if (scoped.isErr()) {
+    return scoped;
+  }
+  const { plan, presentChangedPaths, mergeBase } = scoped.value;
+  const leg = options.leg;
+  const resultBoundaryCommand = planResultBoundaryLint({
+    files:
+      leg === undefined
+        ? presentChangedPaths
+        : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
+    mergeBase,
+    resolveMergeBase: () => {
+      const git = (args: string[]) =>
+        Bun.spawnSync(["git", ...args], {
+          cwd: REPO_ROOT,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      // Only a missing comparison ref means "no base"; any other Git failure
+      // is surfaced rather than silently skipping the exact lint.
+      if (
+        git(["rev-parse", "--verify", "--quiet", `${DEFAULT_BASE}^{commit}`])
+          .exitCode !== 0
+      ) {
+        return null;
+      }
+      const result = git(["merge-base", DEFAULT_BASE, "HEAD"]);
+      const base = result.stdout.toString().trim();
+      return result.exitCode === 0 && base !== ""
+        ? base
+        : panic(
+            `git merge-base ${DEFAULT_BASE} HEAD failed: ${result.stderr.toString().trim()}`,
+          );
+    },
+    measureDebt: measureResultBoundaryDebt,
+    report: (message) => {
+      process.stdout.write(message);
+    },
+  });
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
     if (options.dryRun) {
       process.stdout.write(`  ${resultBoundaryCommand.join(" ")}\n`);
     } else {
-      run(resultBoundaryCommand);
+      const boundaryLint = await runCheck(resultBoundaryCommand);
+      if (boundaryLint.isErr()) {
+        return boundaryLint;
+      }
     }
   }
 
@@ -678,10 +1041,7 @@ const main = () => {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
-    if (!options.dryRun) {
-      run(["bun", "run", "code-check"]);
-    }
-    return;
+    return options.dryRun ? Result.ok() : runFullFallback(leg);
   }
 
   const scopeLabel = (scope: TaskScope): string => {
@@ -696,18 +1056,60 @@ const main = () => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
-  const commands = scopedCommands(plan);
+  const commands = scopedCommands(
+    plan,
+    leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+  );
   if (options.dryRun) {
     for (const command of commands) {
       process.stdout.write(`  ${command.join(" ")}\n`);
     }
-    return;
+    return Result.ok();
   }
   for (const command of commands) {
-    run(command);
+    const check = await runCheck(command);
+    if (check.isErr()) {
+      return check;
+    }
   }
+  return Result.ok();
 };
 
+/**
+ * A failed check must never exit 0: a signal-terminated child can report a
+ * missing or zero code, which would turn the failure into a pass.
+ */
+export const failureExitCode = (code: number | null | undefined) =>
+  code !== null &&
+  code !== undefined &&
+  Number.isInteger(code) &&
+  code > 0 &&
+  code < 256
+    ? code
+    : 1;
+
 if (import.meta.main) {
-  main();
+  const result = await main();
+  if (result.isErr()) {
+    const error = result.error;
+    switch (error._tag) {
+      case "CommandFailedError": {
+        process.stdout.write(
+          formatCheckFailure({
+            summary: summarizeCheckFailure(error),
+            annotations: process.env["GITHUB_ACTIONS"] === "true",
+          }),
+        );
+        break;
+      }
+      case "DelegatedCheckFailedError": {
+        break;
+      }
+      default: {
+        error satisfies never;
+        panic("unknown code-check failure");
+      }
+    }
+    process.exit(failureExitCode(error.exitCode));
+  }
 }

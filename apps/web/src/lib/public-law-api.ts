@@ -1,6 +1,7 @@
 import { TaggedError } from "better-result";
 
 import { parseApiErrorValue } from "@stll/api-contract";
+import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
 import { APIError, toAPIError } from "@/lib/errors/api";
 
@@ -23,7 +24,9 @@ export const SEARCH_UNAVAILABLE_STATUS = 503;
  * grades as retryable.
  */
 export const isSearchUnavailableError = (error: unknown): boolean =>
-  APIError.is(error) && error.status === SEARCH_UNAVAILABLE_STATUS;
+  APIError.is(error) &&
+  error.status === SEARCH_UNAVAILABLE_STATUS &&
+  error.code !== PUBLIC_COUNTRY_UNAVAILABLE_CODE;
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.

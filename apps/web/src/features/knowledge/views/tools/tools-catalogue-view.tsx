@@ -376,7 +376,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
           <>
             <div className="mb-1 flex items-center justify-between gap-3">
               <h2 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                {t("catalogue.sectionRecommended")}
+                {t("common.recommended")}
               </h2>
               {recommendedAction?.(recommendedFiltered)}
             </div>

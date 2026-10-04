@@ -79,12 +79,19 @@ test.describe("card sticky header", () => {
     await openFixture(page);
     // Read in the frame the row is first painted in: a measurement left to an
     // observer leaves this at the bare board offset, and every card's row
-    // spends that frame pinned where the action is about to be.
+    // spends that frame pinned where the action is about to be. The probe
+    // publishes from that frame's animation callback, after the virtualized
+    // row mounts, so the fixture's ready flag can precede it: wait on the
+    // probe's own signal.
+    await page.waitForFunction(
+      () =>
+        document.documentElement.dataset["kanbanCardStickyTopFirstLayout"] !==
+        undefined,
+    );
     const firstLayout = await page.evaluate(
       () => document.documentElement.dataset["kanbanCardStickyTopFirstLayout"],
     );
 
-    expect(firstLayout).toBeDefined();
     expect(pinnedAboveOf(firstLayout ?? "")).toBeGreaterThan(0);
     // And it is the action's own height, not some arbitrary offset.
     const actionHeight = await pinnedAction(page).evaluate(

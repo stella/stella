@@ -19,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import {
   authorizeSkillInstallScope,
   installSkill,
@@ -27,7 +28,7 @@ import { parseUploadedSkillPackage } from "@/api/lib/skills/skill-package";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 
 export type ValidateAgentSkillProps = {
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   scope: "team" | "private";
 };
 
@@ -54,7 +55,7 @@ export type FinalizeAgentSkillProps = {
   recordAuditEvent: AuditRecorder;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   scanned: ScannedFile;
   scope: "team" | "private";
   uploadId: SafeId<"pendingUpload">;

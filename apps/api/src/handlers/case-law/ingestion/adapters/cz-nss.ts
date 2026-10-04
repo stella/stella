@@ -1,5 +1,14 @@
+// parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -41,6 +50,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -55,15 +65,17 @@ import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  absentTextField,
   checkedDecisionMetadata,
   sourceTextField,
   splitStoredDecisionTextMetadata,
-  storeTextField,
 } from "@/api/lib/case-law/decision-text";
+import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -83,7 +95,8 @@ import { isRecord } from "@/api/lib/type-guards";
  * 3. Page 0 results are inline in the search response.
  *    Pages 1+ use POST /Home/MyResTRowsCont (AJAX pagination)
  *
- * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed.
+ * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed; JSON when
+ * checkpointing count retries or the earliest unsettled day.
  * A null cursor starts 30 days ago at page 0.
  *
  * The search is addressed by decision date and answers with the court's own
@@ -670,7 +683,7 @@ type CzNssSourceHashOptions = {
   sheetNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
-  legalSentence: string | undefined;
+  legalSentence: TextField;
 };
 
 /**
@@ -692,9 +705,9 @@ type CzNssSourceHashOptions = {
  * why: the court writes it when it selects an already published decision for
  * its collection, and edits it afterwards. Left out, a row stored before that
  * would be skipped as unchanged for good. It is appended only where the court
- * states one, so a decision that has none hashes exactly as it did and is not
- * rewritten for this. The replay hashes the value off the row's own metadata,
- * which is where the crawl put it, so the two agree.
+ * states text or a typed absence other than not_published. A genuinely missing
+ * headnote keeps its existing hash; a placeholder changes it so refresh writes
+ * the distinction. Crawl and replay hash the same classified value.
  */
 const czNssSourceHash = ({
   caseNumber,
@@ -708,9 +721,19 @@ const czNssSourceHash = ({
   const sheet = sheetNumber ?? carried;
   const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
   const base = `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`;
-  return hashContent(
-    legalSentence === undefined ? base : `${base}|${legalSentence}`,
-  );
+  switch (legalSentence.type) {
+    case TEXT_FIELD_TYPE.PRESENT:
+      return hashContent(JSON.stringify([base, legalSentence]));
+    case TEXT_FIELD_TYPE.ABSENT:
+      return hashContent(
+        legalSentence.reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
+          ? base
+          : JSON.stringify([base, legalSentence]),
+      );
+    default:
+      legalSentence satisfies never;
+      return panic(`Unhandled NSS sentence: ${String(legalSentence)}`);
+  }
 };
 
 /**
@@ -730,6 +753,7 @@ const fetchRichDocument = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -823,6 +847,7 @@ const fetchDecisionContent = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -1246,8 +1271,18 @@ export type CzNssDetailMetadata = {
   legalSentence: string | undefined;
 };
 
+type ExtractDivTextOptions = {
+  html: string;
+  divId: string;
+  emptyValue?: "preserve" | "omit";
+};
+
 /** Extract a div's value text by its ID, skipping the label span. */
-const extractDivText = (html: string, divId: string): string | undefined => {
+const extractDivText = ({
+  html,
+  divId,
+  emptyValue = "omit",
+}: ExtractDivTextOptions): string | undefined => {
   const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "iu");
   const match = html.match(pattern);
   if (!match?.[1]) {
@@ -1260,7 +1295,9 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     /class="det-textval[^"]*"[^>]*>(?<value>[\s\S]*?)<\/span>/giu;
   let valMatch: RegExpExecArray | null;
   const texts: string[] = [];
+  let statedValueCount = 0;
   while ((valMatch = valPattern.exec(match[1])) !== null) {
+    statedValueCount += 1;
     const text = stripHtml(valMatch.groups?.["value"] ?? "").trim();
     if (text) {
       texts.push(text);
@@ -1270,7 +1307,7 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     return texts.join(", ");
   }
 
-  return undefined;
+  return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
 };
 
 /**
@@ -1283,24 +1320,34 @@ const extractDivText = (html: string, divId: string): string | undefined => {
 export const parseCzNssDetailMetadata = (
   html: string,
 ): CzNssDetailMetadata => ({
-  ecli: extractDivText(html, "ecli"),
-  judge: extractDivText(html, "soudcezpravodaj"),
-  senate: extractDivText(html, "soudsenat"),
-  legalArea: extractDivText(html, "oblastupravy"),
-  decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-  decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-  outcome: extractDivText(html, "vyrokrozhodnuti"),
-  caseType: extractDivText(html, "typrizeni"),
-  parties: extractDivText(html, "ucastnicirizeniz"),
-  caseStatus: extractDivText(html, "stavrizeni"),
-  administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-  citation: extractDivText(html, "citace"),
+  ecli: extractDivText({ html, divId: "ecli" }),
+  judge: extractDivText({ html, divId: "soudcezpravodaj" }),
+  senate: extractDivText({ html, divId: "soudsenat" }),
+  legalArea: extractDivText({ html, divId: "oblastupravy" }),
+  decisionType: extractDivText({
+    html,
+    divId: "druhdokumentuavyrokrozhodnuti",
+  }),
+  decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
+  outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
+  caseType: extractDivText({ html, divId: "typrizeni" }),
+  parties: extractDivText({ html, divId: "ucastnicirizeniz" }),
+  caseStatus: extractDivText({ html, divId: "stavrizeni" }),
+  administrativeAuthority: extractDivText({
+    html,
+    divId: "nazevspravnihoorganu",
+  }),
+  citation: extractDivText({ html, divId: "citace" }),
   // The headnote the court writes for a decision it selects into its
   // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
   // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
   // and the field is on the detail page alone: neither document
   // endpoint carries it.
-  legalSentence: extractDivText(html, "pravnivetaupravena"),
+  legalSentence: extractDivText({
+    html,
+    divId: "pravnivetaupravena",
+    emptyValue: "preserve",
+  }),
 });
 
 /**
@@ -1355,28 +1402,37 @@ const readDetailPage = async (
   session: SessionState,
   signal: AbortSignal,
 ): Promise<DetailRead> => {
-  try {
-    const response = await fetchPublisher(
-      `${BASE_URL}/DokumentDetail/Index/${documentId}`,
-      {
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        signal,
-        headers: {
-          ...COMMON_HEADERS,
-          Cookie: session.cookies,
+  const attempt = await Result.tryPromise({
+    try: async () => {
+      const response = await fetchPublisher(
+        `${BASE_URL}/DokumentDetail/Index/${documentId}`,
+        {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.CZ_NSS,
+          signal,
+          headers: {
+            ...COMMON_HEADERS,
+            Cookie: session.cookies,
+          },
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         },
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      },
-    );
-    if (response.status === 404) {
-      return { type: "absent" };
-    }
-    if (!response.ok) {
-      return { type: "unavailable" };
-    }
+      );
+      if (response.status === 404) {
+        return { type: "absent" } as const satisfies DetailRead;
+      }
+      if (!response.ok) {
+        return { type: "unavailable" } as const satisfies DetailRead;
+      }
 
-    return { type: "read", html: await response.text() };
-  } catch (error) {
+      return {
+        type: "read",
+        html: await response.text(),
+      } as const satisfies DetailRead;
+    },
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(attempt)) {
+    const error = attempt.error;
     if (signal.aborted) {
       throw error;
     }
@@ -1386,6 +1442,7 @@ const readDetailPage = async (
     });
     return { type: "unavailable" };
   }
+  return attempt.value;
 };
 
 const fetchDetailMetadata = async (
@@ -1456,6 +1513,14 @@ const statedDetailMetadataFields = (
     ),
   );
 
+/** An explicitly blank NSS prose value is a publisher placeholder. */
+const czNssTextField = (raw: string | undefined) => {
+  if (raw?.trim().length === 0) {
+    return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
+  }
+  return sourceTextField(ADAPTER_KEYS.CZ_NSS, raw);
+};
+
 /** Convert a parsed row into an IngestionResult. */
 const rowToResult = ({
   content,
@@ -1464,6 +1529,7 @@ const rowToResult = ({
   row,
 }: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
+  const legalSentenceField = czNssTextField(detail.legalSentence);
   const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
     if (detail.decisionDate) {
@@ -1489,7 +1555,7 @@ const rowToResult = ({
     ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
   };
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: row.caseNumber,
     sheetNumber,
     ...(reporterIdentifiers === undefined
@@ -1520,7 +1586,7 @@ const rowToResult = ({
     documentUrl: row.documentUrl,
     textFields: {
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: sourceTextField(ADAPTER_KEYS.CZ_NSS, detail.legalSentence),
+      legalSentence: legalSentenceField,
     },
     metadata: checkedDecisionMetadata({
       caseNumber: row.caseNumber,
@@ -1540,7 +1606,7 @@ const rowToResult = ({
       sheetNumber,
       decisionDate,
       decisionType,
-      legalSentence: detail.legalSentence,
+      legalSentence: legalSentenceField,
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
@@ -1555,7 +1621,7 @@ const rowToResult = ({
           sourceRaw: encodeSourceRawEnvelope(rawParts),
           sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         }),
-  };
+  });
 };
 
 /**
@@ -1752,16 +1818,29 @@ const reparseStoredRaw = (
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
-  const statedLegalSentence = nonEmptyString(storedDetail?.legalSentence);
+  const textFields = { ...storedDecisionText.textFields };
+  // Only legacy text without a sidecar, or text already read as present, can
+  // be reclassified. A sidecar's absence (including quarantine) stays closed.
+  for (const key of DECISION_TEXT_FIELD_KEYS) {
+    const storedText = stored.metadata[key];
+    const field = textFields[key];
+    if (
+      typeof storedText === "string" &&
+      (field.type === TEXT_FIELD_TYPE.PRESENT ||
+        stored.metadata[DECISION_TEXT_ABSENCE_METADATA_KEY] === undefined)
+    ) {
+      textFields[key] = czNssTextField(storedText);
+    }
+  }
+  const statedLegalSentence = storedDetail?.legalSentence;
   const legalSentenceField =
     statedLegalSentence === undefined
-      ? storedDecisionText.textFields.legalSentence
-      : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
-  const legalSentence = storeTextField(legalSentenceField);
+      ? textFields.legalSentence
+      : czNssTextField(statedLegalSentence);
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
       sheetNumber,
       ...(reporterIdentifiers === undefined
@@ -1781,7 +1860,7 @@ const reparseStoredRaw = (
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
       textFields: {
-        ...storedDecisionText.textFields,
+        ...textFields,
         legalSentence: legalSentenceField,
       },
       // Written back rather than passed through: a legacy row states the
@@ -1807,7 +1886,7 @@ const reparseStoredRaw = (
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence,
+        legalSentence: legalSentenceField,
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: rebuilt.documentAst,
@@ -1815,7 +1894,7 @@ const reparseStoredRaw = (
       // a decision, it does not rewrite what the crawl fetched for it.
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "text/html",
-    },
+    }),
   };
 };
 
@@ -1849,6 +1928,7 @@ let cachedSession: {
 
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   const response = await fetchPublisher(BASE_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     signal,
     redirect: "follow",
@@ -1914,17 +1994,31 @@ const DATE_TO_FIELD =
   "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
   ".vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo";
 
-/**
- * What one day-filtered search answered with.
- *
- * `statedCount` is the court's own record count for the day and `null` where
- * the page states none — the difference between a day that holds nothing and a
- * page that is not a results page at all.
- */
-type SearchResult = {
-  html: string;
-  continuation: ListingContinuation | undefined;
-  statedCount: number | null;
+type SearchResult =
+  | {
+      type: "present";
+      html: string;
+      continuation: ListingContinuation;
+      statedCount: number;
+    }
+  | { type: "absent"; html: string; statedCount: 0 }
+  | { type: "missing-count"; error: AdapterFetchError }
+  | { type: "unavailable"; error: AdapterFetchError };
+
+/** Reconciliation refuses uncounted searches; the crawl bounds them before this boundary. */
+const requireSearchResult = (read: SearchResult) => {
+  switch (read.type) {
+    case "present":
+    case "absent":
+      return read;
+    case "missing-count":
+    case "unavailable":
+      invalidateSession();
+      throw read.error;
+    default:
+      read satisfies never;
+      return panic(`Unexpected NSS search read: ${JSON.stringify(read)}`);
+  }
 };
 
 /**
@@ -1950,6 +2044,7 @@ const executeSearch = async (
   formData.set(DATE_TO_FIELD, czDate);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -1965,13 +2060,15 @@ const executeSearch = async (
   });
 
   if (!response.ok) {
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS search failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: date,
-      httpStatus: response.status,
-    });
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `NSS search failed: ${response.status}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+        httpStatus: response.status,
+      }),
+    };
   }
 
   // Merge any new cookies (overwriting stale names)
@@ -1982,11 +2079,32 @@ const executeSearch = async (
 
   const html = await response.text();
 
-  return {
-    html,
-    continuation: extractContinuation(html),
-    statedCount: statedResultCount(html),
-  };
+  const statedCount = statedResultCount(html);
+  if (statedCount === null) {
+    return {
+      type: "missing-count",
+      error: new AdapterFetchError({
+        message: `NSS stated no result count for ${date}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+      }),
+    };
+  }
+  if (statedCount === 0) {
+    return { type: "absent", html, statedCount };
+  }
+  const continuation = extractContinuation(html);
+  if (continuation === undefined || continuation.conditions === "[]") {
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `NSS results for ${date} carried no pagination state`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+      }),
+    };
+  }
+  return { type: "present", html, continuation, statedCount };
 };
 
 type FetchResultPageOptions = {
@@ -2031,6 +2149,7 @@ const fetchResultPage = async ({
   formData.set("resultOrder", continuation.order);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -2122,11 +2241,12 @@ type BuildCzNssDecisionOptions = {
  * the one the same document hashes to once read, so the full row replaces it
  * when the document is read.
  */
-const listingOnlyDecision = (decision: IngestionResult): IngestionResult => ({
-  ...decision,
-  isListingOnly: true,
-  rawHash: hashContent(`${decision.rawHash}|listing-only`),
-});
+const listingOnlyDecision = (decision: IngestionResult): IngestionResult =>
+  plainTextIngestionResult({
+    ...decision,
+    isListingOnly: true,
+    rawHash: hashContent(`${decision.rawHash}|listing-only`),
+  });
 
 /** The listing-only row for a listed document nothing was read for. */
 const unreadRowDecision = (row: ParsedRow): IngestionResult =>
@@ -2288,11 +2408,9 @@ const czNssDaySlices = createCalendarDaySliceWalk({
  * replays the day's search itself, because the loop calls it one page at a
  * time and carries nothing between the calls.
  *
- * A failed request is thrown, never flattened into an empty page. The crawl
- * can afford to read an unreadable page as "nothing here" because a cursor
- * that moves on can be walked again; a ledger row cannot, since an outage
- * recorded as an empty day makes that day settled and it is never revisited.
- * So only the court's own count answers what a day holds: `Počet nalezených
+ * A failed request is thrown, never flattened into an empty page. Both walks
+ * hold their progress when a search is unreadable. Only the court's own count
+ * answers what a day holds: `Počet nalezených
  * záznamů: 0` is an empty slice, and everything else — a non-2xx, a session
  * page served instead of results, a results page stating no count — is an
  * error the engine retries on a later pass.
@@ -2309,23 +2427,12 @@ const listCzNssSlicePage = async ({
     signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
 
   const session = await getSession(effectiveSignal);
-  const search = await executeSearch(session, slice, effectiveSignal);
-
-  if (search.statedCount === null) {
-    // A 200 that is not a results page is what an expired ASP.NET session
-    // looks like: the portal re-renders the unsubmitted form. Dropping the
-    // session turns one expiry into one failed request instead of ten minutes
-    // of them.
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS stated no result count for ${slice}`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: slice,
-    });
-  }
+  const search = requireSearchResult(
+    await executeSearch(session, slice, effectiveSignal),
+  );
 
   const firstPageRows = parseResultRows(search.html);
-  if (search.statedCount === 0) {
+  if (search.type === "absent") {
     if (firstPageRows.length > 0) {
       // The page contradicts itself, so neither number can be trusted for a
       // ledger row. Refused rather than resolved in either direction.
@@ -2339,17 +2446,6 @@ const listCzNssSlicePage = async ({
   }
 
   const { continuation } = search;
-  if (continuation === undefined) {
-    // Same reasoning as the missing count: a results page always carries the
-    // state its own infinite scroll pages with, so a page without it is not
-    // one the current session produced.
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS results for ${slice} carried no pagination state`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: slice,
-    });
-  }
 
   const continued =
     page === 0
@@ -2452,8 +2548,50 @@ const buildCzNssFromPayload = async (
   }
 };
 
-/** Parse cursor string "YYYY-MM-DD:page" or null. */
-const parseCursor = (cursor: string | null): { date: string; page: number } => {
+const CZ_NSS_MISSING_COUNT_ATTEMPTS = 3;
+
+type CzNssCursor = {
+  date: string;
+  page: number;
+  missingCountAttempts?: number;
+};
+
+const encodeCursor = (state: CzNssCursor): string =>
+  state.missingCountAttempts === undefined
+    ? `${state.date}:${state.page}`
+    : JSON.stringify(state);
+
+/** Retry state shares the pipeline's durable checkpoint. */
+const parseCursor = (cursor: string | null): CzNssCursor => {
+  if (cursor?.startsWith("{")) {
+    const state: unknown = JSON.parse(cursor);
+    if (
+      !isRecord(state) ||
+      typeof state["date"] !== "string" ||
+      typeof state["page"] !== "number" ||
+      !Number.isInteger(state["page"]) ||
+      state["page"] < 0
+    ) {
+      return panic("Invalid NSS crawl cursor");
+    }
+    const attempts = state["missingCountAttempts"];
+    if (
+      attempts !== undefined &&
+      (typeof attempts !== "number" ||
+        !Number.isInteger(attempts) ||
+        attempts < 0 ||
+        attempts >= CZ_NSS_MISSING_COUNT_ATTEMPTS)
+    ) {
+      return panic("Invalid NSS count attempt checkpoint");
+    }
+    return {
+      date: state["date"],
+      page: state["page"],
+      ...(typeof attempts === "number"
+        ? { missingCountAttempts: attempts }
+        : {}),
+    };
+  }
   if (!cursor) {
     const lookback = addUtcDays(new Date(), -DEFAULT_LOOKBACK_DAYS);
     const iso = lookback.toISOString().split("T")[0];
@@ -2526,6 +2664,7 @@ const CZ_NSS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNssAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NSS,
   sourceSurfaces: CZ_NSS_SOURCE_SURFACES,
   sourceFields: {
@@ -2571,6 +2710,7 @@ export const czNssAdapter = defineSourceAdapter({
       );
 
       const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         method: "POST",
         signal,
@@ -2608,6 +2748,19 @@ export const czNssAdapter = defineSourceAdapter({
    * held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            caseNumber: payload["caseNumber"],
+            publishedCaseNumber: payload["publishedCaseNumber"],
+            decisionDate: payload["decisionDate"],
+            decisionType: payload["decisionType"],
+            outcome: payload["outcome"],
+            documentUrl: payload["documentUrl"],
+            documentId: payload["documentId"],
+          }
+        : null,
     firstSlice: CZ_NSS_FIRST_SLICE,
     ...czNssDaySlices.walk,
     tipWindowDays: CZ_NSS_TIP_WINDOW_DAYS,
@@ -2629,35 +2782,80 @@ export const czNssAdapter = defineSourceAdapter({
         const readBudgetSpent = (): boolean =>
           readBudget.aborted && signal?.aborted !== true;
 
-        const { date, page } = parseCursor(cursor);
+        const { date, page, missingCountAttempts = 0 } = parseCursor(cursor);
+        const cursorFor = (nextDate: string, nextPage: number): string =>
+          encodeCursor({
+            date: nextDate,
+            page: nextPage,
+          });
         const today = todayIso();
 
         // If the date is in the future, park at today so we
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: `${today}:0` };
+          return { decisions: [], nextCursor: cursorFor(today, 0) };
         }
 
         // 1. Get or reuse session
         const session = await getSession(effectiveSignal);
 
         // 2. Execute search for this date
-        const searchResult = await executeSearch(
-          session,
-          date,
-          effectiveSignal,
-        );
-
-        const { continuation } = searchResult;
-        if (continuation === undefined || continuation.conditions === "[]") {
-          // Not a results page; advance to next day
+        const searchRead = await executeSearch(session, date, effectiveSignal);
+        if (searchRead.type === "missing-count") {
+          invalidateSession();
+          const attempts = missingCountAttempts + 1;
+          if (attempts < CZ_NSS_MISSING_COUNT_ATTEMPTS) {
+            logger.warn("case_law.ingestion.nss_count_retry", {
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              date,
+              page,
+              attempts,
+            });
+            return {
+              decisions: [],
+              nextCursor: encodeCursor({
+                date,
+                page,
+                missingCountAttempts: attempts,
+              }),
+            };
+          }
+          logger.warn("case_law.ingestion.nss_unsettled_day", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            type: "missing-result-count",
+            date,
+            attempts,
+            repair: "calendar_reconciliation",
+          });
           const next = nextDay(date);
           return {
             decisions: [],
-            nextCursor: next <= today ? `${next}:0` : `${today}:0`,
+            itemBuildFailures: { type: "item_build_failed", count: 1 },
+            nextCursor: encodeCursor({
+              date: next <= today ? next : today,
+              page: 0,
+            }),
           };
         }
+        const searchResult = requireSearchResult(searchRead);
+
+        if (searchResult.type === "absent") {
+          const rows = parseResultRows(searchResult.html);
+          if (rows.length > 0) {
+            throw new AdapterFetchError({
+              message: `NSS stated no records for ${date} while rendering ${rows.length}`,
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              cursor,
+            });
+          }
+          const next = nextDay(date);
+          return {
+            decisions: [],
+            nextCursor: cursorFor(next <= today ? next : today, 0),
+          };
+        }
+        const { continuation } = searchResult;
 
         // Page 0 results are inline in the search response.
         const continued =
@@ -2684,47 +2882,76 @@ export const czNssAdapter = defineSourceAdapter({
         const rows = parseResultRows(
           continued === null ? searchResult.html : continued.value,
         );
+        const expectedRows = czNssExpectedRows({
+          page,
+          statedCount: searchResult.statedCount,
+        });
+        const gap = Math.max(0, expectedRows - rows.length);
+        if (gap > 0) {
+          logger.warn("case_law.ingestion.nss_listing_gap", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            date,
+            page,
+            type: "item_build_failed",
+            count: gap,
+            expectedRows,
+            parsedRows: rows.length,
+          });
+        }
         const decisions: IngestionResult[] = [];
+        let failed = gap;
 
         // Every listed row is stored, and the cursor moves past the page. A
         // document that was not read, including every row left once the
         // page's read budget is spent, is stored listing-only, and the
         // reconciliation reads it again.
         for (const row of rows) {
-          if (readBudgetSpent()) {
-            decisions.push(unreadRowDecision(row));
-            continue;
-          }
-          const built = await Result.tryPromise({
-            try: async () =>
-              await buildCzNssDecision({
-                row,
-                session,
-                signal: effectiveSignal,
-              }),
-            catch: (cause: unknown) => cause,
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+
+            rawListing: JSON.stringify(row),
+            build: async () => {
+              if (readBudgetSpent()) {
+                return unreadRowDecision(row);
+              }
+              const built = await Result.tryPromise({
+                try: async () =>
+                  await buildCzNssDecision({
+                    row,
+                    session,
+                    signal: effectiveSignal,
+                  }),
+                catch: (cause: unknown) => cause,
+              });
+              if (built.isOk()) {
+                return built.value.decision;
+              }
+              if (
+                readBudgetSpent() &&
+                !(built.error instanceof PlainTextError)
+              ) {
+                return unreadRowDecision(row);
+              }
+              throw built.error;
+            },
           });
-          if (Result.isOk(built)) {
-            decisions.push(built.value.decision);
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
             continue;
           }
-          if (readBudgetSpent()) {
-            decisions.push(unreadRowDecision(row));
-            continue;
-          }
-          const { error } = built;
-          throw error;
+          decisions.push(attempted.value);
         }
 
-        // Determine next cursor. Against the size this page can hold, not the
-        // inline one: a continuation page tops out at half of it, so measuring
-        // every page against the inline size ended the day at the first
-        // continuation page and skipped everything past record 60.
-        if (rows.length >= czNssRowsOnPage(page)) {
+        // Parsed rows can be short because malformed rows were dropped. The
+        // publisher's count still requires the remaining pages to be read.
+        if (page + 1 < czNssTotalPages(searchResult.statedCount)) {
           // More pages for this date
           return {
             decisions,
-            nextCursor: `${date}:${page + 1}`,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+            nextCursor: cursorFor(date, page + 1),
           };
         }
 
@@ -2732,7 +2959,8 @@ export const czNssAdapter = defineSourceAdapter({
         const next = nextDay(date);
         return {
           decisions,
-          nextCursor: next <= today ? `${next}:0` : `${today}:0`,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+          nextCursor: cursorFor(next <= today ? next : today, 0),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),

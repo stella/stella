@@ -1549,7 +1549,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       templateId: ids.templateA,
       userId: ids.userA1,
       format: "docx",
-      status: "completed",
+      status: "success",
     },
     {
       id: ids.templateFillB,
@@ -1557,7 +1557,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       templateId: ids.templateB,
       userId: ids.userB1,
       format: "docx",
-      status: "completed",
+      status: "success",
     },
   ]);
 };

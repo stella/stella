@@ -3,7 +3,7 @@ import { and, asc, eq, gt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { savedTimeNarratives } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +17,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
 
 import { toSavedTimeNarrativeItem } from "./schema";
@@ -47,7 +48,13 @@ const config = {
   description:
     "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     limit: t.Optional(tPaginationLimit(100)),
@@ -58,7 +65,7 @@ const config = {
 const listSavedTimeNarratives = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user }) {
-    const limit = query.limit ?? 50;
+    const limit = normalizeTenantPageLimit(query.limit ?? 50);
     const conditions = [
       eq(savedTimeNarratives.organizationId, session.activeOrganizationId),
       eq(savedTimeNarratives.userId, user.id),

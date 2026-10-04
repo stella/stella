@@ -11,7 +11,7 @@ import {
   legalListItemSources,
   legalListItems,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -27,6 +27,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
@@ -48,9 +49,11 @@ const config = {
     "its first source (document id, document name, locator), null when it " +
     "has none.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workspace_schema",
     consumesServices: false,
   },
@@ -75,7 +78,9 @@ const decodeCursor = (value: string): ItemCursor | null => {
 const readListItems = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListItemsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListItemsPageSizeDefault,
+    );
     const conditions = [
       eq(legalListItems.workspaceId, workspaceId),
       eq(legalListItems.listId, params.listId),

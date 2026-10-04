@@ -1,14 +1,19 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import { env } from "@/api/env";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type {
+  ActionKind,
+  AdmittedActionIdentity,
+} from "@/api/lib/rate-limit/action-kinds";
 
 const EXECUTION_ADMISSION_FAILURE = failureSink({
   event: "chat.execution.admission_lost",
@@ -17,30 +22,56 @@ const EXECUTION_ADMISSION_FAILURE = failureSink({
 
 export type ChatExecutionAdmission = {
   signal: AbortSignal;
+  reservePeriod: (
+    identity: AdmittedActionIdentity,
+    organizationStateDb?: ScopedDb,
+  ) => Promise<Result<void, HandlerError>>;
   /** Release only after provider, fenced persistence and heartbeat work settle. */
   release: () => Promise<void>;
+};
+
+const chatAdmissionError = (error: unknown) => {
+  if (ActionAdmissionError.is(error)) {
+    return new HandlerError({ ...actionAdmissionRefusal(error), cause: error });
+  }
+  return new HandlerError({
+    status: 503,
+    code: "service_unavailable",
+    message: "Action admission is unavailable",
+    cause: error,
+  });
 };
 
 type StartChatExecutionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  /** Overrides the deployment flag `withActionAdmission` reads. */
   enabled?: boolean;
   admit?: typeof withActionAdmission;
-};
+} & (
+  | {
+      mode: "action";
+      periodIdentity: AdmittedActionIdentity;
+      actionKind?: never;
+    }
+  | { mode: "concurrency-only"; actionKind: ActionKind; periodIdentity?: never }
+);
 
 // Transport readiness and execution settlement are separate: returning a
 // response cannot release the execution's lease. Continuations acquire anew.
+// Disabled admission still yields an execution: `withActionAdmission` owns that
+// decision and applies the demo account's daily budget either way.
 export const startChatExecutionAdmission = async ({
   organizationId,
   userId,
-  enabled = env.FEATURE_ACTION_ADMISSION,
+  enabled,
   admit = withActionAdmission,
+  mode,
+  actionKind,
+  periodIdentity,
 }: StartChatExecutionAdmissionOptions): Promise<
-  Result<ChatExecutionAdmission | undefined, HandlerError>
+  Result<ChatExecutionAdmission, HandlerError>
 > => {
-  if (!enabled) {
-    return Result.ok(undefined);
-  }
   const ready =
     Promise.withResolvers<Result<ChatExecutionAdmission, HandlerError>>();
   const finished = Promise.withResolvers<undefined>();
@@ -48,11 +79,12 @@ export const startChatExecutionAdmission = async ({
     status: "acquiring",
   };
   const completion = admit({
-    enabled: true,
+    ...(enabled === undefined ? {} : { enabled }),
     scope: "independent",
     organizationId,
     userId,
-    run: async (signal) => {
+    ...(mode === "action" ? { mode, periodIdentity } : { mode }),
+    run: async (signal, control) => {
       state.status = "executing";
       const loss = () =>
         observeFailure(signal.reason, { sink: EXECUTION_ADMISSION_FAILURE });
@@ -60,6 +92,20 @@ export const startChatExecutionAdmission = async ({
       ready.resolve(
         Result.ok({
           signal,
+          reservePeriod: async (identity, organizationStateDb) => {
+            const expectedKind =
+              mode === "action" ? periodIdentity.actionKind : actionKind;
+            if (identity.actionKind !== expectedKind) {
+              panic("Chat reservation changed its action kind");
+            }
+            const reserved = await control.reservePeriod(
+              identity,
+              organizationStateDb,
+            );
+            return Result.isError(reserved)
+              ? Result.err(chatAdmissionError(reserved.error))
+              : Result.ok(reserved.value);
+          },
           release: async () => {
             finished.resolve(undefined);
             await completion;
@@ -75,21 +121,7 @@ export const startChatExecutionAdmission = async ({
   }).then((outcome) => {
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {
-        const busy =
-          ActionAdmissionError.is(outcome.error) &&
-          outcome.error.reason === "busy";
-        ready.resolve(
-          Result.err(
-            new HandlerError({
-              status: busy ? 429 : 503,
-              code: busy ? "rate_limited" : "service_unavailable",
-              message: busy
-                ? "Concurrent action limit reached"
-                : "Action admission is unavailable",
-              cause: outcome.error,
-            }),
-          ),
-        );
+        ready.resolve(Result.err(chatAdmissionError(outcome.error)));
       } else {
         // Settlement already owns the durable outcome. Do not make it
         // retryable just because the ephemeral lease or its release failed.

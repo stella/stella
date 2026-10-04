@@ -43,6 +43,7 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+RUN bun apps/api/scripts/generate-capability-runtime.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
@@ -73,6 +74,23 @@ RUN bun build \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
+# Deployment-owned usage policy configuration; run explicitly after migrations:
+#   command override -> ["bun", "/app/seed-usage-policies.js"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/seed-usage-policies.js \
+    apps/api/scripts/seed-usage-policies.ts
+# Replays one stored hosted-usage provider event at a time. Run with the API
+# task's database credentials. --apply requires --requested-by (a claimed
+# operator label) and --reason.
+# Replay performer is the ECS task ARN; metadata resolution must succeed.
+#   command override -> ["bun", "/app/replay-provider-events.js"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/replay-provider-events.js \
+    apps/api/scripts/replay-provider-events.ts
 # Better Auth migration rehearsal validator. It accepts only a database
 # credential plus a private tmpfs baseline path; stdout is a redacted JSON
 # report. Run on the isolated clone task with command override:
@@ -124,6 +142,12 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# One bounded, load-aware background replay tick; enrolment is reviewed in code.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/replay-tick.js \
+    apps/api/src/scripts/replay-tick.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
 # documents bucket, so they run inside the API task, whose role may:
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
@@ -138,6 +162,14 @@ RUN bun build \
     --target bun \
     --outfile /app/case-law-raw-layout.js \
     apps/api/src/scripts/case-law-raw-layout.ts
+# SK ÚS raw completion runs as its own one-off task with a scoped login rather
+# than inside the API task; it reports without writing until `--apply`:
+#   ["bun", "/app/complete-sk-us-raw.js", "--checkpoint", "/tmp/sk-us.json"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/complete-sk-us-raw.js \
+    apps/api/src/scripts/complete-sk-us-raw.ts
 # Decision-analysis operator pass. Like replay above, these need the API env
 # (corpus bucket, storage mode) and run inside the API task, but their
 # database login is overridden per task to the analysis writer role through
@@ -276,6 +308,11 @@ RUN cd apps/api && \
     bun src/scripts/materialize-runtime-worker-native-assets.ts \
       "$TARGETARCH" /app/runtime-onnx
 RUN bun --filter @stll/legal-atlas-runner build
+RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+    S3_ENDPOINT=http://localhost \
+    S3_BUCKET=smoke \
+    S3_REGION=eu-central-1 \
+    bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
 # Runtime-asset smoke probe: initializes the compiled anonymize and QuickJS
 # runtimes, plus the external YARA rules, worker bundles, OCR model, and font.
 # Compiled like the server and run by the verification stage below.
@@ -303,11 +340,6 @@ ENV STELLA_VERSION=${STELLA_VERSION}
 ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
 ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 ENV NODE_ENV=production
-ENV FEATURE_CHAT=true
-ENV FEATURE_CONTACTS=true
-ENV FEATURE_DESKTOP_EDITING=true
-ENV FEATURE_KNOWLEDGE_TEMPLATES=true
-ENV FEATURE_TODOS=true
 ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
@@ -319,14 +351,18 @@ RUN groupadd --system --gid 1001 stella && \
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/collab /app/collab
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
+COPY --chown=stella:stella --from=builder /app/seed-usage-policies.js /app/seed-usage-policies.js
+COPY --chown=stella:stella --from=builder /app/replay-provider-events.js /app/replay-provider-events.js
 COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
 COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-map.js /app/better-auth-microsoft-identity-map.js
 COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/better-auth-17-backfill.js
 COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
+COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
+COPY --chown=stella:stella --from=builder /app/complete-sk-us-raw.js /app/complete-sk-us-raw.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-candidates.js /app/decision-analysis-candidates.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/decision-analysis-input.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js
@@ -339,6 +375,7 @@ COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/co
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
 # Bundled migration task entrypoint:
 #   ["bun", "/app/apps/api/src/db/migrate.js"]
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/apps/api/src/db/migrate.js

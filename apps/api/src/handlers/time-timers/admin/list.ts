@@ -2,10 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import { timeTimers, workspaces } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -15,10 +13,12 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
 
 const ADMIN_TIMER_COLUMNS = {
@@ -77,9 +77,11 @@ const listRunningMemberTimers = createSafeRootHandler(
     description:
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "billing_admin",
       consumesServices: false,
     },
@@ -89,7 +91,7 @@ const listRunningMemberTimers = createSafeRootHandler(
     }),
   },
   async function* ({ safeDb, session, user, memberRole, query }) {
-    if (!isOrganizationManagementRole(memberRole.role)) {
+    if (!hasManagementPermission(memberRole, { timeEntry: ["approve"] })) {
       return Result.err(
         new HandlerError({
           status: 403,
@@ -112,7 +114,9 @@ const listRunningMemberTimers = createSafeRootHandler(
         }),
       );
     }
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx

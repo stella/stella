@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
 import { savedSearches } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSavedSearchId } from "@/api/lib/safe-id-boundaries";
 
 import { toSavedSearchResponse } from "./response";
@@ -15,6 +16,7 @@ import { savedSearchListQuerySchema } from "./schema";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
   query: savedSearchListQuerySchema,
@@ -28,7 +30,9 @@ export const savedSearchCursor = createTimestampIdCursorCodec({
 const listSavedSearches = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, query }) {
-    const limit = query.limit ?? LIMITS.savedSearchesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.savedSearchesPageSizeDefault,
+    );
     const organizationId = session.activeOrganizationId;
     const conditions = [
       eq(savedSearches.organizationId, organizationId),

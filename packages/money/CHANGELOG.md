@@ -1,5 +1,17 @@
 # @stll/money
 
+## 0.3.0
+
+### Minor Changes
+
+- [#4582](https://github.com/stella/stella/pull/4582) [`b8a1d41`](https://github.com/stella/stella/commit/b8a1d41da558c4c148fd696a714d56621ecb2db3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared time-entry amount calculation that honors no-charge time.
+
+## 0.2.3
+
+### Patch Changes
+
+- [#4514](https://github.com/stella/stella/pull/4514) [`ab4d98e`](https://github.com/stella/stella/commit/ab4d98ed5959581bcda956b4163fb9125a4dbd05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add matter billing arrangement capabilities and preserve exact minor-unit arithmetic.
+
 ## 0.2.2
 
 ### Patch Changes

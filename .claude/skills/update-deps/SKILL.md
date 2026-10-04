@@ -3,6 +3,8 @@ name: update-deps
 description: "Inventory, assess, update, and validate third-party dependencies across Bun, Python/uv, Cargo, Docker, and GitHub Actions without hiding ecosystem or supply-chain risk."
 ---
 
+<!-- This local skill replaces the shared update-deps skill (.ai/shared/skills/update-deps/SKILL.md) to add the anonymizer rules below. When the shared skill changes, reconcile this file with it and record the new base in .ai/local-skills/shared-bases.sha256; scripts/check-local-skill-overrides.sh fails until then. -->
+
 # Update Dependencies
 
 Review or update the dependency scope requested by the user. Discover the
@@ -41,6 +43,52 @@ and "risky major" are not blocks.
 For every major and heavy minor, read the official release notes for capabilities
 worth adopting, not only for breakage. Report the relevant migration details and
 capabilities adopted or identified with the version moves.
+
+### Anonymizer Packages
+
+`@stll/anonymize`, `@stll/anonymize-wasm`, and `@stll/anonymize-data` decide
+what leaves the workspace in anonymized chat, so any version move of them, patch
+included and whether alone or in a sweep, follows these rules:
+
+1. **Measure before and after.** Before changing the version, with the current
+   version installed, record the per-class corpus tallies:
+
+   ```bash
+   bun apps/api/scripts/name-matching-corpus.ts --failures > /tmp/corpus-before.txt
+   ```
+
+   Run it again after the update and put both tallies, or their difference, in
+   the pull request.
+
+2. **The name-matching gates pass.** From `apps/api`, run the corpus gate and
+   the real-anonymizer suites against the new version:
+
+   ```bash
+   bun run test src/mcp/name-matching-corpus.test.ts \
+     src/mcp/anonymization.test.ts \
+     src/handlers/chat/stored-parts-send-mode.integration.test.ts \
+     src/handlers/chat/provider-request-schemas.integration.test.ts \
+     src/handlers/chat/provider-request-roles.integration.test.ts
+   bun run test:property src/mcp/anonymization.property.test.ts
+   ```
+
+   and, from `packages/anonymize-chat`, `bun run test:property`. These run the
+   native binding; the `anonymize-chat` property suite uses a stand-in runtime.
+
+3. **The WASM build is exercised for real.** When `@stll/anonymize-wasm` moves,
+   run `bun --filter @stll/web test:e2e:landing`: it drives the shipped WASM
+   bundle in a browser and fails when the engine does not boot or detect. No
+   automated test yet runs the chat worker's deny-list matching on the real
+   WASM build, so also check it by hand on a local stack (`bun run agent:up`):
+   add short, inflected, and diacritic names to a workspace deny list, send an
+   anonymized chat that uses them, confirm each is replaced in the request the
+   provider receives, and state the result in the pull request.
+4. **Bounds only tighten.** Never lower a recall floor or raise a
+   false-positive ceiling in `name-matching-corpus.test.ts` (or relax a property
+   test) to make the update pass, unless the pull request states the reason,
+   the classes and cases affected, and the before and after tallies, and that
+   justification is reviewed and approved before merge. Raise a floor or lower
+   a ceiling when the new version does better.
 
 ## 2. Inventory the Full Requested Surface
 

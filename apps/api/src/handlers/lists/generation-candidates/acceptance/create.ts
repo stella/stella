@@ -15,7 +15,8 @@ import {
   WORK_OBLIGATION_SOURCE,
 } from "@/api/db/schema";
 import { commitSettledRun } from "@/api/handlers/lists/generation-candidates/commit-settled-run";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -42,6 +43,8 @@ const config = {
     "candidate is left pending. A candidate whose sources have disappeared " +
     "is refused and the reserved item is cleaned up.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",

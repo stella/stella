@@ -3,12 +3,16 @@ import { expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import {
+  ACTION_KINDS,
+  type ActionKind,
+  type PeriodActionKind,
+} from "@/api/lib/rate-limit/action-kinds";
 
 import { createObservationBuffer } from "./buffer";
 import {
   currentActionCostIdentity,
-  recordExternalActionCall,
+  actionCallObserver,
   type ActionCostObservation,
 } from "./context";
 
@@ -34,15 +38,15 @@ const admissionOptions = {
   redis: { send: async () => 1 },
 };
 
-const registeredKinds = {
-  "chat.improve-prompt": "chat.improve-prompt",
-  "chat.suggest-thread-title": "chat.suggest-thread-title",
-  "mcp.services/call": "mcp.services/call",
-  "mcp.data/call": "mcp.data/call",
-} as const satisfies { [Kind in ActionKind]: Kind };
+const registeredKinds = Object.keys(ACTION_KINDS)
+  .filter((kind): kind is ActionKind => kind in ACTION_KINDS)
+  .filter(
+    (kind): kind is PeriodActionKind =>
+      ACTION_KINDS[kind].admission === "period",
+  );
 
 for (const enabled of [true, false]) {
-  for (const actionKind of Object.values(registeredKinds)) {
+  for (const actionKind of registeredKinds) {
     test(`${actionKind} captures one identity with admission enabled=${enabled}`, async () => {
       const observations: ActionCostObservation[] = [];
       const periodIdentity = { actionKind, logicalPhaseId: "fixture-phase" };
@@ -57,7 +61,10 @@ for (const enabled of [true, false]) {
         },
         periodIdentity,
         costRecorder: recorderFor(observations),
-        run: async () => {
+        run: async (_signal, control) => {
+          expect(Result.isOk(await control.reservePeriod(periodIdentity))).toBe(
+            true,
+          );
           expect(currentActionCostIdentity(organizationId)).toEqual({
             organizationId,
             ...periodIdentity,
@@ -65,7 +72,7 @@ for (const enabled of [true, false]) {
           expect(
             currentActionCostIdentity(toSafeId<"organization">("other-org")),
           ).toBeUndefined();
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
           return "done";
         },
       });
@@ -119,7 +126,7 @@ test("refused actions produce no observations and disabled recording produces no
     },
     costRecorder: null,
     run: async () => {
-      recordExternalActionCall("fixture_provider");
+      actionCallObserver(organizationId)("fixture_provider");
       return await run();
     },
   });
@@ -175,7 +182,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         periodIdentity,
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
       await withActionAdmission({
@@ -186,7 +193,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         },
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
     },

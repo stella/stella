@@ -22,17 +22,21 @@
  *
  * Self-checkpointing: a repaired row leaves the selection predicate, so an
  * interrupted run resumes by running again, a completed run finds nothing, and
- * there is no cursor or bookkeeping table to keep. Completion is a catalog
- * fact, `pg_constraint.convalidated`, which the phase reads before it repairs
- * anything and the API's startup gate reads before it serves.
+ * the rows supply the data checkpoint. The shared maintenance state persists
+ * adaptive sizing and holds. A committed checkpoint admits a pending repair
+ * through deploy and startup; `pg_constraint.convalidated` proves completion.
  */
 
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
+import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
@@ -73,7 +77,7 @@ const dialect = new PgDialect();
  * to a parameterised query on the reserved connection, so the whole repair
  * shares the session that holds the online-migrations lock.
  */
-const bindTo = (connection: OnlineMigrationConnection) => ({
+const bindTo = (connection: Pick<OnlineMigrationConnection, "query">) => ({
   execute: async (query: SQL): Promise<unknown> => {
     const { sql: text, params } = dialect.sqlToQuery(query);
     return await connection.query(text, onlineMigrationParams(params));
@@ -102,50 +106,52 @@ const reportUnreconciled = (rows: number): void => {
   );
 };
 
-/** One batch in its own transaction; the number of rows it claimed. */
-const repairOneBatch = async (
-  connection: OnlineMigrationConnection,
-): Promise<number> => {
-  await connection.execute("BEGIN");
-  // Transaction boundary on a raw connection: a failed batch is rolled back so
-  // the session stays usable for the lock release, then rethrown to fail the
-  // migrate task, whose retry resumes from the rows still selected.
-  try {
-    await connection.execute(
-      `SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`,
-    );
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-    );
-    const batch = await repairDecisionDateBatch(bindTo(connection), BATCH, {
-      // This runs on the reserved migrate connection, which has no query layer
-      // to reach the projection's desired-state writer. The rows are reported
-      // so a reconcile sweep is known to be owed for them.
-      reconcileProjection: null,
-    });
-    await connection.execute("COMMIT");
-    reportUnannounced(batch.unannounced);
-    reportUnreconciled(batch.unreconciled);
-    return batch.cleared + batch.rederived + batch.skipped;
-  } catch (error: unknown) {
-    await connection.execute("ROLLBACK");
-    throw error;
-  }
-};
-
-/**
- * Repair batches until the selection is empty. Recursive rather than a loop
- * with an awaited body: each batch depends on the previous one having
- * committed, so the sequencing is structural.
- */
+/** The runtime owns the transaction, checkpoint, health read and per-batch slot. */
 const repairUntilEmpty = async (
   connection: OnlineMigrationConnection,
-): Promise<void> => {
-  const claimed = await repairOneBatch(connection);
-  if (claimed === 0) {
-    return;
+  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
+) => {
+  const runtime = createBackfillRuntime({
+    name: REPAIR_NAME,
+    tableName: TABLE_NAME,
+    initialSize: BATCH,
+    config: {
+      ...defaultConfig,
+      batchLockTimeoutMs: 30_000,
+      batchStatementTimeoutMs: 300_000,
+    },
+    connection,
+    readVerdict,
+    clock,
+    log,
+  });
+  try {
+    return await runBackfillPass({
+      holdPolicy: "propagate",
+      sleep,
+      step: async () =>
+        await runtime.step(async ({ tx, size, cursor }) => {
+          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
+          await tx.execute(
+            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
+          );
+          const batch = await repairDecisionDateBatch(bindTo(tx), size, {
+            reconcileProjection: null,
+          });
+          return {
+            cursor,
+            done: batch.cleared + batch.rederived + batch.skipped === 0,
+            value: batch,
+          };
+        }),
+      onBatch: ({ value }) => {
+        reportUnannounced(value.unannounced);
+        reportUnreconciled(value.unreconciled);
+      },
+    });
+  } finally {
+    await runtime.close();
   }
-  await repairUntilEmpty(connection);
 };
 
 const validateConstraint = async (
@@ -159,17 +165,40 @@ const validateConstraint = async (
   );
 };
 
-export const DECISION_DATE_CEILING_REPAIR: OnlineRepair = {
+type RepairRuntimeOptions = {
+  readVerdict?: () => Promise<Verdict>;
+  sleep?: (milliseconds: number) => Promise<void>;
+  clock?: () => number;
+  log?: (record: unknown) => void;
+};
+
+export const createDecisionDateCeilingRepair = (
+  options: RepairRuntimeOptions = {},
+): OnlineRepair => ({
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
       connection,
       constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       repairName: REPAIR_NAME,
+      backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
   repair: async (connection) => {
-    await repairUntilEmpty(connection);
+    // Empty fresh databases have no heavy data work and no metric source yet.
+    if (
+      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+        .length === 0
+    ) {
+      await validateConstraint(connection);
+      return;
+    }
+    const pass = await repairUntilEmpty(connection, options);
+    if (pass.isErr()) {
+      throw pass.error;
+    }
     await validateConstraint(connection);
   },
-};
+});
+
+export const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair();

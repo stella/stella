@@ -9,6 +9,11 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import {
+  PUBLIC_COUNTRIES,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
+
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import {
@@ -30,6 +35,7 @@ import type {
   ChatProjectionSchema,
   DehydratedInput,
 } from "@/api/lib/chat/projection-schema";
+import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
 import type {
   AssertNoExtraFields,
   LIST_MATTERS_LIST_PROJECTION,
@@ -399,6 +405,111 @@ describe("projectForChat", () => {
     expect(containsRawUuid(projected)).toBe(false);
   });
 
+  test("list_tasks hands each assignee to the model with the userId a person link needs", () => {
+    const refRegistry = createChatRefRegistry();
+    const taskRef = refRegistry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    const USER_ID = "b2b7c1d0-5d1e-4f63-9a1c-0f8e7d6c5b4a";
+
+    const projected = project({
+      dehydration: {
+        ...emptyDehydration(),
+        dehydratedEntityRefs: new Map([[ENTITY_UUID, taskRef]]),
+        resolvedEntityParams: { task_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        task: {
+          taskId: ENTITY_UUID,
+          name: "Call the counterparty",
+          status: "todo",
+          priority: null,
+          itemType: "task",
+          dueDate: null,
+          startAt: null,
+          endAt: null,
+          location: null,
+          agendaKind: null,
+          assignees: [{ userId: USER_ID, name: "jankubica96", role: "owner" }],
+          links: [],
+        },
+      },
+      refRegistry,
+      schema: READ_TOOL_REF_FIELD_MAP.list_tasks.projection,
+    }).unwrap();
+
+    // The userId is the person's reference: the prompt's PEOPLE MENTIONS rule
+    // links the name as `[jankubica96](#stella-user=<userId>)`.
+    expect(projected).toMatchObject({
+      task: {
+        taskId: taskRef,
+        assignees: [{ userId: USER_ID, name: "jankubica96", role: "owner" }],
+      },
+    });
+  });
+
+  test("a person field keeps its userId, so the model can link the person", () => {
+    const USER_ID = "b2b7c1d0-5d1e-4f63-9a1c-0f8e7d6c5b4a";
+    const refRegistry = createChatRefRegistry();
+    const documentRef = refRegistry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+
+    const projected = project({
+      dehydration: {
+        ...emptyDehydration(),
+        dehydratedEntityRefs: new Map([[ENTITY_UUID, documentRef]]),
+        resolvedEntityParams: { entity_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        entityId: ENTITY_UUID,
+        name: "Lease",
+        version: {
+          id: "version-1",
+          versionNumber: 1,
+          stamp: null,
+          label: null,
+          description: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          fields: [
+            {
+              id: "field-1",
+              propertyId: PROPERTY_UUID,
+              content: {
+                version: 1,
+                type: "person",
+                userId: USER_ID,
+                name: "Jan Kubica",
+                image: "https://cdn.example.test/avatar.png",
+              },
+            },
+          ],
+        },
+      },
+      refRegistry,
+      schema: READ_DOCUMENT_VERSION_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      version: {
+        fields: [
+          {
+            content: {
+              version: 1,
+              type: "person",
+              userId: USER_ID,
+              name: "Jan Kubica",
+            },
+          },
+        ],
+      },
+    });
+    // The avatar URL is still web-UI plumbing the model never sees.
+    expect(JSON.stringify(projected)).not.toContain("avatar.png");
+  });
+
   test("an entity echo reuses the dehydrated ref even under another workspace source", () => {
     const refRegistry = createChatRefRegistry();
     const entityRef = refRegistry.toEntityRef({
@@ -598,6 +709,23 @@ describe("projectForChat", () => {
         if (entry.chatProjectable) {
           expect(() => deriveRefMediationEntry(entry.projection)).not.toThrow();
         }
+      }
+    }
+  });
+
+  test("public law projections preserve every unavailable country response", () => {
+    const projections = [
+      READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
+      READ_TOOL_REF_FIELD_MAP.lookup_case_law.projection,
+      READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
+    ];
+    for (const country of PUBLIC_COUNTRIES) {
+      const payload = publicCountryUnavailable(country);
+      if (payload === null) {
+        continue;
+      }
+      for (const schema of projections) {
+        expect(project({ schema, payload }).unwrap()).toEqual(payload);
       }
     }
   });

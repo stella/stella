@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { envBase } from "@/api/env-base";
 import {
   deleteS3ObjectWithSignal,
@@ -33,6 +35,23 @@ describe("fake S3 carries the real s3 helpers", () => {
     fake.stop();
   });
 
+  test("a held PUT exposes completion only after applying its bytes", async () => {
+    const key = "org_1/ws_1/held.txt";
+    const hold = fake.holdNext({ method: "PUT", keyIncludes: key });
+    const pending = writeS3ObjectWithRetry(
+      { key, data: "held bytes" },
+      { type: "fixture" },
+    );
+    await hold.reached;
+    expect(fake.objects.has(`${bucket}/${key}`)).toBe(false);
+    hold.release();
+    await hold.completed;
+    expect(
+      new TextDecoder().decode(fake.objects.get(`${bucket}/${key}`)?.bytes),
+    ).toBe("held bytes");
+    await pending;
+  });
+
   test("round-trips an object through the SDK and presigned transports", async () => {
     const bytes = new TextEncoder().encode("hello object");
     await putS3ObjectWithSignal(
@@ -63,6 +82,121 @@ describe("fake S3 carries the real s3 helpers", () => {
 
     await deleteS3ObjectWithSignal("org_1/ws_1/doc.txt", signal);
     expect(fake.objects.size).toBe(0);
+  });
+
+  test("copies preserve bytes while validators change and checksums are requested or inherited", async () => {
+    const requestSignal = AbortSignal.timeout(5000);
+    const bytes = new TextEncoder().encode("same content");
+    fake.put(bucket, "source", bytes);
+    const source = await fetch(`${fake.endpoint}/${bucket}/source`, {
+      signal: requestSignal,
+    });
+    const sourceValidator = source.headers.get("etag");
+    const sourceBytes = new Uint8Array(await source.arrayBuffer());
+    expect(sourceValidator).not.toBeNull();
+
+    for (const key of ["copy-one", "copy-two"]) {
+      const copied = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        method: "PUT",
+        headers: { "x-amz-copy-source": `${bucket}/source` },
+      });
+      const receipt = await copied.text();
+      const read = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        headers: { "x-amz-checksum-mode": "ENABLED" },
+      });
+      expect(receipt).not.toContain("ChecksumSHA256");
+      expect(read.headers.get("x-amz-checksum-sha256")).toBeNull();
+      expect(read.headers.get("etag")).not.toBe(sourceValidator);
+      expect(receipt).toContain(
+        (read.headers.get("etag") ?? "").replaceAll('"', "&quot;"),
+      );
+      expect(new Uint8Array(await read.arrayBuffer())).toEqual(sourceBytes);
+    }
+
+    const requested = await fetch(`${fake.endpoint}/${bucket}/copy-checked`, {
+      signal: requestSignal,
+      method: "PUT",
+      headers: {
+        "x-amz-copy-source": `${bucket}/source`,
+        "x-amz-checksum-algorithm": "SHA256",
+        "x-amz-copy-source-if-match": sourceValidator ?? "",
+      },
+    });
+    const expected = new Bun.CryptoHasher("sha256")
+      .update(bytes)
+      .digest("base64");
+    expect(await requested.text()).toContain(
+      `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
+    );
+    const head = await fetch(`${fake.endpoint}/${bucket}/copy-checked`, {
+      signal: requestSignal,
+      method: "HEAD",
+      headers: { "x-amz-checksum-mode": "ENABLED" },
+    });
+    expect(head.headers.get("x-amz-checksum-sha256")).toBe(expected);
+    expect(head.headers.get("x-amz-checksum-type")).toBe("FULL_OBJECT");
+
+    const checkedValidator = head.headers.get("etag");
+    for (const key of ["copy-inherited", "copy-checked"]) {
+      const inherited = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        method: "PUT",
+        headers: { "x-amz-copy-source": `${bucket}/copy-checked` },
+      });
+      expect(await inherited.text()).toContain(
+        `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
+      );
+      const inheritedHead = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        method: "HEAD",
+        headers: { "x-amz-checksum-mode": "ENABLED" },
+      });
+      expect(inheritedHead.headers.get("x-amz-checksum-sha256")).toBe(expected);
+      expect(inheritedHead.headers.get("etag")).not.toBe(checkedValidator);
+    }
+
+    fake.put(bucket, "source", bytes);
+    const staleRead = await fetch(`${fake.endpoint}/${bucket}/source`, {
+      signal: requestSignal,
+      headers: { "if-match": sourceValidator ?? "" },
+    });
+    expect(staleRead.status).toBe(412);
+    await staleRead.text();
+    const staleCopy = await fetch(`${fake.endpoint}/${bucket}/stale-copy`, {
+      signal: requestSignal,
+      method: "PUT",
+      headers: {
+        "x-amz-copy-source": `${bucket}/source`,
+        "x-amz-copy-source-if-match": sourceValidator ?? "",
+      },
+    });
+    expect(staleCopy.status).toBe(412);
+    await staleCopy.text();
+    expect(fake.objects.has(`${bucket}/stale-copy`)).toBe(false);
+  });
+
+  test("copies read the source bucket and snapshot its bytes", async () => {
+    const requestSignal = AbortSignal.timeout(5000);
+    fake.put("source-bucket", "same-key", "source bytes");
+    fake.put(bucket, "same-key", "destination bytes");
+    const copied = await fetch(`${fake.endpoint}/${bucket}/cross-copy`, {
+      signal: requestSignal,
+      method: "PUT",
+      headers: { "x-amz-copy-source": "/source-bucket/same-key" },
+    });
+    expect(copied.status).toBe(200);
+    await copied.text();
+    const read = await fetch(`${fake.endpoint}/${bucket}/cross-copy`, {
+      signal: requestSignal,
+    });
+    expect(await read.text()).toBe("source bytes");
+    fake.put("source-bucket", "same-key", "changed source");
+    const snapshot = await fetch(`${fake.endpoint}/${bucket}/cross-copy`, {
+      signal: requestSignal,
+    });
+    expect(await snapshot.text()).toBe("source bytes");
   });
 
   test("reports absence as absence and a rejection as a failure", async () => {
@@ -104,13 +238,21 @@ describe("fake S3 carries the real s3 helpers", () => {
 
   test("retries a transient write and stops on a terminal rejection", async () => {
     fake.failNext({ method: "PUT", code: "InternalError", status: 500 });
-    await writeS3ObjectWithRetry({ key: "retry/ok", data: "payload" });
+    await writeS3ObjectWithRetry(
+      { key: "retry/ok", data: "payload" },
+      { type: "fixture" },
+    );
     expect(fake.objects.has(`${bucket}/retry/ok`)).toBe(true);
 
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     expect(
-      writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
-    ).rejects.toThrow(/AccessDenied/u);
+      await rejectionOf(
+        writeS3ObjectWithRetry(
+          { key: "retry/denied", data: "payload" },
+          { type: "fixture" },
+        ),
+      ),
+    ).toHaveProperty("message", expect.stringMatching(/AccessDenied/u));
     expect(fake.objects.has(`${bucket}/retry/denied`)).toBe(false);
   });
 });

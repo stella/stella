@@ -3,19 +3,24 @@ import { Result } from "better-result";
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns a version summary rather than stored-file bytes.",
+  },
   description:
     "Summarize in prose what changed between one document version and its " +
     "predecessor, over the same server-resolved text diff " +
     "entities.versions.diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -44,6 +49,7 @@ const versionSummarize = createSafeHandler(
     session,
     user,
     orgAIConfig,
+    managedAIResidency,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -64,6 +70,7 @@ const versionSummarize = createSafeHandler(
     let summary: string | null = null;
     if (segments.length > 0) {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -85,6 +92,7 @@ const versionSummarize = createSafeHandler(
             await summarizeVersionDiff({
               diffText: diffSegmentsToText(segments),
               orgAIConfig,
+              managedAIResidency,
               organizationId,
               aiAnalytics,
             }),

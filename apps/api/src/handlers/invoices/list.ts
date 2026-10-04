@@ -3,12 +3,13 @@ import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
@@ -40,12 +41,15 @@ const readInvoices = createSafeHandler(
       "and total, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "list_invoices" },
     access: "read",
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.invoicesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.invoicesPageSizeDefault,
+    );
     const conditions = [eq(invoices.workspaceId, workspaceId)];
 
     if (query.cursor) {
@@ -82,6 +86,8 @@ const readInvoices = createSafeHandler(
             dueDate: invoices.dueDate,
             currency: invoices.currency,
             totalAmount: invoices.totalAmount,
+            billingMode: invoices.billingMode,
+            flatFeeAmount: invoices.flatFeeAmount,
             createdAt: invoices.createdAt,
             createdAtCursor: invoiceCursor.cursorValue.as("created_at_cursor"),
             updatedAt: invoices.updatedAt,
@@ -113,6 +119,8 @@ const readInvoices = createSafeHandler(
         dueDate: row.dueDate,
         currency: row.currency,
         totalAmount: row.totalAmount,
+        billingMode: row.billingMode,
+        flatFeeAmount: row.flatFeeAmount,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       })),

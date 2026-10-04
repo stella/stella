@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -11,7 +11,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
@@ -35,6 +35,7 @@ export const exportCsvHandler = async ({
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
@@ -77,10 +78,7 @@ export const exportCsvHandler = async ({
   const csvRows = [headers.join(",")];
 
   for (const row of rows) {
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
     csvRows.push(
       [
         escapeCSV(row.dateWorked),
@@ -107,6 +105,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export a matter's client time entries as CSV text, one row per entry with " +
     "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +
@@ -114,7 +113,12 @@ const config = {
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;

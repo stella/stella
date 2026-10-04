@@ -19,7 +19,7 @@ import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
-import { sessionCookieName } from "@/api/lib/auth-cookie-name";
+import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
@@ -167,6 +167,7 @@ export const mintSmokeSession = async (
   await rootDb.insert(session).values({
     id: `smoke-session-${token}`,
     token,
+    refreshMode: "fixed",
     userId: record.user.id,
     activeOrganizationId: record.org.id,
     expiresAt,

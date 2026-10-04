@@ -23,8 +23,10 @@ import { isRecord } from "@/api/lib/type-guards";
 // cached prefix:
 // - `cache_control` markers. A marker says where a cached prefix ends; moving
 //   it forward to the newest message is how an incremental conversation is
-//   cached, so its position is not prefix content. Chat marks only its system
-//   prompt (`systemPromptsPatch`), where it never moves.
+//   cached, so its position is not prefix content. Chat marks the ends of its
+//   system prompt's static and organization layers, which never move, and
+//   sets the request-level marker that lands on each request's last block
+//   (`chat-request.ts`).
 // - Model options, OpenAI's `prompt_cache_key` among them: a request's
 //   settings, not its prompt. The key is derived from the stable part of the
 //   system prompt (`buildChatPromptCacheKey`), so it holds whenever the
@@ -39,8 +41,10 @@ import { isRecord } from "@/api/lib/type-guards";
 // - A request made by a process that then died before storing what it had
 //   sent (a tool's result, a partial answer): nothing kept it, so nothing can
 //   extend it (`loseSince`).
-// - In no conversation checked here: compaction and the history window (both
-//   replace old history once a thread outgrows the model's context), editing
+// - A compaction checkpoint landing between requests: its summary replaces
+//   the history earlier requests sent (`compacted`).
+// - In no conversation checked here: the history window (it drops old
+//   history once a thread outgrows its row cap), editing
 //   a message, a change of the context the user has open (the system prompt
 //   describes it), and the day changing in the user's time zone (the system
 //   prompt states the date).
@@ -294,6 +298,14 @@ export const createPromptPrefixLedger = () => {
      *  only up to that call's last user message. */
     replacesTail: (): void => {
       nextReplacesTail = true;
+    },
+    /** The thread's history was compacted before the next call: the summary
+     *  replaces what earlier calls sent, so the next call extends none of
+     *  them. */
+    compacted: (): void => {
+      compare();
+      kept.splice(0);
+      compared = 0;
     },
     /** Where the next recorded call will sit, for `loseSince`. */
     mark: (): number => kept.length,

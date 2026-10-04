@@ -38,6 +38,7 @@ import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj"
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -113,6 +114,11 @@ const installPublisherStub = (): (() => void) => {
             headers: { "Content-Type": "text/html" },
           }),
         );
+      }
+      if (url.pathname.startsWith("/o/v1/")) {
+        // The ÚS supplementary surfaces state nothing for these documents;
+        // the identity under test is read from the listing row.
+        return Promise.resolve(new Response(null, { status: 404 }));
       }
       if (url.hostname === "vyhledavac.nssoud.cz") {
         return Promise.resolve(
@@ -316,10 +322,11 @@ const NO_RAW_PAYLOAD = {
  * The raw payload is dropped before storing: object storage is not what these
  * cases are about, and a failed upload would only add noise to them.
  */
-const withoutRawPayload = (decision: IngestionResult): IngestionResult => ({
-  ...decision,
-  ...NO_RAW_PAYLOAD,
-});
+const withoutRawPayload = (decision: IngestionResult): IngestionResult =>
+  plainTextIngestionResult({
+    ...decision,
+    ...NO_RAW_PAYLOAD,
+  });
 
 /**
  * The row this adapter used to write for that document: everything it writes
@@ -328,12 +335,13 @@ const withoutRawPayload = (decision: IngestionResult): IngestionResult => ({
 const asLegacyRow = (
   decision: IngestionResult,
   keepEcli: boolean,
-): IngestionResult => ({
-  ...withoutRawPayload(decision),
-  legacySourceUrls: undefined,
-  sourceDocumentId: undefined,
-  ...(keepEcli ? {} : { ecli: undefined }),
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    ...withoutRawPayload(decision),
+    legacySourceUrls: undefined,
+    sourceDocumentId: undefined,
+    ...(keepEcli ? {} : { ecli: undefined }),
+  });
 
 type StoredRow = { id: string; sourceDocumentId: string | null };
 

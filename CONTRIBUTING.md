@@ -9,10 +9,18 @@ and coordinate development.
 
 ## Getting Started
 
-1. Fork the repository and clone your fork.
-2. Install dependencies: `bun install`
-3. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
-4. Start the dev environment: `bun run dev`
+1. Install [Bun](https://bun.sh) at the version pinned in the
+   `packageManager` field of `package.json`, and Docker (the local stack
+   runs its services in containers).
+2. Fork the repository and clone your fork with its submodules:
+   `git clone --recurse-submodules <your fork URL>` (in an existing clone,
+   run `git submodule update --init`).
+3. Add the canonical repository as a remote, so local checks compare your
+   branch against its `main` rather than your fork's:
+   `git remote add upstream https://github.com/stella/stella.git && git fetch upstream`
+4. Install dependencies: `bun install`
+5. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
+6. Start the dev environment: `bun run dev`
 
 `bun run dev` now prepares the local stack for the current checkout,
 including worktree-aware `.env` linking and automatic port offsets when
@@ -75,11 +83,18 @@ to explore the codebase.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:
    ```bash
+   bun run autofix
    bun run verify
    ```
-   This mirrors the required CI checks (lint, format, typecheck,
-   tests, i18n, dependency hygiene): green here means green on the
-   `ci-result` status. Use `bun run verify --all` to check every
+   `autofix` regenerates the derived files your change affects, applies
+   safe lint fixes and formats the changed files. CI does this on
+   same-repository pull requests but not on pull requests from forks, so
+   from a fork run it and commit the result.
+   `verify` mirrors CI's package checks (lint, format, typecheck, tests,
+   i18n, dependency hygiene) against the canonical repository's `main`.
+   A pass covers the package checks, not all of `ci-result`: the web and
+   landing builds run in CI, and browser, e2e and service-backed suites
+   run in the merge queue. Use `bun run verify --all` to check every
    package instead of only those affected by your branch.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
@@ -161,6 +176,7 @@ it:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/mcp-kit`
 - `@stll/money`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`
@@ -193,16 +209,26 @@ can observe needs a real bump.
 - [ ] Changes are tested
 - [ ] A changeset is included when a published package changed (empty if the
       public surface did not)
-- [ ] CLA is signed
+- [ ] CLA is signed by the opener and every commit author, or each is exempt
 - [ ] Issue is linked
 
 ## Contributor License Agreement
 
-All contributors must sign the
-[Contributor License Agreement](https://github.com/stella/cla/blob/main/CLA.md) before their pull request
-can be merged. You will be prompted automatically when you open a
-PR. Signing is a one-time process: post the required comment on
-your first PR and all future contributions are covered.
+Outside contributors must sign the
+[Contributor License Agreement](https://github.com/stella/cla/blob/main/CLA.md)
+before their pull request can be merged. Active organization members and owners,
+bot accounts, and explicitly allowlisted automation accounts are exempt.
+
+The `cla` check covers the pull request opener and every commit author, and
+prompts unsigned contributors automatically. Each contributor must post this
+exact sentence as a comment from their own linked GitHub account:
+
+> I have read the CLA Document and I hereby sign the CLA
+
+Signing is a one-time process; existing signatures cover future contributions.
+A comment from another account cannot sign for a contributor. Commit authors
+without linked GitHub accounts must link their author identity before verification.
+Pull requests with more than 250 commits cannot be fully verified by this check.
 
 The CLA grants stella labs, s.r.o. a perpetual license to use your
 contributions across all distributions of stella. While the project

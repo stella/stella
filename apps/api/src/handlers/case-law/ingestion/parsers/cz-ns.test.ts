@@ -9,6 +9,7 @@ import {
   parseNsDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import type { ParseNsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -586,6 +587,95 @@ describe("parseNsDecisionHtml", () => {
 });
 
 describe("source table text retention", () => {
+  test("preserves breaks in unknown, additional and recognized metadata cells", () => {
+    for (const separator of [
+      "<br>",
+      "<br/>",
+      "<BR />",
+      "&lt;br&gt;",
+      "&lt;br/&gt;",
+      "&lt;BR /&gt;",
+    ]) {
+      const { canonical, source } = extractNsMetadata(
+        cheerio.load(`<table id="box-table-a">
+          <tr><th>Unknown${separator}label</th>
+            <td>${separator}<b>foo${separator}bar</b>${separator}baz</td>
+            <td>extra${separator}value</td></tr>
+          <tr><td>Kategorie rozhodnutí:</td><td>foo${separator}bar</td></tr>
+          <tr><td>Heslo:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><td>Dotčené předpisy:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><th>Standalone${separator}header</th></tr>
+        </table>`),
+      );
+      expect(source["metadataTable"]).toEqual({
+        captions: [],
+        rows: [
+          [
+            { type: "header", text: "Unknown\nlabel" },
+            { type: "data", text: "foo\nbar\nbaz" },
+            { type: "data", text: "extra\nvalue" },
+          ],
+          [
+            { type: "data", text: "Kategorie rozhodnutí:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Heslo:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Dotčené předpisy:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [{ type: "header", text: "Standalone\nheader" }],
+        ],
+      });
+      expect(source["kategorieRozhodnuti"]).toBe("foo\nbar");
+      expect(canonical.keywords).toEqual(["foo", "bar"]);
+      expect(canonical.statutes).toEqual(canonical.keywords);
+    }
+  });
+
+  test("escaped metadata breaks retain ordered values like HTML breaks", () => {
+    const values = [
+      "odmítnuto pro zjevnou neopodstatněnost",
+      "odmítnuto pro neoprávněnost navrhovatele",
+      "odmítnuto pro nepříslušnost",
+    ];
+    const fixture = (separator: string) => `<html><body>
+      <table id="box-table-a">
+        <tr><td>Senátní značka:</td><td>29 ICdo 37/2013</td></tr>
+        <tr><td>Heslo:</td><td>${separator}${values.join(separator)}</td></tr>
+        <tr><td colspan="2">Podána ústavní stížnost
+          <table><tr><td>Výsledek</td></tr>
+            <tr><td><font>${separator}${values.join(separator)}</font></td></tr>
+          </table>
+        </td></tr>
+      </table>
+      <p>Text rozhodnutí zůstává zachován.</p>
+    </body></html>`;
+    const expected = parseNsDecisionHtml(baseInput(fixture("<br/>")));
+    for (const separator of ["&lt;br&gt;", "&lt;br/&gt;", "&lt;BR /&gt;"]) {
+      const result = parseNsDecisionHtml(baseInput(fixture(separator)));
+      expect(JSON.stringify(result)).toBe(JSON.stringify(expected));
+      expect(result.metadata.caseNumber).toBe("29 ICdo 37/2013");
+      expect(result.metadata.keywords).toEqual(values);
+      expect(
+        result.sourceMetadata.ustavniStiznost?.at(0)?.["výsledek"],
+      ).toMatchObject({
+        type: "text",
+        value: values.join("\n"),
+      });
+      expect(
+        result.documentAst.blocks.every(
+          (block) => markupResidueIn(block.plainText) === undefined,
+        ),
+      ).toBe(true);
+      expect(result.fulltext).toContain(values.join("\n"));
+      expect(result.fulltext).toContain("Text rozhodnutí zůstává zachován.");
+    }
+  });
+
   test("keeps every metadata cell and caption without inferring labels", () => {
     const { source } = extractNsMetadata(
       cheerio.load(`<table id="box-table-a">
@@ -626,5 +716,60 @@ describe("source table text retention", () => {
       (block) => block.type === "table",
     );
     expect(table?.rows.at(0)?.at(0)?.header).toBe(true);
+  });
+});
+
+test("retains a nested table inside its outer cell once", () => {
+  const parsed = parseNsDecisionHtml(
+    baseInput(
+      '<table id="box-table-a"></table><table><tr><td>Outer<table><tr><td>qzmarkerInner</td></tr></table></td></tr></table>',
+    ),
+  );
+  const tables = parsed.documentAst.blocks.filter(
+    (block) => block.type === "table",
+  );
+  expect(tables).toHaveLength(1);
+  expect(tables.at(0)?.rows).toHaveLength(1);
+  expect(tables.at(0)?.rows.at(0)?.at(0)?.plainText).toBe("OuterqzmarkerInner");
+  expect(parsed.fulltext.split("qzmarkerInner").length - 1).toBe(1);
+});
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text in metadata captions and values`, () => {
+    const clean = `<table id="box-table-a"><caption>Metadata</caption><tbody>
+      <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+      <tr><td>Heslo:</td><td>Dovolání<br/>Přípustnost dovolání</td></tr>
+    </tbody></table>`;
+    const hidden = `<${tag}>qzmetadataHidden</${tag}>`;
+    const injected = clean
+      .replace("Metadata", () => `Metadata${hidden}`)
+      .replace("Nejvyšší soud", () => `Nejvyšší soud${hidden}`)
+      .replace("Dovolání<br/>", () => `Dovolání${hidden}<br/>`);
+    expect(injected).not.toBe(clean);
+    expect(extractNsMetadata(cheerio.load(injected))).toEqual(
+      extractNsMetadata(cheerio.load(clean)),
+    );
+  });
+}
+
+test("retains metadata footer rows through the shared row owner", () => {
+  const { source } = extractNsMetadata(
+    cheerio.load(`<table id="box-table-a">
+    <tbody><tr><td>Soud:</td><td>Nejvyšší soud</td></tr></tbody>
+    <tfoot><tr><td>Dodatečná informace:</td><td>Source footer</td></tr></tfoot>
+  </table>`),
+  );
+  expect(source["metadataTable"]).toEqual({
+    captions: [],
+    rows: [
+      [
+        { type: "data", text: "Soud:" },
+        { type: "data", text: "Nejvyšší soud" },
+      ],
+      [
+        { type: "data", text: "Dodatečná informace:" },
+        { type: "data", text: "Source footer" },
+      ],
+    ],
   });
 });

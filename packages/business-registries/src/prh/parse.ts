@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import type {
   PrhAddress,
   PrhBusinessLine,
@@ -289,7 +290,7 @@ export const parseCompany = (raw: PrhRawCompany): PrhCompany => {
       raw.tradeRegisterStatus === TRADE_REGISTER_REGISTERED,
     registeredAt: raw.registrationDate ?? null,
     endedAt: raw.endDate ?? null,
-    registryUrl: `${PRH_AVOINDATA_URL}${encodeURIComponent(businessId)}`,
+    registryUrl: `${PRH_AVOINDATA_URL}${encodeRegistryComponent(businessId)}`,
   };
 };
 

@@ -26,6 +26,11 @@ import {
   StoredAstDegradedError,
 } from "@/api/lib/errors/tagged-errors";
 import {
+  corpusContentHash,
+  EMPTY_CORPUS_CONTENT_HASHES,
+} from "@/api/lib/legal-search/corpus-content-hash";
+import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
+import {
   formatCorpusLocation,
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
@@ -43,7 +48,6 @@ import type {
 } from "@/api/lib/legal-search/corpus-tombstones";
 import {
   emptyAstSchema,
-  EMPTY_AST,
   persistedDecisionSectionsSchema,
 } from "@/api/lib/legal-search/document-types";
 import type {
@@ -58,7 +62,11 @@ import {
   readCorpusS3BytesBounded,
   readCorpusS3Range,
 } from "@/api/lib/s3";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+export { corpusContentHash, EMPTY_CORPUS_CONTENT_HASHES };
+export type { CorpusPayload };
 
 /**
  * Canonical corpus payloads (text, sections, AST) live in object
@@ -136,7 +144,12 @@ const boundedCorpusIo = async <T>(
     signal,
     timeoutMs = CORPUS_IO_TIMEOUT_MS,
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<T> => await withTimeout(operation, { label, signal, timeoutMs });
+): Promise<T> =>
+  await withTimeout(operation, {
+    label,
+    ...(signal === undefined ? {} : { signal }),
+    timeoutMs,
+  });
 
 type CorpusKeyInput = {
   documentId: string;
@@ -163,76 +176,6 @@ export const corpusKeys = ({
   };
 };
 
-export type CorpusPayload = {
-  text: string | null;
-  sections: DecisionSection[] | null;
-  ast: DocumentAst | EmptyAst | null;
-};
-
-/**
- * Separates the payload's fields inside the hash, so a document whose
- * text ends where the next field begins cannot collide with a different
- * split of the same bytes. NUL cannot occur in a payload: the pipeline
- * strips it from every stored string. Spelled as an escape because a
- * literal NUL in source makes the file binary to half the toolchain —
- * the byte, and therefore every hash, is unchanged.
- */
-const FIELD_SEPARATOR = "\u0000";
-
-/** sha256 over the canonical payload; what object storage is keyed on. */
-export const corpusContentHash = ({
-  text,
-  sections,
-  ast,
-}: CorpusPayload): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(text ?? "");
-  hasher.update(FIELD_SEPARATOR);
-  hasher.update(JSON.stringify(sections ?? null));
-  hasher.update(FIELD_SEPARATOR);
-  hasher.update(JSON.stringify(ast ?? null));
-  return hasher.digest("hex");
-};
-
-/**
- * The content hashes of a payload that carries no document.
- *
- * A metadata-first ingest stores the decision's identity and leaves the
- * document to a later fetch, so under dual-write or canonical storage it
- * still writes a corpus payload — an empty one. Those objects are
- * indistinguishable from a real payload by key alone, so the hash is
- * what identifies them: a row still carrying one of these has nothing
- * readable in object storage, whatever its Postgres columns say.
- *
- * Derived rather than written down, so a change to the hash function or
- * to the empty shapes cannot leave a stale constant behind. `null` and
- * `""` text hash alike (the hasher coalesces), so the variants are the
- * cross product of the empty sections shapes (none, or a stored `[]`)
- * with the constant empty AST shapes (the `EMPTY_AST` placeholder, or
- * none at all). A structurally valid AST with no blocks is deliberately
- * NOT here — its envelope carries per-document metadata, so its hash is
- * row-specific and no constant can name it; those rows are recognised
- * structurally instead (see stored-payload.ts).
- */
-const EMPTY_SECTION_SHAPES: readonly (DecisionSection[] | null)[] = [null, []];
-// A full `DocumentAst` with an empty `blocks` array is NOT representable
-// here: it carries per-document `source`/`metadata`, so its hash is
-// row-specific and no constant can name it. Such a row (empty text, empty
-// blocks, populated envelope) is judged by the Postgres-side structural
-// predicate instead; the hash constants cover every payload whose empty
-// shape is content-independent.
-const EMPTY_AST_SHAPES: readonly (DocumentAst | EmptyAst | null)[] = [
-  EMPTY_AST,
-  null,
-];
-
-export const EMPTY_CORPUS_CONTENT_HASHES: readonly string[] =
-  EMPTY_SECTION_SHAPES.flatMap((sections) =>
-    EMPTY_AST_SHAPES.map((ast) =>
-      corpusContentHash({ text: null, sections, ast }),
-    ),
-  );
-
 type WriteCorpusInput = CorpusPayload & {
   documentId: string;
   jurisdiction: string;
@@ -247,7 +190,10 @@ type WriteCorpusInput = CorpusPayload & {
   stored: WriteCorpusResult | null;
 };
 
-type CorpusIoOptions = { signal?: AbortSignal };
+type CorpusIoOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
+};
 
 type StartedCorpusIo<T> = {
   result: Promise<T>;
@@ -606,7 +552,7 @@ export const corpusPayloadDisposition = ({
  */
 export const writeCorpusDocument = async (
   input: WriteCorpusInput,
-  { signal }: CorpusIoOptions = {},
+  { signal, s3Policy }: CorpusIoOptions = {},
 ): Promise<CorpusWriteOutcome> => {
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
@@ -630,34 +576,37 @@ export const writeCorpusDocument = async (
     startCancellableCorpusIo(
       "corpus-write-text",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.textKey,
-          frames.text,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.textKey,
+          bytes: frames.text,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
     startCancellableCorpusIo(
       "corpus-write-sections",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.sectionsKey,
-          frames.sections,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.sectionsKey,
+          bytes: frames.sections,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
     startCancellableCorpusIo(
       "corpus-write-ast",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.astKey,
-          frames.ast,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.astKey,
+          bytes: frames.ast,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
   ];
@@ -674,6 +623,7 @@ type BoundedObjectReader = (options: {
   key: string;
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }) => Promise<Uint8Array>;
 
 type RangeReader = (options: {
@@ -681,6 +631,7 @@ type RangeReader = (options: {
   offset: number;
   length: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }) => Promise<Uint8Array>;
 
 type ReadCorpusBytesAtOptions = {
@@ -688,6 +639,7 @@ type ReadCorpusBytesAtOptions = {
   /** Ceiling on the transferred (still-compressed) bytes. */
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   /** Test seams; production reads through the corpus bucket client. */
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
@@ -714,6 +666,7 @@ type ReadPackedMemberOptions = {
   location: PackedCorpusLocation;
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   readRange: RangeReader;
   readTombstones: CorpusTombstoneReader;
 };
@@ -728,6 +681,7 @@ const readPackedMember = async ({
   location,
   maxBytes,
   signal,
+  s3Policy,
   readRange,
   readTombstones,
 }: ReadPackedMemberOptions): Promise<
@@ -760,6 +714,7 @@ const readPackedMember = async ({
     offset: location.offset,
     length: location.length,
     signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   const digest = corpusMemberDigest(bytes);
   return digest === location.sha256
@@ -777,18 +732,25 @@ export const readCorpusBytesAt = async ({
   location,
   maxBytes,
   signal,
+  s3Policy,
   readObject = readCorpusS3BytesBounded,
   readRange = readCorpusS3Range,
   readTombstones,
 }: ReadCorpusBytesAtOptions): Promise<Uint8Array> => {
   switch (location.type) {
     case "object":
-      return await readObject({ key: location.key, maxBytes, signal });
+      return await readObject({
+        key: location.key,
+        maxBytes,
+        signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      });
     case "packed": {
       const member = await readPackedMember({
         location,
         maxBytes,
         signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         readRange,
         readTombstones,
       });
@@ -810,6 +772,8 @@ export const readCorpusBytesAt = async ({
  * answer to "where is this read's erasure list", and is required.
  */
 export type CorpusByteSourceSeams = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
   readTombstones: CorpusTombstoneReader;
@@ -818,17 +782,20 @@ export type CorpusByteSourceSeams = {
 type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
   storedKey: string;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 };
 
 const readStoredCorpusBytes = async ({
   storedKey,
   signal,
+  s3Policy,
   ...seams
 }: ReadStoredCorpusBytesOptions): Promise<Uint8Array> =>
   await readCorpusBytesAt({
     location: parseCorpusLocation(storedKey),
     maxBytes: CORPUS_TRANSFER_MAX_BYTES,
     signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     ...seams,
   });
 
@@ -844,25 +811,34 @@ type ReadCorpusTextOptions = CorpusByteSourceSeams & {
  */
 export const readCorpusText = async (
   storedKey: string,
-  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions,
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, signal, ...seams }: ReadCorpusTextOptions,
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
-    { timeoutMs },
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { timeoutMs, ...(signal === undefined ? {} : { signal }) },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
 
 export const readCorpusSections = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -882,12 +858,17 @@ export type SizedCorpusAst = {
 
 export const readSizedCorpusAst = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
   const parsed: unknown = JSON.parse(decoded);

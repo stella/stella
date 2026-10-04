@@ -3,9 +3,11 @@ import {
   and,
   asc,
   eq,
+  gte,
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   min,
   or,
@@ -24,9 +26,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
-  CorpusIndexDeleteSettlement,
+  CorpusIndexDeleteSettlementRead,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexMaturationPeriodMs } from "@/api/lib/legal-search/corpus-index-config";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
   type CorpusIndexIntentStatus,
@@ -47,6 +51,11 @@ import {
   type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
+  type CorpusProjectionCleanupJudgement,
+  type CorpusProjectionCleanupPending,
+  judgeCorpusProjectionCleanupSettlement,
+} from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
+import {
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
@@ -62,6 +71,7 @@ const CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES = [
   "cleanup_pending",
   "cleanup_started",
   "cleanup_committed",
+  "cleanup_stalled",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 const CORPUS_PROJECTION_REOPENABLE_STATUSES = [
   ...CORPUS_PROJECTION_REOPEN_CONVERGED_STATUSES,
@@ -324,9 +334,13 @@ export const retryCorpusProjectionCleanupTx = async (
   return rows.length;
 };
 
-type VerifyCorpusProjectionCleanupSettlementOptions = {
-  client: Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
-  lease: CorpusProjectionCleanupSettlementLease;
+type VerifyCorpusProjectionCleanupSettlementsOptions = {
+  client: Pick<CorpusIndexClient, "readDeleteSettlements" | "search">;
+  indexId: string;
+  /** Leases of `indexId`, all proved against one read of its split list. */
+  leases: readonly CorpusProjectionCleanupSettlementLease[];
+  /** Deterministic test clock for split maturity; defaults to now. */
+  testNow?: Temporal.Instant;
 };
 
 export type CorpusProjectionCleanupSettlementLease = {
@@ -572,16 +586,95 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
   );
 };
 
+type SurvivorPending = Extract<
+  CorpusProjectionCleanupPending,
+  { reason: "survivor" }
+>;
+
+/**
+ * Every pending reason but `survivor` is a wait: release the lease and prove
+ * again on a later turn. A survivor carries the authority to issue the
+ * delete again, which only `reissueCorpusProjectionCleanupTx` accepts.
+ */
 export type CorpusProjectionCleanupSettlementResult =
-  | {
+  | ({ status: "pending" } & Exclude<
+      CorpusProjectionCleanupPending,
+      SurvivorPending
+    >)
+  | ({
       status: "pending";
-      settlement: CorpusIndexDeleteSettlement;
-      remainingRevisionCount: number | null;
-    }
+      reissue: CorpusProjectionCleanupReissue;
+    } & SurvivorPending)
   | {
       status: "verified";
       proof: CorpusProjectionCleanupSettlementProof;
     };
+
+type CorpusProjectionCleanupSettlementVerdict = {
+  lease: CorpusProjectionCleanupSettlementLease;
+  result: Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>;
+};
+
+type ProveCorpusProjectionCleanupSettlementOptions = {
+  client: Pick<CorpusIndexClient, "search">;
+  lease: CorpusProjectionCleanupSettlementLease;
+  settlement: CorpusIndexDeleteSettlementRead;
+  now: Temporal.Instant;
+};
+
+/**
+ * When a survivor-shaped verdict may stand: once every split that existed
+ * when the delete task was created has had its maturation period, the engine
+ * has applied the task wherever it can, and a split the listing missed can no
+ * longer be one it is still to reach.
+ */
+const survivorConfirmableAt = ({
+  family,
+  generation,
+  deleteTaskCreatedAt,
+}: CorpusProjectionCleanupSettlementLease): Temporal.Instant =>
+  Temporal.Instant.fromEpochMilliseconds(
+    deleteTaskCreatedAt.epochMilliseconds +
+      corpusIndexMaturationPeriodMs(
+        requireCorpusIndexManifest(family, generation).engine.indexConfig
+          .indexing_settings.merge_policy.maturation_period,
+      ),
+  );
+
+/** Not exported, so no other module can construct reissue evidence. */
+const REISSUE_CONSTRUCTION: unique symbol = Symbol(
+  "corpus projection cleanup reissue",
+);
+
+/**
+ * Opaque evidence that every split the listing holds crossed the delete
+ * opstamp and that an exact revision query still found documents of the
+ * leased revisions: they were written after the delete, so only a new one can
+ * remove them.
+ */
+export class CorpusProjectionCleanupReissue {
+  readonly indexId: string;
+  readonly intentIds: readonly ProjectionIntentId[];
+  readonly deleteOpstamp: number;
+  readonly leaseToken: string;
+  readonly remainingRevisionCount: number;
+
+  /** Callable only in this module: settlement proof constructs it. */
+  constructor(
+    construction: typeof REISSUE_CONSTRUCTION,
+    lease: CorpusProjectionCleanupSettlementLease,
+    { remainingRevisionCount }: SurvivorPending,
+  ) {
+    if (construction !== REISSUE_CONSTRUCTION) {
+      panic("Corpus projection reissue evidence has a foreign constructor");
+    }
+    this.indexId = lease.indexId;
+    this.intentIds = [...lease.intentIds];
+    this.deleteOpstamp = lease.deleteOpstamp;
+    this.leaseToken = lease.leaseToken;
+    this.remainingRevisionCount = remainingRevisionCount;
+  }
+}
 
 /**
  * Opaque evidence that every split that could hold the deleted revisions
@@ -606,26 +699,29 @@ export class CorpusProjectionCleanupSettlementProof {
     this.leaseToken = leaseToken;
   }
 
-  static async verify({
+  /**
+   * One verdict per lease, in lease order. The leases share one read of the
+   * index's split list, so a turn's listing cost does not grow with the
+   * number of delete tasks it proves; a failed read fails every lease.
+   */
+  static async verifyAll({
     client,
-    lease,
-  }: VerifyCorpusProjectionCleanupSettlementOptions): Promise<
-    Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
+    indexId,
+    leases,
+    testNow,
+  }: VerifyCorpusProjectionCleanupSettlementsOptions): Promise<
+    CorpusProjectionCleanupSettlementVerdict[]
   > {
-    const {
-      indexId,
-      intentIds,
-      deleteOpstamp,
-      deleteTaskCreatedAt,
-      leaseToken,
-    } = lease;
-    if (
-      intentIds.length === 0 ||
-      intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
-      !Number.isSafeInteger(deleteOpstamp) ||
-      deleteOpstamp < 0
-    ) {
-      return panic("Corpus projection settlement request is invalid");
+    for (const lease of leases) {
+      if (
+        lease.indexId !== indexId ||
+        lease.intentIds.length === 0 ||
+        lease.intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
+        !Number.isSafeInteger(lease.deleteOpstamp) ||
+        lease.deleteOpstamp < 0
+      ) {
+        return panic("Corpus projection settlement request is invalid");
+      }
     }
     // Which splits the delete has to have reached, and why the rest are not
     // evidence of anything. The cleanup fence issues a delete only after the
@@ -639,45 +735,150 @@ export class CorpusProjectionCleanupSettlementProof {
     // after the task that inherited documents from an input published before
     // it; the exact revision count below is what refuses to settle then, and
     // it is the step that makes the proof exact rather than merely bounded.
-    const settlement = await client.readDeleteSettlement({
+    // A merge output carries the lowest opstamp of its inputs, so the listing
+    // still shows it below the task, and a count it answers waits for the
+    // engine instead of declaring a survivor.
+    const settlements = await client.readDeleteSettlements({
+      observer: "unobserved",
       indexId,
-      requiredOpstamp: deleteOpstamp,
-      deleteCreatedAt: deleteTaskCreatedAt,
+      tasks: leases.map(({ deleteOpstamp, deleteTaskCreatedAt }) => ({
+        requiredOpstamp: deleteOpstamp,
+        deleteCreatedAt: deleteTaskCreatedAt,
+      })),
     });
+    if (settlements.isErr()) {
+      return leases.map((lease) => ({
+        lease,
+        result: Result.err(settlements.error),
+      }));
+    }
+    if (settlements.value.length !== leases.length) {
+      return panic(
+        `Corpus index returned ${settlements.value.length} settlements for ${leases.length} delete tasks`,
+      );
+    }
+    const now = testNow ?? Temporal.Now.instant();
+    const verdicts: CorpusProjectionCleanupSettlementVerdict[] = [];
+    for (const [index, lease] of leases.entries()) {
+      const settlement =
+        settlements.value.at(index) ??
+        panic("Corpus projection settlement lost its delete task");
+      verdicts.push({
+        lease,
+        result: await CorpusProjectionCleanupSettlementProof.prove({
+          client,
+          lease,
+          settlement,
+          now,
+        }),
+      });
+    }
+    return verdicts;
+  }
+
+  private static async prove({
+    client,
+    lease,
+    settlement,
+    now,
+  }: ProveCorpusProjectionCleanupSettlementOptions): Promise<
+    Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
+  > {
     if (settlement.isErr()) {
       return Result.err(settlement.error);
     }
-    if (!settlement.value.settled) {
-      return Result.ok({
-        status: "pending",
-        settlement: settlement.value,
-        remainingRevisionCount: null,
-      });
+    const listed = judgeCorpusProjectionCleanupSettlement({
+      settlement: settlement.value,
+      remainingRevisionCount: null,
+      now,
+      survivorConfirmableAt: survivorConfirmableAt(lease),
+    });
+    if (listed.type !== "count_required") {
+      return Result.ok(
+        CorpusProjectionCleanupSettlementProof.resultOf(lease, listed),
+      );
     }
     const remaining = await countCorpusProjectionRevisions({
       client,
-      indexId,
-      revisions: intentIds,
+      indexId: lease.indexId,
+      revisions: lease.intentIds,
     });
     if (remaining.isErr()) {
       return Result.err(remaining.error);
     }
-    if (remaining.value !== 0) {
-      return Result.ok({
-        status: "pending",
-        settlement: settlement.value,
-        remainingRevisionCount: remaining.value,
-      });
-    }
-    return Result.ok({
-      status: "verified",
-      proof: new CorpusProjectionCleanupSettlementProof(
-        indexId,
-        [...intentIds],
-        deleteOpstamp,
-        leaseToken,
-      ),
+    const counted = judgeCorpusProjectionCleanupSettlement({
+      settlement: settlement.value,
+      remainingRevisionCount: remaining.value,
+      now,
+      survivorConfirmableAt: survivorConfirmableAt(lease),
     });
+    if (counted.type === "count_required") {
+      return panic("Corpus projection settlement was counted twice");
+    }
+    return Result.ok(
+      CorpusProjectionCleanupSettlementProof.resultOf(lease, counted),
+    );
+  }
+
+  private static resultOf(
+    lease: CorpusProjectionCleanupSettlementLease,
+    judgement: Exclude<
+      CorpusProjectionCleanupJudgement,
+      { type: "count_required" }
+    >,
+  ): CorpusProjectionCleanupSettlementResult {
+    switch (judgement.type) {
+      case "verified":
+        return {
+          status: "verified",
+          proof: new CorpusProjectionCleanupSettlementProof(
+            lease.indexId,
+            [...lease.intentIds],
+            lease.deleteOpstamp,
+            lease.leaseToken,
+          ),
+        };
+      case "pending":
+        return CorpusProjectionCleanupSettlementProof.pendingOf(
+          lease,
+          judgement.pending,
+        );
+      default: {
+        judgement satisfies never;
+        return panic(
+          `Unhandled corpus projection settlement judgement ${String(judgement)}`,
+        );
+      }
+    }
+  }
+
+  private static pendingOf(
+    lease: CorpusProjectionCleanupSettlementLease,
+    pending: CorpusProjectionCleanupPending,
+  ): CorpusProjectionCleanupSettlementResult {
+    switch (pending.reason) {
+      case "staged_split":
+      case "immature_split":
+      case "delete_lagging":
+      case "survivor_unconfirmed":
+        return { status: "pending", ...pending };
+      case "survivor":
+        return {
+          status: "pending",
+          ...pending,
+          reissue: new CorpusProjectionCleanupReissue(
+            REISSUE_CONSTRUCTION,
+            lease,
+            pending,
+          ),
+        };
+      default: {
+        pending satisfies never;
+        return panic(
+          `Unhandled corpus projection pending reason ${String(pending)}`,
+        );
+      }
+    }
   }
 }
 
@@ -783,6 +984,141 @@ export const settleCorpusProjectionCleanupTx = async (
     );
   }
   return rows.length;
+};
+
+/**
+ * Deletes one revision may have issued again before it stalls. A revision
+ * written after its delete needs one more; needing it again and again means
+ * something keeps writing it, which another delete does not fix.
+ */
+export const CORPUS_PROJECTION_DELETE_REISSUE_LIMIT = 3;
+
+type ReissueCorpusProjectionCleanupOptions = {
+  reissue: CorpusProjectionCleanupReissue;
+  testNow?: Date;
+};
+
+/** Per-revision outcome of one reissue, so a stall is never only a count. */
+export type CorpusProjectionCleanupReissueResult = {
+  /** Back in `cleanup_pending`: the next cleanup turn issues a new delete. */
+  reissuedIntentIds: ProjectionIntentId[];
+  /**
+   * Now `cleanup_stalled`: their deletes were re-issued the limit already.
+   * They keep their last receipt and block convergence until an operator
+   * moves them back to cleanup.
+   */
+  stalledIntentIds: ProjectionIntentId[];
+  /**
+   * No longer held by this lease and left untouched: a successor took the
+   * lease over after it expired, or a replay of this call moved them already.
+   */
+  unleasedIntentIds: ProjectionIntentId[];
+};
+
+/**
+ * Sends revisions whose delete left survivors back to cleanup, or stalls the
+ * ones that reached the reissue limit. Same lease discipline as release: only
+ * rows still carrying this turn's lease move.
+ */
+export const reissueCorpusProjectionCleanupTx = async (
+  tx: Transaction,
+  { reissue, testNow }: ReissueCorpusProjectionCleanupOptions,
+): Promise<CorpusProjectionCleanupReissueResult> => {
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, reissue.intentIds);
+  await lockCorpusProjectionIntentsById(tx, reissue.intentIds);
+  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const heldByThisLease = and(
+    inArray(corpusIndexProjectionIntents.id, reissue.intentIds),
+    eq(corpusIndexProjectionIntents.indexId, reissue.indexId),
+    eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+    eq(
+      corpusIndexProjectionIntents.deleteOpstamp,
+      BigInt(reissue.deleteOpstamp),
+    ),
+    eq(corpusIndexProjectionIntents.leaseToken, reissue.leaseToken),
+  );
+  const survivorMessage = `corpus projection delete ${reissue.deleteOpstamp} left ${reissue.remainingRevisionCount} revision documents written after it`;
+  const reissued = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_pending",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      cleanupNotBefore: transitionAt,
+      cleanupStartedAt: null,
+      deleteOpstamp: null,
+      deleteTaskCreatedAt: null,
+      deleteReissues: sql`${corpusIndexProjectionIntents.deleteReissues} + 1`,
+      lastError: `${survivorMessage}; delete re-issued`,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        heldByThisLease,
+        lt(
+          corpusIndexProjectionIntents.deleteReissues,
+          CORPUS_PROJECTION_DELETE_REISSUE_LIMIT,
+        ),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  const stalled = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({
+      status: "cleanup_stalled",
+      leaseToken: null,
+      leaseExpiresAt: null,
+      lastError: `${survivorMessage} after ${CORPUS_PROJECTION_DELETE_REISSUE_LIMIT} re-issued deletes; cleanup stalled`,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        heldByThisLease,
+        gte(
+          corpusIndexProjectionIntents.deleteReissues,
+          CORPUS_PROJECTION_DELETE_REISSUE_LIMIT,
+        ),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  // In lease order, whatever order the updates returned their rows in.
+  const reissuedIds = new Set(reissued.map(({ id }) => id));
+  const stalledIds = new Set(stalled.map(({ id }) => id));
+  const reissuedIntentIds = reissue.intentIds.filter((id) =>
+    reissuedIds.has(id),
+  );
+  const stalledIntentIds = reissue.intentIds.filter((id) => stalledIds.has(id));
+  const unleasedIntentIds = reissue.intentIds.filter(
+    (id) => !reissuedIds.has(id) && !stalledIds.has(id),
+  );
+  if (unleasedIntentIds.length > 0) {
+    // As in release: a row that still carries this token but failed the
+    // predicate left the index, status or delete task its lease was granted
+    // against without giving the lease up, which no transition writes.
+    const stillLeasedHere = await tx
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          inArray(corpusIndexProjectionIntents.id, unleasedIntentIds),
+          eq(corpusIndexProjectionIntents.leaseToken, reissue.leaseToken),
+        ),
+      );
+    if (stillLeasedHere.length > 0) {
+      return panic(
+        `Corpus projection reissue left ${stillLeasedHere.length} of ${reissue.intentIds.length} leased revisions on this lease`,
+      );
+    }
+  }
+  if (stalledIntentIds.length > 0) {
+    logger.warn("corpus_projection.cleanup_stalled", {
+      index: reissue.indexId,
+      opstamp: reissue.deleteOpstamp,
+      remaining: reissue.remainingRevisionCount,
+      revisions: stalledIntentIds.length,
+    });
+  }
+  return { reissuedIntentIds, stalledIntentIds, unleasedIntentIds };
 };
 
 type ReopenCorpusProjectionCleanupOptions = {

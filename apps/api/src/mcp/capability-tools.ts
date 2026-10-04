@@ -9,10 +9,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
@@ -33,6 +33,10 @@ import {
   isServiceClassification,
   type CatalogServiceClassification,
 } from "@/api/lib/rate-limit/service-classification";
+import {
+  HANDLER_KINDS,
+  type HandlerKind,
+} from "@/api/lib/safe-handler-factories";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -46,8 +50,11 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
-import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
-import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
+import {
+  projectMcpRefusal,
+  statusCodeToErrorCode,
+} from "@/api/mcp/error-codes";
+import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
   findRemovedInputIssues,
@@ -64,6 +71,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
   McpEgressPlan,
+  McpReadClass,
   McpToolDefinition,
   McpToolHandler,
   McpToolResponse,
@@ -101,16 +109,6 @@ type CapabilityMcpDisposition =
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };
 
-const HANDLER_KINDS = [
-  "workspace",
-  "root",
-  "session",
-  "token",
-  "public",
-] as const;
-
-type HandlerKind = (typeof HANDLER_KINDS)[number];
-
 type CatalogEntry = {
   id: string;
   consumesServices: CatalogServiceClassification;
@@ -124,6 +122,7 @@ type CatalogEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
   scope: string;
   additionalScopes?: readonly string[];
@@ -249,7 +248,11 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   (value["description"] === undefined ||
     typeof value["description"] === "string") &&
   isHandlerKind(value["handlerKind"]) &&
-  (value["access"] === "read" || value["access"] === "write") &&
+  (value["access"] === "write" ||
+    (value["access"] === "read" &&
+      (value["readClass"] === "tenant" ||
+        value["readClass"] === "public" ||
+        value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
@@ -267,7 +270,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
  * shape, so a mismatch here is a corrupt build artifact: fail fast rather than
  * casting the raw import and letting a malformed entry flow downstream.
  */
-const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
+export const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
   if (!Array.isArray(raw)) {
     return panic("capability catalog artifact is not a JSON array");
   }
@@ -280,12 +283,29 @@ const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
 
 let catalog: readonly CatalogEntry[] | undefined;
 let catalogById: Map<string, CatalogEntry> | undefined;
-const getCatalog = () => (catalog ??= parseCatalog(capabilityCatalogRaw));
-const getCatalogById = () =>
-  (catalogById ??= new Map(getCatalog().map((entry) => [entry.id, entry])));
-const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
-  Object.entries(CAPABILITY_DISPATCH),
-);
+// Tool definitions are also imported by the exporter before shards exist.
+// Defer the generated runtime data until a capability is actually used.
+const getCatalog = async () => {
+  if (catalog !== undefined) {
+    return catalog;
+  }
+  const generated = await import("./generated/capability-catalog");
+  catalog = parseCatalog(generated.default);
+  return catalog;
+};
+const getCatalogById = async () =>
+  (catalogById ??= new Map(
+    (await getCatalog()).map((entry) => [entry.id, entry]),
+  ));
+let dispatchById: Map<string, CapabilityDispatchEntry> | undefined;
+const getDispatchById = async () => {
+  if (dispatchById !== undefined) {
+    return dispatchById;
+  }
+  const generated = await import("./generated/capability-dispatch");
+  dispatchById = new Map(Object.entries(generated.CAPABILITY_DISPATCH));
+  return dispatchById;
+};
 
 const capabilityDomain = (id: string): string => id.split(".").at(0) ?? id;
 const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
@@ -352,6 +372,7 @@ type EndpointConfig = {
   params?: TSchema;
   query?: TSchema;
   permissions?: PermissionInput;
+  accountAccess?: AccountAccess;
 };
 
 type EndpointDefinition = {
@@ -370,8 +391,10 @@ const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
  * expose the expected endpoint shape (a generated-artifact drift the registry
  * test would also catch); the caller maps that to `internal_error`.
  */
-const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
-  const dispatch = DISPATCH_BY_ID.get(id);
+export const loadCapabilityEndpoint = async (
+  id: string,
+): Promise<EndpointDefinition | null> => {
+  const dispatch = (await getDispatchById()).get(id);
   if (!dispatch) {
     return null;
   }
@@ -643,49 +666,6 @@ const validatePart = ({
 
 // --- Result mapping ----------------------------------------------------------
 
-/**
- * Deliberate map from every 4xx a safe handler actually returns (sweep of
- * `HandlerError`/`status(...)` statuses in apps/api/src/handlers) onto the
- * error envelope, preserving the handler's message:
- *  - 400 validation, 422 semantic validation, 413 payload too large ->
- *    `validation_error`;
- *  - 401 (unauthenticated) and 403 (role/permission) -> `permission_denied`
- *    (the generic path is always authenticated, so a 401 here is an
- *    authorization gap, not a login prompt);
- *  - 404 -> `not_found`; 402 -> `usage_limited`; 429 -> `rate_limited`;
- *  - 409 -> `conflict` (duplicate link/name, concurrent edit; the message
- *    names the conflicting resource).
- * Unlisted statuses fall through to `internal_error` deliberately: 5xx are
- * genuine server failures (500/502 in handlers), 2xx/3xx status responses do
- * not occur on catalog handlers (302 lives in oauth-callback/verify, which are
- * `internal`-disposition; `redirect()` also trips the context-fidelity scan),
- * and 410 is unused across the handler tree.
- */
-const STATUS_CODE_TO_ENVELOPE: {
-  min: number;
-  max: number;
-  code: McpErrorCode;
-}[] = [
-  { min: 400, max: 400, code: "validation_error" },
-  { min: 401, max: 401, code: "permission_denied" },
-  { min: 402, max: 402, code: "usage_limited" },
-  { min: 403, max: 403, code: "permission_denied" },
-  { min: 404, max: 404, code: "not_found" },
-  { min: 409, max: 409, code: "conflict" },
-  { min: 413, max: 413, code: "validation_error" },
-  { min: 422, max: 422, code: "validation_error" },
-  { min: 429, max: 429, code: "rate_limited" },
-];
-
-const statusCodeToErrorCode = (code: number): McpErrorCode => {
-  for (const range of STATUS_CODE_TO_ENVELOPE) {
-    if (code >= range.min && code <= range.max) {
-      return range.code;
-    }
-  }
-  return "internal_error";
-};
-
 const statusResponseMessage = (response: unknown): string => {
   if (isRecord(response) && typeof response["message"] === "string") {
     return response["message"];
@@ -728,7 +708,25 @@ const mapStatusResponse = (
       hint: MCP_INTERNAL_ERROR_HINT,
     });
   }
-  return structuredErrorResult({ code, message });
+  return structuredErrorResult(
+    projectMcpRefusal({
+      status: statusCode,
+      code:
+        isRecord(responseBody) && typeof responseBody["code"] === "string"
+          ? responseBody["code"]
+          : undefined,
+      message,
+      issues: isRecord(responseBody) ? responseBody["issues"] : undefined,
+      hint:
+        isRecord(responseBody) && typeof responseBody["hint"] === "string"
+          ? responseBody["hint"]
+          : undefined,
+      retryable:
+        isRecord(responseBody) && typeof responseBody["retryable"] === "boolean"
+          ? responseBody["retryable"]
+          : undefined,
+    }),
+  );
 };
 
 /**
@@ -874,19 +872,19 @@ const contextFeatureEnabled = (
  * The MCP transport attests them on every authenticated response so a client
  * with a baked-in catalog can mark those commands instead of offering them.
  */
-export const featureOmittedCapabilityIds = (
+export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
-): readonly string[] =>
-  getCatalog()
+): Promise<readonly string[]> =>
+  (await getCatalog())
     .filter((entry) => !isFeatureEnabled(entry.feature))
     .map((entry) => entry.id)
     .toSorted();
 
 const listCapabilitiesHandler: McpToolHandler<
   v.InferInput<typeof LIST_CAPABILITIES_OUTPUT_SCHEMA>
-> = ({
+> = async ({
   args,
   context,
 }: {
@@ -915,7 +913,7 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = getCatalog().filter(
+  const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       (confirmable || !entry.destructive) &&
@@ -967,8 +965,8 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 // --- describe_capability -----------------------------------------------------
 
-const notFoundWithHint = (id: string): InternalToolErrorResult =>
-  notFoundResult(`No capability with id "${id}"`, hintForUnknownId(id));
+const notFoundWithHint = async (id: string): Promise<InternalToolErrorResult> =>
+  notFoundResult(`No capability with id "${id}"`, await hintForUnknownId(id));
 
 /**
  * Refusal for a capability whose deployment feature flag is off. Same message
@@ -984,10 +982,10 @@ const featureDisabledResult = (
     hint: featureDisabledHint(feature),
   });
 
-const hintForUnknownId = (id: string): string => {
+const hintForUnknownId = async (id: string): Promise<string> => {
   const suggestions = closestToolNames(
     id,
-    getCatalog().map((entry) => entry.id),
+    (await getCatalog()).map((entry) => entry.id),
   );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
@@ -1022,7 +1020,7 @@ const loadEndpointGuarded = async (
 ): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadEndpoint(id);
+    endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     endpoint = null;
@@ -1058,7 +1056,7 @@ const describeCapabilityHandler: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const id = parsed.output.capability;
-  const entry = getCatalogById().get(id);
+  const entry = (await getCatalogById()).get(id);
   if (!entry) {
     return notFoundWithHint(id);
   }
@@ -1463,7 +1461,7 @@ export const invokedCapabilityConsumesServices = async (args: unknown) => {
     // Invalid calls reach canonical validation without executing work.
     return Result.ok(false);
   }
-  const entry = getCatalogById().get(parsed.output.capability);
+  const entry = (await getCatalogById()).get(parsed.output.capability);
   if (entry === undefined) {
     return Result.ok(false);
   }
@@ -1511,7 +1509,7 @@ const invokeCapabilityHandler = async ({
     confirm,
   } = parsed.output;
 
-  const entry = getCatalogById().get(id);
+  const entry = (await getCatalogById()).get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
@@ -2021,6 +2019,20 @@ export const mapHandlerResult = ({
   return successEgress(result, access);
 };
 
+export const resolveCapabilityReadClass = async (args: unknown) => {
+  if (!isRecord(args) || typeof args["capability"] !== "string") {
+    return undefined;
+  }
+  const entry = (await getCatalogById()).get(args["capability"]);
+  if (entry === undefined || entry.access === "write") {
+    return undefined;
+  }
+  return (
+    entry.readClass ??
+    panic(`Missing read classification for capability ${entry.id}`)
+  );
+};
+
 // --- tool set ----------------------------------------------------------------
 
 const CAPABILITY_TOOL_DEFINITIONS = [
@@ -2034,6 +2046,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "list_capabilities",
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
     description:
@@ -2057,6 +2070,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "describe_capability",
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
     description:
@@ -2086,6 +2100,13 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "invoke_capability",
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "delegated",
+      reason:
+        "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
+    },
+    readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",

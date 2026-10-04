@@ -122,6 +122,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
   } as ResolvedTanStackTextModel;
 
   return await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     caching: {
       enabled: false,
       reason: "org-disabled",
@@ -401,7 +402,7 @@ describe("AI provider canary tool contract", () => {
         provider: "anthropic",
       },
       // A scripted Anthropic model: nothing here reaches a provider.
-      resolveTextModel: (): ResolvedTanStackTextModel => ({
+      resolveTextModel: async (): Promise<ResolvedTanStackTextModel> => ({
         adapter,
         keySource: "instance",
         modelId: "claude-opus-5-5",

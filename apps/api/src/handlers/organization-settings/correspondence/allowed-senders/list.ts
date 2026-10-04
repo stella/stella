@@ -6,7 +6,7 @@ import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -21,6 +21,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandValidatedAllowedSenderCursorId } from "@/api/lib/safe-id-boundaries";
 
 type AllowedSenderRow = typeof correspondenceAllowedSenders.$inferSelect;
@@ -94,6 +95,7 @@ const config = {
   description:
     "List approved and revoked shared mailbox senders for the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "correspondence",
@@ -105,7 +107,7 @@ const config = {
 const listAllowedSenders = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE_DEFAULT);
     const cursorParts = query.cursor
       ? decodePaginationCursor(query.cursor)
       : null;

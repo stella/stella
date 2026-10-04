@@ -1,6 +1,12 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 
 import {
+  DEFAULT_MANAGED_AI_RESIDENCY,
+  MANAGED_AI_RESIDENCIES,
+} from "@/api/lib/chat/ai-data-policy";
+import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
+
+import {
   bytea,
   jsonb,
   orgPolicies,
@@ -167,6 +173,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    sanctionsMonitoringMode: p
+      .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
+      .notNull()
+      .default("enabled"),
     matterNumberPattern: p
       .varchar("matter_number_pattern", { length: 128 })
       .notNull()
@@ -244,6 +254,10 @@ export const organizationSettings = p.pgTable(
     urlFetchApiKeyEncrypted: bytea("url_fetch_api_key_encrypted"),
     /** AES-GCM initialization vector for urlFetchApiKeyEncrypted. */
     urlFetchApiKeyIv: bytea("url_fetch_api_key_iv"),
+    managedAIResidency: p
+      .text("managed_ai_residency", { enum: MANAGED_AI_RESIDENCIES })
+      .notNull()
+      .default(DEFAULT_MANAGED_AI_RESIDENCY),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -295,6 +309,13 @@ export const organizationSettings = p.pgTable(
   },
   (table) => [
     p.check(
+      "organization_settings_managed_ai_residency_check",
+      sql`${table.managedAIResidency} IN (${sql.join(
+        MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_time_minimum_unit_check",
       sql`${table.timeMinimumUnitMinutes} > 0 AND 60 % ${table.timeMinimumUnitMinutes} = 0`,
     ),
@@ -316,6 +337,13 @@ export const organizationSettings = p.pgTable(
       .where(
         sql`${table.memoryExtractionEnabled} = true AND ${table.memoryExtractionScheduledAt} IS NOT NULL`,
       ),
+    p.check(
+      "organization_settings_sanctions_monitoring_mode_check",
+      sql`${table.sanctionsMonitoringMode} IN (${sql.join(
+        SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
     ...orgPolicies(),
   ],
 );

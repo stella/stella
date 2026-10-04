@@ -282,7 +282,7 @@ export const RELEASE_DOC_MARKERS = {
   end: "<!-- END GENERATED RELEASE ARTIFACT CONTRACT -->",
 } as const;
 
-export const renderSelfhostDocsContract = () => {
+export const renderSelfhostDocsContract = (loadGateDescription: string) => {
   const rows = Object.entries(SELFHOST_SERVICE_CONTRACT).map(
     ([name, contract]) =>
       `- \`${name}\`: ${contract.description}; readiness \`${contract.readiness}\`.`,
@@ -295,6 +295,8 @@ export const renderSelfhostDocsContract = () => {
     ...rows,
     "",
     `Its generated environment template is \`${SELFHOST_ENV_EXAMPLE_PATH}\`.`,
+    "",
+    loadGateDescription,
     SELFHOST_DOC_MARKERS.end,
   ].join("\n");
 };

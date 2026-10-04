@@ -124,7 +124,12 @@ describe("buildRegistryWriteSummaryRows", () => {
       playbook_id: "playbook-1",
       expected_updated_at: "2026-09-20T10:00:00.000Z",
       positions: [
-        { mode: "graded", issue: "Liability cap", standard: { tiers: {} } },
+        {
+          mode: "graded",
+          issue: "Liability cap",
+          standard: { tiers: {} },
+          sources: ["ent_1", "ent_2"],
+        },
         { mode: "graded", issue: "Governing law", source_id: "position-1" },
       ],
       remove_source_ids: ["position-2", "position-3"],

@@ -19,6 +19,7 @@ import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-s
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -59,6 +60,7 @@ const config = {
   // entities/ocr/create.ts does; workspace:read alone would let a member
   // with no document-processing grant start metered AI review runs.
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // Creating a run writes a row and enqueues metered model work, so it must
   // never be reachable through a read-only consent even though the permission
   // gate that fronts the whole review surface is a workspace read.
@@ -295,6 +297,7 @@ const createDocumentReviewRun = createSafeHandler(
     // through the review model's rate, one output budget per planned
     // finding. Large runs need the client to restate the estimate.
     const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
+      dataClass: "customer",
       organizationId,
     });
     const inputBytes =

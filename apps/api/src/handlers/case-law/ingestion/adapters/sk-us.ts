@@ -1,5 +1,10 @@
+// parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: [sk-us] failed and refused publisher reads are typed outcomes; served and 404 reads build the same decision.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
+
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -33,8 +38,8 @@ import * as v from "valibot";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
-
 import { classifyFailure } from "@stll/errors";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
@@ -75,9 +80,17 @@ import type {
   SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisherBytes,
+  readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -93,6 +106,16 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
+  READ_OUTCOME_METADATA_KEY,
+  readPresent,
+  readUnavailable,
+  type AbsenceEvidence,
+  type ReadOutcome,
+  type ReadRefusal,
+  type ReadRefusalScope,
+  type ReadUnavailableCause,
+} from "@/api/lib/errors/read-outcome";
+import {
   AdapterFetchError,
   FetchBoundaryError,
   UNPERSISTABLE_DECISION_FIELDS,
@@ -100,6 +123,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -179,20 +204,26 @@ const FIELDS_TO_RETURN: string[] = [];
 
 // ── Cursor helpers ──────────────────────────────────────────
 
-type YearCursor = { year: number; offset: number };
+type YearCursor = { year: number; offset: number } & (
+  | { status: "walking" }
+  | { status: "refused-frontier" }
+);
 
 const parseCursor = (cursor: string | null): YearCursor => {
   if (!cursor) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
   // New format: "YYYY:offset"
-  const match = /^(?<year>\d{4}):(?<offset>\d+)$/u.exec(cursor);
-  const { year, offset } = match?.groups ?? {};
+  const match = /^(?<year>\d{4}):(?<offset>\d+)(?<refused>:refused)?$/u.exec(
+    cursor,
+  );
+  const { year, offset, refused } = match?.groups ?? {};
   if (year && offset) {
     return {
       year: Number.parseInt(year, 10),
       offset: Number.parseInt(offset, 10),
+      status: refused ? "refused-frontier" : "walking",
     };
   }
 
@@ -202,13 +233,14 @@ const parseCursor = (cursor: string | null): YearCursor => {
   // archive (~52k decisions, takes a few hours to crawl through).
   const legacyOffset = Number.parseInt(cursor, 10);
   if (!Number.isNaN(legacyOffset)) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
-  return { year: FIRST_YEAR, offset: 0 };
+  return { year: FIRST_YEAR, offset: 0, status: "walking" };
 };
 
-const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
+const encodeCursor = (c: { year: number; offset: number }): string =>
+  `${c.year}:${c.offset}`;
 
 // ── Search API types ─────────────────────────────────────
 
@@ -329,8 +361,8 @@ const PDF_SIGNATURE = "%PDF-";
 
 const PDF_SIGNATURE_BYTES = new TextEncoder().encode(PDF_SIGNATURE);
 
-/** A decision PDF download that failed. */
-const pdfReadFailed = failureSink({
+/** A per-decision read (the PDF, or a response the build needs) that failed. */
+const detailReadFailed = failureSink({
   event: "case_law.ingestion.detail_fetch_failed",
   expected: [],
 });
@@ -339,8 +371,56 @@ const isPdf = (bytes: Uint8Array): boolean =>
   bytes.length >= PDF_SIGNATURE_BYTES.length &&
   PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
 
+/** What one read of a decision's PDF established. */
+type SkUsPdfRead =
+  | { type: "pdf"; bytes: Uint8Array }
+  /** The court stated no document, or served something that is not a PDF. */
+  | { type: "not-served"; evidence: AbsenceEvidence | "not-a-pdf" }
+  | ReadRefusal
+  | { type: "unavailable"; cause: ReadUnavailableCause };
+
+type ReadFailureErrorOptions = {
+  url: string;
+  cause: ReadUnavailableCause;
+  label: string;
+};
+
 /**
- * The decision's PDF, or `undefined` when the court served no document.
+ * A failed read as an error, with its status where it had one, for
+ * telemetry and for the retry, authentication and stop-kind checks that read
+ * it.
+ */
+const readFailureError = ({
+  url,
+  cause,
+  label,
+}: ReadFailureErrorOptions): Error => {
+  switch (cause.kind) {
+    case "thrown":
+      return cause.error instanceof Error
+        ? cause.error
+        : new FetchBoundaryError({ url, message: label, cause: cause.error });
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return new FetchBoundaryError({
+        url,
+        status: cause.status,
+        message: `${label}: ${cause.status}`,
+      });
+    case "too-large":
+      return new FetchBoundaryError({
+        url,
+        message: `${label}: body over ${cause.maxBytes} bytes`,
+      });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
+};
+
+/**
+ * The decision's PDF, or why there is none.
  *
  * The status alone does not answer that: this portal answers a document
  * request with a 200 error page, and those bytes taken on faith would be
@@ -353,84 +433,87 @@ const isPdf = (bytes: Uint8Array): boolean =>
 const fetchPdfBytes = async (
   documentId: string,
   signal?: AbortSignal,
-): Promise<Uint8Array | undefined> => {
-  try {
-    const response = await fetchPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
-      adapterKey: ADAPTER_KEYS.SK_US,
-      headers: { "User-Agent": INGESTION_USER_AGENT },
-      signal,
-      timeoutMs: 30_000,
-    });
-    if (!response.ok) {
-      return undefined;
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    return isPdf(bytes) ? bytes : undefined;
-  } catch (error) {
-    // The caller's cancellation ends the build.
-    if (signal?.aborted) {
-      throw error;
-    }
-    // The row is held listing-only, which the reconciliation asks about
-    // again. The failed download is reported, graded as the upstream being
-    // unavailable, so an unreachable portal is told apart from documents it
-    // does not serve.
+): Promise<SkUsPdfRead> => {
+  const read = await readPublisherBytes(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.SK_US,
+    expectedContentType: "pdf",
+    headers: { "User-Agent": INGESTION_USER_AGENT },
+    signal,
+    timeoutMs: 30_000,
+  });
+  // The failed download is reported, graded as the upstream being
+  // unavailable, so an unreachable portal is told apart from documents it
+  // does not serve.
+  const unavailable = (cause: ReadUnavailableCause): SkUsPdfRead => {
     observeFailure(
       classifyFailure(
-        typeof error === "object" && error !== null
-          ? error
-          : new Error("PDF download failed", { cause: error }),
+        readFailureError({
+          url: DOC_DOWNLOAD_URL,
+          cause,
+          label: "SK ÚS PDF download failed",
+        }),
         "upstream_unavailable",
       ),
       {
-        sink: pdfReadFailed,
+        sink: detailReadFailed,
         ctx: { adapterKey: ADAPTER_KEYS.SK_US, documentId },
       },
     );
-    return undefined;
+    return { type: "unavailable", cause };
+  };
+  // A served but empty body, one over the read ceiling, and one that fails
+  // after the headers are failed reads, not a page the court answered with in
+  // place of a document: the read types all three as unavailable.
+  switch (read.type) {
+    case "present":
+      return isPdf(read.value)
+        ? { type: "pdf", bytes: read.value }
+        : { type: "not-served", evidence: "not-a-pdf" };
+    case "absent":
+      return { type: "not-served", evidence: read.evidence };
+    case "refused":
+      return read;
+    case "unavailable":
+      return unavailable(read.cause);
+    default:
+      read satisfies never;
+      return panic(`Unhandled PDF read: ${String(read)}`);
   }
 };
 
 // ── The other responses served for one decision ──────────
 
 /**
- * A JSON response, or `undefined` where the service served none.
+ * One JSON response from the service, typed by what the read established.
  *
- * Every supplementary surface answers the same way to a request it will not
- * serve: an empty 204, or a 500 with an empty body. Neither is a decision
- * failing to exist, and neither is worth halting a crawl over, so a missing
- * response leaves its envelope part out and the row states what did arrive.
+ * Only a 404 or 410 states that a surface holds nothing for this decision;
+ * an empty 204, a 500 or an empty body is a read that failed. A 401, 403 or
+ * 451 is a refusal of what `refusalScope` names.
  */
-const fetchJson = async (
+const readJson = async (
   path: string,
-  init: { body?: string; signal?: AbortSignal },
-): Promise<string | undefined> =>
-  (
-    await Result.tryPromise({
-      try: async (): Promise<string | undefined> => {
-        const response = await fetchPublisher(`${SERVICE_URL}/${path}`, {
-          adapterKey: ADAPTER_KEYS.SK_US,
-          ...(init.body === undefined
-            ? {}
-            : { method: "POST", body: init.body }),
-          headers: {
-            "User-Agent": INGESTION_USER_AGENT,
-            ...(init.body === undefined
-              ? {}
-              : { "Content-Type": "application/json" }),
-          },
-          ...(init.signal === undefined ? {} : { signal: init.signal }),
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-        });
-        if (!response.ok || response.status === 204) {
-          return undefined;
-        }
-        const body = await response.text();
-        return body.length === 0 ? undefined : body;
-      },
-      catch: () => undefined,
-    })
-  ).unwrapOr(undefined);
+  init: {
+    body?: string;
+    signal?: AbortSignal;
+    fetchStage: DocumentFetchStage;
+    refusalScope: ReadRefusalScope;
+  },
+): Promise<ReadOutcome<string>> =>
+  await readPublisherText(`${SERVICE_URL}/${path}`, {
+    fetchStage: init.fetchStage,
+    adapterKey: ADAPTER_KEYS.SK_US,
+    refusalScope: init.refusalScope,
+    ...(init.body === undefined ? {} : { method: "POST", body: init.body }),
+    headers: {
+      "User-Agent": INGESTION_USER_AGENT,
+      ...(init.body === undefined
+        ? {}
+        : { "Content-Type": "application/json" }),
+    },
+    ...(init.signal === undefined ? {} : { signal: init.signal }),
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  });
 
 /**
  * The decision's text, as the service renders it.
@@ -442,28 +525,39 @@ const fetchJson = async (
 const fetchDocumentXhtml = async (
   documentId: string,
   signal?: AbortSignal,
-): Promise<string | undefined> => {
-  const body = await fetchJson(CONTENT_PATH, {
+): Promise<ReadOutcome<string>> => {
+  const read = await readJson(CONTENT_PATH, {
     body: JSON.stringify({
       highlightText: "",
       documentId,
       docType: DECISION_DOC_TYPE,
     }),
+    fetchStage: "document",
+    refusalScope: "document",
     ...(signal === undefined ? {} : { signal }),
   });
-  if (body === undefined) {
-    return undefined;
+  if (read.type !== "present") {
+    return read;
   }
   const payload: unknown = Result.try({
-    try: (): unknown => JSON.parse(body),
+    try: (): unknown => JSON.parse(read.value),
     catch: () => null,
   }).unwrapOr(null);
   const content = isRecord(payload) ? payload["content"] : undefined;
+  if (typeof content !== "string") {
+    return readUnavailable({
+      kind: "thrown",
+      error: new FetchBoundaryError({
+        url: `${SERVICE_URL}/${CONTENT_PATH}`,
+        message: "SK ÚS content response has no document",
+      }),
+    });
+  }
   // The document states its own charset; read the bytes as that, not as
   // UTF-8 by assumption.
-  return typeof content === "string"
-    ? decodeDeclared(Buffer.from(content, "base64"), { contentType: null }).text
-    : undefined;
+  return readPresent(
+    decodeDeclared(Buffer.from(content, "base64"), { contentType: null }).text,
+  );
 };
 
 /**
@@ -482,8 +576,10 @@ const fetchDocumentXhtml = async (
 const fetchFacets = async (
   { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
   signal?: AbortSignal,
-): Promise<string | undefined> =>
-  await fetchJson(SEARCH_PATH, {
+): Promise<ReadOutcome<string>> =>
+  await readJson(SEARCH_PATH, {
+    fetchStage: "listing",
+    refusalScope: "part",
     body: JSON.stringify({
       docType: DECISION_DOC_TYPE,
       start: 0,
@@ -514,8 +610,10 @@ const fetchFacets = async (
 const fetchCollectionListing = async (
   { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
   signal?: AbortSignal,
-): Promise<string | undefined> =>
-  await fetchJson(SEARCH_PATH, {
+): Promise<ReadOutcome<string>> =>
+  await readJson(SEARCH_PATH, {
+    fetchStage: "listing",
+    refusalScope: "part",
     body: JSON.stringify({
       docType: COLLECTION_DOC_TYPE,
       start: 0,
@@ -552,8 +650,10 @@ const fetchCollectionListing = async (
 const fetchCourtFile = async (
   rvpNumber: string,
   signal?: AbortSignal,
-): Promise<string | undefined> =>
-  await fetchJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
+): Promise<ReadOutcome<string>> =>
+  await readJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
+    fetchStage: "document",
+    refusalScope: "part",
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -628,16 +728,16 @@ export type SkUsPageContext = {
   collectionListing: (
     key: { caseNumber: string; decisionDate: string },
     signal?: AbortSignal,
-  ) => Promise<string | undefined>;
-  codelist: (signal?: AbortSignal) => Promise<SkUsCodelist | undefined>;
+  ) => Promise<ReadOutcome<string>>;
+  codelist: (signal?: AbortSignal) => Promise<ReadOutcome<SkUsCodelist>>;
   facets: (
     key: { caseNumber: string; decisionDate: string },
     signal?: AbortSignal,
-  ) => Promise<string | undefined>;
+  ) => Promise<ReadOutcome<string>>;
   courtFile: (
     rvpNumber: string,
     signal?: AbortSignal,
-  ) => Promise<string | undefined>;
+  ) => Promise<ReadOutcome<string>>;
 };
 
 /** Joins a docket and a date into one cache key; neither ever contains it. */
@@ -660,12 +760,28 @@ const perKey = <T>(
 };
 
 export const createSkUsPageContext = (): SkUsPageContext => {
-  const codelist = perKey(async (_key, signal) => {
-    const body = await fetchJson(CODELIST_PATH, {
-      ...(signal === undefined ? {} : { signal }),
-    });
-    return body === undefined ? undefined : parseCodelist(body);
-  });
+  const codelist = perKey(
+    async (_key, signal): Promise<ReadOutcome<SkUsCodelist>> => {
+      const read = await readJson(CODELIST_PATH, {
+        fetchStage: "listing",
+        refusalScope: "part",
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if (read.type !== "present") {
+        return read;
+      }
+      const parsed = parseCodelist(read.value);
+      return parsed === undefined
+        ? readUnavailable({
+            kind: "thrown",
+            error: new FetchBoundaryError({
+              url: `${SERVICE_URL}/${CODELIST_PATH}`,
+              message: "SK ÚS codelist response has no codelist",
+            }),
+          })
+        : readPresent(parsed);
+    },
+  );
   const facets = perKey(async (key, signal) => {
     const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
     return await fetchFacets({ caseNumber, decisionDate }, signal);
@@ -814,6 +930,181 @@ export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
     : { type: "document", sourceDocumentId: fields.documentId };
 };
 
+export type SkUsListingFetchOutcome =
+  | { type: "listing"; listing: string }
+  | { type: "listing_unavailable" }
+  | { type: "listing_identity_mismatch" }
+  | { type: "publisher_rate_limited"; error: AdapterFetchError }
+  | { type: "retry_later"; error: AdapterFetchError };
+
+/** A search request that established no listing. */
+type SearchReadFailure = Exclude<ReadOutcome<string>, { type: "present" }>;
+
+/** The status an HTTP absence was stated with. */
+const absenceStatus = (evidence: AbsenceEvidence): number => {
+  switch (evidence) {
+    case "http-404":
+      return 404;
+    case "http-410":
+      return 410;
+    case "stated-zero":
+    case "publisher-typed-absence":
+      return panic(
+        `A publisher request stated a non-HTTP absence: ${evidence}`,
+      );
+    default:
+      evidence satisfies never;
+      return panic(`Unhandled absence evidence: ${String(evidence)}`);
+  }
+};
+
+type SearchReadFailureOptions = {
+  read: SearchReadFailure;
+  url: string;
+  label: string;
+};
+
+/**
+ * What a failed search request stands for, with its status, so the retry
+ * and authentication checks read it. A 404 from the search endpoint is the
+ * endpoint failing, not a decision absence.
+ */
+const searchReadFailure = ({
+  read,
+  url,
+  label,
+}: SearchReadFailureOptions): Error => {
+  switch (read.type) {
+    case "absent": {
+      const status = absenceStatus(read.evidence);
+      return new FetchBoundaryError({
+        url,
+        status,
+        message: `${label}: ${status}`,
+      });
+    }
+    case "refused":
+      return new FetchBoundaryError({
+        url,
+        status: read.status,
+        message: `${label}: ${read.status}`,
+      });
+    case "unavailable":
+      return readFailureError({ url, cause: read.cause, label });
+    default:
+      read satisfies never;
+      return panic(`Unhandled search read: ${String(read)}`);
+  }
+};
+
+type FetchSkUsListingOptions = {
+  documentId: string;
+  caseNumber: string;
+  signal?: AbortSignal;
+  read?: typeof readPublisherText;
+  pause?: (milliseconds: number) => Promise<void>;
+};
+
+/** Refetch only the publisher row, using the crawl's gated HTTP boundary. */
+// parser-output-unchanged: listing fetch only; stored replay and parser inputs are unchanged.
+export const fetchSkUsListing = async ({
+  documentId,
+  caseNumber,
+  signal,
+  read = readPublisherText,
+  pause = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
+}: FetchSkUsListingOptions): Promise<SkUsListingFetchOutcome> => {
+  for (let attempt = 0; ; attempt += 1) {
+    const fetched = await Result.tryPromise({
+      try: async (): Promise<SkUsListingFetchOutcome> => {
+        const listed = await read(SEARCH_URL, {
+          adapterKey: ADAPTER_KEYS.SK_US,
+          fetchStage: "listing",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": INGESTION_USER_AGENT,
+          },
+          body: JSON.stringify({
+            docType: DECISION_DOC_TYPE,
+            start: 0,
+            pageSize: 2,
+            searchFilter: {
+              filterNameValue: [
+                {
+                  type: "STRING",
+                  fieldName: "documentId",
+                  fieldValue: documentId,
+                },
+              ],
+            },
+            facetFilter: { facetFilterNameValue: [] },
+            facets: [],
+            fieldsToReturn: FIELDS_TO_RETURN,
+            clustering: false,
+          }),
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        if (
+          listed.type === "unavailable" &&
+          listed.cause.kind === "no-content"
+        ) {
+          return { type: "listing_unavailable" };
+        }
+        if (listed.type !== "present") {
+          throw searchReadFailure({
+            read: listed,
+            url: SEARCH_URL,
+            label: "SK ÚS listing fetch failed",
+          });
+        }
+        const data: unknown = JSON.parse(listed.value);
+        if (!isSearchResponse(data)) {
+          throw new FetchBoundaryError({
+            url: SEARCH_URL,
+            message: "SK ÚS listing response has an invalid shape",
+          });
+        }
+        if (data.numFound === 0 && data.documents.length === 0) {
+          return { type: "listing_unavailable" };
+        }
+        const doc = data.documents.at(0);
+        const identity = doc === undefined ? null : skUsIdentityFields(doc);
+        if (
+          data.numFound !== 1 ||
+          data.documents.length !== 1 ||
+          identity?.documentId !== documentId ||
+          identity.caseNumber !== caseNumber
+        ) {
+          return { type: "listing_identity_mismatch" };
+        }
+        return { type: "listing", listing: JSON.stringify(doc) };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.SK_US, null),
+    });
+    if (Result.isOk(fetched)) {
+      return fetched.value;
+    }
+    // The publisher's rate-limit refusal arrives as readPublisher's typed
+    // stop (rule 19a): one request, no retry.
+    if (fetched.error.httpStatus === 429) {
+      return { type: "publisher_rate_limited", error: fetched.error };
+    }
+    const cause = fetched.error.cause;
+    const retryable =
+      cause instanceof FetchBoundaryError &&
+      cause.status !== undefined &&
+      cause.status >= 500;
+    if (attempt >= 2 || signal?.aborted || !retryable) {
+      return { type: "retry_later", error: fetched.error };
+    }
+    await pause(backoffMs(attempt));
+  }
+};
+
 /**
  * What building one listed item produced.
  *
@@ -829,7 +1120,61 @@ export type SkUsBuildResult =
   /** No docket or no document id to key on; nothing can store this item. */
   | { type: "unkeyable" }
   /** The court served no document for the id the listing states. */
-  | { type: "detail-unavailable"; decision: IngestionResult };
+  | { type: "detail-unavailable"; decision: IngestionResult }
+  /**
+   * A response the decision is built from was unavailable, or the document
+   * was refused. `item` is the listing-only row of every response read so
+   * far; the pipeline decides what it costs the page.
+   */
+  | { type: "unread"; part: SkUsReadPart; item: UnreadListedItem };
+
+/**
+ * States, as plain text the reconciliation walk can select on, that a row was
+ * built without a part the service refused. It is written beside the typed
+ * refusal and from the same value, and is gone once a build reads the part.
+ */
+const SK_US_PART_READ_METADATA_KEY = "partReadState";
+
+const SK_US_PART_READ_STATE = { WITHHELD: "withheld" } as const;
+
+/** The per-decision responses a build cannot do without once requested. */
+type SkUsReadPart =
+  | "codelist"
+  | "document"
+  | "facets"
+  | "collection-listing"
+  | "file"
+  | "document-file";
+
+type SkUsPartRead<T> =
+  | { type: "read"; value: T | undefined }
+  /** A part the service refused: built without it, the refusal typed. */
+  | { type: "withheld"; refusal: ReadRefusal }
+  /** A read that stops the build: unavailable, or the document refused. */
+  | { type: "unread"; outcome: UnreadOutcome };
+
+/**
+ * One per-decision read as a build input: the value, `undefined` where the
+ * service stated it holds none, a refused part, or the outcome that stops
+ * the build.
+ */
+const partRead = <T>(read: ReadOutcome<T>): SkUsPartRead<T> => {
+  switch (read.type) {
+    case "present":
+      return { type: "read", value: read.value };
+    case "absent":
+      return { type: "read", value: undefined };
+    case "refused":
+      return read.scope === "part"
+        ? { type: "withheld", refusal: read }
+        : { type: "unread", outcome: read };
+    case "unavailable":
+      return { type: "unread", outcome: read };
+    default:
+      read satisfies never;
+      return panic(`Unhandled SK ÚS read: ${String(read)}`);
+  }
+};
 
 export type BuildSkUsDecisionOptions = {
   /**
@@ -882,7 +1227,9 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
-const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
+const skUsTextFields = (
+  doc: SearchDocument,
+): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   const headnote = doc.mkClauseTitle?.trim();
   const legalSentence = doc.mkClauseText?.trim();
@@ -1078,7 +1425,7 @@ const skUsCollectionPublication = (
 const skUsCollectionTextFields = (
   doc: SearchDocument,
   collection: SkUsCollectionMatch,
-): IngestionResult["textFields"] => {
+): RawIngestionResult["textFields"] => {
   const stated = skUsTextFields(doc);
   switch (collection.status) {
     case "unresolved":
@@ -1211,67 +1558,54 @@ const skUsMetadata = ({
   };
 };
 
-/**
- * Build one decision from a search-listing item, fetching every other
- * response the service serves for it. Shared by the crawl and the
- * reconciliation walk so neither can key, parse or enrich an item
- * differently from the other.
- *
- * Four requests per document: the text, the facet counts the index-only
- * fields are stated as, the docket file, and the document file itself. Two
- * of them are shared within a page, so a docket's separate opinions cost
- * the text and the file only.
- */
-export const buildSkUsDecision = async (
-  doc: SearchDocument,
-  { context, signal }: BuildSkUsDecisionOptions = {},
-): Promise<SkUsBuildResult> => {
-  const fields = skUsIdentityFields(doc);
-  if (fields === null) {
-    return { type: "unkeyable" };
-  }
-  const { caseNumber, documentId } = fields;
-  const page = context ?? createSkUsPageContext();
+/** Every response one decision's build has read, and the part it withheld. */
+type SkUsResponses = {
+  codelist: SkUsCodelist | undefined;
+  documentXhtml: string | undefined;
+  facetsJson: string | undefined;
+  collectionJson: string | undefined;
+  courtFileJson: string | undefined;
+  pdfBytes: Uint8Array | undefined;
+  /**
+   * The first part the service refused, stored typed under the read-outcome
+   * key on the decision built without it.
+   */
+  withheld: ReadRefusal | undefined;
+};
 
+type AssembleSkUsDecisionOptions = {
+  doc: SearchDocument;
+  caseNumber: string;
+  documentId: string;
+  responses: Readonly<SkUsResponses>;
+};
+
+/**
+ * The decision the responses read so far describe. Without the document
+ * file it is the listing-only row a later read completes.
+ */
+const assembleSkUsDecision = ({
+  doc,
+  caseNumber,
+  documentId,
+  responses: {
+    codelist,
+    documentXhtml,
+    facetsJson,
+    collectionJson,
+    courtFileJson,
+    pdfBytes,
+    withheld,
+  },
+}: AssembleSkUsDecisionOptions): IngestionResult => {
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision ?? undefined;
   const ecli = doc.mkECLI ?? undefined;
   const court = "Ústavný súd SR";
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
-
-  const documentXhtml = await fetchDocumentXhtml(documentId, signal);
-  const facetsJson =
-    decisionDate === undefined
-      ? undefined
-      : await page.facets({ caseNumber, decisionDate }, signal);
-  const collectionJson =
-    decisionDate === undefined
-      ? undefined
-      : await page.collectionListing({ caseNumber, decisionDate }, signal);
-  signal?.throwIfAborted();
   const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
-  if (
-    decisionDate !== undefined &&
-    collection.status === "unresolved" &&
-    collection.reason === "unavailable"
-  ) {
-    logger.warn("case_law.ingestion.collection_fetch_failed", {
-      adapterKey: ADAPTER_KEYS.SK_US,
-      caseNumber,
-      decisionDate,
-      reason: collection.reason,
-    });
-  }
-  const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
-  const courtFileJson =
-    rvpNumber === undefined
-      ? undefined
-      : await page.courtFile(rvpNumber, signal);
-  const pdfBytes = await fetchPdfBytes(documentId, signal);
-
   const rapporteurs = skUsRapporteurs(doc);
   const dissenters = facetValues(facetsJson, "mkDifferentViewJudges");
-  const codelist = await page.codelist(signal);
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
@@ -1326,7 +1660,7 @@ export const buildSkUsDecision = async (
   };
   const sourceRaw = encodeSourceRawEnvelope(parts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: documentId,
     // What every row this adapter wrote before it stated an id was stored
@@ -1351,13 +1685,24 @@ export const buildSkUsDecision = async (
     sourceUrl: documentUrl,
     documentUrl,
     textFields: skUsCollectionTextFields(doc, collection),
-    metadata: checkedDecisionMetadata(
-      skUsMetadata({ doc, facetsJson, header, collection }),
-    ),
+    metadata: checkedDecisionMetadata({
+      ...skUsMetadata({ doc, facetsJson, header, collection }),
+      ...(withheld === undefined
+        ? {}
+        : {
+            [READ_OUTCOME_METADATA_KEY]: withheld,
+            [SK_US_PART_READ_METADATA_KEY]: SK_US_PART_READ_STATE.WITHHELD,
+          }),
+    }),
     // Over the envelope, not over the listing row: the row is one of seven
     // responses stored, and a hash of it alone would call a decision
     // unchanged after the court rewrote the document behind it.
-    rawHash: hashContent(sourceRaw),
+    // A withheld part joins the hash, so a row stored with the part's
+    // response, or with none stated, is rewritten to carry the refusal.
+    rawHash:
+      withheld === undefined
+        ? hashContent(sourceRaw)
+        : hashContent(`${hashContent(sourceRaw)}|${JSON.stringify(withheld)}`),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
     documentAst,
     sourceRaw,
@@ -1374,9 +1719,158 @@ export const buildSkUsDecision = async (
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
-  return pdfBytes === undefined
+  return decision;
+};
+
+/**
+ * Build one decision from a search-listing item, fetching every other
+ * response the service serves for it. Shared by the crawl and the
+ * reconciliation walk so neither can key, parse or enrich an item
+ * differently from the other.
+ *
+ * Four requests per document: the text, the facet counts the index-only
+ * fields are stated as, the docket file, and the document file itself. Two
+ * of them are shared within a page, so a docket's separate opinions cost
+ * the text and the file only.
+ */
+export const buildSkUsDecision = async (
+  doc: SearchDocument,
+  { context, signal }: BuildSkUsDecisionOptions = {},
+): Promise<SkUsBuildResult> => {
+  const fields = skUsIdentityFields(doc);
+  if (fields === null) {
+    return { type: "unkeyable" };
+  }
+  const { caseNumber, documentId } = fields;
+  const page = context ?? createSkUsPageContext();
+
+  const decisionDate = parseApiDate(doc.mkDateOfDecision);
+
+  const responses: SkUsResponses = {
+    codelist: undefined,
+    documentXhtml: undefined,
+    facetsJson: undefined,
+    collectionJson: undefined,
+    courtFileJson: undefined,
+    pdfBytes: undefined,
+    withheld: undefined,
+  };
+  /** Take one read into the build; the outcome that stops it, if any. */
+  const take = <T>(
+    read: SkUsPartRead<T>,
+    store: (value: T | undefined) => void,
+  ): UnreadOutcome | undefined => {
+    switch (read.type) {
+      case "read":
+        store(read.value);
+        return undefined;
+      case "withheld":
+        responses.withheld ??= read.refusal;
+        return undefined;
+      case "unread":
+        return read.outcome;
+      default:
+        read satisfies never;
+        return panic(`Unhandled SK ÚS part read: ${String(read)}`);
+    }
+  };
+  const unread = (
+    part: SkUsReadPart,
+    outcome: UnreadOutcome,
+  ): SkUsBuildResult => ({
+    type: "unread",
+    part,
+    item: {
+      listing: {
+        ...assembleSkUsDecision({ doc, caseNumber, documentId, responses }),
+        sourceDocumentId: documentId,
+        isListingOnly: true,
+      },
+      outcome,
+    },
+  });
+
+  // The page's vocabularies, shared by every decision on it: a refusal
+  // withholds them as a part, an unavailable read leaves each item unread.
+  const codelistStop = take(partRead(await page.codelist(signal)), (value) => {
+    responses.codelist = value;
+  });
+  if (codelistStop !== undefined) {
+    return unread("codelist", codelistStop);
+  }
+  const documentStop = take(
+    partRead(await fetchDocumentXhtml(documentId, signal)),
+    (value) => {
+      responses.documentXhtml = value;
+    },
+  );
+  if (documentStop !== undefined) {
+    return unread("document", documentStop);
+  }
+  if (decisionDate !== undefined) {
+    const facetsStop = take(
+      partRead(await page.facets({ caseNumber, decisionDate }, signal)),
+      (value) => {
+        responses.facetsJson = value;
+      },
+    );
+    if (facetsStop !== undefined) {
+      return unread("facets", facetsStop);
+    }
+    const collectionStop = take(
+      partRead(
+        await page.collectionListing({ caseNumber, decisionDate }, signal),
+      ),
+      (value) => {
+        responses.collectionJson = value;
+      },
+    );
+    if (collectionStop !== undefined) {
+      return unread("collection-listing", collectionStop);
+    }
+  }
+  signal?.throwIfAborted();
+  const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
+  if (rvpNumber !== undefined) {
+    const fileStop = take(
+      partRead(await page.courtFile(rvpNumber, signal)),
+      (value) => {
+        responses.courtFileJson = value;
+      },
+    );
+    if (fileStop !== undefined) {
+      return unread("file", fileStop);
+    }
+  }
+  // Last: the most expensive read, worth paying only once every other
+  // response is in hand.
+  const pdf = await fetchPdfBytes(documentId, signal);
+  switch (pdf.type) {
+    case "pdf":
+      responses.pdfBytes = pdf.bytes;
+      break;
+    // Where the court states there is no document, the row is held
+    // listing-only, which the reconciliation asks about again.
+    case "not-served":
+      break;
+    case "refused":
+      return unread("document-file", pdf);
+    case "unavailable":
+      return unread("document-file", { type: "unavailable", cause: pdf.cause });
+    default:
+      pdf satisfies never;
+      return panic(`Unhandled SK ÚS PDF read: ${String(pdf)}`);
+  }
+
+  const decision = assembleSkUsDecision({
+    doc,
+    caseNumber,
+    documentId,
+    responses,
+  });
+  return responses.pdfBytes === undefined
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
 };
@@ -1405,13 +1899,19 @@ type ExecuteSearchOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type SearchRead =
+  | { type: "present"; data: SearchResponse }
+  | { type: "absent"; data: SearchResponse }
+  | { type: "unavailable" };
+
 const executeSearch = async ({
   offset,
   pageSize,
   range,
   signal,
-}: ExecuteSearchOptions): Promise<SearchResponse | null> => {
-  const response = await fetchPublisher(SEARCH_URL, {
+}: ExecuteSearchOptions): Promise<SearchRead> => {
+  const read = await readPublisherText(SEARCH_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
     headers: {
@@ -1443,29 +1943,29 @@ const executeSearch = async ({
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
 
-  if (!response.ok) {
+  if (read.type === "unavailable" && read.cause.kind === "no-content") {
+    return { type: "unavailable" };
+  }
+  if (read.type !== "present") {
     // A 401/403 here means the court put the endpoint back behind
     // authentication. There is no credential to refresh — the adapter
     // needs a real one — so surface it rather than retrying blind.
-    throw new FetchBoundaryError({
+    throw searchReadFailure({
+      read,
       url: SEARCH_URL,
-      status: response.status,
-      statusText: response.statusText,
-      message: `SK ÚS search failed: ${response.status}`,
+      label: "SK ÚS search failed",
     });
   }
 
-  if (response.status === 204) {
-    return null;
-  }
-
-  const data: unknown = await response.json();
+  const data: unknown = JSON.parse(read.value);
   if (!isSearchResponse(data)) {
     const preview = JSON.stringify(data).slice(0, 200);
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
-  return data;
+  return data.documents.length === 0
+    ? { type: "absent", data }
+    : { type: "present", data };
 };
 
 type ExecuteSearchWithRetryOptions = ExecuteSearchOptions & {
@@ -1591,18 +2091,6 @@ const sliceDateRange = (slice: string): SearchDateRange => {
 };
 
 /**
- * One page of the publisher's own listing for a month, with no PDF downloads.
- *
- * A failed request is thrown, never flattened into an empty page. The crawl
- * can afford to read a 204 or a dead window as "nothing here" because a cursor
- * that moves on can be walked again; a ledger row cannot, since an outage
- * recorded as an empty month makes that month settled and it is never revisited.
- * So only a body that states a count answers what a month holds: `numFound: 0`
- * is an empty slice, and everything else — a 5xx (this endpoint has been
- * observed answering 500 and 524 under load), a 204, a body the validator
- * rejects — is an error the engine retries on a later pass.
- */
-/**
  * One listed item for a result the DMS will not serve.
  *
  * With no body there is no document id and no docket, so there is nothing to
@@ -1618,10 +2106,13 @@ const unservedListingItem = (offset: number): ReconciliationListingItem => ({
   payload: { unservedResultIndex: offset },
 });
 
-/** What one window of a month's results answered. */
+/** What one window of a date range's results answered. */
 type ListedWindow = {
-  items: ReconciliationListingItem[];
-  /** The month's size, from whichever sub-window stated it; null if none did. */
+  items: (
+    | { type: "served"; document: SearchDocument }
+    | { type: "unserved"; offset: number }
+  )[];
+  /** The range's size, from whichever sub-window stated it; null if none did. */
   numFound: number | null;
 };
 
@@ -1648,9 +2139,10 @@ type SplitBudget = { remaining: number };
 
 type ListSkUsWindowOptions = {
   budget: SplitBudget;
-  /** 0-indexed result offset within the month. */
+  /** 0-indexed result offset within the date range. */
   offset: number;
   pageSize: number;
+  range: SearchDateRange;
   slice: string;
   signal?: AbortSignal | undefined;
 };
@@ -1667,18 +2159,19 @@ const unservedWindowError = (
 
 type SearchWindowOptions = Omit<ListSkUsWindowOptions, "budget">;
 
-/** One search request for a window: its body, or null where it answered 204. */
+/** One typed reading of a publisher search window. */
 const searchWindow = async ({
   offset,
   pageSize,
+  range,
   signal,
   slice,
-}: SearchWindowOptions): Promise<SearchResponse | null> => {
+}: SearchWindowOptions): Promise<SearchRead> => {
   const searchResult = await executeSearchWithRetry({
     cursor: slice,
     offset,
     pageSize,
-    range: sliceDateRange(slice),
+    range,
     signal,
   });
   if (Result.isError(searchResult)) {
@@ -1688,15 +2181,12 @@ const searchWindow = async ({
 };
 
 const listedWindow = (data: SearchResponse): ListedWindow => ({
-  items: data.documents.map((doc) => ({
-    identity: skUsListingIdentity(doc),
-    payload: doc,
-  })),
+  items: data.documents.map((document) => ({ type: "served", document })),
   numFound: data.numFound,
 });
 
 /**
- * List one window of a month, splitting it around whatever the DMS refuses.
+ * List one crawl-year or reconciliation-month window, isolating DMS refusals.
  *
  * The endpoint answers 204 with an empty body for any window containing a
  * record it cannot serialise, and it does so deterministically: for 2025-04,
@@ -1708,17 +2198,17 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  * So a refused window is halved until the refusal is one record wide. What
  * surrounds it lists normally, the record itself is reported with nothing to
  * key on, and the month settles honestly: 277 reported, 277 collected, one
- * unidentifiable. The halving terminates at a window of one record, costs
+ * unidentifiable. The halving terminates at a window of one record, costs up to
  * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} plus the one confirming request
  * below per such record, and each of those requests waits the same pause as
  * every other request here.
  *
- * A refusal that survives the halving with nothing served on either side is
- * the endpoint being down for that window rather than a record it cannot
- * serialise, and is thrown: reporting the window as that many unidentifiable
- * items would settle the month over an outage. Two unservable records lying
- * side by side read the same way and are refused with it, which is the safe
- * direction to be wrong in.
+ * A refused subtree may have no count, including adjacent poison records;
+ * a sibling can still supply the count for the enclosing page. If the whole
+ * page serves nothing, it cannot distinguish poison records from an empty
+ * range. Reconciliation rejects it; the crawl records the refusal and parks
+ * its current frontier with bounded polling. The shared split budget bounds
+ * that work.
  *
  * A one-record refusal is confirmed by a second request before it is reported
  * unserved. An unidentifiable item is excluded from the slice rather than
@@ -1731,24 +2221,26 @@ const listSkUsWindow = async ({
   budget,
   offset,
   pageSize,
+  range,
   signal,
   slice,
 }: ListSkUsWindowOptions): Promise<ListedWindow> => {
-  const data = await searchWindow({ offset, pageSize, signal, slice });
-  if (data !== null) {
-    return listedWindow(data);
+  const data = await searchWindow({ offset, pageSize, range, signal, slice });
+  if (data.type !== "unavailable") {
+    return listedWindow(data.data);
   }
 
   if (pageSize <= 1) {
     const confirmation = await searchWindow({
       offset,
       pageSize,
+      range,
       signal,
       slice,
     });
-    return confirmation === null
-      ? { items: [unservedListingItem(offset)], numFound: null }
-      : listedWindow(confirmation);
+    return confirmation.type === "unavailable"
+      ? { items: [{ type: "unserved", offset }], numFound: null }
+      : listedWindow(confirmation.data);
   }
 
   if (budget.remaining < 2) {
@@ -1764,6 +2256,7 @@ const listSkUsWindow = async ({
     budget,
     offset,
     pageSize: half,
+    range,
     signal,
     slice,
   });
@@ -1771,12 +2264,13 @@ const listSkUsWindow = async ({
     budget,
     offset: offset + half,
     pageSize: pageSize - half,
+    range,
     signal,
     slice,
   });
 
-  // Both halves state the size of the same month, so two different counts mean
-  // the month changed under the walk or the endpoint answered about something
+  // Both halves state the size of the same range, so two different counts mean
+  // the range changed under the walk or the endpoint answered about something
   // else. Either way the page cannot be sized, and banking it would write a
   // `reported` the slice can never reach.
   if (
@@ -1792,12 +2286,6 @@ const listSkUsWindow = async ({
   }
 
   const numFound = lower.numFound ?? upper.numFound;
-  if (numFound === null) {
-    throw unservedWindowError(
-      slice,
-      `${pageSize} records from offset ${offset} served nothing`,
-    );
-  }
 
   return { items: [...lower.items, ...upper.items], numFound };
 };
@@ -1811,17 +2299,33 @@ const listSkUsSlicePage = async ({
     budget: { remaining: SPLIT_REQUEST_BUDGET },
     offset: page * LISTING_PAGE_SIZE,
     pageSize: LISTING_PAGE_SIZE,
+    range: sliceDateRange(slice),
     signal,
     slice,
   });
 
   if (numFound === null) {
-    // Only reachable where a page is one record wide: the split refuses a
-    // wider window that served nothing before it can answer with one.
+    // A window with no served records cannot establish the publisher count.
     throw unservedWindowError(slice, `offset ${page * LISTING_PAGE_SIZE}`);
   }
 
-  return { items, totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE) };
+  return {
+    items: items.map((item) => {
+      switch (item.type) {
+        case "served":
+          return {
+            identity: skUsListingIdentity(item.document),
+            payload: item.document,
+          };
+        case "unserved":
+          return unservedListingItem(item.offset);
+        default:
+          item satisfies never;
+          return panic("Unhandled SK ÚS listing result");
+      }
+    }),
+    totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
+  };
 };
 
 /**
@@ -1856,6 +2360,7 @@ const buildSkUsFromPayload = async (
     case "unkeyable":
       return { type: "unkeyable" };
     case "detail-unavailable":
+    case "unread":
       // The decision the listing describes is deliberately dropped: storing it
       // would make the identity held while its document stayed unread.
       return { type: "detail-unavailable" };
@@ -2319,7 +2824,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: fields.caseNumber,
       sourceDocumentId: fields.documentId,
       ecli: listing.mkECLI ?? undefined,
@@ -2349,7 +2854,7 @@ const reparseStoredRaw = (
       documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "application/json",
-    },
+    }),
   };
 };
 
@@ -2425,7 +2930,14 @@ const SK_US_SOURCE_SURFACES = {
   >,
 } as const satisfies SourceSurfaceCensus;
 
+/** The page field a crawl page's unread items fill. */
+const unreadPage = (
+  unreadItems: readonly UnreadListedItem[],
+): Pick<SyncPage, "unreadItems"> =>
+  unreadItems.length === 0 ? {} : { unreadItems };
+
 export const skUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.SK_US,
   sourceSurfaces: SK_US_SOURCE_SURFACES,
   sourceFields: {
@@ -2460,9 +2972,9 @@ export const skUsAdapter = defineSourceAdapter({
       return { type: "probe-failed", errorTag: errorTag(searched.error) };
     }
     // A 204 carries no count; it is the endpoint declining, not an empty court.
-    return searched.value === null
+    return searched.value.type === "unavailable"
       ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
-      : sourceTotalRead(searched.value.numFound);
+      : sourceTotalRead(searched.value.data.numFound);
   },
 
   /**
@@ -2471,6 +2983,57 @@ export const skUsAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            documentId: payload["documentId"],
+            docType: payload["docType"],
+            title: payload["title"],
+            content: payload["content"],
+            extension: payload["extension"],
+            size: payload["size"],
+            contentType: payload["contentType"],
+            mkDocumentType: payload["mkDocumentType"],
+            mkRSAPNumberOfFile: payload["mkRSAPNumberOfFile"],
+            mkRVPNumberOfFile: payload["mkRVPNumberOfFile"],
+            mkECLI: payload["mkECLI"],
+            mkDateOfDecision: payload["mkDateOfDecision"],
+            mkDateOfLegalForce: payload["mkDateOfLegalForce"],
+            mkPublicationDate: payload["mkPublicationDate"],
+            mkFormOfDecision: payload["mkFormOfDecision"],
+            mkTypeOfDecision: payload["mkTypeOfDecision"],
+            mkTypeOfProceeding: payload["mkTypeOfProceeding"],
+            mkTypeOfNegotiation: payload["mkTypeOfNegotiation"],
+            mkDecisionInTermsOf: payload["mkDecisionInTermsOf"],
+            mkResultOfNegotiation: payload["mkResultOfNegotiation"],
+            mkCause: payload["mkCause"],
+            mkJudgeReporter: payload["mkJudgeReporter"],
+            mkDifferentView: payload["mkDifferentView"],
+            mkWordRegister: payload["mkWordRegister"],
+            mkMaterialRegister: payload["mkMaterialRegister"],
+            mkComplainedLegalRegulation: payload["mkComplainedLegalRegulation"],
+            mkClarificationOfLegalRegulation:
+              payload["mkClarificationOfLegalRegulation"],
+            mkFileReference: payload["mkFileReference"],
+            mkReferences: payload["mkReferences"],
+            mkTypeOfProposer: payload["mkTypeOfProposer"],
+            mkAffectedLegalRegulation: payload["mkAffectedLegalRegulation"],
+            mkUnderage: payload["mkUnderage"],
+            mkIncludeToZnaU: payload["mkIncludeToZnaU"],
+            mkEntryDate: payload["mkEntryDate"],
+            mkFormOfEntry: payload["mkFormOfEntry"],
+            mkTypeOfEntry: payload["mkTypeOfEntry"],
+            mkParentIdDecision: payload["mkParentIdDecision"],
+            mkLawReportsNumber: payload["mkLawReportsNumber"],
+            mkVolumeOfLawReports: payload["mkVolumeOfLawReports"],
+            mkYearOfLawReports: payload["mkYearOfLawReports"],
+            mkTimePeriodZNaU: payload["mkTimePeriodZNaU"],
+            mkClauseTitle: payload["mkClauseTitle"],
+            mkClauseText: payload["mkClauseText"],
+            mkWebTitle: payload["mkWebTitle"],
+          }
+        : null,
     firstSlice: SK_US_FIRST_SLICE,
     sliceOf: skUsSliceOf,
     nextSlice: skUsNextSlice,
@@ -2485,6 +3048,14 @@ export const skUsAdapter = defineSourceAdapter({
     // by one rather than through a representative, and a sibling whose PDF
     // failed no longer hides behind one that succeeded.
     heldRequiresDetail: true,
+    // A row built without a part the service refused (the vocabularies, the
+    // facets, the collection entry or the docket file) holds its document and
+    // counts as held; it is read again on each walk of its month until a
+    // build reads the part.
+    recheckHeld: {
+      metadataKey: SK_US_PART_READ_METADATA_KEY,
+      values: [SK_US_PART_READ_STATE.WITHHELD],
+    },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
   },
@@ -2492,27 +3063,56 @@ export const skUsAdapter = defineSourceAdapter({
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const { year, offset } = parseCursor(cursor);
+        const { year, offset, status } = parseCursor(cursor);
         const currentYear = Temporal.Now.plainDateISO().year;
 
-        const searchResult = await executeSearchWithRetry({
-          cursor,
-          offset,
-          pageSize: PAGE_SIZE,
-          range: { from: `${year}-01-01`, to: `${year}-12-31` },
-          signal,
-        });
-        if (Result.isError(searchResult)) {
-          if (signal?.aborted) {
-            throw new DOMException("Cycle aborted", "AbortError");
-          }
-          throw searchResult.error;
+        const range = { from: `${year}-01-01`, to: `${year}-12-31` };
+        const slice = encodeCursor({ year, offset });
+        let window: ListedWindow;
+        if (status === "refused-frontier") {
+          const read = await searchWindow({
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
+          window =
+            read.type === "unavailable"
+              ? { items: [], numFound: null }
+              : listedWindow(read.data);
+        } else {
+          window = await listSkUsWindow({
+            budget: { remaining: SPLIT_REQUEST_BUDGET },
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
         }
-        const data = searchResult.value;
+        const { items, numFound } = window;
+        if (numFound === null) {
+          // No sub-window states a count: empty and wholly refused years are
+          // indistinguishable. Reconciliation audits historical months; the
+          // current frontier rechecks one window until it can be read again.
+          logger.warn("case_law.ingestion.unserved_crawl_window", {
+            adapterKey: ADAPTER_KEYS.SK_US,
+            year,
+            offset,
+            reconciliation: "monthly_listing_reports_unserved_records",
+          });
+          return {
+            decisions: [],
+            itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            nextCursor:
+              year < currentYear
+                ? encodeCursor({ year: year + 1, offset: 0 })
+                : `${slice}:refused`,
+          };
+        }
 
-        // 204 / empty search for this year window.
-        // Advance to next year if available.
-        if (!data || data.documents.length === 0) {
+        if (items.length === 0) {
           if (year < currentYear) {
             // Move to next year
             return {
@@ -2528,17 +3128,63 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const decisions: IngestionResult[] = [];
+        const unreadItems: UnreadListedItem[] = [];
+        let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
         // docket-file read.
         const context = createSkUsPageContext();
 
-        for (const doc of data.documents) {
+        for (const item of items) {
+          switch (item.type) {
+            case "unserved":
+              failed++;
+              logger.warn("case_law.ingestion.unserved_listing_record", {
+                adapterKey: ADAPTER_KEYS.SK_US,
+                cursor: encodeCursor({ year, offset }),
+                resultIndex: item.offset,
+                outcome: "deterministic_refusal",
+                reconciliation: "reports_unserved",
+              });
+              continue;
+            case "served":
+              break;
+            default:
+              item satisfies never;
+              panic("Unhandled SK ÚS listing result");
+          }
+          const doc = item.document;
           try {
-            const built = await buildSkUsDecision(doc, {
-              context,
-              ...(signal === undefined ? {} : { signal }),
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                  case "detail-unavailable":
+                    return value.decision;
+                  case "unread":
+                    return value.item.listing;
+                  case "unkeyable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.SK_US,
+
+              rawListing: JSON.stringify(doc),
+              build: async () =>
+                await buildSkUsDecision(doc, {
+                  context,
+                  ...(signal === undefined ? {} : { signal }),
+                }),
             });
+            if (attempted.type === "item_build_failed") {
+              failed++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
             switch (built.type) {
               case "unkeyable":
                 break;
@@ -2549,18 +3195,27 @@ export const skUsAdapter = defineSourceAdapter({
               case "built":
                 decisions.push(built.decision);
                 break;
+              // The pipeline decides what an unread document costs the page.
+              case "unread":
+                unreadItems.push(built.item);
+                break;
               default: {
                 built satisfies never;
                 panic(`Unhandled SK ÚS build result: ${String(built)}`);
               }
             }
           } catch (error) {
-            if (error instanceof DOMException) {
+            if (
+              error instanceof DOMException ||
+              error instanceof AdapterFetchError ||
+              error instanceof FetchBoundaryError
+            ) {
               throw error;
             }
             // The cursor moves past this document and the reconciliation walk
             // is what recovers it; reported so a build failing on every row
             // is not read as a page with nothing on it.
+            failed++;
             logger.warn("case_law.ingestion.item_build_failed", {
               adapterKey: ADAPTER_KEYS.SK_US,
               ...(typeof doc.documentId === "string"
@@ -2573,12 +3228,13 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const nextOffset = offset + PAGE_SIZE;
-        const hasMore =
-          data.documents.length >= PAGE_SIZE && nextOffset < data.numFound;
+        const hasMore = items.length >= PAGE_SIZE && nextOffset < numFound;
 
         if (hasMore) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+            ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -2587,6 +3243,8 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+            ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -2602,9 +3260,11 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+          ...unreadPage(unreadItems),
           nextCursor: encodeCursor({
             year,
-            offset: offset + data.documents.length,
+            offset: offset + items.length,
           }),
         };
       },

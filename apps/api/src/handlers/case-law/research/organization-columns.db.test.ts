@@ -32,6 +32,7 @@ import type { ResearchAnswerClaim } from "@/api/lib/case-law/research-answer-que
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
 import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -63,9 +64,10 @@ const contextFor = (
   getActiveWorkspaceIds: async () => [],
   getAccessibleWorkspaces: async () => [],
   getWorkspaceAccess: async () => null,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),

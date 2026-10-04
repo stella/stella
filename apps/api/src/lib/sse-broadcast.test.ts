@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
-import { parseRedisPayload } from "@/api/lib/sse-broadcast";
+import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createSseBroadcastPublisher,
+  parseRedisPayload,
+} from "@/api/lib/sse-broadcast";
 
 const redisPayload = (
   scope: "organization" | "session" | "workspace",
@@ -122,4 +126,36 @@ describe("SSE Redis payload parsing", () => {
       ),
     ).toBeNull();
   });
+});
+
+test("the publisher constructs a cache client with bounded connection options", async () => {
+  const constructed: unknown[] = [];
+  const published: unknown[] = [];
+  const publisher = createSseBroadcastPublisher({
+    createClient: (options) => {
+      constructed.push(options);
+      return {
+        publish: async (...args) => {
+          published.push(args);
+          return 0;
+        },
+      };
+    },
+  });
+  const sessionId = toSafeId<"desktopEditSession">(
+    "00000000-0000-4000-8000-000000000001",
+  );
+  const event = {
+    type: REALTIME_EVENT_TYPE.SESSION_CLOSED,
+    data: { reason: "expired" },
+  } as const;
+  await publisher.publishSessionEvent(sessionId, event);
+  await publisher.publishSessionEvent(sessionId, event);
+  expect(constructed).toEqual([
+    {
+      storeClass: "cache",
+      overrides: { connectionTimeout: 2000, enableOfflineQueue: false },
+    },
+  ]);
+  expect(published).toHaveLength(2);
 });

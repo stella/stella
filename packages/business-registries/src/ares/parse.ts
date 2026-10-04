@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { getAresCourtName } from "./court-names.js";
 import type {
   AresAddress,
@@ -18,11 +19,11 @@ import type {
 
 const ARES_RES_URL = "https://ares.gov.cz/ekonomicke-subjekty?ico=";
 
-const CURRENCIES: Record<string, string> = {
-  KORUNY: "Kč",
-  EURA: "EUR",
-  EUR: "EUR",
-};
+const CURRENCIES = new Map([
+  ["KORUNY", "Kč"],
+  ["EURA", "EUR"],
+  ["EUR", "EUR"],
+]);
 
 // ---------------------------------------------------------------------------
 // Address parsing
@@ -65,7 +66,7 @@ export const parseResRecord = (record: AresResRecord): AresCompany => ({
   dateEstablished: record.datumVzniku ?? null,
   dateRegistered: record.datumZapisu ?? null,
   czNace: record.czNace ?? [],
-  registryUrl: `${ARES_RES_URL}${record.ico}`,
+  registryUrl: `${ARES_RES_URL}${encodeRegistryComponent(record.ico)}`,
   status: null,
   courtFile: null,
   shareCapital: null,
@@ -107,7 +108,7 @@ const formatMoney = (
   if (!value) {
     return null;
   }
-  const currencyStr = currency ? (CURRENCIES[currency] ?? currency) : "";
+  const currencyStr = currency ? (CURRENCIES.get(currency) ?? currency) : "";
   const match = /^(?<whole>\d+)(?:[;.](?<fraction>\d+))?$/u.exec(value);
   const whole = match?.groups?.["whole"];
   if (whole === undefined) {

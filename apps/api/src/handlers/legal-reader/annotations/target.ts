@@ -29,4 +29,5 @@ const AUDIT_RESOURCE_TYPE_BY_TARGET = {
 
 export const annotationAuditResourceType = (
   targetType: ReaderAnnotationTargetType,
-): AuditResourceType => AUDIT_RESOURCE_TYPE_BY_TARGET[targetType];
+): (typeof AUDIT_RESOURCE_TYPE_BY_TARGET)[ReaderAnnotationTargetType] =>
+  AUDIT_RESOURCE_TYPE_BY_TARGET[targetType];

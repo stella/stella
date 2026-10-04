@@ -23,6 +23,7 @@ import {
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type AssertNoExtraFields,
@@ -44,9 +45,11 @@ import {
   type ClauseParagraph,
   type ClauseRun,
   isClauseBody,
+  normalizeClauseBody,
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -58,13 +61,21 @@ import {
   brandPersistedClauseCategoryId,
   brandPersistedClauseId,
   brandPersistedClauseVersionId,
+  brandPersistedEntityId,
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import {
+  positionSourceEntityIds,
+  positionSources,
+  readablePositionSources,
+  withReadableSources,
+} from "@/api/lib/workflow/playbook-position-sources";
 import { POSITION_LIMITS } from "@/api/lib/workflow/playbook-positions";
 import type {
   PlaybookScope,
   Position,
+  PositionSource,
   PositionStandard,
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
@@ -934,7 +945,12 @@ const clauseRunArgSchema = v.strictObject({
 });
 
 const clauseParagraphArgSchema = v.strictObject({
-  text: v.pipe(v.string(), v.description("Paragraph plain text")),
+  text: v.pipe(
+    v.string(),
+    v.description(
+      "Paragraph text; directive paragraphs use balanced literal tags, e.g. {% if enabled %} ... {% endif %}.",
+    ),
+  ),
   style: v.optional(
     v.pipe(v.string(), v.description("Optional paragraph style name")),
   ),
@@ -1049,6 +1065,27 @@ const saveClauseArgsSchema = nullAsAbsent(
         ),
       ),
       body: v.optional(clauseBodyArgSchema),
+      expected_body: v.optional(
+        v.pipe(
+          v.pipe(
+            v.array(
+              v.objectWithRest(
+                {
+                  text: v.pipe(
+                    v.string(),
+                    v.description("Paragraph text from the read body"),
+                  ),
+                },
+                v.unknown(),
+              ),
+            ),
+            v.minLength(1),
+          ),
+          v.description(
+            "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving.",
+          ),
+        ),
+      ),
       category_id: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.uuid())),
@@ -1124,6 +1161,15 @@ const saveClauseArgsSchema = nullAsAbsent(
       ["snapshot_version"],
     ),
     // An update must request at least one change.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["expected_body"]],
+        ({ clause_id, expected_body }) =>
+          clause_id !== undefined || expected_body === undefined,
+        "expected_body only applies when updating a clause",
+      ),
+      ["expected_body"],
+    ),
     v.partialCheck(
       [
         ["clause_id"],
@@ -1239,6 +1285,9 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       body: {
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(clauseBody === undefined ? {} : { body: clauseBody }),
+        ...(input.expected_body === undefined
+          ? {}
+          : { expectedBody: normalizeClauseBody(input.expected_body) }),
         ...(input.category_id === undefined
           ? {}
           : {
@@ -1367,7 +1416,29 @@ const readPlaybookDetail = async ({
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  const playbook = result.value;
+  // Remove the sources the caller cannot read before the payload is used
+  // anywhere else. Chat creates a ref for each source, and a ref adds the
+  // source's matter to the thread's observed scope.
+  const readableSources = await readablePositionSources({
+    safeDb: context.safeDb,
+    entityIds: positionSourceEntityIds(
+      positionSources(result.value.positions.items),
+    ),
+    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
+  });
+  if (Result.isError(readableSources)) {
+    return internalFailureResult(readableSources.error);
+  }
+  const playbook = {
+    ...result.value,
+    positions: {
+      version: result.value.positions.version,
+      items: withReadableSources(
+        result.value.positions.items,
+        readableSources.value,
+      ),
+    },
+  };
 
   const textFields = runTextFieldSpecs(
     playbookDetailTextFieldSpecs(organizationId),
@@ -1632,6 +1703,10 @@ const PLAYBOOK_MERGE_ISSUE_HINTS = {
     "Resend this entry with at least one acceptable or not_acceptable rule, " +
     "a fallback entry, or ideal wording; a position that only captures a " +
     "value takes mode extract.",
+  unreadable_source:
+    "Resend this entry with sources holding only document ids returned by " +
+    "list_documents or a search in this conversation, or without sources.",
+  too_many_sources: "Resend this entry with fewer sources.",
 } as const satisfies Record<PlaybookMergeIssueCode, string>;
 
 const toSavePlaybookIssues = (issues: readonly PlaybookMergeIssue[]) =>
@@ -1681,6 +1756,42 @@ const savePlaybookFailureResult = (error: unknown) => {
   return internalFailureResult(error);
 };
 
+/**
+ * Looks up, in one query, every document the merge for a save needs: the
+ * document ids in the call and the sources already stored. Returns a map
+ * keyed by document id; ids the caller cannot read are not in it.
+ */
+const readSavePlaybookSources = async ({
+  context,
+  positions,
+  stored,
+}: {
+  context: McpRequestContext;
+  positions: readonly PlaybookPositionInput[];
+  stored: readonly Position[];
+}) => {
+  const entityIds = new Set(positionSourceEntityIds(positionSources(stored)));
+  for (const position of positions) {
+    for (const entityId of arrayOrEmpty(position.sources)) {
+      entityIds.add(brandPersistedEntityId(entityId));
+    }
+  }
+  const readable = await readablePositionSources({
+    safeDb: context.safeDb,
+    entityIds: [...entityIds],
+    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
+  });
+  return readable.map(
+    (sources) =>
+      new Map<string, PositionSource>(
+        sources.map(({ entityId, workspaceId }) => [
+          entityId,
+          { entityId, workspaceId },
+        ]),
+      ),
+  );
+};
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1715,25 +1826,40 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         hint: "Provide 'name' when playbook_id is omitted (create mode).",
       });
     }
+    const readableSources = await readSavePlaybookSources({
+      context,
+      positions,
+      stored: [],
+    });
+    if (Result.isError(readableSources)) {
+      return internalFailureResult(readableSources.error);
+    }
     const merged = mergePlaybookPositions({
       stored: [],
       positions,
       removeSourceIds: NO_SOURCE_IDS,
+      readableSources: readableSources.value,
       mintId,
     });
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-      await loadOrgSettings();
+    const {
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      managedAIResidency,
+    } = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
         safeDb: context.safeDb,
         organizationId,
+        accessibleWorkspaceIds: context.accessibleWorkspaceIds,
         orgAIConfig,
         orgAIConfigStatus,
         promptCachingEnabled,
+        managedAIResidency,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1786,10 +1912,19 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   if (Result.isError(stored)) {
     return internalFailureResult(stored.error);
   }
+  const readableSources = await readSavePlaybookSources({
+    context,
+    positions,
+    stored: stored.value.positions.items,
+  });
+  if (Result.isError(readableSources)) {
+    return internalFailureResult(readableSources.error);
+  }
   const merged = mergePlaybookPositions({
     stored: stored.value.positions.items,
     positions,
     removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
+    readableSources: readableSources.value,
     mintId,
   });
   const changesDefinition =
@@ -1829,16 +1964,22 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
   }
 
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettings();
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
       organizationId,
+      accessibleWorkspaceIds: context.accessibleWorkspaceIds,
       playbookId,
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
@@ -1958,7 +2099,9 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
-    return errorResult(outcome.message);
+    return internalFailureResult(
+      new HandlerError(playbookRunFailureDetails(outcome)),
+    );
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
@@ -2024,6 +2167,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
@@ -2038,7 +2182,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "clause_id to create (title and body required); pass clause_id to update. " +
       "body is an ordered array of paragraphs, each with text and optional " +
       "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. " +
+      "and directive_expression. Use balanced {% ... %} tags. " +
+      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
       "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
       "update to also append a version snapshot of the body. Returns the clause id.",
@@ -2057,6 +2202,16 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "clause_id",
+        present: { operation: "update", permissions: { clause: ["update"] } },
+        absent: { operation: "create", permissions: { clause: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
     scope: "stella:knowledge_write",
@@ -2075,6 +2230,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "organization's clause library. This is irreversible.",
     inputSchema: deleteClauseArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { clause: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_clause",
@@ -2103,6 +2260,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "pagination dependency; it remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -2148,6 +2306,16 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "playbook_id",
+        present: { operation: "update", permissions: { playbook: ["update"] } },
+        absent: { operation: "create", permissions: { playbook: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_playbook",
     scope: "stella:knowledge_write",
@@ -2168,6 +2336,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { playbook: ["apply"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",
     scope: "stella:knowledge_write",

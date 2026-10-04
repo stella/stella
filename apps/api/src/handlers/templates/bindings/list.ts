@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { buildBindingCatalog } from "@/api/lib/template-binding/binding-catalog";
 
@@ -11,8 +11,10 @@ const config = {
     "catalog is static and identical for every matter in the organization; " +
     "it takes no arguments and reads no stored data.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "template_authoring_ui",
     consumesServices: false,
   },

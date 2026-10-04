@@ -89,10 +89,11 @@ export const ChatBreadcrumb = ({
     groupedThread?.usedAnonymization ?? threadData?.usedAnonymization ?? false;
 
   return (
-    <BreadcrumbItem className="min-w-0 shrink">
+    <BreadcrumbItem className="min-w-0 shrink has-[input]:flex-1">
       <ChatTitleRename
         hasMessages={hasMessages}
-        inputClassName="w-48 text-xs"
+        editClassName="w-full"
+        inputClassName="flex-1 text-sm"
         ownsRenameCommand
         threadRef={threadRef}
         title={currentTitle}

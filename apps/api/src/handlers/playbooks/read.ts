@@ -18,6 +18,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedPlaybookDefinitionId } from "@/api/lib/safe-id-boundaries";
 
 type PlaybookDefinitionRow = typeof playbookDefinitions.$inferSelect;
@@ -43,6 +44,9 @@ const UNPROJECTED_PLAYBOOK_LIST_COLUMNS = [
   "positions",
   "approvedAt",
   "approvedBy",
+  // Derived from `scope.documentTypeKey` for the document-type foreign key;
+  // never a separate client field.
+  "documentTypeKey",
 ] as const satisfies readonly (keyof PlaybookDefinitionRow)[];
 
 // The shape the list `.select({...})` below must project.
@@ -131,7 +135,9 @@ export const listPlaybookDefinitionsHandler = async function* ({
   organizationId,
   query,
 }: ListPlaybookDefinitionsProps) {
-  const limit = query.limit ?? LIMITS.playbookDefinitionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.playbookDefinitionsPageSizeDefault,
+  );
   const conditions = [eq(playbookDefinitions.organizationId, organizationId)];
 
   if (query.cursor) {
@@ -213,6 +219,9 @@ const UNPROJECTED_PLAYBOOK_DETAIL_COLUMNS = [
   // (`playbooks/approve.ts`) but never read back to the client anywhere;
   // possibly a real gap ("approved by whom") rather than deliberate.
   "approvedBy",
+  // Derived from `scope.documentTypeKey` for the document-type foreign key;
+  // the detail already returns `scope`.
+  "documentTypeKey",
 ] as const satisfies readonly (keyof PlaybookDefinitionRow)[];
 
 // The shape the get `columns: {...}` query below must project.

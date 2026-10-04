@@ -12,15 +12,15 @@ import {
   Link,
   useNavigate,
 } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
-  MessageSquareIcon,
   Minimize2Icon,
+  NewChatIcon,
   PinIcon,
   PlusIcon,
   SkillIcon,
@@ -28,7 +28,6 @@ import {
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
-  LandingButton,
   LandingEmpty,
   LandingGreeting,
   LandingItemText,
@@ -36,10 +35,12 @@ import {
   LandingSection,
 } from "@stll/ui/landing";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import {
@@ -56,6 +57,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
@@ -71,6 +73,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -88,10 +91,13 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import type { SuggestedSkill } from "@/lib/prompts/use-suggested-skills";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -101,6 +107,9 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 export const Route = createFileRoute("/_protected/chat/")({
@@ -139,8 +148,49 @@ export const Route = createFileRoute("/_protected/chat/")({
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+/** Who else works on a matter, as a compact avatar stack on its row. */
+const MatterColleagues = ({
+  currentUserId,
+  preview,
+}: {
+  currentUserId: string;
+  preview: WorkspaceMemberPreview | undefined;
+}) => {
+  if (!preview) {
+    return null;
+  }
+  const colleagues = preview.members.flatMap(
+    ({ email, userId, image, name }) =>
+      userId === currentUserId
+        ? []
+        : [
+            {
+              userEmail: email,
+              userId,
+              userImage: image,
+              userName: name,
+            },
+          ],
+  );
+  const viewerCount = preview.members.some(
+    (member) => member.userId === currentUserId,
+  )
+    ? 1
+    : 0;
+  return (
+    <TeamAvatars
+      emptyFallback={null}
+      leadUserId={null}
+      members={colleagues}
+      totalCount={preview.total - viewerCount}
+      size="size-6"
+    />
+  );
+};
+
 function ChatIndex() {
   const t = useTranslations();
+  const { focusThread } = useChatEditorManager();
   const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -327,6 +377,13 @@ function ChatIndex() {
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
+  const { data: memberPreviews } = useQuery(
+    workspaceMemberPreviewsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+      workspaceIds: visibleMatters.map((matter) => matter.id),
+    }),
+  );
   const mattersHeading =
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
@@ -336,6 +393,8 @@ function ChatIndex() {
     () => listChatHistoryItems(groupedThreads).slice(0, 5),
     [groupedThreads],
   );
+  const storedMatterColor = (workspaceId: string) =>
+    workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
 
   const selectPrompt = (prompt: ChatPrompt) => {
     controller.setContent(composerStoredMarkdown(prompt.body));
@@ -612,20 +671,28 @@ function ChatIndex() {
               }}
             >
               <Link
-                className={LANDING_ROW_CLASS}
+                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                 params={{ workspaceId: matter.id }}
                 to="/workspaces/$workspaceId"
               >
-                <LandingItemText
-                  icon={
-                    <MatterIcon
-                      className="size-4"
-                      matter={{ id: matter.id, color: matter.color }}
-                    />
-                  }
-                  iconTone="matter"
-                  meta={formatRelativeTime(matter.lastActivityAt)}
-                  title={matter.name}
+                <span className="min-w-0 flex-1">
+                  <LandingItemText
+                    icon={
+                      <MatterIcon
+                        className="size-4"
+                        matter={{ id: matter.id, color: matter.color }}
+                      />
+                    }
+                    iconTone="matter"
+                    meta={formatRelativeTime(matter.lastActivityAt)}
+                    title={matter.name}
+                  />
+                </span>
+                <MatterColleagues
+                  currentUserId={userId}
+                  preview={memberPreviews?.previews.find(
+                    (preview) => preview.workspaceId === matter.id,
+                  )}
                 />
               </Link>
             </MatterContextMenu>
@@ -661,13 +728,11 @@ function ChatIndex() {
         }
       >
         {suggestedSkills.length > 0 ? (
-          suggestedSkills.map((prompt) => (
-            <LandingButton
-              icon={<SkillIcon className="size-4" />}
-              key={prompt.id}
-              meta={prompt.body}
-              onClick={() => selectPrompt(prompt)}
-              title={prompt.name}
+          suggestedSkills.map((skill) => (
+            <SuggestedSkillRow
+              key={skill.id}
+              onSelect={() => selectPrompt(skill)}
+              skill={skill}
             />
           ))
         ) : (
@@ -687,7 +752,7 @@ function ChatIndex() {
           recentChats.map((chat) =>
             chat.scope === "workspace" ? (
               <Link
-                className={LANDING_ROW_CLASS}
+                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                 key={chat.id}
                 params={{
                   workspaceId: chat.workspaceId,
@@ -695,54 +760,176 @@ function ChatIndex() {
                 }}
                 to="/chat/workspaces/$workspaceId/$threadId"
               >
-                <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
-                  meta={
-                    <>
-                      <ChatThreadOriginPrefix origin={chat.origin} />
-                      <BidiText>{chat.workspaceName}</BidiText>
-                      {" - "}
-                      {formatRelativeTime(chat.updatedAt)}
-                    </>
-                  }
-                  title={
-                    isPlaceholderThreadTitle(chat.title)
-                      ? t("chat.newChat")
-                      : chat.title
-                  }
-                />
+                <span className="min-w-0 flex-1">
+                  <LandingItemText
+                    meta={
+                      <>
+                        <ChatThreadOriginPrefix origin={chat.origin} />
+                        <span
+                          aria-hidden="true"
+                          // Centred on the cap height, not the x-height:
+                          // `align-middle` reads low beside capitals.
+                          className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
+                          style={{
+                            backgroundColor: resolveMatterColor(
+                              chat.workspaceId,
+                              storedMatterColor(chat.workspaceId),
+                            ),
+                          }}
+                        />
+                        <BidiText>{chat.workspaceName}</BidiText>
+                        {" · "}
+                        {formatRelativeTime(chat.updatedAt)}
+                      </>
+                    }
+                    title={
+                      isPlaceholderThreadTitle(chat.title)
+                        ? t("chat.newChat")
+                        : chat.title
+                    }
+                  />
+                </span>
+                <ChatFileStack attachedFiles={chat.context} />
               </Link>
             ) : (
               <Link
-                className={LANDING_ROW_CLASS}
+                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                 key={chat.id}
                 params={{ threadId: chat.id }}
                 to="/chat/$threadId"
               >
-                <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
-                  meta={
-                    <>
-                      <ChatThreadOriginPrefix origin={chat.origin} />
-                      {formatRelativeTime(chat.updatedAt)}
-                    </>
-                  }
-                  title={
-                    isPlaceholderThreadTitle(chat.title)
-                      ? t("chat.newChat")
-                      : chat.title
-                  }
-                />
+                <span className="min-w-0 flex-1">
+                  <LandingItemText
+                    meta={
+                      <>
+                        <ChatThreadOriginPrefix origin={chat.origin} />
+                        {formatRelativeTime(chat.updatedAt)}
+                      </>
+                    }
+                    title={
+                      isPlaceholderThreadTitle(chat.title)
+                        ? t("chat.newChat")
+                        : chat.title
+                    }
+                  />
+                </span>
+                <ChatFileStack attachedFiles={chat.context} />
               </Link>
             ),
           )
         ) : (
-          <LandingEmpty>{t("chat.landing.noRecentChats")}</LandingEmpty>
+          <LandingEmpty>
+            <div className="flex flex-col items-start gap-2.5">
+              {t("chat.landing.noRecentChats")}
+              <Button
+                onClick={() => focusThread(threadRef)}
+                size="sm"
+                variant="outline"
+              >
+                <NewChatIcon className="size-4" />
+                {t("chat.newChat")}
+              </Button>
+            </div>
+          </LandingEmpty>
         )}
       </LandingSection>
     </LandingLayout>
   );
 }
+
+type SuggestedSkillRowProps = {
+  onSelect: () => void;
+  skill: SuggestedSkill;
+};
+
+/**
+ * A suggested skill, signed on the right by its author: the member who last
+ * edited it, or stella for a built-in or unedited bundled skill. An author
+ * the data cannot name (a former member, a system write) shows nothing.
+ */
+const SuggestedSkillRow = ({ onSelect, skill }: SuggestedSkillRowProps) => (
+  <button
+    className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+    onClick={onSelect}
+    type="button"
+  >
+    <span className="min-w-0 flex-1">
+      <LandingItemText meta={skill.body} title={skill.name} />
+    </span>
+    <SkillAuthorAvatar author={skillAuthor(skill)} />
+  </button>
+);
+
+type SkillAuthor =
+  | {
+      type: "member";
+      edit: Extract<SuggestedSkill["lastEdit"], { type: "user" }>;
+    }
+  | { type: "stella" }
+  | { type: "unknown" };
+
+const skillAuthor = ({ lastEdit }: SuggestedSkill): SkillAuthor => {
+  if (lastEdit === null) {
+    return { type: "unknown" };
+  }
+  switch (lastEdit.type) {
+    case "user":
+      return { type: "member", edit: lastEdit };
+    case "stella":
+      return { type: "stella" };
+    case "unattributed":
+      return { type: "unknown" };
+    default: {
+      lastEdit satisfies never;
+      return panic(`Unhandled skill last edit: ${String(lastEdit)}`);
+    }
+  }
+};
+
+const AVATAR_RING_CLASS =
+  "ring-background inline-flex shrink-0 rounded-full ring-2";
+
+const SkillAuthorAvatar = ({ author }: { author: SkillAuthor }) => {
+  const t = useTranslations();
+  switch (author.type) {
+    case "member": {
+      const name =
+        getDisplayName(author.edit.user.name) ?? t("common.unknownUser");
+      return (
+        <Tooltip
+          content={t("chat.landing.skillEditedBy", {
+            name,
+            time: formatRelativeTime(author.edit.at),
+          })}
+          render={<span className={AVATAR_RING_CLASS} />}
+        >
+          <UserIdentityAvatar
+            className="size-6"
+            image={author.edit.user.image}
+            name={name}
+          />
+        </Tooltip>
+      );
+    }
+    case "stella":
+      return (
+        <Tooltip
+          content={t("catalogue.firstParty")}
+          render={<span className={AVATAR_RING_CLASS} />}
+        >
+          <span className="bg-muted text-foreground flex size-6 items-center justify-center rounded-full">
+            <StellaMark className="size-3.5" />
+          </span>
+        </Tooltip>
+      );
+    case "unknown":
+      return null;
+    default: {
+      author satisfies never;
+      return panic(`Unhandled skill author: ${String(author)}`);
+    }
+  }
+};
 
 type PinnedMatter = {
   color: string | null;

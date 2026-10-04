@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -43,7 +43,6 @@ import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-m
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
-  pendingComponent: ContactDetailPending,
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
@@ -52,6 +51,8 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
       contactOptions(context.user.activeOrganizationId, params.contactId),
     );
   },
+  pendingComponent: ContactDetailPending,
+  remountDeps: ({ params }) => params.contactId,
 });
 
 const SECTION_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
@@ -145,10 +146,7 @@ function ContactDetailPage() {
           );
         },
         onError: (error) => {
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -156,10 +154,7 @@ function ContactDetailPage() {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      stellaToast.add({
-        title: deleteBlockedDescription,
-        type: "error",
-      });
+      notifyUserError(undefined, deleteBlockedDescription);
       return;
     }
 
@@ -293,7 +288,7 @@ function ContactDetailPage() {
         </section>
 
         {contact.type === "person" && (
-          <ContactPersonDetailsEditor contact={contact} key={contact.id} />
+          <ContactPersonDetailsEditor contact={contact} />
         )}
 
         {/* Communication */}
@@ -324,14 +319,12 @@ function ContactDetailPage() {
                 value={contact.taxId}
               />
               <EditableRow
+                // A draft is typed in one currency's units; a currency change
+                // remounts the row; its commit guard discards the old draft.
+                key={`default-hourly-rate-${contact.currency ?? "none"}`}
                 contact={contact}
                 field="defaultHourlyRate"
                 label={t("contacts.fields.defaultHourlyRate")}
-                value={
-                  contact.defaultHourlyRate !== null
-                    ? String(contact.defaultHourlyRate)
-                    : null
-                }
               />
               <EditableRow
                 contact={contact}

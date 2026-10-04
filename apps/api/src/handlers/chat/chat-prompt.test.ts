@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  CHAT_USER_HREF_TEMPLATE,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -41,12 +42,15 @@ import {
   buildUserContextBlock,
   buildWorkspacePromptParts,
   buildWorkspacePromptText,
+  chatSafePromptText,
+  chatVolatilePromptSection,
   extractTitle,
   NO_MATTER_SCOPE_SECTION,
 } from "./chat-prompt";
 import type {
   ChatCacheStablePrefix,
   ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "./chat-prompt";
@@ -669,14 +673,71 @@ describe("chat prompt builders", () => {
       userContext: null,
     });
     const extended = appendAnonymizedModeHintToChatSafePrompt(
-      prompt.safePrompt,
+      prompt.safeLayers,
     );
-    const acceptsSafePrompt = (value: ChatSafePrompt) => value;
 
-    expect(acceptsSafePrompt(extended)).toBe(extended);
-    expect(extended).toContain(prompt.safePrompt);
-    expect(extended).toContain("ANONYMIZED MODE");
-    expect(extended).toContain("External (non-stella) tools");
+    // The hint joins the organization layer; the static layer is untouched.
+    expect(extended.static).toBe(prompt.safeLayers.static);
+    expect(chatSafePromptText(extended).startsWith(prompt.safePrompt)).toBe(
+      true,
+    );
+    expect(extended.organization).toContain("ANONYMIZED MODE");
+    expect(extended.organization).toContain("External (non-stella) tools");
+  });
+
+  test("layers the safe half at its cache boundaries without changing its text", () => {
+    const prompt = buildGlobalPromptParts({
+      practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+      skillMetadata: SKILL_METADATA,
+      userContext: {
+        locale: "en",
+        timezone: "Europe/Prague",
+        userName: "First User",
+      },
+    });
+
+    expect(prompt.safeLayers.static).toBe(prompt.cacheStablePrefix);
+    expect(String(prompt.safeLayers.organization)).toBe(
+      "\n\nUser generally practices law in: Czechia.",
+    );
+    expect(chatSafePromptText(prompt.safeLayers)).toBe(prompt.safePrompt);
+    expect(prompt.safePrompt).not.toContain("First User");
+  });
+
+  test("keeps per-user and per-turn text out of the cacheable layers at compile time", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+    const userSection = buildUserContextBlock({
+      locale: "en",
+      timezone: "Europe/Prague",
+      userName: "First User",
+    });
+    const turnSection = chatVolatilePromptSection("Connected to a matter.");
+    const layers = (value: ChatSafePromptLayers) => value;
+
+    expect(layers(prompt.safeLayers)).toBe(prompt.safeLayers);
+    layers({
+      organization: prompt.safeLayers.organization,
+      // @ts-expect-error a user's section is not the static layer
+      static: userSection,
+    });
+    layers({
+      // @ts-expect-error a turn's section is not the organization layer
+      organization: turnSection,
+      static: prompt.safeLayers.static,
+    });
+    layers({
+      // @ts-expect-error the untrusted tail is not the organization layer
+      organization: prompt.untrustedSuffix,
+      static: prompt.safeLayers.static,
+    });
+    layers({
+      organization: prompt.safeLayers.organization,
+      // @ts-expect-error plain text is not the static layer
+      static: "You are an AI.",
+    });
   });
 
   test("routes installed skill metadata through the untrusted suffix", () => {
@@ -1450,6 +1511,17 @@ describe("system prompt tool-reference guard", () => {
         "Never link a stella decision by its appUrl or sourceUrl",
       );
       expect(prompt).toContain("say that the corpus returned none");
+    }
+  });
+
+  // Tools return people (task assignees, matter members, person fields) with
+  // a userId; without a rule for people the model printed a bare handle where
+  // it links every other reference.
+  test("every assembled prompt links people by the userId a tool returned", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain("PEOPLE MENTIONS");
+      expect(prompt).toContain(`(${CHAT_USER_HREF_TEMPLATE})`);
+      expect(prompt).toContain("A person without a userId stays plain text");
     }
   });
 

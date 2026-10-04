@@ -52,6 +52,11 @@
     "takenOverLocalError": "انتقل التحرير على سطح المكتب إلى جهاز آخر. هذه النسخة المحلية محفوظة."
   },
   "dialog": {
+    "accountWindowTitle": "ربط الحساب",
+    "accountTitle": "هل تريد ربط هذا الحساب؟",
+    "accountSubtitle": "اربط stella desktop بهذا الحساب وهذه المؤسسة.",
+    "accountEmail": "الحساب",
+    "organizationName": "المؤسسة",
     "allow": "السماح",
     "apiUrl": "عنوان API",
     "cancel": "إلغاء",

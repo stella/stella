@@ -18,7 +18,9 @@ import { resolveDatabaseUrl } from "@/api/db-url";
 import type { RehearsalSeedStep } from "@/api/scripts/seed-migration-rehearsal-plan";
 import {
   REHEARSAL_DEFAULT_DECISIONS,
+  rehearsalPresentTablesStatement,
   rehearsalSeedSteps,
+  rehearsalVacuumStatement,
 } from "@/api/scripts/seed-migration-rehearsal-plan";
 
 const DECIMAL_INTEGER = /^\d+$/u;
@@ -43,6 +45,41 @@ const flagInteger = (name: string, fallback: number): number => {
   return parsed;
 };
 
+const elapsedSince = (startedAt: number) =>
+  `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+
+const applyStep = async (client: SQL, step: RehearsalSeedStep) => {
+  const stepStartedAt = performance.now();
+  switch (step.type) {
+    case "sql": {
+      await client.unsafe(step.statement);
+      if (step.table !== null) {
+        console.info(`${step.table}: ${elapsedSince(stepStartedAt)}`);
+      }
+      return;
+    }
+    case "vacuum": {
+      const rows: { name: string }[] = await client.unsafe(
+        rehearsalPresentTablesStatement(step.tables),
+      );
+      const present = new Set(rows.map(({ name }) => name));
+      const tables = step.tables.filter((table) => present.has(table));
+      if (tables.length === 0) {
+        panic("No seeded table is present to vacuum");
+      }
+      await client.unsafe(rehearsalVacuumStatement(tables));
+      console.info(
+        `vacuumed ${String(tables.length)} tables: ${elapsedSince(stepStartedAt)}`,
+      );
+      return;
+    }
+    default: {
+      step satisfies never;
+      panic("Unhandled seed step");
+    }
+  }
+};
+
 /**
  * Apply the steps one after another. Recursive rather than a loop with an
  * awaited body: each step reads what the previous one wrote, so the
@@ -57,13 +94,7 @@ const applyStepAt = async (
   if (step === undefined) {
     return;
   }
-  const stepStartedAt = performance.now();
-  await client.unsafe(step.statement);
-  if (step.table !== null) {
-    console.info(
-      `${step.table}: ${((performance.now() - stepStartedAt) / 1000).toFixed(1)}s`,
-    );
-  }
+  await applyStep(client, step);
   await applyStepAt(client, steps, offset + 1);
 };
 

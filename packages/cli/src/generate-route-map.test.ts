@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { TOOL_ANNOTATIONS } from "./annotations.js";
 import {
   classifyProp,
   generateRouteMap,
   RouteGenerationError,
 } from "./generate-route-map.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import type {
   FlagSpec,
   LeafCommandSpec,
@@ -311,6 +311,23 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(save?.flags.every((f) => !f.required)).toBe(true);
   });
 
+  test("numeric clamp metadata reaches generated flags", () => {
+    expect(
+      classifyProp("max_chars", {
+        type: "integer",
+        minimum: 1,
+        maximum: 8000,
+        "x-stella-agent-input": { kind: "number", range: "clamp" },
+      }),
+    ).toMatchObject({ kind: "flag", spec: { kind: "int", range: "clamp" } });
+    expect(
+      flagFor(
+        findLeaf(tree, ["case-law", "read"]) ?? errorSpec(),
+        "--max-chars",
+      ),
+    ).toMatchObject({ kind: "int", min: 1, max: 8000, range: "clamp" });
+  });
+
   test("a dot-path leaf is required only when both schema levels require it", () => {
     // prepare_file_comparison requires `base` and every field inside it.
     const prepare = findLeaf(tree, ["document", "comparison", "prepare"]);
@@ -360,6 +377,7 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(findLeaf(tree, ["template", "fill"])?.inputOnly).toEqual(["values"]);
     expect(findLeaf(tree, ["clause", "save"])?.inputOnly).toEqual([
       "body",
+      "expected_body",
       "metadata",
     ]);
     // set_field_value.content has an untyped `value` child -> whole object to --input.

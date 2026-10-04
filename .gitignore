@@ -43,6 +43,9 @@ dist-ssr
 .turbo
 .cache
 
+# Local source projections restored by Turbo generation tasks
+apps/web/src/generated/api-routes.gen.ts
+
 # Vercel
 .vercel
 
@@ -76,3 +79,14 @@ i18n.cache
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
+
+# API runtime aggregates embed the committed per-capability shards.
+apps/api/src/mcp/generated/capability-dispatch.ts
+apps/api/src/mcp/generated/capability-catalog.ts
+
+# CLI runtime projections are restored by codegen:runtime.
+packages/cli/src/generated/route-map.ts
+packages/cli/src/generated/tool-annotations.ts
+
+# Derived TanStack route tree, restored by the web generation task.
+apps/web/src/routeTree.gen.ts

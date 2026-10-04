@@ -3,13 +3,14 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
@@ -28,6 +29,7 @@ const config = {
   permissions: {
     workspace: ["read"],
   },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({
@@ -52,11 +54,12 @@ const readWorkspaceNavigation = createSafeRootHandler(
   async function* ({ query, safeDb, session }) {
     const statusScope =
       query.statusScope ?? WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE;
-    const limit =
+    const limit = normalizeTenantPageLimit(
       query.limit ??
-      (statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE
-        ? LIMITS.workspacesCount
-        : LIMITS.workspaceNavigationPageSizeDefault);
+        (statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE
+          ? LIMITS.workspacesCount
+          : LIMITS.workspaceNavigationPageSizeDefault),
+    );
     const conditions = [
       eq(workspaces.organizationId, session.activeOrganizationId),
       statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE

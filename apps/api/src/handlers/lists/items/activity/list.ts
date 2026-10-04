@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -16,6 +16,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
@@ -35,9 +36,11 @@ const config = {
     "task behind it, each with its action, the actor's name, the recorded " +
     "changes, and the operation label.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workspace_schema",
     consumesServices: false,
   },
@@ -53,7 +56,9 @@ const activityCursor = createTimestampIdCursorCodec({
 const readItemActivity = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListActivityPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListActivityPageSizeDefault,
+    );
     const cursor = query.cursor ? activityCursor.decode(query.cursor) : null;
     if (query.cursor && !cursor) {
       return Result.err(

@@ -96,7 +96,10 @@ run_probe() {
   docker run --rm --name "$probe" --label "$owner_label=$run_id" --network "$network" "$@"
 }
 migrate() {
+  # Non-RDS database: online index builds must not wait on EBS metrics or a
+  # wall-clock busy window.
   run_probe --env DATABASE_URL=postgres://postgres:smoke-only@smoke-postgres:5432/stella \
+    --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
@@ -173,7 +176,7 @@ if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
 fi
 echo 'PASS: collab reached environment validation'
 
-for entrypoint in /app/document-processing-worker.js /app/backfill.js; do
+for entrypoint in /app/document-processing-worker.js /app/backfill.js /app/complete-sk-us-raw.js; do
   output=$(run_probe "$image_id" timeout 20 bun "$entrypoint" 2>&1 || true)
   if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
     || ! grep -q 'Invalid environment variables' <<< "$output"; then

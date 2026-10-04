@@ -9,7 +9,7 @@ import type {
   SignalSeverity,
 } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS, todayFor } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { NewSignal } from "@/api/lib/signals/emit";
@@ -44,12 +44,17 @@ export type WorkAttentionObligation = {
 };
 
 /**
- * Civil date of an instant on the server's UTC day. `hard_deadline_date` is a
- * date with no time zone, and the My Work queues default their `asOf` to the
- * same UTC day, so the scout and the queue agree about what is due.
+ * Civil date of an instant for the scout. `hard_deadline_date` is a date with
+ * no time zone, and the scout has no viewer whose zone it could take: no user
+ * or organization time zone is stored on the server. It reads the UTC day,
+ * the same day the My Work queues default their `asOf` to when the client
+ * sends none, so the scout and the queue agree about what is due.
  */
 export const workAttentionToday = (now: Date): string =>
-  now.toISOString().slice(0, 10);
+  todayFor(
+    "UTC",
+    Temporal.Instant.fromEpochMilliseconds(now.getTime()),
+  ).toString();
 
 /** Whole days between two civil dates; negative once `date` is in the past. */
 export const daysUntilDate = (date: string, now: Date): number =>

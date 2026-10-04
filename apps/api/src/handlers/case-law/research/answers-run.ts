@@ -6,7 +6,7 @@ import {
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
 import { detached } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -19,6 +19,7 @@ import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  access: "write",
   description:
     "Queue answers for the given decisions in the given question columns " +
     "(every column the organization keeps, when none is named). Cells that " +
@@ -26,6 +27,7 @@ const config = {
     "run is still working on are skipped. Answering continues after the " +
     "response; poll the answers.",
   permissions: { caseLawResearch: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: runResearchAnswersBodySchema,
   // The detached runner meters every model call under `case_law` at the
@@ -44,6 +46,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
@@ -57,6 +60,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     // spend) and rejects only an unreadable stored config, so the role's
     // provider and model support is still decided here.
     const available = requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -149,6 +153,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
           columns: runColumns,
           claim: queued.claim,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
         },
         {

@@ -1,13 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, ne, or } from "drizzle-orm";
+import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
-import { timeEntries, workspaces } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { leftTodayMinutes } from "@/api/lib/billing/daily-target";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,6 +23,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const DELETING_WORKSPACE_STATUS = "deleting" as const;
@@ -108,6 +110,7 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "activityCode",
   // Invoice and split identifiers are internal billing links.
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   // Timer stop and audit timestamps are not used by the day view.
   "timerStoppedAt",
@@ -140,9 +143,16 @@ const config = {
   description:
     "List the signed-in user's client and internal time entries for one work date " +
     "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
-    "Follow the cursor for the next page.",
+    "Follow the cursor for the next page. Logged minutes, daily target and remaining minutes cover all " +
+    "accessible entries for the date, independently of pagination. Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     date: t.String({
@@ -185,10 +195,25 @@ const listMyTimeEntries = createSafeRootHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
+    const dayScope = and(
+      eq(timeEntries.organizationId, session.activeOrganizationId),
+      eq(timeEntries.userId, user.id),
+      eq(timeEntries.dateWorked, query.date),
+      or(
+        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+        and(
+          eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+          eq(workspaces.organizationId, session.activeOrganizationId),
+          ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+        ),
+      ),
+    );
+    const day = yield* Result.await(
+      safeDb(async (tx) => {
+        const rows = await tx
           .select(myTimeEntryColumns)
           .from(timeEntries)
           .leftJoin(
@@ -198,41 +223,52 @@ const listMyTimeEntries = createSafeRootHandler(
               eq(timeEntries.organizationId, workspaces.organizationId),
             ),
           )
-          .where(
-            and(
-              eq(timeEntries.organizationId, session.activeOrganizationId),
-              eq(timeEntries.userId, user.id),
-              eq(timeEntries.dateWorked, query.date),
-              cursor ? gt(timeEntries.id, cursor) : undefined,
-              or(
-                eq(
-                  timeEntries.activityGroup,
-                  TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
-                ),
-                and(
-                  eq(
-                    timeEntries.activityGroup,
-                    TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
-                  ),
-                  eq(workspaces.organizationId, session.activeOrganizationId),
-                  ne(workspaces.status, DELETING_WORKSPACE_STATUS),
-                ),
+          .where(and(dayScope, cursor ? gt(timeEntries.id, cursor) : undefined))
+          .orderBy(asc(timeEntries.id))
+          .limit(limit + 1);
+        const summaries = await tx
+          .select({
+            loggedMinutes:
+              sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)`.mapWith(
+                Number,
               ),
+            dailyTargetMinutes: sql<number | null>`(
+            SELECT ${timeDailyTargets.minutes} FROM ${timeDailyTargets}
+            WHERE ${timeDailyTargets.organizationId} = ${session.activeOrganizationId}
+              AND ${timeDailyTargets.userId} = ${user.id}
+          )`,
+          })
+          .from(timeEntries)
+          .leftJoin(
+            workspaces,
+            and(
+              eq(timeEntries.workspaceId, workspaces.id),
+              eq(timeEntries.organizationId, workspaces.organizationId),
             ),
           )
-          .orderBy(asc(timeEntries.id))
-          .limit(limit + 1),
-      ),
+          .where(dayScope);
+        const summary = summaries.at(0);
+        if (summary === undefined) {
+          return panic("Daily time aggregate returned no row");
+        }
+        return { rows, summary };
+      }),
     );
 
     const page = createCursorPage({
-      rows,
+      rows: day.rows,
       limit,
       cursorForItem: ({ id }) => encodePaginationCursor([id]),
     });
     return Result.ok({
       ...page,
       items: page.items.map(toMyTimeEntryItem),
+      loggedTodayMinutes: day.summary.loggedMinutes,
+      dailyTargetMinutes: day.summary.dailyTargetMinutes,
+      leftTodayMinutes: leftTodayMinutes(
+        day.summary.dailyTargetMinutes,
+        day.summary.loggedMinutes,
+      ),
     });
   },
 );

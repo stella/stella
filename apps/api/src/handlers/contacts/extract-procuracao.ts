@@ -10,11 +10,11 @@ import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { getS3 } from "@/api/lib/s3";
 import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 import {
@@ -79,7 +79,12 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Extracts contact fields without returning the source file.",
+  },
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -98,6 +103,7 @@ const extractProcuracao = createSafeRootHandler(
     session,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     user,
     safeDb,
@@ -105,6 +111,7 @@ const extractProcuracao = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -256,6 +263,7 @@ const extractProcuracao = createSafeRootHandler(
       }
 
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -276,8 +284,10 @@ const extractProcuracao = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             tenantWorkspaceIds: [],
             analytics: aiAnalytics,

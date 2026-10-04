@@ -1,4 +1,5 @@
 import { TransactionRollbackError } from "drizzle-orm";
+import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as authSchema from "@/api/db/auth-schema";
@@ -30,6 +31,19 @@ const createTestDb = async (): Promise<TestDatabase> => {
     }),
   );
 };
+
+/** The same database, with `logger` seeing every statement run through it. */
+export const withQueryLogger = (
+  database: TestDatabase,
+  logger: Logger,
+): TestDatabase =>
+  markRlsDatabase(
+    drizzle({
+      client: database.$client,
+      relations: allRelations,
+      logger,
+    }),
+  );
 
 const DEFAULT_TEST_USER_ID = toSafeId<"user">("user_test");
 
@@ -82,6 +96,7 @@ export const releaseTestDb = async (): Promise<void> => {
   });
   // Preserve the failure for this release call, but recover the shared chain
   // so one failed initialization or close cannot poison every later test.
+  // swallow-ok: recovers the shared close chain; this release still awaits the original close failure below
   dbClosePromise = closePromise.catch(() => undefined);
   await closePromise;
 };

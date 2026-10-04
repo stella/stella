@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -8,11 +9,13 @@ import { stellaToast } from "@stll/ui/toast";
 import { getMarkdownDraftSyncDecision } from "@/components/inspector/file-tab-panel.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -55,6 +58,7 @@ export const useMarkdownFileDraft = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const editorRef = useRef<MarkdownHybridEditorHandle>(null);
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const textQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
@@ -98,8 +102,6 @@ export const useMarkdownFileDraft = ({
     onSuccess: async (response, variables) => {
       replaceFileFieldId(variables.fieldId, {
         id: response.fieldId,
-        fileName: variables.fileName,
-        label: tab.label,
         mimeType: MARKDOWN_MIME,
         pdfFileId: null,
         ...(variables.propertyId ? { propertyId: variables.propertyId } : {}),
@@ -117,10 +119,8 @@ export const useMarkdownFileDraft = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("workspaces.files.versionUploadFailed"),
+      notifyUserError(error, t("workspaces.files.versionUploadFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });
@@ -148,21 +148,43 @@ export const useMarkdownFileDraft = ({
   }
 
   const discard = () => {
+    if (saveMutation.isPending) {
+      return;
+    }
+    editorRef.current?.resetMarkdown(text);
     setDraft(text);
   };
   const save = () => {
+    if (saveMutation.isPending) {
+      return;
+    }
+    const currentTab = useInspectorTabsStore
+      .getState()
+      .tabs.find(
+        (candidate) =>
+          candidate.id === tab.id &&
+          candidate.type === "pdf" &&
+          candidate.workspaceId === tab.workspaceId,
+      );
+    if (currentTab?.type !== "pdf") {
+      panic("Markdown publication requires a mounted file tab");
+    }
     saveMutation.mutate({
       entityId: tab.entityId,
       fieldId: tab.id,
-      fileName: tab.fileName,
+      fileName: currentTab.fileName,
       propertyId: filePropertyId,
-      text: draft,
+      // A mounted editor is the source of truth (it may hold an edit inside
+      // the debounce window). When it is unmounted, e.g. while a failed
+      // refetch shows the error state, the retained draft is the source.
+      text: editorRef.current?.captureForSave() ?? draft,
       workspaceId: tab.workspaceId,
     });
   };
 
   return {
     discard,
+    editorRef,
     isDirty,
     isSaving: saveMutation.isPending,
     save,

@@ -22,6 +22,7 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 const {
   decodeChatModelSelection,
   encodeChatModelSelection,
+  getChatModelBenchmarkOptions,
   getChatModelReasoningEfforts,
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
@@ -139,14 +140,14 @@ describe("isChatModelSelectionAvailable", () => {
     }
   });
 
-  test("falls back to the single instance provider when no org config exists", () => {
+  test("excludes unavailable instance selections when no org config exists", () => {
     expect(
       isChatModelSelectionAvailable({
         provider: "openai",
         modelId: "gpt-5.4",
         orgAIConfig: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isChatModelSelectionAvailable({
         provider: "anthropic",
@@ -154,6 +155,39 @@ describe("isChatModelSelectionAvailable", () => {
         orgAIConfig: null,
       }),
     ).toBe(false);
+  });
+
+  test("offers only the active eligible instance provider", () => {
+    const previous = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
+    };
+    Object.assign(env, {
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_API_KEY: "test-openrouter-instance-key",
+      USE_MOCK_AI: false,
+      REQUIRE_PERSONAL_AI_KEY: false,
+    });
+    try {
+      expect(
+        isChatModelSelectionAvailable({
+          provider: "openrouter",
+          modelId: "google/gemini-3.7-flash",
+          orgAIConfig: null,
+        }),
+      ).toBe(true);
+      expect(
+        isChatModelSelectionAvailable({
+          provider: "openai",
+          modelId: "gpt-5.4",
+          orgAIConfig: null,
+        }),
+      ).toBe(false);
+    } finally {
+      Object.assign(env, previous);
+    }
   });
 });
 
@@ -202,6 +236,76 @@ describe("getConfiguredChatModelOptions", () => {
         expect(option.reasoningEfforts).toBeNull();
       }
     }
+  });
+});
+
+describe("getChatModelBenchmarkOptions", () => {
+  test("lists every offered route, marking unconfigured providers", () => {
+    const options = getChatModelBenchmarkOptions(
+      orgConfigForProviders(["anthropic"]),
+    );
+
+    expect(options.map(({ value }) => value)).toEqual(
+      TANSTACK_AI_PROVIDERS.flatMap((provider) =>
+        BYOK_MODEL_OPTIONS[provider].map((modelId) =>
+          encodeChatModelSelection({ provider, modelId }),
+        ),
+      ),
+    );
+    for (const option of options) {
+      expect(option.availability).toBe(
+        option.provider === "anthropic" ? "available" : "provider_unconfigured",
+      );
+    }
+  });
+
+  test("explains every route the catalog has no exact Arena row for", () => {
+    const options = getChatModelBenchmarkOptions(null);
+
+    expect(
+      options.find(({ value }) => value === "openai::gpt-6.1-sol")
+        ?.unratedReason,
+    ).toBe("too_new");
+    for (const option of options) {
+      if (option.unratedReason !== null) {
+        expect(option.tradeoff.type).toBe("unmeasured");
+      }
+    }
+  });
+
+  test("measures only efforts the route can be sent with", () => {
+    for (const option of getChatModelBenchmarkOptions(null)) {
+      for (const { reasoningEffort } of option.measurements) {
+        if (reasoningEffort !== null) {
+          expect(option.reasoningEfforts ?? []).toContain(reasoningEffort);
+        }
+      }
+    }
+  });
+
+  test("reports dominated and premium efforts from the classified measurements", () => {
+    const options = getChatModelBenchmarkOptions(null);
+
+    for (const { measurements, tradeoff } of options) {
+      expect(tradeoff.dominatedReasoningEfforts).toEqual(
+        measurements
+          .filter(({ classification }) => classification === "dominated")
+          .map(({ reasoningEffort }) => reasoningEffort),
+      );
+      expect(tradeoff.premiumReasoningEfforts).toEqual(
+        measurements
+          .filter(({ premium }) => premium)
+          .map(({ reasoningEffort }) => reasoningEffort),
+      );
+      expect(tradeoff.type === "unmeasured").toBe(measurements.length === 0);
+    }
+    // The committed snapshot contains clearly dominated variants; an empty
+    // result would mean classification stopped reaching the API.
+    expect(
+      options.some(
+        ({ tradeoff }) => tradeoff.dominatedReasoningEfforts.length > 0,
+      ),
+    ).toBe(true);
   });
 });
 

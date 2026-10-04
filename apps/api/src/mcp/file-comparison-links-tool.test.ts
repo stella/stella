@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-comparison-links-tool";
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -86,6 +88,7 @@ const createHarness = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 
   const dependencies: PrepareFileComparisonFromLinksDependencies = {
@@ -285,6 +288,45 @@ describe("prepare_file_comparison_from_links", () => {
     expect(error.code).toBe("validation_error");
     expect(error.message).toBe("The base file is not a .docx");
     expect(error.issues?.at(0)?.path).toBe("base.url");
+    expect(harness.inserted).toHaveLength(0);
+  });
+
+  for (const format of ["docx", "xlsx", "pptx"] as const) {
+    test(`refuses a password-protected ${format} as encrypted content`, async () => {
+      const locked = new Uint8Array(
+        await Bun.file(
+          new URL(
+            `../lib/files/__fixtures__/password-protected-${format}.cfb`,
+            import.meta.url,
+          ),
+        ).arrayBuffer(),
+      );
+      const harness = createHarness({
+        downloads: { [BASE_URL]: okDownload(locked) },
+      });
+
+      const error = errorOf(await harness.run(validArgs()));
+
+      expect(error).toMatchObject({
+        code: "validation_error",
+        message: ENCRYPTED_CONTENT_MESSAGE,
+        issues: [{ path: "base.url" }],
+      });
+      expect(harness.inserted).toHaveLength(0);
+    });
+  }
+
+  test("refuses an encrypted PDF as not a .docx", async () => {
+    const harness = createHarness({
+      downloads: {
+        [BASE_URL]: okDownload(new Uint8Array(await createEncryptedPdf())),
+      },
+    });
+
+    const error = errorOf(await harness.run(validArgs()));
+
+    expect(error.code).toBe("validation_error");
+    expect(error.message).toBe("The base file is not a .docx");
     expect(harness.inserted).toHaveLength(0);
   });
 

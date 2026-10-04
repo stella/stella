@@ -44,6 +44,7 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -67,7 +68,7 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
@@ -93,6 +94,7 @@ export type RunResearchAnswersInput = {
    */
   claim: ResearchAnswerClaim;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
 };
 
@@ -326,6 +328,7 @@ const answerDecision = async (
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "case-law.research-answers",
     modelRole: "fast",
     organizationId: input.organizationId,
@@ -350,15 +353,20 @@ const answerDecision = async (
 
   const generated = await Result.tryPromise({
     try: async () => {
-      const { modelId } = getTanStackTextModelForRole(
+      const { modelId } = getTanStackTextModelInfoForRole(
         "fast",
         input.orgAIConfig,
-        { organizationId: input.organizationId },
+        {
+          dataClass: "customer",
+          organizationId: input.organizationId,
+        },
       );
       const output = await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig: input.orgAIConfig,
+        managedAIResidency: input.managedAIResidency,
         organizationId: input.organizationId,
         // The corpus is global; answers are tenant rows written separately.
         tenantWorkspaceIds: [],
@@ -639,6 +647,7 @@ const retrievePassages = async (
     const { serving, manifest } = target.value;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
     const response = await getCorpusIndexClient(serving.cluster).search({
+      observer: "unobserved",
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
       maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
@@ -728,6 +737,7 @@ const answerWithSystemOne = async ({
     return untouched;
   }
   const { decisions, model } = await decideMany({
+    dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,
     state: plan.state,

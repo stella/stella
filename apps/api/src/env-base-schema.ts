@@ -1,3 +1,7 @@
+// parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
+// parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
+// parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
+// parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
@@ -16,6 +20,7 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
+import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
@@ -24,6 +29,8 @@ import {
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
+import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
@@ -32,7 +39,7 @@ import {
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
-const databasePoolMaxValueSchema = v.pipe(
+const positiveIntegerValueSchema = v.pipe(
   v.string(),
   v.digits(),
   v.toNumber(),
@@ -46,7 +53,7 @@ export const featureFlagSchema = v.optional(
 );
 
 const databasePoolMaxSchema = (fallback = "5") =>
-  v.optional(databasePoolMaxValueSchema, fallback);
+  v.optional(positiveIntegerValueSchema, fallback);
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -119,6 +126,9 @@ export const envBaseServerSchema = {
   INGESTION_USER_AGENT: v.optional(v.string()),
   SANCTIONS_EU_XML_URL: v.optional(v.pipe(v.string(), v.url())),
   DATABASE_URL: v.pipe(v.string(), v.url()),
+  // parser-output-unchanged: database load-gate settings; no parser reads them
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: v.optional(v.string()),
+  DB_LOAD_GATE_EBS_SIGNAL: v.optional(v.picklist(["disabled"])),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
@@ -126,7 +136,31 @@ export const envBaseServerSchema = {
   // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
   // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
   CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: v.optional(databasePoolMaxValueSchema),
+  CASE_LAW_DATABASE_POOL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_ASSUMED_REPLICAS: v.optional(positiveIntegerValueSchema, "2"),
+  PUBLIC_CORPUS_SEARCH_P95_SECONDS: v.optional(positiveIntegerValueSchema, "1"),
+  PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: v.optional(
+    positiveIntegerValueSchema,
+    "2",
+  ),
+  PUBLIC_CORPUS_SITEMAP_P95_SECONDS: v.optional(
+    positiveIntegerValueSchema,
+    "30",
+  ),
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: v.optional(
+    positiveIntegerValueSchema,
+    "30",
+  ),
+  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
+  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
+  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   // Session statement_timeout for the root and RLS pools, sent when each
@@ -162,6 +196,20 @@ export const envBaseServerSchema = {
   LEGAL_SEARCH_PROVIDER: v.optional(
     v.picklist(["pg-fts", "corpus-index"]),
     "pg-fts",
+  ),
+  // Experimental shared relevance ranking; disabled until runtime evaluation.
+  CORPUS_INDEX_RANKING_MODE: v.optional(
+    v.picklist(CORPUS_INDEX_RANKING_MODES),
+    "off",
+  ),
+  CORPUS_INDEX_QUERY_VARIANT: v.optional(
+    v.picklist(CORPUS_INDEX_QUERY_VARIANTS),
+    "off",
+  ),
+  // Query guidance in the search_case_law contract; off until evaluated.
+  MCP_CASE_LAW_SEARCH_GUIDANCE: v.optional(
+    v.picklist(CASE_LAW_SEARCH_GUIDANCE_MODES),
+    "off",
   ),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),

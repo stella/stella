@@ -7,14 +7,41 @@
       "severity": "high",
       "package": "image-size",
       "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
-      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+      "reason": "Patched image-size releases exist only on the 2.x line, while Metro depends on the 1.x API, so the 1.x copy stays until Metro moves to 2.x. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro depends on a patched image-size release."
     },
     {
       "id": "GHSA-w3rx-r6r6-pgpr",
       "severity": "high",
       "package": "image-size",
       "title": "image-size: ICNS parser allows denial of service through an infinite loop",
-      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+      "reason": "Patched image-size releases exist only on the 2.x line, while Metro depends on the 1.x API, so the 1.x copy stays until Metro moves to 2.x. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro depends on a patched image-size release."
+    },
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "severity": "high",
+      "package": "node-forge",
+      "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+      "reason": "No patched node-forge release exists (advisory range <=1.4.0; accepted 2026-10-02). It is reached only through @stll/mobile's Expo tooling (expo -> @expo/cli and expo-updates -> @expo/code-signing-certificates), which runs on developer machines for code-signing key generation and configuration; the expo-updates runtime does not import it, so it is not in the shipped mobile bundle, the API or web runtime images, the desktop app, or any published package's runtime dependencies. The acceptance is temporary: it lapses on 2026-11-01, once a node-forge release outside the vulnerable range is published, or once the advisory is no longer reported, whichever comes first.",
+      "expiresOn": "2026-11-01",
+      "untilPatched": true
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "severity": "high",
+      "package": "braces",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "reason": "No patched braces release exists (advisory range <=3.0.3; accepted 2026-10-03). It is reached only through glob matching in build and lint tooling: stylelint (globby -> fast-glob -> micromatch) and @stll/mobile's Metro file map. Those expand repository-controlled patterns on developer machines and CI; braces is not in the API, web or collab runtime, the desktop app, or any published package's runtime dependencies. The acceptance lapses on 2026-11-01, once a braces release outside the vulnerable range is published, or once the advisory is no longer reported, whichever comes first.",
+      "expiresOn": "2026-11-01",
+      "untilPatched": true
+    },
+    {
+      "id": "GHSA-ch52-4w7c-c8xp",
+      "severity": "high",
+      "package": "http-cache-semantics",
+      "title": "http-cache-semantics max-stale handling can disclose cross-user cached responses",
+      "reason": "Its only dependency path is Astro in @stll/landing, which is a static build (output: \"static\"): Astro uses it for fetch caching during the build and the local dev server, and the deployed site is static files with no Astro server, so no shared cache serves cross-user responses. It is not in the API, web or collab runtime. The patched release 4.3.0 is inside the five-day install quarantine until 2026-10-09; the acceptance expires on 2026-10-10, by which time the dependency is updated and this entry removed.",
+      "expiresOn": "2026-10-10",
+      "untilPatched": false
     }
   ]
 }

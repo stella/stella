@@ -52,6 +52,7 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
+import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -62,6 +63,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -291,6 +293,7 @@ function ProfilePageBody() {
       }
       releaseUserStorage();
       signalSessionChange();
+      hideSessionDocument();
       window.location.href = "/auth";
     },
     onError: (err: unknown) => {
@@ -315,11 +318,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -341,11 +341,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -368,11 +365,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -464,10 +458,10 @@ function ProfilePageBody() {
               // identity surface renders. Stop the empty submit here rather
               // than letting the server silently keep the previous value.
               if (displayName.trim().length === 0) {
-                stellaToast.add({
-                  title: t("settings.account.displayNameRequired"),
-                  type: "error",
-                });
+                notifyUserError(
+                  undefined,
+                  t("settings.account.displayNameRequired"),
+                );
                 return;
               }
               // Awaited, not detached: `ProfileSubmitButton` disables itself

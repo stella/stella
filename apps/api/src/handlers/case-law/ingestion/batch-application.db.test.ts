@@ -26,6 +26,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,
@@ -54,10 +55,20 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import {
+  approveMetadataUrls,
+  META_URL_DIAGNOSTICS,
+} from "@/api/lib/legal-search/metadata-urls";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -125,29 +136,31 @@ const failingTransfer = (): CaseLawCorpusDependencies => ({
   },
 });
 
-const record = (n: number): IngestionResult => ({
-  caseNumber: `4 As ${n}/2008`,
-  sourceDocumentId: `batch-record-${n}`,
-  court: "Nejvyšší správní soud",
-  country: "CZE",
-  language: "cs",
-  decisionDate: "2008-12-18",
-  decisionType: "rozsudek",
-  fulltext: `Nejvyšší správní soud rozhodl v právní věci žalobkyně č. ${n}.`,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: `batch-record-hash-${n}`,
-  documentAst: {},
-});
+const record = (n: number): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: `4 As ${n}/2008`,
+    sourceDocumentId: `batch-record-${n}`,
+    court: "Nejvyšší správní soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2008-12-18",
+    decisionType: "rozsudek",
+    fulltext: `Nejvyšší správní soud rozhodl v právní věci žalobkyně č. ${n}.`,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: `batch-record-hash-${n}`,
+    documentAst: {},
+  });
 
 const records = (count: number): IngestionResult[] =>
   Array.from({ length: count }, (_, n) => record(n + 1));
 
 /** A record the ingestion boundary refuses: its identity cannot be stored. */
-const rejectedRecord = (n = 99): IngestionResult => ({
-  ...record(n),
-  sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-});
+const rejectedRecord = (n = 99): IngestionResult =>
+  plainTextIngestionResult({
+    ...record(n),
+    sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+  });
 
 const sourceRejection = (n: number): RejectedCaseLawIngestionRecord => ({
   type: "rejected",
@@ -279,6 +292,7 @@ type Applied =
   | { type: "held"; detail: string };
 
 type ApplyOptions = {
+  batchRecordLimit?: number;
   sourceId: SafeId<"caseLawSource">;
   decisions: readonly IngestionResult[];
   corpus: CaseLawCorpusDependencies;
@@ -303,7 +317,7 @@ const leaseFor = async (sourceId: SafeId<"caseLawSource">) =>
 const crawlCaller: Caller = {
   name: "a crawl page",
   source: crawlSource,
-  apply: async ({ sourceId, decisions, corpus }) => {
+  apply: async ({ sourceId, decisions, corpus, batchRecordLimit }) => {
     const sourceLease = await leaseFor(sourceId);
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
@@ -313,10 +327,12 @@ const crawlCaller: Caller = {
     const run = await Result.tryPromise({
       try: async () =>
         await runIngestionPipeline({
+          acquireStoredTotalAdmission: async () => "held",
           source: sourceLease.source,
           sourceLease,
           scopedDb,
           maxPages: 1,
+          ...(batchRecordLimit === undefined ? {} : { batchRecordLimit }),
           corpus,
         }),
       catch: (cause) => cause,
@@ -366,6 +382,191 @@ const prepared = (
   const batch = prepareCaseLawIngestionBatch({ decisions });
   return Result.isOk(batch) ? batch.value : panic(batch.error.message);
 };
+
+test("the registered batch clones and persists declared URL scalars and diagnostics without display-text decoding", async () => {
+  const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
+  const nestedUrl = "https://example.test/?nested=&amp;lt;b&amp;gt;";
+  const fixtureDecision = await plCourtsFixture().buildDecision();
+  const metadata = approveMetadataUrls(
+    checkedDecisionMetadata({
+      ...fixtureDecision.metadata,
+      href: toMetadataUrl(rootUrl, "transport-json"),
+      division: {
+        href: toMetadataUrl(nestedUrl, "transport-json"),
+        court: { href: toMetadataUrl(null, "transport-json") },
+        chamber: undefined,
+      },
+      chambers: [{ href: toMetadataUrl(null, "transport-json") }],
+      source: {
+        judgmentUrl: toMetadataUrl(
+          "ftp://example.test/rejected",
+          "transport-json",
+        ),
+      },
+    }),
+    PL_COURTS_METADATA_URL_SCHEMA,
+  );
+  const decision = {
+    ...fixtureDecision,
+    metadata: toPlainTextMetadataObject(
+      metadata,
+      PL_COURTS_METADATA_URL_SCHEMA,
+    ).unwrap(),
+  };
+  const sourceId = createSafeId<"caseLawSource">();
+  await db
+    .update(caseLawSources)
+    .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+    .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.PL_COURTS));
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
+    name: "Declared URL batch fixture",
+  });
+  const batch = prepared([decision]);
+  const originalBatch = structuredClone(batch);
+  const transfer = landingTransfer();
+  const fakeS3 = startFakeS3();
+  try {
+    const applied = await applyPrepared({
+      sourceId,
+      batch,
+      corpus: transfer.corpus,
+    });
+    expect(applied.isOk()).toBe(true);
+    const row = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl, court: { href: null } },
+      chambers: [{ href: null }],
+      source: {},
+      [META_URL_DIAGNOSTICS]: {
+        entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
+    });
+    expect(row?.metadata?.["source"]).toEqual({});
+    expect(row?.metadata?.[META_URL_DIAGNOSTICS]).toEqual({
+      entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+      overflowCount: 0,
+    });
+    const replayed = await applyPrepared({
+      sourceId,
+      batch,
+      corpus: transfer.corpus,
+    });
+    expect(replayed.isOk()).toBe(true);
+    const afterReplay = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+    ).at(0);
+    expect(afterReplay?.metadata).toEqual(row?.metadata);
+    // structuredClone drops Symbol keys, so clone both sides before comparing.
+    expect(structuredClone(batch)).toEqual(originalBatch);
+  } finally {
+    fakeS3.stop();
+  }
+});
+
+test.each([ADAPTER_KEYS.PL_COURTS, ADAPTER_KEYS.CZ_NS])(
+  "one batch resolves the persisted source schema once for every decision (%s)",
+  async (adapterKey) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+      .where(eq(caseLawSources.adapterKey, adapterKey));
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey,
+      name: "One schema lookup per batch fixture",
+    });
+    const stated = "https://example.test/?stated=&amp;amp;&encoded=%26";
+    const decisions = [901, 902, 903].map((number) =>
+      plainTextIngestionResult(
+        {
+          ...record(number),
+          country: adapterKey === ADAPTER_KEYS.PL_COURTS ? "POL" : "CZE",
+          language: adapterKey === ADAPTER_KEYS.PL_COURTS ? "pl" : "cs",
+          court:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? "Sąd Rejonowy"
+              : "Nejvyšší správní soud",
+          caseNumber:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? `II K ${number}/26`
+              : `4 As ${number}/2008`,
+          metadata:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? checkedDecisionMetadata(
+                  {
+                    href: toMetadataUrl(stated, "transport-json"),
+                    division: { href: toMetadataUrl(stated, "transport-json") },
+                  },
+                  PL_COURTS_METADATA_URL_SCHEMA,
+                )
+              : {},
+        },
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ),
+    );
+    const sourceReads: string[] = [];
+    const countedDb = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+      logger: {
+        logQuery(query) {
+          if (
+            query.startsWith("select ") &&
+            query.includes('"adapter_key"') &&
+            query.includes('from "case_law_sources"')
+          ) {
+            sourceReads.push(query);
+          }
+        },
+      },
+    });
+    const countedScopedDb: ScopedDb = async (callback) =>
+      await countedDb.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const sourceLease = await leaseFor(sourceId);
+    const fakeS3 = startFakeS3();
+    try {
+      const applied = await applyCaseLawIngestionBatch({
+        batch: prepared(decisions),
+        sourceLease,
+        scopedDb: countedScopedDb,
+        signal: new AbortController().signal,
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus: landingTransfer().corpus,
+      });
+      expect(applied.isOk()).toBe(true);
+      const rows = await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      expect(rows).toHaveLength(decisions.length);
+      expect(sourceReads).toHaveLength(1);
+      if (adapterKey === ADAPTER_KEYS.PL_COURTS) {
+        for (const row of rows) {
+          expect(row.metadata).toMatchObject({
+            href: stated,
+            division: { href: stated },
+          });
+        }
+      }
+    } finally {
+      fakeS3.stop();
+      await sourceLease.release();
+    }
+  },
+);
 
 /** Certified by the receipt. */
 const directCaller: Caller = {
@@ -859,15 +1060,43 @@ describe("the batch bounds", () => {
       CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
     );
   });
+  test("a smaller record bound admits exactly the bound and splits the next record", () => {
+    const recordLimit = 2;
+    const admitted = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit),
+      recordLimit,
+    });
+    expect(Result.isOk(admitted) ? admitted.value.decisions : null).toEqual(
+      records(recordLimit),
+    );
+    const refused = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit + 1),
+      recordLimit,
+    });
+    expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_RECORDS,
+    );
+    expect(
+      admitPageDecisions(records(recordLimit + 1), recordLimit).map(
+        ({ decisions }) => decisions.map(({ caseNumber }) => caseNumber),
+      ),
+    ).toEqual([
+      records(recordLimit).map(({ caseNumber }) => caseNumber),
+      [record(recordLimit + 1).caseNumber],
+    ]);
+  });
+
   test(
     "a crawl page over the record bound is applied in bounded batches",
     async () => {
       const sourceId = await crawlSource();
       const { corpus, landed } = landingTransfer();
-      const count = CASE_LAW_INGESTION_BATCH_LIMITS.records + 1;
+      const batchRecordLimit = 2;
+      const count = batchRecordLimit + 1;
 
       const applied = await crawlCaller.apply({
         sourceId,
+        batchRecordLimit,
         decisions: records(count),
         corpus,
       });
@@ -887,32 +1116,35 @@ describe("the batch bounds", () => {
   );
 
   test("a page is admitted in parts, and a record over the byte bound is a part of its own", () => {
-    const oversized = {
+    const oversized = plainTextIngestionResult({
       ...record(2),
       fulltext: "a".repeat(CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes + 1),
-    };
+    });
 
     const parts = admitPageDecisions([record(1), oversized, record(3)]);
 
     expect(
-      parts.map(({ admission, decisions }) => ({
-        admission,
-        caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
-      })),
-    ).toEqual([
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 1/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.OVERSIZED_RECORD,
-        caseNumbers: ["4 As 2/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 3/2008"],
-      },
-    ]);
+      Bun.deepEquals(
+        parts.map(({ admission, decisions }) => ({
+          admission,
+          caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
+        })),
+        [
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 1/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.OVERSIZED_RECORD,
+            caseNumbers: ["4 As 2/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 3/2008"],
+          },
+        ],
+      ),
+    ).toBe(true);
     // The same contract refuses it for a prepared batch.
     const refused = prepareCaseLawIngestionBatch({ decisions: [oversized] });
     expect(Result.isError(refused) ? refused.error.reason : null).toBe(
@@ -927,16 +1159,18 @@ describe("the batch bounds", () => {
         // The fixture reaches the fault: a Buffer serializes as a JSON array.
         expect(JSON.stringify(asBuffer)).toStartWith('{"type":"Buffer"');
         const measured = (payload: Uint8Array) =>
-          encodedIngestionResultBytes({
-            ...record(1),
-            sourceRawBytes: payload,
-            sourceRawObjects: {
-              "document-file": {
-                bytes: payload,
-                contentType: "application/pdf",
+          encodedIngestionResultBytes(
+            plainTextIngestionResult({
+              ...record(1),
+              sourceRawBytes: payload,
+              sourceRawObjects: {
+                "document-file": {
+                  bytes: payload,
+                  contentType: "application/pdf",
+                },
               },
-            },
-          });
+            }),
+          );
         expect(measured(asBuffer)).toBe(measured(bytes));
         expect(measured(bytes)).toBe(
           measured(new Uint8Array()) + 2 * bytes.length,
@@ -949,7 +1183,9 @@ describe("the batch bounds", () => {
     expect(
       Result.isOk(
         prepareCaseLawIngestionBatch({
-          decisions: [{ ...record(1), sourceRawBytes: payload }],
+          decisions: [
+            plainTextIngestionResult({ ...record(1), sourceRawBytes: payload }),
+          ],
         }),
       ),
     ).toBe(true);
@@ -957,10 +1193,12 @@ describe("the batch bounds", () => {
 
   test("structure weighs something even when every value is empty", () => {
     const measured = (aliases: number) =>
-      encodedIngestionResultBytes({
-        ...record(1),
-        sourceDocumentIdAliases: Array.from({ length: aliases }, () => ""),
-      });
+      encodedIngestionResultBytes(
+        plainTextIngestionResult({
+          ...record(1),
+          sourceDocumentIdAliases: Array.from({ length: aliases }, () => ""),
+        }),
+      );
 
     expect(measured(1000) - measured(0)).toBeGreaterThanOrEqual(1000);
   });
@@ -968,10 +1206,11 @@ describe("the batch bounds", () => {
   test("a prepared batch refuses what it cannot carry before any write", () => {
     const { records: maxRecords, encodedBytes } =
       CASE_LAW_INGESTION_BATCH_LIMITS;
-    const heavy = (n: number, bytes: number): IngestionResult => ({
-      ...record(n),
-      fulltext: "a".repeat(bytes),
-    });
+    const heavy = (n: number, bytes: number): IngestionResult =>
+      plainTextIngestionResult({
+        ...record(n),
+        fulltext: "a".repeat(bytes),
+      });
     const refusal = (decisions: readonly IngestionResult[]) => {
       const admitted = prepareCaseLawIngestionBatch({ decisions });
       return Result.isError(admitted)

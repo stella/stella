@@ -1,6 +1,6 @@
 {
   "name": "@stll/calculations",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Typed, unit-safe reducers for workspace column calculations.",
   "keywords": [
     "calculations",
@@ -37,7 +37,7 @@
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
-    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src)",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src)",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/calculations",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/calculations",

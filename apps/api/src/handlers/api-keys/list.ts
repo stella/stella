@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { toMachineApiKeySummary } from "@/api/handlers/api-keys/mint";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -12,6 +12,7 @@ import {
   machineApiKeyCursor,
 } from "@/api/lib/machine-api-key-queries";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { McpMode } from "@/api/mcp/constants";
 
 const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
@@ -27,6 +28,7 @@ const listMachineApiKeysQuerySchema = t.Object({
 const config = {
   query: listMachineApiKeysQuerySchema,
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 
@@ -72,7 +74,9 @@ export const createListMachineApiKeysHandler = (
   listMachineApiKeys: typeof listOrganizationMachineApiKeys = listOrganizationMachineApiKeys,
 ) =>
   createSafeRootHandler(config, async function* ({ session, query }) {
-    const limit = query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT,
+    );
 
     // A malformed cursor is rejected rather than silently treated as "first
     // page", so a client bug surfaces instead of quietly re-reading page one.

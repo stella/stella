@@ -7,6 +7,49 @@ import {
 } from "./schema";
 
 describe("normalizeAgentInput", () => {
+  test.each(["toString", "constructor", "__proto__"])(
+    "preserves %s as JSON data through nested object normalization",
+    (key) => {
+      const entry = { injected: true };
+      const value = { nested: Object.fromEntries([[key, entry]]) };
+      const result = normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: {
+            nested: {
+              type: "object",
+              properties: Object.fromEntries([[key, { type: "object" }]]),
+            },
+          },
+        },
+        value,
+      });
+      expect(result).toMatchObject({ ok: true, value });
+      if (!result.ok) {
+        return;
+      }
+      expect(JSON.stringify(result.value)).toBe(JSON.stringify(value));
+    },
+  );
+
+  test.each(["toString", "constructor", "__proto__"])(
+    "does not normalize %s using an inherited schema declaration",
+    (key) => {
+      const properties = Object.setPrototypeOf(
+        {},
+        Object.fromEntries([[key, { type: "boolean" }]]),
+      );
+      expect(Object.hasOwn(properties, key)).toBe(false);
+      expect(key in properties).toBe(true);
+      const value = Object.fromEntries([[key, "true"]]);
+      expect(normalizeAgentInput({ schema: { properties }, value })).toEqual({
+        ok: true,
+        value,
+        notes: [],
+      });
+    },
+  );
+
   test("derives normalization recursively from JSON Schema", () => {
     expect(
       normalizeAgentInput({

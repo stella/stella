@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { SPREADSHEET_EXPORT_LIMITS } from "@/api/lib/views/table-export";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -152,10 +154,10 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "xlsx" },
-      recordAuditEvent: async () => undefined,
+      recordAuditEvent: auditRecorderDouble(),
       safeDb,
       session: { activeOrganizationId: "organization_test" },
       user: { id: "user_test" },
@@ -340,10 +342,10 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "csv" },
-      recordAuditEvent: async () => undefined,
+      recordAuditEvent: auditRecorderDouble(),
       safeDb,
       session: { activeOrganizationId: "organization_test" },
       user: { id: "user_test" },

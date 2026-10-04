@@ -69,6 +69,7 @@ export const classifyWithSystemOne = async ({
   Decision<ChoiceAnswer<ClassifiablePolarity>>
 > =>
   await decide({
+    dataClass: "public_corpus",
     id: "case-law.polarity",
     orgAIConfig: null,
     state: { language, citation: citationText, excerpt: context },

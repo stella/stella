@@ -14,11 +14,13 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -63,6 +65,8 @@ const config = {
     "clientId on a personal matter, and any attempt to re-promote a matter " +
     "that already has a client, are refused.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "covered", by: "save_matter" },
   body: updateWorkspaceBodySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -161,6 +165,7 @@ const checkReferenceNotRetired = async ({
 };
 
 export type UpdateWorkspaceHandlerProps = {
+  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -172,12 +177,16 @@ export type UpdateWorkspaceHandlerProps = {
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const updateWorkspaceHandler = async function* ({
+  userEmail,
   safeDb,
   organizationId,
   workspaceId,
   recordAuditEvent,
   body,
 }: UpdateWorkspaceHandlerProps) {
+  if ((body.promote?.memberUserIds?.length ?? 0) > 0) {
+    yield* checkDemoAccountOperation(userEmail);
+  }
   const txResult = await safeDb(async (tx) => {
     const workspaceRows = await tx
       .select({
@@ -431,8 +440,16 @@ export const updateWorkspaceHandler = async function* ({
 
 const updateWorkspace = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* updateWorkspaceHandler({
+      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,

@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { vatRates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { vatRateOnDate } from "@/api/lib/billing/vat-rates";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -15,6 +15,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedVatRateId } from "@/api/lib/safe-id-boundaries";
 
 type VatRateRow = typeof vatRates.$inferSelect;
@@ -53,7 +54,13 @@ true satisfies UnexpectedVatRateListColumn extends never ? true : never;
 const config = {
   description: "List active VAT rates in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     on: t.Optional(t.String({ format: "date" })),
@@ -72,7 +79,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? LIMITS.vatRatesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.vatRatesPageSizeDefault,
+    );
     const conditions = [
       eq(vatRates.organizationId, session.activeOrganizationId),
       isNull(vatRates.archivedAt),

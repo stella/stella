@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 651,
+    "count": 650,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 8,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -92,7 +92,7 @@
       "apps/api/src/lib/analytics/server-analytics.ts": 7,
       "apps/api/src/lib/api-handlers.ts": 4,
       "apps/api/src/lib/audit-log.ts": 3,
-      "apps/api/src/lib/auth-paths.ts": 1,
+      "apps/api/src/lib/auth/auth-paths.ts": 1,
       "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/bilingual/contract.ts": 1,
       "apps/api/src/lib/bilingual/formatting.ts": 3,
@@ -275,7 +275,6 @@
       "apps/api/src/mcp/constants.ts": 1,
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
-      "apps/api/src/mcp/generated/capability-dispatch.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
       "apps/api/src/mcp/research-admin-tools.ts": 1,
       "apps/api/src/mcp/resource-policy-contract.ts": 1,

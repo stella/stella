@@ -11,6 +11,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
@@ -30,6 +31,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
+  corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
@@ -147,6 +149,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier_label: "required",
     weight: "required",
   },
+  // Accept the future reader grant before a later release grants and reads it.
+  case_law_decision_aliases: {
+    retired_decision_id: "permitted",
+    canonical_decision_id: "permitted",
+  },
   case_law_decision_identifiers: {
     decision_id: "required",
     type: "required",
@@ -172,6 +179,9 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     slug: "required",
     ecli: "required",
     citation_key: "required",
+    // Granted a release after the column (expand first); the read probes
+    // for the grant and falls back to the spellings without it.
+    docket_family_key: "permitted",
     court: "required",
     court_id: "required",
     country: "required",
@@ -321,8 +331,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     provisioning_status: "required",
   },
   // Exactly what deciding "this generation holds this decision now" reads.
-  // The applied revision, the work schedule and the failure detail are
-  // operator state and stay on the owning service side.
+  // The revision joins its physical passage count; work schedules and failure
+  // details stay on the owning service side.
   corpus_index_projection_states: {
     family: "required",
     generation: "required",
@@ -333,8 +343,14 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     desired_index_id: "required",
     applied_action: "required",
     applied_epoch: "required",
+    applied_revision: "required",
     applied_fingerprint: "required",
     applied_index_id: "required",
+  },
+  // Exact physical count of the applied revision, needed for pagination exclusions.
+  corpus_index_projection_intents: {
+    id: "required",
+    expected_document_count: "required",
   },
   legislation_documents: {
     id: "required",

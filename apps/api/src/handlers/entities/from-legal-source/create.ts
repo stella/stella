@@ -7,10 +7,16 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -29,6 +35,11 @@ const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {
 
 export default createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason:
+        "Stores document content and returns operation metadata rather than stored-file bytes.",
+    },
     description:
       "Compile a plain-text legal draft written in stella's legal-source " +
       "markup into a DOCX and store it as a new document in the current " +
@@ -38,6 +49,8 @@ export default createSafeHandler(
       "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: entityFileRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "document_processing",
@@ -77,6 +90,7 @@ export default createSafeHandler(
         buffer: compiled.value,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
       }).then((r) => Result.mapError(r, toHandlerError)),
     );
 
@@ -123,10 +137,14 @@ const toHandlerError = (
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" }
+    | DocumentWriteRefusedError
     | OrganizationFileUsageError,
 ): HandlerError => {
   if (error instanceof OrganizationFileUsageError) {
     return organizationFileUsageHandlerError(error);
+  }
+  if (DocumentWriteRefusedError.is(error)) {
+    return documentWriteRefusalHandlerError(error);
   }
   switch (error._tag) {
     case "DocumentTooLargeError":

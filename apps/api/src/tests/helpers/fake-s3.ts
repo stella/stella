@@ -62,8 +62,11 @@ export type FakeS3HoldMatch = {
 };
 
 export type FakeS3Hold = {
+  readonly isReached: boolean;
   /** Settles once a matching request is held. */
   readonly reached: Promise<undefined>;
+  /** Settles after the held request has applied and produced its response. */
+  readonly completed: Promise<undefined>;
   readonly release: () => void;
 };
 
@@ -111,6 +114,28 @@ const escapeXml = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+
+const requestedSha256 = (headers: Headers, bytes: Uint8Array): string | null =>
+  (headers.get("x-amz-sdk-checksum-algorithm") ??
+    headers.get("x-amz-checksum-algorithm")) === "SHA256"
+    ? new Bun.CryptoHasher("sha256").update(bytes).digest("base64")
+    : null;
+
+type CopiedSha256Options = {
+  headers: Headers;
+  bytes: Uint8Array;
+  inherited: string | undefined;
+};
+
+const copiedSha256 = ({
+  headers,
+  bytes,
+  inherited,
+}: CopiedSha256Options): string | null =>
+  headers.has("x-amz-checksum-algorithm") ||
+  headers.has("x-amz-sdk-checksum-algorithm")
+    ? requestedSha256(headers, bytes)
+    : (inherited ?? null);
 
 const errorResponse = (code: string, status: number, key: string): Response =>
   new Response(
@@ -260,8 +285,19 @@ export type FakeS3Options = {
 export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
   const versions = new Map<string, number>();
+  const etags = new Map<string, string>();
+  const checksums = new Map<string, string>();
+  let validatorSequence = 0;
+  const newValidator = (id: string): string => {
+    validatorSequence += 1;
+    const etag = `"${validatorSequence.toString(16).padStart(32, "0")}"`;
+    etags.set(id, etag);
+    checksums.delete(id);
+    return etag;
+  };
   const modifiedAt = new Map<string, Date>();
   const addVersion = (id: string): void => {
+    newValidator(id);
     versions.set(id, (versions.get(id) ?? 0) + 1);
     modifiedAt.set(id, new Date());
   };
@@ -271,6 +307,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     match: FakeS3HoldMatch;
     reached: () => void;
     released: Promise<undefined>;
+    completed: () => void;
   }[] = [];
 
   const takeFailure = (
@@ -308,10 +345,15 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     // A server-side copy is a PUT carrying `x-amz-copy-source`; the SDK's
     // CopyObjectCommand never sends a body, so it must not be stored as one.
     const copySource = request.headers.get("x-amz-copy-source");
-    const copySourceKey =
+    const decodedCopySource =
       copySource === null
         ? null
-        : decodeURIComponent(copySource.replace(/^\/?[^/]+\//u, ""));
+        : decodeURIComponent(copySource).replace(/^\//u, "");
+    const copySourceSeparator = decodedCopySource?.indexOf("/") ?? -1;
+    const copySourceBucket =
+      decodedCopySource?.slice(0, copySourceSeparator) ?? null;
+    const copySourceKey =
+      decodedCopySource?.slice(copySourceSeparator + 1) ?? null;
     const method = ((): FakeS3Method => {
       if (isList) {
         return "LIST";
@@ -343,102 +385,144 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     const holdIndex = holds.findIndex(
       ({ match }) => match.method === method && key.includes(match.keyIncludes),
     );
-    if (holdIndex !== -1) {
-      const [hold] = holds.splice(holdIndex, 1);
-      hold?.reached();
-      await hold?.released;
+    const hold =
+      holdIndex === -1 ? undefined : holds.splice(holdIndex, 1).at(0);
+    if (hold !== undefined) {
+      hold.reached();
+      await hold.released;
     }
-
-    if (delayMs > 0) {
-      await Bun.sleep(delayMs);
-      // The client hung up mid-request: answer without applying it, the way
-      // a cancelled upload or delete leaves the store untouched.
-      if (request.signal.aborted) {
-        return new Response(null, { status: 499 });
+    try {
+      if (delayMs > 0) {
+        await Bun.sleep(delayMs);
+        // The client hung up mid-request: answer without applying it, the way
+        // a cancelled upload or delete leaves the store untouched.
+        if (request.signal.aborted) {
+          return new Response(null, { status: 499 });
+        }
       }
-    }
 
-    if (method === "LIST") {
-      return listResponse({
-        bucket,
-        objects: new Map(
-          [...objects.entries()]
-            .filter(([id]) => id.startsWith(`${bucket}/`))
-            .map(([id]) => [
-              id.slice(bucket.length + 1),
-              modifiedAt.get(id) ?? FAKE_EPOCH,
-            ]),
-        ),
-        maxKeys: Number(url.searchParams.get("max-keys") ?? "1000"),
-        prefix: url.searchParams.get("prefix") ?? "",
-        // Continuation tokens are the last key served, so both ways of
-        // resuming a walk read the same.
-        startAfter:
-          url.searchParams.get("continuation-token") ??
-          url.searchParams.get("start-after") ??
-          undefined,
-        delimiter: url.searchParams.get("delimiter") ?? undefined,
-      });
-    }
-
-    const id = objectId(bucket, key);
-    if (method === "COPY" && copySourceKey !== null) {
-      const source = objects.get(objectId(bucket, copySourceKey));
-      if (source === undefined) {
-        return errorResponse("NoSuchKey", 404, copySourceKey);
+      if (method === "LIST") {
+        return listResponse({
+          bucket,
+          objects: new Map(
+            [...objects.entries()]
+              .filter(([id]) => id.startsWith(`${bucket}/`))
+              .map(([id]) => [
+                id.slice(bucket.length + 1),
+                modifiedAt.get(id) ?? FAKE_EPOCH,
+              ]),
+          ),
+          maxKeys: Number(url.searchParams.get("max-keys") ?? "1000"),
+          prefix: url.searchParams.get("prefix") ?? "",
+          // Continuation tokens are the last key served, so both ways of
+          // resuming a walk read the same.
+          startAfter:
+            url.searchParams.get("continuation-token") ??
+            url.searchParams.get("start-after") ??
+            undefined,
+          delimiter: url.searchParams.get("delimiter") ?? undefined,
+        });
       }
-      // Snapshot, as S3 does: the copy must not alias the source's bytes.
-      objects.set(id, { ...source, bytes: source.bytes.slice() });
-      addVersion(id);
-      return new Response(
-        `${XML_HEADER}<CopyObjectResult><ETag>&quot;fake&quot;</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified></CopyObjectResult>`,
-        { status: 200, headers: { "content-type": "application/xml" } },
-      );
-    }
-    if (method === "PUT") {
-      // The body is read before the precondition is checked, so the check
-      // and the write below happen with no await between them: two
-      // concurrent conditional PUTs cannot both see the key empty.
-      const bytes = new Uint8Array(await request.arrayBuffer());
-      if (ifNoneMatch === "*" && objects.has(id)) {
+
+      const id = objectId(bucket, key);
+      if (method === "COPY" && copySourceKey !== null) {
+        const sourceId = objectId(copySourceBucket ?? bucket, copySourceKey);
+        const source = objects.get(sourceId);
+        if (source === undefined) {
+          return errorResponse("NoSuchKey", 404, copySourceKey);
+        }
+        const sourceIfMatch = request.headers.get("x-amz-copy-source-if-match");
+        if (sourceIfMatch !== null && sourceIfMatch !== etags.get(sourceId)) {
+          return errorResponse("PreconditionFailed", 412, copySourceKey);
+        }
+        // Capture the checksum before writing: source and destination may be
+        // the same key. Copies inherit an existing checksum unless replaced.
+        const checksum = copiedSha256({
+          headers: request.headers,
+          bytes: source.bytes,
+          inherited: checksums.get(sourceId),
+        });
+        // Snapshot, as S3 does: the copy must not alias the source's bytes.
+        objects.set(id, { ...source, bytes: source.bytes.slice() });
+        addVersion(id);
+        if (checksum !== null) {
+          checksums.set(id, checksum);
+        }
+        return new Response(
+          `${XML_HEADER}<CopyObjectResult><ETag>${escapeXml(etags.get(id) ?? panic("copy validator missing"))}</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified>${checksum === null ? "" : `<ChecksumSHA256>${checksum}</ChecksumSHA256><ChecksumType>FULL_OBJECT</ChecksumType>`}</CopyObjectResult>`,
+          { status: 200, headers: { "content-type": "application/xml" } },
+        );
+      }
+      if (method === "PUT") {
+        // The body is read before the precondition is checked, so the check
+        // and the write below happen with no await between them: two
+        // concurrent conditional PUTs cannot both see the key empty.
+        const bytes = new Uint8Array(await request.arrayBuffer());
+        if (ifNoneMatch === "*" && objects.has(id)) {
+          return errorResponse("PreconditionFailed", 412, key);
+        }
+        objects.set(id, { bytes, contentType });
+        addVersion(id);
+        const checksum = requestedSha256(request.headers, bytes);
+        if (checksum !== null) {
+          checksums.set(id, checksum);
+        }
+        return new Response(null, {
+          status: 200,
+          headers: { etag: etags.get(id) ?? panic("put validator missing") },
+        });
+      }
+      if (method === "DELETE") {
+        objects.delete(id);
+        modifiedAt.delete(id);
+        etags.delete(id);
+        checksums.delete(id);
+        return new Response(null, { status: 204 });
+      }
+
+      const object = objects.get(id);
+      if (object === undefined) {
+        return errorResponse("NoSuchKey", 404, key);
+      }
+      const ifMatch = request.headers.get("if-match");
+      if (ifMatch !== null && ifMatch !== etags.get(id)) {
         return errorResponse("PreconditionFailed", 412, key);
       }
-      objects.set(id, { bytes, contentType });
-      addVersion(id);
-      return new Response(null, { status: 200, headers: { etag: '"fake"' } });
+      const checksum =
+        request.headers.get("x-amz-checksum-mode") === "ENABLED"
+          ? checksums.get(id)
+          : undefined;
+      const headers: Record<string, string> = {
+        "content-length": String(object.bytes.byteLength),
+        "last-modified": (modifiedAt.get(id) ?? FAKE_EPOCH).toUTCString(),
+        // S3 answers every object read with a validator, and callers pass it
+        // through to their own clients; a store with no ETag would let that
+        // pass-through look tested when nothing had one to pass.
+        etag: etags.get(id) ?? panic("read validator missing"),
+        ...(checksum === undefined
+          ? {}
+          : {
+              "x-amz-checksum-sha256": checksum,
+              "x-amz-checksum-type": "FULL_OBJECT",
+            }),
+        ...(object.contentType === null
+          ? {}
+          : { "content-type": object.contentType }),
+      };
+      if (method === "HEAD") {
+        return new Response(null, { status: 200, headers });
+      }
+      if (range === null) {
+        return new Response(object.bytes, { status: 200, headers });
+      }
+      return rangeResponse({
+        bytes: object.bytes,
+        range: parseClosedRange(range),
+        headers,
+      });
+    } finally {
+      hold?.completed();
     }
-    if (method === "DELETE") {
-      objects.delete(id);
-      modifiedAt.delete(id);
-      return new Response(null, { status: 204 });
-    }
-
-    const object = objects.get(id);
-    if (object === undefined) {
-      return errorResponse("NoSuchKey", 404, key);
-    }
-    const headers: Record<string, string> = {
-      "content-length": String(object.bytes.byteLength),
-      "last-modified": (modifiedAt.get(id) ?? FAKE_EPOCH).toUTCString(),
-      // S3 answers every object read with a validator, and callers pass it
-      // through to their own clients; a store with no ETag would let that
-      // pass-through look tested when nothing had one to pass.
-      etag: `"${new Bun.CryptoHasher("md5").update(object.bytes).digest("hex")}"`,
-      ...(object.contentType === null
-        ? {}
-        : { "content-type": object.contentType }),
-    };
-    if (method === "HEAD") {
-      return new Response(null, { status: 200, headers });
-    }
-    if (range === null) {
-      return new Response(object.bytes, { status: 200, headers });
-    }
-    return rangeResponse({
-      bytes: object.bytes,
-      range: parseClosedRange(range),
-      headers,
-    });
   };
 
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: handle });
@@ -457,17 +541,25 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       failures.push({ failure, remaining: failure.times ?? 1 });
     },
     holdNext: (match) => {
+      let isReached = false;
       const reached = Promise.withResolvers<undefined>();
       const released = Promise.withResolvers<undefined>();
+      const completed = Promise.withResolvers<undefined>();
       holds.push({
         match,
         reached: () => {
+          isReached = true;
           reached.resolve(undefined);
         },
         released: released.promise,
+        completed: () => completed.resolve(undefined),
       });
       return {
+        get isReached() {
+          return isReached;
+        },
         reached: reached.promise,
+        completed: completed.promise,
         release: () => {
           released.resolve(undefined);
         },
@@ -475,6 +567,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     },
     modifiedAt,
     put: (bucket, key, bytes, contentType, lastModified = FAKE_EPOCH) => {
+      newValidator(objectId(bucket, key));
       modifiedAt.set(objectId(bucket, key), lastModified);
       objects.set(objectId(bucket, key), {
         // Snapshot the caller's buffer so a later mutation cannot rewrite

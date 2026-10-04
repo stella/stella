@@ -9,6 +9,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -121,9 +122,10 @@ const createContext = ({
   asTestRaw<SuggestCtx>({
     getWorkspaceAccess: async (id: SafeId<"workspace">) =>
       id === ids.wsA1 ? { id: ids.wsA1, status: "active" } : null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params: { threadId },
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},

@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readEntitiesBodySchema = t.Object({
@@ -60,6 +61,7 @@ const config = {
     "entities.filesystem-tree.get for the same query shaped as a folder " +
     "tree, and entities.get to read one row in full.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_documents" },
   access: "read",
   body: readEntitiesBodySchema,
@@ -84,7 +86,9 @@ export const createReadEntitiesHandler = (
         return Result.err(cursorResult.error);
       }
 
-      const limit = body.limit ?? LIMITS.entitiesPageSizeDefault;
+      const limit = normalizeTenantPageLimit(
+        body.limit ?? LIMITS.entitiesPageSizeDefault,
+      );
       const result = yield* Result.await(
         queryEntitiesImpl({
           safeDb,

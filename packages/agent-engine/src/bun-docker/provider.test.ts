@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { DockerApiError } from "./api";
 import { bunDockerSandbox } from "./provider";
 
@@ -154,15 +156,17 @@ describe("bun Docker provider failure handling", () => {
     const provider = bunDockerSandbox({ image: "sandbox:test" });
     const handle = await provider.create({});
 
-    expect(handle.fs.mkdir("/denied-mkdir")).rejects.toBeInstanceOf(
-      DockerApiError,
-    );
-    expect(handle.fs.remove("/protected-remove")).rejects.toBeInstanceOf(
+    expect(await rejectionOf(handle.fs.mkdir("/denied-mkdir"))).toBeInstanceOf(
       DockerApiError,
     );
     expect(
-      handle.fs.rename("/missing-source", "/workspace/target"),
-    ).rejects.toBeInstanceOf(DockerApiError);
+      await rejectionOf(handle.fs.remove("/protected-remove")),
+    ).toBeInstanceOf(DockerApiError);
+    expect(
+      await rejectionOf(
+        handle.fs.rename("/missing-source", "/workspace/target"),
+      ),
+    ).toBeInstanceOf(DockerApiError);
 
     await handle.destroy();
     expect(removals).toEqual(["/containers/container-1"]);

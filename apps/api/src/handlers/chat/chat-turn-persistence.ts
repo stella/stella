@@ -35,6 +35,8 @@ import type {
   ChatTurnState,
   ChatTurnView,
 } from "@/api/handlers/chat/chat-turn-state";
+import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
+import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
   ChatTurnOutcome,
   ChatMessageRole,
@@ -88,7 +90,7 @@ const AI_ERROR_RETRYABLE = {
  * The failure code a failed run settles its turn with, when the caller names
  * none: what the model or its provider did, by error kind.
  */
-const AI_ERROR_FAILURE_CODE = {
+export const AI_ERROR_FAILURE_CODE = {
   empty_completion: "empty-response",
   loop_detected: "provider-error",
   model_unavailable: "provider-error",
@@ -401,6 +403,45 @@ export const canAcceptChatTurnOnTx = async ({
     columns: { id: true },
   });
   return running === undefined;
+};
+
+/** Why a thread cannot take a new turn. */
+export type ChatTurnRefusal = "history-changed" | "turn-running";
+
+/**
+ * Lock the thread before a caller writes a new user message, and hold the
+ * turn to the history it was planned on. Under the lock no other turn can
+ * write the thread, so a history still current here stays current until the
+ * caller commits; one that moved since it was read means a turn settled in
+ * between, and the plan would drop that turn from the model's history or
+ * replay a turn that is no longer the latest.
+ */
+export const reservePlannedChatTurnOnTx = async ({
+  history,
+  threadId,
+  tx,
+}: {
+  history: ChatHistorySnapshot;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<ChatTurnRefusal | "reserved"> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return "turn-running";
+  }
+  // Compared before `canAcceptChatTurnOnTx` ends an expired turn: that writes
+  // the message the expired turn resumed, a change this transaction makes.
+  if (
+    !(await isChatHistorySnapshotCurrentOnTx({
+      snapshot: history,
+      threadId,
+      tx,
+    }))
+  ) {
+    return "history-changed";
+  }
+  return (await canAcceptChatTurnOnTx({ threadId, tx }))
+    ? "reserved"
+    : "turn-running";
 };
 
 /**
@@ -1141,38 +1182,83 @@ export const withClaimedChatTurnExecution = async <T>({
     return { execution, value: await mutate({ execution, tx }) };
   });
 
+type WriteChatTurnRunOwnershipOptions = {
+  execution: ChatTurnExecution;
+  safeDb: SafeDb;
+} & ({ mode: "bind"; runId: string } | { mode: "renew"; runId?: string });
+
+const writeChatTurnRunOwnership = async ({
+  execution,
+  runId,
+  safeDb,
+  mode,
+}: WriteChatTurnRunOwnershipOptions): Promise<
+  Result<ChatTurnExecutionStanding, SafeDbError>
+> =>
+  await safeDb(async (tx) => {
+    // audit: skip — execution ownership; durable turn outcomes are audited at settlement
+    const written = await tx
+      .update(chatTurns)
+      .set(
+        mode === "bind"
+          ? { runId }
+          : {
+              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+              ...(runId === undefined ? {} : { runId }),
+            },
+      )
+      .where(ownedByExecution(execution))
+      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
+    return standingOf(written.at(0));
+  });
+
 /**
  * Extend a producing run's lease by `CHAT_TURN_RUN_LEASE_MS`. This conditional
  * write makes the renewed lease a proof that the caller still owns the turn:
  * an owner that finds it lost no longer owns any effect of the turn.
  */
-export const renewChatTurnExecutionLease = async ({
-  execution,
-  runId,
-  safeDb,
-}: {
+export const renewChatTurnExecutionLease = async (options: {
   execution: ChatTurnExecution;
   runId?: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnExecutionStanding, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
-    const renewed = await tx
-      .update(chatTurns)
-      .set({
-        leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
-        ...(runId === undefined ? {} : { runId }),
-      })
-      .where(ownedByExecution(execution))
-      .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
-    return standingOf(renewed.at(0));
-  });
+  await writeChatTurnRunOwnership({ ...options, mode: "renew" });
 
 /** How starting a run went: its standing, or its id already names a turn. */
 type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
 
 /** The index that makes a run id name one turn in its organization. */
 const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+
+const classifyRunIdWrite = (
+  written: Result<ChatTurnExecutionStanding, SafeDbError>,
+): Result<ChatTurnRunStart, SafeDbError> => {
+  if (
+    Result.isError(written) &&
+    isPgConstraintError(
+      written.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      CHAT_TURN_RUN_ID_INDEX,
+    )
+  ) {
+    return Result.ok("run-taken");
+  }
+  return written;
+};
+
+/** Bind the owned turn before pre-dispatch work without changing its expiry. */
+export const bindChatTurnRunId = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<ChatTurnRunStart, SafeDbError>> =>
+  classifyRunIdWrite(
+    await writeChatTurnRunOwnership({ execution, runId, safeDb, mode: "bind" }),
+  );
 
 /**
  * Start the run `runId` for a claimed execution, immediately before provider
@@ -1196,17 +1282,7 @@ export const startChatTurnRun = async ({
     runId,
     safeDb,
   });
-  if (
-    Result.isError(started) &&
-    isPgConstraintError(
-      started.error,
-      PG_ERROR.UNIQUE_VIOLATION,
-      CHAT_TURN_RUN_ID_INDEX,
-    )
-  ) {
-    return Result.ok("run-taken");
-  }
-  return started;
+  return classifyRunIdWrite(started);
 };
 
 /** Advisory preflight check; startChatTurnRun remains the atomic run-id fence. */
@@ -1366,9 +1442,17 @@ export const settleChatTurnOnTx = async ({
         return {
           ...base,
           assistantMessageId,
-          failureCode: failureCode ?? AI_ERROR_FAILURE_CODE[outcome.error],
+          // Admission detail belongs to the server-owned message metadata;
+          // the row uses the existing boundary-refusal code accepted by its CHECK.
+          failureCode:
+            outcome.refusal === undefined
+              ? (failureCode ?? AI_ERROR_FAILURE_CODE[outcome.error])
+              : "boundary-refusal",
+
           failureRetryable:
-            failureRetryable ?? AI_ERROR_RETRYABLE[outcome.error],
+            outcome.refusal === undefined
+              ? (failureRetryable ?? AI_ERROR_RETRYABLE[outcome.error])
+              : false,
           interactionToolCallId: null,
           interactionType: null,
           interruptionReason: null,

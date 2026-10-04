@@ -17,6 +17,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -324,10 +325,17 @@ describe("TanStack service tiers", () => {
 
 describe("TanStack text model resolution", () => {
   test("reports an instance provider only when TanStack can serve it", () => {
-    expect(hasTanStackInstanceProvider()).toBe(true);
+    expect(hasTanStackInstanceProvider()).toBe(false);
+    const previousProvider = env.AI_PROVIDER;
+    env.AI_PROVIDER = "openrouter";
+    try {
+      expect(hasTanStackInstanceProvider()).toBe(true);
+    } finally {
+      env.AI_PROVIDER = previousProvider;
+    }
   });
 
-  test("allows explicit Bedrock instance provider to use SigV4 without a bearer key", () => {
+  test("checks the managed policy for ambient Bedrock credentials", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
       BEDROCK_API_KEY: env.BEDROCK_API_KEY,
@@ -339,16 +347,15 @@ describe("TanStack text model resolution", () => {
       env.BEDROCK_API_KEY = undefined;
       delete process.env["BEDROCK_API_KEY"];
 
-      const model = getTanStackTextModelForRole("chat", null, {
-        organizationId: orgId,
-      });
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          organizationId: orgId,
+        }),
+      ).toThrow("Managed AI is not available");
 
-      expect(hasTanStackInstanceProvider()).toBe(true);
-      expect(model).toMatchObject({
-        keySource: "instance",
-        provider: "bedrock",
-      });
-      expect(model.adapter.name).toBe("bedrock-converse");
+      expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
       Object.assign(env, originalEnv);
       if (originalProcessBedrockApiKey === undefined) {
@@ -359,7 +366,7 @@ describe("TanStack text model resolution", () => {
     }
   });
 
-  test("auto-detects Mistral when stale unsupported provider credentials exist", () => {
+  test("checks the managed policy for an automatically selected provider", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
       ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
@@ -389,26 +396,34 @@ describe("TanStack text model resolution", () => {
         "https://example.endpoints.huggingface.cloud/v1";
       env.MISTRAL_API_KEY = "test-mistral-instance-key";
 
-      const model = getTanStackTextModelForRole("chat", null, {
-        organizationId: orgId,
-      });
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          organizationId: orgId,
+        }),
+      ).toThrow('Managed AI is not available for provider "mistral"');
 
-      expect(hasTanStackInstanceProvider()).toBe(true);
-      expect(model.provider).toBe("mistral");
-      expect(model.adapter.name).toBe("mistral");
+      expect(hasTanStackInstanceProvider()).toBe(false);
     } finally {
       Object.assign(env, originalEnv);
     }
   });
 
-  test("resolves instance OpenAI models through an arbitrary-id compatible adapter", () => {
-    const model = getTanStackTextModelById("openai::gpt-5.4", null, {
-      role: "reasoning",
-      organizationId: orgId,
-    });
+  test("resolves customer OpenAI models through an arbitrary-id compatible adapter", () => {
+    const model = getTanStackTextModelById(
+      "openai::gpt-5.4",
+      orgConfigForProvider("openai"),
+      {
+        role: "reasoning",
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: orgId,
+      },
+    );
 
     expect(model).toMatchObject({
-      keySource: "instance",
+      keySource: "byok",
       provider: "openai",
       modelId: "gpt-5.4",
     });
@@ -423,6 +438,7 @@ describe("TanStack text model resolution", () => {
     expect(() =>
       getTanStackTextModelById("openai::gpt-unrated-experiment", null, {
         role: "chat",
+        dataClass: "public_corpus",
         organizationId: orgId,
       }),
     ).toThrow(
@@ -434,7 +450,12 @@ describe("TanStack text model resolution", () => {
     const model = getTanStackTextModelById(
       "openrouter::google/gemini-3.5-flash",
       null,
-      { role: "chat", organizationId: null },
+      {
+        role: "chat",
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: null,
+      },
     );
 
     expect(model).toMatchObject({
@@ -451,10 +472,16 @@ describe("TanStack text model resolution", () => {
     const originalKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
     env.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
     try {
-      const model = getTanStackTextModelById("google::gemini-3.6-flash", null, {
-        role: "chat",
-        organizationId: null,
-      });
+      const model = getTanStackTextModelById(
+        "google::gemini-3.6-flash",
+        orgConfigForProvider("google"),
+        {
+          role: "chat",
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          organizationId: null,
+        },
+      );
 
       expect(looseOptions(model.modelOptions).thinkingConfig).toBeUndefined();
     } finally {
@@ -466,6 +493,8 @@ describe("TanStack text model resolution", () => {
     const orgConfig = orgConfigForProvider("mistral");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -483,6 +512,8 @@ describe("TanStack text model resolution", () => {
     let handlerError: unknown;
     try {
       getTanStackTextModelForRole("pdf", orgConfigForProvider("mistral"), {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
     } catch (error) {
@@ -505,6 +536,7 @@ describe("TanStack text model resolution", () => {
 
     const unavailable = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig,
       role: "pdf",
     });
@@ -518,6 +550,8 @@ describe("TanStack text model resolution", () => {
     let handlerError: unknown;
     try {
       getTanStackTextModelForRole("pdf", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
     } catch (error) {
@@ -532,26 +566,37 @@ describe("TanStack text model resolution", () => {
     expect(handlerError.message).toContain("document input");
   });
 
-  test("rejects unsupported instance providers in role availability preflight", () => {
-    const originalProvider = env.AI_PROVIDER;
-    try {
-      env.AI_PROVIDER = "mistral";
+  test.each(["customer", "public_corpus"] as const)(
+    "rejects unavailable instance requests for %s in role availability preflight",
+    (dataClass) => {
+      const originalProvider = env.AI_PROVIDER;
+      try {
+        env.AI_PROVIDER = "mistral";
 
-      const unavailable = requireTanStackAIAvailableForRole({
-        configStatus: ORG_AI_CONFIG_STATUS.ok,
-        orgConfig: null,
-        role: "pdf",
-      });
+        const unavailable = requireTanStackAIAvailableForRole({
+          configStatus: ORG_AI_CONFIG_STATUS.ok,
+          dataClass,
+          orgConfig: null,
+          role: "pdf",
+        });
 
-      expect(unavailable.isErr()).toBe(true);
-      if (unavailable.isErr()) {
-        expect(unavailable.error.status).toBe(400);
-        expect(unavailable.error.message).toContain("PDF flows");
+        expect(unavailable.isErr()).toBe(true);
+        if (unavailable.isErr()) {
+          if (dataClass === "customer") {
+            expect(unavailable.error.status).toBe(503);
+            expect(unavailable.error.code).toBe(
+              MANAGED_PROVIDER_UNAVAILABLE_CODE,
+            );
+          } else {
+            expect(unavailable.error.status).toBe(400);
+            expect(unavailable.error.message).toContain("PDF flows");
+          }
+        }
+      } finally {
+        env.AI_PROVIDER = originalProvider;
       }
-    } finally {
-      env.AI_PROVIDER = originalProvider;
-    }
-  });
+    },
+  );
 
   test("keeps streaming structured output for a Bedrock model with streaming tool use", () => {
     const orgConfig = orgConfigForProvider("bedrock");
@@ -561,6 +606,8 @@ describe("TanStack text model resolution", () => {
     };
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -572,6 +619,8 @@ describe("TanStack text model resolution", () => {
     const orgConfig = orgConfigForProvider("bedrock");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -585,88 +634,179 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("bedrock-converse");
   });
 
-  test("sends a Bedrock model an attached image as its bytes", async () => {
-    const model = getTanStackTextModelForRole(
-      "chat",
-      orgConfigForProvider("bedrock"),
-      { organizationId: orgId },
-    );
-    const png = new Uint8Array([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    ]);
-    const bodies: unknown[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: RequestInit,
-      ): Promise<Response> => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        bodies.push(await request.clone().json());
-        return new Response(JSON.stringify({ message: "stop" }), {
-          status: 400,
-          headers: {
-            "content-type": "application/json",
-            "x-amzn-errortype": "ValidationException",
-          },
-        });
-      },
-      { preconnect: originalFetch.preconnect },
-    );
-    try {
-      for await (const _chunk of model.adapter.chatStream({
-        logger: resolveDebugOption(false),
+  test.each(["within-limit", "oversized"] as const)(
+    "sends a Bedrock model a valid %s image within provider limits",
+    async (size) => {
+      const orgConfig = orgConfigForProvider("bedrock");
+      orgConfig.overrideModels.chat = {
+        provider: "bedrock",
+        modelId: "us.amazon.nova-lite-v1:0",
+      };
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: orgId,
+      });
+      const validPng = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/ltyVPwAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      const png =
+        size === "oversized"
+          ? Buffer.concat([
+              validPng,
+              Buffer.alloc(3_750_001 - validPng.byteLength),
+            ])
+          : validPng;
+      expect(png.byteLength > 3_750_000).toBe(size === "oversized");
+      const bodies: unknown[] = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          bodies.push(await request.clone().json());
+          return new Response(JSON.stringify({ message: "stop" }), {
+            status: 400,
+            headers: {
+              "content-type": "application/json",
+              "x-amzn-errortype": "ValidationException",
+            },
+          });
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      try {
+        for await (const _chunk of model.adapter.chatStream({
+          logger: resolveDebugOption(false),
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", content: "Describe the attached image." },
+                {
+                  type: "image",
+                  // How a chat attachment reaches the model.
+                  source: {
+                    type: "url",
+                    value: toDataUrl(png, "image/png"),
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+            },
+          ],
+          model: model.modelId,
+        })) {
+          // The refusal ends the stream once the request is written.
+        }
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+
+      expect(bodies).toHaveLength(1);
+      expect(bodies.at(0)).toMatchObject({
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", content: "Describe the attached image." },
+              { text: "Describe the attached image." },
               {
-                type: "image",
-                // How a chat attachment reaches the model.
-                source: {
-                  type: "url",
-                  value: toDataUrl(png, "image/png"),
-                  mimeType: "image/png",
+                image: {
+                  format: size === "oversized" ? "webp" : "png",
+                  source: {
+                    bytes:
+                      size === "oversized"
+                        ? expect.any(String)
+                        : Buffer.from(png).toString("base64"),
+                  },
                 },
               },
             ],
           },
         ],
-        model: model.modelId,
-      })) {
-        // The refusal ends the stream once the request is written.
-      }
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+      });
+    },
+  );
 
-    expect(bodies).toHaveLength(1);
-    expect(bodies.at(0)).toMatchObject({
-      messages: [
-        {
-          role: "user",
-          content: [
-            { text: "Describe the attached image." },
+  test.each([
+    "us.amazon.nova-micro-v1:0",
+    "openai.gpt-oss-120b-1:0",
+    "openai.gpt-oss-20b-1:0",
+  ])(
+    "refuses images for text-only Bedrock model %s before fetch",
+    async (modelId) => {
+      const orgConfig = orgConfigForProvider("bedrock");
+      orgConfig.overrideModels.chat = { provider: "bedrock", modelId };
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: orgId,
+      });
+      let fetchCalls = 0;
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(
+        async () => {
+          fetchCalls += 1;
+          return new Response(JSON.stringify({ message: "stop" }), {
+            status: 400,
+            headers: {
+              "content-type": "application/json",
+              "x-amzn-errortype": "ValidationException",
+            },
+          });
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      try {
+        const chunks = [];
+        for await (const chunk of model.adapter.chatStream({
+          logger: resolveDebugOption(false),
+          messages: [
             {
-              image: {
-                format: "png",
-                source: { bytes: Buffer.from(png).toString("base64") },
-              },
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "url",
+                    value:
+                      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/ltyVPwAAAABJRU5ErkJggg==",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-    });
-  });
+          model: model.modelId,
+        })) {
+          chunks.push(chunk);
+        }
+        expect(chunks).toMatchObject([
+          {
+            type: "RUN_ERROR",
+            code: "image_input_unsupported",
+            error: { code: "image_input_unsupported" },
+          },
+        ]);
+        expect(fetchCalls).toBe(0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 
   test("normalizes existing Google regional BYOK selections to global", () => {
     const orgConfig = orgConfigForProvider("google", "eu");
 
     const model = getTanStackTextModelForRole("chat", orgConfig, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       organizationId: orgId,
     });
 
@@ -682,6 +822,7 @@ describe("TanStack text model resolution", () => {
     expect(
       requireTanStackAIAvailableForRole({
         configStatus: ORG_AI_CONFIG_STATUS.ok,
+        dataClass: "customer",
         orgConfig: orgConfigForProvider("openai"),
         role: "chat",
       }).isOk(),
@@ -689,6 +830,7 @@ describe("TanStack text model resolution", () => {
 
     const unavailable = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("openai_compatible"),
       role: "chat",
     });
@@ -701,6 +843,7 @@ describe("TanStack text model resolution", () => {
 
     const unsupportedRole = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.ok,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("mistral"),
       role: "pdf",
     });
@@ -731,6 +874,7 @@ describe("TanStack text model resolution", () => {
       }
       const refused = requireTanStackAIAvailableForRole({
         configStatus,
+        dataClass: "customer",
         orgConfig: null,
         role: "chat",
       });
@@ -745,6 +889,7 @@ describe("TanStack text model resolution", () => {
   test("refuses a member without a seat assignment on the organization's own key", () => {
     const refused = requireTanStackAIAvailableForRole({
       configStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      dataClass: "customer",
       orgConfig: orgConfigForProvider("openrouter"),
       role: "chat",
     });
@@ -760,10 +905,11 @@ describe("TanStack text model resolution", () => {
     const modelInfo = getTanStackTextModelInfoForRole(
       "chat",
       orgConfigForProvider("openrouter"),
-      { organizationId: orgId },
+      { dataClass: "customer", organizationId: orgId },
     );
 
     expect(modelInfo).toEqual({
+      availability: "available",
       keySource: "byok",
       provider: "openrouter",
       region: "global",
@@ -1096,6 +1242,8 @@ describe("who answers while the local mock is on", () => {
     clearByokAdapterCache();
     try {
       const model = getTanStackTextModelForRole("chat", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
         organizationId: orgId,
       });
       return {
@@ -1144,7 +1292,11 @@ describe("who answers while the local mock is on", () => {
     try {
       expect(mockAnswersForOrganization(null)).toBe(false);
       expect(() =>
-        getTanStackTextModelForRole("chat", null, { organizationId: orgId }),
+        getTanStackTextModelForRole("chat", null, {
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          organizationId: orgId,
+        }),
       ).toThrow(HandlerError);
     } finally {
       env.REQUIRE_PERSONAL_AI_KEY = requirePersonalKey;

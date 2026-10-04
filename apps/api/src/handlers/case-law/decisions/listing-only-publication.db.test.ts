@@ -237,7 +237,8 @@ test(
     expect(
       shapeRows
         .flatMap((shape) =>
-          partialObservationFromMetadata(shape.metadata).isListingOnly
+          partialObservationFromMetadata(shape.metadata).detail ===
+          "listing-only"
             ? []
             : [shape.id],
         )

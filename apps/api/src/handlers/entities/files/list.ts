@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/entities/list-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const listFilesQuerySchema = t.Object({
   limit: t.Optional(
@@ -36,7 +37,9 @@ const listFilesHandler = async function* ({
   safeDb,
   workspaceId,
 }: ListFilesHandlerProps) {
-  const limit = query.limit ?? LIMITS.entitiesWindowSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.entitiesWindowSizeDefault,
+  );
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);
   const rows = yield* Result.await(
@@ -124,6 +127,7 @@ const config = {
     "and folders and tasks, are left out; use entities.list for the full " +
     "table with column values.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: listFilesQuerySchema,

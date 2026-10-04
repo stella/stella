@@ -12,6 +12,7 @@ import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispat
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   WRITE_TOOL_SCOPE,
   WRITE_TOOL_SCOPES,
@@ -39,15 +40,17 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     docxSuggestionSurface: "file-overlay",
     hasActiveDocxEditClient: false,
     hasActiveDocxFileClient: false,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId,
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
     pinServerValidatedWorkspaceId: () => true,
     recordAuditEvent: noopAuditRecorder,
     refRegistry: createChatRefRegistry(),
     registryDispatch: BUSINESS_REGISTRY_DISPATCH,
     requestWorkspaceId: null,
+    resolveCurrentMembership: async () => ({ role: "owner" }),
     safeDb: unusedSafeDb,
     scopedDb: unusedScopedDb,
     thirdPartyBoundary: { type: "raw" },
@@ -58,6 +61,7 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
       pinnedIds: [],
     }),
     userId,
+    userEmail: "standard@example.test",
     webSearchEnabled: false,
     webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     workspaceId: null,

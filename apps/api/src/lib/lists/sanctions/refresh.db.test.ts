@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import type { ParsedList } from "@stll/sanctions";
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -226,15 +227,17 @@ test(
     expect(rows.at(0)?.activeEditionId).not.toBeNull();
 
     expect(
-      db.transaction(async (tx) => {
-        await tx.execute(sql`SET LOCAL ROLE stella`);
-        await tx.insert(sanctionsSources).values({
-          id: "request-write",
-          issuer: "Test",
-          markerUrl: SOURCE_URL,
-        });
-      }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE stella`);
+          await tx.insert(sanctionsSources).values({
+            id: "request-write",
+            issuer: "Test",
+            markerUrl: SOURCE_URL,
+          });
+        }),
+      ),
+    ).toMatchObject({
       cause: { code: "42501" },
     });
   },

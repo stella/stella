@@ -95,6 +95,23 @@ type RunScopedTransactionOptions<
   workspaceScope: WorkspaceScope;
 };
 
+export type CurrentMembershipScope = {
+  type: typeof WORKSPACE_ACCESS_MODE.membership;
+  serverValidatedWorkspaceIds: readonly [];
+};
+
+type ScopedDbArgs =
+  | [
+      workspaceIds: SafeId<"workspace">[],
+      organizationId: SafeId<"organization">,
+      userId: SafeId<"user"> | null,
+    ]
+  | [
+      workspaceScope: CurrentMembershipScope,
+      organizationId: SafeId<"organization">,
+      userId: SafeId<"user">,
+    ];
+
 const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
   T,
@@ -140,24 +157,20 @@ const runScopedTransaction = async <
 };
 
 /**
- * Create an explicitly narrowed database scope. Use for trusted jobs/tests
- * that already hold a bounded workspace set; request auth uses the membership
- * factory below so it never serializes a user's entire access set.
+ * Create a database scope from an explicit workspace set or a declared mode.
+ * Request auth uses the membership factory below.
  */
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceIds: SafeId<"workspace">[],
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user"> | null,
+    ...[workspaceScope, organizationId, userId]: ScopedDbArgs
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
-      workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds,
-      },
+      workspaceScope: Array.isArray(workspaceScope)
+        ? { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: workspaceScope }
+        : workspaceScope,
       organizationId,
       userId,
       fn,
@@ -225,6 +238,7 @@ export type CreateIngestionDbOptions = {
    * gave up on it.
    */
   laneWaitMs?: number;
+  signal?: AbortSignal;
 };
 
 // SET LOCAL ROLE stella_ingestion per transaction. Used by the
@@ -241,9 +255,12 @@ export type CreateIngestionDbOptions = {
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    { laneWaitMs }: CreateIngestionDbOptions = {},
+    { laneWaitMs, signal }: CreateIngestionDbOptions = {},
   ) =>
-  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+  async <T>(
+    fn: (tx: TTransaction) => Promise<T>,
+    options: CreateIngestionDbOptions = {},
+  ): Promise<T> =>
     await runUnderCorpusSchemaLane({
       database,
       work: async (tx) => {
@@ -253,6 +270,8 @@ export const createIngestionDb =
         return await fn(tx);
       },
       ...(laneWaitMs === undefined ? {} : { laneWaitMs }),
+      ...(signal === undefined ? {} : { signal }),
+      ...options,
     });
 
 const toSafeDbError = (cause: unknown): SafeDbError => {
