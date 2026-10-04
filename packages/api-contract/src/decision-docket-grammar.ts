@@ -1,3 +1,4 @@
+// parser-output-unchanged: A grammar's format spells a reader's docket family only; ingestion reads acceptance and the case-file key, both from the input.
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
