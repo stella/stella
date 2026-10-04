@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -25,7 +26,15 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
+import {
+  detectFileEncryption,
+  officeFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -112,9 +121,11 @@ const createEmptyEntity = async (kind: "document" | "folder") => {
 };
 
 type WriteTestFileOptions = {
+  encryption?: FileEncryption;
   entityVersionId?: SafeId<"entityVersion">;
   fieldId?: SafeId<"field">;
   fileName?: string;
+  mimeType?: string;
   recordAuditEvent?: AuditRecorder;
   scanWarnings?: string[];
   versionMetadata?: {
@@ -143,8 +154,8 @@ const writeTestFile = async (
         fieldId: options.fieldId ?? createSafeId<"field">(),
         fileId: allocateFileObject(),
         fileName: options.fileName ?? "smlouva.docx",
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        mimeType: options.mimeType ?? DOCX_MIME_TYPE,
+        encryption: options.encryption ?? officeFileEncryption(DOCX_MIME_TYPE),
         sizeBytes: 12,
         sha256Hex:
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -154,6 +165,65 @@ const writeTestFile = async (
         writePolicy: options.writePolicy ?? { type: "replace-current-file" },
       }),
   );
+
+const detectedPdfEncryption = async (bytes: Uint8Array) => {
+  const detection = await detectFileEncryption({
+    mimeType: PDF_MIME_TYPE,
+    scanned: testScannedFile({
+      bytes: new Uint8Array(bytes).slice().buffer,
+      mimeType: PDF_MIME_TYPE,
+    }),
+  });
+  expect(detection.status).toBe("known");
+  return detection.encryption;
+};
+
+const currentFileContent = async (entityId: SafeId<"entity">) => {
+  const entity = await testDb.query.entities.findFirst({
+    where: { id: { eq: entityId } },
+    columns: {},
+    with: { currentVersion: { with: { fields: true } } },
+  });
+  const content = entity?.currentVersion?.fields.at(0)?.content;
+  if (content?.type !== "file") {
+    throw new Error("Current version has no file field");
+  }
+  return content;
+};
+
+describe("file encryption across versions", () => {
+  test("each version records the encryption of its own bytes", async () => {
+    const entityId = await createEmptyEntity("document");
+    const plain = PDF.create();
+    plain.addPage();
+    const plainEncryption = await detectedPdfEncryption(await plain.save());
+    const encryptedEncryption = await detectedPdfEncryption(
+      await createEncryptedPdf(),
+    );
+
+    const recorded: boolean[] = [];
+    for (const encryption of [
+      plainEncryption,
+      encryptedEncryption,
+      plainEncryption,
+    ]) {
+      // db-await-in-loop: each version is written after the one before it.
+      const written = await writeTestFile(entityId, {
+        encryption,
+        fileName: "smlouva.pdf",
+        mimeType: PDF_MIME_TYPE,
+      });
+      if (Result.isError(written)) {
+        throw written.error;
+      }
+      expect(written.value.status).toBe("ok");
+      // db-await-in-loop: read back the version just written.
+      recorded.push((await currentFileContent(entityId)).encrypted);
+    }
+
+    expect(recorded).toEqual([false, true, false]);
+  });
+});
 
 describe("first file version persistence", () => {
   test("accepts the empty document state produced by save_document", async () => {

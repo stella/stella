@@ -21,6 +21,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -72,9 +73,6 @@ type HandleDropParams = {
   entityId: string;
   kind: string;
 };
-
-const getTodayUTCDate = (): Temporal.PlainDate =>
-  Temporal.Now.instant().toZonedDateTimeISO("UTC").toPlainDate();
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
@@ -158,9 +156,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   // Current viewport date (month/week navigation state)
-  const [viewDate, setViewDate] = useState(getTodayUTCDate);
+  const [viewDate, setViewDate] = useState(appToday);
   const [monthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(getTodayUTCDate()),
+    getCenteredMonthWindowStart(appToday()),
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
@@ -175,7 +173,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   const year = viewDate.year;
   const month = viewDate.month - 1;
-  const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
+  const monthWeeks = getMonthWeekRows(locale, monthWindowStart, appToday());
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
   const days = (() => {
@@ -183,7 +181,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return monthWeeks.flatMap((week) => week.days);
     }
     if (mode === "week") {
-      return getWeekDays(viewDate, firstWeekday, weekend);
+      return getWeekDays(viewDate, firstWeekday, weekend, appToday());
     }
     return [];
   })();
@@ -284,7 +282,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   const navigateToday = () => {
-    const today = getTodayUTCDate();
+    const today = appToday();
     if (mode === "month") {
       scrollToMonth(today);
       return;
