@@ -20,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
 import {
   VERIFICATION_PIPELINE_VERSION,
   VERIFICATION_RUN_ACTIVE_STATUSES,
@@ -129,6 +130,9 @@ const createVerification = createSafeHandler(
       );
     }
     const file = field.content;
+    if (file.encrypted) {
+      return Result.err(encryptedContentError());
+    }
     if (!isVerifiableFile(file)) {
       return Result.err(
         new HandlerError({

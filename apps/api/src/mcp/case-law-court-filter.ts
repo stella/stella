@@ -121,12 +121,10 @@ const courtVocabulary = (
   }));
 
 /** An apex court's abbreviation, and its English names where it has any. */
-const apexCourtAliases = (abbreviation: string): readonly string[] => {
-  const englishNames = APEX_COURT_ENGLISH_NAMES[abbreviation];
-  return englishNames === undefined
-    ? [abbreviation]
-    : [abbreviation, ...englishNames];
-};
+const apexCourtAliases = (abbreviation: string): readonly string[] =>
+  Object.hasOwn(APEX_COURT_ENGLISH_NAMES, abbreviation)
+    ? [abbreviation, ...(APEX_COURT_ENGLISH_NAMES[abbreviation] ?? [])]
+    : [abbreviation];
 
 type CourtFilterReading =
   | {

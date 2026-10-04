@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -160,6 +161,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
@@ -611,11 +613,11 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
-  permissions: {
-    type: "any",
-    alternatives: [{ template: ["create"] }, { template: ["update"] }],
-    reason: "template_id selects update; without it the call creates.",
-  },
+  accountAccess: "sandbox",
+  permissions: selectOperationByPresence("template_id", {
+    present: { operation: "update", permissions: { template: ["update"] } },
+    absent: { operation: "create", permissions: { template: ["create"] } },
+  }),
   anonymized: { exposure: "excluded", reason: "write" },
   name: "create_template",
   scope: "stella:templates",
@@ -703,6 +705,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  accountAccess: "sandbox",
   permissions: { type: "all", permissions: { template: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "configure_template_fields",
@@ -815,6 +818,7 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  accountAccess: "standard",
   permissions: { type: "all", permissions: { template: ["use"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "fill_template",
@@ -883,6 +887,7 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  accountAccess: "standard",
   permissions: {
     type: "any",
     alternatives: [
@@ -1962,6 +1967,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           buffer: filled.file.bytes,
           fileName,
           mimeType: DOCX_MIME_TYPE,
+          encryption: serverBuiltFileEncryption(),
           parentId:
             input.parent_id === undefined
               ? undefined
@@ -2006,6 +2012,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         buffer: filled.file.bytes,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         source: null,
         writePolicy: { type: "replace-current-file" },
         afterWrite: async (tx, persisted) => {
