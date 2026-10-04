@@ -66,6 +66,7 @@ export const TRANSITIONS = {
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawReconciliationItems: { unmanaged: UNMANAGED_REASONS.projection },
+  caseLawReplayBatches: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },

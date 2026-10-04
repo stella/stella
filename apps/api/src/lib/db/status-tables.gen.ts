@@ -22,6 +22,7 @@ export const STATUS_COLUMNS = {
   caseLawProvisionExtractions: ["workStatus"],
   caseLawProvisionExtractionScopes: ["status"],
   caseLawReconciliationItems: ["status"],
+  caseLawReplayBatches: ["attemptState", "status"],
   caseLawResearchAnswers: ["state"],
   caseLawSearchBackfillFailures: ["status"],
   caseLawStatuteCitationCountState: ["status"],
