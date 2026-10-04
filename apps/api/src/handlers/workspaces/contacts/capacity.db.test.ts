@@ -13,12 +13,17 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import { createWorkspaceContactHandler } from "./create";
 
 let db: TestDatabase;
 let organizationId = mintAuthProviderId<"organization">();
@@ -76,6 +81,101 @@ const fill = async (workspaceId: typeof sourceId) => {
     })),
   );
 };
+
+test.each([1, LIMITS.workspaceContactsCount])(
+  "duplicate link intent returns a conflict with %i stored links",
+  async (count) => {
+    await db.insert(workspaceContacts).values(
+      contactIds.slice(0, count).map((contactId) => ({
+        workspaceId: sourceId,
+        organizationId,
+        contactId,
+        role: "other" as const,
+      })),
+    );
+    const stored = await db.query.workspaceContacts.findMany({
+      where: { workspaceId: { eq: sourceId } },
+      limit: LIMITS.workspaceContactsCount,
+      orderBy: { id: "asc" },
+    });
+    const existing = stored.at(0);
+    if (!existing) {
+      panic("Replay fixture needs an existing link");
+    }
+    let auditEvents = 0;
+    let flushes = 0;
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(db, [sourceId], organizationId, null),
+    );
+    const result = await Result.gen(() =>
+      createWorkspaceContactHandler({
+        safeDb,
+        organizationId,
+        workspaceId: sourceId,
+        body: {
+          contactId: existing.contactId,
+          role: existing.role,
+          isPrimary: true,
+          notes: "Resent link",
+        },
+        recordAuditEvent: async () => {
+          auditEvents += 1;
+        },
+        dependencies: {
+          flushWorkspaceSearchRepairs: async () => {
+            flushes += 1;
+            return { failed: 0, repaired: 0 };
+          },
+        },
+      }),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      panic("Duplicate link intent must return a conflict");
+    }
+    expect(result.error).toMatchObject({
+      status: 409,
+      message: "Contact already has this role on the matter",
+    });
+    expect(result.error).toMatchObject({ hint: undefined });
+    if (count === LIMITS.workspaceContactsCount) {
+      const differentRole = await Result.gen(() =>
+        createWorkspaceContactHandler({
+          safeDb,
+          organizationId,
+          workspaceId: sourceId,
+          body: { contactId: existing.contactId, role: "witness" },
+          recordAuditEvent: async () => {
+            auditEvents += 1;
+          },
+          dependencies: {
+            flushWorkspaceSearchRepairs: async () => {
+              flushes += 1;
+              return { failed: 0, repaired: 0 };
+            },
+          },
+        }),
+      );
+      expect(differentRole.isErr()).toBe(true);
+      if (differentRole.isOk()) {
+        panic("A new role requires capacity");
+      }
+      expect(differentRole.error).toMatchObject({
+        status: 400,
+        code: "matter_contact_capacity_reached",
+      });
+    }
+    expect(auditEvents).toBe(0);
+    expect(flushes).toBe(0);
+    expect(
+      await db.query.workspaceContacts.findMany({
+        where: { workspaceId: { eq: sourceId } },
+        limit: LIMITS.workspaceContactsCount,
+        orderBy: { id: "asc" },
+      }),
+    ).toEqual(stored);
+  },
+);
 
 const overflowContactId = () => {
   const contactId = contactIds.at(LIMITS.workspaceContactsCount);

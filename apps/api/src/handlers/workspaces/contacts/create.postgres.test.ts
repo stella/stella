@@ -305,6 +305,21 @@ if (!databaseUrl || !runPostgresTests) {
               secondAddition,
             ]);
             expect(firstOutcome.isOk()).toBe(true);
+            const replay = await addContact({
+              safeDb: secondSafeDb,
+              organizationId,
+              workspaceId,
+              body: { contactId: firstContactId, role: firstRole },
+            });
+            expect(replay.isErr()).toBe(true);
+            if (replay.isOk()) {
+              panic("Duplicate link intent must return a conflict");
+            }
+            expect(replay.error).toMatchObject({
+              status: 409,
+              message: "Contact already has this role on the matter",
+              hint: undefined,
+            });
             expect(secondOutcome.isErr()).toBe(true);
             if (secondOutcome.isOk()) {
               panic("Second contact addition must refuse a full matter");

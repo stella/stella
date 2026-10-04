@@ -38,7 +38,7 @@ const config = {
     "Link a contact to a matter in a party role (opposing party/counsel, " +
     "co-counsel, witness, expert witness, third party, judge, mediator, or " +
     "other). Pass contactId with role to link. When the matter reaches its " +
-    "contact limit, call link_matter_contact with matter_id and matter_contact_id (without role) to remove an existing link before adding another.",
+    "contact limit, remove an existing contact link before adding another.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "link_matter_contact" },
@@ -51,7 +51,7 @@ const CONTACT_CAPACITY_REFUSAL = {
   status: 400,
   code: MATTER_CONTACT_CAPACITY_CODE.reached,
   retryable: false,
-  hint: "Call link_matter_contact with matter_id and matter_contact_id (without role) to remove an existing link, then link the new contact.",
+  hint: "CLI: call matters.contacts.delete with matterId and matterContactId. MCP: call link_matter_contact with matter_id and matter_contact_id (without role). Then link the new contact.",
   message:
     "This matter has reached its contact limit. Remove a contact link before adding another.",
 } as const;
@@ -95,6 +95,23 @@ export const createWorkspaceContactHandler = async function* ({
         ok: false as const,
         status: 400 as const,
         message: "Contact not found",
+      };
+    }
+
+    const existing = await tx.query.workspaceContacts.findFirst({
+      where: {
+        organizationId: { eq: organizationId },
+        workspaceId: { eq: workspaceId },
+        contactId: { eq: body.contactId },
+        role: { eq: body.role },
+      },
+      columns: { id: true },
+    });
+    if (existing) {
+      return {
+        ok: false as const,
+        status: 409 as const,
+        message: "Contact already has this role on the matter",
       };
     }
 

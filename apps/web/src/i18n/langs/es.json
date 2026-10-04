@@ -2266,7 +2266,7 @@
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
-      "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos con contactos antes de abrir la lista.",
+      "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
       "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",

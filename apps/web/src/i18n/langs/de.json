@@ -2266,7 +2266,7 @@
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
-      "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie Kontaktverknüpfungen, bevor Sie die Liste öffnen.",
+      "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
