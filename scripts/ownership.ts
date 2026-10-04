@@ -697,7 +697,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/flows/flow-executor.ts",
           reason:
-            "Flow steps; their authority model is still to be classified.",
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/folio-collab-rooms.ts",
@@ -727,7 +727,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/workflow-queue.ts",
           reason:
-            "Workflow property generation; its authority model is still to be classified.",
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },

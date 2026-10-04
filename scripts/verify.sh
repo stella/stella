@@ -177,6 +177,13 @@ run_desktop_rust_inputs_guard() {
   bun run check:desktop-rust-inputs
 }
 
+run_queue_authority_guard() {
+  # Every BullMQ queue has a declared authority; member-run queues build
+  # their handles with the run actor. Shrink-only baseline.
+  bun scripts/queue-authority.ts --self-test || return 1
+  BASE_SHA="$base_ref" bun scripts/queue-authority.ts --check
+}
+
 run_module_mock_ledger_guard() {
   # The grandfathered module-mock ledger may only lose members: every line
   # must already exist on the base branch, so a new mock cannot be listed in
@@ -184,7 +191,9 @@ run_module_mock_ledger_guard() {
   bun scripts/check-internal-module-mock-ledger.ts --self-test || return 1
   bun scripts/check-internal-module-mock-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-swallowed-item-error-ledger.ts --self-test || return 1
-  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref"
+  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref" || return 1
+  bun scripts/check-contract-domain-ledger.ts --self-test || return 1
+  bun scripts/check-contract-domain-ledger.ts --base "$base_ref"
 }
 
 run_suppression_waiver_guard() {
@@ -399,6 +408,7 @@ run_step "Test input coverage" run_test_input_coverage_guard
 run_step "Desktop Rust inputs" run_desktop_rust_inputs_guard
 run_step "Test shard partition" bun test scripts/test-shards.test.ts
 run_step "Module ownership" bun run check:module-ownership
+run_step "Queue authority" run_queue_authority_guard
 run_step "Design token docs" bun run check:design-tokens
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
