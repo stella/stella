@@ -455,7 +455,8 @@ describe("a decision's sheet from any source", () => {
         SINGLE_SOURCE_DECISIONS[source],
         NOTHING_ELSE,
       ]);
-      const carrier = written.at(0)?.id;
+      const carrier =
+        written.at(0)?.id ?? panic(`no decision written for ${source}`);
       expect({
         source,
         admitted: await admittedBySql(scenario, written),
