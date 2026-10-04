@@ -36,7 +36,10 @@ if (!databaseUrl || !enabled) {
           const worker = openClient();
           const duplicate = openClient();
           const cancellation = openClient();
-          const f = await flowReviewGateFixture(db, { intermediate: true });
+          const f = await flowReviewGateFixture(db, {
+            intermediate: true,
+            initialRunStatus: "pending",
+          });
           const release = Promise.withResolvers<undefined>();
           const reached = Promise.withResolvers<undefined>();
           const attemptedIds: ReturnType<typeof createSafeId<"entity">>[] = [];
@@ -70,6 +73,10 @@ if (!databaseUrl || !enabled) {
                 },
               })
               .where(eq(flowRuns.id, f.runId));
+            await db
+              .update(flowRunSteps)
+              .set({ status: "running" })
+              .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
             await db
               .update(flowRunSteps)
               .set({

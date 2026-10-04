@@ -83,6 +83,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -197,6 +198,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack invokes these server-tool callbacks and turns thrown
   // ChatToolError values into tool failures; it cannot consume Result.err.
   "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
+  // Code mode invokes this read adapter through Promise rejection; the SDK
+  // converts its ChatToolError into a script failure and cannot consume Result.
+  "apps/api/src/handlers/chat/tools/execute/chat-script-read-boundary.ts",
   // Handed to TanStack AI as its StreamDurability adapter: the SDK reads an
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.

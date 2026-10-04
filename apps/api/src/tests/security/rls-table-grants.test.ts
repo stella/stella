@@ -181,6 +181,11 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "case_law_replay_batches",
+  "case_law_replay_blocked",
+  "case_law_replay_daily_rows",
+  "case_law_replay_source_progress",
+  "case_law_replay_audit_events",
   "action_cost_records",
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.

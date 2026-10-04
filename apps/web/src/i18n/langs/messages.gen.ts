@@ -2291,6 +2291,7 @@ type Messages = {
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
+      "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
@@ -3479,6 +3480,7 @@ type Messages = {
         "approvedOn": "Approved {date}";
         "approvedToast": "Playbook approved";
         "saveBeforeApprove": "Save changes before approving this playbook.";
+        "sourcesNotice": "Before approving, check that no position names a document, a matter, or a counterparty: the whole organization can read this playbook.";
         "statusApproved": "Approved";
         "statusDraft": "Draft";
       };
@@ -3577,6 +3579,7 @@ type Messages = {
       "referenceStandard": "From the reference";
       "removeCheck": "Remove check";
       "removeIdeal": "Remove ideal language";
+      "removeSource": "Remove source {documentName}";
       "reorderPosition": "Reorder position";
       "review": {
         "changePlaybook": "Choose another playbook";
@@ -3608,6 +3611,10 @@ type Messages = {
         "blocker": "Blocker";
       };
       "severityLabel": "Severity";
+      "staleCopy": {
+        "loaded": "A newer version of this playbook has loaded. Reload before editing.";
+        "unavailable": "The latest version of this playbook could not be loaded. This is the last loaded copy and may be out of date.";
+      };
       "starters": {
         "addedToast": "Playbook added";
         "browseButton": "Browse starter playbooks";

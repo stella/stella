@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -8,6 +9,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
+import { readFile } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -20,9 +23,11 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   createS3CredentialGuard,
   type S3CredentialGuard,
+  type S3CredentialRefreshOptions,
 } from "@/api/lib/s3/credential-guard";
 import {
   credentialsFromEnvValues,
+  isUsableStaticCredential,
   type OptionalS3Credentials,
 } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
@@ -64,18 +69,24 @@ const fetchCredentialJson = async (
   {
     fetchImpl,
     headers,
+    signal,
   }: {
+    signal?: AbortSignal;
     fetchImpl: Fetcher;
     headers?: Record<string, string>;
   },
 ): Promise<S3Credentials | null> => {
   // An unreachable or malformed endpoint means this credential source is not
   // available here; the caller falls through to the next one.
+  signal?.throwIfAborted();
   const fetched = await Result.tryPromise(
     async (): Promise<S3Credentials | null> => {
       const response = await fetchImpl(url, {
         ...(headers ? { headers } : {}),
-        signal: AbortSignal.timeout(2000),
+        signal:
+          signal === undefined
+            ? AbortSignal.timeout(2000)
+            : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
       });
       if (!response.ok) {
         return null;
@@ -93,6 +104,7 @@ const fetchCredentialJson = async (
       };
     },
   );
+  signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
 
@@ -134,10 +146,13 @@ const containerCredentialsUrl = (
 const fetchEcsCredentials = async ({
   fetchImpl = fetch,
   runtimeEnv = process.env,
+  signal,
 }: {
+  signal?: AbortSignal;
   fetchImpl?: Fetcher;
   runtimeEnv?: CredentialRuntimeEnv;
 } = {}): Promise<S3Credentials | null> => {
+  signal?.throwIfAborted();
   const url = containerCredentialsUrl(runtimeEnv);
   if (!url) {
     return null;
@@ -156,9 +171,15 @@ const fetchEcsCredentials = async ({
     // without the header can only fail at the endpoint, several layers away
     // from the cause; report it here and let the caller fall through to the
     // next credential source.
-    const token = await Result.tryPromise(
-      async () => await Bun.file(authorizationTokenFile).text(),
+    const token = await Result.tryPromise(async () =>
+      signal === undefined
+        ? await Bun.file(authorizationTokenFile).text()
+        : await readFile(authorizationTokenFile, {
+            encoding: "utf-8",
+            signal,
+          }),
     );
+    signal?.throwIfAborted();
     if (token.isErr()) {
       logger.warn(
         "s3.container_credentials_token_unreadable",
@@ -171,7 +192,11 @@ const fetchEcsCredentials = async ({
     headers["Authorization"] = token.value.trim();
   }
 
-  return await fetchCredentialJson(url, { fetchImpl, headers });
+  return await fetchCredentialJson(url, {
+    fetchImpl,
+    headers,
+    ...(signal === undefined ? {} : { signal }),
+  });
 };
 
 /**
@@ -184,11 +209,14 @@ const fetchEcsCredentials = async ({
  */
 const fetchImdsCredentials = async ({
   fetchImpl = fetch,
+  signal,
 }: {
+  signal?: AbortSignal;
   fetchImpl?: Fetcher;
 } = {}): Promise<S3Credentials | null> => {
   // Off EC2 the metadata endpoint does not answer; that is the local-dev case,
   // not a failure.
+  signal?.throwIfAborted();
   const fetched = await Result.tryPromise(
     async (): Promise<S3Credentials | null> => {
       const tokenResponse = await fetchImpl(
@@ -196,7 +224,10 @@ const fetchImdsCredentials = async ({
         {
           method: "PUT",
           headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!tokenResponse.ok) {
@@ -208,7 +239,10 @@ const fetchImdsCredentials = async ({
         "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
         {
           headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!roleResponse.ok) {
@@ -220,7 +254,10 @@ const fetchImdsCredentials = async ({
         `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
         {
           headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!credsResponse.ok) {
@@ -238,6 +275,7 @@ const fetchImdsCredentials = async ({
       };
     },
   );
+  signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
 
@@ -297,6 +335,7 @@ const corpusBucket = (): string =>
   envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
 
 type ResolveS3CredentialsOptions = {
+  signal?: AbortSignal;
   endpoint?: string;
   fetchImpl?: Fetcher;
   provider?: S3CredentialsProvider;
@@ -310,11 +349,23 @@ const staticCredentialsFromEnv = (): OptionalS3Credentials | null =>
     envBase.S3_SECRET_ACCESS_KEY,
   );
 
-const resolveAwsRuntimeCredentials = async (
-  fetchImpl: Fetcher,
-  runtimeEnv: CredentialRuntimeEnv,
-): Promise<S3Credentials | null> => {
-  const ecsCredentials = await fetchEcsCredentials({ fetchImpl, runtimeEnv });
+type ResolveAwsRuntimeCredentialsOptions = {
+  fetchImpl: Fetcher;
+  runtimeEnv: CredentialRuntimeEnv;
+  signal?: AbortSignal;
+};
+
+const resolveAwsRuntimeCredentials = async ({
+  fetchImpl,
+  runtimeEnv,
+  signal,
+}: ResolveAwsRuntimeCredentialsOptions): Promise<S3Credentials | null> => {
+  signal?.throwIfAborted();
+  const ecsCredentials = await fetchEcsCredentials({
+    fetchImpl,
+    runtimeEnv,
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (ecsCredentials) {
     return ecsCredentials;
   }
@@ -333,7 +384,10 @@ const resolveAwsRuntimeCredentials = async (
     return null;
   }
 
-  const imdsCredentials = await fetchImdsCredentials({ fetchImpl });
+  const imdsCredentials = await fetchImdsCredentials({
+    fetchImpl,
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (imdsCredentials) {
     return imdsCredentials;
   }
@@ -347,7 +401,9 @@ export const resolveS3Credentials = async ({
   provider = envBase.S3_CREDENTIALS_PROVIDER,
   runtimeEnv = process.env,
   staticCredentials = staticCredentialsFromEnv(),
+  signal,
 }: ResolveS3CredentialsOptions = {}): Promise<OptionalS3Credentials | null> => {
+  signal?.throwIfAborted();
   if (provider === "none") {
     return null;
   }
@@ -357,25 +413,63 @@ export const resolveS3Credentials = async ({
   }
 
   if (provider === "aws-runtime") {
-    return await resolveAwsRuntimeCredentials(fetchImpl, runtimeEnv);
+    return await resolveAwsRuntimeCredentials({
+      fetchImpl,
+      runtimeEnv,
+      ...(signal === undefined ? {} : { signal }),
+    });
   }
 
   if (!isAwsS3Endpoint(endpoint)) {
     return (
       staticCredentials ??
-      (await resolveAwsRuntimeCredentials(fetchImpl, runtimeEnv))
+      (await resolveAwsRuntimeCredentials({
+        fetchImpl,
+        runtimeEnv,
+        ...(signal === undefined ? {} : { signal }),
+      }))
     );
   }
 
-  const awsRuntimeCredentials = await resolveAwsRuntimeCredentials(
+  const awsRuntimeCredentials = await resolveAwsRuntimeCredentials({
     fetchImpl,
     runtimeEnv,
-  );
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (awsRuntimeCredentials) {
     return awsRuntimeCredentials;
   }
 
   return staticCredentials;
+};
+
+export class S3DeadlineCredentialsError extends TaggedError(
+  "S3DeadlineCredentialsError",
+)<{
+  message: string;
+}> {}
+
+/** A bounded job must not fall through to the SDK's unbounded credential chain. */
+const resolveRefreshCredentials = async (
+  s3Policy?: S3CredentialRefreshOptions,
+) => {
+  const signal = s3Policy?.signal;
+  const credentials = await resolveS3Credentials({
+    ...(signal === undefined ? {} : { signal }),
+  });
+  signal?.throwIfAborted();
+  if (
+    signal !== undefined &&
+    (credentials === null ||
+      !isUsableStaticCredential(credentials.accessKeyId) ||
+      !isUsableStaticCredential(credentials.secretAccessKey))
+  ) {
+    throw new S3DeadlineCredentialsError({
+      message:
+        "Deadline-bound S3 operations require complete explicit credentials",
+    });
+  }
+  return credentials;
 };
 
 /**
@@ -386,11 +480,15 @@ export const resolveS3Credentials = async ({
  * Call at process startup and periodically in long-running
  * processes to prevent STS credential expiry.
  */
-export const refreshS3 = async (): Promise<void> => {
-  const credentials = await resolveS3Credentials();
+export const refreshS3 = async (
+  s3Policy?: S3CredentialRefreshOptions,
+): Promise<void> => {
+  const credentials = await resolveRefreshCredentials(s3Policy);
+  s3Policy?.signal.throwIfAborted();
   _client = buildS3Client(envBase.S3_BUCKET, credentials);
   _abortableClient = buildAbortableS3Client(credentials);
   _clientCreatedAt = Temporal.Now.instant().epochMilliseconds;
+  _clientCredentialMode = s3Policy?.mode ?? "default";
 };
 
 const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
@@ -402,6 +500,7 @@ const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
 let _client: S3Client | null = null;
 let _abortableClient: AwsS3Client | null = null;
 let _clientCreatedAt = 0;
+let _clientCredentialMode: "default" | "replay-strict" = "default";
 
 /**
  * Returns the S3 client, building one from static env credentials on
@@ -430,12 +529,17 @@ export const isS3Stale = (): boolean =>
 let _corpusClient: S3Client | null = null;
 let _abortableCorpusClient: AwsS3Client | null = null;
 let _corpusClientCreatedAt = 0;
+let _corpusCredentialMode: "default" | "replay-strict" = "default";
 
-export const refreshCorpusS3 = async (): Promise<void> => {
-  const credentials = await resolveS3Credentials();
+export const refreshCorpusS3 = async (
+  s3Policy?: S3CredentialRefreshOptions,
+): Promise<void> => {
+  const credentials = await resolveRefreshCredentials(s3Policy);
+  s3Policy?.signal.throwIfAborted();
   _corpusClient = buildS3Client(corpusBucket(), credentials);
   _abortableCorpusClient = buildAbortableS3Client(credentials);
   _corpusClientCreatedAt = Temporal.Now.instant().epochMilliseconds;
+  _corpusCredentialMode = s3Policy?.mode ?? "default";
 };
 
 export const getCorpusS3 = (): S3Client => {
@@ -454,16 +558,20 @@ export const isCorpusS3Stale = (): boolean =>
     CREDENTIAL_MAX_AGE_MS;
 
 const documentsCredentials = createS3CredentialGuard({
-  isStale: () => isS3Stale(),
-  refresh: async () => {
-    await refreshS3();
+  isStale: (options) =>
+    isS3Stale() ||
+    (options !== undefined && _clientCredentialMode !== "replay-strict"),
+  refresh: async (s3Policy) => {
+    await refreshS3(s3Policy);
   },
 });
 
 const corpusCredentials = createS3CredentialGuard({
-  isStale: () => isCorpusS3Stale(),
-  refresh: async () => {
-    await refreshCorpusS3();
+  isStale: (options) =>
+    isCorpusS3Stale() ||
+    (options !== undefined && _corpusCredentialMode !== "replay-strict"),
+  refresh: async (s3Policy) => {
+    await refreshCorpusS3(s3Policy);
   },
 });
 
@@ -538,6 +646,8 @@ const s3WriteRetryDelayMs = (attempt: number): number =>
   Math.random() * S3_WRITE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
 
 type S3ObjectWrite = {
+  s3Policy?: S3CredentialRefreshOptions;
+  signal?: AbortSignal;
   contentType?: string | undefined;
   data: Uint8Array | string;
   /**
@@ -561,8 +671,31 @@ export const S3_OBJECT_WRITE_CERTAINTY = {
 export type S3ObjectWriteCertainty =
   (typeof S3_OBJECT_WRITE_CERTAINTY)[keyof typeof S3_OBJECT_WRITE_CERTAINTY];
 
-const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
-  await documentsCredentials.run(
+const writeViaClient: S3ObjectWriter = async ({
+  contentType,
+  data,
+  key,
+  signal,
+  s3Policy,
+}) => {
+  if (s3Policy !== undefined) {
+    const writeSignal = signal ?? s3Policy.signal;
+    writeSignal.throwIfAborted();
+    return await documentsCredentials.run(
+      async () =>
+        await getAbortableS3().send(
+          new PutObjectCommand({
+            Body: data,
+            Bucket: envBase.S3_BUCKET,
+            ContentType: contentType,
+            Key: key,
+          }),
+          { abortSignal: writeSignal },
+        ),
+      s3Policy,
+    );
+  }
+  return await documentsCredentials.run(
     async () =>
       await getS3().write(
         key,
@@ -570,6 +703,7 @@ const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
         contentType === undefined ? undefined : { type: contentType },
       ),
   );
+};
 
 export type S3ObjectWriteOwnership =
   | {
@@ -621,17 +755,27 @@ export const writeS3ObjectWithRetry = async (
       return panic("Unhandled object write ownership");
   }
   const timeoutMs = _writeTimeoutOverride ?? S3_WRITE_TIMEOUT_MS;
+  const operationSignal = object.signal ?? object.s3Policy?.signal;
   let lastError: unknown;
   let priorAttemptMayCompleteLate = false;
   for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
+    operationSignal?.throwIfAborted();
     const written = await Result.tryPromise({
       try: async () =>
-        await withTimeout(async () => await write(object), {
-          label: "s3 object write",
-          timeoutMs,
-        }),
+        await withTimeout(
+          async (signal) =>
+            await write(
+              operationSignal === undefined ? object : { ...object, signal },
+            ),
+          {
+            signal: operationSignal,
+            label: "s3 object write",
+            timeoutMs,
+          },
+        ),
       catch: (cause) => cause,
     });
+    operationSignal?.throwIfAborted();
     if (!Result.isError(written)) {
       return priorAttemptMayCompleteLate
         ? S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
@@ -643,7 +787,13 @@ export const writeS3ObjectWithRetry = async (
       break;
     }
     if (attempt < S3_WRITE_MAX_ATTEMPTS) {
-      await Bun.sleep(s3WriteRetryDelayMs(attempt));
+      if (operationSignal === undefined) {
+        await Bun.sleep(s3WriteRetryDelayMs(attempt));
+      } else {
+        await sleep(s3WriteRetryDelayMs(attempt), undefined, {
+          signal: operationSignal,
+        });
+      }
     }
   }
   throw lastError;
@@ -670,9 +820,16 @@ export const createS3ObjectIfAbsent = async (
       type: "fixed-key",
       reason: "Content-addressed bytes are immutable at this key",
     },
-    async ({ contentType, data, key }): Promise<void> => {
+    async ({ contentType, data, key, signal, s3Policy }): Promise<void> => {
+      signal?.throwIfAborted();
       if (!conditional) {
-        await writeViaClient({ contentType, data, key });
+        await writeViaClient({
+          contentType,
+          data,
+          key,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        });
         return;
       }
       const written = await Result.tryPromise({
@@ -687,8 +844,12 @@ export const createS3ObjectIfAbsent = async (
                   IfNoneMatch: "*",
                   Key: key,
                 }),
-                { abortSignal: AbortSignal.timeout(S3_WRITE_TIMEOUT_MS) },
+                {
+                  abortSignal:
+                    signal ?? AbortSignal.timeout(S3_WRITE_TIMEOUT_MS),
+                },
               ),
+            s3Policy,
           ),
         catch: (cause) => cause,
       });
@@ -703,7 +864,13 @@ export const createS3ObjectIfAbsent = async (
       }
       if (code === "NotImplemented") {
         conditional = false;
-        await writeViaClient({ contentType, data, key });
+        await writeViaClient({
+          contentType,
+          data,
+          key,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        });
         return;
       }
       // `ConditionalRequestConflict` (a concurrent conditional write to the
@@ -747,6 +914,7 @@ export const isMissingCorpusObjectError = (
 export const headS3ObjectWithSignal = async (
   key: string,
   signal: AbortSignal,
+  s3Policy?: S3CredentialRefreshOptions,
 ): Promise<{
   contentLength: number | null;
   contentType: string | null;
@@ -759,6 +927,7 @@ export const headS3ObjectWithSignal = async (
             new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
             { abortSignal: signal },
           ),
+        s3Policy,
       ),
   );
   return head === null
@@ -875,8 +1044,9 @@ export const isMissingS3ObjectError = (error: unknown): boolean => {
 const presentOrNull = async <T>(
   request: () => Promise<T>,
 ): Promise<T | null> => {
+  const attempted = Promise.resolve().then(request);
   const response = await Result.tryPromise({
-    try: request,
+    try: async () => await attempted,
     catch: (cause) => cause,
   });
   if (Result.isOk(response)) {
@@ -885,7 +1055,7 @@ const presentOrNull = async <T>(
   if (isMissingS3ObjectError(response.error)) {
     return null;
   }
-  throw response.error;
+  return await attempted;
 };
 
 /**
@@ -897,6 +1067,34 @@ export const readS3ObjectIfPresent = async (
   signal: AbortSignal,
 ): Promise<ArrayBuffer | null> =>
   await presentOrNull(async () => await getS3ObjectWithSignal(key, signal));
+
+type CopyReplayS3ObjectOptions = {
+  signal?: AbortSignal;
+  sourceKey: string;
+  destinationKey: string;
+  s3Policy: S3CredentialRefreshOptions;
+};
+
+/** Deadline-owned copy uses the explicitly refreshed documents client. */
+export const copyReplayS3Object = async ({
+  sourceKey,
+  destinationKey,
+  s3Policy,
+  signal,
+}: CopyReplayS3ObjectOptions): Promise<void> => {
+  await documentsCredentials.run(async () => {
+    await getAbortableS3().send(
+      new CopyObjectCommand({
+        Bucket: envBase.S3_BUCKET,
+        CopySource: `${envBase.S3_BUCKET}/${encodeURIComponent(sourceKey)}`,
+        Key: destinationKey,
+        TaggingDirective: "REPLACE",
+        Tagging: "",
+      }),
+      { abortSignal: signal ?? s3Policy.signal },
+    );
+  }, s3Policy);
+};
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */
 export const deleteS3ObjectWithSignal = async (
@@ -1070,6 +1268,7 @@ export const listS3ObjectPage = async ({
   });
 
 type BoundedS3ReadOptions = {
+  s3Policy?: S3CredentialRefreshOptions;
   bucket: string;
   key: string;
   maxBytes: number;
@@ -1086,6 +1285,7 @@ export const readS3ObjectBounded = async ({
   key,
   maxBytes,
   signal,
+  s3Policy,
 }: BoundedS3ReadOptions): Promise<Uint8Array> =>
   await documentsCredentials.run(async () => {
     const response = await getAbortableS3().send(
@@ -1112,7 +1312,7 @@ export const readS3ObjectBounded = async ({
       });
     }
     return await response.Body.transformToByteArray();
-  });
+  }, s3Policy);
 
 /**
  * {@link readS3ObjectBounded} from the documents bucket, or `null` when the
@@ -1122,6 +1322,7 @@ export const readS3ObjectBoundedIfPresent = async ({
   key,
   maxBytes,
   signal,
+  s3Policy,
 }: Omit<BoundedS3ReadOptions, "bucket">): Promise<Uint8Array | null> =>
   await presentOrNull(
     async () =>
@@ -1130,6 +1331,7 @@ export const readS3ObjectBoundedIfPresent = async ({
         key,
         maxBytes,
         signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
       }),
   );
 
@@ -1267,6 +1469,7 @@ const fetchObject = async (
   store: ObjectStore,
   key: string,
   signal?: AbortSignal,
+  s3Policy?: S3CredentialRefreshOptions,
 ): Promise<Response> =>
   await store.run(async () => {
     const response = await fetchWithTimeout(
@@ -1284,7 +1487,7 @@ const fetchObject = async (
       });
     }
     return response;
-  });
+  }, s3Policy);
 
 /** Read a legal-corpus object's bytes. See `fetchObject`. */
 export const readCorpusS3Bytes = async (
@@ -1294,6 +1497,7 @@ export const readCorpusS3Bytes = async (
   await (await fetchObject(corpusStore, key, signal)).bytes();
 
 type BoundedCorpusReadOptions = {
+  s3Policy?: S3CredentialRefreshOptions;
   key: string;
   /** Ceiling on the transferred (still-compressed) body. */
   maxBytes: number;
@@ -1317,8 +1521,9 @@ const boundedCorpusResponse = async ({
   key,
   maxBytes,
   signal,
+  s3Policy,
 }: BoundedCorpusReadOptions): Promise<Response> => {
-  const response = await fetchObject(corpusStore, key, signal);
+  const response = await fetchObject(corpusStore, key, signal, s3Policy);
   // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
   // is 0, so converting first would turn a missing or empty `Content-Length`
   // into a length of zero that passes every ceiling — making the refusal below
@@ -1369,6 +1574,7 @@ export const readCorpusS3ObjectBounded = async (
 };
 
 type CorpusRangeReadOptions = {
+  s3Policy?: S3CredentialRefreshOptions;
   key: string;
   /** First byte of the range, inclusive. */
   offset: number;
@@ -1398,6 +1604,7 @@ export const readCorpusS3Range = async ({
   offset,
   length,
   signal,
+  s3Policy,
 }: CorpusRangeReadOptions): Promise<Uint8Array> => {
   if (!Number.isSafeInteger(offset) || offset < 0) {
     return panic(
@@ -1433,7 +1640,7 @@ export const readCorpusS3Range = async ({
       });
     }
     return served;
-  });
+  }, s3Policy);
   const contentRange = CONTENT_RANGE_PATTERN.exec(
     response.headers.get("content-range") ?? "",
   );
@@ -1484,18 +1691,47 @@ export const readS3ArrayBuffer = async (
  * caller: a probe run once per row by a backfill has to survive a credential
  * rotation the same way every other object-store call in this module does.
  */
-export const corpusS3ObjectExists = async (key: string): Promise<boolean> =>
-  await corpusCredentials.run(
-    async () => await getCorpusS3().file(key).exists(),
+export const corpusS3ObjectExists = async (
+  key: string,
+  signal?: AbortSignal,
+  s3Policy?: S3CredentialRefreshOptions,
+): Promise<boolean> => {
+  if (s3Policy === undefined) {
+    return await corpusCredentials.run(
+      async () => await getCorpusS3().file(key).exists(),
+    );
+  }
+  return (
+    (await presentOrNull(
+      async () =>
+        await corpusCredentials.run(
+          async () =>
+            await getAbortableCorpusS3().send(
+              new HeadObjectCommand({ Bucket: corpusBucket(), Key: key }),
+              { abortSignal: signal ?? s3Policy.signal },
+            ),
+          s3Policy,
+        ),
+    )) !== null
   );
+};
+
+type PutCorpusS3ObjectOptions = {
+  key: string;
+  bytes: Uint8Array;
+  mimeType: string;
+  signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
+};
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
-export const putCorpusS3ObjectWithSignal = async (
-  key: string,
-  bytes: Uint8Array,
-  mimeType: string,
-  signal: AbortSignal,
-): Promise<void> => {
+export const putCorpusS3ObjectWithSignal = async ({
+  key,
+  bytes,
+  mimeType,
+  signal,
+  s3Policy,
+}: PutCorpusS3ObjectOptions): Promise<void> => {
   await corpusCredentials.run(
     async () =>
       await getAbortableCorpusS3().send(
@@ -1507,6 +1743,7 @@ export const putCorpusS3ObjectWithSignal = async (
         }),
         { abortSignal: signal },
       ),
+    s3Policy,
   );
 };
 
@@ -1546,7 +1783,9 @@ export const configureS3ForTesting = ({
   _corpusClient = buildS3Client(corpusBucket(), credentials);
   _abortableCorpusClient = buildAbortableS3Client(credentials);
   _clientCreatedAt = Temporal.Now.instant().epochMilliseconds;
+  _clientCredentialMode = "default";
   _corpusClientCreatedAt = Temporal.Now.instant().epochMilliseconds;
+  _corpusCredentialMode = "default";
 };
 
 export const resetS3ForTesting = (): void => {

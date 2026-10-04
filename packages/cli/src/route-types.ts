@@ -15,6 +15,7 @@ export type ToolScope = McpCliToolScope;
 
 /** Wire fields from `tools/list` (build-time: projected from `DEFAULT_MCP_TOOL_DEFINITIONS`). */
 export type RegistryToolListing = {
+  featureId?: string;
   name: string;
   description: string;
   inputSchema: JsonSchema;
@@ -37,6 +38,7 @@ export type DiscriminatorSubcommand = {
 
 /** Baked-in per-tool annotation (spec S1), keyed by tool name and merged with the listing. */
 export type ToolAnnotation = {
+  featureId?: string;
   command: readonly string[];
   additionalScopes?: readonly ToolScope[];
   /** API-owned finite transport deadline for this generated tool. */
@@ -119,6 +121,7 @@ export type FlagSpec = {
 
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
 export type LeafCommandSpec = {
+  featureId?: string;
   commandPath: readonly string[];
   additionalScopes?: readonly ToolScope[];
   requestTimeoutMs?: number;
@@ -183,6 +186,7 @@ export type CapabilityFlagSpec = FlagSpec & {
  * `{ capability: capabilityId, input: { body?, params?, query? } }`.
  */
 export type CapabilityLeafSpec = {
+  featureId?: string;
   commandPath: readonly string[];
   capabilityId: string;
   /** API-owned finite transport deadline for this generated capability command. */

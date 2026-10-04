@@ -1,10 +1,14 @@
 import { panic } from "better-result";
 
 import type { McpMode } from "@/api/mcp/constants";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-reference";
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
+import { scopeMcpResourceReferences } from "@/api/mcp/resources";
+import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 
 /**
  * Server-level `instructions` handed to MCP clients at connect time (the MCP
@@ -117,7 +121,7 @@ export const MCP_INSTRUCTIONS = {
   law: lawInstructions(true),
 } as const satisfies Record<McpMode, string>;
 
-export const getMcpInstructions = (mode: McpMode): string => {
+const renderMcpInstructions = (mode: McpMode): string => {
   switch (mode) {
     case "default":
       return defaultInstructions(isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"));
@@ -131,4 +135,15 @@ export const getMcpInstructions = (mode: McpMode): string => {
       mode satisfies never;
       return panic(`Unhandled MCP mode: ${String(mode)}`);
   }
+};
+
+export const getMcpInstructions = (
+  mode: McpMode,
+  context?: McpFeatureAccessContext,
+): string => {
+  const text = scopeMcpResourceReferences(renderMcpInstructions(mode), {
+    mode,
+    context,
+  });
+  return scopeProseToSurface(text, surfaceToolVocabulary(mode, context)) ?? "";
 };

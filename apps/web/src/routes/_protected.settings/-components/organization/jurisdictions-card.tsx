@@ -18,9 +18,12 @@ import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-set
 
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
   const serverSelected = settings ? settings.practiceJurisdictions : [];
 

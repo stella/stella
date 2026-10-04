@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
@@ -30,6 +31,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "status-set";
+      readonly columns: Readonly<Record<string, readonly string[]>>;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "import";
       readonly specifiers: readonly string[];
@@ -338,6 +344,14 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+export const STATUS_TRANSITION_OWNERSHIP = {
+  id: "status-transition",
+  capability: "Changing a row's lifecycle state",
+  owner: ["apps/api/src/lib/db/transitions.ts"],
+  summary:
+    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
+  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+} as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
 const UNMIGRATED_PUBLISHER_READERS = [
@@ -359,12 +373,23 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/pl-uodo.ts",
   "handlers/case-law/ingestion/adapters/pl-uokik.ts",
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
-  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
-  "handlers/case-law/ingestion/adapters/sk-courts.ts",
-  "handlers/case-law/ingestion/adapters/sk-us.ts",
 ] as const;
 
 export const OWNERSHIP = [
+  STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "feature-access",
+    capability: "Deciding caller feature admission and discovery",
+    owner: [
+      "apps/api/src/lib/auth/feature-access/policy.ts",
+      "apps/api/src/lib/auth/feature-access/context.ts",
+      "apps/api/src/lib/feature-access/registry.ts",
+      "apps/api/src/mcp/feature-access.ts",
+    ],
+    summary:
+      "The feature registry declares enrolment and ownership. One principal-bound policy decides admission and discovery; the catalog declaration guard and real discovery tests enforce the boundary.",
+    enforcement: { kind: "none" },
+  },
   {
     id: "time-entry-amount",
     capability: "Price recorded time with its no-charge disposition",
@@ -420,6 +445,11 @@ export const OWNERSHIP = [
       specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
       names: ["hostedUsageWebhookEvents"],
       allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
+        },
         {
           path: "apps/api/src/db/schema.ts",
           reason:
@@ -761,11 +791,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason:
-            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
           reason: "Scheduled organization automation.",
         },
@@ -788,7 +813,7 @@ export const OWNERSHIP = [
       "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
       "workspace pinned for the run's own rows and its output, and `inputDb` " +
       "reads under the requester's membership as it stands when the run " +
-      "executes. Member-run queues are listed in " +
+      "executes. Member-run queues and scheduler tasks are listed in " +
       "`apps/api/src/lib/member-run-queues.ts`.",
     enforcement: {
       kind: "import",
@@ -807,6 +832,12 @@ export const OWNERSHIP = [
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
+        // Kept equal to MEMBER_RUN_SCHEDULER_TASKS by scripts/ownership.test.ts.
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Member-run scheduler task; reads each compaction through its owner's inputDb.",
+        },
       ],
     },
   },
@@ -1096,6 +1127,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
+          reason:
+            "Loads persisted source bytes under the replay tick's byte cap and deadline.",
         },
         {
           path: "apps/api/src/handlers/chat/chat-prompt.ts",
@@ -2350,6 +2386,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "status-set": {
+      return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
     }
     default: {
       enforcement satisfies never;

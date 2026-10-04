@@ -170,7 +170,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
     );
     expect(skill).not.toContain("  - metadata:");
     expect(skill).toContain(
-      'positions[]: mode="extract": issue:string, ask:{question}',
+      'positions[]: mode="extract": issue:string, sources?:string[], ask:{question}',
     );
     expect(skill).toContain('type="multi-select": value:string[]');
   });

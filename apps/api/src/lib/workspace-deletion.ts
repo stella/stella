@@ -15,13 +15,15 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
-import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  CLIENT_MATTER_ADMIN_ROLES,
+  isMemberRole,
+} from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
-const ORGANIZATION_WIDE_WORKSPACE_ROLES = new Set(["owner", "admin"]);
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
 export type WorkspaceDeletionDatabase = {
@@ -105,7 +107,7 @@ const actorCanAccessWorkspace = async ({
 }): Promise<boolean> => {
   if (
     workspace.clientId !== null &&
-    ORGANIZATION_WIDE_WORKSPACE_ROLES.has(actorRole)
+    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
   ) {
     return true;
   }
