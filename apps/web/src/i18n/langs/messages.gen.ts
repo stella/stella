@@ -4921,6 +4921,7 @@ type Messages = {
     "directiveFor": "Loop: {expression}";
     "directiveIf": "If: {expression}";
     "discoveryFailed": "Failed to analyze template";
+    "documentCreatedIncomplete": "Document created, but the fill is incomplete";
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
@@ -5016,6 +5017,7 @@ type Messages = {
     "saveFailed": "Failed to save template";
     "savedLookupFormats": "Saved output formats";
     "searchTemplates": "Search templates…";
+    "structureErrorsInDocument": "Template directives that could not be applied: {count}. Check the document.";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {

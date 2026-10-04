@@ -4918,6 +4918,7 @@
     "directiveFor": "Schleife: {expression}",
     "directiveIf": "Wenn: {expression}",
     "discoveryFailed": "Vorlage konnte nicht analysiert werden",
+    "documentCreatedIncomplete": "Dokument erstellt, aber die Ausfüllung ist unvollständig",
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "savedLookupFormats": "Gespeicherte Ausgabeformate",
     "searchTemplates": "Vorlagen durchsuchen…",
+    "structureErrorsInDocument": "Vorlagenanweisungen, die nicht angewendet werden konnten: {count}. Prüfen Sie das Dokument.",
     "structureWarningParagraph": "Absatz {paragraph, number}",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {

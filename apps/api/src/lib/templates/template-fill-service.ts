@@ -624,7 +624,13 @@ export const discoverTemplateSource = async ({
   };
 };
 
-type FilledDocx = {
+/** The members of a {@link FilledDocx} that are the document itself. Every
+ *  other member is a diagnostic: the completion decision reads them all
+ *  (`FillDiagnosticSources` is the rest of this type), so a new member must
+ *  either be listed here or be graded there. */
+export type FilledDocumentMember = "templateName" | "fileName" | "file";
+
+export type FilledDocx = {
   templateName: string;
   fileName: string;
   /** The filled document, derived from the scanned template. */
@@ -1074,7 +1080,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     generate: generateAiValue,
   });
   record = drafted.values;
-  const aiFieldErrors = drafted.errors;
   // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
   // before substitution so its {% if field_path %} block resolves correctly.
   const decidedConditions = await resolveAiConditions({
@@ -1094,6 +1099,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   });
   const fillSource = adapted.file;
   const adaptedPaths = adapted.adaptedPaths;
+  // A field the model could not adapt still fills with its stub, but nobody
+  // asked for that wording: reported like a failed draft, so the fill is
+  // partial.
+  const aiFieldErrors = [...drafted.errors, ...adapted.failures];
 
   const optionalDefaults =
     strictInputPlaceholders === null

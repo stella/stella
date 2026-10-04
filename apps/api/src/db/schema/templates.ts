@@ -311,37 +311,49 @@ export const templates = p.pgTable(
   ],
 );
 
-export type TemplatePersistenceResult =
+/**
+ * A fill's diagnostics as a `save_filled_template` receipt keeps them, so an
+ * idempotent retry replays everything the first call reported. One member per
+ * fill diagnostic kind (the tool builds them from the whole diagnostics
+ * record); the optional ones are optional only because receipts persisted
+ * before that kind was recorded do not carry it. New receipts carry every
+ * member.
+ */
+export type TemplatePersistenceDiagnostics = {
+  unmatchedPlaceholders: string[];
+  unusedValues: string[];
+  clauseWarnings?: ClauseDirectiveWarning[] | undefined;
+  aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
+  undecidedConditions?: TemplatePersistenceUndecidedCondition[] | undefined;
+  structureErrors?: TemplatePersistenceStructureError[] | undefined;
+  unrestoredFields?: string[] | undefined;
+  /** The completion decision the tool reported for the persisted fill. */
+  completionStatus?: "complete" | "partial" | undefined;
+};
+
+export type TemplatePersistenceResult = (
   | {
       action: "create_document";
       entityId: SafeId<"entity">;
       entityVersionId: SafeId<"entityVersion">;
       fileName: string;
-      unmatchedPlaceholders: string[];
-      unusedValues: string[];
-      /** Older persisted receipts predate clause warnings. */
-      clauseWarnings?: ClauseDirectiveWarning[];
-      /** Optional only because receipts persisted before AI diagnostics were
-       * recorded do not carry this property. New partial receipts include it. */
-      aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
-      /** Older receipts predate undecided-condition diagnostics. */
-      undecidedConditions?: TemplatePersistenceUndecidedCondition[] | undefined;
     }
   | {
       action: "create_version";
       entityId: SafeId<"entity">;
       entityVersionId: SafeId<"entityVersion">;
       fileName: string;
-      unmatchedPlaceholders: string[];
-      unusedValues: string[];
-      /** Older persisted receipts predate clause warnings. */
-      clauseWarnings?: ClauseDirectiveWarning[];
-      /** See the persisted-receipt compatibility boundary above. */
-      aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
-      /** Older receipts predate undecided-condition diagnostics. */
-      undecidedConditions?: TemplatePersistenceUndecidedCondition[] | undefined;
       versionNumber: number;
-    };
+    }
+) &
+  TemplatePersistenceDiagnostics;
+
+/** A template directive the renderer could not apply, by its paragraph. */
+type TemplatePersistenceStructureError = {
+  directive: string;
+  message: string;
+  paragraphIndex: number;
+};
 
 type TemplatePersistenceAiFieldError = {
   field: AiFieldError["valuePath"];

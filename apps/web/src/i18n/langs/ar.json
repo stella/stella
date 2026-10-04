@@ -4918,6 +4918,7 @@
     "directiveFor": "حلقة: {expression}",
     "directiveIf": "إذا: {expression}",
     "discoveryFailed": "تعذّر تحليل القالب",
+    "documentCreatedIncomplete": "تم إنشاء المستند، لكن التعبئة غير مكتملة",
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "تعذّر حفظ القالب",
     "savedLookupFormats": "تنسيقات الإخراج المحفوظة",
     "searchTemplates": "البحث في القوالب…",
+    "structureErrorsInDocument": "توجيهات القالب التي تعذّر تطبيقها: {count}. راجع المستند.",
     "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {

@@ -75,6 +75,7 @@ const diagnosticsArbitrary: fc.Arbitrary<FillDiagnostics> = fc.record({
   clauseWarnings: fc.array(clauseWarningArbitrary, { maxLength: 3 }),
   structureErrors: fc.array(structureErrorArbitrary, { maxLength: 3 }),
   unusedValues: fc.array(fc.string({ minLength: 1 }), { maxLength: 5 }),
+  unrestoredFields: fc.array(fc.string({ minLength: 1 }), { maxLength: 3 }),
 });
 
 const EMPTY_DIAGNOSTICS: FillDiagnostics = {
@@ -84,6 +85,7 @@ const EMPTY_DIAGNOSTICS: FillDiagnostics = {
   clauseWarnings: [],
   structureErrors: [],
   unusedValues: [],
+  unrestoredFields: [],
 };
 
 /** Independent oracle: a kind blocks when any entry it carries grades
@@ -93,7 +95,8 @@ const hasBlockingEntry = (diagnostics: FillDiagnostics): boolean =>
   diagnostics.unmatchedPlaceholders.length > 0 ||
   diagnostics.aiFieldErrors.length > 0 ||
   diagnostics.undecidedConditions.length > 0 ||
-  diagnostics.structureErrors.length > 0;
+  diagnostics.structureErrors.length > 0 ||
+  diagnostics.unrestoredFields.length > 0;
 
 const undecided = (
   reason: UndecidedAiCondition["reason"],
@@ -251,6 +254,45 @@ describe("template fill completion policy", () => {
       },
     });
     expect(decision.type).toBe("rejected_partial");
+  });
+
+  test("a value still holding an anonymization placeholder alone makes a fill incomplete", () => {
+    const diagnostics = {
+      ...EMPTY_DIAGNOSTICS,
+      unrestoredFields: ["party.name"],
+    };
+    const rejected = decideTemplateFillCompletion({
+      mode: "require_complete",
+      diagnostics,
+    });
+    expect(templateFillStatus(diagnostics)).toBe("partial");
+    if (rejected.type !== "rejected_partial") {
+      throw new Error("expected a rejected shortfall");
+    }
+    expect(rejected.blockingKinds).toEqual(["unrestoredFields"]);
+    expect(fillShortfallIssues(rejected.blocking)).toEqual([
+      {
+        path: "values.party.name",
+        message:
+          "The value still holds an anonymization placeholder, so the document carries the placeholder instead of the real value; supply the real value.",
+      },
+    ]);
+  });
+
+  test("fillDiagnosticsOf carries the fields a boundary could not restore", () => {
+    expect(
+      fillDiagnosticsOf(
+        {
+          unmatchedPlaceholders: [],
+          aiFieldErrors: [],
+          conditionDecisions: [],
+          clauseWarnings: [],
+          structureErrors: [],
+          unusedValues: [],
+        },
+        { unrestoredFields: ["party.name"] },
+      ),
+    ).toEqual({ ...EMPTY_DIAGNOSTICS, unrestoredFields: ["party.name"] });
   });
 
   test("fillDiagnosticsOf reads undecided conditions out of the fill's decisions", () => {

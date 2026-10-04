@@ -156,8 +156,10 @@ describe("fill to workspace records the completion decision", () => {
       );
 
       expect(result).toMatchObject({
+        completionStatus: "partial",
         unmatchedPlaceholders: [],
         aiFieldErrors: [],
+        structureErrors: [],
         undecidedConditions: [
           {
             path: "is_consumer",

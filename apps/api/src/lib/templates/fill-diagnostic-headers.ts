@@ -71,6 +71,13 @@ const FILL_DIAGNOSTIC_HEADERS = {
     formats: DOCX_ONLY,
     value: (d) => encodeURIComponent(d.unusedValues.join(",")),
   },
+  // Only a fill behind an anonymizing boundary has any; a download route has
+  // none, but a download that did would name them.
+  unrestoredFields: {
+    name: "X-Unrestored-Fields",
+    formats: ALL_FORMATS,
+    value: (d) => encodeURIComponent(d.unrestoredFields.join(",")),
+  },
 } as const satisfies Record<FillDiagnosticKind, DiagnosticHeader>;
 
 /** The diagnostic headers of a download in `format`, one per non-empty kind. */

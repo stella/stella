@@ -1,9 +1,14 @@
 import * as v from "valibot";
 
+import type { TemplateFillStatus } from "@/api/db/schema";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type { TemplateStructureError } from "@/api/lib/docx/types";
+import type {
+  FilledDocumentMember,
+  FilledDocx,
+} from "@/api/lib/templates/template-fill-service";
 
 export const TEMPLATE_FILL_COMPLETION_MODES = [
   "require_complete",
@@ -60,6 +65,11 @@ export type FillDiagnostics = {
   readonly structureErrors: readonly TemplateStructureError[];
   /** Supplied values the template never reads. */
   readonly unusedValues: readonly string[];
+  /** Field paths whose value reached the document still holding an
+   *  anonymization placeholder the turn's boundary could not restore: the
+   *  document carries the placeholder, not the real value. Only a fill behind
+   *  an anonymizing boundary (the chat tool) can have any. */
+  readonly unrestoredFields: readonly string[];
 };
 
 export type FillDiagnosticKind = keyof FillDiagnostics;
@@ -96,6 +106,7 @@ export const FILL_DIAGNOSTIC_GRADES = {
   clauseWarnings: (warning) => CLAUSE_WARNING_SEVERITY[warning.code],
   structureErrors: () => "blocking",
   unusedValues: () => "informational",
+  unrestoredFields: () => "blocking",
 } as const satisfies FillDiagnosticGrades;
 
 /** Accepts a list of kinds only when it names every kind. */
@@ -114,34 +125,51 @@ export const FILL_DIAGNOSTIC_KINDS = everyKind([
   "clauseWarnings",
   "structureErrors",
   "unusedValues",
+  "unrestoredFields",
 ]);
 
-/** The fill outcomes the diagnostics are read from, as every fill result of
- *  the template fill service carries them. */
-export type FillDiagnosticSources = {
-  readonly unmatchedPlaceholders: readonly string[];
-  readonly aiFieldErrors: readonly AiFieldError[];
-  readonly conditionDecisions: readonly ResolvedAiCondition[];
-  readonly clauseWarnings: readonly ClauseDirectiveWarning[];
-  readonly structureErrors: readonly TemplateStructureError[];
-  readonly unusedValues: readonly string[];
-};
+/** The fill outcomes the diagnostics are read from: every member of the fill
+ *  service's result except the document itself. Derived from that result, so
+ *  a diagnostic the service adds lands here and must be read by
+ *  {@link fillDiagnosticsOf} before anything compiles. */
+export type FillDiagnosticSources = Omit<FilledDocx, FilledDocumentMember>;
 
 const isUndecided = (
   condition: ResolvedAiCondition,
 ): condition is UndecidedAiCondition => condition.state === "undecided";
 
-/** Read a fill result into its total diagnostics record. */
+/** What the fill's caller observed around the fill service. */
+type FillBoundaryDiagnostics = {
+  /** See {@link FillDiagnostics.unrestoredFields}; a caller without an
+   *  anonymizing boundary has none. */
+  unrestoredFields?: readonly string[] | undefined;
+};
+
+/** Read a fill result into its total diagnostics record. Every source member
+ *  is destructured: one left unread fails typecheck below. */
 export const fillDiagnosticsOf = (
-  filled: FillDiagnosticSources,
-): FillDiagnostics => ({
-  unmatchedPlaceholders: filled.unmatchedPlaceholders,
-  aiFieldErrors: filled.aiFieldErrors,
-  undecidedConditions: filled.conditionDecisions.filter(isUndecided),
-  clauseWarnings: filled.clauseWarnings,
-  structureErrors: filled.structureErrors,
-  unusedValues: filled.unusedValues,
-});
+  {
+    unmatchedPlaceholders,
+    aiFieldErrors,
+    conditionDecisions,
+    clauseWarnings,
+    structureErrors,
+    unusedValues,
+    ...unread
+  }: FillDiagnosticSources,
+  { unrestoredFields = [] }: FillBoundaryDiagnostics = {},
+): FillDiagnostics => {
+  unread satisfies Record<PropertyKey, never>;
+  return {
+    unmatchedPlaceholders,
+    aiFieldErrors,
+    undecidedConditions: conditionDecisions.filter(isUndecided),
+    clauseWarnings,
+    structureErrors,
+    unusedValues,
+    unrestoredFields,
+  };
+};
 
 const blockingOnly = <TEntry>(
   entries: readonly TEntry[],
@@ -173,6 +201,10 @@ const blockingDiagnostics = (diagnostics: FillDiagnostics): FillDiagnostics => {
       grades.structureErrors,
     ),
     unusedValues: blockingOnly(diagnostics.unusedValues, grades.unusedValues),
+    unrestoredFields: blockingOnly(
+      diagnostics.unrestoredFields,
+      grades.unrestoredFields,
+    ),
   };
 };
 
@@ -228,7 +260,7 @@ export const decideTemplateFillCompletion = ({
  *  is recorded `success` only when it is complete. */
 export const templateFillStatus = (
   diagnostics: FillDiagnostics,
-): "success" | "partial" =>
+): TemplateFillStatus =>
   decideTemplateFillCompletion({ mode: "allow_partial", diagnostics }).type ===
   "complete"
     ? "success"
@@ -257,6 +289,8 @@ const SHORTFALL_SUMMARIES = {
   structureErrors: (d) =>
     `template directives that could not be applied: ${previewList(d.structureErrors.map(({ paragraphIndex }) => `paragraph ${paragraphIndex + 1}`))}`,
   unusedValues: (d) => `unused values: ${previewList(d.unusedValues)}`,
+  unrestoredFields: (d) =>
+    `fields still holding an anonymization placeholder: ${previewList(d.unrestoredFields)}`,
 } as const satisfies Record<
   FillDiagnosticKind,
   (diagnostics: FillDiagnostics) => string
@@ -296,5 +330,10 @@ export const fillShortfallIssues = (
   ...diagnostics.unusedValues.map((key) => ({
     path: `values.${key}`,
     message: "Value key does not match a template field",
+  })),
+  ...diagnostics.unrestoredFields.map((fieldPath) => ({
+    path: `values.${fieldPath}`,
+    message:
+      "The value still holds an anonymization placeholder, so the document carries the placeholder instead of the real value; supply the real value.",
   })),
 ];

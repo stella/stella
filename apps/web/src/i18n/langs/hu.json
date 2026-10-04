@@ -4918,6 +4918,7 @@
     "directiveFor": "Ciklus: {expression}",
     "directiveIf": "Ha: {expression}",
     "discoveryFailed": "Nem sikerült elemezni a sablont",
+    "documentCreatedIncomplete": "A dokumentum létrejött, de a kitöltés hiányos",
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",
     "downloadPdf": "Letöltés PDF-ként",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Nem sikerült menteni a sablont",
     "savedLookupFormats": "Mentett kimeneti formátumok",
     "searchTemplates": "Sablonok keresése…",
+    "structureErrorsInDocument": "Nem alkalmazható sablonutasítások: {count}. Ellenőrizze a dokumentumot.",
     "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {

@@ -13,6 +13,7 @@ import discoverEndpoint from "@/api/handlers/templates/discover";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { AI_FIELD_ADAPTATION_FAILURE_MESSAGE } from "@/api/lib/docx/adapt-ai-fields";
 import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
@@ -414,6 +415,45 @@ describe("fillTemplateDocx required-field rejection", () => {
       },
     ]);
     expect(result.unmatchedPlaceholders).toContain("governing_law");
+  });
+
+  test("reports a field the model could not adapt, fills its stub and grades the fill partial", async () => {
+    const file = await makeConfiguredDocx([
+      {
+        path: "governing_law",
+        label: "Governing law",
+        inputType: "text",
+        aiAdapt: true,
+      },
+    ]);
+
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", file },
+      values: { governing_law: "czech" },
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
+    });
+
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    // The stub still fills the marker, but nobody asked for that wording.
+    expect((await extractTexts(result.file)).join("")).toContain(
+      "Governed by czech law.",
+    );
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    expect(result.aiFieldErrors).toEqual([
+      {
+        fieldPath: "governing_law",
+        valuePath: "governing_law",
+        itemIndex: null,
+        reason: "generation-failed",
+        message: AI_FIELD_ADAPTATION_FAILURE_MESSAGE,
+      },
+    ]);
+    expect(templateFillStatus(fillDiagnosticsOf(result))).toBe("partial");
   });
 
   test("does not reject a required, source-bound field left unfilled", async () => {

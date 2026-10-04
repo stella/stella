@@ -4,7 +4,10 @@ import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
-import type { TemplatePersistenceResult } from "@/api/db/schema";
+import type {
+  TemplatePersistenceDiagnostics,
+  TemplatePersistenceResult,
+} from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -74,6 +77,8 @@ import {
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {
+  FillDiagnosticKind,
+  FillDiagnostics,
   FillDiagnosticSources,
   TemplateFillCompletionMode,
 } from "@/api/lib/templates/template-fill-completion";
@@ -1131,6 +1136,19 @@ const PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA = v.strictObject({
   model: v.nullable(v.string()),
 });
 
+/** The diagnostics a receipt carries, optional where receipts persisted
+ *  before that kind was recorded lack it. */
+const SAVE_FILLED_TEMPLATE_DIAGNOSTIC_OUTPUT_ENTRIES = {
+  completionStatus: v.optional(v.picklist(["complete", "partial"])),
+  clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
+  aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
+  undecidedConditions: v.optional(
+    v.array(TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA),
+  ),
+  structureErrors: v.optional(v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA)),
+  unrestoredFields: v.optional(v.array(v.string())),
+};
+
 const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
   v.strictObject({
     action: v.literal("create_document"),
@@ -1139,11 +1157,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
-    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
-    aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
-    undecidedConditions: v.optional(
-      v.array(TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA),
-    ),
+    ...SAVE_FILLED_TEMPLATE_DIAGNOSTIC_OUTPUT_ENTRIES,
   }),
   v.strictObject({
     action: v.literal("create_version"),
@@ -1152,11 +1166,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
-    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
-    aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
-    undecidedConditions: v.optional(
-      v.array(TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA),
-    ),
+    ...SAVE_FILLED_TEMPLATE_DIAGNOSTIC_OUTPUT_ENTRIES,
     versionNumber: v.pipe(v.number(), v.integer()),
   }),
 ]);
@@ -1200,11 +1210,38 @@ const gateTemplateFillCompletion = ({
   };
 };
 
-/** The undecided AI conditions of a fill, in the shape fill_template reports
- *  its decisions in; the persisting tool returns them and its receipt keeps
- *  them. */
-const undecidedConditionsOutput = (filled: FillDiagnosticSources) =>
-  fillDiagnosticsOf(filled).undecidedConditions.map(toUndecidedConditionOutput);
+/** Every diagnostic kind, as a receipt keeps it. Total over the kinds: a
+ *  kind the receipt type does not name fails the `Pick`, and one this record
+ *  does not fill fails its return type. */
+type PersistedFillDiagnostics = Required<
+  Pick<TemplatePersistenceDiagnostics, FillDiagnosticKind>
+>;
+
+/** The whole diagnostics record of a persisted fill, in the shape
+ *  save_filled_template returns and its receipt replays. */
+const persistedFillDiagnostics = (
+  diagnostics: FillDiagnostics,
+): PersistedFillDiagnostics => ({
+  unmatchedPlaceholders: [...diagnostics.unmatchedPlaceholders],
+  aiFieldErrors: diagnostics.aiFieldErrors.map((error) => ({
+    field: error.valuePath,
+    reason: error.reason,
+    message: error.message,
+  })),
+  undecidedConditions: diagnostics.undecidedConditions.map(
+    toUndecidedConditionOutput,
+  ),
+  clauseWarnings: [...diagnostics.clauseWarnings],
+  structureErrors: diagnostics.structureErrors.map(
+    ({ directive, message, paragraphIndex }) => ({
+      directive,
+      message,
+      paragraphIndex,
+    }),
+  ),
+  unusedValues: [...diagnostics.unusedValues],
+  unrestoredFields: [...diagnostics.unrestoredFields],
+});
 
 type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
 
@@ -1855,12 +1892,11 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     return errorResult("Request cancelled before document persistence");
   }
 
-  const aiFieldErrors = filled.aiFieldErrors.map((error) => ({
-    field: error.valuePath,
-    reason: error.reason,
-    message: error.message,
-  }));
-  const undecidedConditions = undecidedConditionsOutput(filled);
+  const diagnostics = fillDiagnosticsOf(filled);
+  const receiptDiagnostics = {
+    completionStatus: completion.completionStatus,
+    ...persistedFillDiagnostics(diagnostics),
+  };
   const fileName = resolveFilledDocxName({
     requested: input.name,
     fallback: filled.fileName,
@@ -1879,7 +1915,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       organizationId: context.organizationId,
       userId: context.userId,
       format: "docx",
-      diagnostics: fillDiagnosticsOf(filled),
+      diagnostics,
       workspaceId,
       entityId: result.entityId,
       entityVersionId: result.entityVersionId,
@@ -1928,13 +1964,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
               entityId: persisted.entityId,
               entityVersionId: persisted.entityVersionId,
               fileName: persisted.fileName,
-              unmatchedPlaceholders: filled.unmatchedPlaceholders,
-              unusedValues: filled.unusedValues,
-              clauseWarnings: filled.clauseWarnings,
-              ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
-              ...(undecidedConditions.length === 0
-                ? {}
-                : { undecidedConditions }),
+              ...receiptDiagnostics,
             };
             await recordPersistedFill(tx, result);
           },
@@ -1973,13 +2003,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             entityId,
             entityVersionId: persisted.entityVersionId,
             fileName,
-            unmatchedPlaceholders: filled.unmatchedPlaceholders,
-            unusedValues: filled.unusedValues,
-            clauseWarnings: filled.clauseWarnings,
-            ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
-            ...(undecidedConditions.length === 0
-              ? {}
-              : { undecidedConditions }),
+            ...receiptDiagnostics,
             versionNumber: persisted.versionNumber,
           };
           await recordPersistedFill(tx, result);

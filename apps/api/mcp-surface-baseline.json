@@ -208,7 +208,7 @@
       "documents": {"title": 13, "description": 516, "inputSchema": 1455, "outputSchema": 133, "annotations": 115, "payloadUtf8Bytes": 2330}
     },
     "save_filled_template": {
-      "default": {"title": 20, "description": 391, "inputSchema": 1437, "outputSchema": 1528, "annotations": 121, "payloadUtf8Bytes": 3602}
+      "default": {"title": 20, "description": 391, "inputSchema": 1437, "outputSchema": 1920, "annotations": 121, "payloadUtf8Bytes": 3994}
     },
     "save_matter": {
       "default": {"title": 11, "description": 328, "inputSchema": 891, "outputSchema": 157, "annotations": 113, "payloadUtf8Bytes": 1596}

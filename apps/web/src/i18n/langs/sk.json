@@ -4918,6 +4918,7 @@
     "directiveFor": "Cyklus: {expression}",
     "directiveIf": "Ak: {expression}",
     "discoveryFailed": "Nepodarilo sa analyzovať vzor",
+    "documentCreatedIncomplete": "Dokument bol vytvorený, ale vyplnenie nie je úplné",
     "downloadAnyway": "Aj tak stiahnuť",
     "downloadDocx": "Stiahnuť DOCX",
     "downloadPdf": "Stiahnuť PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Nepodarilo sa uložiť vzor",
     "savedLookupFormats": "Uložené výstupné formáty",
     "searchTemplates": "Hľadať vzory…",
+    "structureErrorsInDocument": "Direktívy vzoru, ktoré nebolo možné použiť: {count}. Skontrolujte dokument.",
     "structureWarningParagraph": "Odsek {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry}}",
     "studio": {

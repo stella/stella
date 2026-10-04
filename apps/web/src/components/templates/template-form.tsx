@@ -82,6 +82,7 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  savedFillNotices,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -2051,42 +2052,54 @@ export const TemplateForm = ({
           }),
         });
       }
-      stellaToast.add({
-        type: "success",
-        title: t("success.documentCreated"),
-      });
-      if (created.unmatchedPlaceholders.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.unmatchedPlaceholders", {
-            list: created.unmatchedPlaceholders.join(", "),
-          }),
-        });
-      }
-      // A field whose draft failed is unfilled, so it is already listed above
-      // as an unmatched placeholder; this names the ones the model could not
-      // write, which the person filling the template has to write instead.
-      if (created.aiFieldErrors.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.aiFieldsNotDrafted", {
-            list: created.aiFieldErrors
-              .map((fieldError) => fieldError.fieldPath)
-              .join(", "),
-          }),
-        });
-      }
-      // A condition nothing decided rendered its sections as if it did not
-      // apply; the person filling the template has to decide it instead.
-      if (created.undecidedConditions.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.aiConditionsUndecided", {
-            list: created.undecidedConditions
-              .map((condition) => condition.label)
-              .join(", "),
-          }),
-        });
+      for (const notice of savedFillNotices(created)) {
+        switch (notice.kind) {
+          case "created":
+            stellaToast.add({
+              type: "success",
+              title: t("success.documentCreated"),
+            });
+            break;
+          case "createdIncomplete":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.documentCreatedIncomplete"),
+            });
+            break;
+          case "unmatchedPlaceholders":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.unmatchedPlaceholders", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "aiFieldsNotDrafted":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiFieldsNotDrafted", { list: notice.list }),
+            });
+            break;
+          case "aiConditionsUndecided":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiConditionsUndecided", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "structureErrors":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.structureErrorsInDocument", {
+                count: String(notice.count),
+              }),
+            });
+            break;
+          default:
+            notice satisfies never;
+            panic("Unhandled saved-fill notice");
+        }
       }
 
       setMatterDialogOpen(false);

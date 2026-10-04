@@ -281,7 +281,11 @@ export const createTemplateTools = ({
       if ("error" in result) {
         return result;
       }
-      const diagnostics = fillDiagnosticsOf(result);
+      // A value or AI draft that kept a placeholder put the placeholder into
+      // the document: a blocking diagnostic, so the fill is partial.
+      const diagnostics = fillDiagnosticsOf(result, {
+        unrestoredFields: [...unrestoredFields].toSorted(),
+      });
       // Record the execution (fill row + EXECUTE audit) like the REST fill
       // routes, so agent-driven fills appear in the audit trail.
       // Best-effort: a successful render is not discarded if the
@@ -299,8 +303,9 @@ export const createTemplateTools = ({
           }),
       ).catch(captureError);
       // The completion decision over the whole diagnostics record: a fill
-      // with an unfilled placeholder, a failed AI draft or an undecided AI
-      // condition is partial, and each shortfall names what to supply.
+      // with an unfilled placeholder, a failed AI draft, an undecided AI
+      // condition or an unrestored placeholder is partial, and each
+      // shortfall names what to supply.
       const completion = decideTemplateFillCompletion({
         mode: "allow_partial",
         diagnostics,
@@ -314,9 +319,9 @@ export const createTemplateTools = ({
               shortfall: fillShortfallIssues(completion.blocking),
             }),
       };
-      return unrestoredFields.size === 0
+      return diagnostics.unrestoredFields.length === 0
         ? graded
-        : { ...graded, unrestoredFields: [...unrestoredFields].toSorted() };
+        : { ...graded, unrestoredFields: diagnostics.unrestoredFields };
     }),
   };
 };

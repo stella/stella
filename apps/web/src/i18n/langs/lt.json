@@ -4918,6 +4918,7 @@
     "directiveFor": "Kilpa: {expression}",
     "directiveIf": "Jei: {expression}",
     "discoveryFailed": "Nepavyko išanalizuoti šablono",
+    "documentCreatedIncomplete": "Dokumentas sukurtas, bet užpildymas neužbaigtas",
     "downloadAnyway": "Vis tiek atsisiųsti",
     "downloadDocx": "Atsisiųsti DOCX",
     "downloadPdf": "Atsisiųsti PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Nepavyko išsaugoti šablono",
     "savedLookupFormats": "Išsaugoti išvesties formatai",
     "searchTemplates": "Ieškoti šablonų…",
+    "structureErrorsInDocument": "Šablono direktyvos, kurių nepavyko pritaikyti: {count}. Patikrinkite dokumentą.",
     "structureWarningParagraph": "Pastraipa {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktūros įspėjimas} few {# struktūros įspėjimai} many {# struktūros įspėjimo} other {# struktūros įspėjimų}}",
     "studio": {

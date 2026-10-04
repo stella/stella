@@ -8,6 +8,7 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  savedFillNotices,
 } from "./template-form.logic";
 
 describe("download AI diagnostics", () => {
@@ -92,6 +93,55 @@ describe("download undecided AI conditions", () => {
         ),
       ),
     ).toBe(true);
+  });
+});
+
+describe("notices for a fill saved into a matter", () => {
+  const complete = {
+    completionStatus: "complete" as const,
+    unmatchedPlaceholders: [],
+    aiFieldErrors: [],
+    undecidedConditions: [],
+    structureErrors: [],
+  };
+
+  test("a complete fill reports the document as created and nothing else", () => {
+    expect(savedFillNotices(complete)).toEqual([{ kind: "created" }]);
+  });
+
+  test("a partial fill is reported incomplete, never created, with every reason", () => {
+    expect(
+      savedFillNotices({
+        completionStatus: "partial",
+        unmatchedPlaceholders: ["signature", "date"],
+        aiFieldErrors: [{ fieldPath: "summary" }],
+        undecidedConditions: [
+          { path: "is_consumer", label: "Consumer contract" },
+          { path: "has_penalty", label: "" },
+        ],
+        structureErrors: [{}, {}],
+      }),
+    ).toEqual([
+      { kind: "createdIncomplete" },
+      { kind: "unmatchedPlaceholders", list: "signature, date" },
+      { kind: "aiFieldsNotDrafted", list: "summary" },
+      // An empty authored label falls back to the condition's path.
+      { kind: "aiConditionsUndecided", list: "Consumer contract, has_penalty" },
+      { kind: "structureErrors", count: 2 },
+    ]);
+  });
+
+  test("a directive that could not be applied alone makes the fill incomplete", () => {
+    expect(
+      savedFillNotices({
+        ...complete,
+        completionStatus: "partial",
+        structureErrors: [{}],
+      }),
+    ).toEqual([
+      { kind: "createdIncomplete" },
+      { kind: "structureErrors", count: 1 },
+    ]);
   });
 });
 

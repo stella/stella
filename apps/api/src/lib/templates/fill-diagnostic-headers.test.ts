@@ -18,6 +18,7 @@ const EMPTY_DIAGNOSTICS: FillDiagnostics = {
   clauseWarnings: [],
   structureErrors: [],
   unusedValues: [],
+  unrestoredFields: [],
 };
 
 describe("fillDiagnosticHeaders", () => {

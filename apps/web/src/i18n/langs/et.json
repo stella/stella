@@ -4918,6 +4918,7 @@
     "directiveFor": "Tsükkel: {expression}",
     "directiveIf": "Kui: {expression}",
     "discoveryFailed": "Malli analüüsimine ebaõnnestus",
+    "documentCreatedIncomplete": "Dokument loodi, kuid täitmine on puudulik",
     "downloadAnyway": "Laadi ikkagi alla",
     "downloadDocx": "Laadi alla DOCX",
     "downloadPdf": "Laadi alla PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Malli salvestamine ebaõnnestus",
     "savedLookupFormats": "Salvestatud väljundvormingud",
     "searchTemplates": "Otsi malle…",
+    "structureErrorsInDocument": "Malli direktiivid, mida ei saanud rakendada: {count}. Kontrollige dokumenti.",
     "structureWarningParagraph": "Lõik {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {

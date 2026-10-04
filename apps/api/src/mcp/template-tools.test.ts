@@ -1008,6 +1008,7 @@ describe("MCP template tools", () => {
             },
           ],
           unusedValues: [],
+          unrestoredFields: [],
         },
       }),
     );
@@ -1938,14 +1939,20 @@ describe("MCP template tools", () => {
         }),
       }),
     );
+    // A receipt carries every diagnostic kind and the completion decision.
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_new",
       entityVersionId: "version_new",
       fileName: "Example Lease.docx",
+      completionStatus: "complete",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
       clauseWarnings: [],
+      aiFieldErrors: [],
+      undecidedConditions: [],
+      structureErrors: [],
+      unrestoredFields: [],
     });
     expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
   });
@@ -2604,16 +2611,33 @@ describe("MCP template tools", () => {
         workspaceId: WORKSPACE_ID,
       }),
     );
-    expect(parseToolPayload(result)).toEqual({
+    // The partial receipt names every blocking diagnostic, the directive the
+    // renderer could not apply included, and a retry replays the same.
+    const expectedReceipt = {
       action: "create_version",
       entityId: ENTITY_ID,
       entityVersionId: "version_2",
       versionNumber: 2,
       fileName: "lease.docx",
+      completionStatus: "partial",
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
       clauseWarnings: [],
-    });
+      aiFieldErrors: [],
+      undecidedConditions: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
+      unrestoredFields: [],
+    };
+    expect(parseToolPayload(result)).toEqual(expectedReceipt);
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expectedReceipt }),
+    );
   });
 
   test("save_filled_template fingerprints every argument except the idempotency key", async () => {

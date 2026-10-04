@@ -4918,6 +4918,7 @@
     "directiveFor": "Pętla: {expression}",
     "directiveIf": "Jeśli: {expression}",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
+    "documentCreatedIncomplete": "Dokument utworzono, ale wypełnienie jest niekompletne",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",
     "downloadPdf": "Pobierz PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Nie udało się zapisać szablonu",
     "savedLookupFormats": "Zapisane formaty wyjściowe",
     "searchTemplates": "Szukaj szablonów…",
+    "structureErrorsInDocument": "Dyrektywy szablonu, których nie udało się zastosować: {count}. Sprawdź dokument.",
     "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {

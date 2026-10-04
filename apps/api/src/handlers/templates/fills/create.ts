@@ -347,6 +347,11 @@ const fillTemplateToWorkspace = createSafeHandler(
       entityId,
       fieldId: created.value.fieldId,
       fileName: created.value.fileName,
+      // The recorded completion decision: `partial` when any diagnostic
+      // below is blocking, so the client reports the document as incomplete
+      // instead of as created.
+      completionStatus:
+        fillStatus === "success" ? ("complete" as const) : ("partial" as const),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
       clauseWarnings: filled.clauseWarnings,
@@ -357,6 +362,15 @@ const fillTemplateToWorkspace = createSafeHandler(
       // if false, so the person who filled the template has to decide them.
       undecidedConditions: diagnostics.undecidedConditions.map(
         ({ path, label, reason }) => ({ path, label, reason }),
+      ),
+      // Directives the renderer could not apply: the saved document renders
+      // them wrong, so the person who filled the template has to fix them.
+      structureErrors: diagnostics.structureErrors.map(
+        ({ directive, message, paragraphIndex }) => ({
+          directive,
+          message,
+          paragraphIndex,
+        }),
       ),
     });
   },

@@ -4918,6 +4918,7 @@
     "directiveFor": "Boucle : {expression}",
     "directiveIf": "Si : {expression}",
     "discoveryFailed": "Impossible d'analyser le modèle",
+    "documentCreatedIncomplete": "Document créé, mais le remplissage est incomplet",
     "downloadAnyway": "Télécharger quand même",
     "downloadDocx": "Télécharger en DOCX",
     "downloadPdf": "Télécharger en PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Impossible d'enregistrer le modèle",
     "savedLookupFormats": "Formats de sortie enregistrés",
     "searchTemplates": "Rechercher des modèles…",
+    "structureErrorsInDocument": "Directives du modèle qui n'ont pas pu être appliquées : {count}. Vérifiez le document.",
     "structureWarningParagraph": "Paragraphe {paragraph, number}",
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",
     "studio": {

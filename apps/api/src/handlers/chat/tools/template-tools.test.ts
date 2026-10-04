@@ -7,6 +7,7 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
@@ -166,8 +167,17 @@ describe("fill_template grades the fill", () => {
     return new Uint8Array(file.bytes);
   };
 
-  test("an undecided AI condition records and returns the fill as partial", async () => {
-    // No AI backend of any tier, whatever the environment configures.
+  /** Run fill_template over `docx` behind `thirdPartyBoundary` with no AI
+   *  backend of any tier, returning the tool result and the fill rows. */
+  const runFill = async ({
+    docx,
+    values,
+    thirdPartyBoundary,
+  }: {
+    docx: Uint8Array;
+    values: Record<string, unknown>;
+    thirdPartyBoundary: ChatThirdPartyBoundary;
+  }) => {
     const providerSpy = spyOn(
       tanstackModels,
       "hasTanStackInstanceProvider",
@@ -178,7 +188,7 @@ describe("fill_template grades the fill", () => {
     ).mockReturnValue(false);
     const fakeS3 = startFakeS3();
     try {
-      fakeS3.put("stella", s3Key, await gatedDocx());
+      fakeS3.put("stella", s3Key, docx);
       const rows: Record<string, unknown>[] = [];
       const { scopedDb } = createScopedDbMock({
         query: {
@@ -215,42 +225,95 @@ describe("fill_template grades the fill", () => {
         safeDb: stubSafeDb,
         organizationId: orgId,
         userId,
-        thirdPartyBoundary: { type: "raw" },
+        thirdPartyBoundary,
       });
       const execute = asTestRaw<
         (input: unknown, options: unknown) => Promise<Record<string, unknown>>
       >(tools[FILL_TEMPLATE_TOOL_NAME].execute);
 
       const result = await execute(
-        { templateId: "00000000-0000-4000-8000-000000000001", values: {} },
+        { templateId: "00000000-0000-4000-8000-000000000001", values },
         {},
       );
-
-      expect(result).toMatchObject({
-        completionStatus: "partial",
-        shortfall: [
-          {
-            path: "values.is_consumer",
-            message:
-              'AI-decided condition "Consumer contract" was left undecided (no-backend); supply true or false for it.',
-          },
-        ],
-        conditionDecisions: [
-          {
-            path: "is_consumer",
-            label: "Consumer contract",
-            state: "undecided",
-            reason: "no-backend",
-          },
-        ],
-      });
-      expect(rows).toHaveLength(1);
-      expect(rows.at(0)).toMatchObject({ status: "partial", format: "text" });
+      return { result, rows };
     } finally {
       fakeS3.stop();
       providerSpy.mockRestore();
       decisionSpy.mockRestore();
     }
+  };
+
+  test("an undecided AI condition records and returns the fill as partial", async () => {
+    const { result, rows } = await runFill({
+      docx: await gatedDocx(),
+      values: {},
+      thirdPartyBoundary: { type: "raw" },
+    });
+
+    expect(result).toMatchObject({
+      completionStatus: "partial",
+      shortfall: [
+        {
+          path: "values.is_consumer",
+          message:
+            'AI-decided condition "Consumer contract" was left undecided (no-backend); supply true or false for it.',
+        },
+      ],
+      conditionDecisions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "undecided",
+          reason: "no-backend",
+        },
+      ],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)).toMatchObject({ status: "partial", format: "text" });
+  });
+
+  test("a value still holding an anonymization placeholder records and returns the fill as partial", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Signed by {{party_name}}.</w:t></w:r></w:p></w:body></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymizeFields: async ({ fields }: { fields: string[] }) =>
+        Result.ok({ entityCount: 0, fields, redactionMap: new Map() }),
+      anonymizationScopeId: "workspace-A",
+      organizationId: orgId,
+      scopedDb: createScopedDbMock({}).scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
+    });
+
+    // A placeholder the turn never sent cannot be restored, so the document
+    // carries the placeholder instead of a name.
+    const { result, rows } = await runFill({
+      docx: await zip.generateAsync({ type: "uint8array" }),
+      values: { party_name: "[PERSON_4]" },
+      thirdPartyBoundary,
+    });
+
+    expect(result).toMatchObject({
+      text: "Signed by [PERSON_4].",
+      completionStatus: "partial",
+      shortfall: [
+        {
+          path: "values.party_name",
+          message:
+            "The value still holds an anonymization placeholder, so the document carries the placeholder instead of the real value; supply the real value.",
+        },
+      ],
+      unrestoredFields: ["party_name"],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)).toMatchObject({ status: "partial", format: "text" });
   });
 });
 

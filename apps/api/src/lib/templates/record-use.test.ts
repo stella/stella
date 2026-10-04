@@ -15,6 +15,7 @@ const EMPTY_DIAGNOSTICS: FillDiagnostics = {
   clauseWarnings: [],
   structureErrors: [],
   unusedValues: [],
+  unrestoredFields: [],
 };
 
 /** Records what the fill row and the audit event were written with. */

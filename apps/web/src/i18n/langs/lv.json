@@ -4918,6 +4918,7 @@
     "directiveFor": "Cikls: {expression}",
     "directiveIf": "Ja: {expression}",
     "discoveryFailed": "Neizdevās analizēt veidni",
+    "documentCreatedIncomplete": "Dokuments izveidots, bet aizpildījums nav pilnīgs",
     "downloadAnyway": "Tomēr lejupielādēt",
     "downloadDocx": "Lejupielādēt DOCX",
     "downloadPdf": "Lejupielādēt PDF",
@@ -5013,6 +5014,7 @@
     "saveFailed": "Neizdevās saglabāt veidni",
     "savedLookupFormats": "Saglabātie izvades formāti",
     "searchTemplates": "Meklēt veidnes…",
+    "structureErrorsInDocument": "Veidnes direktīvas, kuras neizdevās piemērot: {count}. Pārbaudiet dokumentu.",
     "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {
