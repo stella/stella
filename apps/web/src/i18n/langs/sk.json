@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
+      "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",

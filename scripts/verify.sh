@@ -203,7 +203,9 @@ run_module_mock_ledger_guard() {
   # Case-law rawHash files and external-id writers: exact sets, shrink-only.
   # The registration (drivers) section is checked by the API guard test.
   bun scripts/source-fingerprint-baseline.ts --self-test || return 1
-  bun scripts/source-fingerprint-baseline.ts --check --base "$base_ref"
+  bun scripts/source-fingerprint-baseline.ts --check --base "$base_ref" || return 1
+  bun scripts/fill-diagnostics-ledger.ts --self-test || return 1
+  bun scripts/fill-diagnostics-ledger.ts --base "$base_ref"
 }
 
 run_suppression_waiver_guard() {

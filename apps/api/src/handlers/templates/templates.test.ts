@@ -812,8 +812,23 @@ describe("fill handler diagnostic headers", () => {
     });
 
     expect(result.status).toBe(200);
-    expect(rows).toHaveLength(1);
-    expect(rows.at(0)).toMatchObject({ status: "partial" });
+    // An uploaded template is not stored: the analytics row has no template.
+    expect(rows).toEqual([
+      {
+        organizationId: fakeOrgId,
+        userId: fakeUserId,
+        format: "docx",
+        status: "partial",
+        unmatchedCount: 0,
+        unusedCount: 0,
+        structureErrors: [
+          expect.objectContaining({
+            paragraphIndex: 0,
+            directive: "{% if oops %}",
+          }),
+        ],
+      },
+    ]);
     expect(
       JSON.parse(
         decodeURIComponent(result.headers.get("X-Structure-Errors") ?? "[]"),

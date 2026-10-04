@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import messages from "@/i18n/langs/en.json";
 
@@ -62,6 +63,22 @@ describe("toAPIError", () => {
     expect(error.message).toBe(
       "Other work is in progress. Please try again shortly.",
     );
+  });
+
+  test("explains how to preserve a file property's type", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        message: "Raw property refusal",
+      },
+    });
+
+    expect(error.message).toBe(
+      "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+    );
+    expect(userErrorFromThrown(error, "Fallback")).toBe(error.message);
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
   });
 
   test.each([

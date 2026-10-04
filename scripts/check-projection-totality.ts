@@ -15,11 +15,13 @@
 // Usage: bun scripts/check-projection-totality.ts
 
 import { panic } from "better-result";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const HANDLERS_ROOT = path.join(REPO_ROOT, "apps/api/src/handlers");
+const API_SOURCE_ROOT = path.join(REPO_ROOT, "apps/api/src");
+const HANDLERS_ROOT = path.join(API_SOURCE_ROOT, "handlers");
+const MCP_ROOT = path.join(API_SOURCE_ROOT, "mcp");
 const ALLOWLIST_PATH = path.join(
   REPO_ROOT,
   "scripts/projection-totality.allowlist.json",
@@ -82,18 +84,25 @@ export const shouldScanHandlerFile = (relativePath: string): boolean => {
   return true;
 };
 
+type ResourceProjectionModuleOptions = {
+  relativePath: string;
+  content: string;
+  /** Some route table or MCP module reaches this module through imports. */
+  responseReachable: boolean;
+};
+
 /**
  * True when a handler module is shaped like a resource projection: it reads
  * rows from a schema table AND returns them to a client, per the two marker
- * sets above.
+ * sets above. A `$inferSelect` row type alone counts only in a module a
+ * response surface can reach: an internal pipeline module (a worker store,
+ * a scheduled job) types its rows the same way but never serializes them.
  */
 export const isResourceProjectionModule = ({
   relativePath,
   content,
-}: {
-  relativePath: string;
-  content: string;
-}): boolean => {
+  responseReachable,
+}: ResourceProjectionModuleOptions): boolean => {
   const readsSchemaRows = READS_SCHEMA_ROWS_MARKERS.some((marker) =>
     content.includes(marker),
   );
@@ -102,8 +111,74 @@ export const isResourceProjectionModule = ({
   }
   return (
     CLIENT_FACING_FILENAME.test(relativePath) ||
-    content.includes("$inferSelect")
+    (responseReachable && content.includes("$inferSelect"))
   );
+};
+
+const IMPORT_SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/gu;
+
+/** The module specifiers a source file imports, statically or dynamically. */
+export const importSpecifiersOf = (content: string): string[] =>
+  Array.from(content.matchAll(IMPORT_SPECIFIER), (match) => match[1] ?? "");
+
+const RESOLVABLE_SUFFIXES = [".ts", ".tsx", "/index.ts"] as const;
+
+// Only the API's own modules matter: a package or a builtin cannot lead back
+// into a handler.
+const resolveApiImport = (
+  fromAbsolute: string,
+  specifier: string,
+): string | null => {
+  const apiBase = (): string | null => {
+    if (specifier.startsWith("@/api/")) {
+      return path.join(API_SOURCE_ROOT, specifier.slice("@/api/".length));
+    }
+    if (specifier.startsWith(".")) {
+      return path.resolve(path.dirname(fromAbsolute), specifier);
+    }
+    return null;
+  };
+  const base = apiBase();
+  if (base === null) {
+    return null;
+  }
+  if (base.endsWith(".ts") && existsSync(base)) {
+    return base;
+  }
+  const suffix = RESOLVABLE_SUFFIXES.find((candidate) =>
+    existsSync(`${base}${candidate}`),
+  );
+  return suffix === undefined ? null : `${base}${suffix}`;
+};
+
+const isResponseRoot = (absolute: string): boolean =>
+  !absolute.endsWith(".test.ts") &&
+  (path.basename(absolute) === "routes.ts" ||
+    absolute.startsWith(`${MCP_ROOT}${path.sep}`));
+
+/**
+ * Every API module a route table or MCP module reaches through imports: the
+ * modules whose rows can end up in a client response.
+ */
+export const collectResponseReachable = (
+  apiFiles: readonly string[],
+): Set<string> => {
+  const reached = new Set<string>();
+  const pending = apiFiles.filter(isResponseRoot);
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (reached.has(next)) {
+      continue;
+    }
+    reached.add(next);
+    for (const specifier of importSpecifiersOf(readFileSync(next, "utf-8"))) {
+      const resolved = resolveApiImport(next, specifier);
+      if (resolved !== null && !reached.has(resolved)) {
+        pending.push(resolved);
+      }
+    }
+  }
+  return reached;
 };
 
 const walk = (directory: string, out: string[]): void => {
@@ -118,19 +193,30 @@ const walk = (directory: string, out: string[]): void => {
   }
 };
 
-const collectHandlerFiles = (): string[] => {
+const collectApiFiles = (): string[] => {
   const files: string[] = [];
-  walk(HANDLERS_ROOT, files);
-  return files.filter((absolute) =>
-    shouldScanHandlerFile(
-      path.relative(REPO_ROOT, absolute).split(path.sep).join("/"),
-    ),
-  );
+  walk(API_SOURCE_ROOT, files);
+  return files.filter((absolute) => absolute.endsWith(".ts"));
 };
 
-const collectProjectionModules = (
-  files: readonly string[],
-): ProjectionModule[] => {
+const collectHandlerFiles = (apiFiles: readonly string[]): string[] =>
+  apiFiles.filter(
+    (absolute) =>
+      absolute.startsWith(`${HANDLERS_ROOT}${path.sep}`) &&
+      shouldScanHandlerFile(
+        path.relative(REPO_ROOT, absolute).split(path.sep).join("/"),
+      ),
+  );
+
+type CollectProjectionModulesOptions = {
+  files: readonly string[];
+  responseReachable: ReadonlySet<string>;
+};
+
+const collectProjectionModules = ({
+  files,
+  responseReachable,
+}: CollectProjectionModulesOptions): ProjectionModule[] => {
   const modules: ProjectionModule[] = [];
   for (const absolute of files) {
     const relativePath = path
@@ -138,7 +224,13 @@ const collectProjectionModules = (
       .split(path.sep)
       .join("/");
     const content = readFileSync(absolute, "utf-8");
-    if (!isResourceProjectionModule({ relativePath, content })) {
+    if (
+      !isResourceProjectionModule({
+        relativePath,
+        content,
+        responseReachable: responseReachable.has(absolute),
+      })
+    ) {
       continue;
     }
     modules.push({
@@ -172,8 +264,11 @@ const loadAllowlist = (): AllowlistEntry[] => {
 };
 
 const main = (): void => {
-  const handlerFiles = collectHandlerFiles();
-  const projectionModules = collectProjectionModules(handlerFiles);
+  const apiFiles = collectApiFiles();
+  const projectionModules = collectProjectionModules({
+    files: collectHandlerFiles(apiFiles),
+    responseReachable: collectResponseReachable(apiFiles),
+  });
 
   const projectionModuleByPath = new Map(
     projectionModules.map((module) => [module.relativePath, module]),

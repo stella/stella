@@ -928,12 +928,12 @@ export const courtSiteFetch: RosterFetch = async (url, init) => {
 export const corpusPortraitStore: RosterPortraitStore = {
   put: async ({ key, bytes, contentType }) => {
     const { putCorpusS3ObjectWithSignal } = await import("@/api/lib/s3");
-    await putCorpusS3ObjectWithSignal(
+    await putCorpusS3ObjectWithSignal({
       key,
       bytes,
-      contentType,
-      AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    );
+      mimeType: contentType,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
   },
 };
 
