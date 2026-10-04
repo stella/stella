@@ -95,20 +95,25 @@ export const failureAsEmptyCensus = (): string[] => {
     config,
     `export default ${JSON.stringify({ categories: { correctness: "off" }, jsPlugins: [path.join(ROOT, ".oxlint-plugins", `${RULE}.ts`)], rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] } })};\n`,
   );
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      config,
-      "--format=json",
-      ".",
-    ],
-    { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
-  );
-  const output = readFileSync(report, "utf-8");
-  rmSync(directory, { recursive: true, force: true });
+  const { result, output } = (() => {
+    try {
+      const spawned = Bun.spawnSync(
+        [
+          process.execPath,
+          "--bun",
+          path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
+          "-c",
+          config,
+          "--format=json",
+          ".",
+        ],
+        { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
+      );
+      return { result: spawned, output: readFileSync(report, "utf-8") };
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  })();
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     panic(`Failure-as-empty census failed: ${result.stderr.toString()}`);
   }
