@@ -73,20 +73,16 @@ test("known Doctor output is accepted only after ordinary child termination", ()
   );
   const binaries = path.join(directory, "node_modules/.bin");
   mkdirSync(binaries, { recursive: true });
-  writeFileSync(
-    path.join(binaries, "expo-doctor"),
-    `#!/usr/bin/env bun
-await Bun.write(Bun.stdout, ${JSON.stringify(BUN_DUPLICATE_OUTPUT)});
-if (process.env.DOCTOR_TERMINATION === "signal") {
-  process.kill(process.pid, "SIGTERM");
-} else {
-  process.exit(1);
-}
-`,
-    { mode: 0o755 },
-  );
   try {
     for (const termination of ["ordinary", "signal"]) {
+      writeFileSync(
+        path.join(binaries, "expo-doctor"),
+        `#!/usr/bin/env bun
+await Bun.write(Bun.stdout, ${JSON.stringify(BUN_DUPLICATE_OUTPUT)});
+${termination === "signal" ? 'process.kill(process.pid, "SIGTERM");' : "process.exit(1);"}
+`,
+        { mode: 0o755 },
+      );
       const result = Bun.spawnSync(
         [
           process.execPath,
@@ -95,7 +91,6 @@ if (process.env.DOCTOR_TERMINATION === "signal") {
           directory,
         ],
         {
-          env: { ...process.env, DOCTOR_TERMINATION: termination },
           stdout: "pipe",
           stderr: "pipe",
         },

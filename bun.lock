@@ -104,6 +104,7 @@
         "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
+        "@stll/scripts": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -283,6 +284,7 @@
       "dependencies": {
         "@stll/api": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
+        "@stll/scripts": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "drizzle-orm": "catalog:",
@@ -312,6 +314,7 @@
       },
       "devDependencies": {
         "@babel/core": "^7.29.0",
+        "@stll/scripts": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
         "bun-types": "catalog:",
@@ -459,6 +462,7 @@
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
         "@stll/property-testing": "workspace:*",
+        "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",

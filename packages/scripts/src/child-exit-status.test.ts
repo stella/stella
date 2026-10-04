@@ -64,10 +64,10 @@ test("Bun and Node signal-killed children produce a failing parent status", asyn
   try {
     bunChild.kill("SIGTERM");
     await bunChild.exited;
-    expect(bunChild.signalCode).toBeDefined();
+    expect(bunChild.signalCode).toBe("SIGTERM");
     expect(childExitStatus(bunChild)).toBe(1);
   } finally {
-    if (bunChild.exitCode === null && bunChild.signalCode === undefined) {
+    if (bunChild.exitCode === null && bunChild.signalCode === null) {
       bunChild.kill("SIGKILL");
       await bunChild.exited;
     }
