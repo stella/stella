@@ -62,9 +62,16 @@ export const corpusSqlStatements = (source: string): string[] | null => {
     }
     if (char === "'" || char === '"') {
       const start = index++;
+      // Only explicit E-strings have setting-independent backslash escapes.
+      const escapes = /(?:^|[^a-zA-Z0-9_$\u0080-\u{10FFFF}])[eE]'$/u.test(
+        source.slice(Math.max(0, start - 2), start + 1),
+      );
       let closed = false;
       while (index < source.length) {
         if (source[index] === "\\") {
+          if (!escapes) {
+            return null;
+          }
           index += 2;
           continue;
         }
@@ -260,7 +267,7 @@ export const verifyCorpusMigrations = (
       if (revoke !== null) {
         const roles = revoke
           .slice(1)
-          .filter((role) => role !== "")
+          .filter((role) => typeof role === "string" && role !== "")
           .map((role) => role.toLowerCase());
         revokedApp ||= roles.includes("stella");
         revokedPublic ||= roles.includes("public");

@@ -1,3 +1,4 @@
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -50,6 +51,91 @@ const bundle = {
 };
 
 describe("committed corpus admission proof", () => {
+  test.each(["stella", "PUBLIC"])(
+    "accepts separate single-role revokes beginning with %s",
+    (firstRole) => {
+      const otherRole = firstRole === "stella" ? "PUBLIC" : "stella";
+      const separate = migrations.map(({ file, sql }) => {
+        const combined = "REVOKE ALL ON public.checkpoint FROM stella, PUBLIC;";
+        expect(sql).toContain(combined);
+        return {
+          file,
+          sql: sql.replace(
+            combined,
+            () =>
+              `REVOKE ALL ON public.checkpoint FROM ${firstRole};\nREVOKE ALL ON public.checkpoint FROM ${otherRole};`,
+          ),
+        };
+      });
+      expect(verifyCorpusMigrations(entry, separate).errors).toEqual([]);
+      const matched = {
+        ...proof,
+        migrationDigest: corpusDigest(separate),
+        statementDigest: corpusDigest(
+          verifyCorpusMigrations(entry, separate).relevant,
+        ),
+      };
+      expect(
+        verifiedCorpusMembership({
+          ...bundle,
+          migrations: separate,
+          attestations: [matched],
+        }),
+      ).toHaveLength(1);
+    },
+  );
+
+  test.each([
+    String.raw`SELECT 'left\'; SELECT 'right'; SELECT '--';`,
+    String.raw`SELECT "left\"; SELECT "right";`,
+    String.raw`SELECT nameE'left\'; SELECT 'right';`,
+    String.raw`SELECT name$E'left\'; SELECT 'right';`,
+    String.raw`SELECT caféE'left\'; SELECT 'right';`,
+  ])("rejects ambiguous quoted backslashes: %s", (source) => {
+    expect(corpusSqlStatements(source)).toBeNull();
+    expect(
+      verifyCorpusMigrations(entry, [
+        ...migrations,
+        { file: "literal.sql", sql: source },
+      ]).errors,
+    ).toContain("literal.sql: unsupported migration quoting");
+  });
+
+  test("accepts only setting-independent quoted backslashes", async () => {
+    const database = new PGlite();
+    try {
+      const ordinary = String.raw`SELECT 'left\\right' AS value`;
+      const escaped = String.raw`SELECT E'left\\right' AS value`;
+      await database.exec("SET standard_conforming_strings = on");
+      const standard = await database.query(ordinary);
+      const standardEscape = await database.query(escaped);
+      await database.exec("SET standard_conforming_strings = off");
+      const legacy = await database.query(ordinary);
+      const legacyEscape = await database.query(escaped);
+      expect(standard.rows).not.toEqual(legacy.rows);
+      expect(standardEscape.rows).toEqual(legacyEscape.rows);
+      expect(corpusSqlStatements(ordinary)).toBeNull();
+      expect(corpusSqlStatements(`${escaped}; SELECT 2;`)).toEqual([
+        escaped,
+        "SELECT 2",
+      ]);
+    } finally {
+      await database.close();
+    }
+  });
+
+  test.each([
+    String.raw`SELECT E'left\';right'`,
+    String.raw`SELECT e'left\\'; SELECT 2`,
+    String.raw`SELECT E'left''right'`,
+  ])("keeps explicit escape strings intact: %s", (source) => {
+    const statements = corpusSqlStatements(`${source}; SELECT 3;`);
+    const expected = source.endsWith("; SELECT 2")
+      ? [source.slice(0, -"; SELECT 2".length), "SELECT 2", "SELECT 3"]
+      : [source, "SELECT 3"];
+    expect(statements).toEqual(expected);
+  });
+
   test("requires all migration controls before an attestation can match", () => {
     expect(verifyCorpusMigrations(entry, migrations).errors).toEqual([]);
     expect(verifiedCorpusMembership(bundle)).toHaveLength(1);
