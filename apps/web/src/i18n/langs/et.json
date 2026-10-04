@@ -1608,6 +1608,15 @@
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
+    "datePicker": {
+      "label": "Kuupäevavalija",
+      "nextDecade": "Järgmine kümnend",
+      "nextMonth": "Järgmine kuu",
+      "nextYear": "Järgmine aasta",
+      "previousDecade": "Eelmine kümnend",
+      "previousMonth": "Eelmine kuu",
+      "previousYear": "Eelmine aasta"
+    },
     "decisions": "Lahendid",
     "decline": "Keeldu",
     "delete": "Kustuta",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
+      "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",

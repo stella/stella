@@ -1608,6 +1608,15 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
+    "datePicker": {
+      "label": "Datuma atlasītājs",
+      "nextDecade": "Nākamā desmitgade",
+      "nextMonth": "Nākamais mēnesis",
+      "nextYear": "Nākamais gads",
+      "previousDecade": "Iepriekšējā desmitgade",
+      "previousMonth": "Iepriekšējais mēnesis",
+      "previousYear": "Iepriekšējais gads"
+    },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
+      "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",

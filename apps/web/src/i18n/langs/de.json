@@ -1608,6 +1608,15 @@
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
     "date": "Datum",
+    "datePicker": {
+      "label": "Datumsauswahl",
+      "nextDecade": "Nächstes Jahrzehnt",
+      "nextMonth": "Nächster Monat",
+      "nextYear": "Nächstes Jahr",
+      "previousDecade": "Vorheriges Jahrzehnt",
+      "previousMonth": "Vorheriger Monat",
+      "previousYear": "Vorheriges Jahr"
+    },
     "decisions": "Entscheidungen",
     "decline": "Ablehnen",
     "delete": "Löschen",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
+      "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",

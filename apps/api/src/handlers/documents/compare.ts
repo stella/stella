@@ -33,6 +33,7 @@ import {
   resolveScannedTrackedChanges,
 } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   FILE_READ_URL_EXPIRY_SECONDS,
   readFileHandler,
@@ -99,6 +100,11 @@ const compareOutputSchema = t.Union([
 ]);
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns comparison output covered by the comparison operation audit.",
+  },
   description:
     "Create tracked-changes DOCX redlines between stored versions of one " +
     `document in a matter. Select an explicit base and up to ${String(DOCUMENT_COMPARE_TARGET_LIMIT)} targets, ` +
@@ -888,6 +894,7 @@ export const createDocumentCompareGenerator = (
                 buffer: compared.buffer,
                 fileName: redlineFileName(pair.target.file.fileName),
                 mimeType: DOCX_MIME_TYPE,
+                encryption: serverBuiltFileEncryption(),
                 source,
                 writePolicy: {
                   type: "append-derived-file-from-version",

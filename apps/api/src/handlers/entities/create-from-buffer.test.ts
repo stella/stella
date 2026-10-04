@@ -38,12 +38,20 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import {
+  detectFileEncryption,
+  serverBuiltFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -74,12 +82,28 @@ const createEntityFromBufferDependencies = {
 } satisfies CreateEntityFromBufferDependencies;
 
 const createEntityFromBufferForTest = async (
-  input: Omit<Parameters<typeof createEntityFromBuffer>[0], "dependencies">,
+  input: Omit<
+    Parameters<typeof createEntityFromBuffer>[0],
+    "dependencies" | "encryption"
+  > & { encryption?: FileEncryption },
 ) =>
   await createEntityFromBuffer({
+    encryption: serverBuiltFileEncryption(),
     ...input,
     dependencies: createEntityFromBufferDependencies,
   });
+
+const detectedEncryptedPdf = async (): Promise<FileEncryption> => {
+  const detection = await detectFileEncryption({
+    mimeType: PDF_MIME_TYPE,
+    scanned: testScannedFile({
+      bytes: new Uint8Array(await createEncryptedPdf()).slice().buffer,
+      mimeType: PDF_MIME_TYPE,
+    }),
+  });
+  expect(detection.status).toBe("known");
+  return detection.encryption;
+};
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -318,7 +342,7 @@ describe("createEntityFromBuffer", () => {
       buffer: new TextEncoder().encode("pdf bytes"),
       fileName: "Encrypted Agreement.pdf",
       mimeType: "application/pdf",
-      encrypted: true,
+      encryption: await detectedEncryptedPdf(),
       parentId,
       provenance: {
         type: "email_attachment",

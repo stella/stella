@@ -58,12 +58,15 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
@@ -80,7 +83,6 @@ import {
   finalizeErr,
   finalizeOk,
 } from "@/api/lib/uploads/runtime";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type ResolveFileNameProps = {
   tx: Transaction;
@@ -514,22 +516,18 @@ export const finalizeEntityCreate = async function* ({
   // need to know whether to enqueue a PDF derivative or mark it
   // failed up front. The byte buffer is in memory anyway because
   // the finalize runtime had to download it for scanning.
-  let encrypted = false;
-  if (declaredMime === PDF_MIME_TYPE) {
-    const encryptedResult = await isEncryptedPdf(scanned);
-    if (Result.isError(encryptedResult)) {
-      captureError(encryptedResult.error, {
-        mimeType: PDF_MIME_TYPE,
-        sizeBytes: String(declaredSize),
-      });
-      return finalizeErr({
-        status: 422,
-        message: "Failed to open PDF: file appears corrupted",
-        rejectReason: "pdf-open-failed",
-      });
-    }
-    encrypted = encryptedResult.value;
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({ mimeType: declaredMime, scanned }),
+    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+  );
+  if (encryption === null) {
+    return finalizeErr({
+      status: 422,
+      message: "Failed to open PDF: file appears corrupted",
+      rejectReason: "pdf-open-failed",
+    });
   }
+  const { encrypted } = encryption;
 
   const fileId = allocateFileObject();
   const entityId = createSafeId<"entity">();
@@ -626,7 +624,7 @@ export const finalizeEntityCreate = async function* ({
           fileName: renamed.value,
           mimeType: declaredMime,
           sizeBytes: declaredSize,
-          encrypted,
+          encryption,
           sha256Hex: declaredSha256Hex,
           pdfFileId: null,
           pdfDerivative: pdfDerivativeStateForFile({

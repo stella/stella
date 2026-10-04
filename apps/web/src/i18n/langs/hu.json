@@ -1608,6 +1608,15 @@
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
     "date": "Dátum",
+    "datePicker": {
+      "label": "Dátumválasztó",
+      "nextDecade": "Következő évtized",
+      "nextMonth": "Következő hónap",
+      "nextYear": "Következő év",
+      "previousDecade": "Előző évtized",
+      "previousMonth": "Előző hónap",
+      "previousYear": "Előző év"
+    },
     "decisions": "Határozatok",
     "decline": "Elutasítás",
     "delete": "Törlés",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
+      "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",

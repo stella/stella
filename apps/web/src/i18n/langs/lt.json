@@ -1608,6 +1608,15 @@
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
     "date": "Data",
+    "datePicker": {
+      "label": "Datos parinkiklis",
+      "nextDecade": "Kitas dešimtmetis",
+      "nextMonth": "Kitas mėnuo",
+      "nextYear": "Kiti metai",
+      "previousDecade": "Ankstesnis dešimtmetis",
+      "previousMonth": "Ankstesnis mėnuo",
+      "previousYear": "Ankstesni metai"
+    },
     "decisions": "Sprendimai",
     "decline": "Atmesti",
     "delete": "Ištrinti",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
+      "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",

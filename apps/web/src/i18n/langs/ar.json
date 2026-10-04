@@ -1608,6 +1608,15 @@
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
+    "datePicker": {
+      "label": "منتقي التاريخ",
+      "nextDecade": "العقد التالي",
+      "nextMonth": "الشهر التالي",
+      "nextYear": "السنة التالية",
+      "previousDecade": "العقد السابق",
+      "previousMonth": "الشهر السابق",
+      "previousYear": "السنة السابقة"
+    },
     "decisions": "الأحكام",
     "decline": "رفض",
     "delete": "حذف",
@@ -2263,6 +2272,7 @@
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
+      "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
