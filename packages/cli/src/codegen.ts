@@ -95,6 +95,7 @@ const cliAnnotationSchema = v.object({
     }),
   ),
   flagRename: v.optional(v.record(v.string(), v.string())),
+  featureId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   localFileBase64Prop: v.optional(v.pipe(v.string(), v.minLength(1))),
   confirmPassthrough: v.optional(v.literal(true)),
   composite: v.optional(
@@ -139,6 +140,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   }
   if (cli.excluded !== undefined) {
     annotation.excluded = cli.excluded;
+  }
+  if (cli.featureId !== undefined) {
+    annotation.featureId = cli.featureId;
   }
   if (cli.scope !== undefined) {
     annotation.scope = cli.scope;

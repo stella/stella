@@ -526,6 +526,7 @@ const runTests = async (
       switch (verdict.type) {
         case BATCH_MEMORY.within:
           break;
+        case BATCH_MEMORY.planDrift:
         case BATCH_MEMORY.nearCap:
           log.out(verdict.annotation);
           break;
@@ -617,6 +618,8 @@ if (rssMode.mode === "measure-rss") {
       baselineMb,
       environment: rssMode.environment,
       source: rssMode.source,
+      shard: shard ?? { index: 1, count: 1 },
+      plannedFiles: testPaths.length,
     }),
   );
   print(

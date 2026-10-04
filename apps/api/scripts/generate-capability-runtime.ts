@@ -46,6 +46,27 @@ export const generateCapabilityRuntime = async (
     new URL("capability-catalog.ts", directory),
     `${header}${catalogImports}\n\nexport default [${ids.map((_id, index) => `capability${index}`).join(",")}];\n`,
   );
+  const features = entries.flatMap((entry) => {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      !("id" in entry) ||
+      typeof entry.id !== "string"
+    ) {
+      return panic("Capability feature bindings require a catalog entry id");
+    }
+    if (!("featureId" in entry)) {
+      return [];
+    }
+    if (typeof entry.featureId !== "string") {
+      return panic("Capability feature bindings require a string feature id");
+    }
+    return [[entry.id, entry.featureId]];
+  });
+  await writeFile(
+    new URL("capability-feature-bindings.ts", directory),
+    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : JSON.stringify(features)});\n`,
+  );
   const dispatchImports = ids
     .map(
       (id, index) =>

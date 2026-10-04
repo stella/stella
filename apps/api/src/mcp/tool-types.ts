@@ -8,6 +8,7 @@ import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -260,6 +261,7 @@ export type McpToolDefinition = McpToolAccessBranch &
      * tools.
      */
     feature?: DeploymentFeatureFlag;
+    featureId?: FeatureId;
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -315,6 +317,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
   /** API-owned finite transport deadline projected into generated CLI leaves. */

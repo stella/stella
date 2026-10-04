@@ -32,6 +32,8 @@ const transportSchema = v.variant("type", [
 ]);
 
 const catalogEntrySchema = v.object({
+  featureId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  featureAccess: v.optional(v.picklist(["required", "conditional"])),
   id: v.string(),
   description: v.optional(v.string()),
   handlerKind: v.picklist(["workspace", "root", "session"]),
@@ -110,6 +112,14 @@ export const parseCapabilityCatalog = (
   if (!parsed.success) {
     return null;
   }
+  if (
+    parsed.output.some(
+      (entry) =>
+        (entry.featureId === undefined) !== (entry.featureAccess === undefined),
+    )
+  ) {
+    return null;
+  }
   return parsed.output.map((entry) => {
     const parts: CapabilityCatalogEntry["inputSchema"] = {};
     if (entry.inputSchema.$defs !== undefined) {
@@ -133,6 +143,12 @@ export const parseCapabilityCatalog = (
       inputSchema: parts,
       transport: projectTransport(entry.transport),
     };
+    if (entry.featureId !== undefined) {
+      projected.featureId = entry.featureId;
+    }
+    if (entry.featureAccess !== undefined) {
+      projected.featureAccess = entry.featureAccess;
+    }
     if (entry.additionalScopes !== undefined) {
       projected.additionalScopes = entry.additionalScopes;
     }

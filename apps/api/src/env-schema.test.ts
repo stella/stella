@@ -12,6 +12,21 @@ test("agent client storage format requires explicit enablement", () => {
   expect(v.parse(schema, "true")).toBe(true);
 });
 
+test("feature access grants default to empty and unknown production feature ids reject startup", () => {
+  expect(
+    v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, undefined),
+  ).toEqual({});
+  expect(v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, "{}")).toEqual(
+    {},
+  );
+  expect(
+    v.safeParse(
+      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      '{"unknown-feature":[{"type":"member","organizationId":"org-a","email":"member@example.test"}]}',
+    ).success,
+  ).toBe(false);
+});
+
 for (const name of [
   "ACTION_COST_RETENTION_DAYS",
   "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS",

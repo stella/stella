@@ -4,7 +4,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
@@ -1912,7 +1915,10 @@ describe("statute country publication", () => {
         expect(page.items).toEqual([]);
         expect(page.nextCursor).toBeNull();
       } else {
-        expect(listed).toMatchObject({ code: 503, response: unavailable });
+        expect(listed).toMatchObject({
+          code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+          response: unavailable,
+        });
       }
       expect(
         await readPublicLegislationHandler(id, legislationDb),

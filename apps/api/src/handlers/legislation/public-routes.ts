@@ -66,13 +66,16 @@ import {
 import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 
 const listStatutes = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      listStatutesSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        listStatutesSuccessResponseSchema,
+      ),
     ),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
@@ -92,8 +95,10 @@ const listStatutes = createSafeBoundedPublicHandler(
 
 const readLegislationShelf = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      legislationShelfSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        legislationShelfSuccessResponseSchema,
+      ),
     ),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
@@ -114,8 +119,10 @@ const readLegislationShelf = createSafeBoundedPublicHandler(
 
 const readLegislationFacets = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      legislationFacetsSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        legislationFacetsSuccessResponseSchema,
+      ),
     ),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
@@ -187,7 +194,7 @@ const resolveStatutes = createSafeBoundedPublicHandler(
 
 const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
-    response: {
+    response: withPublicCountryUnavailable({
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
       ),
@@ -195,7 +202,7 @@ const readStatuteBySlug = createSafeBoundedPublicHandler(
         safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
-    },
+    }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -321,8 +328,10 @@ const listStatuteSitemapShards = createSafeBoundedPublicHandler(
 
 const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      statuteSitemapStatutesSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        statuteSitemapStatutesSuccessResponseSchema,
+      ),
     ),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },

@@ -297,7 +297,7 @@ export const searchDecisionsHandler = async ({
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });
   if (countryRead.kind === "unavailable") {
-    return status(503, countryRead.response);
+    return countryRead.answer;
   }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });

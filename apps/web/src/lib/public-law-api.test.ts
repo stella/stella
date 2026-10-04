@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
 
 import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
 import {
+  isPublicLawMiss,
   isSearchUnavailableError,
   PublicLawUnavailableError,
   unwrapPublicLawEden,
@@ -73,8 +77,15 @@ describe("unwrapPublicLawEden", () => {
 });
 
 describe("isSearchUnavailableError", () => {
-  test("country admission is localized and never treated as a retryable engine outage", () => {
-    const error = thrownBy(503, publicCountryUnavailable("SVK"));
+  test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
+    const refusal = {
+      status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+      value: publicCountryUnavailable("SVK"),
+    };
+    expect(isPublicLawMiss(refusal, "searchPublicCaseLawDecisions")).toBe(
+      false,
+    );
+    const error = thrownBy(refusal.status, refusal.value);
     expect(APIError.is(error)).toBe(true);
     expect(isSearchUnavailableError(error)).toBe(false);
     expect(shouldRetryAPIRequest(0, error)).toBe(false);
