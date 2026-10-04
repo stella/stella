@@ -20,6 +20,16 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/auth/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -398,6 +408,7 @@ export type HandlerConfig = InputSchema &
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
@@ -493,6 +504,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     session: {
       activeOrganizationId: SafeId<"organization">;
     };
+    featureAccessSnapshot?: FeatureAccessSnapshot;
+    featureAccessProof?: FeatureAccessProof;
     scopedDb: ScopedDb;
     safeDb: SafeDb;
     /** Resolve non-deleting workspace IDs only when an operation spans matters. */
@@ -1157,6 +1170,84 @@ const createSafeScopedHandler = <
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",
       });
+    }
+
+    const featureAccess = config.featureAccess;
+    if (featureAccess !== undefined) {
+      const principal = {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      };
+      const snapshot =
+        ctx.featureAccessSnapshot === undefined ||
+        !isFeatureAccessSnapshotForPrincipal(
+          ctx.featureAccessSnapshot,
+          principal,
+        )
+          ? await ctx.safeDb(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                }),
+            )
+          : Result.ok(ctx.featureAccessSnapshot);
+      if (Result.isError(snapshot)) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler() {
+            return yield* Result.await(
+              Promise.resolve(Result.err(snapshot.error)),
+            );
+          },
+        });
+      }
+      ctx.featureAccessSnapshot = snapshot.value;
+      delete ctx.featureAccessProof;
+      const enabled = isFeatureEnabled(
+        snapshot.value,
+        featureAccess.featureId,
+        principal,
+      );
+      const decision = snapshot.value.decisions.get(featureAccess.featureId);
+      if (enabled && decision?.status === "enabled") {
+        ctx.featureAccessProof = decision.proof;
+      }
+      if (!enabled) {
+        const usage =
+          featureAccess.type === "required"
+            ? Result.ok(true)
+            : await Result.tryPromise(
+                async () =>
+                  await featureAccess.usesFeature({
+                    body: ctx.body,
+                    params: ctx.params,
+                    query: ctx.query,
+                    organizationId: ctx.session.activeOrganizationId,
+                    scopedDb: ctx.scopedDb,
+                    safeDb: ctx.safeDb,
+                    ...(hasWorkspaceId(ctx)
+                      ? { workspaceId: ctx.workspaceId }
+                      : {}),
+                  }),
+              );
+        if (Result.isError(usage)) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(usage.error)),
+              );
+            },
+          });
+        }
+        if (usage.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+      }
     }
 
     if (requiresStandardAccount(config.accountAccess)) {

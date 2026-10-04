@@ -11,6 +11,7 @@ import {
 } from "./deployment-feature-guard";
 import type { ScanInput } from "./lib/deployment-feature-scan";
 import {
+  createParseCache,
   findingKey,
   scanDeploymentFeatures,
 } from "./lib/deployment-feature-scan";
@@ -66,7 +67,9 @@ const input = ({
 };
 
 const keys = (scanInput: ScanInput): string[] =>
-  scanDeploymentFeatures(scanInput).findings.map(findingKey);
+  scanDeploymentFeatures(scanInput, createParseCache()).findings.map(
+    findingKey,
+  );
 
 const FLAGGED_KEY = `flagged-capability:things.list@${ROUTE}`;
 
@@ -356,6 +359,7 @@ describe("baseline", () => {
       },
       readers: [],
     }),
+    createParseCache(),
   ).findings;
   const rows = buildBaseline(findings);
 
@@ -444,19 +448,22 @@ describe("baseline", () => {
 });
 
 describe("real tree", () => {
+  // The tree is read and parsed once, outside the test timeouts; the
+  // self-test cases reparse only the files they edit.
   const real = loadRealInput();
+  const cache = createParseCache();
+  const scanned = scanDeploymentFeatures(real, cache);
 
   test("every self-test detector fires", () => {
     expect(SELF_TEST_CASES.length).toBeGreaterThan(0);
-    expect(runSelfTest(real)).toEqual([]);
+    expect(runSelfTest(real, cache)).toEqual([]);
   });
 
   test("the scan matches the committed baseline", async () => {
     const committed: unknown = await Bun.file(
       new URL("../deployment-feature-baseline.json", import.meta.url),
     ).json();
-    const result = scanDeploymentFeatures(real);
-    expect(buildBaseline(result.findings)).toEqual(
+    expect(buildBaseline(scanned.findings)).toEqual(
       Array.isArray(committed) ? committed : [],
     );
   });

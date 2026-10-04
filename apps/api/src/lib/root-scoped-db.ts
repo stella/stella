@@ -11,6 +11,7 @@ import {
 import type { CurrentMembershipScope, RlsDatabase } from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
+  brandPersistedOrganizationId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
@@ -177,43 +178,63 @@ export const tokenScopedDatabase: TokenScopedDatabase = {
  * under the requester's membership as it stands now, so a run whose
  * requester has since lost the matter or the organization reads nothing.
  * Readers of documents, files and fields take `ContentReadDb`, which a
- * pinned handle is not.
+ * pinned handle is not. A run with no workspace (`workspaceId: null`) pins
+ * nothing: its `writeDb` reaches only the member's own organization rows.
  */
-export type RootRunActor<TRun extends SafeIdType> = {
+export type RootRunActor<
+  TRun extends SafeIdType,
+  TWorkspace extends SafeId<"workspace"> | null = SafeId<"workspace">,
+> = {
   writeDb: PinnedScopedDb;
   writeSafeDb: PinnedSafeDb;
   inputDb: MembershipScopedDb;
   inputSafeDb: MembershipSafeDb;
   organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
+  workspaceId: TWorkspace;
   userId: SafeId<"user">;
   runId: SafeId<TRun>;
 };
 
-export const createRootRunActor = <TRun extends SafeIdType>(
-  data: {
-    organizationId: string;
-    workspaceId: string;
-    userId: string;
-    runId: string;
-  },
+type RootRunActorData<TWorkspace extends string | null> = {
+  organizationId: string;
+  workspaceId: TWorkspace;
+  userId: string;
+  runId: string;
+};
+
+export function createRootRunActor<TRun extends SafeIdType>(
+  data: RootRunActorData<string>,
   brandRunId: (runId: string) => SafeId<TRun>,
   database?: RlsDatabase<Transaction>,
-): RootRunActor<TRun> => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
+): RootRunActor<TRun>;
+export function createRootRunActor<TRun extends SafeIdType>(
+  data: RootRunActorData<string | null>,
+  brandRunId: (runId: string) => SafeId<TRun>,
+  database?: RlsDatabase<Transaction>,
+): RootRunActor<TRun, SafeId<"workspace"> | null>;
+export function createRootRunActor<TRun extends SafeIdType>(
+  data: RootRunActorData<string | null>,
+  brandRunId: (runId: string) => SafeId<TRun>,
+  database?: RlsDatabase<Transaction>,
+): RootRunActor<TRun, SafeId<"workspace"> | null> {
+  const organizationId = brandPersistedOrganizationId(data.organizationId);
+  const workspaceId =
+    data.workspaceId === null
+      ? null
+      : brandValidatedWorkflowActorKey({
+          organizationId: data.organizationId,
+          workspaceId: data.workspaceId,
+        }).workspaceId;
   const userId = brandPersistedUserId(data.userId);
   const tenant = {
-    organizationId: branded.organizationId,
+    organizationId,
     userId,
-    workspaceIds: [branded.workspaceId],
+    workspaceIds: workspaceId === null ? [] : [workspaceId],
   };
-  const member = { organizationId: branded.organizationId, userId };
+  const member = { organizationId, userId };
   return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
+    organizationId,
+    workspaceId,
     userId,
     runId: brandRunId(data.runId),
     writeDb: createPinnedScopedDb(tenant, database),
@@ -221,4 +242,4 @@ export const createRootRunActor = <TRun extends SafeIdType>(
     inputDb: createRootMembershipScopedDb(member, database),
     inputSafeDb: createRootMembershipSafeDb(member, database),
   };
-};
+}

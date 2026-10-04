@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/soft-law/ingestion.ts",
+  "delta": 3,
+  "reason": "Lease renewals fence each document and cursor request; each page commits atomically before discovery continues. These operations depend on preceding state."
+}

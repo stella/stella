@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
+      "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Zatwierdzono {date}",
         "approvedToast": "Playbook zatwierdzony",
         "saveBeforeApprove": "Zapisz zmiany przed zatwierdzeniem tego playbooka.",
+        "sourcesNotice": "Przed zatwierdzeniem sprawdź, czy żadne stanowisko nie wymienia dokumentu, sprawy ani kontrahenta: ten playbook może czytać cała organizacja.",
         "statusApproved": "Zatwierdzony",
         "statusDraft": "Wersja robocza"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "Z referencji",
       "removeCheck": "Usuń kontrolę",
       "removeIdeal": "Usuń idealne brzmienie",
+      "removeSource": "Usuń źródło {documentName}",
       "reorderPosition": "Zmień kolejność stanowiska",
       "review": {
         "changePlaybook": "Wybierz inny playbook",
@@ -3605,6 +3608,10 @@
         "blocker": "Blokująca"
       },
       "severityLabel": "Waga",
+      "staleCopy": {
+        "loaded": "Wczytano nowszą wersję tego playbooka. Wczytaj ponownie przed edycją.",
+        "unavailable": "Nie udało się załadować najnowszej wersji tego playbooka. To ostatnio wczytana kopia, która może być nieaktualna."
+      },
       "starters": {
         "addedToast": "Dodano playbook",
         "browseButton": "Przeglądaj gotowe playbooki",

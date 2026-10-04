@@ -39,7 +39,7 @@ export const useCompanyRegistrySearch = (
   const user = useAuthenticatedUser();
   const organizationId = user.activeOrganizationId;
   const settings = useQuery({
-    ...organizationSettingsOptions(organizationId),
+    ...organizationSettingsOptions({ organizationId, userId: user.id }),
     enabled: visible,
   });
   const configuration = useQuery(

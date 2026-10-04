@@ -8,6 +8,7 @@ import {
   skDocumentErrorDiagnostics,
   skDocumentResponseDiagnostics,
 } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -44,18 +45,23 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
+  UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import {
+  PUBLISHER_BODY_MAX_BYTES,
+  readPublisher,
+  readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
   createSkCourtRegistryReader,
   isSkCourtRegistryRecord,
-  isSkCourtRegistryUnavailable,
+  isSkCourtRegistryWithheld,
   skCourtDirectoryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import type {
@@ -81,7 +87,23 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  isReadRefusal,
+  isStoredReadAbsence,
+  readAbsent,
+  readPresent,
+  readUnavailable,
+  type AbsenceEvidence,
+  type ReadOutcome,
+  type ReadRefusal,
+  type ReadUnavailableCause,
+  type StoredReadAbsence,
+} from "@/api/lib/errors/read-outcome";
+import {
+  AdapterFetchError,
+  FetchBoundaryError,
+} from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -162,11 +184,11 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
       reason: target.error.message,
       url: target.error.url,
     });
-    return undefined;
+    return { type: "refused-target", reason: target.error.message };
   }
   const fetched = await Result.tryPromise({
     try: async () =>
-      await fetchPublisher(target.value, {
+      await readPublisher(target.value, {
         fetchStage: "document",
         expectedContentType: "pdf",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
@@ -184,15 +206,36 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
     );
     throw fetched.error;
   }
-  const diagnostics = skDocumentResponseDiagnostics(fetched.value);
-  if (
-    !fetched.value.ok ||
-    (diagnostics.contentTypeClass !== "pdf" &&
-      diagnostics.contentTypeClass !== "binary")
-  ) {
-    logger.warn("case_law.ingestion.sk_document_fetch_response", diagnostics);
+  const read = fetched.value;
+  switch (read.type) {
+    case "present": {
+      const diagnostics = skDocumentResponseDiagnostics(read.value);
+      if (
+        diagnostics.contentTypeClass !== "pdf" &&
+        diagnostics.contentTypeClass !== "binary"
+      ) {
+        logger.warn(
+          "case_law.ingestion.sk_document_fetch_response",
+          diagnostics,
+        );
+      }
+      return read;
+    }
+    case "absent":
+    case "refused":
+      return read;
+    case "unavailable":
+      if (read.cause.kind === "thrown") {
+        logger.warn(
+          "case_law.ingestion.sk_document_fetch_failed",
+          skDocumentErrorDiagnostics(read.cause.error),
+        );
+      }
+      return read;
+    default:
+      read satisfies never;
+      return panic(`Unhandled document read: ${String(read)}`);
   }
-  return fetched.value;
 };
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
@@ -381,30 +424,84 @@ const parseSkDate = (raw: string | null | undefined): string | undefined => {
 const fetchDetail = async (
   guid: string,
   signal?: AbortSignal,
-): Promise<SkDetailItem | null> => {
+): Promise<ReadOutcome<SkDetailItem>> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
-  const response = await fetchPublisher(url, {
+  const read = await readPublisherText(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: { Accept: "application/json" },
   });
-
-  if (!response.ok) {
+  if (read.type !== "present") {
     logger.warn("case_law.ingestion.detail_fetch_failed", {
       adapterKey: ADAPTER_KEYS.SK_COURTS,
       guid,
-      httpStatus: response.status,
+      ...readDiagnostics(read),
     });
-    return null;
+    return read;
   }
+  const json = parseJsonOrNull(read.value);
+  // The service answers a record it holds nothing for with an empty object:
+  // its own statement that there is no record, not a failed read.
+  if (isRecord(json) && Object.keys(json).length === 0) {
+    return readAbsent("publisher-typed-absence");
+  }
+  // A served payload that is not a decision record is a read that did not
+  // produce it, so the item is reported unread like a 5xx: the page holds for
+  // a bounded number of cycles, never for good.
+  if (!isSkDetailItem(json)) {
+    return readUnavailable({
+      kind: "thrown",
+      error: new FetchBoundaryError({
+        url,
+        message: "SK courts detail response is not a decision record",
+      }),
+    });
+  }
+  return readPresent(json);
+};
 
-  const json: unknown = await response.json();
-  if (!isSkDetailItem(json) || Object.keys(json).length === 0) {
-    return null;
+/** A served JSON body, or null where it does not parse. */
+const parseJsonOrNull = (body: string): unknown =>
+  Result.try({
+    try: (): unknown => JSON.parse(body),
+    catch: () => null,
+  }).unwrapOr(null);
+
+/** What a read that established no value states, for a warning. */
+const readDiagnostics = (
+  read: Exclude<ReadOutcome<unknown>, { type: "present" }>,
+): { outcome: string; httpStatus?: number } => {
+  switch (read.type) {
+    case "absent":
+      return { outcome: read.evidence };
+    case "refused":
+      return { outcome: read.type, httpStatus: read.status };
+    case "unavailable":
+      return { outcome: read.cause.kind, ...causeHttpStatus(read.cause) };
+    default:
+      read satisfies never;
+      return panic(`Unhandled read: ${String(read)}`);
   }
-  return json;
+};
+
+/** The status a failed read was answered with, where it was answered. */
+const causeHttpStatus = (
+  cause: ReadUnavailableCause,
+): { httpStatus?: number } => {
+  switch (cause.kind) {
+    case "thrown":
+    case "too-large":
+      return {};
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return { httpStatus: cause.status };
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
 };
 
 /**
@@ -540,8 +637,25 @@ type SkCourtsDetailFetch =
   | { type: "detail"; detail: SkDetailItem }
   /** The item names no record to ask about. */
   | { type: "listing-only" }
-  /** A record was asked about and nothing came back. */
-  | { type: "unavailable" };
+  /**
+   * The publisher stated the record does not exist, or refused it: the row
+   * is held listing-only with the typed outcome.
+   */
+  | { type: "withheld"; outcome: SkCourtsDetailOutcome }
+  /**
+   * A record was asked about and could not be read: the item is reported
+   * unread, and the pipeline decides what that costs the page.
+   */
+  | { type: "unavailable"; cause: ReadUnavailableCause };
+
+/** Why a decision is stored without its record. */
+type SkCourtsDetailOutcome = StoredReadAbsence | ReadRefusal;
+
+const isSkCourtsDetailOutcome = (
+  value: unknown,
+): value is SkCourtsDetailOutcome =>
+  isStoredReadAbsence(value) ||
+  (isReadRefusal(value) && value.scope === "document");
 
 const fetchDetailForItem = async (
   item: SkApiItem,
@@ -551,9 +665,87 @@ const fetchDetailForItem = async (
   if (guid === undefined || guid.length === 0) {
     return { type: "listing-only" };
   }
-  const detail = await fetchDetail(guid, signal);
-  return detail === null ? { type: "unavailable" } : { type: "detail", detail };
+  const read = await fetchDetail(guid, signal);
+  switch (read.type) {
+    case "present":
+      return { type: "detail", detail: read.value };
+    case "absent":
+      return {
+        type: "withheld",
+        outcome: { type: "absent", evidence: read.evidence },
+      };
+    case "refused":
+      return { type: "withheld", outcome: read };
+    case "unavailable":
+      return { type: "unavailable", cause: read.cause };
+    default:
+      read satisfies never;
+      return panic(`Unhandled detail read: ${String(read)}`);
+  }
 };
+
+/** One page's record reads, each asked once. */
+export type SkCourtsDetailReader = (
+  item: SkApiItem,
+  signal?: AbortSignal,
+) => Promise<SkCourtsDetailFetch>;
+
+/** Page-owned promise cache: bounded by the page, discarded on completion. */
+export const createSkCourtsDetailReader = (
+  signal?: AbortSignal,
+): SkCourtsDetailReader => {
+  const reads = new Map<string, Promise<SkCourtsDetailFetch>>();
+  return async (item, requestSignal) => {
+    const guid = toOptionalValue(item.guid) ?? "";
+    const cached = reads.get(guid);
+    if (cached !== undefined) {
+      return await cached;
+    }
+    const pending = fetchDetailForItem(item, requestSignal ?? signal);
+    reads.set(guid, pending);
+    return await pending;
+  };
+};
+
+type ReadPageDetailsOptions = {
+  items: readonly unknown[];
+  readDetail: SkCourtsDetailReader;
+};
+
+/**
+ * Read every keyable item's record before any item is built, so a read that
+ * ends the cycle (the publisher's rate-limit refusal, cancellation) rejects
+ * here and fails the page with its cursor kept. Inside an item's build the
+ * same rejection would be isolated as that one item's failure. A record that
+ * stays unavailable is the item's, reported unread when it is built.
+ */
+const readPageDetails = async ({
+  items,
+  readDetail,
+}: ReadPageDetailsOptions): Promise<void> => {
+  await mapWithConcurrency({
+    items: items.filter(
+      (item): item is SkApiItem =>
+        isSkApiItem(item) && skCourtsIdentityFields(item) !== null,
+    ),
+    limit: ITEM_CONCURRENCY,
+    operation: async (item) => await readDetail(item),
+  });
+};
+
+/** A record read that failed, as an error, with its status. */
+const detailReadError = (cause: ReadUnavailableCause): AdapterFetchError =>
+  new AdapterFetchError({
+    message:
+      cause.kind === "too-large"
+        ? `SK courts decision record exceeded ${cause.maxBytes} bytes`
+        : "SK courts decision record unavailable",
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+    ...(cause.kind === "thrown"
+      ? { cause: cause.error }
+      : causeHttpStatus(cause)),
+  });
 
 type SkCourtsMetadata = Record<string, unknown> & {
   updateDate: string | undefined;
@@ -571,6 +763,12 @@ type SkCourtsDecisionParts = {
   /** The per-decision record, where one was read. */
   detail: SkDetailItem | null;
   courtRegistry?: SkCourtRegistryObservation | null | undefined;
+  /**
+   * Why the record is missing, where the publisher stated it absent or
+   * refused it. The row is then listing-only, so a stored row is never
+   * overwritten with the absences of this one.
+   */
+  detailOutcome?: SkCourtsDetailOutcome | undefined;
 };
 
 /**
@@ -584,6 +782,7 @@ const skCourtsSourceRaw = ({
   item,
   detail,
   courtRegistry,
+  detailOutcome,
 }: SkCourtsDecisionParts): {
   sourceRaw: string;
   sourceRawContentType: string;
@@ -593,13 +792,18 @@ const skCourtsSourceRaw = ({
       ? { "court-registry": JSON.stringify(courtRegistry.record) }
       : {};
   const unavailableParts =
-    courtRegistry?.status === "unavailable"
-      ? { "court-registry-unavailable": JSON.stringify(courtRegistry) }
-      : {};
+    courtRegistry === null ||
+    courtRegistry === undefined ||
+    courtRegistry.status === "available"
+      ? {}
+      : { "court-registry-unavailable": JSON.stringify(courtRegistry) };
   return {
     sourceRaw: encodeSourceRawEnvelope({
       listing: JSON.stringify(item),
       ...(detail === null ? {} : { detail: JSON.stringify(detail) }),
+      ...(detailOutcome === undefined
+        ? {}
+        : { "detail-outcome": JSON.stringify(detailOutcome) }),
       ...registryParts,
       ...unavailableParts,
     }),
@@ -618,6 +822,7 @@ const skCourtsSourceRaw = ({
 export const assembleSkCourtsDecision = ({
   courtRegistry,
   detail,
+  detailOutcome,
   item,
 }: SkCourtsDecisionParts): IngestionResult | null => {
   const fields = skCourtsIdentityFields(item);
@@ -637,7 +842,11 @@ export const assembleSkCourtsDecision = ({
       ? undefined
       : skCourtDirectoryMetadata(registryRecord, court);
   const registryUnavailable =
-    courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
+    courtRegistry === null ||
+    courtRegistry === undefined ||
+    courtRegistry.status === "available"
+      ? undefined
+      : courtRegistry;
   const courtSuccession = skCourtSuccessionReferences(
     court,
     registryRecord?.nazov,
@@ -647,6 +856,7 @@ export const assembleSkCourtsDecision = ({
     directoryMetadata,
     registryUnavailable,
     courtSuccession,
+    detailOutcome,
   });
   const rawHash = hashContent(rawJson);
 
@@ -704,6 +914,9 @@ export const assembleSkCourtsDecision = ({
           ...(registryUnavailable === undefined
             ? {}
             : { courtRegistry: registryUnavailable }),
+          ...(detailOutcome === undefined
+            ? {}
+            : { [READ_OUTCOME_METADATA_KEY]: detailOutcome }),
           caseNumber,
           ecli,
           court,
@@ -755,7 +968,8 @@ export const assembleSkCourtsDecision = ({
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-      ...skCourtsSourceRaw({ item, detail, courtRegistry }),
+      ...(detailOutcome === undefined ? {} : { isListingOnly: true }),
+      ...skCourtsSourceRaw({ item, detail, courtRegistry, detailOutcome }),
     },
     SK_COURTS_METADATA_URL_SCHEMA,
   );
@@ -773,8 +987,57 @@ export type SkCourtsBuildResult =
   | { type: "built"; decision: IngestionResult }
   /** No docket or no court to key on; nothing can store this item. */
   | { type: "unkeyable" }
-  /** A decision or court registry record was unavailable; reconciliation retries. */
-  | { type: "detail-unavailable"; decision: IngestionResult };
+  /**
+   * The publisher stated the decision's record absent, or refused it: the
+   * listing-only row with the typed outcome; reconciliation retries.
+   */
+  | { type: "detail-unavailable"; decision: IngestionResult }
+  /**
+   * The record could not be read: `item` is the listing-only row with the
+   * listing and the court registry record; the pipeline decides what it
+   * costs the page.
+   */
+  | { type: "unread"; item: UnreadListedItem }
+  /**
+   * The court registry record could not be read, or an unread record's item
+   * has no publisher id to key it on: nothing is built.
+   */
+  | { type: "read-failed"; error: AdapterFetchError };
+
+type UnreadSkCourtsItemOptions = {
+  item: SkApiItem;
+  courtRegistry: SkCourtRegistryObservation | null;
+  cause: ReadUnavailableCause;
+};
+
+/**
+ * The listed item whose record stayed unavailable, keyed by the publisher's
+ * id. The streak that bounds how long it holds the page is counted under that
+ * id, so an item stating none this store can hold is not built (counted, the
+ * page advancing) rather than reported unread.
+ */
+const unreadSkCourtsItem = ({
+  item,
+  courtRegistry,
+  cause,
+}: UnreadSkCourtsItemOptions): SkCourtsBuildResult => {
+  const sourceDocumentId = skCourtsSourceDocumentId(item.guid);
+  const listing = assembleSkCourtsDecision({
+    item,
+    detail: null,
+    courtRegistry,
+  });
+  if (sourceDocumentId === undefined || listing === null) {
+    return { type: "read-failed", error: detailReadError(cause) };
+  }
+  return {
+    type: "unread",
+    item: {
+      listing: { ...listing, sourceDocumentId, isListingOnly: true },
+      outcome: { type: "unavailable", cause },
+    },
+  };
+};
 
 /**
  * Build one decision from a listing item, through this adapter's own parse and
@@ -784,6 +1047,7 @@ export type SkCourtsBuildResult =
 type SkCourtsBuildOptions = {
   signal?: AbortSignal | undefined;
   readCourt?: SkCourtRegistryReader | undefined;
+  readDetail?: SkCourtsDetailReader | undefined;
 };
 
 export const buildSkCourtsDecision = async (
@@ -791,6 +1055,7 @@ export const buildSkCourtsDecision = async (
   {
     signal,
     readCourt = createSkCourtRegistryReader(signal),
+    readDetail = createSkCourtsDetailReader(signal),
   }: SkCourtsBuildOptions = {},
 ): Promise<SkCourtsBuildResult> => {
   // Asked before the record is fetched, so an item nothing can store never
@@ -799,7 +1064,7 @@ export const buildSkCourtsDecision = async (
   if (skCourtsIdentityFields(item) === null) {
     return { type: "unkeyable" };
   }
-  const fetched = await fetchDetailForItem(item, signal);
+  const fetched = await readDetail(item, signal);
   const registreGuid = toOptionalValue(item.sud?.registreGuid);
   const registry =
     registreGuid === undefined
@@ -811,23 +1076,34 @@ export const buildSkCourtsDecision = async (
       ...(registreGuid === undefined ? {} : { registreGuid }),
       reason: registry.error.message,
     });
+    return { type: "read-failed", error: registry.error };
   }
-  const courtRegistry = registry.unwrapOr(null);
+  if (fetched.type === "unavailable") {
+    return unreadSkCourtsItem({
+      item,
+      courtRegistry: registry.unwrapOr(null),
+      cause: fetched.cause,
+    });
+  }
+  const detailOutcome =
+    fetched.type === "withheld" ? fetched.outcome : undefined;
   const decision = assembleSkCourtsDecision({
     item,
     detail: fetched.type === "detail" ? fetched.detail : null,
-    courtRegistry,
+    courtRegistry: registry.unwrapOr(null),
+    ...(detailOutcome === undefined ? {} : { detailOutcome }),
   });
   if (decision === null) {
     return { type: "unkeyable" };
   }
-  return fetched.type === "unavailable" || registry.isErr()
-    ? { type: "detail-unavailable", decision }
-    : { type: "built", decision };
+  return detailOutcome === undefined
+    ? { type: "built", decision }
+    : { type: "detail-unavailable", decision };
 };
 
 type SkCourtsParsedItem =
   | { type: "decision"; decision: IngestionResult }
+  | { type: "unread"; item: UnreadListedItem }
   | { type: "item_build_failed"; decision: IngestionResult | null };
 
 const parseItemWithDetail = async (
@@ -848,7 +1124,10 @@ const parseItemWithDetail = async (
         case "built":
         case "detail-unavailable":
           return value.decision;
+        case "unread":
+          return value.item.listing;
         case "unkeyable":
+        case "read-failed":
           return undefined;
         default:
           value satisfies never;
@@ -873,6 +1152,14 @@ const parseItemWithDetail = async (
       return { type: "item_build_failed", decision: built.decision };
     case "built":
       return { type: "decision", decision: built.decision };
+    // The pipeline decides what an unread record costs the page.
+    case "unread":
+      return { type: "unread", item: built.item };
+    // The page reads every court registry record before building and fails
+    // on one it could not read, so this is an unread record whose item has
+    // no publisher id to count it under. Counted, never stored.
+    case "read-failed":
+      return { type: "item_build_failed", decision: null };
     default: {
       built satisfies never;
       return panic(
@@ -1033,6 +1320,102 @@ type ListedDayPage = {
  * and everything else — a 5xx, a timeout, a body without a count — is an error
  * the engine retries on a later pass.
  */
+type ListingReadErrorOptions = {
+  read: Exclude<ReadOutcome<unknown>, { type: "present" }>;
+  cursor: string;
+};
+
+/**
+ * The error a listing request that served no listing stands for: with its
+ * status, so the engine reads a refusal or an outage as it did, and the
+ * original error where the request threw.
+ */
+const listingReadError = ({ read, cursor }: ListingReadErrorOptions): Error => {
+  switch (read.type) {
+    case "absent":
+      return listingStatusError({
+        status: absenceStatus(read.evidence),
+        cursor,
+      });
+    case "refused":
+      return listingStatusError({ status: read.status, cursor });
+    case "unavailable":
+      return listingFailureError({ cause: read.cause, cursor });
+    default:
+      read satisfies never;
+      return panic(`Unhandled listing read: ${String(read)}`);
+  }
+};
+
+const listingStatusError = ({
+  status,
+  cursor,
+}: {
+  status: number;
+  cursor: string;
+}): AdapterFetchError =>
+  new AdapterFetchError({
+    message: `SK courts listing API error: ${status}`,
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor,
+    httpStatus: status,
+  });
+
+const listingFailureError = ({
+  cause,
+  cursor,
+}: {
+  cause: ReadUnavailableCause;
+  cursor: string;
+}): Error => {
+  switch (cause.kind) {
+    case "thrown":
+      return thrownReadError(cause.error);
+    case "too-large":
+      return new AdapterFetchError({
+        message: `SK courts listing exceeded ${cause.maxBytes} bytes`,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor,
+      });
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return listingStatusError({ status: cause.status, cursor });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
+};
+
+/** The error a publisher request threw, as it was thrown. */
+const thrownReadError = (error: unknown): Error =>
+  error instanceof Error
+    ? error
+    : new AdapterFetchError({
+        message: "SK courts publisher request failed",
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        cause: error,
+      });
+
+/** The status an HTTP absence was stated with. */
+const absenceStatus = (evidence: AbsenceEvidence): number => {
+  switch (evidence) {
+    case "http-404":
+      return 404;
+    case "http-410":
+      return 410;
+    case "stated-zero":
+    case "publisher-typed-absence":
+      return panic(
+        `A publisher request stated a non-HTTP absence: ${evidence}`,
+      );
+    default:
+      evidence satisfies never;
+      return panic(`Unhandled absence evidence: ${String(evidence)}`);
+  }
+};
+
 const listSkCourtsDayPage = async ({
   day,
   page,
@@ -1052,7 +1435,7 @@ const listSkCourtsDayPage = async ({
     vydaniaDo: day,
   }).toString()}`;
 
-  const response = await fetchPublisher(url, {
+  const read = await readPublisherText(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
@@ -1062,17 +1445,11 @@ const listSkCourtsDayPage = async ({
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
-
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `SK courts listing API error: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: day,
-      httpStatus: response.status,
-    });
+  if (read.type !== "present") {
+    throw listingReadError({ read, cursor: day });
   }
 
-  const json: unknown = await response.json();
+  const json = parseJsonOrNull(read.value);
   if (!isSkApiResponse(json)) {
     throw new AdapterFetchError({
       message:
@@ -1141,6 +1518,8 @@ const buildSkCourtsFromPayload = async (
     // Written as a decision it would make the identity held with the document
     // still unread, and unread is how the document walk finds its work.
     case "detail-unavailable":
+    case "unread":
+    case "read-failed":
       return { type: "detail-unavailable" };
     default: {
       built satisfies never;
@@ -1272,6 +1651,7 @@ const collectFrontierPage = async (
     signal,
   });
   const readCourt = createSkCourtRegistryReader(signal);
+  const readDetail = createSkCourtsDetailReader(signal);
   const records = await mapWithConcurrency({
     items: [
       ...new Set(
@@ -1292,20 +1672,33 @@ const collectFrontierPage = async (
       return record;
     }
   }
+  await readPageDetails({ items: listed, readDetail });
   const built = await mapWithConcurrency({
     items: listed,
     limit: ITEM_CONCURRENCY,
     operation: async (item) =>
-      await parseItemWithDetail(item, { signal, readCourt }),
+      await parseItemWithDetail(item, { signal, readCourt, readDetail }),
   });
   const decisions: IngestionResult[] = [];
+  const unreadItems: UnreadListedItem[] = [];
   let failed = 0;
   for (const item of built) {
-    if (item.type === "item_build_failed") {
-      failed++;
-    }
-    if (item.decision !== null) {
-      decisions.push(item.decision);
+    switch (item.type) {
+      case "decision":
+        decisions.push(item.decision);
+        break;
+      case "unread":
+        unreadItems.push(item.item);
+        break;
+      case "item_build_failed":
+        failed++;
+        if (item.decision !== null) {
+          decisions.push(item.decision);
+        }
+        break;
+      default:
+        item satisfies never;
+        return panic(`Unhandled sk-courts page item: ${String(item)}`);
     }
   }
 
@@ -1313,6 +1706,7 @@ const collectFrontierPage = async (
   return Result.ok({
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
+    ...(unreadItems.length === 0 ? {} : { unreadItems }),
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({
@@ -1621,7 +2015,11 @@ const reparseStoredRaw = (
   );
   const registryUnavailable = storedPart(
     parts?.["court-registry-unavailable"],
-    isSkCourtRegistryUnavailable,
+    isSkCourtRegistryWithheld,
+  );
+  const detailOutcome = storedPart(
+    parts?.["detail-outcome"],
+    isSkCourtsDetailOutcome,
   );
   const courtRegistry =
     registryRecord === null
@@ -1633,6 +2031,7 @@ const reparseStoredRaw = (
         registryRecord.registreGuid !== item.sud?.registreGuid)) ||
     (parts?.["court-registry-unavailable"] !== undefined &&
       registryUnavailable === null) ||
+    (parts?.["detail-outcome"] !== undefined && detailOutcome === null) ||
     (registryRecord !== null && registryUnavailable !== null)
   ) {
     return {
@@ -1645,6 +2044,7 @@ const reparseStoredRaw = (
     item,
     detail: storedPart(parts?.["detail"], isSkDetailItem),
     courtRegistry,
+    ...(detailOutcome === null ? {} : { detailOutcome }),
   });
   if (decision === null) {
     return {
@@ -1780,7 +2180,7 @@ export const skCourtsAdapter = defineSourceAdapter({
    * largest we hold — has no completeness signal at all.
    */
   async getTotalCount(signal) {
-    const response = await fetchPublisher(
+    const read = await readPublisherText(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
         fetchStage: "listing",
@@ -1790,10 +2190,21 @@ export const skCourtsAdapter = defineSourceAdapter({
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
     );
-    if (!response.ok) {
+    if (read.type === "unavailable" && read.cause.kind === "thrown") {
+      throw thrownReadError(read.cause.error);
+    }
+    if (
+      read.type === "unavailable" &&
+      (read.cause.kind === "too-large" || read.cause.kind === "empty-body")
+    ) {
+      return sourceTotalProbeFailed(
+        SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+      );
+    }
+    if (read.type !== "present") {
       return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
     }
-    const json: unknown = await response.json();
+    const json = parseJsonOrNull(read.value);
     if (!isRecord(json)) {
       return sourceTotalProbeFailed(
         SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -1826,6 +2237,9 @@ export const skCourtsAdapter = defineSourceAdapter({
             povaha: payload["povaha"],
           }
         : null,
+    // A row the crawl stored without its record is not held: the walk asks
+    // for it again until the record is read.
+    heldRequiresDetail: true,
     firstSlice: SK_COURTS_FIRST_SLICE,
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,
@@ -1844,6 +2258,7 @@ export const skCourtsAdapter = defineSourceAdapter({
     if (frontier === null) {
       const page = await createBackfillPage(
         createSkCourtRegistryReader(signal),
+        createSkCourtsDetailReader(signal),
       )(cursor, config, signal);
       // The walk names its successor and nothing else, so the handover
       // cursor it writes states no day. Give it one here rather than
@@ -1881,7 +2296,10 @@ export const skCourtsAdapter = defineSourceAdapter({
  * decisions land at the end, behind the cursor — and when it reaches that
  * end, the frontier takes over.
  */
-const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
+const createBackfillPage = (
+  readCourt: SkCourtRegistryReader,
+  readDetail: SkCourtsDetailReader,
+) =>
   createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
@@ -1901,11 +2319,24 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     ],
 
     parseResponse: async (response) => {
+      const bytes =
+        response.body === null
+          ? new Uint8Array()
+          : await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
+      if (bytes === null) {
+        return Result.err(
+          new AdapterFetchError({
+            message: `SK courts listing exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            cursor: null,
+          }),
+        );
+      }
       const validatedPage = validatePublisherPage({
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         cursor: null,
         headers: response.headers,
-        body: await response.text(),
+        body: new TextDecoder().decode(bytes),
         expectation: {
           kind: "json",
           minBytes: 2,
@@ -1938,6 +2369,10 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
           return record;
         }
       }
+      await readPageDetails({
+        items: arrayOrEmpty(json.rozhodnutieList),
+        readDetail,
+      });
       return Result.ok(json);
     },
 
@@ -1947,5 +2382,5 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     }),
 
     parseItem: async (item, signal) =>
-      await parseItemWithDetail(item, { signal, readCourt }),
+      await parseItemWithDetail(item, { signal, readCourt, readDetail }),
   });

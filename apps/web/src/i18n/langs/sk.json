@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
+      "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Schválené {date}",
         "approvedToast": "Playbook schválený",
         "saveBeforeApprove": "Pred schválením playbooku uložte zmeny.",
+        "sourcesNotice": "Pred schválením skontrolujte, že žiadna pozícia nemenuje dokument, spis ani protistranu: tento playbook môže čítať celá organizácia.",
         "statusApproved": "Schválené",
         "statusDraft": "Koncept"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "Z referencie",
       "removeCheck": "Odstrániť kontrolu",
       "removeIdeal": "Odstrániť ideálne znenie",
+      "removeSource": "Odstrániť zdroj {documentName}",
       "reorderPosition": "Zmeniť poradie pozície",
       "review": {
         "changePlaybook": "Vybrať iný playbook",
@@ -3605,6 +3608,10 @@
         "blocker": "Blokujúca"
       },
       "severityLabel": "Závažnosť",
+      "staleCopy": {
+        "loaded": "Bola načítaná novšia verzia tohto playbooku. Pred úpravami ju načítajte znova.",
+        "unavailable": "Najnovšiu verziu tohto playbooku sa nepodarilo načítať. Zobrazuje sa posledná načítaná kópia, ktorá môže byť zastaraná."
+      },
       "starters": {
         "addedToast": "Playbook pridaný",
         "browseButton": "Prehľadávať úvodné playbooky",
