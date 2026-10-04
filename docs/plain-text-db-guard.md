@@ -34,7 +34,16 @@ The 42 guarded columns come from the case-law and legislation schema owners:
 | `legislation_search_documents`  | `title`                                                                                                                                                   | Search result titles.                                                                                |
 
 Metadata validation traverses JSON string values recursively, including arrays;
-it does not treat object keys or JSON escaping as document markup. Changing a
+it does not treat object keys or JSON escaping as document markup. Case-law
+metadata exempts exactly the URL string leaves declared by its source adapter.
+The migration's SQL contracts are generated from `METADATA_URL_SCHEMAS` and
+`composedMetadataUrlSchema`; an ungated test binds every generated contract to
+these owners. Decision metadata also includes the declared supplement URLs;
+supplement metadata uses the adapter's original contract. Source identity comes
+from `case_law_sources`, and changing a row's `source_id` rechecks metadata.
+Unknown sources, undeclared paths, sibling labels, and unexpected objects or
+arrays remain guarded. URL spelling is preserved. Legislation metadata has no
+URL declaration and retains full string-leaf validation. Changing a
 metadata column checks its entire new value. Existing markup must be repaired
 before changing that column, but unrelated column updates remain available.
 Full decision/legislation text, supplement bodies, searchable text, preview

@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName } from "drizzle-orm";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   caseLawCitations,
@@ -21,9 +21,15 @@ import {
   legislationWorkNames,
 } from "@/api/db/schema";
 import {
+  composedMetadataUrlSchema,
+  METADATA_URL_SCHEMAS,
+} from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import {
   containsTagLikeMarkup,
   TAG_LIKE_MARKUP_SOURCE,
 } from "@/api/lib/case-law/plain-text-markup";
+import { metadataUrlAddresses } from "@/api/lib/legal-search/metadata-urls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const MIGRATION = new URL(
@@ -83,16 +89,19 @@ const guards = [
   const names = (match[1] ?? panic("trigger has no columns")).split(", ");
   return {
     tableName,
-    columns: names.map((name) => {
-      const column =
-        columns.find((candidate) => candidate.name === name) ??
-        panic(`unknown guarded column ${tableName}.${name}`);
-      return { name, sqlType: String(column.getSQLType()) };
-    }),
+    columns: names
+      .filter((name) => name !== "source_id")
+      .map((name) => {
+        const column =
+          columns.find((candidate) => candidate.name === name) ??
+          panic(`unknown guarded column ${tableName}.${name}`);
+        return { name, sqlType: String(column.getSQLType()) };
+      }),
   };
 });
 
 const BLOCK = [
+  "https://example.test/?q=<p>",
   "<br/>",
   '<span title="a > b">x</span>',
   "<span title='a < b'>",
@@ -129,6 +138,29 @@ const ALLOW = [
   "Bundesverfassungsgericht",
 ];
 
+const databaseUrlContracts = Object.fromEntries(
+  Object.entries(METADATA_URL_SCHEMAS).map(([adapter, schema]) => [
+    adapter,
+    { base: schema ?? {}, composed: composedMetadataUrlSchema(schema) },
+  ]),
+);
+
+// Each address comes from schema introspection; array positions are explicit.
+const metadataAtAddress = (
+  address: string,
+  value: unknown,
+): Record<string, unknown> => {
+  const keys = address.replaceAll("[*]", ".*").split(".");
+  let nested = value;
+  for (const key of keys.toReversed()) {
+    nested = key === "*" ? [nested] : { [key]: nested };
+  }
+  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+    return panic("URL address must have an object root");
+  }
+  return Object.fromEntries(Object.entries(nested));
+};
+
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -145,6 +177,9 @@ const withFixture = async (fn: (client: TransactionSQL) => Promise<void>) => {
       const namespace = `plaintext_guard_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       await tx.unsafe(`CREATE SCHEMA "${namespace}"`);
       await tx.unsafe(`SET LOCAL search_path TO "${namespace}", public`);
+      await tx.unsafe(
+        "CREATE TABLE case_law_sources (id uuid PRIMARY KEY, adapter_key text NOT NULL)",
+      );
       for (const { tableName, columns } of guards) {
         const definitions = columns.map(
           ({ name, sqlType }) => `"${name}" ${sqlType}`,
@@ -158,6 +193,12 @@ const withFixture = async (fn: (client: TransactionSQL) => Promise<void>) => {
         await tx.unsafe(
           `INSERT INTO "${tableName}" (fixture_id, ${columns.map(({ name }) => `"${name}"`).join(", ")}) VALUES (1, ${values.join(", ")})`,
         );
+      }
+      for (const tableName of [
+        "case_law_decisions",
+        "case_law_decision_supplements",
+      ]) {
+        await tx.unsafe(`ALTER TABLE "${tableName}" ADD COLUMN source_id uuid`);
       }
       for (const { table, column } of bodyColumns) {
         const tableName = getTableName(table);
@@ -407,6 +448,87 @@ if (!runPostgresTests || !databaseUrl) {
       });
     });
 
+    test(
+      "exempts every declared source URL leaf while guarding siblings and unexpected shapes",
+      async () => {
+        await withFixture(async (client) => {
+          const unclassifiedSourceId = Bun.randomUUIDv7();
+          await client`INSERT INTO case_law_sources (id, adapter_key) VALUES (${unclassifiedSourceId}::uuid, 'unclassified-fixture')`;
+          for (const [adapter, contracts] of Object.entries(
+            databaseUrlContracts,
+          )) {
+            const sourceId = Bun.randomUUIDv7();
+            await client`INSERT INTO case_law_sources (id, adapter_key) VALUES (${sourceId}::uuid, ${adapter})`;
+            for (const [tableName, schema] of [
+              ["case_law_decisions", contracts.composed],
+              ["case_law_decision_supplements", contracts.base],
+            ] as const) {
+              for (const address of metadataUrlAddresses(schema)) {
+                const url = "https://example.test/document?q=<p>";
+                const metadata = metadataAtAddress(address, url);
+                const projected = toPlainTextMetadataObject(
+                  metadata,
+                  schema,
+                ).unwrap();
+                expect(projected).toEqual(metadata);
+                await client.unsafe(
+                  `INSERT INTO "${tableName}" (fixture_id, source_id, metadata) VALUES (2, $1::uuid, $2::text::jsonb)`,
+                  [sourceId, JSON.stringify(projected)],
+                );
+                const rows = await client.unsafe(
+                  `SELECT metadata FROM "${tableName}" WHERE fixture_id = 2`,
+                );
+                expect(rows.at(0)?.metadata).toEqual(metadata);
+                await client.unsafe(
+                  `UPDATE "${tableName}" SET metadata = $1::text::jsonb WHERE fixture_id = 2`,
+                  [JSON.stringify(metadataAtAddress(address, `${url}<br/>`))],
+                );
+                for (const rejected of [
+                  { ...metadata, undeclaredLabel: url },
+                  metadataAtAddress(address, { label: "<p>" }),
+                  metadataAtAddress(address, ["<p>"]),
+                  ...(address.includes("[*]")
+                    ? [
+                        metadataAtAddress(
+                          address.replaceAll("[*]", ".items"),
+                          url,
+                        ),
+                      ]
+                    : []),
+                ]) {
+                  await expectMarkupFailure({
+                    client,
+                    statement: `UPDATE "${tableName}" SET metadata = $1 WHERE fixture_id = 2`,
+                    column: "metadata",
+                    value: JSON.stringify(rejected),
+                  });
+                }
+                const switched = await Result.tryPromise(() =>
+                  client.savepoint(async (tx) => {
+                    await tx.unsafe(
+                      `UPDATE "${tableName}" SET source_id = $1::uuid WHERE fixture_id = 2`,
+                      [unclassifiedSourceId],
+                    );
+                  }),
+                );
+                expect(switched.isErr()).toBe(true);
+                if (switched.isErr()) {
+                  expect(switched.error.cause).toMatchObject({
+                    errno: "23514",
+                    column: "metadata",
+                  });
+                }
+                await client.unsafe(
+                  `DELETE FROM "${tableName}" WHERE fixture_id = 2`,
+                );
+              }
+            }
+          }
+        });
+      },
+      propertyTestTimeout(30_000),
+    );
+
     test("preserves literal angle-bracket prose in every body projection", async () => {
       await withFixture(async (client) => {
         for (const { table, column } of bodyColumns) {
@@ -503,12 +625,13 @@ if (!runPostgresTests || !databaseUrl) {
               )
               .map((characters) => characters.join("")),
           );
-          await fc.assert(
+          await assertProperty(
+            "SQL predicate and sanitizer agree on generated text, HTML whitespace, and long legal text",
             fc.asyncProperty(
               fc.array(text, { minLength: 1, maxLength: 40 }),
               assertParity,
             ),
-            propertyConfig({ numRuns: 100, seed: 20_261_001 }),
+            { numRuns: 100, seed: 20_261_001 },
           );
         });
       },
