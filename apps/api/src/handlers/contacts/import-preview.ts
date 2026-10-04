@@ -8,7 +8,7 @@ import {
   parseContactImportMappingText,
   previewContactImport,
 } from "@/api/handlers/contacts/contact-import-file";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
@@ -20,6 +20,7 @@ const importPreviewBodySchema = t.Object({
 
 const config = {
   permissions: { contact: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: importPreviewBodySchema,
 } satisfies HandlerConfig;

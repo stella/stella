@@ -59,6 +59,7 @@ import {
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
@@ -73,6 +74,7 @@ const listStatutes = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       listStatutesSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: listStatutesQuerySchema,
@@ -93,6 +95,7 @@ const readLegislationShelf = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       legislationShelfSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationShelfQuerySchema,
@@ -114,6 +117,7 @@ const readLegislationFacets = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       legislationFacetsSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationFacetsQuerySchema,
@@ -141,6 +145,7 @@ const readStatuteByEli = createSafeBoundedPublicHandler(
         publisherWindowInconsistentResponseSchema,
       ]),
     },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     query: readStatuteByEliQuerySchema,
@@ -164,6 +169,7 @@ const resolveStatutes = createSafeBoundedPublicHandler(
     ),
     // The batch form of `by-eli`: one read per Work is what `read_statute`
     // already answers, so an agent gains nothing from a second tool.
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     body: resolveStatutesBodySchema,
@@ -190,6 +196,7 @@ const readStatuteBySlug = createSafeBoundedPublicHandler(
         publisherWindowInconsistentResponseSchema,
       ]),
     },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     params: readStatuteBySlugParamsSchema,
@@ -216,6 +223,7 @@ const readStatute = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteReaderSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
@@ -240,6 +248,7 @@ const listStatuteVersions = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteVersionsSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: listStatuteVersionsParamsSchema,
@@ -266,6 +275,7 @@ const readProvisionHistory = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       provisionHistorySuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "read_provision_history" },
     cache: { kind: "none" },
     params: provisionHistoryParamsSchema,
@@ -293,6 +303,7 @@ const listStatuteSitemapShards = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapShardsSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
   },
@@ -313,6 +324,7 @@ const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapStatutesSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: sitemapShardStatutesQuerySchema,

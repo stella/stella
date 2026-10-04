@@ -4,6 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import type { NamedEntityInsert } from "@/api/lib/entities/sibling-name-insert";
 import {
   type EntityVersionValues,
   insertEntityVersions,
@@ -19,7 +20,7 @@ export type CurrentVersionAssignment = {
 type InsertEntityBatchOptions = {
   tx: Transaction;
   /** Parents before children: a chunk may only reference earlier rows. */
-  entityRows: readonly (typeof entities.$inferInsert)[];
+  entityRows: readonly NamedEntityInsert[];
   versionRows: readonly EntityVersionValues[];
   stampOrigin: StampOrigin;
   currentVersions: readonly CurrentVersionAssignment[];
