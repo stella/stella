@@ -91,8 +91,9 @@ const withReplayTransaction = async <T>(
 export const REPLAY_SYSTEMIC_ISOLATION_THRESHOLD = 3;
 const PREFLIGHT_CHECKPOINT = "case-law-replay:preflight";
 
-const checkpointName = (source: BackgroundReplaySource) =>
-  `case-law-replay:${source.id}:${source.currentParserVersion}`;
+const checkpointName = (
+  source: Pick<BackgroundReplaySource, "id" | "currentParserVersion">,
+) => `case-law-replay:${source.id}:${source.currentParserVersion}`;
 
 const reservationBatch = (
   source: BackgroundReplaySource,
@@ -246,6 +247,57 @@ const chooseSource = async (
   const sourceByAdapter = new Map(
     availableSources.map((source) => [source.adapterKey, source]),
   );
+  // The cheap per-source reads run once for every source; only the lag probe
+  // and the budget check stay lazy, per candidate, in the walk below.
+  const gateNames = availableSources.map((source) =>
+    checkpointName({
+      id: source.id,
+      currentParserVersion: PARSER_VERSIONS[source.adapterKey],
+    }),
+  );
+  const { gateStates, pendingSourceIds } = await withReplayTransaction(
+    db,
+    async (tx) => {
+      const gateRows =
+        gateNames.length === 0
+          ? []
+          : await tx
+              .select()
+              .from(databaseBackfillStates)
+              .where(inArray(databaseBackfillStates.name, gateNames));
+      const pendingRows =
+        availableSources.length === 0
+          ? []
+          : await tx
+              .selectDistinct({ sourceId: caseLawReplayBatches.sourceId })
+              .from(caseLawReplayBatches)
+              .where(
+                and(
+                  inArray(
+                    caseLawReplayBatches.sourceId,
+                    availableSources.map((source) => source.id),
+                  ),
+                  inArray(caseLawReplayBatches.status, [
+                    "reserved",
+                    "retry-exhausted",
+                  ]),
+                  or(
+                    isNull(caseLawReplayBatches.retryAt),
+                    lte(
+                      caseLawReplayBatches.retryAt,
+                      sql`${new Date(now())}::timestamptz`,
+                    ),
+                  ),
+                ),
+              );
+      return {
+        gateStates: new Map(
+          gateRows.map((row) => [row.name, decodeCheckpoint(row).batch]),
+        ),
+        pendingSourceIds: new Set(pendingRows.map((row) => row.sourceId)),
+      };
+    },
+  );
   for (const adapterKey of ordered) {
     const policy = enrolment[adapterKey];
     if (policy.mode === "off" || sourceEnabled?.(adapterKey) === false) {
@@ -272,39 +324,15 @@ const chooseSource = async (
         // A bounded existence probe supplies a lower bound, not a corpus census.
         rowsBehind: 1,
       };
-      // db-await-in-loop: Read each gate during the ordered first-eligible-source walk; held sources must be skipped before probing their corpus.
-      const state = await loadGateState(context, candidate);
+      const state = gateStates.get(checkpointName(candidate)) ?? {
+        ...initialBatchState(),
+        size: 1,
+      };
       if (state.holdUntil !== null && state.holdUntil > now()) {
         context.onHeld?.(candidate, state);
         return null;
       }
-      // db-await-in-loop: Probe sources in persisted round-robin order, stopping at the first eligible source; each probe needs its own timeout boundary.
-      const pending = await withReplayTransaction(
-        db,
-        async (tx) =>
-          (
-            await tx
-              .select({ id: caseLawReplayBatches.id })
-              .from(caseLawReplayBatches)
-              .where(
-                and(
-                  eq(caseLawReplayBatches.sourceId, source.id),
-                  inArray(caseLawReplayBatches.status, [
-                    "reserved",
-                    "retry-exhausted",
-                  ]),
-                  or(
-                    isNull(caseLawReplayBatches.retryAt),
-                    lte(
-                      caseLawReplayBatches.retryAt,
-                      sql`${new Date(now())}::timestamptz`,
-                    ),
-                  ),
-                ),
-              )
-              .limit(1)
-          ).length > 0,
-      );
+      const pending = pendingSourceIds.has(source.id);
       let probe = pending;
       if (!pending) {
         // db-await-in-loop: Only probe lag after this source has no pending receipt, before advancing to the next source in round-robin order.
