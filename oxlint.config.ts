@@ -3744,7 +3744,12 @@ export default defineConfig({
     {
       // Outside the API, apps and packages read their own env modules; a
       // deployment flag is never read off the raw process environment.
-      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",

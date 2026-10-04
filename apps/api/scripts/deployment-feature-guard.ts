@@ -11,9 +11,8 @@
 //     `import.meta.env.FEATURE_*` read anywhere in apps or packages;
 //   - over the real route tree (every handler file that builds an Elysia
 //     instance, plus the server root), a capability whose catalog entry carries
-//     a flag is mounted behind a gate that reads that flag on every mount (or
-//     its handler module checks the flag itself), every gate reads declared
-//     flags, and every route file is classified: gated, serving a flagged
+//     a flag is mounted behind a gate that reads that flag on every mount,
+//     every gate reads declared flags, and every route file is classified: gated, serving a flagged
 //     capability, or declared always-on in `ALWAYS_ON_ROUTE_FILES`.
 //
 // Existing gaps live in `apps/api/deployment-feature-baseline.json`, one row
@@ -31,6 +30,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import type {
@@ -116,6 +117,7 @@ export const loadRealInput = (): ScanInput => {
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.ts",
         "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
       ]).filter((file) => !allFiles.has(file)),
     ),
     routeFiles,
@@ -162,7 +164,7 @@ export const buildBaseline = (findings: readonly Finding[]): BaselineRow[] =>
       key: findingKey(finding),
       reason: reasonFor(finding),
     }))
-    .toSorted((a, b) => a.key.localeCompare(b.key));
+    .toSorted((a, b) => compareCodeUnit(a.key, b.key));
 
 const parseBaseline = (raw: unknown, origin: string): BaselineRow[] => {
   if (!Array.isArray(raw)) {
@@ -189,12 +191,28 @@ const readBaseline = (): BaselineRow[] => {
     : [];
 };
 
-const readBaseBaseline = (base: string): BaselineRow[] | undefined => {
+const gitSucceeds = (args: readonly string[]): boolean =>
+  Bun.spawnSync(["git", ...args], { cwd: REPO_ROOT, stderr: "ignore" })
+    .exitCode === 0;
+
+/**
+ * The base revision's baseline; undefined only when the revision exists and
+ * has no baseline file. A revision that does not resolve fails.
+ */
+export const readBaseBaseline = (base: string): BaselineRow[] | undefined => {
+  if (!gitSucceeds(["cat-file", "-e", `${base}^{commit}`])) {
+    return panic(`deployment-feature-guard: --base ${base} is not a commit`);
+  }
+  if (!gitSucceeds(["cat-file", "-e", `${base}:${BASELINE_FILE}`])) {
+    return undefined;
+  }
   const result = Bun.spawnSync(["git", "show", `${base}:${BASELINE_FILE}`], {
     cwd: REPO_ROOT,
   });
   if (result.exitCode !== 0) {
-    return undefined;
+    return panic(
+      `deployment-feature-guard: cannot read ${base}:${BASELINE_FILE}`,
+    );
   }
   return parseBaseline(
     JSON.parse(result.stdout.toString()),
@@ -226,7 +244,7 @@ export const diffBaseline = ({
 }): BaselineDiff => {
   const keys = new Set(baseline.map(({ key }) => key));
   const current = new Set(findings.map(findingKey));
-  const sorted = baseline.map(({ key }) => key).toSorted();
+  const sorted = baseline.map(({ key }) => key).toSorted(compareCodeUnit);
   const baseKeys =
     baseBaseline === undefined
       ? undefined
@@ -481,12 +499,22 @@ const printReport = (result: ScanResult): void => {
   }
 };
 
-const argumentAfter = (flag: string): string | undefined => {
-  const index = process.argv.indexOf(flag);
-  return index === -1 ? undefined : process.argv[index + 1];
+/** `--base <rev>`; a present flag with an empty or missing value fails. */
+const baseArgument = (): string | undefined => {
+  const index = process.argv.indexOf("--base");
+  if (index === -1) {
+    return undefined;
+  }
+  const value = process.argv[index + 1];
+  if (value === undefined || value.length === 0 || value.startsWith("-")) {
+    return panic("deployment-feature-guard: --base needs a revision");
+  }
+  return value;
 };
 
 const main = async (): Promise<number> => {
+  // Parsed first so a bad `--base` fails before the scan.
+  const base = baseArgument();
   const input = loadRealInput();
   if (process.argv.includes("--self-test")) {
     const failures = runSelfTest(input);
@@ -516,11 +544,7 @@ const main = async (): Promise<number> => {
     console.log(`deployment-feature-guard: wrote ${rows.length} rows.`);
     return 0;
   }
-  const base = argumentAfter("--base");
-  const baseBaseline =
-    base === undefined || base.length === 0
-      ? undefined
-      : readBaseBaseline(base);
+  const baseBaseline = base === undefined ? undefined : readBaseBaseline(base);
   const diff = diffBaseline({
     findings: result.findings,
     baseline: readBaseline(),
