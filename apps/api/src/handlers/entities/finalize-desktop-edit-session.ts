@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/entity-versions/version-utils";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -539,6 +540,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       const storedSizeBytes = storedBytes.byteLength;
 
       const nextVersionId = createSafeId<"entityVersion">();
+      const encryption = officeFileEncryption(canonicalMimeType);
       await lockObjectCleanupIntentsForWriter(tx, [intentId]);
 
       if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
@@ -595,13 +597,13 @@ export const finalizeDesktopEditSessionHandler = async ({
         entityVersionId: nextVersionId,
         propertyId: editSession.propertyId,
         replacementContent: fileContentWithMintedObject({
-          encrypted: false,
+          encryption,
           fileName: editSession.fileName,
           id: sourceFileId,
           mimeType: canonicalMimeType,
           pdfFileId: null,
           pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: false,
+            encrypted: encryption.encrypted,
             mimeType: canonicalMimeType,
           }),
           sha256Hex: storedSha256Hex,
@@ -746,7 +748,9 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
 
       enqueuePdfDerivativeOrMarkFailed({
-        encrypted: false,
+        encrypted: officeFileEncryption(
+          desktopEditMimeTypeForFileType(result.fileType),
+        ).encrypted,
         entityId: result.entityId,
         fieldId: result.fieldId,
         mimeType: desktopEditMimeTypeForFileType(result.fileType),

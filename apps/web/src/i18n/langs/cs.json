@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Přidat číselnou řadu",
       "advance": "Záloha",
+      "allSellers": "Všichni dodavatelé",
       "archiveConfirm": "Archivovat tuto číselnou řadu? Nebude již dostupná pro nové doklady.",
       "creditNote": "Dobropis",
       "default": "Výchozí řada",
@@ -562,6 +563,9 @@
       "preview": "Další číslo",
       "previewAllocated": "Toto číslo již bylo přiděleno.",
       "previewHelp": "Náhled používá uložený vzor a nerezervuje číslo.",
+      "sellerProfile": "Profil dodavatele",
+      "sellerUnavailable": "Dodavatel je archivovaný nebo nedostupný",
+      "sellerUnavailableHelp": "Tento dodavatel je archivovaný nebo nedostupný. Ponechte přiřazení nebo vyberte jiného dodavatele.",
       "setDefault": "Nastavit jako výchozí řadu",
       "title": "Číselné řady"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Zatím žádné dovednosti",
       "pinnedMatters": "Připnuté spisy",
       "recentChats": "Nedávné chaty",
+      "skillEditedBy": "Upravil(a) {name} · {time}",
       "skills": "Dovednosti"
     },
     "loadEarlierMessages": "Načíst starší zprávy",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "thinking": "Pracuji s kontextem",
+    "threadFiles": {
+      "title": "Soubory v tomto chatu"
+    },
     "tool": {
       "add_comment": "Přidávání komentáře",
       "apply-active-docx-edits": "Připravuji úpravy dokumentu",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
+      "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
       "forbidden": "K této akci nemáte oprávnění.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
@@ -4826,6 +4835,7 @@
     "addPart": "Přidat část",
     "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnout tyto podmínky, proto byly jejich části vyplněny, jako by neplatily: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala vytvořit návrh těchto polí: {list}",
     "allTemplates": "Všechny vzory",
@@ -4917,6 +4927,7 @@
     "directiveFor": "Smyčka: {expression}",
     "directiveIf": "Pokud: {expression}",
     "discoveryFailed": "Nepodařilo se analyzovat vzor",
+    "documentCreatedIncomplete": "Dokument byl vytvořen, ale vyplnění není úplné",
     "downloadAnyway": "Přesto stáhnout",
     "downloadDocx": "Stáhnout DOCX",
     "downloadPdf": "Stáhnout PDF",
@@ -5012,6 +5023,7 @@
     "saveFailed": "Nepodařilo se uložit vzor",
     "savedLookupFormats": "Uložené výstupní formáty",
     "searchTemplates": "Hledat vzory…",
+    "structureErrorsInDocument": "Direktivy vzoru, které nebylo možné použít: {count}. Zkontrolujte dokument.",
     "structureWarningParagraph": "Odstavec {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {

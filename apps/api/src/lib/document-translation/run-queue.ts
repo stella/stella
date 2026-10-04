@@ -101,10 +101,12 @@ import {
   createBilingualDocxFromScanned,
   readScannedBilingualDocx,
 } from "@/api/lib/file-scan/document-parsers";
-import { scanFile } from "@/api/lib/file-scan/scan";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -1153,15 +1155,23 @@ const executeRun = async (
       return "format_validation_failed";
     }
   }
-  const scan = await scanFile({
-    buffer:
-      completedOutput.buffer instanceof Uint8Array
-        ? completedOutput.buffer
-        : new Uint8Array(completedOutput.buffer),
+  const scanned = await scanUpload({
+    bytes: completedOutput.buffer,
     declaredMimeType: completedOutput.mimeType,
     fileName: completedOutput.fileName,
   });
-  if (Result.isError(scan) || scan.value.verdict === "reject") {
+  if (Result.isError(scanned)) {
+    return "format_validation_failed";
+  }
+  // A provider's output: its bytes decide the attribute, as an upload's do.
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({
+      mimeType: completedOutput.mimeType,
+      scanned: scanned.value,
+    }),
+    { mimeType: completedOutput.mimeType, runId: actor.runId },
+  );
+  if (encryption === null) {
     return "format_validation_failed";
   }
 
@@ -1193,7 +1203,8 @@ const executeRun = async (
     buffer: completedOutput.buffer,
     fileName: completedOutput.fileName,
     mimeType: completedOutput.mimeType,
-    scanWarnings: getScanWarnings(scan.value) ?? undefined,
+    encryption,
+    scanWarnings: scanned.value.scanWarnings ?? undefined,
     afterCreate: async (tx, createdOutput) => {
       // audit: skip — lifecycle bookkeeping committed atomically with the
       // audited output entity, preventing a completed file with a stuck run.

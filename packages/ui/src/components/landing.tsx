@@ -79,11 +79,13 @@ export const LandingGreeting = ({ icon, children }: LandingGreetingProps) => (
   </div>
 );
 
-/** A column's heading: an icon and an uppercase label, as a link or a trigger. */
+/** A column's heading: an icon and a sentence-case label, as a link or a trigger. */
 export const LANDING_SECTION_HEADING_CLASS =
-  "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase outline-none focus-visible:ring-2";
+  "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 text-sm font-medium outline-none focus-visible:ring-2";
 
-/** A row of a column, as a link or a button. */
+/** A row of a column, as a link or a button. Its text lines up with the
+ *  heading's label; the icon slot under the heading icon stays empty unless
+ *  the icon identifies the row (a matter's colour). */
 export const LANDING_ROW_CLASS =
   "group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2";
 
@@ -138,7 +140,9 @@ export const LandingItemText = ({
   title,
 }: LandingItemTextProps) => (
   <span className="flex min-w-0 items-start gap-2">
-    {icon !== undefined && (
+    {icon === undefined ? (
+      <span aria-hidden="true" className="size-4 shrink-0" />
+    ) : (
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">

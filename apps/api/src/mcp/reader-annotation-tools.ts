@@ -685,6 +685,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "Resending the same call returns the mark it already made.",
     inputSchema: createArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
       type: "all",
       permissions: { legalReaderAnnotation: ["create"] },
@@ -705,6 +706,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it. ${MARK_OWNERSHIP}`,
     inputSchema: updateArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
       type: "all",
       permissions: { legalReaderAnnotation: ["update"] },
@@ -725,6 +727,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Permanently delete one of the user's highlights or comments, every passage of it. ${MARK_OWNERSHIP}`,
     inputSchema: deleteArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
       type: "all",
       permissions: { legalReaderAnnotation: ["delete"] },
