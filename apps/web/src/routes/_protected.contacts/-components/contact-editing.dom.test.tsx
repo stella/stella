@@ -122,6 +122,7 @@ const contact = (id: typeof A, notes: string | null) =>
     responsibleAttorney: null,
     dateOfBirth: null,
     nationalityCodes: [],
+    sanctionsMonitoringMode: "included",
     createdBy: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
