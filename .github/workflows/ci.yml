@@ -1777,8 +1777,10 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every BullMQ queue declares whose authority its jobs run under
         # (apps/api/src/lib/member-run-queues.ts), and a member-run queue
-        # builds its handles with the run actor. Existing gaps are listed in
-        # a shrink-only baseline: `bun scripts/queue-authority.ts --write`.
+        # builds its handles with the run actor; scheduler tasks are held the
+        # same way (apps/api/src/lib/scheduler/task-authority.ts). Existing
+        # gaps are listed in shrink-only baselines:
+        # `bun scripts/queue-authority.ts --write`.
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
