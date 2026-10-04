@@ -119,6 +119,47 @@ export const SIZE_LINT_POLICY_OVERRIDES =
   sizeLintPolicyOverrides(SIZE_LINT_CEILINGS);
 
 /**
+ * Built-in rules the vendored presets enable whose merged-code findings ride
+ * the backlog below, so each one is on for every file the baseline does not
+ * list. `oxlint.design.config.ts` measures them under the options the
+ * repository lint resolves for them.
+ */
+export const BUILTIN_LINT_BACKLOG_RULES = [
+  "react/jsx-no-duplicate-props",
+  "react/jsx-no-undef",
+  "react/no-children-prop",
+  "react/no-did-mount-set-state",
+  "react/no-did-update-set-state",
+  "react/no-direct-mutation-state",
+  "react/no-find-dom-node",
+  "react/no-is-mounted",
+  "react/no-render-return-value",
+  "react/no-string-refs",
+  "react/no-this-in-sfc",
+  "react/no-unsafe",
+  "react/no-will-update-set-state",
+  "eslint/no-unexpected-multiline",
+  "eslint/no-use-before-define",
+  "unicorn/filename-case",
+  "unicorn/consistent-function-scoping",
+  "unicorn/no-useless-undefined",
+  "unicorn/prefer-ternary",
+  "promise/avoid-new",
+  "promise/prefer-await-to-callbacks",
+  "promise/prefer-await-to-then",
+  "eslint/func-names",
+  "eslint/func-style",
+  "eslint/no-plusplus",
+  "eslint/no-negated-condition",
+  "eslint/prefer-destructuring",
+  "eslint/class-methods-use-this",
+  "eslint/max-classes-per-file",
+  "eslint/no-inline-comments",
+] as const;
+
+type BuiltinLintBacklogRule = (typeof BUILTIN_LINT_BACKLOG_RULES)[number];
+
+/**
  * Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`.
  *
  * `require-bounded-request-schema` and `no-unbounded-response-body` are not
@@ -138,6 +179,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-unbounded-response-body/no-unbounded-response-body",
   "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ...SIZE_LINT_BACKLOG_RULES,
+  ...BUILTIN_LINT_BACKLOG_RULES,
 ] as const;
 
 export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
@@ -200,13 +242,23 @@ const SIZE_LINT_RULE_IDS: ReadonlySet<string> = new Set(
 const isSizeLintRule = (rule: string): rule is SizeLintRule =>
   SIZE_LINT_RULE_IDS.has(rule);
 
+const BUILTIN_LINT_RULE_IDS: ReadonlySet<string> = new Set(
+  BUILTIN_LINT_BACKLOG_RULES,
+);
+
+const isBuiltinLintRule = (rule: string): rule is BuiltinLintBacklogRule =>
+  BUILTIN_LINT_RULE_IDS.has(rule);
+
 /**
  * The tracked rules this repository implements, as opposed to the preset's
  * and the core size limits, which both passes configure from this module.
  */
 const DESIGN_LINT_LOCAL_RULES: ReadonlySet<string> = new Set(
   DESIGN_LINT_BACKLOG_RULES.filter(
-    (rule) => pluginOf(rule) !== SHADCN_PLUGIN && !isSizeLintRule(rule),
+    (rule) =>
+      pluginOf(rule) !== SHADCN_PLUGIN &&
+      !isSizeLintRule(rule) &&
+      !isBuiltinLintRule(rule),
   ),
 );
 

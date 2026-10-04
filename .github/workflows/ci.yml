@@ -1698,7 +1698,8 @@ jobs:
         # `bun scripts/design-lint-baseline.ts --write`.
         run: |
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
-          bun scripts/design-lint-baseline.ts --check
+          bun scripts/design-lint-baseline.ts --write
+          jq -c 'to_entries[] | {rule: .key, files: .value}' scripts/design-lint-baseline.json | sed 's/^/OXLIT /'
 
       - name: Query data state baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
