@@ -126,7 +126,6 @@ const bindingsFor = (source: ts.SourceFile) => {
         node,
         node.name,
         ts.isExternalModuleReference(reference) &&
-          reference.expression !== undefined &&
           ts.isStringLiteralLike(reference.expression)
           ? { type: "import", source: reference.expression.text, name: "*" }
           : { type: "shadow" },
