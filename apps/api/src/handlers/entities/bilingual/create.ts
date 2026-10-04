@@ -18,6 +18,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -204,7 +208,9 @@ export const createBilingualEntityHandler = (
       });
       if (Result.isError(created)) {
         return Result.err(
-          new HandlerError({ status: 400, message: created.error.message }),
+          DocumentWriteRefusedError.is(created.error)
+            ? documentWriteRefusalHandlerError(created.error)
+            : new HandlerError({ status: 400, message: created.error.message }),
         );
       }
 

@@ -293,7 +293,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             userId,
             admit,
           });
-          if (Result.isError(phase) || phase.value === undefined) {
+          if (Result.isError(phase)) {
             panic("Expected chat phase admission");
           }
           try {
@@ -357,7 +357,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           actionKind: "chat.send",
           admit,
         });
-        if (Result.isError(phase) || phase.value === undefined) {
+        if (Result.isError(phase)) {
           panic("Expected chat phase admission");
         }
         try {
@@ -375,7 +375,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             actionKind: "chat.generate-thread-title",
             admit,
           });
-          if (Result.isError(title) || title.value === undefined) {
+          if (Result.isError(title)) {
             panic("Expected detached title admission");
           }
           try {
@@ -652,7 +652,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               },
             }),
         });
-        if (Result.isError(result) || result.value === undefined) {
+        if (Result.isError(result)) {
           panic("Expected chat phase admission");
         }
         try {

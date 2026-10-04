@@ -294,7 +294,7 @@ const config = {
     "and AI-fillable fields are resolved automatically; AI-fillable fields " +
     "are drafted when you omit them.",
   permissions: { template: ["use"] },
-  accountAccess: ACCOUNT_ACCESS.sandbox,
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
   transport: {

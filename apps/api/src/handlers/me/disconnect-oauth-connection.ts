@@ -16,7 +16,7 @@ const routeParams = t.Object({
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.sandbox,
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "auth_plumbing" },
   params: routeParams,
 } satisfies SessionHandlerConfig;
