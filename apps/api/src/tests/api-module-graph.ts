@@ -48,6 +48,10 @@ const resolveApiModule = (
 export const collectApiImports = async (
   entrypoint: string,
 ): Promise<string[]> => {
+  // Imported assets remain graph nodes but do not contain source imports.
+  if (!/\.(?:[cm]?js|jsx|tsx?)$/u.test(entrypoint)) {
+    return [];
+  }
   const source = await Bun.file(entrypoint).text();
   const loader = entrypoint.endsWith(".tsx") ? "tsx" : "ts";
   const imports = new Bun.Transpiler({ loader }).scan(source).imports;
