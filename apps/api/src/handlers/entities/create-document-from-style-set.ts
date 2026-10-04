@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { readStyleSetFile } from "@/api/lib/style-sets";
@@ -14,7 +14,9 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  access: "write",
   permissions: { entity: ["create"], styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "compound_consent" },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;

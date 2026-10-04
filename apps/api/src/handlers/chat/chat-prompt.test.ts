@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  CHAT_USER_HREF_TEMPLATE,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -1510,6 +1511,17 @@ describe("system prompt tool-reference guard", () => {
         "Never link a stella decision by its appUrl or sourceUrl",
       );
       expect(prompt).toContain("say that the corpus returned none");
+    }
+  });
+
+  // Tools return people (task assignees, matter members, person fields) with
+  // a userId; without a rule for people the model printed a bare handle where
+  // it links every other reference.
+  test("every assembled prompt links people by the userId a tool returned", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain("PEOPLE MENTIONS");
+      expect(prompt).toContain(`(${CHAT_USER_HREF_TEMPLATE})`);
+      expect(prompt).toContain("A person without a userId stays plain text");
     }
   });
 

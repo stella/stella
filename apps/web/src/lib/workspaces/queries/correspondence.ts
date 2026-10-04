@@ -53,6 +53,10 @@ export const uniqueCorrespondenceAddresses = (
   });
 };
 
+/** Page size of the matter's correspondence list; the view loader prefetches
+ *  the same first page. */
+export const CORRESPONDENCE_PAGE_SIZE = 50;
+
 export const correspondenceInfiniteOptions = (
   workspaceId: string,
   limit: number,

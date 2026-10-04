@@ -10,6 +10,7 @@ export const CORPUS_INDEX_INTENT_STATUSES = [
   "cleanup_pending",
   "cleanup_started",
   "cleanup_committed",
+  "cleanup_stalled",
   "settled",
   "cancelled",
 ] as const;
@@ -29,6 +30,7 @@ export const CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION = {
   cleanup_pending: "blocking",
   cleanup_started: "blocking",
   cleanup_committed: "blocking",
+  cleanup_stalled: "blocking",
   settled: "terminal",
   cancelled: "terminal",
 } as const satisfies Record<
@@ -119,7 +121,12 @@ export const CORPUS_INDEX_INTENT_TRANSITIONS = {
   applied: ["cleanup_pending"],
   cleanup_pending: ["cleanup_started"],
   cleanup_started: ["cleanup_pending", "cleanup_committed"],
-  cleanup_committed: ["settled"],
+  // A delete settles unless revisions it targeted were written after it, which
+  // no delete can reach: those go back to cleanup for a new delete, a bounded
+  // number of times, and then stall for an operator instead of looping.
+  cleanup_committed: ["settled", "cleanup_pending", "cleanup_stalled"],
+  // Operator-only exit: no worker transition leaves a stall.
+  cleanup_stalled: ["cleanup_pending"],
   // A zero-hit census may later disprove settlement if an append was still in
   // an ingester tail. Reopening exact-revision cleanup is safe and makes that
   // engine edge self-healing.

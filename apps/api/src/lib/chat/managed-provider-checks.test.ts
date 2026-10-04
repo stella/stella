@@ -3,6 +3,8 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 import { describe, expect, jest, spyOn, test } from "bun:test";
 
+import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -18,7 +20,7 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],
@@ -181,6 +183,7 @@ describe("managed request catalog checks", () => {
               : [],
           });
         }
+        expect(await request.json()).toMatchObject({ model: MODEL });
         return Response.json(
           { error: { code: 400, message: "fixture stop" } },
           { status: 400 },
@@ -202,63 +205,49 @@ describe("managed request catalog checks", () => {
           model: MODEL,
           apiKey: "fixture-key",
           managedAIResidency: residency,
-        });
-        const variantChatOptions = { ...chatOptions, model: `${MODEL}:online` };
-        const variantStructuredOptions = {
-          ...structuredOptions,
-          chatOptions: variantChatOptions,
-        };
-        for (const path of [
-          "chat",
-          "structured",
-          "structured-stream",
-        ] as const) {
-          const before = requests.length;
-          if (path === "structured") {
-            const result = await Result.tryPromise({
-              try: async () =>
-                await adapter.structuredOutput(variantStructuredOptions),
-              catch: (error) => error,
-            });
-            expect(result.isErr()).toBe(true);
-            if (residency === "us" && Result.isError(result)) {
-              expect(result.error).toMatchObject({
-                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        }).unwrap();
+        for (const model of [MODEL, `${MODEL}:online`, `${MODEL}:free`]) {
+          const selectedChatOptions = { ...chatOptions, model };
+          const selectedStructuredOptions = {
+            ...structuredOptions,
+            chatOptions: selectedChatOptions,
+          };
+          const refused = residency === "us" || model === `${MODEL}:online`;
+          for (const path of [
+            "chat",
+            "structured",
+            "structured-stream",
+          ] as const) {
+            const before = requests.length;
+            if (path === "structured") {
+              const result = await Result.tryPromise({
+                try: async () =>
+                  await adapter.structuredOutput(selectedStructuredOptions),
+                catch: (error) => error,
               });
-            }
-          } else {
-            const result = await Result.tryPromise({
-              try: async () => {
-                const chunks = [];
-                for await (const chunk of path === "chat"
-                  ? adapter.chatStream(variantChatOptions)
-                  : adapter.structuredOutputStream(variantStructuredOptions)) {
-                  chunks.push(chunk);
-                }
-                return chunks.at(-1);
-              },
-              catch: (error) => error,
-            });
-            if (residency === "us" && path === "structured-stream") {
               expect(result.isErr()).toBe(true);
-              if (Result.isError(result)) {
+              if (refused && Result.isError(result)) {
                 expect(result.error).toMatchObject({
+                  status: 503,
                   code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
                 });
               }
             } else {
-              expect(result.isOk()).toBe(true);
-              if (Result.isOk(result)) {
-                expect(result.value?.type).toBe(EventType.RUN_ERROR);
-                if (residency === "us") {
-                  expect(result.value).toMatchObject({
-                    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                  });
-                }
+              const chunks = [];
+              for await (const chunk of path === "chat"
+                ? adapter.chatStream(selectedChatOptions)
+                : adapter.structuredOutputStream(selectedStructuredOptions)) {
+                chunks.push(chunk);
+              }
+              expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
+              if (refused) {
+                expect(chunks.at(-1)).toMatchObject({
+                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                });
               }
             }
+            expect(requests.length - before).toBe(refused ? 0 : 1);
           }
-          expect(requests.length - before).toBe(residency === "eu" ? 1 : 0);
         }
       }
       const beforeMissing = requests.length;
@@ -266,7 +255,7 @@ describe("managed request catalog checks", () => {
         model: MODEL,
         apiKey: "fixture-key",
         managedAIResidency: "eu",
-      });
+      }).unwrap();
       const missingChunks = [];
       for await (const chunk of adapter.chatStream({
         ...chatOptions,
@@ -341,7 +330,7 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               expect(new URL(request.url).hostname).toBe(
                 dataClass === "customer"
                   ? `${residency}.openrouter.ai`
-                  : "openrouter.ai",
+                  : "eu.openrouter.ai",
               );
               requestBodies.push(await request.json());
               requests++;

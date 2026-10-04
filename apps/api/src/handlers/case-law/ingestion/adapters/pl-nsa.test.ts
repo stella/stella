@@ -1,3 +1,6 @@
+import { panic, Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 /**
  * pl-nsa against rows the dataset serves.
  *
@@ -7,10 +10,6 @@
  * without judges. `pl-nsa-rows.parquet` is the same rows under the dataset's
  * own schema, which is what the reader and the cursor are driven over.
  */
-
-import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
@@ -54,9 +53,14 @@ import {
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
@@ -214,7 +218,7 @@ describe("the recorded dataset rows", () => {
     // Stored as 2025-01-13T23:00:00Z, which is midnight on the 14th in Warsaw.
     const decision = await byCase("nsa-2025-reasons");
     expect(decision.decisionDate).toBe("2025-01-14");
-    expect(decision.metadata["filedDate"]).toBe("2022-05-10");
+    expect(decision.metadata["filedDate"] === "2022-05-10").toBe(true);
   });
 
   test.each<[string, ExpectedClassification]>([
@@ -287,25 +291,25 @@ describe("the recorded dataset rows", () => {
     const decision = await byCase(name);
     const { metadata } = decision;
     if (expected.court !== undefined) {
-      expect(decision.court).toBe(expected.court);
+      expect(decision.court === expected.court).toBe(true);
     }
     if (expected.level !== undefined) {
-      expect(metadata["courtLevel"]).toBe(expected.level);
+      expect(metadata["courtLevel"] === expected.level).toBe(true);
     }
     if (expected.seat !== undefined) {
-      expect(metadata["courtSeat"]).toBe(expected.seat);
+      expect(metadata["courtSeat"] === expected.seat).toBe(true);
     }
     if (expected.type !== undefined) {
-      expect(decision.decisionType).toBe(expected.type);
+      expect(decision.decisionType === expected.type).toBe(true);
     }
     if (expected.bench !== undefined) {
-      expect(metadata["bench"]).toBe(expected.bench);
+      expect(metadata["bench"] === expected.bench).toBe(true);
     }
     if (expected.era !== undefined) {
-      expect(metadata["courtEra"]).toBe(expected.era);
+      expect(metadata["courtEra"] === expected.era).toBe(true);
     }
     if (expected.branch !== undefined) {
-      expect(metadata["courtBranch"]).toBe(expected.branch);
+      expect(metadata["courtBranch"] === expected.branch).toBe(true);
     }
     if (expected.finality !== undefined) {
       expect(metadata["finality"]).toMatchObject({
@@ -340,12 +344,14 @@ describe("the recorded dataset rows", () => {
   test("a judgment without reasons is stored whole, the reasons marked absent", async () => {
     const decision = await byCase("wsa-wyrok-no-reasons");
     expect(decision.isListingOnly).toBeUndefined();
-    expect(decision.metadata["textSections"]).toEqual({
-      thesis: "absent",
-      sentence: "present",
-      reasons: "absent",
-      dissent: "absent",
-    });
+    expect(
+      Bun.deepEquals(decision.metadata["textSections"], {
+        thesis: "absent",
+        sentence: "present",
+        reasons: "absent",
+        dissent: "absent",
+      }),
+    ).toBe(true);
     expect(headingsOf(decision)).toEqual(["Sentencja"]);
     expect(decision.sections?.map((section) => section.type)).toEqual([
       "ruling",
@@ -381,13 +387,15 @@ describe("the recorded dataset rows", () => {
 
   test("judges keep their roles and the bench as printed", async () => {
     const decision = await byCase("nsa-2025-reasons");
-    expect(decision.judges).toEqual([
-      { role: "presiding", nameAsPrinted: "Maciej Jaśniewicz" },
-      { role: "rapporteur", nameAsPrinted: "Antoni Hanusz" },
-      { role: "panel-member", nameAsPrinted: "Alicja Polańska" },
-      { role: "panel-member", nameAsPrinted: "Antoni Hanusz" },
-      { role: "panel-member", nameAsPrinted: "Maciej Jaśniewicz" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "presiding", nameAsPrinted: "Maciej Jaśniewicz" },
+        { role: "rapporteur", nameAsPrinted: "Antoni Hanusz" },
+        { role: "panel-member", nameAsPrinted: "Alicja Polańska" },
+        { role: "panel-member", nameAsPrinted: "Antoni Hanusz" },
+        { role: "panel-member", nameAsPrinted: "Maciej Jaśniewicz" },
+      ]),
+    ).toBe(true);
     // A row naming no judge says nothing about the bench, rather than that
     // there was none.
     expect((await byCase("no-judges")).judges).toBeUndefined();
@@ -396,6 +404,25 @@ describe("the recorded dataset rows", () => {
   test("related decisions link the court's own pages", async () => {
     const decision = await byCase("multiple-related");
     const related = decision.metadata["relatedDecisions"];
+    const repeated = toPlainTextIngestionResult(
+      decision,
+      PL_NSA_METADATA_URL_SCHEMA,
+    ).unwrap().metadata;
+    const serializedMetadata = JSON.stringify(decision.metadata);
+    const restored = toPlainTextMetadataObject(
+      rehydrateMetadataUrls(
+        JSON.parse(serializedMetadata),
+        PL_NSA_METADATA_URL_SCHEMA,
+      ),
+      PL_NSA_METADATA_URL_SCHEMA,
+    ).unwrap();
+    expect(repeated["relatedDecisions"]).toEqual(
+      decision.metadata["relatedDecisions"],
+    );
+    expect(restored["relatedDecisions"]).toEqual(
+      decision.metadata["relatedDecisions"],
+    );
+
     expect(Array.isArray(related) && related.length >= 2).toBe(true);
     for (const item of Array.isArray(related) ? related : []) {
       expect(item).toMatchObject({
@@ -692,13 +719,15 @@ describe("dockets", () => {
 
   test("a joined docket names each of its cases as an identifier", async () => {
     const decision = await withDocket("I SA 1234-1236/98");
-    expect(decision.caseNumber).toBe("I SA 1234-1236/98");
+    expect(decision.caseNumber === "I SA 1234-1236/98").toBe(true);
     expect(decision.metadata["docketRecognised"]).toBe(true);
-    expect(decision.metadata["docketRangeMembers"]).toEqual([
-      "I SA 1234/98",
-      "I SA 1235/98",
-      "I SA 1236/98",
-    ]);
+    expect(
+      Bun.deepEquals(decision.metadata["docketRangeMembers"], [
+        "I SA 1234/98",
+        "I SA 1235/98",
+        "I SA 1236/98",
+      ]),
+    ).toBe(true);
     // What the pipeline stores and resolves citations against: a citation
     // of the middle case keys the same as one of the row's identifiers.
     const stored = decisionIdentifiersFromMetadata({
@@ -739,15 +768,17 @@ describe("dockets", () => {
 
   test("a register lead is dropped from the case number, kept as published", async () => {
     const decision = await withDocket("12/II SA/Po 1234/99");
-    expect(decision.caseNumber).toBe("II SA/Po 1234/99");
-    expect(decision.metadata["docketAsPublished"]).toBe("12/II SA/Po 1234/99");
+    expect(decision.caseNumber === "II SA/Po 1234/99").toBe(true);
+    expect(
+      decision.metadata["docketAsPublished"] === "12/II SA/Po 1234/99",
+    ).toBe(true);
     expect(decision.metadata["docketRecognised"]).toBe(true);
   });
 
   test("an unrecognised docket is kept as printed and marked", async () => {
     // A register the grammar does not know, spaced as the source spaces it.
     const decision = await withDocket("SAO/Kr  12/82");
-    expect(decision.caseNumber).toBe("SAO/Kr 12/82");
+    expect(decision.caseNumber === "SAO/Kr 12/82").toBe(true);
     expect(decision.metadata["docketRecognised"]).toBe(false);
   });
 });
@@ -870,7 +901,7 @@ describe("a row without a publisher id", () => {
     expect(decision.sourceDocumentId).toMatch(
       /^pl-nsa-quarantine:[0-9a-f]{64}$/u,
     );
-    expect(decision.metadata["identityKind"]).toBe("quarantine");
+    expect(decision.metadata["identityKind"] === "quarantine").toBe(true);
     // No portal id, so no portal link.
     expect(decision.sourceUrl).toBeUndefined();
     // The verbatim row is what the quarantine holds.
@@ -1041,10 +1072,12 @@ describe("the deciding court comes from the record", () => {
     });
     // Stored, unpublished, under a label that is not a court.
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.court).toBe(PL_NSA_UNSTATED_COURT);
-    expect(decision.metadata["quarantine"]).toEqual({
-      reason: "court-unstated",
-    });
+    expect(decision.court === PL_NSA_UNSTATED_COURT).toBe(true);
+    expect(
+      Bun.deepEquals(decision.metadata["quarantine"], {
+        reason: "court-unstated",
+      }),
+    ).toBe(true);
     expect(decision.sourceDocumentId).toBe(
       String(recorded.values["judgment_id"]).replace("/doc/", ""),
     );
@@ -1424,10 +1457,12 @@ describe("unreadable timestamps", () => {
     async (_, value) => {
       const decision = await withDate(value);
       expect(decision.isListingOnly).toBe(true);
-      expect(decision.metadata["quarantine"]).toEqual({
-        reason: "timestamp-unreadable",
-        fields: ["judgment_date"],
-      });
+      expect(
+        Bun.deepEquals(decision.metadata["quarantine"], {
+          reason: "timestamp-unreadable",
+          fields: ["judgment_date"],
+        }),
+      ).toBe(true);
     },
   );
 
@@ -1436,4 +1471,105 @@ describe("unreadable timestamps", () => {
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.decisionDate).toBe("2010-04-02");
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(String(entry.input), async () => {
+      const { input } = entry;
+      const recorded =
+        (await recordedRows()).at(0) ?? panic("No recorded NSA row");
+      const decision = build({
+        ...recorded,
+        values: {
+          ...recorded.values,
+          extracted_legal_bases: [
+            { link: input, article: "art. 1", journal: "Dz.U.", law: "Ustawa" },
+          ],
+        },
+      });
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_NSA_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_NSA_METADATA_URL_SCHEMA,
+        ),
+        PL_NSA_METADATA_URL_SCHEMA,
+      ).unwrap();
+      const addresses = ["citedProvisions[0].link"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual({
+            entries: expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+            overflowCount: 0,
+          });
+        }
+      }
+    });
+  }
+});
+
+test("unresolvable related decisions preserve a null source URL", async () => {
+  const recorded = (await recordedRows()).at(0) ?? panic("No recorded NSA row");
+  const decision = build({
+    ...recorded,
+    values: {
+      ...recorded.values,
+      related_docket_numbers: [
+        {
+          judgment_id: null,
+          docket_number: "I SA 1/24",
+          judgment_date: null,
+          judgment_type: null,
+        },
+      ],
+    },
+  });
+  expect(decision.metadata).toHaveProperty(
+    "relatedDecisions[0].sourceUrl",
+    null,
+  );
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
 });

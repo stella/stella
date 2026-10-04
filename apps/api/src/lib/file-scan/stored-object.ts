@@ -31,7 +31,10 @@ import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readS3ObjectBounded, writeS3ObjectWithRetry } from "@/api/lib/s3";
-import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
+import type {
+  S3ObjectWriteOwnership,
+  S3ObjectWriteCertainty,
+} from "@/api/lib/s3";
 
 const UNSCANNED_READ_TIMEOUT_MS = 30_000;
 
@@ -76,16 +79,18 @@ type WrittenScannedObject = {
 };
 
 /** Stores a scanned file's bytes; the reference is what its row records. */
-export const writeScannedObject = async ({
-  file,
-  key,
-  write = writeS3ObjectWithRetry,
-}: WriteScannedObjectInput): Promise<WrittenScannedObject> => ({
-  certainty: await write({
-    key,
-    data: new Uint8Array(file.bytes),
-    contentType: file.mimeType,
-  }),
+export const writeScannedObject = async (
+  { file, key, write = writeS3ObjectWithRetry }: WriteScannedObjectInput,
+  ownership: S3ObjectWriteOwnership,
+): Promise<WrittenScannedObject> => ({
+  certainty: await write(
+    {
+      key,
+      data: new Uint8Array(file.bytes),
+      contentType: file.mimeType,
+    },
+    ownership,
+  ),
   object: { scanState: "scanned", key: v.parse(fileKeySchema, key) },
 });
 

@@ -81,7 +81,6 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db#createScopedDb",
       "path:@/api/db#db",
       "path:@/api/db/root#rlsDb,rootDb",
-      "path:@/api/lib/api-handlers#createHandler,createRootHandler",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
       ...PROVIDER_ADAPTER_IMPORT_KEYS,

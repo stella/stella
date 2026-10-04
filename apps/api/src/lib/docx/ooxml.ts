@@ -147,3 +147,59 @@ export const createIdGenerator = (existingIds: Set<number>): (() => number) => {
     return id;
   };
 };
+
+/**
+ * Remove one block-level unit (a paragraph, a row, or a whole table) and repair
+ * the containers the removal would leave invalid: a `w:tc` must keep at least
+ * one `w:p`, and a `w:tbl` at least one `w:tr` — Word reports a document
+ * violating either as corrupt. Every directive removal path routes through
+ * here (marker stripping, branch pruning, row removal, and the paragraph-index
+ * fallback), so no path can invent a new way to empty a cell.
+ */
+export const removeBlockUnit = (unit: slimdom.Node): void => {
+  const parent = unit.parentNode;
+  if (!parent) {
+    return;
+  }
+  if (isElement(unit) && unit.namespaceURI === W_NS && unit.localName === "p") {
+    const properties = [...unit.childNodes].find(
+      (child) =>
+        isElement(child) &&
+        child.namespaceURI === W_NS &&
+        child.localName === "pPr",
+    );
+    if (
+      properties &&
+      isElement(properties) &&
+      properties.getElementsByTagNameNS(W_NS, "sectPr").length > 0
+    ) {
+      // A section boundary owns page layout and header/footer references.
+      // Retain that empty paragraph when its ordinary content is removed.
+      for (const child of [...unit.childNodes]) {
+        if (child !== properties) {
+          unit.removeChild(child);
+        }
+      }
+      return;
+    }
+  }
+  // Resolve the containers to repair from the PARENT, not the direct
+  // parent-child relation: a row-level content control wraps its `w:tr` in
+  // `w:sdt`/`w:sdtContent`, so the enclosing table is an ancestor rather than
+  // the row's parent, and a table-shell check on `parent` alone would miss it.
+  const cell = ancestorByLocalName(parent, "tc");
+  const table = ancestorByLocalName(parent, "tbl");
+  parent.removeChild(unit);
+
+  // The last row left the table: drop the shell, then repair whatever cell the
+  // table itself lived in.
+  if (table?.getElementsByTagNameNS(W_NS, "tr").length === 0) {
+    removeBlockUnit(table);
+    return;
+  }
+
+  const doc = cell?.ownerDocument;
+  if (cell && doc && cell.getElementsByTagNameNS(W_NS, "p").length === 0) {
+    cell.append(doc.createElementNS(W_NS, "w:p"));
+  }
+};

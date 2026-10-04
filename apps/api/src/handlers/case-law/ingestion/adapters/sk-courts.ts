@@ -1,5 +1,6 @@
+// parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import { decodeHTMLStrict } from "entities";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -45,6 +46,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
@@ -78,14 +80,18 @@ import {
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
 
 /**
  * Slovak Courts adapter.
@@ -161,6 +167,8 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
   const fetched = await Result.tryPromise({
     try: async () =>
       await fetchPublisher(target.value, {
+        fetchStage: "document",
+        expectedContentType: "pdf",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         redirect: "error",
         signal,
@@ -376,6 +384,7 @@ const fetchDetail = async (
 ): Promise<SkDetailItem | null> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -420,17 +429,25 @@ const skCourtsSourceDocumentId = (
 /** The two fields this adapter refuses to store a decision without. */
 type SkCourtsIdentityFields = { caseNumber: string; court: string };
 
-// Decode publisher display text once; raw payloads, URLs and source IDs stay verbatim.
+/**
+ * Publisher display text in the form a plain-text field stores. A value the
+ * canonical form refuses is kept as stated, so assembly reports it instead of
+ * this helper hiding it.
+ */
+const canonicalSkCourtText = (value: string): string =>
+  toPlainText(value).unwrapOr(value);
+
+// Raw payloads, URLs and source IDs stay verbatim.
 const decodeSkCourtText = (value: string | null | undefined) => {
   const text = toOptionalValue(value);
-  return text === undefined ? undefined : decodeHTMLStrict(text);
+  return text === undefined ? undefined : canonicalSkCourtText(text);
 };
 
 const decodeSkCourtTextList = (values: string[] | null | undefined) => {
   if (values === null || values === undefined) {
     return values;
   }
-  return values.map((value) => decodeHTMLStrict(value));
+  return values.map((value) => canonicalSkCourtText(value));
 };
 
 /** The registry's display names decoded; a stated null or absence stays as stated. */
@@ -438,12 +455,12 @@ const decodeSkCourtRegistryRecord = (
   record: SkCourtRegistryRecord,
 ): SkCourtRegistryRecord => ({
   ...record,
-  nazov: decodeHTMLStrict(record.nazov),
+  nazov: canonicalSkCourtText(record.nazov),
   ...(typeof record.typSudu === "string"
-    ? { typSudu: decodeHTMLStrict(record.typSudu) }
+    ? { typSudu: canonicalSkCourtText(record.typSudu) }
     : {}),
   ...(typeof record.skratka_string === "string"
-    ? { skratka_string: decodeHTMLStrict(record.skratka_string) }
+    ? { skratka_string: canonicalSkCourtText(record.skratka_string) }
     : {}),
 });
 
@@ -458,12 +475,17 @@ const decodeSkCourtRegistryRecord = (
 const skCourtsIdentityFields = (
   item: SkApiItem,
 ): SkCourtsIdentityFields | null => {
-  const caseNumber = decodeSkCourtText(item.spisovaZnacka);
-  const court = decodeSkCourtText(item.sud?.nazov);
-  if (!caseNumber || !court) {
+  const statedCaseNumber = toOptionalValue(item.spisovaZnacka);
+  const statedCourt = toOptionalValue(item.sud?.nazov);
+  if (!statedCaseNumber || !statedCourt) {
     return null;
   }
-  return { caseNumber, court };
+  // Stated markup-only labels must reach the required-label boundary with
+  // their evidence intact; an empty canonical form is not source absence.
+  return {
+    caseNumber: canonicalSkCourtText(statedCaseNumber) || statedCaseNumber,
+    court: canonicalSkCourtText(statedCourt) || statedCourt,
+  };
 };
 
 /**
@@ -485,9 +507,19 @@ export const skCourtsListingIdentity = (item: unknown): ListingIdentity => {
   if (sourceDocumentId !== undefined) {
     return { type: "document", sourceDocumentId };
   }
+  const caseNumber = toPlainText(fields.caseNumber);
+  const court = toPlainText(fields.court);
+  if (
+    caseNumber.isErr() ||
+    court.isErr() ||
+    caseNumber.value.length === 0 ||
+    court.value.length === 0
+  ) {
+    return { type: "unidentifiable" };
+  }
   return {
     type: "case-number",
-    caseNumber: fields.caseNumber,
+    caseNumber: caseNumber.value,
     language: SK_COURTS_LANGUAGE,
   };
 };
@@ -649,74 +681,84 @@ export const assembleSkCourtsDecision = ({
     return sourceUrl === undefined ? "rejected-url" : "published";
   })();
 
-  return {
-    caseNumber,
-    ecli,
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
-    language: SK_COURTS_LANGUAGE,
-    decisionDate,
-    decisionType,
-    sourceDocumentId: skCourtsSourceDocumentId(item.guid),
-    sourceUrl,
-    documentUrl:
-      restrictSkCourtDocumentUrl(
-        toOptionalValue(detail?.dokument?.url) ?? "",
-      )?.toString() ?? undefined,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
-      ...directoryMetadata,
-      courtSuccession,
-      ...(registryUnavailable === undefined
-        ? {}
-        : { courtRegistry: registryUnavailable }),
+  return plainTextIngestionResult(
+    {
       caseNumber,
       ecli,
       court,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
+      language: SK_COURTS_LANGUAGE,
       decisionDate,
       decisionType,
-      decisionTypeKey: decisionTypeKey(decisionType),
-      guid: toOptionalValue(item.guid),
-      identifikacneCislo: toOptionalValue(item.identifikacneCislo),
-      // The name this service states for a decision is the judge's or a
-      // senior court officer's, and the record carries no discriminator, so
-      // it stays a stated name rather than becoming a bench role. See the
-      // `judge-registry` surface for what would tell the two apart.
-      judge: decodeSkCourtText(item.sudca?.meno),
-      judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
-      courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
-      decisionNature: decodeSkCourtTextList(item.povaha),
-      area: decodeSkCourtTextList(detail?.oblast),
-      subArea: decodeSkCourtTextList(detail?.podOblast),
-      referencedLegislation:
-        detail?.odkazovanePredpisy?.map((reference) => ({
-          ...reference,
-          nazov: decodeSkCourtText(reference.nazov),
-        })) ?? detail?.odkazovanePredpisy,
-      documentName: decodeSkCourtText(detail?.dokument?.name),
-      documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
-      documentSize: detail?.dokument?.size,
-      documentFileId: detail?.dokument?.id,
-      updateDate,
-      updateDateIso,
-      updateDateDefect:
-        updateDate !== undefined && updateDateIso === undefined
-          ? { type: "invalid-publisher-date", value: updateDate }
-          : undefined,
-      statedSourceUrl,
-      sourceUrlStatus,
-      originCourt: decodeSkCourtText(detail?.povodnySud?.nazov),
-      originCourtRegistreGuid: toOptionalValue(
-        detail?.povodnySud?.registreGuid,
+      sourceDocumentId: skCourtsSourceDocumentId(item.guid),
+      sourceUrl,
+      documentUrl:
+        restrictSkCourtDocumentUrl(
+          toOptionalValue(detail?.dokument?.url) ?? "",
+        )?.toString() ?? undefined,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
+        {
+          ...directoryMetadata,
+          courtSuccession,
+          ...(registryUnavailable === undefined
+            ? {}
+            : { courtRegistry: registryUnavailable }),
+          caseNumber,
+          ecli,
+          court,
+          decisionDate,
+          decisionType,
+          decisionTypeKey: decisionTypeKey(decisionType),
+          guid: toOptionalValue(item.guid),
+          identifikacneCislo: toOptionalValue(item.identifikacneCislo),
+          // The name this service states for a decision is the judge's or a
+          // senior court officer's, and the record carries no discriminator, so
+          // it stays a stated name rather than becoming a bench role. See the
+          // `judge-registry` surface for what would tell the two apart.
+          judge: decodeSkCourtText(item.sudca?.meno),
+          judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
+          courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
+          decisionNature: decodeSkCourtTextList(item.povaha),
+          area: decodeSkCourtTextList(detail?.oblast),
+          subArea: decodeSkCourtTextList(detail?.podOblast),
+          referencedLegislation:
+            detail?.odkazovanePredpisy === null ||
+            detail?.odkazovanePredpisy === undefined
+              ? detail?.odkazovanePredpisy
+              : detail.odkazovanePredpisy.map((reference) => ({
+                  ...reference,
+                  nazov: decodeSkCourtText(reference.nazov),
+                  url: toMetadataUrl(reference.url, "transport-json"),
+                })),
+          documentName: decodeSkCourtText(detail?.dokument?.name),
+          documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
+          documentSize: detail?.dokument?.size,
+          documentFileId: detail?.dokument?.id,
+          updateDate,
+          updateDateIso,
+          updateDateDefect:
+            updateDate !== undefined && updateDateIso === undefined
+              ? { type: "invalid-publisher-date", value: updateDate }
+              : undefined,
+          statedSourceUrl,
+          sourceUrlStatus,
+          originCourt: decodeSkCourtText(detail?.povodnySud?.nazov),
+          originCourtRegistreGuid: toOptionalValue(
+            detail?.povodnySud?.registreGuid,
+          ),
+          originCaseNumber: decodeSkCourtText(detail?.povodnaSpisovaZnacka),
+        } satisfies SkCourtsMetadata,
+        SK_COURTS_METADATA_URL_SCHEMA,
       ),
-      originCaseNumber: decodeSkCourtText(detail?.povodnaSpisovaZnacka),
-    } satisfies SkCourtsMetadata),
-    rawHash,
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-    documentAst: EMPTY_AST,
-    documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-    ...skCourtsSourceRaw({ item, detail, courtRegistry }),
-  };
+      rawHash,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      documentAst: EMPTY_AST,
+      documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
+      ...skCourtsSourceRaw({ item, detail, courtRegistry }),
+    },
+    SK_COURTS_METADATA_URL_SCHEMA,
+  );
 };
 
 /**
@@ -800,7 +842,28 @@ const parseItemWithDetail = async (
     });
     return { type: "item_build_failed", decision: null };
   }
-  const built = await buildSkCourtsDecision(raw, options);
+  const attempted = await buildPlainTextItem({
+    decisionOf: (value) => {
+      switch (value.type) {
+        case "built":
+        case "detail-unavailable":
+          return value.decision;
+        case "unkeyable":
+          return undefined;
+        default:
+          value satisfies never;
+          return panic("Unhandled source build outcome");
+      }
+    },
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+
+    rawListing: JSON.stringify(raw),
+    build: async () => await buildSkCourtsDecision(raw, options),
+  });
+  if (attempted.type === "item_build_failed") {
+    return attempted;
+  }
+  const built = attempted.value;
   switch (built.type) {
     case "unkeyable":
       return { type: "item_build_failed", decision: null };
@@ -990,6 +1053,7 @@ const listSkCourtsDayPage = async ({
   }).toString()}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: LIST_TIMEOUT_MS,
@@ -1497,10 +1561,10 @@ type SkCourtsStoredDocketMatch = "same" | "legacy-encoded" | "different";
  * How a row's stored docket relates to the one its payload now parses to.
  *
  * Rows written before display text was decoded hold the publisher's encoded
- * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when decoding
- * it once, with the decoder ingestion now applies, yields the replayed value.
- * Decoding is not repeated, so a stored value that only matches after a
- * second pass is a different docket, as is anything else.
+ * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when its
+ * canonical plain-text form, the one ingestion now stores, is the replayed
+ * value. Anything else, a spelling the canonical form refuses included, is a
+ * different docket.
  */
 const skCourtsStoredDocketMatch = ({
   stored,
@@ -1509,7 +1573,8 @@ const skCourtsStoredDocketMatch = ({
   if (stored === replayed) {
     return "same";
   }
-  return decodeSkCourtText(stored) === replayed
+  const canonical = toPlainText(stored);
+  return canonical.isOk() && canonical.value === replayed
     ? "legacy-encoded"
     : "different";
 };
@@ -1688,6 +1753,7 @@ const SK_COURTS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const skCourtsAdapter = defineSourceAdapter({
+  documentStage: "deferred",
   key: ADAPTER_KEYS.SK_COURTS,
   collectionEnrichment: createSkCollectionConnector({ status: "disabled" }),
   sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
@@ -1717,6 +1783,7 @@ export const skCourtsAdapter = defineSourceAdapter({
     const response = await fetchPublisher(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         signal,
         headers: { Accept: "application/json" },
@@ -1745,6 +1812,20 @@ export const skCourtsAdapter = defineSourceAdapter({
    * against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            guid: payload["guid"],
+            spisovaZnacka: payload["spisovaZnacka"],
+            identifikacneCislo: payload["identifikacneCislo"],
+            sud: payload["sud"],
+            sudca: payload["sudca"],
+            datumVydania: payload["datumVydania"],
+            formaRozhodnutia: payload["formaRozhodnutia"],
+            povaha: payload["povaha"],
+          }
+        : null,
     firstSlice: SK_COURTS_FIRST_SLICE,
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,

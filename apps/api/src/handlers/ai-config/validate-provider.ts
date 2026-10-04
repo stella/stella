@@ -6,7 +6,10 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { consumeValidateProviderRateLimit } from "@/api/handlers/ai-config/validate-provider-rate-limit";
 import { supportsRegion } from "@/api/lib/ai-config";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isActiveOrganizationMember } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +26,7 @@ export const validateProviderBody = t.Object({
 });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;
@@ -53,7 +57,7 @@ const truncateProbeError = (message: string): string =>
  */
 const validateProvider = createSafeSessionHandler(
   config,
-  async function* ({ body, request, user }) {
+  async function* ({ body, request, set, user }) {
     if (
       body.region &&
       body.region !== "global" &&
@@ -89,6 +93,7 @@ const validateProvider = createSafeSessionHandler(
         try: async () =>
           await isActiveOrganizationMember({
             headers: request.headers,
+            responseHeaders: set.headers,
             userId: user.id,
           }),
         catch: probeUnavailable,

@@ -9,13 +9,19 @@ import {
   type CorpusIndexPublisherFields,
   type CorpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { CorpusStemming } from "@/api/lib/legal-search/corpus-query";
+import type {
+  CorpusLegacyStemming,
+  CorpusStemming,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import {
+  LEGACY_STEMMERS,
+  type MorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/stem";
 
 /**
  * The serving case-law generation cannot answer a case-law read: its index
@@ -182,6 +188,7 @@ export type CaseLawCorpusQueryFields = {
   surfaceFields: readonly string[];
   keywordFields: readonly string[];
   stemming: CorpusStemming | null;
+  legacyStemming?: CorpusLegacyStemming | undefined;
   /**
    * The words a query in this language may stop requiring, or null where it
    * requires every one it carries.
@@ -240,7 +247,17 @@ export const caseLawCorpusQueryFields = ({
   const { stemFields, searchableFields, keywordFields } =
     corpusIndexReadContract("case_law", generation);
   const stemLanguage = caseLawQueryLanguage({ jurisdiction, language });
+  const legacyStemmer =
+    stemLanguage === null ? null : LEGACY_STEMMERS[stemLanguage];
   return {
+    ...(stemFields !== null && legacyStemmer !== null
+      ? {
+          legacyStemming: {
+            fields: [stemFields.text, stemFields.publisherSummary],
+            stemTerm: legacyStemmer,
+          },
+        }
+      : {}),
     surfaceFields: searchableFields,
     keywordFields,
     functionWords: functionWordsFor(stemLanguage),

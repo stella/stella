@@ -5,11 +5,14 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 
 describe("workspace activity authorization", () => {
   test("allows read-only external users to receive entity activity", () => {
-    const memberRole = { role: "external" } as const;
+    const memberRole = sessionMemberRole("external");
 
     expect(
       hasMemberPermission(memberRole, WORKSPACE_ACTIVITY_PERMISSIONS),
@@ -20,7 +23,7 @@ describe("workspace activity authorization", () => {
   });
 
   test("includes chat activity only for roles with chat access", () => {
-    expect(resolveWorkspaceActivityScope({ role: "member" })).toBe(
+    expect(resolveWorkspaceActivityScope(sessionMemberRole("member"))).toBe(
       WORKSPACE_ACTIVITY_SCOPE.entitiesAndChat,
     );
   });

@@ -229,6 +229,11 @@ type RunSkUsRawPageOptions = {
     row: SkUsRawCursor,
     mode: "apply" | "dry-run",
   ) => Promise<SkUsRawOutcome>;
+  /**
+   * Every attempted row in both modes, before its journal record: the
+   * operator's per-row evidence, which outlives the task's local files.
+   */
+  record: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => void;
   journal: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => Promise<void>;
   checkpoint: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => Promise<void>;
 };
@@ -238,6 +243,7 @@ export const runSkUsRawPage = async ({
   rows,
   mode,
   complete,
+  record,
   journal,
   checkpoint,
 }: RunSkUsRawPageOptions) => {
@@ -252,6 +258,7 @@ export const runSkUsRawPage = async ({
       panic(`Unknown completion outcome: ${outcome}`);
     }
     counts[outcome] = count + 1;
+    record(row, outcome);
     if (mode === "apply") {
       await journal(row, outcome);
     }

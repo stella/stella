@@ -3,14 +3,16 @@ import { and, eq } from "drizzle-orm";
 
 import {
   BILLING_STATUS,
+  INVOICE_ATTACHMENT,
   expenses,
   INVOICE_STATUS,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -24,6 +26,7 @@ const deleteInvoice = createSafeHandler(
       "approved, unbilled status so they can be invoiced again. Only draft " +
       "invoices can be deleted: a sent, paid, or void invoice is refused.",
     permissions: { invoice: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -79,6 +82,7 @@ const deleteInvoice = createSafeHandler(
           .set({
             status: BILLING_STATUS.APPROVED,
             invoiceId: null,
+            invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
             updatedAt: now,
           })
           .where(
@@ -113,6 +117,8 @@ const deleteInvoice = createSafeHandler(
               eq(invoices.status, INVOICE_STATUS.DRAFT),
             ),
           );
+
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         await recordAuditEvent(tx, [
           {

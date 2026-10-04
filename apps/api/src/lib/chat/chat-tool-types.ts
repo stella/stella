@@ -118,6 +118,17 @@ export type ChatClientToolsFor<
   | ExternalMcpClientTool
 )[];
 
+/**
+ * The tool registered under `name`. Names arrive from clients and models, so
+ * only an own entry counts: `constructor` or `__proto__` must not resolve to
+ * a member every object inherits.
+ */
+export const registeredChatTool = (
+  tools: ChatToolMap,
+  name: string,
+): ChatTool | undefined =>
+  Object.hasOwn(tools, name) ? tools[name] : undefined;
+
 export const assertChatToolMapInvariants = (tools: ChatToolMap): void => {
   for (const [name, tool] of Object.entries(tools)) {
     if (!tool) {

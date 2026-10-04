@@ -201,7 +201,7 @@ export const convertLayout = (
     };
   }
 
-  // overview, filesystem
+  // overview, filesystem, correspondence
   return { version: 1, type: targetType, ...base };
 };
 

@@ -1,21 +1,21 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
   setDailyTarget,
 } from "@/api/lib/billing/daily-target";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 
 const updateMemberDailyTarget = createSafeRootHandler(
   {
     description:
       "Set a current member's daily time target in the active organization. Only organization owners and admins may set another member's target. Pass minutes from 1 to 1440, or null to clear it.",
     permissions: { organizationSettings: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.standard,
     access: "write",
     mcp: {
       type: "capability",
@@ -33,7 +33,11 @@ const updateMemberDailyTarget = createSafeRootHandler(
     body,
     recordAuditEvent,
   }) {
-    if (!isOrganizationManagementRole(memberRole.role)) {
+    if (
+      !hasManagementPermission(memberRole, {
+        organizationSettings: ["update"],
+      })
+    ) {
       return Result.err(
         new HandlerError({
           status: 403,

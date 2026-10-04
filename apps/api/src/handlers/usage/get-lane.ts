@@ -2,10 +2,13 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
-import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
+import {
+  isEntitlementConsumableAt,
+  resolveUsageConsumption,
+} from "@/api/lib/usage/usage-ledger";
 
 /**
  * Read the caller's own budget-lane state: which lane their next chat
@@ -21,6 +24,7 @@ const config = {
     "budgets the current day/week has used. Returns { budgets: null } " +
     "when the organization's plan declares no per-user budgets.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "chat_thread_ui" },
 } satisfies HandlerConfig;
@@ -48,10 +52,17 @@ const getLane = createSafeRootHandler(
           )
           .limit(1);
         const entitlement = rows.at(0);
+        const asOf = new Date();
         if (
           !entitlement ||
-          !isEntitlementConsumableAt(entitlement) ||
-          entitlement.dailyAllowanceMicroUnits === null
+          entitlement.dailyAllowanceMicroUnits === null ||
+          !(await resolveUsageConsumption({
+            tx,
+            organizationId: session.activeOrganizationId,
+            originalAccess: isEntitlementConsumableAt(entitlement, asOf),
+            currentPeriodStart: entitlement.currentPeriodStart,
+            asOf,
+          }))
         ) {
           return { budgets: null } as const;
         }
@@ -61,6 +72,7 @@ const getLane = createSafeRootHandler(
           organizationId: session.activeOrganizationId,
           userId: user.id,
           kind: "daily",
+          asOf,
         });
         const weeklyUsed =
           entitlement.fallbackWeeklyMicroUnits === null
@@ -70,6 +82,7 @@ const getLane = createSafeRootHandler(
                 organizationId: session.activeOrganizationId,
                 userId: user.id,
                 kind: "fallback_weekly",
+                asOf,
               });
 
         return {

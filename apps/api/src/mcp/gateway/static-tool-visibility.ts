@@ -5,6 +5,7 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 
 /**
  * A session that cannot confirm is not offered tools that always need
@@ -22,10 +23,18 @@ const isStaticToolAvailableToConfirmation = (
   return behavior !== "always" && behavior !== "outbound";
 };
 
+/**
+ * A write tool is offered only to a request whose effective authority holds
+ * its declared permissions; `getGatewayMcpToolDefinition` reads this too, so
+ * the call path refuses what discovery withholds.
+ */
 export const isStaticToolVisibleToRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
 ): boolean => {
+  if (!hasMcpToolAuthority(context, definition)) {
+    return false;
+  }
   if (definition.isVisibleToMemberRole === undefined) {
     return true;
   }

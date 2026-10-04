@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -72,26 +73,25 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { clauseDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  clauseDetailOptions,
+  knowledgeKeys,
+  invalidateTemplateClauseSources,
+} from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  canReviewFlushReportResolved,
-  type ClauseEditorReviewStatus,
-  isStaleSaveSettlement,
-  nextRetryPendingToken,
-  reviewFlushTokenForSave,
-  shouldKeepBodyPanelMounted,
-  shouldReissueAfterStaleSettlement,
-} from "@/routes/knowledge/-components/clause-ai-tracked-changes";
+import type { ClauseEditorReviewStatus } from "@/routes/knowledge/-components/clause-ai-tracked-changes";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/knowledge/-components/clause-diff-view";
+import type { ClauseRewrite } from "@/routes/knowledge/-components/clause-editor";
 import { ClauseEditor } from "@/routes/knowledge/-components/clause-editor";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
+import type { ClauseBodyWrite } from "@/routes/knowledge/-components/use-clause-body-save";
+import { useClauseBodySave } from "@/routes/knowledge/-components/use-clause-body-save";
 import { useClauseFieldSave } from "@/routes/knowledge/-components/use-clause-field-save";
 import { useClauseNavStore } from "@/stores/knowledge/clause-nav-store";
 
@@ -211,6 +211,8 @@ export const ClauseDetailView = ({
           categories={categories}
           clauseId={clauseId}
           detail={detail}
+          organizationId={organizationId}
+          key={clauseId}
           onBack={onBack}
           onDeleted={onDeleted}
           onRefresh={refreshDetail}
@@ -222,8 +224,29 @@ export const ClauseDetailView = ({
 
 // ── Detail Content ───────────────────────────────────
 
-const DetailContent = ({
+export type ClauseHead = {
+  body: ClauseParagraph[];
+  currentVersion: number;
+  updatedAt: string;
+};
+export type ClauseDetailTransport = {
+  save: (write: ClauseBodyWrite) => Promise<ClauseHead>;
+  read: () => Promise<ClauseParagraph[]>;
+  restore: (
+    versionId: string,
+    expectedBody: ClauseParagraph[],
+  ) => Promise<ClauseHead>;
+  promote: (
+    body: ClauseParagraph[],
+    expectedBody: ClauseParagraph[],
+  ) => Promise<ClauseHead>;
+  rewrite?: ClauseRewrite | undefined;
+};
+
+export const DetailContent = ({
   detail,
+  organizationId,
+  transport,
   clauseId,
   categories,
   canEdit,
@@ -233,6 +256,8 @@ const DetailContent = ({
   onRefresh,
 }: {
   detail: ClauseDetail;
+  organizationId: string;
+  transport?: ClauseDetailTransport;
   clauseId: string;
   categories: CategoryOption[];
   canEdit: boolean;
@@ -243,13 +268,110 @@ const DetailContent = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  // Autosave persists the head working copy on every edit; a version snapshot
-  // is created only on explicit "Save as new version" / leave-with-changes.
-  // This tracks whether the head has un-versioned edits. A freshly loaded
-  // clause is clean.
-  const [dirtySinceVersion, setDirtySinceVersion] = useState(false);
-  const [reviewStatus, setReviewStatus] =
-    useState<ClauseEditorReviewStatus>("resolved");
+  const queryClient = useQueryClient();
+  const options = clauseDetailOptions(organizationId, clauseId);
+  const resolvedTransport =
+    transport ??
+    ({
+      save: async (write: ClauseBodyWrite) => {
+        const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
+        return { ...saved, body: write.body };
+      },
+      read: async () => unwrapEden(await api.clauses({ clauseId }).get()).body,
+      restore: async (versionId: string, expectedBody: ClauseParagraph[]) =>
+        unwrapEden(
+          await api
+            .clauses({ clauseId })
+            .versions({ versionId })
+            .restore.post({ expectedBody }),
+        ),
+      promote: async (
+        body: ClauseParagraph[],
+        expectedBody: ClauseParagraph[],
+      ) => {
+        const saved = unwrapEden(
+          await api
+            .clauses({ clauseId })
+            .post({ body, expectedBody, snapshotVersion: true }),
+        );
+        return { ...saved, body };
+      },
+      rewrite: undefined,
+    } satisfies ClauseDetailTransport);
+  const [directiveRefusal, setDirectiveRefusal] = useState(false);
+  const cacheHead = async (head: ClauseHead) => {
+    setDirectiveRefusal(false);
+    if (head.currentVersion !== detail.currentVersion) {
+      await invalidateTemplateClauseSources(queryClient, organizationId);
+    }
+    await queryClient.cancelQueries({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+    queryClient.setQueryData(options.queryKey, (previous) =>
+      previous ? { ...previous, ...head } : previous,
+    );
+    onRefresh();
+  };
+  const reportBodyError = (error: unknown) => {
+    if (APIError.is(error) && error.code === CLAUSE_DIRECTIVES_INVALID_CODE) {
+      setDirectiveRefusal(true);
+      return;
+    }
+    getAnalytics().captureError(error);
+    notifyUserError(error, t("clauses.saveFailed"), {
+      description: userErrorFromThrown(error, t("common.unexpectedError")),
+    });
+  };
+  const bodySave = useClauseBodySave({
+    initialBody: detail.body,
+    persist: async (write) => {
+      const saved = await resolvedTransport.save(write);
+      await cacheHead(saved);
+      return saved;
+    },
+    readHead: async () => {
+      const body = await resolvedTransport.read();
+      queryClient.setQueryData(options.queryKey, (previous) =>
+        previous ? { ...previous, body } : previous,
+      );
+      return body;
+    },
+    onError: reportBodyError,
+  });
+  const reviewStatus = bodySave.reviewStatus;
+  const bodyActionAllowed = () => {
+    if (reviewStatus === "resolved") {
+      return true;
+    }
+    stellaToast.add({
+      type: "info",
+      title: t("clauses.reviewBeforeBodyAction"),
+    });
+    return false;
+  };
+
+  const promoteBody = async (body: ClauseParagraph[]) => {
+    if (!bodyActionAllowed()) {
+      return false;
+    }
+    return bodySave.sequenceHead(async (expectedBody) => {
+      const head = await resolvedTransport.promote(body, expectedBody);
+      await cacheHead(head);
+      return head.body;
+    });
+  };
+
+  const restoreBody = async (versionId: string) => {
+    if (!bodyActionAllowed()) {
+      return false;
+    }
+    return bodySave.sequenceHead(async (expectedBody) => {
+      const head = await resolvedTransport.restore(versionId, expectedBody);
+      await cacheHead(head);
+      return head.body;
+    });
+  };
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
@@ -259,13 +381,35 @@ const DetailContent = ({
         categories={categories}
         clauseId={clauseId}
         detail={detail}
-        dirtySinceVersion={dirtySinceVersion}
+        dirtySinceVersion={bodySave.dirty}
         reviewStatus={reviewStatus}
         onBack={onBack}
         onDeleted={onDeleted}
         onRefresh={onRefresh}
-        onVersionSaved={() => setDirtySinceVersion(false)}
+        onSaveVersion={bodySave.snapshot}
+        onFlushBody={bodySave.flush}
       />
+
+      {bodySave.conflict.status === "choice" && (
+        <div className="mt-4 rounded-lg border p-4" role="alert">
+          <p className="font-medium">{t("clauses.saveConflictTitle")}</p>
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.saveConflictDescription")}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              onClick={() => {
+                detached(bodySave.keepMine(), "clause-detail.keep-mine");
+              }}
+            >
+              {t("clauses.keepMyText")}
+            </Button>
+            <Button onClick={bodySave.takeTheirs} variant="outline">
+              {t("clauses.takeTheirText")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <p className="text-muted-foreground mt-2 text-sm">
         {t("common.versionLabel", {
@@ -302,18 +446,18 @@ const DetailContent = ({
           <TabsTab value="history">{t("common.history")}</TabsTab>
         </TabsList>
 
-        <TabsPanel
-          keepMounted={shouldKeepBodyPanelMounted(reviewStatus)}
-          value="body"
-        >
+        <TabsPanel keepMounted value="body">
           <ClauseBodyEditor
             canEdit={canEdit}
-            clauseId={clauseId}
             detail={detail}
-            onBodyDirty={() => setDirtySinceVersion(true)}
-            onRefresh={onRefresh}
-            onReviewStatusChange={setReviewStatus}
+            bodySave={bodySave}
+            rewrite={resolvedTransport.rewrite}
           />
+          {directiveRefusal && (
+            <p role="alert" className="text-destructive mt-2 text-sm">
+              {t("clauses.directivesInvalid")}
+            </p>
+          )}
           <ClauseUsageNotesField
             canEdit={canEdit}
             clauseId={clauseId}
@@ -325,7 +469,14 @@ const DetailContent = ({
         <TabsPanel value="variants">
           <VariantsTab
             clauseId={clauseId}
-            onRefresh={onRefresh}
+            onRefresh={() => {
+              onRefresh();
+              detached(
+                invalidateTemplateClauseSources(queryClient, organizationId),
+                "clause-detail.variant-invalidate",
+              );
+            }}
+            onPromote={promoteBody}
             variants={detail.variants}
           />
         </TabsPanel>
@@ -333,8 +484,8 @@ const DetailContent = ({
         <TabsPanel value="history">
           <HistoryTab
             clauseId={clauseId}
-            currentBody={detail.body}
-            onRefresh={onRefresh}
+            currentBody={bodySave.body}
+            onRestore={restoreBody}
             versions={detail.versions}
           />
         </TabsPanel>
@@ -345,7 +496,87 @@ const DetailContent = ({
 
 // \u2500\u2500 Header (inline title, category, delete) \u2500\u2500\u2500\u2500
 
-const ClauseHeader = ({
+type ClauseLeaveState = "closed" | "confirm" | "failed" | "review";
+const ClauseLeaveDialog = ({
+  leaveDialog,
+  savingVersion,
+  reviewStatus,
+  onClose,
+  onBack,
+  leaveWithoutVersion,
+  saveVersionAndLeave,
+}: {
+  leaveDialog: ClauseLeaveState;
+  savingVersion: boolean;
+  reviewStatus: ClauseEditorReviewStatus;
+  onClose: () => void;
+  onBack: () => void;
+  leaveWithoutVersion: () => Promise<void>;
+  saveVersionAndLeave: () => Promise<void>;
+}) => {
+  const t = useTranslations();
+  const descriptions = {
+    closed: t("clauses.unsavedVersionLeaveConfirm"),
+    confirm: t("clauses.unsavedVersionLeaveConfirm"),
+    failed: t("clauses.saveFailedLeaveDescription"),
+    review: t("clauses.reviewBeforeLeaving"),
+  } satisfies Record<ClauseLeaveState, string>;
+  const description = descriptions[leaveDialog];
+  return (
+    <AlertDialog
+      open={leaveDialog !== "closed"}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.goBackToEditing")}
+          </AlertDialogClose>
+          {(leaveDialog === "failed" || leaveDialog === "review") && (
+            <Button onClick={onBack} variant="destructive">
+              {t("clauses.leaveAndDiscard")}
+            </Button>
+          )}
+          {leaveDialog !== "review" && (
+            <Button
+              onClick={() => {
+                detached(
+                  leaveWithoutVersion(),
+                  "clause-detail.leave-without-version",
+                );
+              }}
+              variant="ghost"
+              disabled={savingVersion}
+            >
+              {t("clauses.leaveWithoutVersion")}
+            </Button>
+          )}
+          <Button
+            disabled={savingVersion || reviewStatus !== "resolved"}
+            onClick={() => {
+              detached(
+                saveVersionAndLeave(),
+                "clause-detail.save-version-and-leave",
+              );
+            }}
+          >
+            {t("clauses.saveVersionAndLeave")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
+
+export const ClauseHeader = ({
   detail,
   clauseId,
   categories,
@@ -356,7 +587,8 @@ const ClauseHeader = ({
   onBack,
   onDeleted,
   onRefresh,
-  onVersionSaved,
+  onSaveVersion,
+  onFlushBody,
 }: {
   detail: ClauseDetail;
   clauseId: string;
@@ -368,73 +600,62 @@ const ClauseHeader = ({
   onBack: () => void;
   onDeleted: () => void;
   onRefresh: () => void;
-  onVersionSaved: () => void;
+  onSaveVersion: () => Promise<boolean>;
+  onFlushBody: () => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(detail.title);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaveDialog, setLeaveDialog] = useState<ClauseLeaveState>("closed");
   const [savingVersion, setSavingVersion] = useState(false);
   const setNavOpen = useClauseNavStore((s) => s.setOpen);
   const setNavName = useClauseNavStore((s) => s.setName);
   const clearNav = useClauseNavStore((s) => s.clear);
 
-  // Snapshot the current head body as a new version. The head is already
-  // autosaved, so this only appends to history (no data is at risk).
   const saveVersion = useCallback(async () => {
     if (reviewStatus !== "resolved") {
       return false;
     }
     setSavingVersion(true);
-    const response = await api
-      .clauses({ clauseId })
-      .post({ body: detail.body, snapshotVersion: true });
+    const clean = await onSaveVersion();
     setSavingVersion(false);
-
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return false;
-    }
-
-    onVersionSaved();
-    onRefresh();
-    return true;
-  }, [clauseId, detail.body, reviewStatus, t, onVersionSaved, onRefresh]);
+    return clean;
+  }, [reviewStatus, onSaveVersion]);
 
   const saveVersionAndLeave = useCallback(async () => {
     const ok = await saveVersion();
     if (ok) {
       onBack();
+      return;
     }
+    setLeaveDialog("failed");
   }, [saveVersion, onBack]);
 
-  // Un-versioned head edits don't block leaving (they're already saved); we
-  // just offer to capture them as a version first.
+  // Offer a version snapshot for edits made since the last publication.
   const handleBack = useCallback(() => {
     if (reviewStatus !== "resolved") {
+      setLeaveDialog("review");
       return;
     }
     if (dirtySinceVersion) {
-      setConfirmLeave(true);
+      setLeaveDialog("confirm");
       return;
     }
     onBack();
   }, [dirtySinceVersion, reviewStatus, onBack]);
 
-  const leaveWithoutVersion = useCallback(() => {
-    if (reviewStatus !== "resolved") {
+  const leaveWithoutVersion = useCallback(async () => {
+    if (reviewStatus === "pending") {
+      setLeaveDialog("review");
       return;
     }
-    onBack();
-  }, [reviewStatus, onBack]);
+    if (await onFlushBody()) {
+      onBack();
+      return;
+    }
+    setLeaveDialog("failed");
+  }, [reviewStatus, onBack, onFlushBody]);
 
   // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
   // Name) and wire its list crumb back through the same unsaved-version guard
@@ -456,9 +677,7 @@ const ClauseHeader = ({
 
     if (response.error) {
       setTitleDraft(detail.title);
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -479,9 +698,7 @@ const ClauseHeader = ({
       });
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -509,9 +726,7 @@ const ClauseHeader = ({
       onDeleted();
     },
     onError: (error) => {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.deleteFailed"),
+      notifyUserError(error, t("clauses.deleteFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
     },
@@ -620,25 +835,14 @@ const ClauseHeader = ({
         </AlertDialog>
       )}
 
-      <LeaveConfirmDialog
-        cancelLabel={t("common.goBackToEditing")}
-        description={t("clauses.unsavedVersionLeaveConfirm")}
-        onOpenChange={setConfirmLeave}
-        open={confirmLeave}
-        primary={{
-          label: t("clauses.saveVersionAndLeave"),
-          onClick: () => {
-            detached(
-              saveVersionAndLeave(),
-              "clause-detail.save-version-and-leave",
-            );
-          },
-        }}
-        secondary={{
-          label: t("clauses.leaveWithoutVersion"),
-          variant: "ghost",
-          onClick: leaveWithoutVersion,
-        }}
+      <ClauseLeaveDialog
+        leaveDialog={leaveDialog}
+        savingVersion={savingVersion}
+        reviewStatus={reviewStatus}
+        onClose={() => setLeaveDialog("closed")}
+        onBack={onBack}
+        leaveWithoutVersion={leaveWithoutVersion}
+        saveVersionAndLeave={saveVersionAndLeave}
       />
     </div>
   );
@@ -648,248 +852,34 @@ const ClauseHeader = ({
 
 const ClauseBodyEditor = ({
   detail,
-  clauseId,
   canEdit,
-  onRefresh,
-  onBodyDirty,
-  onReviewStatusChange,
+  bodySave,
+  rewrite,
 }: {
   detail: ClauseDetail;
-  clauseId: string;
   canEdit: boolean;
-  onRefresh: () => void;
-  onBodyDirty: () => void;
-  onReviewStatusChange: (status: ClauseEditorReviewStatus) => void;
+  bodySave: ReturnType<typeof useClauseBodySave>;
+  rewrite?: ClauseRewrite | undefined;
 }) => {
-  const t = useTranslations();
-
-  // Epoch for the review's own flush save (see `canReviewFlushReportResolved`):
-  // bumped only inside `onReviewResolved`, below. Ordinary autosaves
-  // (blur/debounced) never touch this ref and never pass a token into
-  // `saveBody`, so they can never report the review gate "resolved" purely
-  // by matching this epoch — only a save carrying the current epoch's token
-  // (minted directly, or picked up via `retryPendingTokenRef` below) can.
-  const reviewFlushEpochRef = useRef(0);
-
-  // Armed by a failed review flush (see `nextRetryPendingToken`): while set,
-  // the *next* `saveBody` call — whatever triggers it, blur or the
-  // keystroke debounce included — retries clearing the gate on the failed
-  // flush's behalf. Read once at the very start of `saveBody`, before the
-  // request goes out, so a save already in flight when the failure armed
-  // this can't retroactively pick it up (see `reviewFlushTokenForSave`) —
-  // the original stale-autosave race stays fixed.
-  const retryPendingTokenRef = useRef<number | undefined>(undefined);
-
-  // Monotonic id for every saveBody call (debounce, blur, or review flush).
-  // Paired with `inFlightSaveAbortRef` and `latestSettledSaveRef` below to
-  // close the write-side counterpart of the epoch/token race above: a body
-  // autosave that started before a review is accepted can still be in
-  // flight when the review's own flush persists the accepted body. See
-  // `isStaleSaveSettlement` for why sequence order — not just aborting the
-  // older request — is the guard that actually holds.
-  const saveSequenceRef = useRef(0);
-
-  // The AbortController for the currently in-flight saveBody call, if any.
-  // Every call aborts the previous one before issuing its own request: the
-  // fast path for the stale-autosave race, cancelling the older request
-  // before its response can reach this function at all.
-  const inFlightSaveAbortRef = useRef<AbortController | null>(null);
-
-  // Sequence + body of the most recently *settled* successful save. The
-  // sequence lets a late-arriving stale settlement recognize it lost the
-  // race (`isStaleSaveSettlement`); the body is kept alongside it for
-  // context even though the reissue path below intentionally does not read
-  // it — see `latestRequestedBodyRef`.
-  const latestSettledSaveRef = useRef<
-    { sequence: number; body: ClauseParagraph[] } | undefined
-  >(undefined);
-
-  // The body of the most recently *requested* `saveBody` call — set at the
-  // very top of every call (debounce, blur, or review flush), before the
-  // request even goes out. Unlike `latestSettledSaveRef`, this updates
-  // unconditionally, so it is always a superset of the settled body: the
-  // reissue path below must reclaim a lost write with THIS body, not the
-  // last settled snapshot. Reissuing the settled snapshot would silently
-  // resurrect stale content if the user typed again after that settlement —
-  // that edit's own save is newer than the reissue's source sequence, but
-  // the reissue itself mints a fresh, higher sequence, so the sequence guard
-  // can't catch it (the reissue genuinely *is* the newest save). Reissuing
-  // the latest requested body instead is a no-op when it still equals the
-  // settled body, and preserves the newer edit when it doesn't.
-  const latestRequestedBodyRef = useRef<ClauseParagraph[] | undefined>(
-    undefined,
-  );
-
-  // Mirrors `saveBody` itself, kept in sync by the effect right after its
-  // declaration below. The reissue path recurses into `saveBody`, but a
-  // `const` closure referencing its own not-yet-initialized binding (or a
-  // self-referencing named function expression) trips the React Compiler's
-  // self-reference analysis; going through this ref instead breaks that
-  // cycle. Writing the ref from an effect — rather than during render —
-  // keeps the write outside the compiler's render-phase purview: `saveBody`
-  // is only ever invoked asynchronously (debounce timer, blur handler, or
-  // its own reissue after an awaited request), always well after the effect
-  // that syncs this render's closure into the ref has committed.
-  const saveBodyRef = useRef<
-    (body: ClauseParagraph[], explicitReviewFlushToken?: number) => void
-  >(() => {
-    // Overwritten by the effect below before any caller can reach this —
-    // `saveBody`'s own definition never invokes it during render.
-  });
-
-  const saveBody = useCallback(
-    async (body: ClauseParagraph[], explicitReviewFlushToken?: number) => {
-      // Record before anything async happens: this is what makes the ref
-      // always reflect the newest content asked to persist, regardless of
-      // which call's request settles first (see `latestRequestedBodyRef`).
-      latestRequestedBodyRef.current = body;
-
-      const reviewFlushToken = reviewFlushTokenForSave(
-        explicitReviewFlushToken,
-        retryPendingTokenRef.current,
-      );
-      retryPendingTokenRef.current = undefined;
-
-      saveSequenceRef.current += 1;
-      const sequence = saveSequenceRef.current;
-      inFlightSaveAbortRef.current?.abort();
-      const controller = new AbortController();
-      inFlightSaveAbortRef.current = controller;
-
-      // Head-only autosave: persists the working copy without snapshotting a
-      // version. The version snapshot happens on explicit save / leave.
-      const response = await api
-        .clauses({ clauseId })
-        .post({ body }, { fetch: { signal: controller.signal } });
-
-      const isStale = isStaleSaveSettlement(
-        sequence,
-        latestSettledSaveRef.current?.sequence,
-      );
-
-      if (controller.signal.aborted || isStale) {
-        // Superseded by a newer save — whether cancelled locally or simply
-        // out-ordered on the server, this settlement must not surface a
-        // toast or touch the retry/review gate; only the current save's own
-        // outcome is authoritative for the UI.
-        if (shouldReissueAfterStaleSettlement(isStale, !response.error)) {
-          // This stale save's write still reached the server (the local
-          // abort couldn't recall a request that had already landed) *and*
-          // landed after the body we last knew settled — re-issue the most
-          // recently *requested* body (see `latestRequestedBodyRef`), not
-          // the last settled snapshot, so a newer edit made since that
-          // settlement can't be overwritten by this reissue. This function's
-          // own first line always assigns the ref before this point runs, so
-          // it is never undefined here.
-          saveBodyRef.current(latestRequestedBodyRef.current);
-        }
-        return;
-      }
-
-      if (response.error) {
-        // Leave the review-status gate exactly where it was (e.g.
-        // "persisting" right after accepting an AI review): do not report
-        // "resolved" on a failed persist, or version-save could snapshot a
-        // still-stale server body. If this failing save was itself allowed
-        // to clear the gate, arm a retry so the *next* successful persist
-        // through this function — the debounced/blur autosave on the user's
-        // next edit, or another retry — reports "resolved" even though it
-        // carries no explicit token of its own.
-        retryPendingTokenRef.current = nextRetryPendingToken(
-          reviewFlushToken,
-          reviewFlushEpochRef.current,
-        );
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      latestSettledSaveRef.current = { sequence, body };
-
-      // Only a save carrying the current epoch's token — the review's own
-      // flush, or a later retry of it — may lift the gate. A plain autosave
-      // that never picked up a retry token still carries none, so a stale
-      // one that started before a review began but settles after can't
-      // clear a gate it knows nothing about.
-      if (
-        canReviewFlushReportResolved(
-          reviewFlushToken,
-          reviewFlushEpochRef.current,
-        )
-      ) {
-        onReviewStatusChange("resolved");
-      }
-      onRefresh();
-    },
-    [clauseId, t, onRefresh, onReviewStatusChange],
-  );
-  // Sync the latest `saveBody` closure into the ref outside of render (see
-  // `saveBodyRef` above). `saveBody` is only ever called from a later
-  // event/timer/await, so this always commits before any caller could read
-  // a stale value.
-  useExternalSyncEffect(() => {
-    saveBodyRef.current = (body, explicitReviewFlushToken) => {
-      detached(
-        saveBody(body, explicitReviewFlushToken).catch((error: unknown) => {
-          getAnalytics().captureError(error);
-        }),
-        "clause-detail.save-body",
-      );
-    };
-  }, [saveBody]);
-
-  const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
-    detached(saveBody(body), "clause-detail.save-body");
-  }, 1200);
-
   if (!canEdit) {
     return (
       <div className="mt-4 rounded-lg border p-4">
-        <ClauseBody paragraphs={detail.body} />
+        <ClauseBody paragraphs={bodySave.body} />
       </div>
     );
   }
 
-  const handleReviewResolved = async (body: ClauseParagraph[]) => {
-    // An accepted/rejected AI review is a decisive action, like blur:
-    // flush immediately instead of waiting on the keystroke debounce.
-    // Mint a fresh epoch token for this flush so `saveBody` can tell
-    // it apart from an unrelated autosave settling in the same
-    // window — only the save carrying the *current* token may report
-    // "resolved" (see `canReviewFlushReportResolved`). saveBody
-    // reports "resolved" itself on success; on failure it arms
-    // `retryPendingTokenRef` and toasts, leaving the "persisting" gate
-    // blocked until a later successful save — any trigger, no token of
-    // its own required — picks that retry token up and lifts it.
-    debouncedSave.cancel();
-    reviewFlushEpochRef.current += 1;
-    const reviewFlushToken = reviewFlushEpochRef.current;
-    await saveBody(body, reviewFlushToken);
-  };
-
   return (
     <div className="mt-4">
       <ClauseEditor
-        content={detail.body}
-        onBlur={(body) => {
-          debouncedSave.cancel();
-          detached(saveBody(body), "clause-detail.save-body");
+        content={bodySave.body}
+        onBlur={() => {
+          detached(bodySave.flush(), "clause-detail.save-body");
         }}
-        onChange={(body) => {
-          // Mark un-versioned the instant the body is edited (not when the
-          // debounced autosave resolves), so leaving right after a change still
-          // triggers the "save a version?" prompt.
-          onBodyDirty();
-          debouncedSave(body);
-        }}
-        onReviewResolved={handleReviewResolved}
-        onReviewStatusChange={onReviewStatusChange}
+        onChange={bodySave.change}
+        onReviewResolved={bodySave.resolveReview}
+        onReviewStatusChange={bodySave.onReviewStatusChange}
+        rewrite={rewrite}
         title={detail.title}
         usageNotes={detail.usageNotes ?? undefined}
       />
@@ -1012,9 +1002,7 @@ const ClauseLanguageField = ({
       const response = await api.clauses({ clauseId }).post({ language: next });
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -1163,10 +1151,12 @@ const VariantsTab = ({
   clauseId,
   variants,
   onRefresh,
+  onPromote,
 }: {
   clauseId: string;
   variants: VariantItem[];
   onRefresh: () => void;
+  onPromote: (body: ClauseParagraph[]) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -1198,6 +1188,7 @@ const VariantsTab = ({
               index={index}
               key={variant.id}
               onChanged={onRefresh}
+              onPromote={onPromote}
               variant={variant}
               variants={variants}
             />
@@ -1228,12 +1219,14 @@ const VariantRow = ({
   index,
   clauseId,
   onChanged,
+  onPromote,
 }: {
   variant: VariantItem;
   variants: VariantItem[];
   index: number;
   clauseId: string;
   onChanged: () => void;
+  onPromote: (body: ClauseParagraph[]) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -1253,9 +1246,7 @@ const VariantRow = ({
     setDeleting(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.deleteFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.deleteFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1279,24 +1270,9 @@ const VariantRow = ({
     }
 
     setPromoting(true);
-    // Reuse the clause update endpoint with an explicit version snapshot:
-    // bumps currentVersion and writes a clauseVersions row, so the promotion
-    // stays auditable and revertable from history.
-    const response = await api
-      .clauses({ clauseId })
-      .post({ body, snapshotVersion: true });
-
+    const promoted = await onPromote(body);
     setPromoting(false);
-
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+    if (!promoted) {
       return;
     }
 
@@ -1306,7 +1282,7 @@ const VariantRow = ({
     });
     setPromoteOpen(false);
     onChanged();
-  }, [clauseId, variant.body, t, onChanged]);
+  }, [variant.body, t, onChanged, onPromote]);
 
   const handleReorder = useCallback(
     async (direction: "up" | "down") => {
@@ -1334,9 +1310,7 @@ const VariantRow = ({
 
       const failure = first.error ?? second.error;
       if (failure) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
           description: userErrorMessage(failure, t("common.unexpectedError")),
         });
         return;
@@ -1542,9 +1516,7 @@ const VariantFormDialogBody = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1612,16 +1584,16 @@ const VariantFormDialogBody = ({
 
 // ── History Tab ──────────────────────────────────────
 
-const HistoryTab = ({
+export const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
-  onRefresh,
+  onRestore,
 }: {
   clauseId: string;
   currentBody: ClauseParagraph[];
   versions: VersionItem[];
-  onRefresh: () => void;
+  onRestore: (versionId: string) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1660,9 +1632,7 @@ const HistoryTab = ({
     setLoading(false);
 
     if (error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
+      notifyUserError(error, t("clauses.loadFailed"), {
         description: userErrorMessage(error, t("common.unexpectedError")),
       });
       setSelectedId(null);
@@ -1696,10 +1666,9 @@ const HistoryTab = ({
         <ul className="divide-y">
           {versions.map((ver) => (
             <VersionRow
-              clauseId={clauseId}
               isSelected={selectedId === ver.id}
               key={ver.id}
-              onRestored={onRefresh}
+              onRestore={onRestore}
               onToggleDiff={() => {
                 detached(
                   handleVersionClick(ver.id),
@@ -1738,16 +1707,14 @@ const HistoryTab = ({
 
 const VersionRow = ({
   version,
-  clauseId,
   isSelected,
   onToggleDiff,
-  onRestored,
+  onRestore,
 }: {
   version: VersionItem;
-  clauseId: string;
   isSelected: boolean;
   onToggleDiff: () => void;
-  onRestored: () => void;
+  onRestore: (versionId: string) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -1756,22 +1723,9 @@ const VersionRow = ({
 
   const handleRestore = useCallback(async () => {
     setRestoring(true);
-    const response = await api
-      .clauses({ clauseId })
-      .versions({ versionId: version.id })
-      .restore.post();
-
+    const restored = await onRestore(version.id);
     setRestoring(false);
-
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+    if (!restored) {
       return;
     }
 
@@ -1780,8 +1734,7 @@ const VersionRow = ({
       title: t("clauses.versionRestored"),
     });
     setRestoreOpen(false);
-    onRestored();
-  }, [clauseId, version.id, t, onRestored]);
+  }, [version.id, t, onRestore]);
 
   return (
     <li className="flex items-center gap-2 px-2">
