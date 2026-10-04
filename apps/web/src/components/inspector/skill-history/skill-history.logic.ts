@@ -7,7 +7,7 @@ import type {
   skillProposalsOptions,
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 
 // Row shapes are derived from the query factories rather than restated, so a
 // server-side field rename fails to compile here instead of drifting.
@@ -87,9 +87,7 @@ export const canManageSkill = ({
 }: CanManageSkillOptions): boolean => {
   switch (scope) {
     case "team":
-      return managementRoles.some(
-        (managementRole) => managementRole === memberRole,
-      );
+      return hasOrganizationManagementAccess(memberRole);
     case "private":
       return ownerUserId === userId;
     default: {

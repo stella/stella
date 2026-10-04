@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { GUIDE_PROGRESS_STATUSES } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   GUIDE_TOUR_IDS,
@@ -17,6 +16,7 @@ import {
 import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
@@ -107,8 +107,8 @@ export const useOnboardingProgress = (
           : current,
       );
     },
-    onError: () => {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({

@@ -149,7 +149,6 @@ jobs:
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
-      ratchet: ${{ steps.scope.outputs.ratchet }}
     steps:
       # Fetch paths before checking out pull request code. Only the planner
       # files are needed in this job; generators run in the later job.
@@ -298,39 +297,10 @@ jobs:
             bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
           fi
 
-      # The planner cannot authorize a baseline edit. These sources must match
-      # the trusted base, including after earlier generators and safe fixes.
-      - name: Record ratchet improvements
-        id: ratchet
-        if: needs.regenerate-scope.outputs.ratchet == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
-            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
-            exit 1
-          fi
-          if ! git diff --quiet "$BASE_SHA" -- scripts/ packages/api-contract/src/ packages/scripts/src/ packages/typescript-config/ bunfig.toml ":(glob)tsconfig*.json"; then
-            echo "::notice::Ratchet autofix requires unchanged trusted sources."
-            echo "ratchet_written=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ ! -f scripts/ratchet-baseline.json || -L scripts/ratchet-baseline.json ]]; then
-            echo "::error::Ratchet baseline must be a regular tracked file."
-            exit 1
-          fi
-          merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-          bun --no-install --no-env-file scripts/autofix-plan.ts run-ratchet "$GENERATOR_IDS" "$merge_base"
-
       - name: Restrict autofix changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          RATCHET_WRITTEN: ${{ steps.ratchet.outputs.ratchet_written }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
         shell: bash
         run: |
@@ -344,14 +314,8 @@ jobs:
           # Check this literal path independently: neither PR changed paths nor
           # the PR planner's output globs can grant a baseline exception.
           if ! git diff --quiet HEAD -- scripts/ratchet-baseline.json || [[ -n "$(git ls-files --others --exclude-standard -- scripts/ratchet-baseline.json)" ]]; then
-            if [[ "$RATCHET_WRITTEN" != true || ! -f scripts/ratchet-baseline.json || -L scripts/ratchet-baseline.json ]]; then
-              echo "::error::Ratchet baseline changed without its generator proof."
-              exit 1
-            fi
-            git diff --quiet "$BASE_SHA" -- scripts/ packages/api-contract/src/ packages/scripts/src/ packages/typescript-config/ bunfig.toml ":(glob)tsconfig*.json" ':(exclude,literal)scripts/ratchet-baseline.json'
-            git ls-files --error-unmatch -- scripts/ratchet-baseline.json > /dev/null
-            merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-            bun --no-install --no-env-file scripts/ratchet.ts --check-improvements-only --base "$merge_base"
+            echo "::error::Autofix cannot recreate the retired ratchet baseline."
+            exit 1
           fi
 
           mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
@@ -367,10 +331,6 @@ jobs:
             [[ -n "$path" ]] || continue
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
           done
-
-          if [[ "$RATCHET_WRITTEN" == true ]]; then
-            excludes+=(":(exclude,literal)scripts/ratchet-baseline.json")
-          fi
 
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"

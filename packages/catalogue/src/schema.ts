@@ -237,6 +237,18 @@ export const mcpEntrySchema = v.strictObject({
   url: v.pipe(v.string(), v.url()),
   authType: v.picklist(MCP_AUTH_TYPES),
   oauthRequestedScopes: v.optional(v.array(v.string()), []),
+  oauthAuthorization: v.optional(
+    v.strictObject({
+      issuer: v.pipe(v.string(), v.url()),
+      endpointOrigins: v.array(
+        v.pipe(
+          v.string(),
+          v.url(),
+          v.check((url) => new URL(url).origin === url, "Expected an origin"),
+        ),
+      ),
+    }),
+  ),
   allowedTools: v.optional(v.array(v.string()), []),
   documentationUrl: v.optional(v.pipe(v.string(), v.url())),
   tokenHelpUrl: v.optional(v.pipe(v.string(), v.url())),

@@ -18,6 +18,14 @@
  * and the priority handling can be exercised on their own.
  */
 
+import { panic, Result } from "better-result";
+
+import {
+  DOCUMENT_FETCH_EVENT,
+  documentFetchErrorOutcome,
+  type DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+import { createSafeDocumentStageObserver } from "@stll/legal-atlas/document-stage-observer";
 import {
   type SkDocumentFetchErrorDiagnostic,
   skDocumentErrorDiagnostics,
@@ -127,9 +135,15 @@ export const SK_DOCUMENT_DRAIN_TIMING = {
 export const DRAIN_CHECK_SLICE_MS = 1000;
 
 export type SkDocumentDrainOptions = {
+  documentObservations?: {
+    source: string;
+    observe: DocumentStageObserver;
+    hasPending: () => Promise<boolean>;
+  };
   queue: PendingDocumentQueue;
   fetchDocument: (
     decision: PendingDocument,
+    onDocumentObservation?: DocumentStageObserver,
   ) => Promise<DecisionDocumentOutcome>;
   /** Stops the walk without abandoning the fetch already in flight. */
   isDraining: () => boolean;
@@ -154,6 +168,8 @@ export type SkDocumentDrainOptions = {
  * - an empty queue doubles its sleep towards the idle ceiling, so a
  *   drained backlog stops asking the database every half second. Any
  *   document found resets it.
+ * - a scan that spent its row budget keeps the fetch gap: more candidates
+ *   remain, so a page of cooling documents cannot trigger idle backoff.
  * - a throw doubles its delay towards the failure ceiling. The unit
  *   throws only for what may affect every document: an unreachable
  *   database, a publisher that is down, refusing this client or asking
@@ -165,6 +181,7 @@ export type SkDocumentDrainOptions = {
  */
 export const runSkDocumentDrain = async ({
   fetchDocument,
+  documentObservations,
   isDraining,
   now,
   queue,
@@ -172,16 +189,56 @@ export const runSkDocumentDrain = async ({
   sleep,
   timing,
 }: SkDocumentDrainOptions): Promise<void> => {
+  const observations =
+    documentObservations === undefined
+      ? undefined
+      : {
+          ...documentObservations,
+          observe: createSafeDocumentStageObserver(
+            documentObservations.observe,
+          ),
+        };
   let summary = emptySummary();
+  let windowStartedAt = now();
   let summaryDueAt = now() + timing.summaryIntervalMs;
   let idleMs = timing.idleSleepMs;
   let consecutiveFailures = 0;
 
-  const flushSummary = (): void => {
+  const flushSummary = async (): Promise<void> => {
+    if (
+      observations !== undefined &&
+      (!summaryIsEmpty(summary) || now() > windowStartedAt)
+    ) {
+      let probeFailures = 0;
+      const pending = await Result.tryPromise({
+        try: observations.hasPending,
+        catch: (error) => error,
+      });
+      const backlog = Result.isOk(pending) && !pending.value ? 0 : 1;
+      if (Result.isError(pending)) {
+        // Unknown queue health must never be presented as a healthy empty drain.
+        probeFailures = 1;
+        await observations.observe(
+          documentFetchErrorOutcome(observations.source, pending.error),
+        );
+      }
+      await observations.observe({
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "five_minute",
+        source: observations.source,
+        backlog,
+        attempted: summary.attempted,
+        filled: summary.filled,
+        failed:
+          summary.failed + summary.deferred + summary.parked + probeFailures,
+        window_seconds: Math.max(0, now() - windowStartedAt) / 1000,
+      });
+    }
     if (!summaryIsEmpty(summary)) {
       report(summary);
     }
     summary = emptySummary();
+    windowStartedAt = now();
     summaryDueAt = now() + timing.summaryIntervalMs;
   };
 
@@ -191,17 +248,30 @@ export const runSkDocumentDrain = async ({
     try {
       const queued = await queue.next();
 
-      if (queued === undefined) {
-        delayMs = idleMs;
-        idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
-      } else {
-        idleMs = timing.idleSleepMs;
-        summary.attempted += 1;
-        const outcome = await fetchDocument(queued.decision);
-        summary[outcome.status] += 1;
-        if (outcome.status === "deferred" || outcome.status === "parked") {
-          summary.failures[outcome.failure] += 1;
-          summary.lastFailureDetail = outcome.detail;
+      switch (queued.type) {
+        case "exhausted":
+          delayMs = idleMs;
+          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          break;
+        case "budget-spent":
+          break;
+        case "row": {
+          idleMs = timing.idleSleepMs;
+          summary.attempted += 1;
+          const outcome = await fetchDocument(
+            queued.row.decision,
+            observations?.observe,
+          );
+          summary[outcome.status] += 1;
+          if (outcome.status === "deferred" || outcome.status === "parked") {
+            summary.failures[outcome.failure] += 1;
+            summary.lastFailureDetail = outcome.detail;
+          }
+          break;
+        }
+        default: {
+          queued satisfies never;
+          panic("Unexpected document queue outcome");
         }
       }
 
@@ -218,7 +288,7 @@ export const runSkDocumentDrain = async ({
     }
 
     if (now() >= summaryDueAt) {
-      flushSummary();
+      await flushSummary();
     }
 
     // The pacing itself: throughput is this gap, so the loop is sequential
@@ -234,5 +304,5 @@ export const runSkDocumentDrain = async ({
 
   // A deployment must not discard the window in hand: without this the
   // tallies of a process replaced mid-window are never reported at all.
-  flushSummary();
+  await flushSummary();
 };

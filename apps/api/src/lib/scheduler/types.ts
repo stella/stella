@@ -1,3 +1,5 @@
+import { TaggedError, type Result } from "better-result";
+
 import type { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,8 +24,17 @@ export type SchedulerTaskContext = {
   logger: typeof logger;
 };
 
-export type SchedulerTask = (
-  context: SchedulerTaskContext,
-) => Promise<void> | void;
+export class SchedulerTaskFailure extends TaggedError("SchedulerTaskFailure")<{
+  message: string;
+  cause: unknown;
+}> {}
+
+export type SchedulerTask =
+  | ((context: SchedulerTaskContext) => void)
+  | ((
+      context: SchedulerTaskContext,
+    ) =>
+      | Promise<void | Result<void, SchedulerTaskFailure>>
+      | Result<void, SchedulerTaskFailure>);
 
 export type SchedulerTaskRegistry = ReadonlyMap<string, SchedulerTask>;

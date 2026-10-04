@@ -93,6 +93,7 @@ describe("the rest of a replay's command line", () => {
       after: null,
       apply: false,
       rejectionPolicy: "report",
+      resultsOut: null,
       scope: { type: "source" },
     });
   });
@@ -142,7 +143,37 @@ describe("the rest of a replay's command line", () => {
     [["--adapter", "eu-ecj", "--limit", "20", "--limit", "20rows"], "--limit"],
     [["--adapter", "eu-ecj", "--adapter", "cz-nss"], "--adapter"],
     [["--adapter", "eu-ecj", "--court", "A", "--court", "B"], "--court"],
+    [
+      ["--adapter", "eu-ecj", "--results-out", "a", "--results-out", "b"],
+      "--results-out",
+    ],
   ])("a value flag given twice is refused (%p)", (argv, flag) => {
     expect(rejection(...argv)).toBe(`${flag} was given more than once`);
+  });
+});
+
+describe("where every row's result is written", () => {
+  test("--results-out names the file", () => {
+    expect(
+      parsed("--adapter", "sk-courts", "--results-out", "/tmp/run.jsonl")
+        .resultsOut,
+    ).toBe("/tmp/run.jsonl");
+  });
+
+  test.each([
+    [
+      ["--adapter", "sk-courts", "--results-out"],
+      "--results-out requires a value",
+    ],
+    [
+      ["--adapter", "sk-courts", "--results-out", "--all"],
+      "--results-out requires a value",
+    ],
+    [
+      ["--adapter", "sk-courts", "--results-out", ""],
+      "--results-out requires a non-empty value",
+    ],
+  ])("a missing path is refused, not defaulted (%p)", (argv, message) => {
+    expect(rejection(...argv)).toBe(message);
   });
 });

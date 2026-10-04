@@ -9,6 +9,7 @@ import {
 const keyEvent = (key: string) => ({
   altKey: false,
   ctrlKey: false,
+  getModifierState: () => false,
   isComposing: false,
   key,
   metaKey: false,
@@ -96,7 +97,37 @@ describe("Office edit intent", () => {
       isOfficeEditIntentKey({ ...keyEvent("v"), metaKey: true }),
     ).toBeFalse();
     expect(
+      isOfficeEditIntentKey({ ...keyEvent("c"), ctrlKey: true }),
+    ).toBeFalse();
+    expect(
       isOfficeEditIntentKey({ ...keyEvent("a"), repeat: true }),
     ).toBeFalse();
+  });
+
+  test("rejects named keys and repeated layout characters but counts Unicode text", () => {
+    for (const key of ["Enter", "Dead", "ab", ""]) {
+      expect(isOfficeEditIntentKey(keyEvent(key))).toBeFalse();
+    }
+    for (const key of ["😀", "e\u0301", "🇨🇿", " "]) {
+      expect(isOfficeEditIntentKey(keyEvent(key))).toBeTrue();
+    }
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true, repeat: true }),
+    ).toBeFalse();
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true, metaKey: true }),
+    ).toBeFalse();
+  });
+
+  test("counts characters typed with Option, AltGr, or an IME", () => {
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true }),
+    ).toBeTrue();
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("ą"), altKey: true, ctrlKey: true }),
+    ).toBeTrue();
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("Process"), isComposing: true }),
+    ).toBeTrue();
   });
 });

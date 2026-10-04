@@ -2,13 +2,18 @@ import path from "node:path";
 
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
+const LEGISLATION_REGISTRY_PATH =
+  "apps/api/src/handlers/legislation/ingestion/adapter-registry.ts";
 const ADAPTER_DIRECTORY = "apps/api/src/handlers/case-law/ingestion/adapters/";
+const LEGISLATION_DIRECTORY = "apps/api/src/handlers/legislation/";
+const LEGISLATION_ADAPTER_DIRECTORY = `${LEGISLATION_DIRECTORY}ingestion/adapters/`;
 const CASE_LAW_DIRECTORY = "apps/api/src/lib/case-law/";
 const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
-const OUTPUT_UNCHANGED = /^\s*\/\/\s*parser-output-unchanged:\s*(\S.*)$/u;
+const OUTPUT_UNCHANGED =
+  /^\s*\/\/\s*parser-output-unchanged:\s+(?:\[([a-z\d-]+)\]\s+\S.*|(?!\[)(\S.*))$/u;
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
@@ -21,7 +26,27 @@ type StaticValue =
       name: string;
       entries: ReadonlyMap<string, string>;
     };
-type SourceOwner = { version: number; parsers: Set<string> };
+type SourceOwner = {
+  /** Module imported by a live entry in ADAPTER_REGISTRY or IMPORT_REGISTRY. */
+  module: string;
+  version: number;
+  /** Output-affecting source files reached from this registered adapter. */
+  parsers: ReadonlySet<string>;
+};
+
+type RegisteredParserSource = {
+  registry: string;
+  key: string;
+  module: string;
+};
+
+type SourceOwnersResult = {
+  owners: ReadonlyMap<string, SourceOwner>;
+  registeredSources: readonly RegisteredParserSource[];
+  parserFiles: ReadonlySet<string>;
+  errors: readonly string[];
+  registryErrors: readonly string[];
+};
 
 // Only source is read: no importing the registry, adapter initialization,
 // dependencies, fixtures, or publisher clients into this check.
@@ -356,7 +381,7 @@ class StaticTree {
     return source;
   }
 
-  owners(): { owners: Map<string, SourceOwner>; errors: string[] } {
+  owners(): SourceOwnersResult {
     const owners = new Map<string, SourceOwner>();
     const errors: string[] = [];
     for (const registry of ["ADAPTER_REGISTRY", "IMPORT_REGISTRY"]) {
@@ -400,13 +425,60 @@ class StaticTree {
             }
           }
         }
-        owners.set(key, { version, parsers });
+        owners.set(key, { module: imported.module, version, parsers });
       }
     }
     errors.push(...this.importErrors);
-    return { owners, errors };
+    const registeredSources: RegisteredParserSource[] = [];
+    const parserFiles = new Set<string>();
+    const registryErrors: string[] = [];
+    for (const [registry, file, name] of [
+      ["case-law-crawl", REGISTRY_PATH, "ADAPTER_REGISTRY"],
+      ["case-law-import", REGISTRY_PATH, "IMPORT_REGISTRY"],
+      [
+        "legislation",
+        LEGISLATION_REGISTRY_PATH,
+        "LEGISLATION_ADAPTER_REGISTRY",
+      ],
+    ] as const) {
+      const entries = this.value(file, name);
+      if (entries?.type !== "map") {
+        registryErrors.push(`Cannot statically read ${name} in ${file}`);
+        continue;
+      }
+      for (const [keyExpression, binding] of entries.entries) {
+        const key = this.key(file, keyExpression);
+        const imported = this.namedImport(file, binding);
+        if (key === undefined || imported === undefined) {
+          registryErrors.push(
+            `Registry entry ${keyExpression} has no resolvable module in ${file}`,
+          );
+          continue;
+        }
+        registeredSources.push({ registry, key, module: imported.module });
+        for (const source of this.closure(imported.module)) {
+          if (
+            source.startsWith(ADAPTER_DIRECTORY) ||
+            source.startsWith(LEGISLATION_ADAPTER_DIRECTORY) ||
+            PARSER_DIRECTORIES.some((directory) =>
+              source.startsWith(directory),
+            ) ||
+            (source.startsWith(LEGISLATION_DIRECTORY) &&
+              source.includes("/parsers/"))
+          ) {
+            parserFiles.add(source);
+          }
+        }
+      }
+    }
+    registryErrors.push(...this.importErrors);
+    return { owners, registeredSources, parserFiles, errors, registryErrors };
   }
 }
+
+/** Read the registered output owners without importing live adapters. */
+export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
+  new StaticTree(files).owners();
 
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
 
@@ -441,9 +513,14 @@ export const checkParserVersions = ({
     }
     const unexempted = changed.filter((file) => {
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
-      return !(head.get(file) ?? "")
-        .split("\n")
-        .some((line) => !baseLines.has(line) && OUTPUT_UNCHANGED.test(line));
+      return !(head.get(file) ?? "").split("\n").some((line) => {
+        if (baseLines.has(line)) {
+          return false;
+        }
+        const marker = OUTPUT_UNCHANGED.exec(line);
+        const owner = marker?.at(1);
+        return marker !== null && (owner === undefined || owner === key);
+      });
     });
     if (unexempted.length > 0) {
       errors.push(
@@ -475,7 +552,7 @@ type ReadGitTreeResult =
   | { type: "failed"; detail: string };
 
 // Read immutable git objects in one batch, without checking out either tree.
-const readGitTree = (ref: string): ReadGitTreeResult => {
+export const readGitTree = (ref: string): ReadGitTreeResult => {
   const listing = git([
     "ls-tree",
     "-r",

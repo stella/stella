@@ -41,9 +41,13 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  invalidateTemplateClauseSources,
+  templateClausesOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 
@@ -97,19 +101,14 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
   const outdatedCount = links.filter((link) => link.isOutdated).length;
 
   const invalidateLinks = useCallback(() => {
-    queryClient
-      .invalidateQueries({
-        queryKey: knowledgeKeys.templates.clauses(
-          activeOrganizationId,
-          templateId,
-        ),
-      })
-      .catch((error: unknown) => {
+    invalidateTemplateClauseSources(queryClient, activeOrganizationId).catch(
+      (error: unknown) => {
         // Invalidation failure leaves the clause list (and its nested preview)
         // stale without a user-facing symptom: capture it for telemetry.
         getAnalytics().captureError(error);
-      });
-  }, [queryClient, activeOrganizationId, templateId]);
+      },
+    );
+  }, [queryClient, activeOrganizationId]);
 
   const handleSyncAll = useCallback(async () => {
     setSyncingAll(true);
@@ -121,9 +120,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
     setSyncingAll(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -251,9 +248,7 @@ const LinkedClauseRow = ({
     setSyncing(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -517,9 +512,7 @@ export const UnlinkButton = ({
     setUnlinking(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.unlinkFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.unlinkFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

@@ -9,14 +9,15 @@ import {
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { ENTITY_CHECK_KINDS } from "@stll/business-registries/entity-checks";
-import type { EntityCheckSubject } from "@stll/business-registries/entity-checks";
+import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
-import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
-import { listContactsPage } from "@/api/handlers/contacts/list-query";
+import {
+  CONTACT_CURSOR_MAX_LENGTH,
+  listContactsPage,
+} from "@/api/handlers/contacts/list-query";
 import {
   MAX_CONTACT_NATIONALITY_CODES,
   validatePersonDetails,
@@ -44,7 +45,14 @@ import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
-import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
+import {
+  COUNTERPARTY_CHECK_KINDS,
+  personDateOfBirth,
+  runEntityCheckShared,
+} from "@/api/lib/business-registries/entity-checks";
+import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
+import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -62,6 +70,7 @@ import {
   SAVE_TASK_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedContactId,
@@ -388,6 +397,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const workspaceId = createSafeId<"workspace">();
     const created = await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         userId: context.userId,
@@ -450,6 +460,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -570,6 +581,7 @@ const listContactsArgsSchema = nullAsAbsent(
       v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
     ),
     cursor: cursorInput({
+      maxLength: CONTACT_CURSOR_MAX_LENGTH,
       description: "Opaque cursor from the previous page",
     }),
     limit: v.optional(
@@ -626,6 +638,31 @@ const handleListContactsTool: TypedMcpToolHandler<
 };
 
 // --- save_contact -------------------------------------------------------
+
+const birthYearSchema = () =>
+  v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999));
+const birthMonthSchema = () =>
+  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12));
+
+/**
+ * A date of birth at the precision known, as contacts store it: a year, a
+ * year and month, or a full date. Shared by save_contact and
+ * check_counterparty, so a date read back from a contact is accepted as is.
+ */
+const dateOfBirthInputSchema = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: birthYearSchema() }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: birthYearSchema(),
+    month: birthMonthSchema(),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: birthYearSchema(),
+    month: birthMonthSchema(),
+    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
+  }),
+]);
 
 type ContactNameParts = {
   display_name?: string | undefined;
@@ -714,55 +751,7 @@ const saveContactArgsSchema = nullAsAbsent(
       ),
       date_of_birth: v.optional(
         v.pipe(
-          v.nullable(
-            v.variant("precision", [
-              v.strictObject({
-                precision: v.literal("year"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-              }),
-              v.strictObject({
-                precision: v.literal("month"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-                month: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(12),
-                ),
-              }),
-              v.strictObject({
-                precision: v.literal("day"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-                month: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(12),
-                ),
-                day: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(31),
-                ),
-              }),
-            ]),
-          ),
+          v.nullable(dateOfBirthInputSchema),
           v.description(
             "Date of birth with known year, month, or day precision; pass null to clear",
           ),
@@ -1021,7 +1010,12 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await lookupBusinessRegistryShared({
+    observer,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
@@ -1046,38 +1040,32 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
 
 const checkCounterpartySubjectSchema = v.variant("type", [
   v.strictObject({
-    type: v.pipe(
-      v.literal("company-id"),
-      v.description("A registered business, by its national business ID."),
-    ),
+    type: v.pipe(v.literal("company-id"), v.description("Business ID")),
     company_id: v.pipe(
       v.string(),
       v.minLength(1),
       v.maxLength(32),
       v.description(
-        "National business ID in the check's country, e.g. the Czech IČO 26863154",
+        "Business ID (e.g. IČO 26863154); sanctions resolves its registered name.",
+      ),
+    ),
+    country: v.optional(
+      countryInputSchema(
+        "ID country: CZ (default) or SK; register checks cover CZ only.",
       ),
     ),
   }),
   v.strictObject({
-    type: v.pipe(
-      v.literal("tax-id"),
-      v.description("A taxpayer, by its tax ID."),
-    ),
+    type: v.pipe(v.literal("tax-id"), v.description("Taxpayer")),
     tax_id: v.pipe(
       v.string(),
       v.minLength(1),
       v.maxLength(32),
-      v.description(
-        "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649",
-      ),
+      v.description("Tax ID, e.g. DIČ CZ45274649"),
     ),
   }),
   v.strictObject({
-    type: v.pipe(
-      v.literal("person"),
-      v.description("A natural person, by name and birth date."),
-    ),
+    type: v.pipe(v.literal("person"), v.description("Person")),
     first_name: v.pipe(
       v.string(),
       v.minLength(2),
@@ -1088,55 +1076,132 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.string(),
       v.minLength(2),
       v.maxLength(100),
-      v.description("Last name (surname)"),
+      v.description("Surname"),
     ),
-    birth_date: v.pipe(
-      ISO_DATE_SCHEMA,
-      v.maxLength(10),
-      v.description("Birth date"),
+    birth_date: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "Full birth date; use date_of_birth for partial dates, never invent a day.",
+        ),
+      ),
+    ),
+    date_of_birth: v.optional(
+      v.pipe(
+        dateOfBirthInputSchema,
+        v.description(
+          "Birth date at known precision, as read_contact returns.",
+        ),
+      ),
+    ),
+    nationality_codes: v.optional(
+      v.pipe(
+        v.array(countryInputSchema("Nationality country")),
+        v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
+        v.description("Known nationalities for sanctions"),
+      ),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
+      v.literal("organization"),
+      v.description("Organization name (sanctions only)"),
+    ),
+    name: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(512),
+      v.description("Registered name"),
+    ),
+    company_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("Known registration number; screened with the name"),
+      ),
     ),
   }),
 ]);
 
-/** Shared with the chat tool, so both surfaces accept the same call. */
-export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
+const checkCounterpartyInputSchema = v.strictObject({
   check: v.pipe(
-    v.picklist(ENTITY_CHECK_KINDS),
+    v.picklist(COUNTERPARTY_CHECK_KINDS),
     v.description(
-      "Source to screen against. cz-insolvency: the Czech insolvency " +
-        "register (ISIR), pending and ended proceedings; takes a company " +
-        "or a person. cz-vat-reliability: the Czech VAT register, " +
-        "unreliable-payer status and published bank accounts; takes a " +
-        "tax ID, or a company ID sent as CZ + IČO and marked derived.",
+      "cz-insolvency: ISIR proceedings, company ID or person with full birth date. " +
+        "cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. " +
+        "sanctions: all EU, UN and national lists; company ID, organization name, " +
+        "or person with any known birth date and nationalities.",
     ),
   ),
   subject: v.pipe(
     checkCounterpartySubjectSchema,
-    v.description("The company or person to screen"),
+    v.description("Subject to screen"),
   ),
 });
 
-const checkCounterpartyArgsSchema = nullAsAbsent(
-  CHECK_COUNTERPARTY_INPUT_SCHEMA,
+/**
+ * Shared with the chat tool: both surfaces run the call through the same
+ * agent-input boundary (country names, lower-case codes, null placeholders)
+ * and then parse it with this schema, so they accept the same call.
+ */
+export const CHECK_COUNTERPARTY_ARGS_SCHEMA = nullAsAbsent(
+  checkCounterpartyInputSchema,
 );
 
-export const toEntityCheckSubject = (
+const invalidCounterpartySubject = (message: string, hint: string) =>
+  Result.err(
+    new HandlerError({ status: 400, code: "validation_error", message, hint }),
+  );
+
+/** The subject as the shared check reads it, from the tool's snake_case input. */
+export const toCounterpartyCheckSubject = (
   subject: v.InferOutput<typeof checkCounterpartySubjectSchema>,
-): EntityCheckSubject => {
+): Result<CounterpartyCheckSubject, HandlerError> => {
   switch (subject.type) {
     case "company-id": {
-      return { type: "company-id", value: subject.company_id };
+      const country = subject.country ?? "CZ";
+      return includes(SANCTIONS_COMPANY_ID_COUNTRIES, country)
+        ? Result.ok({
+            type: "company-id",
+            value: subject.company_id,
+            country,
+          })
+        : invalidCounterpartySubject(
+            `Company IDs from ${country} are not read`,
+            "Send a CZ or SK company ID, or the company's name as an organization subject.",
+          );
     }
     case "tax-id": {
-      return { type: "tax-id", value: subject.tax_id };
+      return Result.ok({ type: "tax-id", value: subject.tax_id });
     }
     case "person": {
-      return {
+      const codes = subject.nationality_codes ?? [];
+      const nationalityCodes = codes.filter(isCountryCode);
+      if (nationalityCodes.length !== codes.length) {
+        return invalidCounterpartySubject(
+          "Nationalities must be ISO 3166-1 alpha-2 country codes",
+          'Send each nationality as a two-letter code, e.g. "CZ".',
+        );
+      }
+      return personDateOfBirth({
+        birthDate: subject.birth_date,
+        dateOfBirth: subject.date_of_birth,
+      }).map((dateOfBirth): CounterpartyCheckSubject => ({
         type: "person",
         firstName: subject.first_name,
         lastName: subject.last_name,
-        birthDate: subject.birth_date,
-      };
+        dateOfBirth,
+        nationalityCodes,
+      }));
+    }
+    case "organization": {
+      return Result.ok({
+        type: "organization",
+        name: subject.name,
+        companyId: subject.company_id ?? null,
+      });
     }
     default: {
       subject satisfies never;
@@ -1152,11 +1217,15 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(checkCounterpartyArgsSchema, args);
+  const parsed = v.safeParse(CHECK_COUNTERPARTY_ARGS_SCHEMA, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
 
+  const subject = toCounterpartyCheckSubject(parsed.output.subject);
+  if (Result.isError(subject)) {
+    return internalFailureResult(subject.error);
+  }
   const observer = actionRequestObserver(
     context.organizationId,
     ACTION_COST_CALL_KIND.registryRequest,
@@ -1164,13 +1233,20 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   const result = await runEntityCheckShared({
     observer,
     check: parsed.output.check,
-    subject: toEntityCheckSubject(parsed.output.subject),
+    subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
+    sanctions: {
+      scopedDb: context.scopedDb,
+      organizationId: context.organizationId,
+      executeLookup: context.testDependencies?.executeRegistryLookup,
+      runSanctionsCheck: context.testDependencies?.runSanctionsCheck,
+    },
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Passthrough: public-register data about a subject the caller named.
+  // Passthrough: public-register and public-list data about a subject the
+  // caller named.
   type CheckCounterpartyPayload = AssertNoExtraFields<
     typeof result.value,
     v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
@@ -2300,6 +2376,12 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ workspace: ["create"] }, { workspace: ["update"] }],
+      reason:
+        "matter_id selects update, archive or unarchive; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
     scope: "stella:matters_write",
@@ -2318,6 +2400,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "chat history. This is irreversible.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
+    permissions: { type: "all", permissions: { workspace: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_matter",
@@ -2374,6 +2457,11 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ contact: ["create"] }, { contact: ["update"] }],
+      reason: "contact_id selects update; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
     scope: "stella:contacts_write",
@@ -2393,6 +2481,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteContactArgsSchema,
     access: "write",
+    permissions: { type: "all", permissions: { contact: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_contact",
@@ -2429,22 +2518,32 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Screen a company or a person against an official register for due " +
-      "diligence. `check` picks the source; `subject` is a company ID, a " +
-      "tax ID or a person by name and birth date. Returns one outcome: clear " +
-      "(the source answered and lists nothing adverse), found (the adverse " +
-      "records), not-registered (the source holds no record, e.g. not a VAT " +
-      "payer; not a clearance), unavailable (the source did not answer: the " +
-      "subject is NOT cleared; retry later or say the check could not run), " +
-      "or not-covered (the source cannot screen this subject type, or needs " +
-      "the tax ID because one derived from the company ID was not on file). " +
-      "Person " +
-      "matches rely on name and birth date: compare the record before " +
-      "relying on one.",
-    inputSchema: checkCounterpartyArgsSchema,
+      "Screen a company or person for due diligence. `check` picks the " +
+      "source. A register check returns one outcome: clear, found (adverse " +
+      "records), not-registered (no record; not a clearance), unavailable " +
+      "(no answer: NOT cleared) or not-covered (cannot screen this " +
+      "subject, or needs the tax ID). The sanctions check returns one " +
+      "outcome per list in `lists`, with whether it binds the firm: clear " +
+      "or possible-match (resembling entries with score and conflicting " +
+      "fields; each needs human review, none is confirmed), naming " +
+      "the edition screened; or unavailable (stale, not loaded, or the " +
+      "company name unreadable: NOT cleared), whose edition fields name " +
+      "the latest edition on file, not one screened. Top-level status is " +
+      "clear only when every list is. Person matches rest on name and " +
+      "birth date: compare the record first.",
+    inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
+      "subject.country": countryNormalization({
+        spelling: "alpha-2",
+        admitted: SANCTIONS_COMPANY_ID_COUNTRIES,
+        tool: "check_counterparty",
+      }),
+      "subject.nationality_codes[]": countryNormalization({
+        spelling: "alpha-2",
+        tool: "check_counterparty",
+      }),
     },
     access: "read",
     readClass: "tenant",
@@ -2504,6 +2603,11 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "any",
+      alternatives: [{ entity: ["create"] }, { entity: ["update"] }],
+      reason: "task_id selects update; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
     scope: "stella:matters_write",
@@ -2523,6 +2627,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "archived. This is irreversible.",
     inputSchema: deleteTaskArgsSchema,
     access: "write",
+    permissions: { type: "all", permissions: { entity: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_task",
@@ -2551,6 +2656,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: { type: "all", permissions: { workspace: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",
     scope: "stella:matters_write",

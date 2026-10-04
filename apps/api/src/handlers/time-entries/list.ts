@@ -12,7 +12,7 @@ import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/handlers/time-entries/timekeeper-names";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -52,6 +52,7 @@ const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
   // Invoicing and split bookkeeping; the list reports billing through
   // `status`, and a split entry reads as an ordinary entry.
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
 ] as const satisfies readonly (keyof TimeEntryRow)[];
 
@@ -155,6 +156,7 @@ const readTimeEntries = createSafeHandler(
       "entry's id, entity, user, date, minutes, rate (minor currency " +
       "units), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "list_time_entries" },
     access: "read",
     query: readTimeEntriesQuerySchema,

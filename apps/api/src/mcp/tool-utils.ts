@@ -23,11 +23,11 @@ import {
 } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -51,7 +51,6 @@ import type {
   InternalToolSuccess,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -323,19 +322,25 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
       if (!isRecord(value)) {
         return value;
       }
-      const normalized: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value)) {
-        const placeholders = plan.absentWhen.get(key);
-        if (
-          placeholders?.some((placeholder) => isPlaceholder(entry, placeholder))
-        ) {
-          continue;
-        }
-        const nested = plan.properties.get(key);
-        normalized[key] =
-          nested === undefined ? entry : applyNullAsAbsent(entry, nested);
-      }
-      return normalized;
+      return Object.fromEntries(
+        Object.entries(value).flatMap(([key, entry]) => {
+          const placeholders = plan.absentWhen.get(key);
+          if (
+            placeholders?.some((placeholder) =>
+              isPlaceholder(entry, placeholder),
+            )
+          ) {
+            return [];
+          }
+          const nested = plan.properties.get(key);
+          return [
+            [
+              key,
+              nested === undefined ? entry : applyNullAsAbsent(entry, nested),
+            ] as const,
+          ];
+        }),
+      );
     }
     default:
       return panic(`Unhandled null-as-absent plan: ${JSON.stringify(plan)}`);
@@ -729,6 +734,10 @@ export const internalFailureResult = (
         // the envelope carries the same `issues[].path` detail a schema
         // rejection does instead of collapsing to one line of prose.
         issues: error.issues,
+        // The handler's own next step for input it refused: authored text
+        // about the call, never internal detail. Other refusals keep the
+        // envelope's default hint.
+        ...(code === "validation_error" && { hint: error.hint }),
       });
     }
   }
@@ -1109,13 +1118,12 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-export const isPublicLawAppUrlEnabled = (): boolean =>
-  isLocalDevOpen() || env.FEATURE_PUBLIC_LAW;
-
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,
 ): string | null =>
-  isPublicLawAppUrlEnabled() ? buildCaseLawDecisionUrl(input) : null;
+  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
+    ? buildCaseLawDecisionUrl(input)
+    : null;
 
 /**
  * The route shape is owned by `@stll/api-contract/case-law-decision-route`, so
@@ -1167,7 +1175,7 @@ export const buildLegislationDocumentAppUrl = ({
   eli,
   slug,
 }: Omit<StatuteRouteInput, "version">): string | null =>
-  isPublicLawAppUrlEnabled()
+  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
     ? `${getAppBaseUrl()}${createStatutePath(
         createStatuteRouteParams({
           country,

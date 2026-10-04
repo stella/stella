@@ -73,14 +73,18 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedMap } from "@/lib/bounded-set";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
+  invalidateTemplateClauseSources,
   templateCheckOptions,
   templateClausePreviewOptions,
   templateClausesOptions,
   templateDetailOptions,
   templateFillDiscoverOptions,
+  templateClauseSourceStamp,
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -176,7 +180,7 @@ export function TemplateStudioInspectorView({
       .templates({ templateId: toSafeId<"template">(templateId) })
       .post({ name: next });
     if (response.error) {
-      stellaToast.add({ type: "error", title: t("templates.renameFailed") });
+      notifyUserError(toAPIError(response.error), t("templates.renameFailed"));
       return;
     }
     // Reflect the new name in the tab label, the breadcrumb, and the list.
@@ -433,6 +437,14 @@ export const TemplateFillFacet = ({
       ? detailData
       : null;
 
+  const { data: clauseSources, isPending: clauseSourcesPending } = useQuery(
+    templateClausesOptions(activeOrganizationId, templateId),
+  );
+  const sourceStamp =
+    clauseSources && "links" in clauseSources
+      ? templateClauseSourceStamp(clauseSources.links)
+      : undefined;
+
   const presignedUrl = detail?.presignedUrl;
   const fileName = detail?.fileName;
   const {
@@ -441,12 +453,19 @@ export const TemplateFillFacet = ({
     isError,
   } = useQuery(
     templateFillDiscoverOptions({
-      key: { organizationId: activeOrganizationId, templateId },
-      context: { presignedUrl, fileName },
+      key: {
+        organizationId: activeOrganizationId,
+        templateId,
+        sourceStamp: sourceStamp ?? "",
+      },
+      context: {
+        presignedUrl: sourceStamp === undefined ? undefined : presignedUrl,
+        fileName,
+      },
     }),
   );
 
-  if (!detail || discovering) {
+  if (!detail || discovering || clauseSourcesPending) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
@@ -1140,12 +1159,10 @@ export const StudioInsertRow = () => {
         <LinkClauseDialog
           onLinked={() => {
             detached(
-              queryClient.invalidateQueries({
-                queryKey: knowledgeKeys.templates.clauses(
-                  activeOrganizationId,
-                  sessionTemplateId,
-                ),
-              }),
+              invalidateTemplateClauseSources(
+                queryClient,
+                activeOrganizationId,
+              ),
               "template-studio-inspector.link-clause-invalidate",
             );
           }}
@@ -1274,11 +1291,7 @@ export const StudioOverviewSummary = ({
     <div className="flex shrink-0 items-center gap-2 px-4 py-2">
       <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
       {outdated.length > 0 && (
-        <ClauseDriftPopover
-          outdated={outdated}
-          queryKey={clausesOptions.queryKey}
-          templateId={templateId}
-        />
+        <ClauseDriftPopover outdated={outdated} templateId={templateId} />
       )}
     </div>
   );
@@ -1290,16 +1303,15 @@ export const StudioOverviewSummary = ({
 export const ClauseDriftPopover = ({
   outdated,
   templateId,
-  queryKey,
 }: {
   outdated: LinkedClause[];
   templateId: string;
-  queryKey: readonly unknown[];
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [syncingAll, setSyncingAll] = useState(false);
 
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const handleSyncAll = async () => {
     setSyncingAll(true);
     const response = await api
@@ -1308,9 +1320,7 @@ export const ClauseDriftPopover = ({
     setSyncingAll(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1328,7 +1338,7 @@ export const ClauseDriftPopover = ({
       });
     }
     detached(
-      queryClient.invalidateQueries({ queryKey }),
+      invalidateTemplateClauseSources(queryClient, activeOrganizationId),
       "template-studio-inspector.invalidate",
     );
   };
@@ -1448,9 +1458,7 @@ export const GuidanceFields = ({
       languages,
     });
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

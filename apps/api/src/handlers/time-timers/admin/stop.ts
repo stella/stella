@@ -2,12 +2,11 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import { timeTimerConfirmations, timeTimers } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { timerNotFound, timerParams } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 import { finalizeTimer } from "../finalize";
@@ -17,6 +16,7 @@ const stopMemberTimer = createSafeRootHandler(
     description:
       "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. The work date uses the timer owner's timezone.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "write",
     mcp: {
       type: "capability",
@@ -37,7 +37,7 @@ const stopMemberTimer = createSafeRootHandler(
     body,
     recordAuditEvent,
   }) {
-    if (!isOrganizationManagementRole(memberRole.role)) {
+    if (!hasManagementPermission(memberRole, { timeEntry: ["approve"] })) {
       return Result.err(
         new HandlerError({
           status: 403,

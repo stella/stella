@@ -11,7 +11,10 @@ import {
   toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
-import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
+import {
+  decodeChatCompactionDeltaCursor,
+  readLatestChatCompactionOnTx,
+} from "@/api/handlers/chat/persistent-compaction";
 import type {
   ChatMessageContent,
   ChatMessageRole,
@@ -19,7 +22,6 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
-import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
 export type WindowedThreadMessage = {
@@ -48,21 +50,6 @@ const toWindowedMessage = (row: {
     }),
   };
 };
-
-/**
- * Decode a checkpoint's stored delta cursor.
- *
- * Returns null both when there is no checkpoint and when its cursor is absent
- * or unreadable (a chain written before the cursor column landed). Null means
- * "read from the start of the thread", which the row cap keeps bounded and
- * which the compactor repairs by writing a cursor on its next run.
- */
-const decodeChatCompactionDeltaCursor = (
-  checkpoint: ChatThreadCompactionCheckpoint | null,
-): TimestampIdCursor<SafeId<"chatMessage">> | null =>
-  checkpoint?.deltaCursor
-    ? chatMessageCursorCodec.decode(checkpoint.deltaCursor)
-    : null;
 
 type LoadWindowedThreadMessagesOnTxArgs = {
   tx: Transaction;

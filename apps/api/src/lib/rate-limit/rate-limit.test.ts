@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia, { status, t } from "elysia";
 
@@ -209,9 +210,9 @@ describe("RedisRateLimitContext", () => {
             delayNextIncrement
           ) {
             delayNextIncrement = false;
-            return await new Promise<unknown>((resolve) => {
+            return await new Promise<unknown>((resolve, reject) => {
               releaseLateReply = () => {
-                applyResultPromise.then(resolve).catch(() => undefined);
+                applyResultPromise.then(resolve).catch(reject);
               };
             });
           }
@@ -991,5 +992,70 @@ describe("client address counters", () => {
         clientAddressOptions,
       }),
     ).toBe("api");
+  });
+});
+
+describe("composed rate-limit response policies", () => {
+  test("remaining budget and reset ties choose one complete policy regardless of registration order", async () => {
+    for (const policies of [
+      [
+        { max: 30, count: 1, reset: 60 },
+        { max: 480, count: 1, reset: 60 },
+      ],
+      [
+        { max: 30, count: 1, reset: 60 },
+        { max: 480, count: 470, reset: 60 },
+      ],
+      [
+        { max: 30, count: 20, reset: 60 },
+        { max: 480, count: 470, reset: 30 },
+      ],
+    ]) {
+      const expected = policies
+        .toSorted(
+          (left, right) =>
+            left.max - left.count - (right.max - right.count) ||
+            left.reset - right.reset,
+        )
+        .at(0);
+      if (expected === undefined) {
+        panic("Missing test policy");
+      }
+      for (const ordered of [policies, policies.toReversed()]) {
+        let app = new Elysia();
+        for (const policy of ordered) {
+          app = app.use(
+            rateLimit({
+              max: policy.max,
+              duration: 60_000,
+              generator: () => "fixture",
+              context: {
+                init: () => undefined,
+                decrement: () => undefined,
+                kill: () => undefined,
+                increment: (_key, _duration, requestTime = 0) => ({
+                  count: policy.count,
+                  start: requestTime,
+                  nextReset: new Date(requestTime + policy.reset * 1000),
+                }),
+              },
+            }),
+          );
+        }
+        const response = await app
+          .get("/policies", () => "ok")
+          .handle(new Request("http://localhost/policies"));
+        expect(response.status).toBe(200);
+        expect(response.headers.get("RateLimit-Limit")).toBe(
+          String(expected.max),
+        );
+        expect(response.headers.get("RateLimit-Remaining")).toBe(
+          String(expected.max - expected.count),
+        );
+        expect(response.headers.get("RateLimit-Reset")).toBe(
+          String(expected.reset),
+        );
+      }
+    }
   });
 });

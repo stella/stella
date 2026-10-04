@@ -8,7 +8,7 @@ import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +25,7 @@ const config = {
     "anchored to it. The skill and its revisions are untouched. Only the " +
     "author or someone who may edit the skill can.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -83,7 +84,12 @@ const deleteSkillProposal = createSafeRootHandler(
         }
         if (
           existing.authorId !== user.id &&
-          !canManageSkill({ skill, memberRole, userId: user.id })
+          !canManageSkill({
+            skill,
+            memberRole,
+            userId: user.id,
+            spends: "update",
+          })
         ) {
           throw new HandlerError({ status: 403, message: "Forbidden" });
         }

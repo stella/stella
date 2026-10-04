@@ -27,6 +27,7 @@ import { publicCountryUnavailableSchema } from "@stll/api-contract/public-countr
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
+  LEGISLATION_SEARCH_MATCH_TYPES,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import {
@@ -46,6 +47,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import {
+  SANCTIONS_COMPANY_ID_COUNTRIES,
+  SANCTIONS_COMPANY_REGISTRIES,
+} from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
@@ -67,6 +72,17 @@ import {
   PROVISION_ABSENCE_STATUSES,
   PROVISION_STATUS,
 } from "@/api/lib/legal-search/legislation-provision-vocabulary";
+import {
+  SANCTIONS_CLASSIFICATIONS,
+  SANCTIONS_ENTITY_TYPES,
+  SANCTIONS_FIELD_COMPARISONS,
+  SANCTIONS_IDENTITY_FIELDS,
+  SANCTIONS_PENDING_UPDATE_CODES,
+  SANCTIONS_SCREENING_STATUSES,
+  SANCTIONS_SOURCE_IDS,
+  SANCTIONS_UNAVAILABLE_REASONS,
+} from "@/api/lib/lists/sanctions/screening-vocabulary";
+import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-outcome-projection";
 
 import {
   chatEntityRef,
@@ -498,9 +514,10 @@ const documentFieldContentProjection = v.variant("type", [
     v.strictObject({
       version: v.literal(1),
       type: v.literal("person"),
-      // The workspace member handle is machinery chat cannot act on; the name
-      // is what a model reads.
-      userId: strippedField(),
+      // The workspace member handle is the person's reference: the model
+      // links the name with it (`#stella-user=<userId>`, PEOPLE MENTIONS) the
+      // way it links an entity with its `ent_N`. Null for a non-member.
+      userId: v.nullable(passthroughId()),
       name: v.string(),
       image: strippedField(),
     }),
@@ -1489,6 +1506,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
       // memory of what earlier pages emitted, so the deduplication `results`
       // carries is within the page; a caller paging keys on `decisionId`.
       nextCursor: v.nullable(passthroughId()),
+      paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       // One entry per `queries[]` entry, in the same order. Per query rather than
       // per call because each phrasing is interpreted on its own: one may carry
       // function words and another none.
@@ -1500,6 +1518,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // The words this phrasing actually required, itself a valid query:
           // send it back as a `queries` entry to repeat the same search.
           queryUsed: v.string(),
+          paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
           // What the search answered that the call did not ask for. Empty for a
           // phrasing that required every word it carried and found something.
           warnings: v.array(
@@ -1517,7 +1536,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
       results: v.array(
         v.strictObject({
           // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-          // is disabled (`isPublicLawAppUrlEnabled`), so the projected shape is
+          // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
           // nullable; a non-nullable declaration would fail the strict parse and
           // take the tool off the chat surface on any deployment with the flag off.
           appUrl: v.nullable(v.string()),
@@ -1878,9 +1897,10 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
     v.strictObject({
       // Opaque corpus-search cursor, base64url-encoded.
       nextCursor: v.nullable(passthroughId()),
+      paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`isPublicLawAppUrlEnabled`)
+          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`)
           // and null for a statute whose ELI carries no citation tail to mint a
           // slug from: both are addresses that do not exist, not missing data.
           appUrl: v.nullable(v.string()),
@@ -1890,6 +1910,9 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           effectiveDate: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
+          match: v.strictObject({
+            type: v.picklist(LEGISLATION_SEARCH_MATCH_TYPES),
+          }),
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(v.string()),
@@ -2264,10 +2287,122 @@ const entityCheckOutcomeEntries = {
   subject: entityCheckSubjectProjection,
 };
 
+const sanctionsDateOfBirthProjection = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: v.number() }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: v.number(),
+    month: v.number(),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: v.number(),
+    month: v.number(),
+    day: v.number(),
+  }),
+]);
+
+// The subject as screened: the name used, and where it came from.
+const sanctionsCheckedSubjectProjection = v.variant("type", [
+  v.strictObject({
+    type: v.literal("organization"),
+    name: v.string(),
+    identifiers: v.array(v.string()),
+    resolvedFrom: v.nullable(
+      v.strictObject({
+        type: v.literal("company-id"),
+        value: v.string(),
+        country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+        registry: v.picklist(SANCTIONS_COMPANY_REGISTRIES),
+      }),
+    ),
+  }),
+  v.strictObject({
+    type: v.literal("person"),
+    name: v.string(),
+    dateOfBirth: v.nullable(sanctionsDateOfBirthProjection),
+    nationalityCodes: v.array(v.string()),
+  }),
+  // A company ID whose name the register could not give; nothing screened.
+  v.strictObject({
+    type: v.literal("company-id"),
+    value: v.string(),
+    country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+  }),
+]);
+
+const sanctionsPossibleMatchProjection = v.strictObject({
+  sourceEntryId: passthroughId(),
+  editionId: passthroughId(),
+  score: v.number(),
+  sourceUrl: publicUrl(),
+  name: v.nullable(v.string()),
+  referenceNumber: v.nullable(v.string()),
+  entityType: v.picklist(SANCTIONS_ENTITY_TYPES),
+  programme: v.nullable(v.string()),
+  listedOn: v.nullable(v.string()),
+  evidence: v.strictObject({
+    nameScore: v.number(),
+    matchedName: v.nullable(v.string()),
+    birthDate: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    nationality: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    entityType: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    identifier: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    conflicts: v.array(v.picklist(SANCTIONS_IDENTITY_FIELDS)),
+  }),
+});
+
+// A newer edition the refresh fetched and held back for review; the list
+// still answers from the edition it had.
+const sanctionsPendingUpdateProjection = v.strictObject({
+  code: v.picklist(SANCTIONS_PENDING_UPDATE_CODES),
+  heldAt: v.string(),
+  previousCount: v.nullable(v.number()),
+  nextCount: v.nullable(v.number()),
+});
+
+// One list's answer. Flattened over its status: a clear or possible-match
+// list names the edition it screened; an unavailable one names its reason
+// and, when one is on file, the edition it did not use.
+const sanctionsListOutcomeProjection = v.strictObject({
+  source: v.picklist(SANCTIONS_SOURCE_IDS),
+  // The issuing country's code, or EU or UN. A plain string keeps the output
+  // schema within its budget; the service types it closed.
+  issuer: v.string(),
+  classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
+  // The one note the budget keeps: which edition these fields name depends
+  // on the list's status (the screened one when it answered).
+  editionId: v.pipe(
+    v.nullable(passthroughId()),
+    v.description("If unavailable: latest on file, NOT screened"),
+  ),
+  publishedAt: v.nullable(v.string()),
+  verifiedAt: v.nullable(v.string()),
+  // A newer edition held back for review; the list still screens the
+  // edition above.
+  pendingUpdate: v.nullable(sanctionsPendingUpdateProjection),
+  totalMatches: v.number(),
+  truncated: v.boolean(),
+  possibleMatches: v.array(sanctionsPossibleMatchProjection),
+});
+
+const sanctionsCheckProjection = v.strictObject({
+  kind: v.literal("sanctions"),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  subject: sanctionsCheckedSubjectProjection,
+  checkedAt: v.string(),
+  cutoff: v.number(),
+  lists: v.array(sanctionsListOutcomeProjection),
+});
+
 /**
- * check_counterparty. Source of truth: `runEntityCheck`'s `EntityCheckResult`
- * union, forwarded verbatim by `handleCheckCounterpartyTool`
- * (`matter-tools.ts`). Public-register data about the screened subject.
+ * check_counterparty. Source of truth: `runEntityCheckShared`'s
+ * `CounterpartyCheckResult` union, forwarded verbatim by
+ * `handleCheckCounterpartyTool` (`matter-tools.ts`): one register outcome, or
+ * the sanctions check's per-list outcomes. Public-register and public-list
+ * data about the screened subject.
  */
 export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
   projectionBranch(
@@ -2317,6 +2452,9 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       supportedSubjectTypes: v.array(v.picklist(ENTITY_CHECK_SUBJECT_TYPES)),
     }),
   ),
+  // Shares status values with the register outcomes above; `kind` tells the
+  // two apart, and each strict branch refuses the other's fields.
+  projectionBranch(sanctionsCheckProjection),
 ]);
 
 const TEMPLATE_WARNINGS_PROJECTION = v.array(

@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import { shouldFinalizeEditSession } from "./docx-browser-editor.logic";
 import type {
@@ -155,7 +156,7 @@ export const useDocxSessionFinish = ({
       );
       if (Result.isError(flushResult)) {
         getAnalytics().captureError(flushResult.error);
-        stellaToast.error(t("folio.networkError"));
+        notifyUserError(flushResult.error, t("folio.networkError"));
         throw flushResult.error;
       }
       if (
@@ -166,7 +167,7 @@ export const useDocxSessionFinish = ({
           message: "The local collaboration state changed during close.",
         });
         getAnalytics().captureError(error);
-        stellaToast.error(t("folio.networkError"));
+        notifyUserError(error, t("folio.networkError"));
         throw error;
       }
       cancelCollaboration();
@@ -178,7 +179,7 @@ export const useDocxSessionFinish = ({
       async () => await cancelDesktopSession(),
     );
     if (Result.isError(cancelResult)) {
-      stellaToast.error(t("folio.networkError"));
+      notifyUserError(cancelResult.error, t("folio.networkError"));
       throw cancelResult.error;
     }
   }, [
@@ -217,10 +218,8 @@ export const useDocxSessionFinish = ({
 
     const ref = editorRef.current;
     if (!ref) {
-      stellaToast.add({
+      notifyUserError(undefined, t("folio.saveEditorUnavailableTitle"), {
         description: t("folio.saveEditorUnavailableDescription"),
-        title: t("folio.saveEditorUnavailableTitle"),
-        type: "error",
       });
       return false;
     }
@@ -239,10 +238,8 @@ export const useDocxSessionFinish = ({
 
     const buffer = await ref.save({ selective: true });
     if (!buffer) {
-      stellaToast.add({
+      notifyUserError(undefined, t("folio.saveSerializeFailedTitle"), {
         description: t("folio.saveSerializeFailedDescription"),
-        title: t("folio.saveSerializeFailedTitle"),
-        type: "error",
       });
       return false;
     }
@@ -254,10 +251,8 @@ export const useDocxSessionFinish = ({
       // A session taken over mid-save has nowhere to retry to; its banner
       // already says the document is read-only here.
       if (checkpoint === "failed") {
-        stellaToast.add({
+        notifyUserError(undefined, t("folio.saveCheckpointFailedTitle"), {
           description: t("folio.saveCheckpointFailedDescription"),
-          title: t("folio.saveCheckpointFailedTitle"),
-          type: "error",
         });
       }
       return false;

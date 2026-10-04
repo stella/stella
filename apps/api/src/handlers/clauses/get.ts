@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -17,6 +17,7 @@ const config = {
     "in sort order and the list of its stored versions. Use " +
     "clauses.versions.get for the body of a particular version.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_clauses" },
   access: "read",
   params: getClauseParamsSchema,
