@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 10,
-  "reason": "The dev process-group owner is a CLI/OS boundary: typed errors stop startup or shutdown on failed process inspection, unsafe ownership, failed registration/signaling, and surviving groups. Errors propagate to the existing runner and agent-session command boundaries; cleanup never reports success while an owned group survives."
-}

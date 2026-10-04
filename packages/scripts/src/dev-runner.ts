@@ -18,7 +18,11 @@ import path from "node:path";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
-import { spawnDevProcess, stopDevProcessGroups } from "./dev-process-groups";
+import {
+  type DevProcessGroupError,
+  spawnDevProcess,
+  stopDevProcessGroups,
+} from "./dev-process-groups";
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
@@ -1634,38 +1638,44 @@ const waitForReadinessChecks = async (
   }
 };
 
-const spawnPersistentStep = (step: Step, rootDir: string): RunningStep => {
+const spawnPersistentStep = (step: Step, rootDir: string) => {
   console.log(`==> Starting ${step.label}...`);
 
-  return {
-    ...step,
-    child: spawnDevProcess({
-      rootDir,
-      cmd: step.cmd,
-      label: step.label,
-      cwd: step.cwd,
-      env: resolveEnv(step.env),
-      stdin: "inherit",
-    }),
-  };
+  return spawnDevProcess({
+    rootDir,
+    cmd: step.cmd,
+    label: step.label,
+    cwd: step.cwd,
+    env: resolveEnv(step.env),
+    stdin: "inherit",
+  }).map((child) => ({
+    cmd: step.cmd,
+    cwd: step.cwd,
+    env: step.env,
+    label: step.label,
+    child,
+  }));
 };
 
 type BackgroundStep = RunningStep & { startedAt: number };
 
-const startBackgroundStep = (step: Step, rootDir: string): BackgroundStep => {
+const startBackgroundStep = (step: Step, rootDir: string) => {
   console.log(`==> ${step.label}...`);
-  return {
-    ...step,
-    child: spawnDevProcess({
-      rootDir,
-      cmd: step.cmd,
-      label: step.label,
-      cwd: step.cwd,
-      env: resolveEnv(step.env),
-      stdin: "ignore",
-    }),
+  return spawnDevProcess({
+    rootDir,
+    cmd: step.cmd,
+    label: step.label,
+    cwd: step.cwd,
+    env: resolveEnv(step.env),
+    stdin: "ignore",
+  }).map((child) => ({
+    cmd: step.cmd,
+    cwd: step.cwd,
+    env: step.env,
+    label: step.label,
+    child,
     startedAt: Temporal.Now.instant().epochMilliseconds,
-  };
+  }));
 };
 
 const finishBackgroundStep = async (step: BackgroundStep) => {
@@ -2277,6 +2287,14 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
+  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
+    result.match({
+      ok: (value) => value,
+      err: (error) => {
+        throw error;
+      },
+    });
+
   const cleanup = async () => {
     if (cleanupPromise) {
       return cleanupPromise;
@@ -2284,17 +2302,20 @@ const main = async () => {
 
     isShuttingDown = true;
     cleanupPromise = (async () => {
-      const forcedChildren = await stopDevProcessGroups({
+      const groupStop = await stopDevProcessGroups({
         rootDir: gitContext.currentRoot,
       });
-      removeDevRuntime(gitContext.currentRoot, process.pid);
-      if (forcedChildren.length > 0) {
+      if (groupStop.isOk()) {
+        removeDevRuntime(gitContext.currentRoot, process.pid);
+      }
+      if (groupStop.isOk() && groupStop.value.length > 0) {
         console.warn(
-          `Forced ${forcedChildren.join(", ")} to exit after the graceful shutdown deadline.`,
+          `Forced ${groupStop.value.join(", ")} to exit after the graceful shutdown deadline.`,
         );
       }
 
       if (!ownsDockerProject) {
+        processGroupValue(groupStop);
         return true;
       }
 
@@ -2313,6 +2334,7 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
+      processGroupValue(groupStop);
       return stopped.isOk();
     })();
 
@@ -2383,7 +2405,9 @@ const main = async () => {
 
     // Register each child immediately so cleanup covers partial startup.
     return steps.map((step) => {
-      const runningStep = spawnPersistentStep(step, gitContext.currentRoot);
+      const runningStep = processGroupValue(
+        spawnPersistentStep(step, gitContext.currentRoot),
+      );
       children.push(runningStep);
       return runningStep;
     });
@@ -2475,14 +2499,16 @@ const main = async () => {
       );
     if (seeds) {
       backgroundSteps.push(
-        startBackgroundStep(
-          buildSeedStep({
-            infraOffset,
-            infraPorts,
-            ports,
-            rootDir: gitContext.currentRoot,
-          }),
-          gitContext.currentRoot,
+        processGroupValue(
+          startBackgroundStep(
+            buildSeedStep({
+              infraOffset,
+              infraPorts,
+              ports,
+              rootDir: gitContext.currentRoot,
+            }),
+            gitContext.currentRoot,
+          ),
         ),
       );
     }

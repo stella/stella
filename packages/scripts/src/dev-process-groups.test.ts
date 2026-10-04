@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   existsSync,
@@ -12,10 +12,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { down } from "./agent-session";
 import {
+  DevProcessSurvivedError,
   devProcessStartedAt,
   readDevProcessGroups,
   spawnDevProcess,
@@ -35,7 +34,7 @@ const startTree = async (rootDir: string, termMode: "ignore" | "exit") => {
     env: process.env,
     label: "test service",
     stdin: "ignore",
-  });
+  }).unwrap("The real process-tree fixture must start successfully");
   const deadline = performance.now() + 3000;
   while (!existsSync(readyPath)) {
     if (performance.now() > deadline) {
@@ -108,7 +107,9 @@ for (const termMode of ["exit", "ignore"] as const) {
     let tree: Awaited<ReturnType<typeof startTree>> | undefined;
     try {
       tree = await startTree(root, termMode);
-      const session = readDevProcessGroups(root);
+      const session = readDevProcessGroups(root).unwrap(
+        "The fixture process-group journal must be readable",
+      );
       expect(session?.groups.at(0)?.pgid).toBe(tree.child.pid);
       tree.child.kill("SIGTERM");
       await tree.child.exited;
@@ -117,11 +118,17 @@ for (const termMode of ["exit", "ignore"] as const) {
       await down(root);
       expect(liveMembers(tree.child.pid)).toEqual([]);
       await assertPortFree(tree.port);
-      expect(readDevProcessGroups(root)).toBeNull();
+      expect(
+        readDevProcessGroups(root).unwrap(
+          "The fixture process-group journal must be readable",
+        ),
+      ).toBeNull();
       await down(root);
     } finally {
       await disposeTree(tree);
-      await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+      (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+        "Fixture group cleanup must succeed",
+      );
       rmSync(root, { recursive: true, force: true });
     }
   }, 20_000);
@@ -135,9 +142,11 @@ test("stopping one session preserves an unrelated sibling group", async () => {
   try {
     tree = await startTree(root, "ignore");
     sibling = await startTree(otherRoot, "exit");
-    expect(await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).toEqual([
-      "test service",
-    ]);
+    expect(
+      (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+        "Stopping the owned fixture must succeed",
+      ),
+    ).toEqual(["test service"]);
     await tree.child.exited;
     expect(liveMembers(tree.child.pid)).toEqual([]);
     expect(liveMembers(sibling.child.pid).length).toBeGreaterThan(0);
@@ -146,8 +155,12 @@ test("stopping one session preserves an unrelated sibling group", async () => {
   } finally {
     await disposeTree(tree);
     await disposeTree(sibling);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
-    await stopDevProcessGroups({ rootDir: otherRoot, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
+    (await stopDevProcessGroups({ rootDir: otherRoot, graceMs: 0 })).unwrap(
+      "Sibling fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
     rmSync(otherRoot, { recursive: true, force: true });
   }
@@ -161,7 +174,9 @@ test("a reused group leader is refused and recovery state is retained", async ()
   try {
     tree = await startTree(root, "exit");
     original = readFileSync(file, "utf-8");
-    const session = readDevProcessGroups(root);
+    const session = readDevProcessGroups(root).unwrap(
+      "The fixture process-group journal must be readable",
+    );
     if (!session) {
       throw new Error("Missing process session");
     }
@@ -179,19 +194,26 @@ test("a reused group leader is refused and recovery state is retained", async ()
         })),
       }),
     );
+    const stopped = await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+    expect(stopped.isErr()).toBe(true);
+    if (stopped.isErr()) {
+      expect(stopped.error.name).toBe("DevProcessOwnershipError");
+      expect(stopped.error.message).toContain("Refusing reused process group");
+    }
     expect(
-      String(
-        await rejectionOf(stopDevProcessGroups({ rootDir: root, graceMs: 0 })),
+      readDevProcessGroups(root).unwrap(
+        "The fixture process-group journal must be readable",
       ),
-    ).toContain("Refusing reused process group");
-    expect(readDevProcessGroups(root)).not.toBeNull();
+    ).not.toBeNull();
     expect((await fetch(`http://127.0.0.1:${tree.port}`)).ok).toBe(true);
   } finally {
     if (original) {
       writeFileSync(file, original);
     }
     await disposeTree(tree);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -204,7 +226,9 @@ test("an older runner cannot stop or replace another session's journal", async (
   try {
     tree = await startTree(root, "exit");
     original = readFileSync(file, "utf-8");
-    const session = readDevProcessGroups(root);
+    const session = readDevProcessGroups(root).unwrap(
+      "The fixture process-group journal must be readable",
+    );
     if (!session) {
       throw new Error("Missing process session");
     }
@@ -218,27 +242,40 @@ test("an older runner cannot stop or replace another session's journal", async (
         groups: session.groups,
       }),
     );
-    expect(await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).toEqual(
-      [],
-    );
-    expect(() =>
-      spawnDevProcess({
-        rootDir: root,
-        cmd: [process.execPath, "--version"],
-        cwd: root,
-        env: process.env,
-        label: "unowned",
-        stdin: "ignore",
-      }),
-    ).toThrow("Another dev session has recorded process groups");
+    expect(
+      (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+        "Stopping the owned fixture must succeed",
+      ),
+    ).toEqual([]);
+    const spawned = spawnDevProcess({
+      rootDir: root,
+      cmd: [process.execPath, "--version"],
+      cwd: root,
+      env: process.env,
+      label: "unowned",
+      stdin: "ignore",
+    });
+    expect(spawned.isErr()).toBe(true);
+    if (spawned.isErr()) {
+      expect(spawned.error.name).toBe("DevProcessOwnershipError");
+      expect(spawned.error.message).toContain(
+        "Another dev session has recorded process groups",
+      );
+    }
     expect((await fetch(`http://127.0.0.1:${tree.port}`)).ok).toBe(true);
-    expect(readDevProcessGroups(root)?.runnerPid).toBe(process.pid + 1);
+    expect(
+      readDevProcessGroups(root).unwrap(
+        "The fixture process-group journal must be readable",
+      )?.runnerPid,
+    ).toBe(process.pid + 1);
   } finally {
     if (original) {
       writeFileSync(file, original);
     }
     await disposeTree(tree);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -249,23 +286,32 @@ test("stopping closes the session to new services before waiting", async () => {
   try {
     tree = await startTree(root, "ignore");
     const stopping = stopDevProcessGroups({ rootDir: root, graceMs: 300 });
-    expect(readDevProcessGroups(root)?.status).toBe("stopping");
-    expect(() =>
-      spawnDevProcess({
-        rootDir: root,
-        cmd: [process.execPath, "--version"],
-        cwd: root,
-        env: process.env,
-        label: "late service",
-        stdin: "ignore",
-      }),
-    ).toThrow("Dev session is stopping");
-    await stopping;
+    expect(
+      readDevProcessGroups(root).unwrap(
+        "The fixture process-group journal must be readable",
+      )?.status,
+    ).toBe("stopping");
+    const spawned = spawnDevProcess({
+      rootDir: root,
+      cmd: [process.execPath, "--version"],
+      cwd: root,
+      env: process.env,
+      label: "late service",
+      stdin: "ignore",
+    });
+    expect(spawned.isErr()).toBe(true);
+    if (spawned.isErr()) {
+      expect(spawned.error.name).toBe("DevProcessOwnershipError");
+      expect(spawned.error.message).toContain("Dev session is stopping");
+    }
+    (await stopping).unwrap("Stopping must finish after blocking new services");
     expect(liveMembers(tree.child.pid)).toEqual([]);
     await assertPortFree(tree.port);
   } finally {
     await disposeTree(tree);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -278,7 +324,9 @@ test("a recycled runner PID cannot adopt a different session identity", async ()
   try {
     tree = await startTree(root, "exit");
     original = readFileSync(file, "utf-8");
-    const session = readDevProcessGroups(root);
+    const session = readDevProcessGroups(root).unwrap(
+      "The fixture process-group journal must be readable",
+    );
     if (!session) {
       throw new Error("Missing process session");
     }
@@ -292,26 +340,33 @@ test("a recycled runner PID cannot adopt a different session identity", async ()
         groups: session.groups,
       }),
     );
-    expect(await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).toEqual(
-      [],
-    );
-    expect(() =>
-      spawnDevProcess({
-        rootDir: root,
-        cmd: [process.execPath, "--version"],
-        cwd: root,
-        env: process.env,
-        label: "unowned",
-        stdin: "ignore",
-      }),
-    ).toThrow("Another dev session");
+    expect(
+      (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+        "Stopping the owned fixture must succeed",
+      ),
+    ).toEqual([]);
+    const spawned = spawnDevProcess({
+      rootDir: root,
+      cmd: [process.execPath, "--version"],
+      cwd: root,
+      env: process.env,
+      label: "unowned",
+      stdin: "ignore",
+    });
+    expect(spawned.isErr()).toBe(true);
+    if (spawned.isErr()) {
+      expect(spawned.error.name).toBe("DevProcessOwnershipError");
+      expect(spawned.error.message).toContain("Another dev session");
+    }
     expect((await fetch(`http://127.0.0.1:${tree.port}`)).ok).toBe(true);
   } finally {
     if (original) {
       writeFileSync(file, original);
     }
     await disposeTree(tree);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -329,30 +384,33 @@ test("external recovery waits for the owner but ignores a recycled runner PID", 
     tree = await startTree(root, "exit");
     sibling = await startTree(otherRoot, "exit");
     original = readFileSync(file, "utf-8");
-    const session = readDevProcessGroups(root);
+    const session = readDevProcessGroups(root).unwrap(
+      "The fixture process-group journal must be readable",
+    );
     if (!session) {
       throw new Error("Missing process session");
     }
     const owner = {
       runnerPid: sibling.child.pid,
-      runnerStartedAt: devProcessStartedAt(sibling.child.pid),
+      runnerStartedAt: devProcessStartedAt(sibling.child.pid).unwrap(
+        "The sibling process birth must be inspectable",
+      ),
       sessionId: session.sessionId,
       status: session.status,
       groups: session.groups,
     };
     writeFileSync(file, JSON.stringify(owner));
-    expect(
-      String(
-        await rejectionOf(
-          stopDevProcessGroups({
-            rootDir: root,
-            runnerPid: owner.runnerPid,
-            sessionId: owner.sessionId,
-            graceMs: 0,
-          }),
-        ),
-      ),
-    ).toContain("Stop the owning runner");
+    const stopped = await stopDevProcessGroups({
+      rootDir: root,
+      runnerPid: owner.runnerPid,
+      sessionId: owner.sessionId,
+      graceMs: 0,
+    });
+    expect(stopped.isErr()).toBe(true);
+    if (stopped.isErr()) {
+      expect(stopped.error.name).toBe("DevProcessOwnershipError");
+      expect(stopped.error.message).toContain("Stop the owning runner");
+    }
     writeFileSync(
       file,
       JSON.stringify({
@@ -363,12 +421,14 @@ test("external recovery waits for the owner but ignores a recycled runner PID", 
         groups: owner.groups,
       }),
     );
-    await stopDevProcessGroups({
-      rootDir: root,
-      runnerPid: owner.runnerPid,
-      sessionId: owner.sessionId,
-      graceMs: 500,
-    });
+    (
+      await stopDevProcessGroups({
+        rootDir: root,
+        runnerPid: owner.runnerPid,
+        sessionId: owner.sessionId,
+        graceMs: 500,
+      })
+    ).unwrap("Recovery of groups after runner PID reuse must succeed");
     expect(liveMembers(tree.child.pid)).toEqual([]);
     await assertPortFree(tree.port);
     expect((await fetch(`http://127.0.0.1:${sibling.port}`)).ok).toBe(true);
@@ -378,9 +438,62 @@ test("external recovery waits for the owner but ignores a recycled runner PID", 
     }
     await disposeTree(tree);
     await disposeTree(sibling);
-    await stopDevProcessGroups({ rootDir: root, graceMs: 0 });
-    await stopDevProcessGroups({ rootDir: otherRoot, graceMs: 0 });
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Fixture group cleanup must succeed",
+    );
+    (await stopDevProcessGroups({ rootDir: otherRoot, graceMs: 0 })).unwrap(
+      "Sibling fixture group cleanup must succeed",
+    );
     rmSync(root, { recursive: true, force: true });
     rmSync(otherRoot, { recursive: true, force: true });
+  }
+});
+
+test("surviving groups fail explicitly and retain recovery state", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "dev-group-survivor-"));
+  let tree: Awaited<ReturnType<typeof startTree>> | undefined;
+  try {
+    tree = await startTree(root, "ignore");
+    const stopped = await stopDevProcessGroups({
+      rootDir: root,
+      graceMs: 0,
+      forceMs: 0,
+      signal: (_pgid, _signal) => Result.ok(undefined),
+    });
+    expect(stopped.isErr()).toBe(true);
+    if (stopped.isErr()) {
+      expect(stopped.error).toBeInstanceOf(DevProcessSurvivedError);
+      if (stopped.error instanceof DevProcessSurvivedError) {
+        expect(stopped.error.pgids).toContain(tree.child.pid);
+      }
+    }
+    expect(
+      readDevProcessGroups(root).unwrap(
+        "Survivor recovery state must remain readable",
+      )?.status,
+    ).toBe("stopping");
+    expect(liveMembers(tree.child.pid).length).toBeGreaterThan(0);
+    expect((await fetch(`http://127.0.0.1:${tree.port}`)).ok).toBe(true);
+    const bound = await Result.tryPromise({
+      try: () => assertPortFree(tree.port),
+      catch: (cause) => {
+        if (!(cause instanceof Error)) {
+          panic("Port binding must reject with an OS error");
+        }
+        return cause;
+      },
+    });
+    expect(bound.isErr()).toBe(true);
+    if (bound.isErr()) {
+      expect("code" in bound.error && bound.error.code).toBe("EADDRINUSE");
+    }
+    await disposeTree(tree);
+    await assertPortFree(tree.port);
+  } finally {
+    await disposeTree(tree);
+    (await stopDevProcessGroups({ rootDir: root, graceMs: 0 })).unwrap(
+      "Survivor fixture cleanup must succeed",
+    );
+    rmSync(root, { recursive: true, force: true });
   }
 });

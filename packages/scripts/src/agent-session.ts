@@ -46,6 +46,8 @@ import {
 } from "./agent-evidence";
 import {
   DEV_SESSION_ID_ENV,
+  type DevProcessGroupError,
+  DevProcessRegistrationError,
   devProcessStartedAt,
   readDevProcessGroups,
   stopDevProcessGroups,
@@ -97,6 +99,9 @@ const fail = (message: string): never => {
   console.error(message);
   process.exit(1);
 };
+
+const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
+  result.match({ ok: (value) => value, err: (error) => fail(error.message) });
 
 const resolveRoot = () => {
   const result = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
@@ -172,7 +177,7 @@ const readStartingRunner = (root: string) => {
 
 type StartRunnerOptions = { root: string; skipInstall: boolean };
 
-const spawnRunner = ({ root, skipInstall }: StartRunnerOptions) => {
+const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
   mkdirSync(path.join(root, DEV_STATE_DIR), { recursive: true });
   const log = openSync(devStatePath(root, RUNNER_LOG_FILE), "w");
   const sessionId = randomUUID();
@@ -193,14 +198,72 @@ const spawnRunner = ({ root, skipInstall }: StartRunnerOptions) => {
     },
   );
   closeSync(log);
-  child.unref();
   const pid = child.pid ?? fail("The dev runner did not start");
-  const startedAt =
-    devProcessStartedAt(pid) ?? fail("The dev runner exited during startup");
-  writeFileSync(
-    devStatePath(root, STARTING_FILE),
-    `${JSON.stringify({ pid, sessionId, startedAt })}\n`,
-  );
+  let exited = false;
+  const exit = new Promise<void>((resolve) => {
+    child.once("exit", () => {
+      exited = true;
+      resolve();
+    });
+  });
+  const registered = Result.gen(function* () {
+    const startedAt = yield* devProcessStartedAt(pid);
+    if (startedAt === null) {
+      return Result.err(
+        new DevProcessRegistrationError({
+          message: "The dev runner exited during startup",
+        }),
+      );
+    }
+    yield* Result.try({
+      try: () => {
+        const startingFile = devStatePath(root, STARTING_FILE);
+        const temporary = `${startingFile}.${sessionId}.tmp`;
+        try {
+          writeFileSync(
+            temporary,
+            `${JSON.stringify({ pid, sessionId, startedAt })}\n`,
+          );
+          renameSync(temporary, startingFile);
+        } finally {
+          rmSync(temporary, { force: true });
+        }
+      },
+      catch: (cause) =>
+        new DevProcessRegistrationError({
+          message: "Cannot record the starting dev runner",
+          cause,
+        }),
+    });
+    return Result.ok(undefined);
+  });
+  if (registered.isErr()) {
+    const errors = [registered.error.message];
+    for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+      if (exited) {
+        break;
+      }
+      const sent = Result.try(() => child.kill(signal));
+      if (sent.isErr()) {
+        errors.push(`Cannot stop the starting runner: ${sent.error.message}`);
+      }
+      await Promise.race([exit, Bun.sleep(DOWN_FORCE_TIMEOUT_MS)]);
+    }
+    if (!exited) {
+      fail(`${errors.join("; ")}; runner ${pid} did not exit`);
+    }
+    await exit;
+    const recovered = await stopDevProcessGroups({
+      rootDir: root,
+      runnerPid: pid,
+      sessionId,
+    });
+    if (recovered.isErr()) {
+      errors.push(recovered.error.message);
+    }
+    fail(errors.join("; "));
+  }
+  child.unref();
   return pid;
 };
 
@@ -214,7 +277,7 @@ const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
   const stopRunner = () => {
     if (
       starting?.pid === pid &&
-      devProcessStartedAt(pid) === starting.startedAt &&
+      processGroupValue(devProcessStartedAt(pid)) === starting.startedAt &&
       isRunnerProcess(pid, root)
     ) {
       process.kill(pid, "SIGTERM");
@@ -460,10 +523,14 @@ const up = async (root: string, args: readonly string[]) => {
       pid:
         (starting &&
         isRunnerProcess(starting.pid, root) &&
-        devProcessStartedAt(starting.pid) === starting.startedAt
+        processGroupValue(devProcessStartedAt(starting.pid)) ===
+          starting.startedAt
           ? starting.pid
           : null) ??
-        spawnRunner({ root, skipInstall: args.includes("--skip-install") }),
+        (await spawnRunner({
+          root,
+          skipInstall: args.includes("--skip-install"),
+        })),
       root,
     }));
   const apiUrl =
@@ -494,7 +561,7 @@ export const down = async (root: string) => {
     runtime !== null && isRunnerProcess(runtime.pid, root)
       ? runtime.pid
       : startingPid;
-  const groups = readDevProcessGroups(root);
+  const groups = processGroupValue(readDevProcessGroups(root));
   if (pid === null && groups === null) {
     console.log("No stack is running for this checkout.");
     return;
@@ -508,8 +575,9 @@ export const down = async (root: string) => {
     pid !== null &&
     runnerStartedAt !== null &&
     isRunnerProcess(pid, root) &&
-    devProcessStartedAt(pid) === runnerStartedAt &&
-    (readDevProcessGroups(root)?.sessionId ?? sessionId) === sessionId;
+    processGroupValue(devProcessStartedAt(pid)) === runnerStartedAt &&
+    (processGroupValue(readDevProcessGroups(root))?.sessionId ?? sessionId) ===
+      sessionId;
   // The runner stops its children and its Docker project on SIGTERM; volumes
   // (and so the seeded database) survive for the next `up`.
   if (pid !== null && isSameRunner()) {
@@ -535,7 +603,9 @@ export const down = async (root: string) => {
       await Bun.sleep(POLL_INTERVAL_MS);
     }
   }
-  await stopDevProcessGroups({ rootDir: root, runnerPid, sessionId });
+  processGroupValue(
+    await stopDevProcessGroups({ rootDir: root, runnerPid, sessionId }),
+  );
   if (starting && readStartingRunner(root)?.sessionId === starting.sessionId) {
     rmSync(devStatePath(root, STARTING_FILE), { force: true });
   }
