@@ -1494,6 +1494,19 @@ export const processWorkflowEntityRun = async ({
       continue;
     }
 
+    // Each level reads anew, so access is settled again before it; level 0
+    // was settled above.
+    if (level > 0 && !(await requesterCanOpenMatter(actor))) {
+      signal.throwIfAborted();
+      await failEntity({
+        actor,
+        data,
+        errorCode: INPUTS_UNAVAILABLE_ERROR_CODE,
+        extractionRuns,
+      });
+      return;
+    }
+
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
     const drained = await drainFanOut({

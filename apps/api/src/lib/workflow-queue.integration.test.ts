@@ -171,7 +171,10 @@ afterAll(async () => {
 });
 
 /** A queued run of one entity whose completion finalizes the run. */
-const queueRun = async (serviceTier: "standard" | "flex") => {
+const queueRun = async (
+  serviceTier: "standard" | "flex",
+  plan: ExecutionLevel[] = executionPlan,
+) => {
   const runId = createSafeId<"extractionRun">();
   createdRunIds.push(runId);
   const runKey = { id: runId, organizationId: ids.orgA, workspaceId: ids.wsA1 };
@@ -226,7 +229,7 @@ const queueRun = async (serviceTier: "standard" | "flex") => {
         workspaceId: ids.wsA1,
         userId: ids.userA1,
         entityId: ids.entityA1,
-        executionPlan,
+        executionPlan: plan,
         requestId: runId,
         serviceTier,
       },
@@ -321,5 +324,34 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
   test("a run stops when its requester has left the organization", async () => {
     await testDb.delete(member).where(eq(member.id, ids.memberA1org));
     await expectStoppedBeforeReading(serviceTier);
+  });
+
+  test("a later level stops when access is removed during an earlier one", async () => {
+    const level = executionPlan.at(0) ?? panic("execution plan has a level");
+    const { run, runId } = await queueRun(serviceTier, [level, level]);
+    generateSpy.mockImplementation(async ({ batch }) => {
+      await testDb
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+      return Result.ok({
+        aiResults: batch.properties.map((property) => ({
+          fieldId: createSafeId<"field">(),
+          propertyId: property.id,
+          content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+        })),
+        aiJustifications: [],
+        skippedPropertyIds: [],
+        unsupportedPropertyIds: [],
+      });
+    });
+
+    await run();
+
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+    expect(await readRun(runId)).toMatchObject({
+      status: "failed",
+      errorCode: "ExtractionRunInputsUnavailable",
+    });
+    expect(stragglerSpy).not.toHaveBeenCalled();
   });
 });
