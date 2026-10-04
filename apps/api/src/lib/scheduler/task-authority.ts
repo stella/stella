@@ -204,9 +204,12 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "memory.extractor": {
     authority: "member-run",
     module: `${TASKS}/memory-extractor.ts`,
-    runActor: null,
+    runActor: {
+      module: `${TASKS}/memory-extractor.ts`,
+      resolver: "createRootRunActor",
+    },
     reason:
-      "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner.",
+      "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner, as that owner's run actor.",
   },
   "organizations.recordMissingAccessStates": platform(
     "organization-access-state-reconcile.ts",
