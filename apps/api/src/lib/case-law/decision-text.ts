@@ -251,9 +251,11 @@ export const storeDecisionTextFields = ({
   // URL diagnostics are generated before the internal text-field projection;
   // publisher keys are reserved by checkedDecisionMetadata at the producer.
   checkDecisionTextMetadata(metadata);
-  const stored = { ...metadata };
-  stored[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY] =
-    DECISION_TEXT_ABSENCE_SCHEMA_VERSION;
+  const stored = {
+    ...metadata,
+    [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+      DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  };
   const absent: DecisionTextAbsenceEntry[] = [];
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const field = textFields[key];
