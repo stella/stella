@@ -35,6 +35,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type {
   PlaybookPositions,
   PositionSource,
@@ -121,7 +122,7 @@ const restContext = async () => ({
   getActiveWorkspaceIds: async () =>
     (await usableWorkspaces()).map(({ id }) => id),
   getWorkspaceAccess: async () => null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   promptCachingEnabled: false,
