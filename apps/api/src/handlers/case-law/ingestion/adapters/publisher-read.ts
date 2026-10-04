@@ -1,3 +1,4 @@
+// parser-output-unchanged: a 429 ends the cycle as a typed stop; a served read returns the same response.
 /**
  * The typed way a case-law adapter reads its publisher.
  *

@@ -64,7 +64,9 @@ const validate = async (tx: Transaction, positions: PlaybookPositions) =>
   await assertPositionsValid({
     safeDb: createScopedDbMock(tx).safeDb,
     organizationId: ORGANIZATION_ID,
+    accessibleWorkspaceIds: [],
     positions,
+    storedPositions: null,
   });
 
 describe("assertPositionsValid", () => {
@@ -202,6 +204,41 @@ describe("assertPositionsValid", () => {
         }),
       ]),
     );
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects a position that lists the same source document twice", async () => {
+    const source = {
+      workspaceId: "dddddddd-0000-4000-8000-000000000001",
+      entityId: "eeeeeeee-0000-4000-8000-000000000001",
+    };
+    const result = await validate(
+      noDbTx,
+      container([gradedPosition({ sources: [source, source] })]),
+    );
+    expect(Result.isError(result) ? result.error : null).toMatchObject({
+      status: 400,
+    });
+  });
+
+  test("carries a stored source without reading the database", async () => {
+    const positions = container([
+      gradedPosition({
+        sources: [
+          {
+            workspaceId: "dddddddd-0000-4000-8000-000000000001",
+            entityId: "eeeeeeee-0000-4000-8000-000000000001",
+          },
+        ],
+      }),
+    ]);
+    const result = await assertPositionsValid({
+      safeDb: createScopedDbMock(noDbTx).safeDb,
+      organizationId: ORGANIZATION_ID,
+      accessibleWorkspaceIds: [],
+      positions,
+      storedPositions: positions,
+    });
     expect(Result.isOk(result)).toBe(true);
   });
 });

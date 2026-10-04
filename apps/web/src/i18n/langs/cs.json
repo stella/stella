@@ -3477,6 +3477,7 @@
         "approvedOn": "Schváleno {date}",
         "approvedToast": "Playbook schválen",
         "saveBeforeApprove": "Před schválením playbooku uložte změny.",
+        "sourcesNotice": "Před schválením zkontrolujte, že žádná pozice nejmenuje dokument, spis ani protistranu: tento playbook může číst celá organizace.",
         "statusApproved": "Schváleno",
         "statusDraft": "Koncept"
       },
@@ -3575,6 +3576,7 @@
       "referenceStandard": "Z reference",
       "removeCheck": "Odebrat kontrolu",
       "removeIdeal": "Odebrat ideální znění",
+      "removeSource": "Odebrat zdroj {documentName}",
       "reorderPosition": "Přeuspořádat pozici",
       "review": {
         "changePlaybook": "Vybrat jiný playbook",
@@ -3606,6 +3608,10 @@
         "blocker": "Blokující"
       },
       "severityLabel": "Závažnost",
+      "staleCopy": {
+        "loaded": "Byla načtena novější verze tohoto playbooku. Před úpravami ji načtěte znovu.",
+        "unavailable": "Nejnovější verzi tohoto playbooku se nepodařilo načíst. Zobrazuje se poslední načtená kopie, která může být zastaralá."
+      },
       "starters": {
         "addedToast": "Playbook přidán",
         "browseButton": "Procházet úvodní playbooky",

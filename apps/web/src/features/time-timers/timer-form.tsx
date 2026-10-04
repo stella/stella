@@ -38,7 +38,10 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
     description: string;
   } | null>(null);
   const policy = useQuery(
-    organizationSettingsOptions(user.activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const requiresNarrative =
     timer !== null && policy.data?.timeNarrativeRequired === true;

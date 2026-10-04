@@ -4,6 +4,10 @@
 # `<local-ref> <local-oid> <remote-ref> <remote-oid>`; each pushed ref is
 # scanned from what the remote already has to what it would receive, so an
 # explicit refspec (`git push origin other:other`) is covered, not only HEAD.
+# Commits on a remote-tracking ref are already published, so a branch that
+# merged main scans its own commits, not main's. Merges are read with
+# `--remerge-diff`: a plain `git log -p` prints no patch for a merge, which
+# would leave anything added while resolving it unscanned.
 # Everything else is validated in CI.
 set -euo pipefail
 
@@ -32,7 +36,7 @@ if [[ ! -t 0 ]]; then
       # already on any remote-tracking ref.
       ranges+=("${local_oid} --not --remotes")
     else
-      ranges+=("${remote_oid}..${local_oid}")
+      ranges+=("${remote_oid}..${local_oid} --not --remotes")
     fi
   done
 fi
@@ -61,6 +65,13 @@ for range in "${ranges[@]}"; do
   fi
 done
 
+# Git before 2.36 rejects --remerge-diff; gitleaks may then read no commits
+# and pass, so refuse instead.
+if ! git log --remerge-diff -n 0 HEAD >/dev/null 2>&1; then
+  echo "error: git log --remerge-diff is unsupported (Git 2.36+ required); secret scanning refused." >&2
+  exit 1
+fi
+
 for range in "${ranges[@]}"; do
-  gitleaks git --redact --no-banner --no-color --log-opts="${range}" .
+  gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" .
 done

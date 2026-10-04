@@ -4,6 +4,7 @@ import JSZip from "jszip";
 
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
@@ -342,13 +343,15 @@ describe("fillByIdLogic records the completion decision", () => {
         }),
       }),
     });
+    const events: Record<string, unknown>[] = [];
     const recordAudit: AuditRecorder = async (_tx, event) => {
       for (const each of Array.isArray(event) ? event : [event]) {
         audits.push(each.metadata ?? {});
+        events.push({ ...each });
       }
       await Promise.resolve();
     };
-    return { ...db, rows, audits, recordAudit };
+    return { ...db, rows, audits, events, recordAudit };
   };
 
   const fillById = async (
@@ -403,5 +406,39 @@ describe("fillByIdLogic records the completion decision", () => {
     const { db } = await fillById(["Governed by {{law}}."], { law: "Czech" });
     expect(db.rows.at(0)).toMatchObject({ status: "success" });
     expect(db.audits.at(0)).toMatchObject({ status: "success" });
+  });
+
+  test("the download is audited with the same counts as every other fill surface", async () => {
+    const { db } = await fillById(["Governed by {{law}} for {{party}}."], {
+      law: "Czech",
+      extra: "unused",
+    });
+    expect(db.rows).toEqual([
+      {
+        organizationId,
+        templateId,
+        userId,
+        format: "docx",
+        status: "partial",
+        unmatchedCount: 1,
+        unusedCount: 1,
+        structureErrors: null,
+      },
+    ]);
+    expect(db.events).toEqual([
+      {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+        resourceId: templateId,
+        workspaceId: null,
+        metadata: {
+          format: "docx",
+          status: "partial",
+          unmatchedCount: 1,
+          aiFieldErrorCount: 0,
+          undecidedConditionCount: 0,
+        },
+      },
+    ]);
   });
 });

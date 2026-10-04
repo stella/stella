@@ -3477,6 +3477,7 @@
         "approvedOn": "Apstiprināts {date}",
         "approvedToast": "Pārbaudes ceļvedis apstiprināts",
         "saveBeforeApprove": "Pirms šī pārbaudes ceļveža apstiprināšanas saglabājiet izmaiņas.",
+        "sourcesNotice": "Pirms apstiprināšanas pārbaudiet, vai nevienā pozīcijā nav nosaukts dokuments, lieta vai pretpuse: šo pārbaudes ceļvedi var lasīt visa organizācija.",
         "statusApproved": "Apstiprināts",
         "statusDraft": "Melnraksts"
       },
@@ -3575,6 +3576,7 @@
       "referenceStandard": "No atsauces",
       "removeCheck": "Noņemt pārbaudi",
       "removeIdeal": "Noņemt ideālo formulējumu",
+      "removeSource": "Noņemt avotu {documentName}",
       "reorderPosition": "Pārkārtot pozīciju",
       "review": {
         "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
@@ -3606,6 +3608,10 @@
         "blocker": "Bloķējoša"
       },
       "severityLabel": "Nopietnība",
+      "staleCopy": {
+        "loaded": "Ir ielādēta jaunāka šī pārbaudes ceļveža versija. Pirms rediģēšanas pārlādējiet.",
+        "unavailable": "Neizdevās ielādēt šī pārbaudes ceļveža jaunāko versiju. Šī ir pēdējā ielādētā kopija, un tā var būt novecojusi."
+      },
       "starters": {
         "addedToast": "Pārbaudes ceļvedis pievienots",
         "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",

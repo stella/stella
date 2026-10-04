@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
 const restorePlaybookVersionParamsSchema = t.Object({
   playbookId: tSafeId("playbookDefinition"),
@@ -21,7 +22,9 @@ const config = {
     "scope, and positions back onto the definition. A restore counts as an " +
     "edit: the playbook returns to draft with its approval metadata cleared, " +
     "so it must be approved again before runs pick it up, and the stored " +
-    "version itself is left untouched.",
+    "version itself is left untouched. The restored positions are validated " +
+    "as an update would validate them, so a restore that would bring back a " +
+    "source document the caller cannot read is refused.",
   permissions: { playbook: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -37,11 +40,20 @@ const config = {
  * name/description/scope/positions back onto the definition. A restore is
  * itself an edit, so it always lands as a new `draft` (mirrors
  * `update-by-id.ts` reverting approval on any change) — it never re-approves
- * or reuses the source version's number.
+ * or reuses the source version's number. Because it is an edit, it gets the
+ * same validation as an update: a source document that is in the snapshot but
+ * not in the current definition counts as added by this caller, so the caller
+ * must be able to read it. Otherwise the restore is refused.
  */
 const restorePlaybookVersion = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    params,
+    recordAuditEvent,
+    getActiveWorkspaceIds,
+  }) {
     const organizationId = session.activeOrganizationId;
     const playbookId = params.playbookId;
 
@@ -52,7 +64,7 @@ const restorePlaybookVersion = createSafeRootHandler(
             id: { eq: playbookId },
             organizationId: { eq: organizationId },
           },
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, positions: true },
         }),
       ),
     );
@@ -86,6 +98,19 @@ const restorePlaybookVersion = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Version not found" }),
       );
     }
+
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
+    yield* Result.await(
+      assertPositionsValid({
+        safeDb,
+        organizationId,
+        accessibleWorkspaceIds,
+        positions: version.positions,
+        storedPositions: playbook.positions,
+      }),
+    );
 
     yield* Result.await(
       safeDb(async (tx) => {
