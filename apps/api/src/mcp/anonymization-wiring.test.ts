@@ -141,7 +141,7 @@ describe("the chat and MCP request path", () => {
       ...anonymizeTextFieldsDependencies,
       createNativePipelineFromConfig: async (input) => {
         configs.push(input.config);
-        gazetteers.push([...input.gazetteerEntries]);
+        gazetteers.push([...(input.gazetteerEntries ?? [])]);
         return await anonymizeTextFieldsDependencies.createNativePipelineFromConfig(
           input,
         );
