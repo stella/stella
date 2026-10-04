@@ -220,10 +220,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "route-file:apps/api/src/handlers/number-series/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "route-file:apps/api/src/handlers/organization-settings/routes.ts",
     "reason": "pending gate classification"
   },
@@ -249,10 +245,6 @@
   },
   {
     "key": "route-file:apps/api/src/handlers/search/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "route-file:apps/api/src/handlers/seller-profiles/routes.ts",
     "reason": "pending gate classification"
   },
   {
@@ -293,10 +285,6 @@
   },
   {
     "key": "route-file:apps/api/src/handlers/user-files/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "route-file:apps/api/src/handlers/vat-rates/routes.ts",
     "reason": "pending gate classification"
   },
   {

@@ -8,16 +8,19 @@ import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
+import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { readDeploymentFeatures } from "@/api/handlers/organization-settings/deployment-features/get";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
+import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
+import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
@@ -34,11 +37,14 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, AnyElysia>> = {
   invoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
+  numberSeriesRoute,
   ratesRoute,
   savedTimeNarrativesRoute,
+  sellerProfilesRoute,
   timeApprovalQueueRoute,
   timeEntriesRoute,
   timeTimersRoute,
+  vatRateRoute,
 };
 
 /**

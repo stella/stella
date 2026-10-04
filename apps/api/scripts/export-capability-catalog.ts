@@ -465,7 +465,8 @@ const readApiModule = (importPath: string): string | undefined => {
  *  - FEATURE_TIME_BILLING gates the billing tool family (list/save/delete
  *    time entries, resolve_rate, list_invoices) and the billing app routes;
  *    the whole billing capability surface (time-entries, rates, invoices,
- *    expenses, billing-codes) rides the same flag.
+ *    expenses, billing-codes, and the invoicing configuration: seller
+ *    profiles, number series, VAT rates) rides the same flag.
  *  - FEATURE_PUBLIC_LAW gates the public legal-corpus surface (search_case_law,
  *    read_case_law_decision, the legislation corpus tools search_legislation,
  *    read_statute, read_statute_provisions and read_provision_history, the BOE
@@ -493,11 +494,14 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
+  "seller-profiles": "FEATURE_TIME_BILLING",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
+  "vat-rates": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
 

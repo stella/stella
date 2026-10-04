@@ -316,13 +316,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `number-series.archive` | write | stella:billing_write | — | generic invoke → `stella capability number-series archive` |
-| `number-series.create` | write | stella:billing_write | — | generic invoke → `stella capability number-series create` |
-| `number-series.default.update` | write | stella:billing_write | — | generic invoke → `stella capability number-series default-update` |
-| `number-series.get` | read | stella:read | — | generic invoke → `stella capability number-series get` |
-| `number-series.list` | read | stella:read | — | generic invoke → `stella capability number-series list` |
-| `number-series.preview` | read | stella:read | — | generic invoke → `stella capability number-series preview` |
-| `number-series.update` | write | stella:billing_write | — | generic invoke → `stella capability number-series update` |
+| `number-series.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series archive` |
+| `number-series.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series create` |
+| `number-series.default.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series default-update` |
+| `number-series.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series get` |
+| `number-series.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series list` |
+| `number-series.preview` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series preview` |
+| `number-series.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series update` |
 
 ## organization-settings
 
@@ -414,12 +414,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `seller-profiles.archive` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles archive` |
-| `seller-profiles.create` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles create` |
-| `seller-profiles.default.update` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles default-update` |
-| `seller-profiles.get` | read | stella:read | — | generic invoke → `stella capability seller-profiles get` |
-| `seller-profiles.list` | read | stella:read | — | generic invoke → `stella capability seller-profiles list` |
-| `seller-profiles.update` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles update` |
+| `seller-profiles.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles archive` |
+| `seller-profiles.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles create` |
+| `seller-profiles.default.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles default-update` |
+| `seller-profiles.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles get` |
+| `seller-profiles.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles list` |
+| `seller-profiles.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles update` |
 
 ## signals
 
@@ -621,10 +621,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `vat-rates.archive` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates archive` |
-| `vat-rates.create` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates create` |
-| `vat-rates.list` | read | stella:read | — | generic invoke → `stella capability vat-rates list` |
-| `vat-rates.update` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates update` |
+| `vat-rates.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates archive` |
+| `vat-rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates create` |
+| `vat-rates.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates list` |
+| `vat-rates.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates update` |
 
 ## view-templates
 
