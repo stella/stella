@@ -109,7 +109,7 @@ export const resolveAiConditions = async ({
     const repeatable = findRepeatableContainer(resolved, field.path);
     if (repeatable !== null) {
       const prefix = `${repeatable.containerPath}.`;
-      const rowFields = [];
+      const rowFields: FieldMeta[] = [];
       for (const candidate of fields) {
         if (
           !candidate.path.startsWith(prefix) ||
