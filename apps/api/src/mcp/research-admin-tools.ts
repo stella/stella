@@ -722,16 +722,14 @@ const manageOrganizationArgsSchema = nullAsAbsent(
       prompt_caching_enabled: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "Toggle AI prompt caching for the organization (update_org_settings)",
-          ),
+          v.description("Toggle AI prompt caching (update_org_settings)"),
         ),
       ),
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
           v.description(
-            "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+            "Set automatic PDF searchable-text extraction (update_org_settings)",
           ),
         ),
       ),
@@ -782,9 +780,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
             ),
           ),
           v.description(
-            "IANA time zone whose calendar decides the organization's day, " +
-              "e.g. Europe/Prague; null derives it from the primary practice " +
-              "jurisdiction again (update_org_settings)",
+            "IANA time zone, e.g. Europe/Prague; null follows the primary " +
+              "practice jurisdiction (update_org_settings)",
           ),
         ),
       ),
@@ -899,9 +896,8 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, document processing, time policy, and the " +
-    "organization's time zone. Manage provider " +
-    "secrets in the dashboard.",
+    "numbering, prompt caching, document processing, time policy, and time " +
+    "zone. Manage provider secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
