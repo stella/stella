@@ -22,6 +22,7 @@ import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapter
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
+  isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
   readAbsent,
   readPresent,
@@ -1217,7 +1218,11 @@ describe("sk-us buildDecision", () => {
       if (built.type !== "built") {
         return;
       }
-      expect(built.decision.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+      const marker = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+      if (!isReadRefusal(marker)) {
+        throw new Error("expected a stored refusal");
+      }
+      expect(marker).toEqual({
         type: "refused",
         status,
         scope: "part",
@@ -1326,10 +1331,12 @@ describe("sk-us buildDecision", () => {
       );
       expect(parts).not.toContain(SURFACE_PART[surface]);
       expect(parts.toSorted()).toEqual(
-        Object.values(SURFACE_PART)
-          .filter((part) => part !== SURFACE_PART[surface])
-          .concat("listing")
-          .toSorted(),
+        [
+          ...Object.values(SURFACE_PART).filter(
+            (part) => part !== SURFACE_PART[surface],
+          ),
+          "listing",
+        ].toSorted(),
       );
     },
   );
