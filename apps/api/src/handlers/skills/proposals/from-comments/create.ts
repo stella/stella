@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments, agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
@@ -65,6 +66,7 @@ const config = {
     "unresolved, and bundled skills are refused. Consumes AI usage.",
   permissions: { agentSkill: ["propose"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

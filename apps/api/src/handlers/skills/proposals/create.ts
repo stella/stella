@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
@@ -37,6 +38,7 @@ const config = {
     "proposal; bundled skills are refused.",
   permissions: { agentSkill: ["propose"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

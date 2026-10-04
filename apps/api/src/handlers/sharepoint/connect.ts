@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { sharepointOAuthState } from "@/api/db/schema";
+import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
 import {
   buildAuthorizeUrl,
@@ -15,6 +16,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 const config = {
   permissions: { integration: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

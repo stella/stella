@@ -1780,10 +1780,6 @@
     "reason": "Existing CustomFieldRow UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.test.ts::numericFields::domain:[\"defaultHourlyRate\",\"paymentTermDays\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:256::1",
     "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
   },

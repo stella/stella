@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   canManageSkill,
   loadVisibleSkill,
@@ -25,6 +26,7 @@ const config = {
     "edit the skill can.",
   permissions: { agentSkill: ["comment"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

@@ -2770,7 +2770,11 @@ export const caseLawResearchAnswers = p.pgTable(
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",
   {
-    id: pUuid<"caseLawCourtWeight">().primaryKey(),
+    // Seed migrations draw ids from gen_random_uuid(); see
+    // 20261004120000_case_law_court_weight_id_default.
+    id: pUuid<"caseLawCourtWeight">()
+      .default(sql`gen_random_uuid()`)
+      .primaryKey(),
     country: p.varchar({ length: 3 }).notNull(),
     courtPattern: p.varchar("court_pattern", { length: 512 }).notNull(),
     tier: p.integer().notNull(),

@@ -4,8 +4,9 @@ name: Model Catalog Upstream Check
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
 # when an eligible new model has no reviewed disposition, an offered model is
-# deprecated or gone upstream, or committed rates and request capabilities
-# drift from live model metadata.
+# deprecated or gone upstream, committed rates and request capabilities
+# drift from live model metadata, or the committed Text Arena quality ratings
+# (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
 
 on:
   schedule:

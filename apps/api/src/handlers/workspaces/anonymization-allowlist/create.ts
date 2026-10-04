@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { countWorkspaceAnonymizationAllowlistForWrite } from "@/api/lib/anonymization-write-cap";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +33,7 @@ const config = {
     "there rather than reported as a no-op.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "anonymization_admin",
