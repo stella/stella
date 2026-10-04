@@ -100,6 +100,7 @@ export type SafeIdType =
   | "signal"
   | "signalEvent"
   | "scoutRun"
+  | "systemScriptRun"
   | "folioCollabRoom"
   | "folioCollabRoomToken"
   | "folioCollabContribution"

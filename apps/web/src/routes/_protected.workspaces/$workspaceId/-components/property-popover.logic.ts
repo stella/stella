@@ -1,3 +1,10 @@
+import { isFileProperty } from "@stll/api-contract/property-policy";
+
+export const canEditPropertyViaComposer = (
+  content: { type: string },
+  isVerdict: boolean,
+): boolean => !isFileProperty(content) && !isVerdict;
+
 type EntityIdRow = {
   original: {
     entityId: string;

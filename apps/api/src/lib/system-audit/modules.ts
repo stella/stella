@@ -35,6 +35,10 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:legislation-expression-id-backfill",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
+  "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":
+    "system:case-law-background-replay",
+  "apps/api/src/lib/legal-search/case-law-replay-audit.ts":
+    "system:case-law-background-replay",
 } as const satisfies Record<string, SystemRunActor>;
 
 export type SystemAuditModule = keyof typeof SYSTEM_AUDIT_MODULES;
