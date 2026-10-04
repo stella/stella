@@ -65,6 +65,7 @@ import {
 } from "@/api/lib/templates/configure-field-input";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import {
+  recordTemplateExecution,
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
@@ -1375,6 +1376,7 @@ const handleFillTemplateTool: McpToolHandler<
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     requiredFields: "enforce",
+    useRecording: "caller",
     assertUsageAvailable,
     aiCollaborators,
   });
@@ -1404,28 +1406,29 @@ const handleFillTemplateTool: McpToolHandler<
     });
   }
 
-  // Record the execution (fill row + EXECUTE audit) like the REST fill routes,
-  // so agent-driven fills appear in the audit trail. Best-effort: a successful
-  // render is not discarded if the bookkeeping write fails (it is captured).
-  await context
-    .scopedDb(
-      async (tx) =>
-        await (
-          context.testDependencies?.recordTemplateFill ?? recordTemplateFill
-        )({
-          tx,
-          templateId: brandPersistedTemplateId(parsed.output.template_id),
-          organizationId: context.organizationId,
-          userId: context.userId,
-          format: "docx",
-          unmatchedCount: filled.unmatchedPlaceholders.length,
-          aiFieldErrorCount: filled.aiFieldErrors.length,
-          unusedCount: filled.unusedValues.length,
-          structureErrors: filled.structureErrors,
-          recordAuditEvent: context.recordAuditEvent,
-        }),
-    )
-    .catch(captureError);
+  // The rendered text reaches the agent only once the fill is recorded (use
+  // count, fill row, EXECUTE audit); a recording failure fails the call.
+  const recorded = await recordTemplateExecution({
+    scopedDb: context.scopedDb,
+    recorders: {
+      recordTemplateUse:
+        context.testDependencies?.recordTemplateUse ?? recordTemplateUse,
+      recordTemplateFill:
+        context.testDependencies?.recordTemplateFill ?? recordTemplateFill,
+    },
+    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    organizationId: context.organizationId,
+    userId: context.userId,
+    format: "docx",
+    unmatchedCount: filled.unmatchedPlaceholders.length,
+    aiFieldErrorCount: filled.aiFieldErrors.length,
+    unusedCount: filled.unusedValues.length,
+    structureErrors: filled.structureErrors,
+    recordAuditEvent: context.recordAuditEvent,
+  });
+  if (Result.isError(recorded)) {
+    return internalFailureResult(recorded.error);
+  }
 
   const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
