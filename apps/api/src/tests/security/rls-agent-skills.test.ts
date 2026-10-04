@@ -317,21 +317,23 @@ describe("agent skill anchor lock", () => {
         }),
       ids.userA1,
     );
-    // No update policy on revisions: even a manager's update matches no row.
-    const updated = await scopedQuery(
+    // Revisions are read-only to the request role: even a manager's update is
+    // refused before any row policy is consulted.
+    const updateError = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       async (tx) =>
-        await tx
-          .update(agentSkillRevisions)
-          .set({ body: "rewritten" })
-          .where(eq(agentSkillRevisions.skillId, skillId))
-          .returning({ id: agentSkillRevisions.id }),
+        await tryCatch(async () => {
+          await tx
+            .update(agentSkillRevisions)
+            .set({ body: "rewritten" })
+            .where(eq(agentSkillRevisions.skillId, skillId));
+        }),
       ids.userAdmin,
     );
 
     expect(lockError).toBeNull();
-    expect(updated).toEqual([]);
+    expect(isPgError(updateError, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
   test("a skill the caller cannot see is refused", async () => {
