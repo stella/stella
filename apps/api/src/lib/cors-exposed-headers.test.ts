@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
 import { REQUEST_ID_HEADER } from "@stll/api-contract";
-import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
+import {
+  CLAUSE_WARNINGS_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
+} from "@stll/api-contract/template-fill-headers";
 
 import { CORS_EXPOSED_HEADERS } from "./security-headers";
 
@@ -47,4 +50,9 @@ test("cross-origin downloads expose bounded clause warning counts and request re
   ).toContain(REQUEST_ID_HEADER);
   expect(response.headers.get(CLAUSE_WARNINGS_HEADER)).toBe("1000000");
   expect(response.headers.get(REQUEST_ID_HEADER)).toBe("req_download");
+});
+
+test("cross-origin downloads expose undecided AI conditions", () => {
+  expect(CORS_EXPOSED_HEADERS).toContain(UNDECIDED_CONDITIONS_HEADER);
+  expect(CORS_EXPOSED_HEADERS).toContain("X-Ai-Field-Errors");
 });

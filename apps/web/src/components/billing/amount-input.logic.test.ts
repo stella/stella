@@ -2,8 +2,25 @@ import { expect, test } from "bun:test";
 
 import {
   majorUnitInput,
+  normalizeMajorUnitInput,
   submittedRateCents,
 } from "@/components/billing/amount-input.logic";
+
+test("localized decimal normalization preserves every digit and is canonical", () => {
+  const decimal = "90071992547409.915";
+  for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
+    expect(normalizeMajorUnitInput({ input: decimal, locale })).toBe(decimal);
+  }
+  expect(
+    normalizeMajorUnitInput({ input: "90071992547409,915", locale: "cs" }),
+  ).toBe(decimal);
+  expect(
+    normalizeMajorUnitInput({
+      input: "٩٠٠٧١٩٩٢٥٤٧٤٠٩٫٩١٥",
+      locale: "ar-u-nu-arab",
+    }),
+  ).toBe(decimal);
+});
 
 test("a rate typed under one currency is scaled by the one submitted", () => {
   // The reported defect: the rate input blurs under USD, the currency beside

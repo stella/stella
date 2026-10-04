@@ -74,6 +74,8 @@ export const docketFamilyScenario = (number: number) => {
     /** Siblings whose sheet only their source's recorded reference states. */
     sheet120: createSafeId<"caseLawDecision">(),
     sheet131: createSafeId<"caseLawDecision">(),
+    /** A sibling of the same file whose sheet no source states. */
+    sheetUnknown: createSafeId<"caseLawDecision">(),
     /** One file, two decisions on different dates, nothing else to tell. */
     earlier: createSafeId<"caseLawDecision">(),
     later: createSafeId<"caseLawDecision">(),
@@ -87,6 +89,13 @@ export const docketFamilyScenario = (number: number) => {
     unkeyedSheet: createSafeId<"caseLawDecision">(),
     /** The same number at a regional court: another court's file. */
     regional: createSafeId<"caseLawDecision">(),
+    /**
+     * Siblings of the large file stored on its bare docket, so a sheet read
+     * reaches them, whose sheets beyond the stored ones only a recorded sheet
+     * or an ECLI states.
+     */
+    largeRecordedSheet: createSafeId<"caseLawDecision">(),
+    largeEcliSheet: createSafeId<"caseLawDecision">(),
   };
   const dockets = {
     sameDay: `7 Tdo ${n}/2020`,
@@ -154,6 +163,7 @@ export const docketFamilyScenario = (number: number) => {
     decision(ids.sheet131, dockets.sheets, administrative, "2010-06-14", null, {
       publishedCaseNumber: `${dockets.sheets} - 131`,
     }),
+    decision(ids.sheetUnknown, dockets.sheets, administrative, "2011-03-01"),
     decision(ids.earlier, dockets.dated, supreme, "2015-03-01"),
     decision(ids.later, dockets.dated, supreme, "2016-09-30"),
     decision(ids.regional, dockets.dated, "Krajský soud v Brně", "2015-03-01"),
@@ -203,6 +213,21 @@ export const docketFamilyScenario = (number: number) => {
         administrative,
         new Date(Date.UTC(2014, 0, 1 + index)).toISOString().slice(0, 10),
       ),
+    ),
+    decision(
+      ids.largeRecordedSheet,
+      dockets.large,
+      administrative,
+      "2015-01-01",
+      null,
+      { sheetNumber: String(LARGE_FILE_SIZE + 2) },
+    ),
+    decision(
+      ids.largeEcliSheet,
+      dockets.large,
+      administrative,
+      "2015-01-02",
+      `ECLI:CZ:NSS:2015:7.AS.${n}.2014.${String(LARGE_FILE_SIZE + 3)}`,
     ),
   ];
   return { ids, dockets, decisions, largeFile, number };
@@ -289,16 +314,20 @@ const identityReaders = (
     )
       .map(String)
       .toSorted();
-  const lookedUp = async (entry: string) => {
-    const intent = intentOf(entry);
-    const rows = await lookupDecisionsByIdentity({
+  const rowsRead = async (intent: DecisionIdentifierIntent) =>
+    await lookupDecisionsByIdentity({
       caseLawDb: caseLawDb(),
       country: jurisdiction,
       locator: decisionIdentityLocatorOf(intent),
     });
-    return resolveDecisionIdentity(intent, rows);
+  const lookedUp = async (entry: string) => {
+    const intent = intentOf(entry);
+    return resolveDecisionIdentity(intent, await rowsRead(intent));
   };
-  return { searched, lookedUp };
+  /** The rows the lookup's read reaches, before it resolves among them. */
+  const read = async (entry: string): Promise<string[]> =>
+    (await rowsRead(intentOf(entry))).map(({ id }) => String(id)).toSorted();
+  return { searched, lookedUp, read };
 };
 
 /**
@@ -313,7 +342,7 @@ export const describeDocketFamilyIdentity = (
     setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
-  const { lookedUp, searched } = identityReaders(
+  const { lookedUp, read, searched } = identityReaders(
     () => context().caseLawDb,
     "CZE",
   );
@@ -487,27 +516,35 @@ export const describeDocketFamilyIdentity = (
       });
     });
 
-    test("a sheet the corpus does not hold returns the file, never a sibling", async () => {
+    test("a sheet the corpus does not hold returns the siblings whose sheet is unknown, never one under another sheet", async () => {
+      // Each other sibling's sheet is known from a different source (ECLI,
+      // parallel identifier, recorded sheet, published reference); every
+      // source excludes alike.
       const { dockets, ids } = context().scenario;
       for (const entry of [
         `${dockets.sheets} - 50`,
         `${dockets.sheets}-8`,
         `${dockets.sheets}-9`,
       ]) {
-        expect(await searched(entry), entry).toEqual(
-          sorted(
-            ids.sheet86,
-            ids.sheet98,
-            ids.sheet109,
-            ids.sheet120,
-            ids.sheet131,
-          ),
-        );
+        expect(await searched(entry), entry).toEqual(sorted(ids.sheetUnknown));
         expect(await lookedUp(entry), entry).toMatchObject({
           status: "ambiguous",
           reason: "selector_unmatched",
         });
       }
+    });
+
+    test("a sheet no sibling carries, every one known under another, answers nothing", async () => {
+      // The siblings stored with their sheet are out of the read's reach; the
+      // two stored on the bare docket are read, and their sheets are known
+      // from a recorded sheet and an ECLI.
+      const { dockets, ids, largeFile } = context().scenario;
+      const entry = `${dockets.large}-${String(largeFile.length + 1)}`;
+      expect(await read(entry)).toEqual(
+        sorted(ids.largeRecordedSheet, ids.largeEcliSheet),
+      );
+      expect(await searched(entry)).toEqual([]);
+      expect(await lookedUp(entry)).toEqual({ status: "none" });
     });
 
     test("a row that still stores its sheet is found by it", async () => {

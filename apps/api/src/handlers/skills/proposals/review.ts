@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkills } from "@/api/db/schema";
 import type { AgentSkillProposalStatus } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   canManageSkill,
   loadVisibleSkill,
@@ -40,6 +41,7 @@ const config = {
     "Requires the rights to edit the skill itself.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

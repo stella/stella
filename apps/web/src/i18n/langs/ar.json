@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "إضافة سلسلة ترقيم",
       "advance": "دفعة مقدمة",
+      "allSellers": "جميع البائعين",
       "archiveConfirm": "هل تريد أرشفة سلسلة الترقيم هذه؟ لن تعود متاحة للمستندات الجديدة.",
       "creditNote": "إشعار دائن",
       "default": "السلسلة الافتراضية",
@@ -562,6 +563,9 @@
       "preview": "الرقم التالي",
       "previewAllocated": "هذا الرقم مخصص بالفعل.",
       "previewHelp": "تستخدم المعاينة القالب المحفوظ ولا تحجز رقمًا.",
+      "sellerProfile": "ملف البائع",
+      "sellerUnavailable": "البائع مؤرشف أو غير متاح",
+      "sellerUnavailableHelp": "هذا البائع مؤرشف أو غير متاح. احتفظ بالتعيين أو اختر بائعًا آخر.",
       "setDefault": "تعيين كسلسلة افتراضية",
       "title": "سلاسل الترقيم"
     },
@@ -976,7 +980,6 @@
     "packPartial": "تم تثبيت {installed}، وفشل {failed}",
     "removed": "لم تعد هذه الأداة متاحة.",
     "sectionOthers": "أخرى",
-    "sectionRecommended": "موصى به",
     "settings": {
       "packTitle": "الحزمة الموصى بها"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "لا توجد مهارات بعد",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
+      "skillEditedBy": "عُدِّل بواسطة {name} · {time}",
       "skills": "المهارات"
     },
     "loadEarlierMessages": "تحميل الرسائل السابقة",
@@ -1183,8 +1187,10 @@
       "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
+      "allModels": "كل النماذج ({count, number})",
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
+      "belowFrontier": "دون أفضل الموازنات",
       "effortHelpDescription": "يتحكم في مقدار الاستدلال الذي يستخدمه النموذج قبل الإجابة. قد تساعد المستويات الأعلى في المهام المعقدة، لكنها تستغرق عادةً وقتًا أطول. تشير النقطة إلى المستوى الافتراضي الذي اختاره المزوّد لهذا النموذج.",
       "effortHelpLabel": "حول مستوى الاستدلال",
       "effortLabel": "مستوى الاستدلال",
@@ -1198,6 +1204,10 @@
         "providerDefault": "الافتراضي",
         "xhigh": "مرتفع جدًا"
       },
+      "newModel": "جديد",
+      "premiumCost": "تكلفة مرتفعة على غير المعتاد",
+      "recommendedHelpDescription": "لا يوجد نموذج آخر متاح أرخص وأعلى تقييمًا في الوقت نفسه. النماذج الأحدث من أن تُقيَّم مُعلَّمة بأنها جديدة. الجودة: <link>{benchmark} من LMArena</link> ({licence})؛ التكلفة: أسعار القائمة.",
+      "recommendedHelpLabel": "حول النماذج الموصى بها",
       "selectionLabel": "{model} | {effort}",
       "title": "اختيار نموذج الدردشة",
       "viaProvider": "عبر {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
     "thinking": "العمل مع السياق",
+    "threadFiles": {
+      "title": "الملفات في هذه الدردشة"
+    },
     "tool": {
       "add_comment": "إضافة تعليق",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",
@@ -1608,6 +1621,16 @@
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
+    "datePicker": {
+      "label": "منتقي التاريخ",
+      "nextDecade": "العقد التالي",
+      "nextMonth": "الشهر التالي",
+      "nextYear": "السنة التالية",
+      "previousDecade": "العقد السابق",
+      "previousMonth": "الشهر السابق",
+      "previousYear": "السنة السابقة",
+      "time": "الوقت"
+    },
     "decisions": "الأحكام",
     "decline": "رفض",
     "delete": "حذف",
@@ -1768,6 +1791,7 @@
     "properties": "الخصائص",
     "queued": "قيد الانتظار",
     "reason": "السبب",
+    "recommended": "موصى به",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1893,6 +1917,7 @@
       "addBankAccount": "إضافة حساب مصرفي",
       "noBillingData": "لم تُحدَّد أي تفاصيل فوترة.",
       "removeBankAccount": "إزالة الحساب المصرفي",
+      "selectCurrencyForRate": "اختر عملة لتحديد الأجر بالساعة.",
       "title": "تفاصيل الفوترة"
     },
     "columns": {
@@ -2267,6 +2292,8 @@
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
+      "matterContactCapacityExceeded": "يحتوي هذا الملف القانوني على جهات اتصال أكثر مما يمكن عرضه. أزل روابط جهات الاتصال الظاهرة لعرض جهات الاتصال المتبقية.",
+      "matterContactCapacityReached": "بلغ هذا الملف القانوني الحد الأقصى لعدد جهات الاتصال. أزل ربط إحدى جهات الاتصال قبل إضافة جهة اتصال أخرى.",
       "mcpAuthorizationApprovalRequired": "يجب على المسؤول الموافقة على هذا الموصل قبل أن تتمكن من الاتصال.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
@@ -4834,6 +4861,7 @@
     "addPart": "إضافة جزء",
     "addTag": "إضافة وسم",
     "aiAdaptHint": "يكيّف الذكاء الاصطناعي هذه الصياغة لتلائم كل موضع تظهر فيه داخل المستند.",
+    "aiConditionsUndecided": "تعذّر على الذكاء الاصطناعي البتّ في هذه الشروط، لذا مُلئت أقسامها كما لو أنها لا تنطبق: {list}",
     "aiDecidedConditions": "يقرّره الذكاء الاصطناعي",
     "aiFieldsNotDrafted": "لم يتمكن الذكاء الاصطناعي من صياغة هذه الحقول: {list}",
     "allTemplates": "جميع القوالب",
@@ -4925,6 +4953,7 @@
     "directiveFor": "حلقة: {expression}",
     "directiveIf": "إذا: {expression}",
     "discoveryFailed": "تعذّر تحليل القالب",
+    "documentCreatedIncomplete": "تم إنشاء المستند، لكن التعبئة غير مكتملة",
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
@@ -5020,6 +5049,7 @@
     "saveFailed": "تعذّر حفظ القالب",
     "savedLookupFormats": "تنسيقات الإخراج المحفوظة",
     "searchTemplates": "البحث في القوالب…",
+    "structureErrorsInDocument": "توجيهات القالب التي تعذّر تطبيقها: {count}. راجع المستند.",
     "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {

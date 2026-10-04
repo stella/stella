@@ -172,6 +172,7 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   handlerResultMessage,
+  internalFailureResult,
   ISO_DATE_SCHEMA,
   MCP_CONTENT_MAX_CHARS,
   MAX_LIST_LIMIT,
@@ -1191,6 +1192,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "standard",
     permissions: {
       type: "all",
       permissions: { organizationSettings: ["update"] },
@@ -1426,6 +1428,10 @@ const readMatterOverview = async ({
     return notFoundResult("Matter not found or not accessible");
   }
 
+  if (contacts.isErr()) {
+    return internalFailureResult(contacts.error);
+  }
+
   const matter = {
     id: workspace.id,
     name: workspace.name,
@@ -1433,7 +1439,7 @@ const readMatterOverview = async ({
     status: workspace.status,
     clientName: workspace.client?.displayName ?? null,
   };
-  const contactCards = contacts.flatMap((workspaceContact) => {
+  const contactCards = contacts.value.contacts.flatMap((workspaceContact) => {
     if (!workspaceContact.contact) {
       return [];
     }
@@ -1472,6 +1478,7 @@ const readMatterOverview = async ({
     matter,
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
+    contactsOverflow: contacts.value.overflow,
     members: memberCards,
   } satisfies v.InferInput<typeof LIST_MATTERS_DETAIL_PROJECTION>;
 

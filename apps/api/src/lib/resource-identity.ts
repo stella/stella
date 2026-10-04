@@ -274,6 +274,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },
   sharepointConnection: { type: "non_resource", reason: "credential" },
   sharepointOAuthState: { type: "non_resource", reason: "credential" },

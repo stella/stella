@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Dodaj serię numeracji",
       "advance": "Zaliczka",
+      "allSellers": "Wszyscy sprzedawcy",
       "archiveConfirm": "Zarchiwizować tę serię numeracji? Nie będzie już dostępna dla nowych dokumentów.",
       "creditNote": "Nota kredytowa",
       "default": "Seria domyślna",
@@ -562,6 +563,9 @@
       "preview": "Następny numer",
       "previewAllocated": "Ten numer został już przydzielony.",
       "previewHelp": "Podgląd używa zapisanego szablonu i nie rezerwuje numeru.",
+      "sellerProfile": "Profil sprzedawcy",
+      "sellerUnavailable": "Sprzedawca zarchiwizowany lub niedostępny",
+      "sellerUnavailableHelp": "Ten sprzedawca został zarchiwizowany lub jest niedostępny. Zachowaj przypisanie lub wybierz innego sprzedawcę.",
       "setDefault": "Ustaw jako serię domyślną",
       "title": "Serie numeracji"
     },
@@ -976,7 +980,6 @@
     "packPartial": "Zainstalowano {installed}, {failed} nieudane",
     "removed": "To narzędzie nie jest już dostępne.",
     "sectionOthers": "Pozostałe",
-    "sectionRecommended": "Polecane",
     "settings": {
       "packTitle": "Polecany pakiet"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
       "recentChats": "Ostatnie czaty",
+      "skillEditedBy": "Edytował(a) {name} · {time}",
       "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
@@ -1183,8 +1187,10 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
+      "allModels": "Wszystkie modele ({count, number})",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
+      "belowFrontier": "Poniżej najlepszych kompromisów",
       "effortHelpDescription": "Określa, ile rozumowania model wykorzystuje przed udzieleniem odpowiedzi. Wyższe poziomy mogą pomóc w złożonych zadaniach, ale zwykle zajmują więcej czasu. Kropka oznacza domyślny poziom dostawcy dla tego modelu.",
       "effortHelpLabel": "Informacje o poziomie rozumowania",
       "effortLabel": "Poziom rozumowania",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Domyślny",
         "xhigh": "Bardzo wysoki"
       },
+      "newModel": "Nowy",
+      "premiumCost": "Nietypowo wysoki koszt",
+      "recommendedHelpDescription": "Żaden inny dostępny model nie jest jednocześnie tańszy i wyżej oceniany. Modele zbyt nowe, by mieć ocenę, są oznaczone jako nowe. Jakość: <link>{benchmark} od LMArena</link> ({licence}); koszt: ceny katalogowe.",
+      "recommendedHelpLabel": "Informacje o polecanych modelach",
       "selectionLabel": "{model} | {effort}",
       "title": "Wybierz model czatu",
       "viaProvider": "przez {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
     "thinking": "Pracuję z kontekstem",
+    "threadFiles": {
+      "title": "Pliki w tym czacie"
+    },
     "tool": {
       "add_comment": "Dodawanie komentarza",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
@@ -1608,6 +1621,16 @@
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
     "date": "Data",
+    "datePicker": {
+      "label": "Wybór daty",
+      "nextDecade": "Następna dekada",
+      "nextMonth": "Następny miesiąc",
+      "nextYear": "Następny rok",
+      "previousDecade": "Poprzednia dekada",
+      "previousMonth": "Poprzedni miesiąc",
+      "previousYear": "Poprzedni rok",
+      "time": "Godzina"
+    },
     "decisions": "Orzeczenia",
     "decline": "Odrzuć",
     "delete": "Usuń",
@@ -1768,6 +1791,7 @@
     "properties": "Właściwości",
     "queued": "W kolejce",
     "reason": "Powód",
+    "recommended": "Polecane",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1893,6 +1917,7 @@
       "addBankAccount": "Dodaj konto bankowe",
       "noBillingData": "Brak danych rozliczeniowych.",
       "removeBankAccount": "Usuń konto bankowe",
+      "selectCurrencyForRate": "Wybierz walutę, aby ustawić stawkę godzinową.",
       "title": "Dane rozliczeniowe"
     },
     "columns": {
@@ -2267,6 +2292,8 @@
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
+      "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -4834,6 +4861,7 @@
     "addPart": "Dodaj część",
     "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
+    "aiConditionsUndecided": "AI nie zdołała rozstrzygnąć tych warunków, więc ich sekcje wypełniono tak, jakby nie miały zastosowania: {list}",
     "aiDecidedConditions": "Decyduje AI",
     "aiFieldsNotDrafted": "AI nie zdołała przygotować tych pól: {list}",
     "allTemplates": "Wszystkie szablony",
@@ -4925,6 +4953,7 @@
     "directiveFor": "Pętla: {expression}",
     "directiveIf": "Jeśli: {expression}",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
+    "documentCreatedIncomplete": "Dokument utworzono, ale wypełnienie jest niekompletne",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",
     "downloadPdf": "Pobierz PDF",
@@ -5020,6 +5049,7 @@
     "saveFailed": "Nie udało się zapisać szablonu",
     "savedLookupFormats": "Zapisane formaty wyjściowe",
     "searchTemplates": "Szukaj szablonów…",
+    "structureErrorsInDocument": "Dyrektywy szablonu, których nie udało się zastosować: {count}. Sprawdź dokument.",
     "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {
