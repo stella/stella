@@ -89,6 +89,13 @@ export const docketFamilyScenario = (number: number) => {
     unkeyedSheet: createSafeId<"caseLawDecision">(),
     /** The same number at a regional court: another court's file. */
     regional: createSafeId<"caseLawDecision">(),
+    /**
+     * Siblings of the large file stored on its bare docket, so a sheet read
+     * reaches them, whose sheets beyond the stored ones only a recorded sheet
+     * or an ECLI states.
+     */
+    largeRecordedSheet: createSafeId<"caseLawDecision">(),
+    largeEcliSheet: createSafeId<"caseLawDecision">(),
   };
   const dockets = {
     sameDay: `7 Tdo ${n}/2020`,
@@ -207,6 +214,21 @@ export const docketFamilyScenario = (number: number) => {
         new Date(Date.UTC(2014, 0, 1 + index)).toISOString().slice(0, 10),
       ),
     ),
+    decision(
+      ids.largeRecordedSheet,
+      dockets.large,
+      administrative,
+      "2015-01-01",
+      null,
+      { sheetNumber: String(LARGE_FILE_SIZE + 2) },
+    ),
+    decision(
+      ids.largeEcliSheet,
+      dockets.large,
+      administrative,
+      "2015-01-02",
+      `ECLI:CZ:NSS:2015:7.AS.${n}.2014.${String(LARGE_FILE_SIZE + 3)}`,
+    ),
   ];
   return { ids, dockets, decisions, largeFile, number };
 };
@@ -292,16 +314,20 @@ const identityReaders = (
     )
       .map(String)
       .toSorted();
-  const lookedUp = async (entry: string) => {
-    const intent = intentOf(entry);
-    const rows = await lookupDecisionsByIdentity({
+  const rowsRead = (intent: DecisionIdentifierIntent) =>
+    lookupDecisionsByIdentity({
       caseLawDb: caseLawDb(),
       country: jurisdiction,
       locator: decisionIdentityLocatorOf(intent),
     });
-    return resolveDecisionIdentity(intent, rows);
+  const lookedUp = async (entry: string) => {
+    const intent = intentOf(entry);
+    return resolveDecisionIdentity(intent, await rowsRead(intent));
   };
-  return { searched, lookedUp };
+  /** The rows the lookup's read reaches, before it resolves among them. */
+  const read = async (entry: string): Promise<string[]> =>
+    (await rowsRead(intentOf(entry))).map(({ id }) => String(id)).toSorted();
+  return { searched, lookedUp, read };
 };
 
 /**
@@ -316,7 +342,7 @@ export const describeDocketFamilyIdentity = (
     setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
-  const { lookedUp, searched } = identityReaders(
+  const { lookedUp, read, searched } = identityReaders(
     () => context().caseLawDb,
     "CZE",
   );
@@ -508,10 +534,15 @@ export const describeDocketFamilyIdentity = (
       }
     });
 
-    test("a sheet no sibling can carry, every one stored under another, answers nothing", async () => {
-      // Every decision of the large file is stored with its own sheet.
-      const { dockets, largeFile } = context().scenario;
+    test("a sheet no sibling carries, every one known under another, answers nothing", async () => {
+      // The siblings stored with their sheet are out of the read's reach; the
+      // two stored on the bare docket are read, and their sheets are known
+      // from a recorded sheet and an ECLI.
+      const { dockets, ids, largeFile } = context().scenario;
       const entry = `${dockets.large}-${String(largeFile.length + 1)}`;
+      expect(await read(entry)).toEqual(
+        sorted(ids.largeRecordedSheet, ids.largeEcliSheet),
+      );
       expect(await searched(entry)).toEqual([]);
       expect(await lookedUp(entry)).toEqual({ status: "none" });
     });
