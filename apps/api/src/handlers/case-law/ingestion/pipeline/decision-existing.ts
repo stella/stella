@@ -20,11 +20,13 @@ import type {
   AttemptStep,
   DecisionRefresh,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -140,7 +142,9 @@ type WatermarkOptions = {
 
 /**
  * Advance only the observation watermark of a row a partial observation
- * reached, while the row's corpus mirror is settled.
+ * reached, while the row's corpus mirror is settled. An observation of an
+ * unread item also records its typed outcome under one metadata key; the
+ * row's detail, text and payload stay as stored.
  */
 const advancePartialObservationWatermark = async ({
   scopedDb,
@@ -154,6 +158,7 @@ const advancePartialObservationWatermark = async ({
       family: "case_law",
       entityId: existing.id,
     });
+    const unreadOutcome = unreadOutcomeOf(result);
     // audit: skip — background case-law observation watermark; public data
     const advanced = (
       await tx
@@ -162,6 +167,11 @@ const advancePartialObservationWatermark = async ({
           sourceObservedAt: observedAt,
           sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
+          ...(unreadOutcome === undefined
+            ? {}
+            : {
+                metadata: sql`jsonb_set(coalesce(${caseLawDecisions.metadata}, '{}'::jsonb), ${`{${READ_OUTCOME_METADATA_KEY}}`}::text[], ${JSON.stringify(unreadOutcome)}::text::jsonb)`,
+              }),
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
         })
         .where(
