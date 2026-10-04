@@ -7,8 +7,8 @@
 //   - every declared flag has at least one reader (an owner call, a `feature`
 //     tag on an agent surface, a catalog entry's `feature`, or a sanctioned
 //     raw read), and every literal read names a declared flag;
-//   - no `process.env.FEATURE_*` / `Bun.env.FEATURE_*` /
-//     `import.meta.env.FEATURE_*` read anywhere in apps or packages;
+//   - no `FEATURE_*` key is read off `process.env`, `Bun.env` or
+//     `import.meta.env` anywhere in apps or packages;
 //   - over the real route tree (every handler file that builds an Elysia
 //     instance, plus the server root), a capability whose catalog entry carries
 //     a flag is mounted behind a gate that reads that flag on every mount,

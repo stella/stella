@@ -14,8 +14,8 @@
 //      surface, a catalog entry's `feature`, or a sanctioned raw `env.FEATURE_X`
 //      read. A declared flag with no reader is dead; a read of an undeclared
 //      flag is an error.
-//   2. Raw reads. `process.env.FEATURE_X`, `Bun.env.FEATURE_X` and
-//      `import.meta.env.FEATURE_X` skip both the env schema and the owner.
+//   2. Raw reads. A `FEATURE_*` key read off `process.env`, `Bun.env` or
+//      `import.meta.env` skips both the env schema and the owner.
 //   3. Routes. Every Elysia instance in the route tree is walked in chain order
 //      (gates apply to routes registered after them, and to child instances
 //      mounted after them). A capability whose catalog entry carries a
@@ -71,7 +71,7 @@ type FlagReadForm =
   | "catalog-feature"
   /** `env.FEATURE_X` on the API env object (lint-sanctioned files only). */
   | "env-read"
-  /** `process.env.FEATURE_X`, `Bun.env.FEATURE_X`, `import.meta.env.FEATURE_X`. */
+  /** A `FEATURE_*` key read off `process.env`, `Bun.env` or `import.meta.env`. */
   | "process-env-read";
 
 type FlagRead = { file: string; flag: string; form: FlagReadForm };
