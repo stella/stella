@@ -221,6 +221,10 @@ export type TemplateStructureError = {
 export type DiscoveredTemplate = {
   clauseSlots?: ClauseSlot[] | undefined;
   clauseFieldPaths?: string[] | undefined;
+  /** Per clause slot key, the field paths only that slot's clause body
+   *  renders (the template's own content never does). Their requiredness
+   *  holds where the slot renders, once per loop iteration it renders in. */
+  clauseScopedFieldPaths?: Record<string, string[]> | undefined;
   placeholders: DiscoveredPlaceholder[];
   fields: DiscoveredField[];
   structureErrors: TemplateStructureError[];

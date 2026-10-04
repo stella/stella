@@ -1,7 +1,11 @@
 import { panic, Result } from "better-result";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
-import type { NamedCondition } from "@stll/template-conditions";
+import {
+  scanMarkers,
+  type NamedCondition,
+  type LoopProperty,
+} from "@stll/template-conditions";
 
 import {
   createDirectiveProcessingContext,
@@ -11,7 +15,11 @@ import {
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { processInlineConditions } from "@/api/lib/docx/inline-conditions";
 import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
-import { patchParagraphPlaceholders } from "@/api/lib/docx/rich-patch";
+import {
+  paragraphSpanText,
+  patchParagraphPlaceholders,
+  replaceParagraphTextRanges,
+} from "@/api/lib/docx/rich-patch";
 import type {
   ClauseProvenance,
   TemplateData,
@@ -156,6 +164,7 @@ export const discoverTemplateWithClauses = async ({
 
 export type ClauseFillContext = {
   values: TemplateData;
+  enclosingLoop?: Record<LoopProperty, number | boolean> | undefined;
   slotKey: string;
   namedConditions?: NamedCondition[] | undefined;
   source?: "stored" | "authored" | undefined;
@@ -165,7 +174,13 @@ export type ClauseFillContext = {
  * patches are constructed. Synthetic loop keys stay local to this clause. */
 export const clauseBodyToRichPatch = (
   body: ClauseBody,
-  { values, slotKey, namedConditions, source }: ClauseFillContext,
+  {
+    values,
+    slotKey,
+    namedConditions,
+    source,
+    enclosingLoop,
+  }: ClauseFillContext,
 ): Result<RichPatchValue, HandlerError<422>> => {
   const structureError = (
     errors: { message: string; paragraphIndex: number; directive: string }[],
@@ -224,6 +239,17 @@ export const clauseBodyToRichPatch = (
   // Insertion does not recursively patch a rich value's contents. Resolve the
   // loop engine's generated keys here, never in the template's global key map.
   for (const paragraph of [...container.getElementsByTagNameNS(W_NS, "p")]) {
+    // Clause-local loops have resolved their counters; surviving tokens bind
+    // to the template iteration that contains this clause occurrence.
+    if (enclosingLoop !== undefined) {
+      const ranges = scanMarkers(paragraphSpanText(paragraph)).flatMap(
+        ({ meta, start, end }) =>
+          meta.kind === "loop"
+            ? [{ start, end, value: String(enclosingLoop[meta.property]) }]
+            : [],
+      );
+      replaceParagraphTextRanges(paragraph, ranges);
+    }
     patchParagraphPlaceholders(paragraph, patchValues);
   }
   const resolved: ClauseBody = [];

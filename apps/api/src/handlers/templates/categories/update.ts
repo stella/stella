@@ -4,7 +4,6 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
   updateTemplateCategoryBodySchema,
@@ -36,21 +35,12 @@ const updateTemplateCategory = createSafeRootHandler(
   config,
   async function* ({ scopedDb, session, params, body, recordAuditEvent }) {
     const result = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await updateTemplateCategoryHandler({
-            scopedDb,
-            organizationId: session.activeOrganizationId,
-            categoryId: params.categoryId,
-            body,
-            recordAuditEvent,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
+      updateTemplateCategoryHandler({
+        scopedDb,
+        organizationId: session.activeOrganizationId,
+        categoryId: params.categoryId,
+        body,
+        recordAuditEvent,
       }),
     );
     return Result.ok(result);
