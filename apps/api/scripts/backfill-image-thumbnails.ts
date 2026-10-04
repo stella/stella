@@ -22,9 +22,9 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 
 import { userFiles } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import {
   generateImageThumbnail,
@@ -162,7 +162,11 @@ const backfillEntityFields = async (): Promise<number> => {
 const readChatFilePage = async (cursor: SafeId<"userFile"> | null) =>
   await db.transaction(
     async (tx) =>
-      await buildChatThumbnailQuery(tx, cursor, env.FEATURE_FILE_USAGE_LIMITS),
+      await buildChatThumbnailQuery(
+        tx,
+        cursor,
+        isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS"),
+      ),
   );
 
 type PreparedThumbnail = {
@@ -199,7 +203,7 @@ const backfillChatFilePage = async (
       userId: brandPersistedUserId(row.userId),
     });
     let organizationId: SafeId<"organization"> | null = null;
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       if (
         !("organizationId" in row) ||
         typeof row.organizationId !== "string"
@@ -230,7 +234,7 @@ const backfillChatFilePage = async (
       { type: "derivative", source: thumbnail.rowId },
     );
   const written = await (async () => {
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       return await writeOrganizationFiles(
         prepared.map((thumbnail) => ({
           organizationId:
