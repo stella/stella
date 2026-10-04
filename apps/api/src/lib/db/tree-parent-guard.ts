@@ -6,8 +6,10 @@
  * inserted or reparented row, once the whole statement's rows are visible,
  * requires the parent in the same scope and walks the parent chain; a row that
  * would close a loop is refused with `check_violation` naming the tree's
- * constraint, including a loop built inside one bulk INSERT. A reparent first
- * takes the tree's lock, so two concurrent moves (A under B, B under A) cannot
+ * constraint, including a loop built inside one bulk INSERT. Parent-changing
+ * updates and inserts with a parent require READ COMMITTED, so a lock wait can
+ * refresh the ancestry snapshot. Roots and unchanged parents are exempt.
+ * A reparent first takes the tree's lock, so opposite concurrent moves cannot
  * both commit, whatever the handler does. An insert takes no lock: a loop
  * through a new row is closed either inside its own statement or by a
  * reparent, which locks.

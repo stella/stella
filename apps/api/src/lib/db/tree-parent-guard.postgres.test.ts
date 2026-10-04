@@ -339,6 +339,127 @@ if (!databaseUrl || !runPostgresTests) {
   for (const treeName of TREE_NAMES) {
     const tree = TREES[treeName];
 
+    for (const isolationLevel of ["repeatable read", "serializable"] as const) {
+      describe(`${treeName}: ${isolationLevel} parent writes`, () => {
+        for (const operation of [
+          "attach",
+          "reparent",
+          "detach",
+          "insert",
+        ] as const) {
+          test(`${operation} requires READ COMMITTED and preserves the stored tree`, async () => {
+            await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+              const { db } = openClient();
+              const scope = await createScope(db);
+              try {
+                const { a, b, c } = ids();
+                await tree.insert(db, scope, [{ id: a, parentId: null }]);
+                await tree.insert(db, scope, [{ id: b, parentId: a }]);
+                await tree.insert(db, scope, [{ id: c, parentId: null }]);
+                const before = await tree.parents(db, scope);
+                const refusal = await failureOf(
+                  db.transaction(
+                    async (tx) => {
+                      // Bind the snapshot before the parent write.
+                      expect(await tree.parents(tx, scope)).toEqual(before);
+                      switch (operation) {
+                        case "attach":
+                          await tree.setParent(tx, c, a);
+                          break;
+                        case "reparent":
+                          await tree.setParent(tx, b, c);
+                          break;
+                        case "detach":
+                          await tree.setParent(tx, b, null);
+                          break;
+                        case "insert":
+                          await tree.insert(tx, scope, [
+                            { id: createSafeId<"entity">(), parentId: a },
+                          ]);
+                          break;
+                        default:
+                          operation satisfies never;
+                      }
+                    },
+                    { isolationLevel },
+                  ),
+                );
+                expectGuardRefusal(refusal, treeName);
+                expect(refusal).toMatchObject({
+                  cause: {
+                    message:
+                      "tree parent writes require READ COMMITTED isolation",
+                  },
+                });
+                expect(await tree.parents(db, scope)).toEqual(before);
+              } finally {
+                await dropScope(db, scope);
+              }
+            });
+          });
+        }
+
+        test("root inserts and unchanged parent updates commit", async () => {
+          await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+            const { db } = openClient();
+            const scope = await createScope(db);
+            try {
+              const { a, b, c } = ids();
+              await tree.insert(db, scope, [{ id: a, parentId: null }]);
+              await tree.insert(db, scope, [{ id: b, parentId: a }]);
+              await db.transaction(
+                async (tx) => {
+                  await tree.insert(tx, scope, [{ id: c, parentId: null }]);
+                  await tree.setParent(tx, a, null);
+                  await tree.setParent(tx, b, a);
+                },
+                { isolationLevel },
+              );
+              expect(await tree.parents(db, scope)).toEqual(
+                new Map([
+                  [a, null],
+                  [b, a],
+                  [c, null],
+                ]),
+              );
+            } finally {
+              await dropScope(db, scope);
+            }
+          });
+        });
+      });
+    }
+
+    test(`${treeName}: READ COMMITTED parent writes commit`, async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const scope = await createScope(db);
+        try {
+          const { a, b, c } = ids();
+          await tree.insert(db, scope, [{ id: a, parentId: null }]);
+          await db.transaction(
+            async (tx) => {
+              await tree.insert(tx, scope, [{ id: b, parentId: a }]);
+              await tree.insert(tx, scope, [{ id: c, parentId: null }]);
+              await tree.setParent(tx, c, a);
+              await tree.setParent(tx, b, c);
+              await tree.setParent(tx, c, null);
+            },
+            { isolationLevel: "read committed" },
+          );
+          expect(await tree.parents(db, scope)).toEqual(
+            new Map([
+              [a, null],
+              [b, c],
+              [c, null],
+            ]),
+          );
+        } finally {
+          await dropScope(db, scope);
+        }
+      });
+    });
+
     describe(`${treeName}: single-transaction refusals`, () => {
       test("a row naming itself as parent is refused on insert and on update", async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {

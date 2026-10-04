@@ -20,6 +20,8 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- Every inserted or reparented row needs its parent in the same scope and a
 -- parent chain that does not reach the row itself.
 --
+-- Parent-changing updates and inserts with a parent require READ COMMITTED;
+-- stronger isolation retains the transaction snapshot after a lock wait.
 -- A reparent locks the tree first and walks the chain on a fresh snapshot:
 -- under the lock it sees every reparent committed before it, so two concurrent
 -- moves cannot both close a loop. An INSERT takes no lock: rows that did not
@@ -44,15 +46,20 @@ DECLARE
   v_parent_scope text;
   v_cycle boolean;
 BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.parent_id IS NOT DISTINCT FROM OLD.parent_id THEN
+    RETURN NULL;
+  END IF;
+  IF (TG_OP = 'UPDATE' OR NEW.parent_id IS NOT NULL)
+    AND current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'tree parent writes require READ COMMITTED isolation'
+      USING ERRCODE = 'check_violation', CONSTRAINT = v_constraint;
+  END IF;
   IF NEW.parent_id IS NULL THEN
     RETURN NULL;
   END IF;
   IF NEW.parent_id = NEW.id THEN
     RAISE EXCEPTION 'a tree row cannot be its own parent'
       USING ERRCODE = 'check_violation', CONSTRAINT = v_constraint;
-  END IF;
-  IF TG_OP = 'UPDATE' AND NEW.parent_id IS NOT DISTINCT FROM OLD.parent_id THEN
-    RETURN NULL;
   END IF;
 
   EXECUTE format('SELECT ($1).%I::text', v_scope_column)
