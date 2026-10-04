@@ -316,7 +316,7 @@ describe("court registry enrichment", () => {
     }
   });
 
-  test("court metadata changes affect the content hash while registry presentation does not", () => {
+  test("every stored court registry field reaches the content hash", () => {
     const build = (courtRegistry: typeof registry) =>
       assembleSkCourtsDecision({
         item,
@@ -336,7 +336,9 @@ describe("court registry enrichment", () => {
         record: { ...registry, foto: "changed" },
       },
     });
-    expect(withPhoto?.rawHash).toBe(before?.rawHash);
+    // The record is stored verbatim, so a field the decision does not read
+    // still changes the stored bytes, and with them the fingerprint.
+    expect(withPhoto?.rawHash).not.toBe(before?.rawHash);
   });
 
   test("types refusals and absences, and classifies malformed JSON separately from transient failures", async () => {
