@@ -42,6 +42,7 @@ export const ADMITTED_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
 
 export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
 
+// parser-output-unchanged: the refusal's HTTP status affects responses only, not parsed records.
 /**
  * The HTTP status the refusal answers with. The country is advertised but
  * holds no public law: an answered client outcome, like any other unavailable
