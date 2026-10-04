@@ -57,10 +57,12 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  * them (file -> reason). Classifying a file here is a product decision; until
  * then it sits in the baseline as unclassified.
  */
-const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map<
-  string,
-  string
->();
+const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
+  [
+    "apps/api/src/handlers/sanctions/public-routes.ts",
+    "Public sanctions search is available on every deployment",
+  ],
+]);
 
 const TEST_FILE =
   /(?:\.test|\.spec)\.tsx?$|(?:^|\/)(?:__tests__|__fixtures__|tests)\//u;
