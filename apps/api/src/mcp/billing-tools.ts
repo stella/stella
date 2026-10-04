@@ -1347,6 +1347,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           currency: te.currency,
           narrative: te.narrative,
           invoiceNarrative: te.invoiceNarrative,
+          noCharge: te.noCharge,
           status: te.status,
           entity: workItem ? { id: workItem.id, name: workItem.name } : null,
         };
@@ -1561,10 +1562,18 @@ export const BILLING_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ timeEntry: ["create"] }, { timeEntry: ["update"] }],
-      reason: "time_entry_id selects update; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "time_entry_id",
+        present: {
+          operation: "update",
+          permissions: { timeEntry: ["update"] },
+        },
+        absent: { operation: "create", permissions: { timeEntry: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
@@ -1587,6 +1596,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "reverted. Returns whether the entry was hard-deleted.",
     inputSchema: deleteTimeEntryArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { timeEntry: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },

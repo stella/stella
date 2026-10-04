@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pievienot numuru sēriju",
       "advance": "Avanss",
+      "allSellers": "Visi pārdevēji",
       "archiveConfirm": "Arhivēt šo numuru sēriju? Tā vairs nebūs pieejama jauniem dokumentiem.",
       "creditNote": "Kredītrēķins",
       "default": "Noklusējuma sērija",
@@ -562,6 +563,9 @@
       "preview": "Nākamais numurs",
       "previewAllocated": "Šis numurs jau ir piešķirts.",
       "previewHelp": "Priekšskatījums izmanto saglabāto veidni un nerezervē numuru.",
+      "sellerProfile": "Pārdevēja profils",
+      "sellerUnavailable": "Pārdevējs ir arhivēts vai nav pieejams",
+      "sellerUnavailableHelp": "Šis pārdevējs ir arhivēts vai nav pieejams. Saglabājiet piesaisti vai izvēlieties citu pārdevēju.",
       "setDefault": "Iestatīt kā noklusējuma sēriju",
       "title": "Numuru sērijas"
     },
@@ -976,7 +980,6 @@
     "packPartial": "{installed} instalēti, {failed} neizdevās",
     "removed": "Šis rīks vairs nav pieejams.",
     "sectionOthers": "Citi",
-    "sectionRecommended": "Ieteiktie",
     "settings": {
       "packTitle": "Ieteicamā paka"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Prasmju vēl nav",
       "pinnedMatters": "Piespraustās lietas",
       "recentChats": "Nesenās tērzēšanas",
+      "skillEditedBy": "Rediģēja {name} · {time}",
       "skills": "Prasmes"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
@@ -1183,8 +1187,10 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
+      "allModels": "Visi modeļi ({count, number})",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
+      "belowFrontier": "Zem labākajiem kompromisiem",
       "effortHelpDescription": "Nosaka, cik daudz spriešanas modelis izmanto pirms atbildes. Augstāki līmeņi var palīdzēt sarežģītos uzdevumos, bet parasti aizņem vairāk laika. Punkts apzīmē pakalpojuma sniedzēja noklusējuma līmeni šim modelim.",
       "effortHelpLabel": "Par spriešanas līmeni",
       "effortLabel": "Spriešanas līmenis",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Noklusējuma",
         "xhigh": "Ļoti augsts"
       },
+      "newModel": "Jauns",
+      "premiumCost": "Neparasti augstas izmaksas",
+      "recommendedHelpDescription": "Neviens cits pieejamais modelis nav vienlaikus lētāks un augstāk novērtēts. Modeļi, kas ir pārāk jauni novērtējumam, ir atzīmēti kā jauni. Kvalitāte: <link>LMArena {benchmark}</link> ({licence}); izmaksas: cenrāža cenas.",
+      "recommendedHelpLabel": "Par ieteicamajiem modeļiem",
       "selectionLabel": "{model} | {effort}",
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
+    "threadFiles": {
+      "title": "Šīs tērzēšanas faili"
+    },
     "tool": {
       "add_comment": "Komentāra pievienošana",
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
@@ -1608,6 +1621,16 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
+    "datePicker": {
+      "label": "Datuma atlasītājs",
+      "nextDecade": "Nākamā desmitgade",
+      "nextMonth": "Nākamais mēnesis",
+      "nextYear": "Nākamais gads",
+      "previousDecade": "Iepriekšējā desmitgade",
+      "previousMonth": "Iepriekšējais mēnesis",
+      "previousYear": "Iepriekšējais gads",
+      "time": "Laiks"
+    },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",
@@ -1768,6 +1791,7 @@
     "properties": "Rekvizīti",
     "queued": "Rindā",
     "reason": "Iemesls",
+    "recommended": "Ieteiktie",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1893,6 +1917,7 @@
       "addBankAccount": "Pievienot bankas kontu",
       "noBillingData": "Nav norēķinu datu.",
       "removeBankAccount": "Noņemt bankas kontu",
+      "selectCurrencyForRate": "Lai iestatītu stundas likmi, izvēlieties valūtu.",
       "title": "Norēķinu dati"
     },
     "columns": {
@@ -2262,10 +2287,14 @@
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
+      "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
+      "filePropertyTypeImmutable": "Faila īpašības tipu nevar mainīt. Saglabājiet pašreizējo tipu; citām vērtībām izveidojiet pielāgotu īpašību.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
+      "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
+      "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
@@ -3448,6 +3477,7 @@
         "approvedOn": "Apstiprināts {date}",
         "approvedToast": "Pārbaudes ceļvedis apstiprināts",
         "saveBeforeApprove": "Pirms šī pārbaudes ceļveža apstiprināšanas saglabājiet izmaiņas.",
+        "sourcesNotice": "Pirms apstiprināšanas pārbaudiet, vai nevienā pozīcijā nav nosaukts dokuments, lieta vai pretpuse: šo pārbaudes ceļvedi var lasīt visa organizācija.",
         "statusApproved": "Apstiprināts",
         "statusDraft": "Melnraksts"
       },
@@ -3546,6 +3576,7 @@
       "referenceStandard": "No atsauces",
       "removeCheck": "Noņemt pārbaudi",
       "removeIdeal": "Noņemt ideālo formulējumu",
+      "removeSource": "Noņemt avotu {documentName}",
       "reorderPosition": "Pārkārtot pozīciju",
       "review": {
         "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
@@ -3577,6 +3608,10 @@
         "blocker": "Bloķējoša"
       },
       "severityLabel": "Nopietnība",
+      "staleCopy": {
+        "loaded": "Ir ielādēta jaunāka šī pārbaudes ceļveža versija. Pirms rediģēšanas pārlādējiet.",
+        "unavailable": "Neizdevās ielādēt šī pārbaudes ceļveža jaunāko versiju. Šī ir pēdējā ielādētā kopija, un tā var būt novecojusi."
+      },
       "starters": {
         "addedToast": "Pārbaudes ceļvedis pievienots",
         "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",
@@ -4826,6 +4861,7 @@
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
     "aiAdaptHint": "AI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiConditionsUndecided": "AI neizdevās izlemt šos nosacījumus, tāpēc to sadaļas aizpildītas tā, it kā tie nebūtu spēkā: {list}",
     "aiDecidedConditions": "Izlemj AI",
     "aiFieldsNotDrafted": "AI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",
@@ -4917,6 +4953,7 @@
     "directiveFor": "Cikls: {expression}",
     "directiveIf": "Ja: {expression}",
     "discoveryFailed": "Neizdevās analizēt veidni",
+    "documentCreatedIncomplete": "Dokuments izveidots, bet aizpildījums nav pilnīgs",
     "downloadAnyway": "Tomēr lejupielādēt",
     "downloadDocx": "Lejupielādēt DOCX",
     "downloadPdf": "Lejupielādēt PDF",
@@ -5012,6 +5049,7 @@
     "saveFailed": "Neizdevās saglabāt veidni",
     "savedLookupFormats": "Saglabātie izvades formāti",
     "searchTemplates": "Meklēt veidnes…",
+    "structureErrorsInDocument": "Veidnes direktīvas, kuras neizdevās piemērot: {count}. Pārbaudiet dokumentu.",
     "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {

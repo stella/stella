@@ -13,6 +13,12 @@ on:
 
 permissions: {}
 
+env:
+  # Disposable non-RDS databases: online index builds in migrate must not wait
+  # on EBS metrics or a wall-clock busy window.
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
 jobs:
   workspace-replay:
     if: github.event_name == 'schedule'

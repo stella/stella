@@ -98,7 +98,12 @@ import {
   isDocumentsMcpCapabilityAllowed,
   listMcpTools,
 } from "@/api/mcp/tools";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOCX_MIME_TYPE,
+  PDF_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -2653,11 +2658,10 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(bare?.candidates).toHaveLength(2);
     expect(bySheet?.status).toBe("found");
     expect(bySheet?.decisionId).toBe(SIBLING_ID);
-    // A sheet neither carries: the file comes back, never one of it.
-    expect(unknownSheet?.status).toBe("ambiguous");
-    expect(unknownSheet?.candidates).toHaveLength(2);
+    // A sheet neither carries: both are known under other sheets, so
+    // neither is the decision named, and none stands in for it.
+    expect(unknownSheet?.status).toBe("not_found");
     expect(unknownSheet?.decisionId).toBeUndefined();
-    expect(unknownSheet?.message).toContain("sheet or part");
   });
 
   test("lookup_case_law does not stand a decision of another sheet in for the one named", async () => {
@@ -2668,6 +2672,25 @@ describe("OpenAI-compatible MCP tools", () => {
         ...createLookupRow(DECISION_ID, "Nejvyšší správní soud"),
         ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.86",
       },
+    ]);
+
+    const payload = await lookup([`${CZ_DOCKET} - 98`]);
+
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("not_found");
+    expect(entry.decisionId).toBeUndefined();
+  });
+
+  test("lookup_case_law returns a sibling of unknown sheet for a sheet no decision is known to carry", async () => {
+    // One sibling is known under sheet 86, the other states no sheet: the
+    // reference to sheet 98 may name the second, never the first.
+    const UNKNOWN_SHEET_ID = "00000000-0000-4000-8000-0000000d0044";
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší správní soud"),
+        ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.86",
+      },
+      createLookupRow(UNKNOWN_SHEET_ID, "Nejvyšší správní soud"),
     ]);
 
     const payload = await lookup([`${CZ_DOCKET} - 98`]);
@@ -6903,6 +6926,59 @@ describe("OpenAI-compatible MCP tools", () => {
         sourceVersionId: "entity_version_1",
       },
     });
+  });
+
+  test("read_document reports an encrypted Office file exactly like an encrypted PDF", async () => {
+    const payloads: unknown[] = [];
+    for (const mimeType of [
+      PDF_MIME_TYPE,
+      DOCX_MIME_TYPE,
+      XLSX_MIME_TYPE,
+      PPTX_MIME_TYPE,
+    ]) {
+      const result = await handleMcpToolCall({
+        args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
+        context: createContext({
+          scopedDb: createScopedDb(
+            [],
+            null,
+            [
+              {
+                encrypted: true,
+                fileName: "locked",
+                id: "file_1",
+                mimeType,
+                pdfFileId: null,
+                sha256Hex: "a".repeat(64),
+                sizeBytes: 128,
+                type: "file",
+                version: 1,
+              },
+            ],
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              kind: "document",
+              name: "Locked Agreement",
+              workspaceId: WORKSPACE_ID,
+            },
+          ),
+        }),
+        toolName: "read_document",
+      });
+      payloads.push(parseToolPayload(result));
+    }
+
+    expect(payloads).toEqual(
+      Array.from({ length: 4 }, () =>
+        expect.objectContaining({
+          contentState: {
+            status: "unsupported",
+            sourceVersionId: "entity_version_1",
+            reason: "Encrypted document content cannot be extracted.",
+          },
+        }),
+      ),
+    );
   });
 
   test("read_document does not advertise a failed DOCX source as readable", async () => {

@@ -799,6 +799,100 @@ describe("a listed decision the download will not serve", () => {
     }
   });
 
+  test.each([
+    {
+      status: 500,
+      outcome: { type: "unavailable", cause: { kind: "status", status: 500 } },
+    },
+    {
+      status: 403,
+      outcome: {
+        type: "refused",
+        status: 403,
+        scope: "document",
+        cause: { kind: "http-status", retryAfter: null },
+      },
+    },
+  ])(
+    "a download answering $status is reported as an unread item, not a page failure",
+    async ({ status, outcome }) => {
+      const stub = stubPublisher((call) =>
+        isSearch(call)
+          ? searchResponse([rowAt(7, "2026-09-19T13:00:00+02:00")], 10_000)
+          : new Response(null, { status }),
+      );
+      try {
+        const page = (
+          await huBhgyAdapter.fetchPage(
+            "tip|head|2026-09-19T12:00:00+02:00",
+            {},
+          )
+        ).unwrap();
+        expect(page.decisions).toEqual([]);
+        const [unread] = page.unreadItems ?? [];
+        expect(unread?.outcome).toEqual(outcome);
+        expect(unread?.listing.sourceDocumentId).toBe("id-7");
+        expect(unread?.listing.isListingOnly).toBe(true);
+        expect(unread?.listing.sourceRaw).toContain("id-7");
+      } finally {
+        stub.restore();
+      }
+    },
+  );
+
+  test("a download that throws is reported as an unavailable unread item", async () => {
+    const stub = stubPublisher((call) => {
+      if (isSearch(call)) {
+        return searchResponse([rowAt(7, "2026-09-19T13:00:00+02:00")], 10_000);
+      }
+      throw new TypeError("connection reset");
+    });
+    try {
+      const page = (
+        await huBhgyAdapter.fetchPage("tip|head|2026-09-19T12:00:00+02:00", {})
+      ).unwrap();
+      expect(page.decisions).toEqual([]);
+      const [unread] = page.unreadItems ?? [];
+      expect(unread?.outcome.type).toBe("unavailable");
+      expect(
+        unread?.outcome.type === "unavailable"
+          ? unread.outcome.cause.kind
+          : null,
+      ).toBe("thrown");
+      expect(unread?.listing.sourceDocumentId).toBe("id-7");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  test("a download answering 429 halts the page after one request (rule 19)", async () => {
+    const stub = stubPublisher((call) =>
+      isSearch(call)
+        ? searchResponse(
+            [
+              rowAt(8, "2026-09-19T14:00:00+02:00"),
+              rowAt(7, "2026-09-19T13:00:00+02:00"),
+            ],
+            10_000,
+          )
+        : new Response(null, { status: 429, headers: { "Retry-After": "60" } }),
+    );
+    try {
+      const page = await huBhgyAdapter.fetchPage(
+        "tip|head|2026-09-19T12:00:00+02:00",
+        {},
+      );
+      expect(Result.isError(page)).toBe(true);
+      const error = Result.isError(page) ? page.error : undefined;
+      expect(error).toBeInstanceOf(AdapterFetchError);
+      expect(error?.httpStatus).toBe(429);
+      expect(error?.retryAfter).toBe("60");
+      expect(stub.calls.filter((call) => !isSearch(call))).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
   test.each(["<p></p>", String.raw`{\rtf1 poisoned}`])(
     "a rejected summary %s is quarantined while the rest of the page advances",
     async (label) => {

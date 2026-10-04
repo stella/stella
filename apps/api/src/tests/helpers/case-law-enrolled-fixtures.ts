@@ -115,6 +115,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -1350,6 +1352,17 @@ export const skCourtsFixture = (): EnrolledAdapterFixture => ({
       case "built":
       case "detail-unavailable":
         return built.decision;
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      case "unread": {
+        const { item } = built;
+        return (
+          planUnreadItems([item], {
+            [item.listing.sourceDocumentId]:
+              UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+          }).terminal.at(0) ?? panic("sk-courts unread item stored nothing")
+        );
+      }
       case "read-failed":
         throw built.error;
       case "unkeyable":
@@ -1551,6 +1564,17 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
     );
 
     const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
+    if (built.type === "unread") {
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      const { item } = built;
+      return (
+        planUnreadItems([item], {
+          [item.listing.sourceDocumentId]:
+            UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+        }).terminal.at(0) ?? panic("sk-us unread item stored nothing")
+      );
+    }
     if (built.type !== "built") {
       return panic(`sk-us fixture did not build: ${built.type}`);
     }

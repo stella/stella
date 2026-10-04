@@ -13,6 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 
 export const MEMORY_CURATOR_TASK = "memory.curator" as const;
 
@@ -31,7 +32,7 @@ const CURATION_BATCH_SIZE = 500;
 // this drains across successive runs rather than holding the scheduler slot
 // for an unbounded stretch.
 const MAX_CURATION_BATCHES_PER_RUN = 1000;
-const MEMORY_CURATOR_AUDIT_ACTOR = "system:memory-curator";
+const MEMORY_CURATOR_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.memoryCurator;
 
 /**
  * Lifecycle sweep for AI memories: active -> stale -> archived, driven by

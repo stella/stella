@@ -46,6 +46,10 @@ permissions: {}
 env:
   # Queue-ref cache entries cannot be reused by other refs.
   TURBO_CACHE: ${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}
+  # Disposable non-RDS databases: online index builds in migrate must not wait
+  # on EBS metrics or a wall-clock busy window.
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
 jobs:
   ci-plan:
@@ -1030,6 +1034,8 @@ jobs:
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1182,6 +1188,8 @@ jobs:
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1266,6 +1274,19 @@ jobs:
       - name: Ratchet scanner invariants
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ratchet-scan.test.ts
+
+      - name: Deployment feature guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every declared deployment flag has a reader and every flag read is
+        # declared; no flag is read off the raw process environment; across the
+        # real route tree a capability tagged with a flag is mounted behind a
+        # gate on that flag, and every route file is classified. Existing gaps
+        # sit in apps/api/deployment-feature-baseline.json, which may only
+        # shrink against the measured base. The --self-test run first proves
+        # each detector fires on mutated copies of the real tree.
+        run: |
+          bun apps/api/scripts/deployment-feature-guard.ts --self-test
+          bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
       - name: Custom lint rule coverage
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1451,6 +1472,21 @@ jobs:
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
 
+      - name: Tauri package alignment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          required=true
+          if [[ -n "$BASE_SHA" ]]; then
+            git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/tauri-changed-files"
+            mapfile -t files < "$RUNNER_TEMP/tauri-changed-files"
+            required=$(bun scripts/check-tauri-package-alignment.ts --requires-check "${files[@]}")
+          fi
+          if [[ "$required" == true ]]; then
+            bun test scripts/check-tauri-package-alignment.test.ts
+            bun scripts/check-tauri-package-alignment.ts
+          fi
+
       - name: Lockfile release-age guard
         # Bun applies the release-age quarantine only while it resolves
         # versions; a frozen install takes whatever bun.lock pins. This looks
@@ -1471,6 +1507,8 @@ jobs:
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1683,6 +1721,14 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Query data state baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/query-data-state-baseline.test.ts
+          bun run check:query-data-state
+
       - name: SQL performance baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1786,6 +1832,12 @@ jobs:
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
+
+      - name: Module ownership invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Invariants the ownership table cannot state itself, such as
+        # allowlists kept equal to their source lists.
+        run: bun test scripts/ownership.test.ts
 
       - name: Queue authority
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1922,6 +1974,15 @@ jobs:
         run: |
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
+
+      - name: Content delivery declarations
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
+        run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
 
       - name: MCP surface baseline self-test
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2095,6 +2156,9 @@ jobs:
       - name: Test install-free CI commands
         run: bun test scripts/install-free-ci.test.ts
 
+      - name: Test pre-push secret scan ranges
+        run: bun test scripts/check-pushed-secrets.test.ts
+
       - name: Test merge-base network comparison
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/network-baseline-comparison.test.ts
@@ -2246,6 +2310,8 @@ jobs:
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2474,6 +2540,8 @@ jobs:
       - name: Turbo remote cache
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -2562,6 +2630,8 @@ jobs:
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2632,6 +2702,8 @@ jobs:
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -2705,6 +2777,8 @@ jobs:
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -3188,6 +3262,8 @@ jobs:
 
       - name: Turbo remote cache
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts

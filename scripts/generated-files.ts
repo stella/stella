@@ -31,6 +31,39 @@ const MODEL_CATALOG_INPUTS = [
 
 export const GENERATORS = [
   {
+    id: "status-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/scripts/generate-status-tables.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-status-tables.ts", "--write"],
+    check: ["bun", "apps/api/scripts/generate-status-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "transition-triggers",
+    outputKind: "committed",
+    outputs: ["apps/api/drizzle/*_flow_run_transitions/migration.sql"],
+    inputs: [
+      "apps/api/src/lib/db/flow-run-transition-spec.ts",
+      "apps/api/src/lib/db/transition-sql.ts",
+      "apps/api/scripts/generate-transition-triggers.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-transition-triggers.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-transition-triggers.ts"],
+    autofix: false,
+    after: ["status-tables"],
+  },
+  {
     id: "capability-catalog",
     outputKind: "committed",
     outputs: [
@@ -279,6 +312,25 @@ export const GENERATORS = [
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:capabilities"],
     check: null,
     checkedBy: "Model catalog snapshot drift check",
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "model-benchmarks",
+    outputKind: "committed",
+    outputs: ["packages/ai-catalog/src/benchmarks.gen.ts"],
+    inputs: [
+      "packages/ai-catalog/package.json",
+      "packages/ai-catalog/src/benchmark-sources.ts",
+      "packages/ai-catalog/src/benchmarks.ts",
+      "packages/ai-catalog/src/index.ts",
+      "packages/scripts/src/model-catalog-benchmarks-gen.ts",
+      "packages/scripts/src/model-catalog-rates-gen.ts",
+    ],
+    write: ["bun", "--filter", "@stll/ai-catalog", "gen:benchmarks"],
+    check: null,
+    unchecked:
+      "The Text Arena snapshot is refreshed on demand; its network check is not a pull request gate",
     autofix: false,
     after: [],
   },

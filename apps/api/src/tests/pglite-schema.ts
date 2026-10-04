@@ -8,6 +8,8 @@ import nodePath from "node:path";
 import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
 
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
+import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -111,6 +113,18 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
+};
+
+export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
+  for (const spec of FLOW_TRANSITION_SPECS_V1) {
+    for (const statement of transitionTriggerSql(spec).split(
+      "--> statement-breakpoint",
+    )) {
+      if (statement.trim()) {
+        await db.execute(sql.raw(statement));
+      }
+    }
+  }
 };
 
 export const createSchemaPglite = async () =>
@@ -570,6 +584,22 @@ const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   "20261003120100_organization_member_capacity",
   "migration.sql",
 );
+
+/** Install the migration-owned matter-contact capacity guard after schema push. */
+export const installPgliteWorkspaceContactCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125100_workspace_contact_capacity",
+      "migration.sql",
+    ),
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
 
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",

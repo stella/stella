@@ -12,6 +12,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -29,6 +30,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -52,10 +54,16 @@ const createBilingualBody = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Creates a translated document without returning stored-file bytes.",
+  },
   description:
     "Create a two-column bilingual copy of a DOCX document (source text on the left, a copy to translate on the right) as a new document.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -198,6 +206,7 @@ export const createBilingualEntityHandler = (
         buffer,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         scanWarnings:
           dependencies.getScanWarnings(scanResult.value) ?? undefined,
       });

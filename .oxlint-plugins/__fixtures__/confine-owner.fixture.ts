@@ -45,6 +45,33 @@ export { createRedisClient as client } from "@/api/lib/redis-client";
 // expect-clean: confine-owner/confine-owner
 export { heading } from "@stll/folio-core/server";
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named stored-reader re-export is confined
+export { readS3ArrayBuffer as readStoredBytes } from "@/api/lib/s3";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a star stored-reader re-export is confined
+export * from "@/api/lib/s3";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named tenant-reader re-export is confined
+export { readTenantS3ArrayBuffer as readTenantBytes } from "@/api/lib/s3-presign";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named signer re-export is confined
+export { presignDownloadUrl as signStoredBytes } from "@/api/lib/s3-presign";
+// oxlint-disable-next-line confine-owner/confine-owner -- x2: star re-export reaches the tenant reader and signer
+export * from "@/api/lib/s3-presign";
+
+export const loadStoredReaders = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic stored-reader import is confined
+  await import("@/api/lib/s3");
+
+export const loadTenantReadersAndSigner = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- x2: dynamic import reaches the tenant reader and signer
+  await import("@/api/lib/s3-presign");
+
+export const loadTenantReader = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic tenant-reader member is confined
+  (await import("@/api/lib/s3-presign")).readTenantS3ArrayBuffer;
+
+export const loadStoredSigner = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic signer member is confined
+  (await import("@/api/lib/s3-presign")).presignDownloadUrl;
+
 declare const navigator: {
   clipboard: {
     readText: () => Promise<string>;

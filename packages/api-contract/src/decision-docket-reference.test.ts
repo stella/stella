@@ -593,28 +593,38 @@ describe("resolving a reference to one decision or to its candidates", () => {
     }
   });
 
+  // A sibling whose sheet is not known, for the sheets no decision carries.
+  const unsheeted: Hit = {
+    id: "unsheeted",
+    caseNumber: "3 Afs 41/2008",
+    ecli: null,
+    decisionDate: "2011-03-01",
+  };
+
   test("a sheet is compared whole, never as a suffix of another", () => {
     // 8 is the end of 98 and 9 the end of 109: neither is that sheet.
     for (const entry of ["3 Afs 41/2008-8", "3 Afs 41/2008-9"]) {
-      const resolution = resolve(entry, sheets);
+      const resolution = resolve(entry, [...sheets, unsheeted]);
       expect(resolution, entry).toMatchObject({
         status: "ambiguous",
         reason: "selector_unmatched",
       });
-      expect(idsOf(resolution)).toEqual(["sheet-109", "sheet-86", "sheet-98"]);
+      expect(idsOf(resolution)).toEqual(["unsheeted"]);
     }
   });
 
-  test("an unknown sheet returns the file, never a sibling", () => {
-    const resolution = resolve("3 Afs 41/2008 - 50", sheets);
-    expect(resolution.status).toBe("ambiguous");
-    expect(idsOf(resolution)).toEqual(["sheet-109", "sheet-86", "sheet-98"]);
-    // Even with one decision of the file at hand, one carrying another sheet
-    // is not the decision named.
-    const lone = resolve("3 Afs 41/2008 - 50", sheets.slice(0, 1));
-    expect(lone).toMatchObject({
+  test("an unheld sheet returns the siblings whose sheet is unknown, never one known under another", () => {
+    const resolution = resolve("3 Afs 41/2008 - 50", [...sheets, unsheeted]);
+    expect(resolution).toMatchObject({
       status: "ambiguous",
       reason: "selector_unmatched",
+    });
+    expect(idsOf(resolution)).toEqual(["unsheeted"]);
+    // Every sibling known under another sheet: nothing answers, as when the
+    // read reaches none.
+    expect(resolve("3 Afs 41/2008 - 50", sheets)).toEqual({ status: "none" });
+    expect(resolve("3 Afs 41/2008 - 50", sheets.slice(0, 1))).toEqual({
+      status: "none",
     });
   });
 
@@ -659,9 +669,8 @@ describe("resolving a reference to one decision or to its candidates", () => {
       "by-reference",
     ]);
     // A different recorded sheet is never accepted for the one named.
-    expect(resolve("3 Afs 41/2008-12", recorded.slice(0, 1))).toMatchObject({
-      status: "ambiguous",
-      reason: "selector_unmatched",
+    expect(resolve("3 Afs 41/2008-12", recorded.slice(0, 1))).toEqual({
+      status: "none",
     });
   });
 
@@ -1163,7 +1172,7 @@ describe.each(
     });
 
     if (sheet.type === "supported") {
-      test("the sheet names exactly its sibling, and an unheld sheet the whole file", () => {
+      test("the sheet names exactly its sibling, and an unheld sheet every sibling not under another sheet", () => {
         const named = resolved(`${docket}-${sheet.held}`, hits);
         expect(named).toMatchObject({ status: "unique", basis: "selector" });
         expect(idsOf(named)).toEqual(["sheet"]);
@@ -1172,7 +1181,7 @@ describe.each(
           status: "ambiguous",
           reason: "selector_unmatched",
         });
-        expect(idsOf(unheld)).toEqual(fileIds);
+        expect(idsOf(unheld)).toEqual(["part", "plain"]);
       });
     }
 

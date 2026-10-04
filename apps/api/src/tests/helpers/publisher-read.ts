@@ -10,7 +10,11 @@ import {
 
 /** A stubbed response as `readPublisher` types it, by its status alone. */
 export const readOfResponse = (response: Response): ReadOutcome<Response> => {
-  const outcome = readOutcomeOfStatus(response.status, "document");
+  const outcome = readOutcomeOfStatus(
+    response.status,
+    "document",
+    response.headers.get("Retry-After"),
+  );
   switch (outcome.type) {
     case "present":
       return readPresent(response);
