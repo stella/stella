@@ -30,7 +30,9 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   cleanup();
-  for (const client of clients) {client.clear();}
+  for (const client of clients) {
+    client.clear();
+  }
   clients.length = 0;
   globalThis.fetch = originalFetch;
 });
@@ -56,7 +58,7 @@ test.each(["client", "personal"])(
           role: "witness" as const,
           isPrimary: false,
           notes: null,
-          createdAt: new Date("2026-10-01T00:00:00Z"),
+          createdAt: "2026-10-01T00:00:00.000Z",
           contact: {
             id: toSafeId<"contact">(
               `00000000-0000-4000-9000-${String(index + 1).padStart(12, "0")}`,
@@ -157,11 +159,17 @@ test.each(["client", "personal"])(
       .getAllByRole("button", { name: messages.workspaces.parties.removeParty })
       .at(0);
     expect(button).toBeDefined();
-    if (!button) {return;}
+    if (!button) {
+      return;
+    }
+    const removedLink = links.at(0);
+    if (!removedLink) {
+      throw new Error("expected a first contact link fixture");
+    }
     fireEvent.click(button);
     await waitFor(() =>
       expect(deletions).toEqual([
-        `/v1/workspaces/${WORKSPACE_ID}/contacts/${links.at(0)?.id}`,
+        `/v1/workspaces/${WORKSPACE_ID}/contacts/${removedLink.id}`,
       ]),
     );
     await waitFor(() => expect(view.getByText("Witness 101")).toBeDefined());
