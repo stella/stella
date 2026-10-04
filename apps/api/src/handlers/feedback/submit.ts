@@ -35,7 +35,7 @@ import type {
 } from "@/api/handlers/feedback/github-delivery";
 import {
   composeGithubIssueBody,
-  neutralizeGithubReferences,
+  composeGithubIssueTitle,
 } from "@/api/handlers/feedback/report-body";
 import {
   feedbackFingerprint,
@@ -367,7 +367,7 @@ const deliver = async ({
     const filed = await github.create({
       config: githubConfig,
       issue: {
-        title: neutralizeGithubReferences(report.title),
+        title: composeGithubIssueTitle(report),
         body: composeGithubIssueBody({ receipt, report, serverVersion }),
         kind: report.kind,
       },

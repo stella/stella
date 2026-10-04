@@ -22,7 +22,7 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
@@ -386,6 +386,7 @@ const createInvoice = createSafeHandler(
       "Pass empty timeEntryIds for a draft with manual lines. Expenses are added " +
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

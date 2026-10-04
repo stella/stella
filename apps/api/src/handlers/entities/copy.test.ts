@@ -1404,7 +1404,9 @@ describe("copy-to-workspace", () => {
         callback: (transaction: typeof tx) => Promise<unknown>,
       ) => await callback(tx),
     });
-    const { safeDb } = createScopedDbMock(transactionFixture);
+    const { safeDb } = createScopedDbMock(transactionFixture, {
+      siblingRows: [],
+    });
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,

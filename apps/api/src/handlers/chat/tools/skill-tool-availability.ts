@@ -16,6 +16,7 @@ import { roleForDisplay } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { isMemberAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 /**
  * A registry tool counts as offered only where its own registry gates pass:
@@ -32,6 +33,7 @@ const isRegistryToolUsable = (
   }
   return (
     isMcpToolFeatureEnabled(definition.feature) &&
+    isMemberAuthorizedForMcpTool(memberRole, definition) &&
     (definition.isVisibleToMemberRole?.(roleForDisplay(memberRole)) ?? true)
   );
 };

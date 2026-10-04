@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
 import {
@@ -24,6 +24,7 @@ const config = {
     "budgets the current day/week has used. Returns { budgets: null } " +
     "when the organization's plan declares no per-user budgets.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "chat_thread_ui" },
 } satisfies HandlerConfig;

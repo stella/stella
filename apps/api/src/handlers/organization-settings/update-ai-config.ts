@@ -25,7 +25,7 @@ import {
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -71,6 +71,7 @@ const updateAIConfigBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateAIConfigBody,
 } satisfies HandlerConfig;

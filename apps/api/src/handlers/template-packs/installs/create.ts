@@ -5,7 +5,7 @@ import type { TemplatePackCatalogue } from "@stll/template-packs";
 import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -53,6 +53,7 @@ const config = {
     "request that failed part way through can simply be repeated. Owners " +
     "and admins only.",
   permissions: TEMPLATE_PACK_INSTALL_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

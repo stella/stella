@@ -1,5 +1,8 @@
 // parser-output-unchanged: shared reporter suffix preserves the existing citation grammar
-import type { StatuteQueryCountry } from "./statute-aliases";
+import type {
+  StatuteDefaultCollection,
+  StatuteQueryCountry,
+} from "./statute-query-capability";
 
 /** Suffixes that identify case-law reporters sharing the Czech Sb. prefix. */
 export const CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE = String.raw`(?:NSS|rozh\.)`;
@@ -13,6 +16,11 @@ export const CZE_CASE_LAW_REPORTER_TAIL_RE = new RegExp(
 
 /** How a collection is printed from a given year on. */
 type StatuteGazetteSpelling = { fromYear: number; abbreviation: string };
+
+type StatuteGazetteSpellings = readonly [
+  StatuteGazetteSpelling,
+  ...StatuteGazetteSpelling[],
+];
 
 /**
  * Each publisher collection, keyed by the collection segment of its ELI
@@ -32,10 +40,14 @@ export const STATUTE_GAZETTES = {
       { fromYear: 1993, abbreviation: "Z. z." },
     ],
   },
-} as const satisfies Record<
-  StatuteQueryCountry,
-  Record<string, readonly [StatuteGazetteSpelling, ...StatuteGazetteSpelling[]]>
->;
+} as const satisfies {
+  // A country's default collection must be one it publishes.
+  [Country in StatuteQueryCountry]: Record<
+    StatuteDefaultCollection<Country>,
+    StatuteGazetteSpellings
+  > &
+    Record<string, StatuteGazetteSpellings>;
+};
 
 const SPELLINGS_BY_ELI_COLLECTION: ReadonlyMap<
   string,
