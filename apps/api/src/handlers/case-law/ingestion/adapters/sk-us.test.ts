@@ -1,4 +1,3 @@
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
   afterEach,
@@ -10,6 +9,9 @@ import {
   test,
 } from "bun:test";
 
+/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
 import {
   buildSkUsDecision,
   skUsAdapter,
@@ -19,6 +21,7 @@ import {
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   UNPERSISTABLE_DECISION_FIELDS,
@@ -1135,18 +1138,150 @@ describe("sk-us buildDecision", () => {
     PER_DECISION_SURFACES.flatMap((surface) =>
       FAILED_READS.map((answer) => [surface, answer] as const),
     ),
-  )("a %s read that fails builds nothing (%o)", async (surface, answer) => {
-    mockFetch({ search: [], supplementary: { [surface]: answer } });
-    expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
-      type: "read-unavailable",
-      part: SURFACE_PART[surface],
-    });
+  )(
+    "a %s read that fails is an unavailable unread item (%o)",
+    async (surface, answer) => {
+      mockFetch({ search: [], supplementary: { [surface]: answer } });
+      const built = await buildSkUsDecision(PLENARY_OPINION);
+      expect(built).toMatchObject({
+        type: "unread",
+        part: SURFACE_PART[surface],
+        item: {
+          listing: {
+            sourceDocumentId: PLENARY_OPINION.documentId,
+            isListingOnly: true,
+          },
+          outcome: { type: "unavailable" },
+        },
+      });
+      // Nothing the failed read would have stated is on the row.
+      const parts = Object.keys(
+        decodeSourceRawEnvelope(
+          built.type === "unread" ? (built.item.listing.sourceRaw ?? "") : "",
+        ) ?? {},
+      );
+      expect(parts).not.toContain(SURFACE_PART[surface]);
+      expect(parts).not.toContain("document-file");
 
-    mockFetch({ search: [], supplementary: { [surface]: answer } });
-    expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
-      type: "detail-unavailable",
-    });
+      mockFetch({ search: [], supplementary: { [surface]: answer } });
+      expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
+        type: "detail-unavailable",
+      });
+    },
+  );
+
+  test.each([401, 403, 451] as const)(
+    "a refused text read (%d) is a refused unread item, scope document",
+    async (status) => {
+      mockFetch({
+        search: [],
+        supplementary: { content: { type: "status", status } },
+      });
+      expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
+        type: "unread",
+        part: "document",
+        item: {
+          listing: { isListingOnly: true },
+          outcome: {
+            type: "refused",
+            status,
+            scope: "document",
+            cause: { kind: "http-status", retryAfter: null },
+          },
+        },
+      });
+    },
+  );
+
+  const PART_SURFACES = ["facets", "collection", "file", "codelist"] as const;
+
+  test.each(
+    PART_SURFACES.flatMap((surface) =>
+      ([401, 403] as const).map((status) => [surface, status] as const),
+    ),
+  )(
+    "a refused %s read (%d) builds without the part and types the refusal",
+    async (surface, status) => {
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status } },
+      });
+      const built = await buildSkUsDecision(PLENARY_OPINION);
+      expect(built.type).toBe("built");
+      if (built.type !== "built") {
+        return;
+      }
+      expect(built.decision.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+        type: "refused",
+        status,
+        scope: "part",
+        cause: { kind: "http-status", retryAfter: null },
+      });
+      const parts = Object.keys(
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ?? {},
+      );
+      expect(parts).not.toContain(SURFACE_PART[surface]);
+
+      // The same part stated absent builds the same envelope with no marker,
+      // and the refusal joins the hash.
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 404 } },
+      });
+      const absent = await buildSkUsDecision(PLENARY_OPINION);
+      if (absent.type !== "built") {
+        throw new Error(`expected a built decision, got ${absent.type}`);
+      }
+      expect(absent.decision.metadata[READ_OUTCOME_METADATA_KEY]).toBe(
+        undefined,
+      );
+      expect(absent.decision.sourceRaw).toBe(built.decision.sourceRaw);
+      expect(absent.decision.rawHash).not.toBe(built.decision.rawHash);
+    },
+  );
+
+  test("a served decision carries no read-outcome marker", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(PLENARY_OPINION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    expect(
+      Object.hasOwn(built.decision.metadata, READ_OUTCOME_METADATA_KEY),
+    ).toBe(false);
   });
+
+  test.each(["content", "facets", "file", "codelist"] as const)(
+    "a %s read answering 429 ends the cycle as the publisher's typed refusal after one request",
+    async (surface) => {
+      let requests = 0;
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 429 } },
+      });
+      const served = globalThis.fetch;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          requests += 1;
+          return await served(input, init);
+        },
+      );
+      const rejection = await rejectionOf(buildSkUsDecision(PLENARY_OPINION));
+      expect(rejection).toBeInstanceOf(AdapterFetchError);
+      expect(
+        rejection instanceof AdapterFetchError
+          ? { stopKind: rejection.stopKind, httpStatus: rejection.httpStatus }
+          : null,
+      ).toEqual({
+        stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+        httpStatus: 429,
+      });
+      // No read after the refusal: the codelist is read first, then the text.
+      expect(requests).toBeLessThanOrEqual(
+        { codelist: 1, content: 2, facets: 3, file: 5 }[surface],
+      );
+    },
+  );
 
   test.each(FAILED_READS)(
     "a codelist read that fails fails the build, not the decision (%o)",
@@ -1337,7 +1472,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     );
   });
 
-  test("a document whose text read fails fails the page, so its cursor is kept", async () => {
+  test("a document whose text read fails is reported as an unread item beside the page's other decisions", async () => {
     mockFetch({
       search: [
         {
@@ -1364,14 +1499,27 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       },
     );
 
-    const page = await skUsAdapter.fetchPage("2021:0", {});
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
 
-    expect(page.isErr()).toBe(true);
-    if (page.isOk()) {
-      return;
-    }
-    expect(page.error).toBeInstanceOf(AdapterFetchError);
-    expect(page.error.cursor).toBe("2021:0");
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual([PLENARY_OPINION.documentId]);
+    expect(
+      page.unreadItems?.map(({ listing, outcome }) => ({
+        sourceDocumentId: listing.sourceDocumentId,
+        isListingOnly: listing.isListingOnly,
+        outcome,
+      })),
+    ).toEqual([
+      {
+        sourceDocumentId: CHAMBER_RESOLUTION.documentId,
+        isListingOnly: true,
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "status", status: 500 },
+        },
+      },
+    ]);
   });
 
   test.each([
@@ -1385,23 +1533,82 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       },
     ],
   ] as const)(
-    "a document file read answering %s fails the page, so its cursor is kept",
+    "a document file read answering %s is an unavailable unread item that keeps every other response",
     async (_label, download) => {
       mockFetch({
         search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
         download,
       });
 
-      const page = await skUsAdapter.fetchPage("2021:0", {});
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
 
-      expect(page.isErr()).toBe(true);
-      if (page.isOk()) {
-        return;
-      }
-      expect(page.error).toBeInstanceOf(AdapterFetchError);
-      expect(page.error.cursor).toBe("2021:0");
+      expect(page.decisions).toEqual([]);
+      const unread = page.unreadItems?.at(0);
+      expect(unread?.outcome.type).toBe("unavailable");
+      expect(unread?.listing).toMatchObject({
+        sourceDocumentId: PLENARY_OPINION.documentId,
+        isListingOnly: true,
+      });
+      // Listing-only: the pipeline keeps a stored row's detail over it,
+      // and a never-stored row keeps every response that was read.
+      expect(
+        Object.keys(
+          decodeSourceRawEnvelope(unread?.listing.sourceRaw ?? "") ?? {},
+        ),
+      ).toContain("document");
+      expect(unread?.listing.sourceRawObjects).toBeUndefined();
     },
   );
+
+  test.each([401, 403] as const)(
+    "a refused document file (%d) is a refused unread item, scope document",
+    async (status) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download: { type: "status", status },
+      });
+
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+      expect(page.decisions).toEqual([]);
+      expect(page.unreadItems?.map(({ outcome }) => outcome)).toEqual([
+        {
+          type: "refused",
+          status,
+          scope: "document",
+          cause: { kind: "http-status", retryAfter: null },
+        },
+      ]);
+    },
+  );
+
+  test("a document file answering 429 fails the page as the publisher's typed refusal", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      download: { type: "status", status: 429 },
+    });
+
+    const page = await skUsAdapter.fetchPage("2021:0", {});
+
+    expect(page.isErr()).toBe(true);
+    if (page.isOk()) {
+      return;
+    }
+    expect(page.error.httpStatus).toBe(429);
+    expect(page.error.stopKind).toBe(INGESTION_STOP_KIND.PUBLISHER_REFUSAL);
+  });
+
+  test("a document file served with an empty body is unavailable, not a document the court withholds", async () => {
+    mockFetch({ search: [], download: { type: "status", status: 200 } });
+
+    expect(await buildSkUsDecision(CHAMBER_RESOLUTION)).toMatchObject({
+      type: "unread",
+      part: "document-file",
+      item: {
+        outcome: { type: "unavailable", cause: { kind: "empty-body" } },
+      },
+    });
+  });
 
   test.each([
     ["404", { type: "status", status: 404 }],
@@ -1484,8 +1691,9 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
 
       expect(built).toMatchObject({
-        type: "read-unavailable",
+        type: "unread",
         part: "document-file",
+        item: { outcome: { type: "unavailable", cause: { kind: "thrown" } } },
       });
       expect(
         logs
