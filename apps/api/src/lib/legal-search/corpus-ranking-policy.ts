@@ -13,9 +13,10 @@ export const CORPUS_INDEX_RANKING_MODES = [
 export type CorpusIndexRankingMode =
   (typeof CORPUS_INDEX_RANKING_MODES)[number];
 
-// Experimental recall candidate; its request latency must be measured before
-// enabling it. One projected read stays below the engine's 10,000 offset cap.
-export const CORPUS_BM25_PASSAGE_LIMIT = 7000;
+// Experimental recall candidate. Response size and rerank time grow with this
+// pool, so it stays small; one projected read stays below the engine's
+// 10,000 offset cap.
+export const CORPUS_BM25_PASSAGE_LIMIT = 1000;
 export const CORPUS_BM25_RATIO_POWER = 0.25;
 // Authority is hydrated after the bounded lexical scan.
 export const CORPUS_AUTHORITY_LEXICAL_RANK_DECAY = 1200;

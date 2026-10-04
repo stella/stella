@@ -265,6 +265,8 @@ test("ranking-mode changes invalidate cursor targets while off preserves them", 
 });
 
 test("BM25 ranking replays a bounded deduplicated universe with scale-invariant pages", async () => {
+  // A full match deep in the bounded pool that authority lifts to the top.
+  const deepAuthorityDoc = `doc-${Math.floor(CORPUS_BM25_PASSAGE_LIMIT * 0.93)}`;
   let scale = 1;
   const requests: { from: number; size: number }[] = [];
   globalThis.fetch = Object.assign(
@@ -278,7 +280,8 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       }
       const body = JSON.parse(requestBody);
       requests.push({ from: body.from, size: body.size });
-      const hits = Array.from({ length: 7100 }, (_, rank) => ({
+      const hitCount = CORPUS_BM25_PASSAGE_LIMIT + 100;
+      const hits = Array.from({ length: hitCount }, (_, rank) => ({
         _source: {
           document_id: rank < 2 ? "first" : `doc-${rank}`,
           chunk_id: `passage-${rank}`,
@@ -323,8 +326,8 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
         hydratedIds = candidates.map(({ id }) => id);
         const ranked = blendStableCitationAuthority({
           candidates,
-          authorityById: new Map([["doc-6513", 100]]),
-          signals: [courtTierSignal(new Map([["doc-6513", 4]]))],
+          authorityById: new Map([[deepAuthorityDoc, 100]]),
+          signals: [courtTierSignal(new Map([[deepAuthorityDoc, 4]]))],
         });
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           ranked,
@@ -341,14 +344,15 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
     });
 
   const first = await read();
-  expect(first.pageRanked.at(0)?.id).toBe("doc-6513");
+  expect(first.pageRanked.at(0)?.id).toBe(deepAuthorityDoc);
   expect(first.scan.passagesScanned).toBe(CORPUS_BM25_PASSAGE_LIMIT);
   expect(first.scan.rounds).toBe(1);
   expect(hydrationRounds).toBe(1);
   expect(first.scan.earlyStopped).toBe(false);
-  expect(hydratedIds.length).toBe(6999);
+  // Ranks 0 and 1 share one document; the lookahead passage is not hydrated.
+  expect(hydratedIds.length).toBe(CORPUS_BM25_PASSAGE_LIMIT - 1);
   expect(new Set(hydratedIds).size).toBe(hydratedIds.length);
-  expect(hydratedIds).not.toContain("doc-7000");
+  expect(hydratedIds).not.toContain(`doc-${CORPUS_BM25_PASSAGE_LIMIT}`);
   expect(first.anchorIdById.get("first")).toBe("anchor-0");
   expect(first.nextCursor?.windowStart).toBe(0);
   expect(first.nextCursor?.id).toBe("doc-9");
