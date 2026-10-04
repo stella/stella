@@ -15,7 +15,7 @@ import nodePath from "node:path";
  * Column grants are not table privileges and are left to the column mirror.
  */
 
-export const TABLE_PRIVILEGES = [
+const TABLE_PRIVILEGES = [
   "SELECT",
   "INSERT",
   "UPDATE",
@@ -42,7 +42,7 @@ type RelationState = {
   rowSecurity: boolean;
 };
 
-export type StellaPrivilegeState = Map<string, RelationState>;
+type StellaPrivilegeState = Map<string, RelationState>;
 
 /**
  * A statement that grants or revokes through `format()` names its relation at
@@ -94,26 +94,22 @@ const LEGAL_LIST_RELATIONS = [
   "legal_list_item_reviews",
 ] as const;
 
-export const DYNAMIC_STELLA_GRANTS: Readonly<Record<string, DynamicExpansion>> =
-  {
-    // Every row-secured relation that exists at this point, bar the case-law
-    // tables the same block excludes by name.
-    "20260510140000_document_rls_role_bootstrap": (state) => {
-      for (const [relation, current] of state) {
-        if (
-          current.rowSecurity &&
-          !BOOTSTRAP_EXCLUDED_RELATIONS.has(relation)
-        ) {
-          grantTo(state, relation, READ_WRITE);
-        }
-      }
-    },
-    "20260808014000_legal_lists": (state) => {
-      for (const relation of LEGAL_LIST_RELATIONS) {
+const DYNAMIC_STELLA_GRANTS: Readonly<Record<string, DynamicExpansion>> = {
+  // Every row-secured relation that exists at this point, bar the case-law
+  // tables the same block excludes by name.
+  "20260510140000_document_rls_role_bootstrap": (state) => {
+    for (const [relation, current] of state) {
+      if (current.rowSecurity && !BOOTSTRAP_EXCLUDED_RELATIONS.has(relation)) {
         grantTo(state, relation, READ_WRITE);
       }
-    },
-  };
+    }
+  },
+  "20260808014000_legal_lists": (state) => {
+    for (const relation of LEGAL_LIST_RELATIONS) {
+      grantTo(state, relation, READ_WRITE);
+    }
+  },
+};
 
 const NAME = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
 const QUALIFIED_NAME = String.raw`(?:${NAME}\s*\.\s*)?${NAME}`;
