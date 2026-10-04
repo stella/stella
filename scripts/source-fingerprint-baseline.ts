@@ -122,7 +122,12 @@ const propertyNameOf = (name: ts.PropertyName): string | null =>
 
 const enclosingName = (node: ts.Node): string => {
   const names: string[] = [];
-  for (let current = node.parent; current !== undefined;) {
+  // Ancestors up to the source file, the root of every parsed node.
+  for (
+    let current = node.parent;
+    !ts.isSourceFile(current);
+    current = current.parent
+  ) {
     if (
       (ts.isFunctionDeclaration(current) ||
         ts.isMethodDeclaration(current) ||
@@ -136,7 +141,6 @@ const enclosingName = (node: ts.Node): string => {
     ) {
       names.unshift(current.name.text);
     }
-    current = current.parent;
   }
   return names.length === 0 ? "module" : names.join("/");
 };
@@ -222,20 +226,23 @@ const writerMembersOf = ({
         add(dedupe, "external-id-dedupe-key");
       }
     }
+    const isDedupeFunctionDeclaration =
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text.endsWith("DedupeKey") === true;
+    const isDedupeFunctionVariable =
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text.endsWith("DedupeKey") &&
+      node.initializer !== undefined &&
+      (ts.isArrowFunction(node.initializer) ||
+        ts.isFunctionExpression(node.initializer));
     const dedupeFunction =
-      (ts.isFunctionDeclaration(node) &&
-        node.name !== undefined &&
-        node.name.text.endsWith("DedupeKey") &&
-        node) ||
-      (ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.name.text.endsWith("DedupeKey") &&
-        node.initializer !== undefined &&
-        (ts.isArrowFunction(node.initializer) ||
-          ts.isFunctionExpression(node.initializer)) &&
-        node);
+      (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) &&
+      (isDedupeFunctionDeclaration || isDedupeFunctionVariable)
+        ? node
+        : undefined;
     if (
-      dedupeFunction &&
+      dedupeFunction !== undefined &&
       mentions(dedupeFunction, EXTERNAL_ID) &&
       !mentions(dedupeFunction, CHANGE_MARKERS)
     ) {
