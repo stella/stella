@@ -254,7 +254,10 @@ export const runEuCompletionControl = async ({
 };
 
 if (import.meta.main) {
-  process.exitCode = await runEuCompletionControl({
-    args: process.argv.slice(2),
-  });
+  // The lane contract exits explicitly: the root pool stays open otherwise.
+  process.exit(
+    await runEuCompletionControl({
+      args: process.argv.slice(2),
+    }),
+  );
 }

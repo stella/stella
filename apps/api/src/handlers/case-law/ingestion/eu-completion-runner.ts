@@ -345,6 +345,18 @@ const fetchFullCompletionCandidate = (
     }
     const candidate =
       matches.at(0) ?? panic("Selected publisher candidate disappeared");
+    // A variant whose every manifestation failed to build is present but
+    // unusable: neither gone nor a conflict to review.
+    if (candidate.plainTextOutcome.type === "item_build_failed") {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Publisher document did not build",
+          code: "parse",
+          scope: "row",
+          cause: candidate.plainTextOutcome.error,
+        }),
+      );
+    }
     if (raw !== null) {
       const preserved = protectEcjLegacyDocument({
         storedRaw: raw,
