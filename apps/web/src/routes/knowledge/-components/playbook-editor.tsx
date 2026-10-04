@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -30,6 +31,7 @@ import {
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import {
   Select,
   SelectItem,
@@ -83,13 +85,25 @@ import {
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
-import type { PlaybookDraft } from "@/routes/knowledge/-components/playbook-editor.logic";
+import type {
+  FresherDetail,
+  PlaybookDraft,
+  PositionSourceLookup,
+} from "@/routes/knowledge/-components/playbook-editor.logic";
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
+  hasResolvedPositionSources,
+  detailSeedGate,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
   resolvePlaybookScrollTop,
+  resolvePositionSources,
+  toPositionSourceLookup,
 } from "@/routes/knowledge/-components/playbook-editor.logic";
 import { PlaybookVersionHistorySheet } from "@/routes/knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/knowledge/-components/position-editor";
@@ -169,15 +183,93 @@ const PlaybookEditorLoader = ({
   onSaved: () => void;
 }) => {
   const t = useTranslations();
-  // Bumped after a version restore so the form below remounts with the
-  // freshly refetched (already-invalidated) detail instead of holding on to
-  // its own stale name/description/positions state.
-  const [reloadKey, setReloadKey] = useState(0);
-  const detailQuery = useQuery(
-    playbookDetailOptions(organizationId, playbookId),
+  const queryClient = useQueryClient();
+  const detailOptions = playbookDetailOptions(organizationId, playbookId);
+  // The gate is computed just before the form takes its initial values: at
+  // mount, and on each reload (after a version restore or a rejected stale
+  // save). For example, reopening the editor right after a save finds the
+  // cached detail invalidated but still holding the pre-save content until
+  // the refetch completes. Changing `reloadKey` remounts the form so it
+  // picks up the new values.
+  const [seedState, setSeedState] = useState(() => ({
+    reloadKey: 0,
+    gate: detailSeedGate(queryClient.getQueryState(detailOptions.queryKey)),
+  }));
+  const detailQuery = useQuery(detailOptions);
+  const detailView = useQueryView(detailQuery, {
+    isEmpty: (detail) => !("positions" in detail),
+  });
+  const seed = resolveDetailSeed({
+    gate: seedState.gate,
+    dataUpdatedAt: detailQuery.dataUpdatedAt,
+    fetchStatus: detailQuery.fetchStatus,
+  });
+  // The form has now been filled from the outdated copy. Record that, so a
+  // later refetch cannot unmount the form and lose what the user typed.
+  const latchedGate = latchedSeedGate(seedState.gate, seed);
+  if (latchedGate !== null) {
+    setSeedState({ reloadKey: seedState.reloadKey, gate: latchedGate });
+  }
+
+  const refetchDetail = () => {
+    // If a refetch is already running, wait for it instead of restarting it.
+    detached(
+      detailQuery.refetch({ cancelRefetch: false }),
+      "playbook-editor.refetch-detail",
+    );
+  };
+
+  const reload = () => {
+    const gate = detailSeedGate(
+      queryClient.getQueryState(detailOptions.queryKey),
+    );
+    if (gate.type === "awaiting") {
+      refetchDetail();
+    }
+    setSeedState((current) => ({ reloadKey: current.reloadKey + 1, gate }));
+  };
+
+  const readFailure = (
+    <div className="flex items-center justify-center gap-2 p-4" role="alert">
+      <p className="text-destructive text-sm">
+        {t("common.somethingWentWrong")}
+      </p>
+      <Button onClick={refetchDetail} size="sm" variant="ghost">
+        {t("common.retry")}
+      </Button>
+    </div>
   );
 
-  if (detailQuery.isPending) {
+  switch (detailView.type) {
+    case "pending":
+      return (
+        <div
+          className="flex flex-1 items-center justify-center p-8"
+          role="status"
+        >
+          <p className="text-muted-foreground text-sm">
+            {t("knowledge.playbooks.loading")}
+          </p>
+        </div>
+      );
+    case "error":
+      return readFailure;
+    case "empty":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <Button onClick={onBack} variant="ghost">
+            {t("common.goBack")}
+          </Button>
+        </div>
+      );
+    case "items":
+      break;
+    default:
+      detailView satisfies never;
+      return panic("Unhandled playbook detail query state");
+  }
+
+  if (seed.type === "wait") {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -187,39 +279,124 @@ const PlaybookEditorLoader = ({
     );
   }
 
-  const detail = detailQuery.data;
-  if (detailQuery.isError || !detail || !("positions" in detail)) {
+  const detail = detailView.items;
+  if (!("positions" in detail)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("knowledge.playbooks.loadFailed")}
-        </p>
+        {readFailure}
       </div>
     );
   }
 
   return (
-    <PlaybookEditorForm
-      initialApprovedAt={detail.approvedAt}
-      initialDescription={detail.description ?? ""}
-      initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
-      initialName={detail.name}
-      initialPerspective={detail.scope?.perspective ?? null}
-      initialStatus={detail.status}
-      initialTrigger={detail.scope?.trigger ?? null}
-      initialPositions={detail.positions.items}
-      key={reloadKey}
-      onBack={onBack}
-      // Derived from the org's findings on every read, so it tracks the cache
-      // rather than freezing at mount like the `initial*` seeds.
-      positionDecisions={readPositionDecisions(detail.positionDecisions)}
-      onReload={() => setReloadKey((current) => current + 1)}
-      onSaved={onSaved}
-      organizationId={organizationId}
-      playbookId={playbookId}
-      initialUpdatedAt={detail.updatedAt}
-    />
+    <>
+      {detailView.refetchError !== undefined && readFailure}
+      <PlaybookEditorForm
+        initialApprovedAt={detail.approvedAt}
+        initialDescription={detail.description ?? ""}
+        initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
+        initialName={detail.name}
+        initialPerspective={detail.scope?.perspective ?? null}
+        initialStatus={detail.status}
+        initialTrigger={detail.scope?.trigger ?? null}
+        initialPositions={detail.positions.items}
+        key={seedState.reloadKey}
+        onBack={onBack}
+        // Derived from the org's findings on every read, so it tracks the cache
+        // rather than freezing at mount like the `initial*` seeds.
+        positionDecisions={readPositionDecisions(detail.positionDecisions)}
+        // Looked up for this reader on every read, like the decisions above.
+        positionSources={toPositionSourceLookup(detail.positionSources)}
+        onReload={reload}
+        onSaved={onSaved}
+        organizationId={organizationId}
+        playbookId={playbookId}
+        initialUpdatedAt={detail.updatedAt}
+        staleDetail={
+          seed.type === "stale"
+            ? { fresher: seed.fresher, onRetry: refetchDetail }
+            : undefined
+        }
+      />
+    </>
   );
+};
+
+// ── Stale detail notice ───────────────────────────────
+
+type StaleDetail = {
+  fresher: FresherDetail;
+  onRetry: () => void;
+};
+
+/**
+ * Shown above a form that was filled from an outdated detail. Retry only
+ * refetches; it does not touch the form. Once a fresh copy has loaded, the
+ * user chooses when to reload the form with it, so a retry that fails again
+ * loses none of their edits.
+ */
+const StaleDetailNotice = ({
+  staleDetail: { fresher, onRetry },
+  isDirty,
+  onReload,
+}: {
+  staleDetail: StaleDetail;
+  isDirty: boolean;
+  onReload: (() => void) | undefined;
+}) => {
+  const t = useTranslations();
+  switch (fresher) {
+    case "unavailable": {
+      return (
+        <ReviewOutOfDateNotice
+          actionLabel={t("common.retry")}
+          onAction={onRetry}
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.unavailable"),
+            },
+          ]}
+        />
+      );
+    }
+    case "loading": {
+      return (
+        <ReviewOutOfDateNotice
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.unavailable"),
+            },
+          ]}
+        />
+      );
+    }
+    case "loaded": {
+      return (
+        <ReviewOutOfDateNotice
+          // Reloading replaces the form with the server's copy. If there are
+          // unsaved edits, label the button "discard changes" to say so.
+          actionLabel={
+            isDirty
+              ? t("knowledge.playbooks.discardChanges")
+              : t("common.reload")
+          }
+          onAction={onReload}
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.loaded"),
+            },
+          ]}
+        />
+      );
+    }
+    default: {
+      fresher satisfies never;
+      return panic(`Unhandled stale detail state: ${String(fresher)}`);
+    }
+  }
 };
 
 // ── Editor form ───────────────────────────────────────
@@ -242,8 +419,14 @@ type PlaybookEditorFormProps = {
   /** What the org's reviewers did with each position, by `sourceId`; empty
    *  for a playbook that has never been run. */
   positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
+  /** The source documents this reader can open; absent for a new playbook,
+   *  which has none. */
+  positionSources?: PositionSourceLookup | undefined;
   /** Concurrency token the seeds were read with; null for a new playbook. */
   initialUpdatedAt: string | null;
+  /** Set when the form was filled from an outdated detail because the
+   *  refetch did not complete (offline, or the request failed). */
+  staleDetail?: StaleDetail | undefined;
   onBack: () => void;
   onSaved: () => void;
   // Only supplied when editing an existing playbook (see
@@ -264,7 +447,9 @@ const PlaybookEditorForm = ({
   initialStatus,
   initialApprovedAt,
   positionDecisions,
+  positionSources,
   initialUpdatedAt,
+  staleDetail,
   onBack,
   onSaved,
   onReload,
@@ -508,28 +693,12 @@ const PlaybookEditorForm = ({
     });
   };
 
-  /**
-   * Move the token to a freshly-returned `updatedAt`, and write it into the
-   * cached detail so a remount before the invalidation round-trip lands does
-   * not seed a token the client already knows is superseded.
-   */
-  const syncUpdatedAt = (id: string, next: string) => {
-    setUpdatedAt(next);
-    queryClient.setQueryData(
-      playbookDetailOptions(organizationId, id).queryKey,
-      (previous) =>
-        previous && "updatedAt" in previous
-          ? { ...previous, updatedAt: next }
-          : previous,
-    );
-  };
-
   const takeFreshToken = async (id: string) => {
-    const fresh = await queryClient.query({
-      ...playbookDetailOptions(organizationId, id),
-      staleTime: 0,
-    });
-    if ("updatedAt" in fresh) {
+    const fresh = await refetchSupersededDetail(
+      queryClient,
+      playbookDetailOptions(organizationId, id).queryKey,
+    );
+    if (fresh !== null && "updatedAt" in fresh) {
       setUpdatedAt(fresh.updatedAt);
     }
   };
@@ -646,7 +815,7 @@ const PlaybookEditorForm = ({
         reportSaveFailure(response.error);
         return false;
       }
-      syncUpdatedAt(playbookId, response.data.updatedAt);
+      setUpdatedAt(response.data.updatedAt);
     }
 
     // What was just persisted is the new clean state; the draft may have moved
@@ -730,13 +899,13 @@ const PlaybookEditorForm = ({
         .approve.post({ expectedUpdatedAt });
       return unwrapEden(response);
     },
-    onSuccess: (data, { id }) => {
+    onSuccess: (data) => {
       setStatus("approved");
       setApprovedAt(data.approvedAt);
       // The approval's own `updatedAt`, not `approvedAt` standing in for it:
       // the two happen to coincide today, and a client that leans on that
       // breaks the moment the handler stops writing them together.
-      syncUpdatedAt(id, data.updatedAt);
+      setUpdatedAt(data.updatedAt);
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
@@ -779,7 +948,7 @@ const PlaybookEditorForm = ({
     >
       <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
         <div className="min-w-0 flex-1 space-y-6">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Button
               onClick={requestBack}
               size="sm"
@@ -791,7 +960,7 @@ const PlaybookEditorForm = ({
               <ArrowLeftIcon />
               {t("common.back")}
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
               {isEdit && (
                 <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
               )}
@@ -885,6 +1054,24 @@ const PlaybookEditorForm = ({
               </Button>
             </div>
           </div>
+
+          {staleDetail !== undefined && (
+            <StaleDetailNotice
+              isDirty={isDirty}
+              onReload={onReload}
+              staleDetail={staleDetail}
+            />
+          )}
+
+          {isEdit &&
+            canApprove &&
+            status === "draft" &&
+            positionSources !== undefined &&
+            hasResolvedPositionSources(positions, positionSources) && (
+              <p className="text-muted-foreground text-end text-xs text-pretty">
+                {t("knowledge.playbooks.approval.sourcesNotice")}
+              </p>
+            )}
 
           <div
             className="space-y-6"
@@ -987,6 +1174,11 @@ const PlaybookEditorForm = ({
                     passageTexts={passageTexts}
                     position={position}
                     showErrors={attemptedSave}
+                    sources={
+                      positionSources === undefined
+                        ? []
+                        : resolvePositionSources(position, positionSources)
+                    }
                     total={positions.length}
                   />
                 ))}

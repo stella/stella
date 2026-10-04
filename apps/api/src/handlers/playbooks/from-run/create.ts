@@ -91,6 +91,7 @@ const createPlaybookFromRun = createSafeRootHandler(
   config,
   async function* ({
     body: { name, runId, workspaceId },
+    getActiveWorkspaceIds,
     getWorkspaceAccess,
     orgAIConfig,
     managedAIResidency,
@@ -195,9 +196,13 @@ const createPlaybookFromRun = createSafeRootHandler(
       perspective === undefined ? undefined : { perspective };
     const derivedName = `${run.targetName ?? definitionSnapshot.name} review`;
 
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const createdResult = yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

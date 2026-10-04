@@ -12,6 +12,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33513
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33744
       }
     ],
     "anthropic/extended": [
@@ -26,6 +30,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34002
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34235
       }
     ],
     "bedrock/default": [
@@ -40,6 +48,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33746
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33977
       }
     ],
     "bedrock/extended": [
@@ -54,6 +66,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34234
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34467
       }
     ],
     "google/default": [
@@ -68,6 +84,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 32682
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 32913
       }
     ],
     "google/extended": [
@@ -82,6 +102,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33159
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33392
       }
     ],
     "mistral/default": [
@@ -96,6 +120,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35118
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35349
       }
     ],
     "mistral/extended": [
@@ -110,6 +138,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35644
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35877
       }
     ],
     "openai/default": [
@@ -124,6 +156,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34721
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34952
       }
     ],
     "openai/extended": [
@@ -138,6 +174,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35236
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35468
       }
     ],
     "openrouter-anthropic/default": [
@@ -152,6 +192,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
       }
     ],
     "openrouter-anthropic/extended": [
@@ -166,6 +210,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
       }
     ],
     "openrouter/default": [
@@ -180,6 +228,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
       }
     ],
     "openrouter/extended": [
@@ -194,6 +246,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
       }
     ]
   },
