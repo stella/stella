@@ -31,6 +31,10 @@ const templateSlotPreviewParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns parsed template slot data rather than stored-file bytes.",
+  },
   description:
     "Resolve one template's clause slots to the plain text of the clauses " +
     "linked to them, keyed by slot name, using the same version and variant " +

@@ -320,6 +320,7 @@ const downloadZipHandler = async function* ({
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Stream one folder of a matter, with every descendant folder and every " +
     "document file below it, as a ZIP archive named after the folder. Empty " +

@@ -100,6 +100,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
@@ -954,6 +955,7 @@ export const ChatErrorMessage = ({
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
+  const refusal = chatRefusal(error);
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -978,7 +980,9 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{t(chatErrorTranslationKey(error))}</p>
+        <p className="text-sm">
+          {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
+        </p>
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button

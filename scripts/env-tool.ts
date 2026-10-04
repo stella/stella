@@ -557,6 +557,7 @@ const AUDIT_GLOBS = [
 const AUDIT_IGNORE_FILES = new Set([
   // These tests contain environment syntax as source-text fixtures or use
   // test-process-only variables that are not repository configuration.
+  "apps/api/scripts/deployment-feature-guard.test.ts",
   "packages/property-testing/src/ci-gate-coverage.test.ts",
   "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
