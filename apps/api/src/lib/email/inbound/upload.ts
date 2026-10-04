@@ -51,6 +51,7 @@ type UploadedMailSkipReason =
   | "no_matter_access"
   | "invalid_content";
 
+/** Terminal outcomes: a permanent refusal is a skip, never an error. */
 type UploadedMailOutcome =
   | {
       status: "filed" | "duplicate";
@@ -58,10 +59,22 @@ type UploadedMailOutcome =
     }
   | { status: "skipped"; reason: UploadedMailSkipReason };
 
-class UploadedMailError extends TaggedError("UploadedMailError")<{
+/**
+ * The database could not be reached or a statement failed. Nothing was
+ * committed for the file, so the same input can be filed again later.
+ */
+export class UploadedMailUnavailableError extends TaggedError(
+  "UploadedMailUnavailableError",
+)<{
   message: string;
   cause?: unknown;
 }> {}
+
+const unavailable = (cause: unknown) =>
+  new UploadedMailUnavailableError({
+    message: "Uploaded correspondence could not be filed",
+    cause,
+  });
 
 type UploadedMailScope = {
   organizationId: SafeId<"organization">;
@@ -168,7 +181,7 @@ const uploadedSignature = async ({
 
 const skipped = (
   reason: UploadedMailSkipReason,
-): Result<UploadedMailOutcome, UploadedMailError> => {
+): Result<UploadedMailOutcome, UploadedMailUnavailableError> => {
   if (reason !== "not_email") {
     logger.info("correspondence.upload.skipped", { reason });
   }
@@ -189,13 +202,20 @@ export const fileUploadedMail = async ({
   scopedDbForUploader = scopedDbForUploaderDefault,
   verifyOriginal = verifyOriginalSignature,
 }: FileUploadedMailOptions): Promise<
-  Result<UploadedMailOutcome, UploadedMailError>
+  Result<UploadedMailOutcome, UploadedMailUnavailableError>
 > => {
   if (!isUploadedMailMimeType(mimeType)) {
     return skipped("not_email");
   }
   const format = UPLOADED_MAIL_FORMATS[mimeType];
-  const file = await readUploader(database, scope);
+  const read = await Result.tryPromise({
+    try: async () => await readUploader(database, scope),
+    catch: unavailable,
+  });
+  if (read.isErr()) {
+    return read;
+  }
+  const file = read.value;
   if (file === null) {
     return skipped("source_missing");
   }
@@ -208,7 +228,14 @@ export const fileUploadedMail = async ({
     workspaceId: scope.workspaceId,
     userId,
   });
-  if (await isCorrespondenceAttachment(scopedDb, scope)) {
+  const attached = await Result.tryPromise({
+    try: async () => await isCorrespondenceAttachment(scopedDb, scope),
+    catch: unavailable,
+  });
+  if (attached.isErr()) {
+    return attached;
+  }
+  if (attached.value) {
     return skipped("correspondence_attachment");
   }
   const parsed = await parseEmailFile({ bytes, format });
@@ -263,12 +290,7 @@ export const fileUploadedMail = async ({
       if (HandlerError.is(created.error) && created.error.status === 403) {
         return skipped("no_matter_access");
       }
-      return Result.err(
-        new UploadedMailError({
-          message: "Uploaded correspondence could not be filed",
-          cause: created.error,
-        }),
-      );
+      return Result.err(unavailable(created.error));
     case "invalid_content":
       return skipped("invalid_content");
     case "invalid_authentication":

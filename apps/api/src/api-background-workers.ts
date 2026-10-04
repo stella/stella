@@ -11,6 +11,7 @@ import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { initListVerificationRunWorker } from "@/api/lib/lists/verification/run-queue";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
+import { initUploadedMailCorrespondenceWorker } from "@/api/lib/uploaded-mail-correspondence-queue";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 /**
@@ -33,5 +34,6 @@ export const initApiBackgroundWorkers = () =>
     initListVerificationRunWorker,
     initReportExportWorker,
     initStyleSetPackageCleanupWorker,
+    initUploadedMailCorrespondenceWorker,
     initWorkflowWorkers,
   ]);

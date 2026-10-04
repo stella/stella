@@ -20,7 +20,6 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
-import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -37,6 +36,7 @@ import {
   findExtractionFileField,
   findExtractionFileFieldRow,
 } from "@/api/lib/search/types";
+import { fileUploadedMailOrRetry } from "@/api/lib/uploaded-mail-correspondence-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -357,7 +357,7 @@ const recordDocxVersionLanguage = async ({
 type RecordUploadedMailOptions = {
   buffer: ArrayBuffer;
   database: NativeExtractionDatabase;
-  extractionMimeType: string;
+  source: ExtractionSource;
   fileEmailCorrespondence: ExecuteNativeExtractionDependencies["fileEmailCorrespondence"];
   run: NativeExtractionRun;
 };
@@ -368,13 +368,14 @@ type RecordUploadedMailOptions = {
  * Every transport that stores a file version reaches this run, so uploads
  * from the web, desktop, CLI, MCP and folder imports are covered without
  * per-handler calls, and the bytes are already here. The record converges on
- * the file, so a replayed run adds nothing. Telemetry-only on failure: the
- * file stays a fully indexed document.
+ * the file, so a replayed run adds nothing. An unavailable database hands the
+ * file to a retrying job; only a failed hand-off or an unexpected error is
+ * reported here, and the file stays a fully indexed document either way.
  */
 const recordUploadedMail = async ({
   buffer,
   database,
-  extractionMimeType,
+  source,
   fileEmailCorrespondence,
   run,
 }: RecordUploadedMailOptions): Promise<void> => {
@@ -382,7 +383,11 @@ const recordUploadedMail = async ({
     try: async () =>
       await fileEmailCorrespondence({
         bytes: buffer,
-        mimeType: extractionMimeType,
+        file: {
+          sourceFileId: source.fileId,
+          storageMimeType: source.storageMimeType,
+          mimeType: source.extractionMimeType,
+        },
         scope: {
           organizationId: run.organizationId,
           workspaceId: run.workspaceId,
@@ -487,7 +492,7 @@ export const executeNativeExtraction = async ({
   await recordUploadedMail({
     buffer,
     database,
-    extractionMimeType: source.extractionMimeType,
+    source,
     fileEmailCorrespondence,
     run,
   });
@@ -532,7 +537,7 @@ export const executeNativeExtraction = async ({
  */
 export type ExecuteNativeExtractionDependencies = {
   extractText: typeof extractFileTextResult;
-  fileEmailCorrespondence: typeof fileUploadedMail;
+  fileEmailCorrespondence: typeof fileUploadedMailOrRetry;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
   requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
@@ -542,7 +547,7 @@ export type ExecuteNativeExtractionDependencies = {
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
     extractText: extractFileTextResult,
-    fileEmailCorrespondence: fileUploadedMail,
+    fileEmailCorrespondence: fileUploadedMailOrRetry,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,
     requestAutomaticOcr: requestAutomaticDocumentOcr,

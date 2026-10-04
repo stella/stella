@@ -104,9 +104,12 @@ or tokens.
 
 An `.eml` or `.msg` file stored in a matter also becomes correspondence linked
 to that file, so one item appears in both Files and Correspondence. The native
-extraction run every new file version reaches calls `fileUploadedMail`, so
-every upload transport is covered; the record is written after the file's text
-projection, and a failure is reported to telemetry without failing extraction.
+extraction run every new file version reaches files it, so every upload
+transport is covered; the record is written after the file's text projection,
+and extraction never fails on this step. A permanent refusal is a logged skip.
+An unavailable database hands the file to the `uploaded-mail-correspondence`
+queue, keyed by the file; its job rereads the stored object and retries with
+backoff, and only an exhausted job or a failed hand-off reaches telemetry.
 
 - `parseEmailFile` reads the file as one message under the inbound limits: the
   same normalization as delivered mail, with an adapter for Outlook's MAPI
@@ -119,7 +122,10 @@ projection, and a failure is reported to telemetry without failing extraction.
   record, or an unreadable or oversized message files nothing; the skip is
   logged with its reason and the file is unaffected.
 - Attachments stay inside the file and are not stored again; the record links
-  the file. Deleting the file deletes its record.
+  the file. Deleting the file deletes its record. The attachment policy is per
+  source: a delivery stores each attachment, so a blocked type refuses it; an
+  upload retains them in the already scanned file, so only count and size
+  limits apply.
 - Each file has at most one record, keyed by the file. A delivered message and
   an uploaded file of it remain separate records, as do two copies of a file.
 

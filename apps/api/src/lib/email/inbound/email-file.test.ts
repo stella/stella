@@ -10,13 +10,18 @@ import {
 
 import {
   EMAIL_FILE_RENDERINGS,
+  emlBytes,
   emlFile,
   GOLDEN_MESSAGE,
   msgFile,
   type StatedMessage,
 } from "./email-file.test-fixture";
 import { INBOUND_MAIL_LIMITS } from "./limits";
-import { EMAIL_FILE_FORMATS, parseEmailFile } from "./message";
+import {
+  EMAIL_FILE_FORMATS,
+  parseEmailFile,
+  parseInboundMessage,
+} from "./message";
 
 const parseBoth = async (message: StatedMessage) => ({
   eml: await parseEmailFile({ bytes: emlFile(message), format: "eml" }),
@@ -136,6 +141,74 @@ const statedMessage = fc.record({
     .stringMatching(/^[a-z0-9]{1,12}$/u)
     .map((id) => `<${id}@example.com>`),
   text: fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9 ,.]{0,200}$/u),
+});
+
+describe("attachment policy by source", () => {
+  const blocked = [
+    {
+      label: "a blocked attachment type",
+      attachment: {
+        fileName: "invoice.html",
+        mimeType: "text/html",
+        bytes: new TextEncoder().encode("<p>Invoice</p>"),
+      },
+    },
+    {
+      label: "executable content under a harmless name",
+      attachment: {
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        bytes: new TextEncoder().encode("MZ executable"),
+      },
+    },
+  ];
+
+  test.each(blocked)(
+    "a delivery with $label is refused, since it would store the attachment",
+    async ({ attachment }) => {
+      const parsed = await parseInboundMessage(
+        emlBytes({ ...GOLDEN_MESSAGE, attachments: [attachment] }),
+      );
+      expect(parsed.isErr() && parsed.error.reason).toBe("unsafeAttachment");
+    },
+  );
+
+  test.each(blocked)(
+    "an uploaded file with $label keeps the attachment inside the file",
+    async ({ attachment }) => {
+      for (const format of EMAIL_FILE_FORMATS) {
+        const parsed = await parseEmailFile({
+          bytes: EMAIL_FILE_RENDERINGS[format]({
+            ...GOLDEN_MESSAGE,
+            attachments: [attachment],
+          }),
+          format,
+        });
+        expect(parsed.isOk() && parsed.value.attachments).toHaveLength(1);
+      }
+    },
+  );
+
+  test("both sources still bound attachment size", async () => {
+    const attachment = {
+      fileName: "large.pdf",
+      mimeType: "application/pdf",
+      bytes: new Uint8Array(INBOUND_MAIL_LIMITS.attachmentBytes + 1),
+    };
+    const delivered = await parseInboundMessage(
+      emlBytes({ ...GOLDEN_MESSAGE, attachments: [attachment] }),
+    );
+    const uploaded = await parseEmailFile({
+      bytes: emlFile({ ...GOLDEN_MESSAGE, attachments: [attachment] }),
+      format: "eml",
+    });
+    expect(delivered.isErr() && delivered.error.reason).toBe(
+      "attachmentTooLarge",
+    );
+    expect(uploaded.isErr() && uploaded.error.reason).toBe(
+      "attachmentTooLarge",
+    );
+  });
 });
 
 describe("email file normalization invariants", () => {

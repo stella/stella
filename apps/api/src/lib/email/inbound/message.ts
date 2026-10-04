@@ -377,8 +377,46 @@ const sanitizeBodyHtml = (
   return Result.ok(load(renderEmailBodyHtml(parsed))("body").html());
 };
 
+const isExecutableContent = (bytes: Uint8Array) =>
+  (bytes[0] === 0x7f &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0x4c &&
+    bytes[3] === 0x46) ||
+  (bytes[0] === 0x4d && bytes[1] === 0x5a) ||
+  (bytes[0] === 0x23 && bytes[1] === 0x21);
+
+/**
+ * What filing does with a message's attachments. `store_each` stores every
+ * attachment as its own matter file, so an executable type rejects the whole
+ * message. `retain_in_file` leaves them inside an email file the upload path
+ * already stored and scanned; nothing is extracted, so they are only counted,
+ * bounded and fingerprinted.
+ */
+type AttachmentPolicy = "store_each" | "retain_in_file";
+
+const ATTACHMENT_POLICY_BY_SOURCE = {
+  delivery: "store_each",
+  upload: "retain_in_file",
+} as const satisfies Record<
+  CorrespondenceProvenance["source"],
+  AttachmentPolicy
+>;
+
+const rejectsUnsafeAttachments = (policy: AttachmentPolicy) => {
+  switch (policy) {
+    case "store_each":
+      return true;
+    case "retain_in_file":
+      return false;
+    default:
+      policy satisfies never;
+      return panic("Unhandled attachment policy");
+  }
+};
+
 const checkedAttachments = (
   stated: MessageFields["attachments"],
+  policy: AttachmentPolicy,
 ): Result<InboundAttachment[], InboundMessageError> => {
   if (stated.length > INBOUND_MAIL_LIMITS.attachmentCount) {
     return fail("tooManyAttachments");
@@ -389,9 +427,11 @@ const checkedAttachments = (
       attachment.mimeType.toLowerCase().split(";").at(0)?.trim() ?? "";
     const fileName = sanitizeFilename(attachment.filename ?? "attachment");
     const extension = fileName.split(".").at(-1)?.toLowerCase() ?? "";
+    const rejectsUnsafe = rejectsUnsafeAttachments(policy);
     if (
-      UNSAFE_ATTACHMENT_EXTENSIONS.has(extension) ||
-      UNSAFE_ATTACHMENT_MIME_TYPES.has(mimeType)
+      rejectsUnsafe &&
+      (UNSAFE_ATTACHMENT_EXTENSIONS.has(extension) ||
+        UNSAFE_ATTACHMENT_MIME_TYPES.has(mimeType))
     ) {
       return fail("unsafeAttachment");
     }
@@ -402,14 +442,7 @@ const checkedAttachments = (
     if (bytes.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
       return fail("attachmentTooLarge");
     }
-    if (
-      (bytes[0] === 0x7f &&
-        bytes[1] === 0x45 &&
-        bytes[2] === 0x4c &&
-        bytes[3] === 0x46) ||
-      (bytes[0] === 0x4d && bytes[1] === 0x5a) ||
-      (bytes[0] === 0x23 && bytes[1] === 0x21)
-    ) {
+    if (rejectsUnsafe && isExecutableContent(bytes)) {
       return fail("unsafeAttachment");
     }
     attachments.push({ fileName, mimeType, bytes });
@@ -506,10 +539,20 @@ const outlookMessageFields = (message: OutlookMsgEmail): MessageFields => ({
   ),
 });
 
-const normalizeMessage = (
-  fields: MessageFields,
-  date: string | null,
-): Result<NormalizedInboundMessage, InboundMessageError> =>
+type NormalizeMessageOptions = {
+  fields: MessageFields;
+  date: string | null;
+  policy: AttachmentPolicy;
+};
+
+const normalizeMessage = ({
+  fields,
+  date,
+  policy,
+}: NormalizeMessageOptions): Result<
+  NormalizedInboundMessage,
+  InboundMessageError
+> =>
   Result.gen(function* () {
     if (fields.fromHeaders.length > 1) {
       return fail("invalidFrom");
@@ -548,7 +591,7 @@ const normalizeMessage = (
       messageId: normalizeHeaderId(fields.messageId),
       inReplyTo: normalizeHeaderId(fields.inReplyTo),
       references: normalizeReferences(fields.references),
-      attachments: yield* checkedAttachments(fields.attachments),
+      attachments: yield* checkedAttachments(fields.attachments, policy),
     };
     return Result.ok({ ...message, contentHash: contentHash(message) });
   });
@@ -716,7 +759,11 @@ export const parseInboundMessage = async (
   if (outerSender.isErr()) {
     return outerSender;
   }
-  const message = normalizeMessage(mimeMessageFields(outerEmail), outerDate);
+  const message = normalizeMessage({
+    fields: mimeMessageFields(outerEmail),
+    date: outerDate,
+    policy: ATTACHMENT_POLICY_BY_SOURCE.delivery,
+  });
   if (message.isErr()) {
     return message;
   }
@@ -753,10 +800,11 @@ export const parseInboundMessage = async (
       fromHeader &&
       parseOneMailbox(fromHeader.value)
     ) {
-      const original = normalizeMessage(
-        mimeMessageFields(attached.value.email),
-        attached.value.date,
-      );
+      const original = normalizeMessage({
+        fields: mimeMessageFields(attached.value.email),
+        date: attached.value.date,
+        policy: ATTACHMENT_POLICY_BY_SOURCE.delivery,
+      });
       if (original.isErr()) {
         return original;
       }
@@ -809,10 +857,11 @@ const parseOutlookFile = (
       }),
   });
   return parsed.andThen((message) =>
-    normalizeMessage(
-      outlookMessageFields(message),
-      explicitZoneDate(message.submittedAt ?? ""),
-    ),
+    normalizeMessage({
+      fields: outlookMessageFields(message),
+      date: explicitZoneDate(message.submittedAt ?? ""),
+      policy: ATTACHMENT_POLICY_BY_SOURCE.upload,
+    }),
   );
 };
 
@@ -823,7 +872,8 @@ type ParseEmailFileOptions = {
 
 /**
  * Reads a stored email file as one message under the inbound limits. The file
- * is the message itself, so a forward inside it is not extracted.
+ * is the message itself, so a forward inside it is not extracted, and its
+ * attachments stay inside it under the upload attachment policy.
  */
 export const parseEmailFile = async ({
   bytes,
@@ -837,10 +887,11 @@ export const parseEmailFile = async ({
       if (parsed.isErr()) {
         return parsed;
       }
-      return normalizeMessage(
-        mimeMessageFields(parsed.value.email),
-        parsed.value.date,
-      );
+      return normalizeMessage({
+        fields: mimeMessageFields(parsed.value.email),
+        date: parsed.value.date,
+        policy: ATTACHMENT_POLICY_BY_SOURCE.upload,
+      });
     }
     case "msg":
       return parseOutlookFile(bytes);

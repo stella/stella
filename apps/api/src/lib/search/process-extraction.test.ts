@@ -899,7 +899,11 @@ describe("the extraction's database", () => {
     expect(outcome).toBe("persisted");
     const [call] = fileEmailCorrespondenceMock.mock.calls;
     const input = call?.[0];
-    expect(input?.mimeType).toBe(EML_MIME_TYPE);
+    expect(input?.file).toEqual({
+      sourceFileId: fileContent.id,
+      storageMimeType: EML_MIME_TYPE,
+      mimeType: EML_MIME_TYPE,
+    });
     expect(input?.scope).toEqual({ organizationId, workspaceId, entityId });
     expect(input?.database).toBe(extractionDatabase);
     expect(new TextDecoder().decode(input?.bytes)).toBe(SOURCE_BYTES);

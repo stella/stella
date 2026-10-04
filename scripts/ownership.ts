@@ -1022,6 +1022,11 @@ export const OWNERSHIP = [
             "Queue transport: worker owns its dedicated blocking connection.",
         },
         {
+          path: "apps/api/src/lib/uploaded-mail-correspondence-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
           path: "apps/api/src/lib/document-review/run-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",

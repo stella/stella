@@ -41,6 +41,10 @@ import {
 import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
 import {
+  fileUploadedMailOrRetry,
+  processUploadedMailJob,
+} from "@/api/lib/uploaded-mail-correspondence-queue";
+import {
   openGatedTestDatabase,
   type GatedTestDb,
 } from "@/api/tests/gated-test-database";
@@ -48,6 +52,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -541,6 +546,94 @@ if (!databaseUrl || !runPostgresTests) {
       });
       expect(await records()).toHaveLength(0);
       expect(await filers()).toHaveLength(0);
+    });
+
+    test("a transient failure is retried by the job and converges on one record", async () => {
+      const entityId = await storeEmailFile({ createdBy: uploaderId });
+      const scopedDbForUploader: Parameters<
+        typeof fileUploadedMail
+      >[0]["scopedDbForUploader"] = (scope) =>
+        createScopedDb(
+          markRlsDatabase(db),
+          [scope.workspaceId],
+          scope.organizationId,
+          scope.userId,
+        );
+      const queued: Parameters<typeof processUploadedMailJob>[0]["data"][] = [];
+      const handedOff = await fileUploadedMailOrRetry({
+        bytes: emlFile(GOLDEN_MESSAGE),
+        file: {
+          sourceFileId: "file_1",
+          storageMimeType: EML_MIME_TYPE,
+          mimeType: EML_MIME_TYPE,
+        },
+        scope: { organizationId, workspaceId, entityId },
+        database: db,
+        fileMail: async (options) =>
+          await fileUploadedMail({
+            ...options,
+            scopedDbForUploader: () => async () => {
+              throw new Error("connection reset");
+            },
+            verifyOriginal: unverifiedOriginal,
+          }),
+        queue: {
+          add: async (_name, data) => {
+            queued.push(data);
+          },
+          getJob: async () => undefined,
+        },
+      });
+      expect(handedOff.isOk() && handedOff.value).toEqual({
+        status: "retry_scheduled",
+      });
+      expect(await records()).toHaveLength(0);
+
+      const [job] = queued;
+      if (job === undefined) {
+        throw new Error("expected a retry job");
+      }
+      const retry = async () =>
+        await processUploadedMailJob({
+          data: job,
+          database: db,
+          readFile: async () =>
+            testScannedFile({
+              bytes: emlFile(GOLDEN_MESSAGE),
+              mimeType: EML_MIME_TYPE,
+            }),
+          fileMail: async (options) =>
+            await fileUploadedMail({
+              ...options,
+              scopedDbForUploader,
+              verifyOriginal: unverifiedOriginal,
+            }),
+        });
+      expect(await retry()).toMatchObject({ status: "filed" });
+      expect(await retry()).toMatchObject({ status: "duplicate" });
+      expect(await records()).toMatchObject([
+        { source: "upload", sourceEntityId: entityId },
+      ]);
+      expect(await filers()).toHaveLength(1);
+    });
+
+    test("an uploaded file with a blocked attachment type is still filed", async () => {
+      const entityId = await storeEmailFile({ createdBy: uploaderId });
+      const outcome = await processUpload({
+        entityId,
+        bytes: emlFile({
+          ...GOLDEN_MESSAGE,
+          attachments: [
+            {
+              fileName: "invoice.html",
+              mimeType: "text/html",
+              bytes: new TextEncoder().encode("<p>Invoice</p>"),
+            },
+          ],
+        }),
+      });
+      expect(outcome.isOk() && outcome.value.status).toBe("filed");
+      expect(await records()).toHaveLength(1);
     });
 
     test("deleting the file deletes its record", async () => {

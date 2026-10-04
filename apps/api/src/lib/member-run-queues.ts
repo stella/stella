@@ -175,6 +175,12 @@ export const QUEUE_AUTHORITY = {
     worker: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
     reason: "Platform cleanup of stored style-set packages.",
   },
+  "uploaded-mail-correspondence": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/uploaded-mail-correspondence-queue.ts",
+    reason:
+      "Retries filing a stored email file as correspondence; the filing transaction rechecks the uploader's current matter access.",
+  },
   workflow: WORKFLOW_RUN,
   "workflow-flex": WORKFLOW_RUN,
 } as const satisfies QueueAuthorityRegistry;
