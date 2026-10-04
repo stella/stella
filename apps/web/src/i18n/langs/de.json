@@ -1615,7 +1615,8 @@
       "nextYear": "Nächstes Jahr",
       "previousDecade": "Vorheriges Jahrzehnt",
       "previousMonth": "Vorheriger Monat",
-      "previousYear": "Vorheriges Jahr"
+      "previousYear": "Vorheriges Jahr",
+      "time": "Uhrzeit"
     },
     "decisions": "Entscheidungen",
     "decline": "Ablehnen",

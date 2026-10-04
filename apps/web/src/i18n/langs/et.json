@@ -1615,7 +1615,8 @@
       "nextYear": "Järgmine aasta",
       "previousDecade": "Eelmine kümnend",
       "previousMonth": "Eelmine kuu",
-      "previousYear": "Eelmine aasta"
+      "previousYear": "Eelmine aasta",
+      "time": "Kellaaeg"
     },
     "decisions": "Lahendid",
     "decline": "Keeldu",

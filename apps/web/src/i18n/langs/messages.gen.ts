@@ -1619,6 +1619,7 @@ type Messages = {
       "previousDecade": "Previous decade";
       "previousMonth": "Previous month";
       "previousYear": "Previous year";
+      "time": "Time";
     };
     "decisions": "Decisions";
     "decline": "Decline";

@@ -1615,7 +1615,8 @@
       "nextYear": "Nākamais gads",
       "previousDecade": "Iepriekšējā desmitgade",
       "previousMonth": "Iepriekšējais mēnesis",
-      "previousYear": "Iepriekšējais gads"
+      "previousYear": "Iepriekšējais gads",
+      "time": "Laiks"
     },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",

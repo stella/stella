@@ -1615,7 +1615,8 @@
       "nextYear": "Kiti metai",
       "previousDecade": "Ankstesnis dešimtmetis",
       "previousMonth": "Ankstesnis mėnuo",
-      "previousYear": "Ankstesni metai"
+      "previousYear": "Ankstesni metai",
+      "time": "Laikas"
     },
     "decisions": "Sprendimai",
     "decline": "Atmesti",

@@ -34,6 +34,7 @@
     "search.updatedWithinOptions.day",
     "settings.organization.auditLogsActionDelete",
     "settings.organization.auditLogsActionDownload",
+    "settings.organization.auditLogsTime",
     "tasks.assigneeRoles.assignee",
     "tasks.priorityValues.high",
     "tasks.priorityValues.low",
