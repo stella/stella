@@ -82,7 +82,6 @@ test("shared composition counts the preload baseline exactly once", () => {
 });
 test("per-file increments retain their own shard baseline", () => {
   const rssTable = {
-    type: "measured",
     baselineMb: 1000,
     environment: ENVIRONMENT,
     files: {
@@ -98,7 +97,6 @@ test("solo isolation uses the planned singleton peak, not the shard's raw peak",
   // Raw peak 1100 MB is below the 60% threshold, but on the table baseline
   // the file needs 1000 + 700 = 1700 MB, which is above it.
   const rssTable = {
-    type: "measured",
     baselineMb: 1000,
     environment: ENVIRONMENT,
     files: {
