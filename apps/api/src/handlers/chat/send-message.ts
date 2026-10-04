@@ -215,12 +215,14 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -341,6 +343,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 
 const config = {
   permissions: CHAT_TURN_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
   requiresUsage: { actionType: "chat", laneRouting: true },
@@ -1994,6 +1997,11 @@ export type SendMessageDependencies = {
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+  /**
+   * Reads the caller's membership when an approved write tool runs. Defaults
+   * to the credential-boundary read; tests bind it to their own database.
+   */
+  resolveCurrentMembership?: typeof resolveCredentialMemberAuthorization;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2031,6 +2039,11 @@ const readOwnedTurnThreadNames = async ({
   }
   return read;
 };
+
+const currentMembershipReader = (
+  dependencies: SendMessageDependencies,
+): typeof resolveCredentialMemberAuthorization =>
+  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2633,6 +2646,7 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
+          resolveCurrentMembership: currentMembershipReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,

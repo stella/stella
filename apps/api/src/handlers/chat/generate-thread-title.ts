@@ -246,9 +246,9 @@ export const generateThreadTitle = async (
   try {
     await generateAdmittedThreadTitle({
       ...props,
-      admissionSignal: admitted.value?.signal,
+      admissionSignal: admitted.value.signal,
     });
   } finally {
-    await admitted.value?.release();
+    await admitted.value.release();
   }
 };

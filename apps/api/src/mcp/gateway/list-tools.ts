@@ -39,6 +39,7 @@ import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
 // connect-time instructions apply the same predicate without importing the
@@ -85,6 +86,7 @@ const externalMcpToolAccess = ({
         readOnlyHint: false;
       };
       destructiveBehavior: { type: "upstream" };
+      permissions: McpWriteToolPermissions;
     } =>
   readOnlyHint === true
     ? {
@@ -106,6 +108,11 @@ const externalMcpToolAccess = ({
           readOnlyHint: false,
         },
         destructiveBehavior: { type: "upstream" },
+        permissions: {
+          type: "delegated",
+          reason:
+            "The connector's upstream server authorizes the call under the connection's own credentials.",
+        },
       };
 
 export const listGatewayMcpToolDefinitions = async ({

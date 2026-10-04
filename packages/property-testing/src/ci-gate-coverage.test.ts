@@ -52,6 +52,8 @@ const LOCAL_ONLY_GATES = new Set<string>([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   // Physical statistics are a local comparison; CI reports the synthetic profile.
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Regenerates the read-fault baseline locally; CI runs the read-only comparison.
+  "READ_FAULT_BASELINE",
 ]);
 
 // Live-API smoke suites not wired into a workflow. Remove an entry once its
