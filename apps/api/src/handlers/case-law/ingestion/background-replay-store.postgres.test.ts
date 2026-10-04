@@ -1391,7 +1391,11 @@ if (!databaseUrl || !enabled) {
         type: "empty",
       });
       time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
-      expect(await store.pendingBatch(source, "2026-10-01")).toEqual(reserved);
+      // Past its delay the row still yields to fresh rows: a systemic retry
+      // never blocks the sweep, and it stays reserved for the stamp check.
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
@@ -1858,6 +1862,7 @@ if (!databaseUrl || !enabled) {
         blocked: 0,
         retryAt: null,
       });
+      // The moved stamp is the terminal receipt: one changed row, no reason.
       expect(
         await db
           .select()
@@ -1865,7 +1870,13 @@ if (!databaseUrl || !enabled) {
           .where(
             eq(caseLawReplayBlocked.decisionId, reserved.batch.decisionId),
           ),
-      ).toHaveLength(0);
+      ).toMatchObject([
+        {
+          decisionId: reserved.batch.decisionId,
+          outcome: "changed",
+          reason: null,
+        },
+      ]);
       const cursor = (
         await db
           .select()
