@@ -37,7 +37,7 @@ export type ReadUnavailableCause =
   | { readonly kind: "thrown"; readonly error: unknown };
 
 /** The statuses by which a source refuses a read. */
-export const READ_REFUSAL_STATUSES = [401, 403, 451] as const;
+const READ_REFUSAL_STATUSES = [401, 403, 451] as const;
 
 export type ReadRefusalStatus = (typeof READ_REFUSAL_STATUSES)[number];
 
@@ -90,7 +90,7 @@ export const readUnavailable = <T>(
 ): ReadOutcome<T> => ({ type: "unavailable", cause });
 
 /** The absence an HTTP status states on its own, if any. */
-export const httpAbsenceEvidence = (status: number): AbsenceEvidence | null => {
+const httpAbsenceEvidence = (status: number): AbsenceEvidence | null => {
   switch (status) {
     case 404:
       return "http-404";
@@ -102,7 +102,7 @@ export const httpAbsenceEvidence = (status: number): AbsenceEvidence | null => {
 };
 
 /** The refusal an HTTP status states on its own, if any. */
-export const httpRefusalStatus = (status: number): ReadRefusalStatus | null =>
+const httpRefusalStatus = (status: number): ReadRefusalStatus | null =>
   READ_REFUSAL_STATUSES.find((refusal) => refusal === status) ?? null;
 
 /** Whether a value is a typed refusal marker. */

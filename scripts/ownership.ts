@@ -2008,6 +2008,11 @@ export const OWNERSHIP = [
           reason:
             "Types the injected publisher fetch of its RIS walk; sends no request itself.",
         },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
+        },
       ],
     },
   },
