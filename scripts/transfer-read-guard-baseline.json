@@ -609,111 +609,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-court-directory.ts",
-    "function": "module/createSkCourtRegistryReader",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-court-directory.ts",
-    "function": "module/createSkCourtRegistryReader",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/fetchDetail",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/fetchDetail",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/getTotalCount",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/listSkCourtsDayPage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/listSkCourtsDayPage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts",
-    "function": "module/skCourtsDocumentFetch",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/executeSearch",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/executeSearch",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/fetchJson",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/fetchJson",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/fetchPdfBytes",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
-    "function": "module/fetchPdfBytes",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
     "function": "module/recordFixture",
     "kind": "numeric-timeout",
@@ -1715,6 +1610,27 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
+    "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
+    "function": "module/loadSoftLawAttempts",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
+    "function": "module/loadSoftLawCollisions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/monitoring-diff.ts",
+    "function": "module/commitSanctionsMonitoringBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
     "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
     "function": "module/fetchBytes",
     "kind": "numeric-timeout",
@@ -1844,14 +1760,14 @@
     "file": "apps/api/src/lib/s3.ts",
     "function": "module/fetchCredentialJson",
     "kind": "total-timeout-body",
-    "count": 1,
+    "count": 2,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/s3.ts",
     "function": "module/fetchImdsCredentials",
     "kind": "total-timeout-body",
-    "count": 3,
+    "count": 6,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
@@ -2646,6 +2562,20 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    "function": "module/InvoicePdfDownloadButton",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    "function": "module/InvoicePdfDownloadButton",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
     "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
     "function": "module/TableExportMenu/handleExport",
     "kind": "numeric-timeout",
@@ -2746,6 +2676,13 @@
   {
     "file": "packages/scripts/src/dev-runner.ts",
     "function": "module/waitForHttpReadiness/pollUntilReady",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/model-catalog-benchmarks-gen.ts",
+    "function": "module/fetchPageOnce",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
