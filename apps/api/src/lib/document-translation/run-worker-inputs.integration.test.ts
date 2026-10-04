@@ -145,6 +145,7 @@ beforeEach(async () => {
       entityVersionId: createSafeId<"entityVersion">(),
       fieldId: createSafeId<"field">(),
       fileName: input.fileName,
+      renamed: false,
     };
     await input.scopedDb(async (tx) => await input.afterCreate?.(tx, created));
     return Result.ok(created);

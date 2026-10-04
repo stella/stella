@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { signalParamsSchema } from "@/api/handlers/signals/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   canTriageSignals,
@@ -14,6 +14,7 @@ const config = {
     "Read one inbox signal with its evidence and suggestions; 404 when it is " +
     "not visible to the caller.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

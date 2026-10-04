@@ -6,7 +6,7 @@ import type { Static } from "elysia";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -122,6 +122,7 @@ const addAssignee = createSafeHandler(
       "and when the task is read-only. Remove an assignment with " +
       "tasks.assignees.remove.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },
