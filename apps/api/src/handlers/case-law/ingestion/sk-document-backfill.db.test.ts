@@ -39,6 +39,7 @@ import {
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 /**
@@ -924,15 +925,20 @@ if (!databaseUrl || !runPostgresTests) {
         expect(text?.fulltext).toBeNull();
       });
 
-      test("a download over the byte ceiling parks the decision with nothing stored", async () => {
+      /** A body one byte over the ceiling that starts with `head`. */
+      const oversizedBody = (head: string): Uint8Array => {
+        const bytes = new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1);
+        bytes.set(new TextEncoder().encode(head));
+        return bytes;
+      };
+
+      test("a PDF over the byte ceiling parks the decision with nothing stored", async () => {
         const id = await insertPending("too-large");
 
         const outcome = await fetchWith(
           id,
           async () =>
-            await Promise.resolve(
-              new Response(new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1)),
-            ),
+            await Promise.resolve(new Response(oversizedBody("%PDF-1.7\n"))),
         );
 
         expect(outcome).toEqual({
@@ -947,6 +953,27 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(stored).toEqual({ fulltext: null });
+      });
+
+      test("a body over the byte ceiling that is not a PDF throws as any non-PDF body does", async () => {
+        const id = await insertPending("too-large-html");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(oversizedBody("<!doctype html><title>error")),
+            ),
+        ).then(
+          (value: unknown) => ({ resolved: value }),
+          (error: unknown) => error,
+        );
+
+        expect(outcome).toBeInstanceOf(SkDocumentNonPdfError);
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBeLessThan(
+          MAX_DOCUMENT_FETCH_ATTEMPTS,
+        );
       });
 
       test("a refused download defers the decision behind its own cooldown", async () => {

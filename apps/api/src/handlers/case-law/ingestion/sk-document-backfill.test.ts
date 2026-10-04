@@ -234,10 +234,13 @@ describe("one document's download", () => {
       async () => await Promise.resolve(new Response(oversized)),
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       type: "too-large",
       limitBytes: MAX_DOCUMENT_PDF_BYTES,
     });
+    expect(result.type === "too-large" ? result.prefix.byteLength : 0).toBe(
+      1024,
+    );
     expect(pulledBytes).toBeLessThan(servedBytes);
   });
 

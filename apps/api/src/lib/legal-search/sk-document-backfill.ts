@@ -207,13 +207,19 @@ export const DOCUMENT_FETCH_FAILURE = {
  */
 export const MAX_DOCUMENT_PDF_BYTES = 32 * 1024 * 1024;
 
+/** The leading bytes kept of a body over the ceiling, for its type check. */
+const OVERSIZED_PREFIX_BYTES = 1024;
+
 /** What one download produced. */
 export type PdfFetchResult =
   | { type: "document"; bytes: Uint8Array }
   /** The publisher states there is nothing to fetch. */
   | { type: "absent" }
-  /** The body ran past `limitBytes`; reading stopped there. */
-  | { type: "too-large"; limitBytes: number }
+  /**
+   * The body ran past `limitBytes`; reading stopped there. `prefix` holds its
+   * leading bytes, so a body that is not a PDF is still refused as one.
+   */
+  | { type: "too-large"; limitBytes: number; prefix: Uint8Array }
   | {
       type: "failed";
       failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
@@ -253,6 +259,38 @@ const brokenBodyDetail = (error: unknown): string | undefined => {
   return undefined;
 };
 
+type CappedBody =
+  | { type: "complete"; bytes: Uint8Array }
+  | { type: "over"; prefix: Uint8Array };
+
+/**
+ * Read a body up to {@link MAX_DOCUMENT_PDF_BYTES}, keeping the leading bytes
+ * of one that runs past it. The leading bytes are copied as they pass, so
+ * nothing is read twice or past the ceiling.
+ */
+const readCappedDocumentBody = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<CappedBody> => {
+  const prefix = new Uint8Array(OVERSIZED_PREFIX_BYTES);
+  let prefixBytes = 0;
+  const observed = body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform: (chunk, controller) => {
+        if (prefixBytes < OVERSIZED_PREFIX_BYTES) {
+          const part = chunk.subarray(0, OVERSIZED_PREFIX_BYTES - prefixBytes);
+          prefix.set(part, prefixBytes);
+          prefixBytes += part.byteLength;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  const bytes = await readCappedBytes(observed, MAX_DOCUMENT_PDF_BYTES);
+  return bytes === null
+    ? { type: "over", prefix: prefix.subarray(0, prefixBytes) }
+    : { type: "complete", bytes };
+};
+
 /**
  * Download one decision's document.
  *
@@ -284,16 +322,20 @@ export const fetchPdfBytes = async ({
   const { ok, status } = response;
   if (ok) {
     const body = await Result.tryPromise({
-      try: async () =>
+      try: async (): Promise<CappedBody> =>
         response.body === null
-          ? new Uint8Array()
-          : await readCappedBytes(response.body, MAX_DOCUMENT_PDF_BYTES),
+          ? { type: "complete", bytes: new Uint8Array() }
+          : await readCappedDocumentBody(response.body),
       catch: (error) => error,
     });
     if (Result.isOk(body)) {
-      return body.value === null
-        ? { type: "too-large", limitBytes: MAX_DOCUMENT_PDF_BYTES }
-        : { type: "document", bytes: body.value };
+      return body.value.type === "complete"
+        ? { type: "document", bytes: body.value.bytes }
+        : {
+            type: "too-large",
+            limitBytes: MAX_DOCUMENT_PDF_BYTES,
+            prefix: body.value.prefix,
+          };
     }
     await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
     const detail = brokenBodyDetail(body.error);
@@ -1492,6 +1534,26 @@ type ParseFetchedDocumentOptions = {
   scopedDb: ScopedDb;
 };
 
+/**
+ * Throw for a body that is not a PDF: a publisher serving an error page serves
+ * it for every download, so the walk backs off rather than parking each one.
+ */
+const assertPdfBody = (bytes: Uint8Array): void => {
+  if (declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
+    return;
+  }
+  const error = new SkDocumentNonPdfError({
+    message: "Document fetch returned a body that is not a PDF",
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+  });
+  logger.warn(
+    "case_law.ingestion.sk_document_parse_failed",
+    skDocumentErrorDiagnostics(error),
+  );
+  throw error;
+};
+
 type ParseFetchedDocumentResult =
   | { type: "parsed"; document: BackfilledDocument | undefined }
   | { type: "parked"; detail: string }
@@ -1512,18 +1574,7 @@ const parseFetchedDocument = async ({
   decision,
   scopedDb,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
-  if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
-    const error = new SkDocumentNonPdfError({
-      message: "Document fetch returned a body that is not a PDF",
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: null,
-    });
-    logger.warn(
-      "case_law.ingestion.sk_document_parse_failed",
-      skDocumentErrorDiagnostics(error),
-    );
-    throw error;
-  }
+  assertPdfBody(bytes);
   const parsed = await Result.tryPromise({
     try: async () => await parsePendingDocument(decision, bytes),
     catch: (error) => error,
@@ -1575,8 +1626,9 @@ type SettledFetchedDocument =
   | { type: "settled"; outcome: DecisionDocumentOutcome };
 
 /**
- * What a download leaves to parse. A body over the ceiling parks the decision
+ * What a download leaves to parse. A PDF over the ceiling parks the decision
  * at once: asking again returns the same body, and nothing of it is stored.
+ * An oversized body that is not a PDF throws as any non-PDF body does.
  */
 const settleFetchedDocument = async ({
   attempts,
@@ -1604,6 +1656,7 @@ const settleFetchedDocument = async ({
       };
     }
     case "too-large": {
+      assertPdfBody(fetched.prefix);
       const parked = await parkDocumentFetch({ decision, scopedDb });
       return {
         type: "settled",
