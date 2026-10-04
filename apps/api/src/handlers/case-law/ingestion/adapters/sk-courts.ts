@@ -69,7 +69,6 @@ import type {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -77,6 +76,7 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -832,14 +832,12 @@ export const assembleSkCourtsDecision = ({
     court,
     registryRecord?.nazov,
   );
-  const rawJson = JSON.stringify({
+  const stored = skCourtsSourceRaw({
     item,
-    directoryMetadata,
-    registryUnavailable,
-    courtSuccession,
+    detail,
+    courtRegistry,
     detailOutcome,
   });
-  const rawHash = hashContent(rawJson);
 
   // PDF download is deferred to the document walk in the
   // ingestion worker (ingestion/sk-document-backfill.ts,
@@ -945,12 +943,12 @@ export const assembleSkCourtsDecision = ({
         } satisfies SkCourtsMetadata,
         SK_COURTS_METADATA_URL_SCHEMA,
       ),
-      rawHash,
+      rawHash: sourceFingerprint({ sourceRaw: stored.sourceRaw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
       ...(detailOutcome === undefined ? {} : { isListingOnly: true }),
-      ...skCourtsSourceRaw({ item, detail, courtRegistry, detailOutcome }),
+      ...stored,
     },
     SK_COURTS_METADATA_URL_SCHEMA,
   );
