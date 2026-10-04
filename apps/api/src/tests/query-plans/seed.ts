@@ -23,6 +23,7 @@ import {
   legislationSearchDocuments,
   legislationSources,
   statuteSitemapShards,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
@@ -64,6 +65,9 @@ export const QUERY_PLAN_SAMPLE = {
   legislation: {
     country: "cze",
     bucket: "00",
+  },
+  systemAudit: {
+    now: "2026-10-04T00:00:00Z",
   },
 } as const;
 
@@ -385,6 +389,20 @@ export const seedQueryPlanData = async (
       'Query plan legislation text ' || n::text,
       CASE n % 3 WHEN 0 THEN 'cs' WHEN 1 THEN 'sk' ELSE 'pl' END,
       to_tsvector('simple', 'Query plan legislation text ' || n::text)
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+
+  // System audit runs spread over twice the retention window, so the purge
+  // cutoff falls mid-table.
+  await db.execute(sql`
+    INSERT INTO ${systemAuditRuns} (id, actor, subject, counts, created_at)
+    SELECT
+      gen_random_uuid(),
+      'system:file-comparison-sweep',
+      'query-plan-run-' || n::text,
+      jsonb_build_object('sweptUploads', n),
+      ${QUERY_PLAN_SAMPLE.systemAudit.now}::timestamptz
+        - make_interval(mins => n * 384)
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
 

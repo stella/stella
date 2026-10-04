@@ -404,6 +404,20 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   {
+    id: "time-entry-amount",
+    capability: "Price recorded time with its no-charge disposition",
+    owner: ["packages/money/"],
+    summary:
+      "timeEntryAmount requires the noCharge field and returns zero for no-charge time. " +
+      "Invoice lines, exports and displayed time amounts use this calculation.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/money"],
+      names: ["prorateHourlyCents"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
@@ -783,11 +797,6 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/folio-collab-rooms.ts",
           reason:
             "Persists a collaboration room re-checked on every token use.",
-        },
-        {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason:
-            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",

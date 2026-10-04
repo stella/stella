@@ -83,6 +83,7 @@ export const PG_ERROR = {
   FOREIGN_KEY_VIOLATION: "23503",
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",
+  CHECK_VIOLATION: "23514",
   INSUFFICIENT_PRIVILEGE: "42501",
   READ_ONLY_SQL_TRANSACTION: "25006",
   /** A value outran a fixed limit of the build, such as a `tsvector` over 1 MiB. */

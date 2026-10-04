@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, notInArray } from "drizzle-orm";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
@@ -56,6 +58,7 @@ import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
+import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
@@ -407,6 +410,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: SWEEP_REGISTRATIONS_TASK,
+  },
+  {
+    description: "Delete system audit runs past retention",
+    id: "audit.purgeSystemRuns.day",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: DAY_IN_MS },
+    task: PURGE_SYSTEM_AUDIT_RUNS_TASK,
   },
   {
     description: "Redact expired completed provider event details",

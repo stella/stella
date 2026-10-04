@@ -9,6 +9,7 @@ import {
   TIME_ENTRY_SUGGESTION_STATUS,
   timeEntrySuggestions,
 } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadTimeSuggestions } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
@@ -294,6 +295,7 @@ const createTimeSuggestionDecision = createSafeHandler(
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
