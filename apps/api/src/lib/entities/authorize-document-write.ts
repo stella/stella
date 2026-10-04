@@ -27,8 +27,9 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
  *    entity checks under row locks, so this step is a fast refusal, not the
  *    serialization point.
  *
- * Folder targets of a create are validated inside `createEntityFromBuffer`'s
- * transaction, which locks the parent row before the insert.
+ * Folder targets and the matter status of a create are checked again inside
+ * `createEntityFromBuffer`'s transaction, under the workspace and parent row
+ * locks, because a create's access can be minted well before the write.
  */
 export type CreateDocumentOperation = {
   type: "create";
@@ -74,13 +75,16 @@ export class DocumentWriteRefusedError extends TaggedError(
   message: string;
 }> {}
 
+export const documentWriteRefusal = (
+  code: DocumentWriteRefusalCode,
+): DocumentWriteRefusedError =>
+  new DocumentWriteRefusedError({
+    code,
+    message: DOCUMENT_WRITE_REFUSAL_MESSAGES[code],
+  });
+
 const refuse = (code: DocumentWriteRefusalCode) =>
-  Result.err(
-    new DocumentWriteRefusedError({
-      code,
-      message: DOCUMENT_WRITE_REFUSAL_MESSAGES[code],
-    }),
-  );
+  Result.err(documentWriteRefusal(code));
 
 class DocumentWriteAccessProof<TOperation extends DocumentWriteOperation> {
   readonly #operation: TOperation;

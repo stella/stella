@@ -27,8 +27,12 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  documentWriteRefusal,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -138,6 +142,7 @@ type CreateEntityFromBufferValue = {
 export type CreateEntityFromBufferResult = Result<
   CreateEntityFromBufferValue,
   | DocumentTooLargeError
+  | DocumentWriteRefusedError
   | EntityLimitError
   | InvalidParentError
   | MissingFilePropertyError
@@ -354,7 +359,19 @@ export const createEntityFromBuffer = async ({
       await scopedDb(async (tx) => {
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
-        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        const workspaceStatus = await lockWorkspaceForEntityCreate(
+          tx,
+          workspaceId,
+        );
+        // Callers authorize the matter before producing the bytes; the status
+        // is read again under the lock so a matter archived or scheduled for
+        // deletion in between receives nothing.
+        if (workspaceStatus === undefined) {
+          throw documentWriteRefusal("workspace-not-found");
+        }
+        if (workspaceStatus !== "active") {
+          throw documentWriteRefusal("workspace-not-active");
+        }
         if (publication.type === "service") {
           await lockObjectCleanupIntentsForWriter(tx, [publication.id]);
         }
@@ -542,7 +559,11 @@ export const createEntityFromBuffer = async ({
         }
       }
 
-      if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
+      if (
+        EntityLimitError.is(error) ||
+        InvalidParentError.is(error) ||
+        DocumentWriteRefusedError.is(error)
+      ) {
         return Result.err(error);
       }
 
