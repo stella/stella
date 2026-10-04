@@ -83,6 +83,26 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "public-sanctions-reader-binding",
+    capability:
+      "Binding the public sanctions reader to the scoped connection pool",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "The connection owner constructs a column-restricted, read-only " +
+      "sanctions reader without exporting another raw connection handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createPublicSanctionsReader"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/lists/sanctions/public-read-owner.ts",
+          reason: "Owns the restricted anonymous screening handle.",
+        },
+      ],
+    },
+  },
+  {
     id: "public-sanctions-screening",
     capability: "Reading the public sanctions corpus for anonymous screening",
     owner: ["apps/api/src/lib/lists/sanctions/public-read-owner.ts"],
