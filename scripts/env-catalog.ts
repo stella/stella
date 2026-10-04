@@ -7,6 +7,7 @@ import {
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
+import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
@@ -130,6 +131,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
   "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
+  ...Object.keys(envOnlineIndexServerSchema),
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
@@ -228,6 +231,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FEEDBACK_GITHUB_REPO: "owner/repo",
   DB_LOAD_GATE_EBS_SIGNAL: "disabled",
+  // Local and CI databases build indexes without wall-clock busy windows.
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -343,9 +348,35 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
-    "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+    "RDS instance whose EBS balances gate heavy maintenance and online index builds. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
   DB_LOAD_GATE_EBS_SIGNAL:
-    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
+  DB_LOAD_GATE_START_FLOOR:
+    "EBS balance percentage required to start an online index build.",
+  DB_LOAD_GATE_HARD_FLOOR:
+    "EBS balance percentage below which a running online index build is cancelled and retried later.",
+  DB_LOAD_GATE_MAX_STALENESS_MS:
+    "Maximum age of a health reading before it counts as unknown and holds the build.",
+  DB_LOAD_GATE_READ_TIMEOUT_MS:
+    "Timeout for each health probe, including the online index observer's connection and statements.",
+  DB_LOAD_GATE_MAX_HELD_MS:
+    "How long an online index build may stay held before a held-too-long event is logged.",
+  DB_LOAD_GATE_LONG_TX_MAX_AGE_MS:
+    "Oldest open transaction age that still allows an online index build to start.",
+  DB_LOAD_GATE_BUSY_WINDOWS:
+    'JSON array of local busy windows, such as `[{"start":"06:30","end":"08:00","timeZone":"Europe/Prague"}]`, during which online index builds wait. `[]` disables them.',
+  ONLINE_INDEX_POLL_MS:
+    "Interval between health checks while an online index build runs.",
+  ONLINE_INDEX_CLIENT_CHECK_MS:
+    "client_connection_check_interval for the index build session, so a lost migrator stops its build.",
+  ONLINE_INDEX_RETRY_MS:
+    "Delay before the migrator retries a deferred online index build.",
+  ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS:
+    "Maximum time an online index build may stay in one waiting phase, such as waiting for older transactions, before it is cancelled and retried.",
+  ONLINE_INDEX_PARALLEL_WORKERS:
+    "max_parallel_maintenance_workers for online index builds (0 or 1).",
+  ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB:
+    "maintenance_work_mem, in megabytes, for online index builds.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:
@@ -555,6 +586,9 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
+  DB_LOAD_GATE_EBS_SIGNAL: "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER is unset",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "the database is RDS and DB_LOAD_GATE_EBS_SIGNAL is unset",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
@@ -578,10 +612,12 @@ export const ENV_CREDENTIAL_KIND = {
 type EnvCatalogName =
   | keyof typeof envBaseServerSchema
   | keyof typeof databaseComponentEnvSchema
+  | keyof typeof envOnlineIndexServerSchema
   | keyof typeof envDocumentProcessingWorkerServerSchema
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
@@ -654,8 +690,15 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DATABASE_STATEMENT_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   DB_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_BUSY_WINDOWS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_EBS_SIGNAL: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_HARD_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_LONG_TX_MAX_AGE_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_MAX_HELD_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_MAX_STALENESS_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_READ_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_START_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
   DB_NAME: ENV_CREDENTIAL_KIND.notCredential,
   DB_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   DB_PORT: ENV_CREDENTIAL_KIND.notCredential,
@@ -738,6 +781,12 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_AUTH_TENANT_ID: ENV_CREDENTIAL_KIND.notCredential,
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_PARALLEL_WORKERS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_POLL_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_RETRY_MS: ENV_CREDENTIAL_KIND.notCredential,
   OPENAI_API_KEY: ENV_CREDENTIAL_KIND.credential,
   OPENAI_APPS_CHALLENGE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPENROUTER_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -875,6 +924,8 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "DATABASE_ROOT_POOL_MAX",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_URL",
+  "DB_LOAD_GATE_BUSY_WINDOWS",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "EMAIL_PROVIDER",
   "FRONTEND_URL",
@@ -919,7 +970,9 @@ const humanizeEnvName = (name: string) => {
 };
 
 const sectionFor = (name: string) => {
-  if (/^(DATABASE|DB_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)) {
+  if (
+    /^(DATABASE|DB_|ONLINE_INDEX_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)
+  ) {
     return "Database";
   }
   if (/^(S3|CORPUS|LEGAL_)/u.test(name)) {
@@ -1069,6 +1122,10 @@ export const ENV_CATALOG = [
     schema: databaseComponentEnvSchema,
   }),
   ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
+    schema: envOnlineIndexServerSchema,
+  }),
+  ...createCatalogEntries({
     owner: ENV_OWNER.documentWorker,
     schema: envDocumentProcessingWorkerServerSchema,
   }),
@@ -1087,6 +1144,7 @@ export const API_ENV_SCHEMA = {
   ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
+  ...envOnlineIndexServerSchema,
   ...envDocumentProcessingWorkerServerSchema,
   ...envApiServerSchema,
 };
@@ -1270,6 +1328,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "MODE",
   "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
+  // The online index gate's child-process fixture receives its target here.
+  "ONLINE_INDEX_TEST_NAME",
+  "ONLINE_INDEX_TEST_NOW",
+  "ONLINE_INDEX_TEST_TABLE",
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
   "OSV_SCANNER_MIRROR_RELEASE_URL",
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
