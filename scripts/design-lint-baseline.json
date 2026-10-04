@@ -471,9 +471,6 @@
   },
   "no-unbounded-response-body/no-unbounded-response-body": {
     "apps/api/src/handlers/case-law/decisions/dev-reparse.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 5,
-    "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 7,
-    "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 11,
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts": 2,

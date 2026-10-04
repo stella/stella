@@ -1579,7 +1579,9 @@ describe("a failed publisher read is never built", () => {
         faulted: (url) => url.endsWith("/opendata/2021"),
         body: '[{"pocet":10}]',
       });
-      expect(await czRegionalAdapter.getTotalCount?.()).toEqual({
+      expect(
+        await czRegionalAdapter.getTotalCount(new AbortController().signal),
+      ).toEqual({
         type: "probe-failed",
         errorTag: COUNT_FAULT_TAG[fault],
       });

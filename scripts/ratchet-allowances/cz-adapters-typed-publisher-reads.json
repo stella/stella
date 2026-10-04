@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 6,
+  "reason": "cz-nss, cz-regional and cz-us now read through readPublisher/readGatedResponseText. A source adapter reports a failed page to the ingestion cycle by throwing, so each typed unavailable or refused outcome that must stop the page is raised from its read site; the try/catch rethrows these reads replace are removed (try-catch-outside-boundary falls by 4)."
+}

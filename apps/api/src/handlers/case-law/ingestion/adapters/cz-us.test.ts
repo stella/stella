@@ -2677,7 +2677,7 @@ describe("a failed or refused NALUS read", () => {
           const decision = page.decisions[0];
           expect(decision?.isListingOnly).toBeUndefined();
           expect(decision?.fulltext).toContain("Lorem ipsum");
-          expect(decision?.metadata[stateKey]).toBe("unavailable");
+          expect(decision?.metadata[stateKey] === "unavailable").toBe(true);
           const outcome = decision?.metadata[READ_OUTCOME_METADATA_KEY];
           expect(isStoredReadUnavailable(outcome)).toBe(true);
           expect(outcome).toMatchObject({ scope: "part" });
@@ -2698,7 +2698,7 @@ describe("a failed or refused NALUS read", () => {
           const decision = page.decisions[0];
           expect(decision?.isListingOnly).toBeUndefined();
           expect(decision?.fulltext).toContain("Lorem ipsum");
-          expect(decision?.metadata[stateKey]).toBe("unavailable");
+          expect(decision?.metadata[stateKey] === "unavailable").toBe(true);
           const outcome = decision?.metadata[READ_OUTCOME_METADATA_KEY];
           expect(isReadRefusal(outcome)).toBe(true);
           expect(outcome).toMatchObject({ scope: "part" });
@@ -2722,9 +2722,10 @@ describe("a failed or refused NALUS read", () => {
         const decision = page.decisions[0];
         expect(decision?.isListingOnly).toBe(true);
         expect(decision?.fulltext).toBeUndefined();
-        expect(decision?.metadata["listedOnlyReason"]).toBe(
-          `text-refused-${fault === "refused-401" ? 401 : 403}`,
-        );
+        expect(
+          decision?.metadata["listedOnlyReason"] ===
+            `text-refused-${fault === "refused-401" ? 401 : 403}`,
+        ).toBe(true);
         expect(
           isReadRefusal(decision?.metadata[READ_OUTCOME_METADATA_KEY]),
         ).toBe(true);
@@ -2763,7 +2764,9 @@ describe("a failed or refused NALUS read", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     expect(page.decisions[0]?.isListingOnly).toBe(true);
-    expect(page.decisions[0]?.metadata["listedOnlyReason"]).toBe("http-404");
+    expect(page.decisions[0]?.metadata["listedOnlyReason"] === "http-404").toBe(
+      true,
+    );
   });
 });
 
