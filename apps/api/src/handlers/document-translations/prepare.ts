@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { prepareDocumentTranslationBodySchema } from "@/api/handlers/document-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -11,9 +11,15 @@ import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-enti
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns translation preparation metadata rather than stored-file bytes.",
+  },
   description:
     "Inspect the current DOCX version and prepare its comment requirements for translation.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

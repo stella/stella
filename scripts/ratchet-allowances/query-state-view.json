@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The pure query-view logic and its React hook provide one shared API for pending reads, initial failures, successful empty results and cached refetch failures. Feature consumers reuse these two owners rather than implementing query state handling independently."
+}

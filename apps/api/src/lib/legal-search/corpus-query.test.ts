@@ -13,9 +13,15 @@ import {
   type CorpusFreeTextOptions,
   corpusFreeTextClause,
   type CorpusTermExpander,
+  partitionCorpusQueryTokens,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  CORPUS_INDEX_QUERY_VARIANTS,
+  CORPUS_QUERY_VARIANT_POLICY,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 import {
   LEGACY_STEMMERS,
@@ -1065,4 +1071,31 @@ test("multiple act groups share the same drop priority before either loses title
     expect(act).toContain('"Strednom občianskom zákonníku"');
   }
   expect(countLeaves(clause)).toBe(CORPUS_QUERY_LEAF_BUDGET);
+});
+
+test("provision spans read the registry's profile for exactly the jurisdictions it holds", () => {
+  const tokens = tokenizeCorpusFreeText("§ 106 OZ");
+  const partitionFor = (
+    queryVariant: CorpusIndexQueryVariant,
+    jurisdiction: string | undefined,
+  ) =>
+    partitionCorpusQueryTokens({
+      tokens,
+      functionWords: null,
+      queryVariant,
+      jurisdiction,
+    }).profile;
+  for (const queryVariant of CORPUS_INDEX_QUERY_VARIANTS) {
+    const { provisions } = CORPUS_QUERY_VARIANT_POLICY[queryVariant];
+    for (const [jurisdiction, profile] of Object.entries(
+      PROVISION_CITATION_PROFILES,
+    )) {
+      expect(partitionFor(queryVariant, jurisdiction)).toBe(
+        provisions ? profile : null,
+      );
+    }
+    for (const jurisdiction of ["POL", "EU", "cze", undefined]) {
+      expect(partitionFor(queryVariant, jurisdiction)).toBeNull();
+    }
+  }
 });

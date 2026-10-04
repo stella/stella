@@ -144,6 +144,29 @@ describe("generated environment examples", () => {
     }
   });
 
+  test("classifies every server picklist setting as internal", () => {
+    const picklistEntries = ENV_CATALOG.filter(({ owner, schema }) => {
+      const inner =
+        schema.type === "optional" && "wrapped" in schema
+          ? schema.wrapped
+          : schema;
+      return (
+        owner !== ENV_OWNER.web &&
+        v.is(v.object({ type: v.literal("picklist") }), inner)
+      );
+    });
+    expect(picklistEntries.map(({ name }) => name)).toContain(
+      "CORPUS_INDEX_QUERY_VARIANT",
+    );
+    for (const { credentialKind, exposure, name } of picklistEntries) {
+      expect({ credentialKind, exposure, name }).toEqual({
+        credentialKind: ENV_CREDENTIAL_KIND.notCredential,
+        exposure: ENV_EXPOSURE.internal,
+        name,
+      });
+    }
+  });
+
   test("derives requirements without executing schema transforms", () => {
     let transformExecuted = false;
     const schema = v.pipe(

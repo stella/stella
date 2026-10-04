@@ -145,6 +145,12 @@ export const brandPersistedPropertyId = (
   propertyId: string,
 ): SafeId<"property"> => toSafeId<"property">(propertyId);
 
+/** A client-supplied property id; property ids are UUIDs, anything else is no property. */
+export const brandValidatedPropertyId = (
+  propertyId: string,
+): SafeId<"property"> | null =>
+  isUuid(propertyId) ? toSafeId<"property">(propertyId) : null;
+
 export const brandPersistedPlaybookId = (
   playbookId: string,
 ): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);

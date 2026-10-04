@@ -27,8 +27,16 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  documentWriteRefusal,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
+import {
+  insertNamedEntity,
+  resolveSiblingNameForInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -133,11 +141,13 @@ type CreateEntityFromBufferValue = {
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   fileName: string;
+  renamed: boolean;
 };
 
 export type CreateEntityFromBufferResult = Result<
   CreateEntityFromBufferValue,
   | DocumentTooLargeError
+  | DocumentWriteRefusedError
   | EntityLimitError
   | InvalidParentError
   | MissingFilePropertyError
@@ -182,7 +192,8 @@ export const createEntityFromBuffer = async ({
   // hash below are taken from the bytes this returns, never the submitted ones.
   const { bytes } = await storedDocumentBytes(submittedBytes);
 
-  const fileName = sanitizeFilenamePreservingExtension(rawFileName);
+  const requestedFileName = sanitizeFilenamePreservingExtension(rawFileName);
+  let fileName = requestedFileName;
   const fileId = allocateFileObject();
   const s3Key = createFileKey({
     organizationId,
@@ -354,7 +365,20 @@ export const createEntityFromBuffer = async ({
       await scopedDb(async (tx) => {
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
-        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        const workspaceStatus = await lockWorkspaceForEntityCreate(
+          tx,
+          workspaceId,
+        );
+        // Callers authorize the matter before producing the bytes; the status
+        // is read again under the lock so a matter archived or scheduled for
+        // deletion in between receives nothing.
+        if (workspaceStatus !== "active") {
+          throw documentWriteRefusal(
+            workspaceStatus === undefined
+              ? "workspace-not-found"
+              : "workspace-not-active",
+          );
+        }
         if (publication.type === "service") {
           await lockObjectCleanupIntentsForWriter(tx, [publication.id]);
         }
@@ -387,10 +411,19 @@ export const createEntityFromBuffer = async ({
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-        await tx.insert(entities).values({
+        const resolvedName = await resolveSiblingNameForInsert({
+          tx,
+          workspaceId,
+          parentId: parentId ?? null,
+          name: requestedFileName,
+          kind: "document",
+        });
+        fileName = resolvedName.fileName;
+
+        await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
-          name: fileName,
+          name: resolvedName.name,
           parentId: parentId ?? null,
           createdBy: userId,
           docSequence: entityStamp.docSequence,
@@ -471,6 +504,7 @@ export const createEntityFromBuffer = async ({
           entityVersionId,
           fieldId,
           fileName,
+          renamed: fileName !== requestedFileName,
         });
 
         if (publication.type === "service") {
@@ -487,7 +521,7 @@ export const createEntityFromBuffer = async ({
             entityId,
             fileId,
             fileName,
-            renamed: false,
+            renamed: fileName !== requestedFileName,
           };
           // audit: skip — intent bookkeeping is atomic with the audited entity.
           const finalizedRows = await tx
@@ -542,7 +576,11 @@ export const createEntityFromBuffer = async ({
         }
       }
 
-      if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
+      if (
+        EntityLimitError.is(error) ||
+        InvalidParentError.is(error) ||
+        DocumentWriteRefusedError.is(error)
+      ) {
         return Result.err(error);
       }
 
@@ -590,5 +628,11 @@ export const createEntityFromBuffer = async ({
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
   );
 
-  return Result.ok({ entityId, entityVersionId, fieldId, fileName });
+  return Result.ok({
+    entityId,
+    entityVersionId,
+    fieldId,
+    fileName,
+    renamed: fileName !== requestedFileName,
+  });
 };

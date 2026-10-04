@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
@@ -107,6 +107,24 @@ export const lockWorkspacesForEntityCap = async (
   workspaceIds: readonly SafeId<"workspace">[],
 ): Promise<void> =>
   await lockWorkspaceRows({ tx, workspaceIds, mode: "update" });
+
+/**
+ * The single-workspace `lockWorkspacesForEntityCap`, returning the locked
+ * row's status (`undefined` when the row does not exist) so a create can
+ * refuse a matter that stopped being active after its access was checked.
+ */
+export const lockWorkspaceForEntityCreate = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const rows = await tx
+    .select({ status: workspaces.status })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("update");
+  return rows.at(0)?.status;
+};
 
 /**
  * Transfers wait on source entity/version/field locks. Existing writers may

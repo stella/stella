@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,6 +22,7 @@ const config = {
     "Pass hidden true to stop offering packs in the template library; " +
     "templates already installed are unaffected. Owners and admins only.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",
