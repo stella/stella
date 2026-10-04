@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 
 import { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
-import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
 const attribution = v.pipe(
@@ -117,20 +117,43 @@ type ControlStore = Pick<
   ReturnType<typeof createEuCompletionStore>,
   "setControl" | "approveSupervisedDryRun"
 >;
+const CONTROL_QUERY_TIMEOUT_MS = 5000;
+
+// A control-plane write touches only the completion controls and approvals.
+// It takes no maintenance door, so a stop never waits behind the tick it
+// stops (the census exemption in maintenance-lane.test.ts).
 const withOperatorStore = async (
   work: (store: ControlStore) => Promise<number>,
 ) => {
-  const session = await enterCaseLawMaintenanceLane();
-  try {
-    return await work(
-      createEuCompletionStore({
-        db: session.rootDb,
-        now: () => Temporal.Now.instant().epochMilliseconds,
-      }),
-    );
-  } finally {
-    await session.release();
-  }
+  const [
+    { rootDb },
+    { runUnderCorpusSchemaLane },
+    { setSharedLockTimeout, setSharedStatementTimeout },
+  ] = await Promise.all([
+    import("@/api/db/root"),
+    import("@/api/db/corpus-schema-lane"),
+    import("@/api/db/shared-pool-timeouts"),
+  ]);
+  const transaction: CaseLawRootHandle["transaction"] = async (fn) =>
+    await runUnderCorpusSchemaLane({
+      database: rootDb,
+      laneWaitMs: CONTROL_QUERY_TIMEOUT_MS,
+      work: async (tx) => {
+        await setSharedStatementTimeout(tx, CONTROL_QUERY_TIMEOUT_MS);
+        await setSharedLockTimeout(tx, CONTROL_QUERY_TIMEOUT_MS);
+        return await fn(tx);
+      },
+    });
+  return await work(
+    createEuCompletionStore({
+      db: {
+        transaction,
+        execute: async (query) =>
+          await transaction(async (tx) => await tx.execute(query)),
+      },
+      now: () => Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
 };
 const controlFailureMessage = (error: unknown) => {
   if (error instanceof Error) {
