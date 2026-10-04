@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 13,
+  "reason": "Member removal, matter removal and the assignment writers abort their single transaction with a typed HandlerError (busy, not a member, limits) so every cleanup step rolls back together; the callers map it at the handler and auth-hook boundary."
+}

@@ -280,12 +280,7 @@ const clearMemberTaskAssignments = async ({
     if (assigned.length === 0) {
       break;
     }
-    const byWorkspace = new Map<SafeId<"workspace">, typeof assigned>();
-    for (const row of assigned) {
-      const rows = byWorkspace.get(row.workspaceId) ?? [];
-      rows.push(row);
-      byWorkspace.set(row.workspaceId, rows);
-    }
+    const byWorkspace = Map.groupBy(assigned, (row) => row.workspaceId);
     // Validate every destination before any write; an invalid handoff is atomic.
     if (reassignTo) {
       for (const workspaceId of [...byWorkspace.keys()].toSorted()) {
@@ -487,15 +482,10 @@ const clearMemberContactAssignments = async ({
       tx,
       contactRows.map(({ id }) => id),
     );
-    const contactsByOrganization = new Map<
-      SafeId<"organization">,
-      typeof contactRows
-    >();
-    for (const row of contactRows) {
-      const rows = contactsByOrganization.get(row.organizationId) ?? [];
-      rows.push(row);
-      contactsByOrganization.set(row.organizationId, rows);
-    }
+    const contactsByOrganization = Map.groupBy(
+      contactRows,
+      (row) => row.organizationId,
+    );
     for (const [organizationId, rows] of contactsByOrganization) {
       const recorder = createBackgroundAuditRecorder({
         organizationId,
@@ -605,12 +595,7 @@ const clearMemberTimeEntryApprovals = async ({
           rows.map(({ id }) => id),
         ),
       );
-    const byOrganization = new Map<SafeId<"organization">, typeof rows>();
-    for (const row of rows) {
-      const grouped = byOrganization.get(row.organizationId) ?? [];
-      grouped.push(row);
-      byOrganization.set(row.organizationId, grouped);
-    }
+    const byOrganization = Map.groupBy(rows, (row) => row.organizationId);
     for (const [organizationId, grouped] of byOrganization) {
       const recorder =
         recordAuditEvent ??
