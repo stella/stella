@@ -490,11 +490,16 @@ export const huBhgyDocumentOf = (
 /**
  * What one download established. `unread` is a status that neither served
  * the document nor stated its absence: the crawl reports it to the pipeline,
- * and the reconciliation fails on `error` as it always has.
+ * and the reconciliation fails on `error` as it always has. `halted` is the
+ * publisher's rate-limit refusal, which stops the page (rule 19).
  */
 type DocumentRead =
   | { type: "read"; document: DecisionDocument | undefined }
-  | { type: "unread"; outcome: UnreadOutcome; error: AdapterFetchError };
+  | { type: "unread"; outcome: UnreadOutcome; error: AdapterFetchError }
+  | { type: "halted"; error: AdapterFetchError };
+
+/** The publisher's rate-limit refusal of a request. */
+const RATE_LIMITED_STATUS = 429;
 
 /** The unread outcome of a status that is neither served nor absent. */
 const unreadOutcomeOfStatus = (
@@ -541,6 +546,21 @@ const fetchDocument = async (
     // The listing states the decision exists and the download does not serve
     // it: a durable listing-only observation, not a page failure (rule 20).
     return { type: "read", document: undefined };
+  }
+  if (response.status === RATE_LIMITED_STATUS) {
+    // One request, no retry, cursor untouched: the page fails as a halt.
+    const retryAfter = response.headers.get("Retry-After");
+    await response.body?.cancel();
+    return {
+      type: "halted",
+      error: new AdapterFetchError({
+        message: `eakta.birosag.hu: download answered ${response.status}`,
+        adapterKey: ADAPTER_KEYS.HU_BHGY,
+        cursor,
+        httpStatus: response.status,
+        ...(retryAfter === null ? {} : { retryAfter }),
+      }),
+    };
   }
   if (!response.ok) {
     await response.body?.cancel();
@@ -777,7 +797,9 @@ type HuBhgyBuildResult =
 type HuBhgyFetchedBuild =
   | HuBhgyBuildResult
   /** The publisher neither served the document nor stated its absence. */
-  | { type: "unread"; item: UnreadListedItem; error: AdapterFetchError };
+  | { type: "unread"; item: UnreadListedItem; error: AdapterFetchError }
+  /** The publisher refused the download for its rate limit. */
+  | { type: "halted"; error: AdapterFetchError };
 
 export type AssembleHuBhgyOptions = {
   row: HuBhgyRow;
@@ -990,6 +1012,8 @@ const buildHuBhgyDecision = async ({
   }
   const fetched = await fetchDocument(normalized, cursor, signal);
   switch (fetched.type) {
+    case "halted":
+      return fetched;
     case "read":
       return await assembleHuBhgyDecision({
         row: normalized,
@@ -1423,6 +1447,7 @@ const buildHuBhgyFromPayload = async (
   });
   switch (built.type) {
     case "unread":
+    case "halted":
       return await Promise.reject(built.error);
     case "built":
       return { type: "built", decision: built.decision };
@@ -1689,6 +1714,7 @@ const collectDecisions = async ({
           case "unread":
             return outcome.item.listing;
           case "unkeyable":
+          case "halted":
             return undefined;
           default:
             outcome satisfies never;
@@ -1706,6 +1732,8 @@ const collectDecisions = async ({
     switch (built.type) {
       case "unkeyable":
         break;
+      case "halted":
+        return Result.err(built.error);
       // The pipeline decides what an unread document costs the page.
       case "unread":
         unreadItems.push(built.item);

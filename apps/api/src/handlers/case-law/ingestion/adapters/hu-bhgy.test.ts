@@ -840,6 +840,34 @@ describe("a listed decision the download will not serve", () => {
     },
   );
 
+  test("a download answering 429 halts the page after one request (rule 19)", async () => {
+    const stub = stubPublisher((call) =>
+      isSearch(call)
+        ? searchResponse(
+            [
+              rowAt(8, "2026-09-19T14:00:00+02:00"),
+              rowAt(7, "2026-09-19T13:00:00+02:00"),
+            ],
+            10_000,
+          )
+        : new Response(null, { status: 429, headers: { "Retry-After": "60" } }),
+    );
+    try {
+      const page = await huBhgyAdapter.fetchPage(
+        "tip|head|2026-09-19T12:00:00+02:00",
+        {},
+      );
+      expect(Result.isError(page)).toBe(true);
+      const error = Result.isError(page) ? page.error : undefined;
+      expect(error).toBeInstanceOf(AdapterFetchError);
+      expect(error?.httpStatus).toBe(429);
+      expect(error?.retryAfter).toBe("60");
+      expect(stub.calls.filter((call) => !isSearch(call))).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
   test.each(["<p></p>", String.raw`{\rtf1 poisoned}`])(
     "a rejected summary %s is quarantined while the rest of the page advances",
     async (label) => {
