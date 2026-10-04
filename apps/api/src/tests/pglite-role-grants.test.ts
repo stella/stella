@@ -1,10 +1,23 @@
-import { describe, expect, test } from "bun:test";
+import type { PGlite } from "@electric-sql/pglite";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { getTableName, isTable } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import * as schema from "@/api/db/schema";
-import { ROLE_GRANT_STATEMENTS } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  HARNESS_RELATIONS_SQL,
+  ROLE_GRANT_STATEMENTS,
+} from "@/api/tests/pglite-test-db";
+import {
+  deriveStellaTablePrivileges,
+  readCommittedMigrations,
+} from "@/api/tests/stella-table-privileges";
+import type {
+  MigrationSource,
+  TablePrivilege,
+} from "@/api/tests/stella-table-privileges";
 
 /**
  * The PGlite harness hand-maintains the role grants the committed migrations
@@ -25,8 +38,9 @@ import { ROLE_GRANT_STATEMENTS } from "@/api/tests/pglite-test-db";
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 
 /**
- * Roles the harness grants wholesale, so a per-table pair adds nothing.
- * `stella` holds `ON ALL TABLES IN SCHEMA public`.
+ * Roles whose table privileges this pair check leaves to another one.
+ * `stella`'s are derived from the migrations and compared on the harness
+ * catalog below.
  */
 const WHOLESALE_ROLES = new Set(["stella", "public"]);
 
@@ -78,37 +92,6 @@ const COLUMN_GRANT =
   /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)[\s\S]*?\bON\s+(?:TABLE\s+)?("?[a-zA-Z_][a-zA-Z0-9_]*"?)/giu;
 
 const unquote = (value: string): string => value.replaceAll('"', "");
-
-const REVOKE_FROM_STELLA =
-  /\bREVOKE\s+([A-Z,\s]+?)\s+ON\s+(?:TABLE\s+)?([^;]*?)\bFROM\s+stella\b/giu;
-
-const COLUMN_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "REFERENCES"];
-
-/**
- * Every table-level `stella` privilege the given SQL revokes, as
- * `table:PRIVILEGE`; `ALL` stands for each privilege a column grant can hold.
- */
-const tablePrivilegesRevokedFromStella = (sqlText: string): Set<string> => {
-  const revoked = new Set<string>();
-  for (const match of sqlText.matchAll(REVOKE_FROM_STELLA)) {
-    const [, privilegeList = "", objects = ""] = match;
-    const privileges = privilegeList
-      .split(",")
-      .map((privilege) => privilege.trim().toUpperCase());
-    const expanded = privileges.some((privilege) => privilege.startsWith("ALL"))
-      ? COLUMN_PRIVILEGES
-      : privileges;
-    for (const identifier of objects.matchAll(IDENTIFIER)) {
-      const name = identifier[1] ?? identifier[2] ?? "";
-      if (name.length > 0 && !PRIVILEGE_WORDS.has(name.toLowerCase())) {
-        for (const privilege of expanded) {
-          revoked.add(`${name}:${privilege}`);
-        }
-      }
-    }
-  }
-  return revoked;
-};
 
 /** Every `(role, table)` pair the given SQL grants, as `role:table`. */
 const grantedPairs = (sqlText: string): Set<string> => {
@@ -211,8 +194,8 @@ describe("pglite role grants mirror the committed migrations", () => {
    * the pair check above sees only `stella_ingestion:case_law_sources`.
    *
    * So this compares the sets, both ways. The tables the schema still defines
-   * are the scope, for every role including `stella`: its wholesale table
-   * grant is narrowed table by table (see the next test), and a column it
+   * are the scope, for every role including `stella`: its table privileges
+   * come from the migrations (compared on the catalog below), and a column it
    * holds in the harness but not in the deployment would let a scoped suite
    * pass on a statement production refuses.
    */
@@ -229,39 +212,6 @@ describe("pglite role grants mirror the committed migrations", () => {
     ].filter(inScope);
 
     expect(harnessColumns.toSorted()).toEqual(migrationColumns.toSorted());
-  });
-
-  /**
-   * The harness grants `stella` every table and narrows it afterwards. A table
-   * the migrations hold `stella` to column by column must be narrowed here
-   * too, or the harness column list is decoration and a scoped suite writes a
-   * column the deployment refuses: the cleanup claim on
-   * `buffer_object_cleanup_intents` updates its retry schedule, which the
-   * request role may write only through an explicit column grant.
-   */
-  test("tables the migrations hold stella to by column are narrowed in the harness", async () => {
-    const migrationColumns = grantedColumnPairs(await readMigrationSql());
-    const columnScopedPrivileges = new Set(
-      [...migrationColumns]
-        .map((pair) => pair.split(":"))
-        .filter(
-          ([role = "", table = ""]) =>
-            role === "stella" && schemaTableNames.has(table),
-        )
-        .map(([, table = "", , privilege = ""]) => `${table}:${privilege}`),
-    );
-    const harnessRevoked = tablePrivilegesRevokedFromStella(
-      ROLE_GRANT_STATEMENTS.join(";\n"),
-    );
-
-    const notNarrowed = [...columnScopedPrivileges]
-      .filter((tablePrivilege) => !harnessRevoked.has(tablePrivilege))
-      .toSorted();
-
-    expect(
-      columnScopedPrivileges.has("buffer_object_cleanup_intents:UPDATE"),
-    ).toBe(true);
-    expect(notNarrowed).toEqual([]);
   });
 
   test("the parser reads both migration and harness grant spellings", async () => {
@@ -286,5 +236,213 @@ describe("pglite role grants mirror the committed migrations", () => {
       "stella_ingestion:case_law_sources:stored_total:UPDATE";
     expect(migrationColumns.has(storedTotalGrant)).toBe(true);
     expect(harnessColumns.has(storedTotalGrant)).toBe(true);
+  });
+});
+
+/**
+ * `stella` table privileges, compared on the built harness catalog rather than
+ * on its statement text: whatever the harness ran (the derived privileges,
+ * the hand-kept grants, the migration replays in `pglite-schema.ts`), the
+ * role must end up holding exactly what the committed migrations leave it.
+ * Every relation in the harness is compared, in both directions, so a
+ * migration REVOKE the harness ignores and a harness GRANT the migrations
+ * never made both fail here.
+ */
+describe("pglite stella table privileges mirror the committed migrations", () => {
+  let client: PGlite;
+
+  beforeAll(async () => {
+    client = await createTestPglite();
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  const harnessPrivileges = async (): Promise<Map<string, Set<string>>> => {
+    const relations = await client.query<{ relation: string }>(
+      HARNESS_RELATIONS_SQL,
+    );
+    const granted = await client.query<{
+      relation: string;
+      privilege: string;
+    }>(`
+      SELECT c.relname AS relation, acl.privilege_type AS privilege
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL pg_catalog.aclexplode(c.relacl) acl
+      WHERE n.nspname = 'public'
+        AND acl.grantee = 'stella'::regrole
+    `);
+    const privileges = new Map<string, Set<string>>(
+      relations.rows.map(({ relation }) => [relation, new Set<string>()]),
+    );
+    for (const { relation, privilege } of granted.rows) {
+      privileges.get(relation)?.add(privilege);
+    }
+    return privileges;
+  };
+
+  /** `relation:PRIVILEGE` on one side only, labelled by the side holding it. */
+  const privilegeDrift = (
+    harness: ReadonlyMap<string, ReadonlySet<string>>,
+    migrations: ReadonlyMap<string, ReadonlySet<TablePrivilege>>,
+  ): string[] => {
+    const drift: string[] = [];
+    for (const [relation, held] of harness) {
+      const expected: ReadonlySet<string> =
+        migrations.get(relation) ?? new Set();
+      for (const privilege of held) {
+        if (!expected.has(privilege)) {
+          drift.push(`harness only: ${relation}:${privilege}`);
+        }
+      }
+      for (const privilege of expected) {
+        if (!held.has(privilege)) {
+          drift.push(`migrations only: ${relation}:${privilege}`);
+        }
+      }
+    }
+    return drift.toSorted();
+  };
+
+  test("the harness holds stella to exactly the migration privileges", async () => {
+    const harness = await harnessPrivileges();
+    const derived = deriveStellaTablePrivileges(readCommittedMigrations());
+
+    expect(derived.unexpandedDynamicMigrations).toEqual([]);
+    expect(derived.unusedDynamicExpansions).toEqual([]);
+    expect(privilegeDrift(harness, derived.privileges)).toEqual([]);
+
+    // A comparison over an empty catalog would pass; pin each kind of
+    // narrowing the mirror exists for. The cleanup claim on
+    // `buffer_object_cleanup_intents` may write its retry schedule only
+    // through column grants, so the table itself holds no UPDATE.
+    expect(harness.get("legal_list_item_reviews")).toEqual(
+      new Set(["SELECT", "INSERT"]),
+    );
+    expect(harness.get("buffer_object_cleanup_intents")).toEqual(
+      new Set(["INSERT", "DELETE"]),
+    );
+    expect(harness.get("case_law_corpus_upload_intents")).toEqual(new Set());
+    expect(harness.get("legal_lists")).toEqual(
+      new Set(["SELECT", "INSERT", "UPDATE", "DELETE"]),
+    );
+  });
+
+  test("a migration privilege change the harness ignores is drift", async () => {
+    const harness = await harnessPrivileges();
+    const committed = readCommittedMigrations();
+    const synthetic = (sql: string): MigrationSource[] => [
+      ...committed,
+      { name: "99999999999999_synthetic", sql },
+    ];
+
+    const revoked = deriveStellaTablePrivileges(
+      synthetic(`REVOKE UPDATE, DELETE ON TABLE "legal_lists" FROM stella;`),
+    );
+    expect(privilegeDrift(harness, revoked.privileges)).toEqual([
+      "harness only: legal_lists:DELETE",
+      "harness only: legal_lists:UPDATE",
+    ]);
+
+    const granted = deriveStellaTablePrivileges(
+      synthetic(
+        `GRANT INSERT ON TABLE public."legal_list_item_reviews" TO "stella";`,
+      ),
+    );
+    expect(privilegeDrift(harness, granted.privileges)).toEqual([]);
+    const widened = deriveStellaTablePrivileges(
+      synthetic(`GRANT UPDATE ON legal_list_item_reviews TO stella;`),
+    );
+    expect(privilegeDrift(harness, widened.privileges)).toEqual([
+      "migrations only: legal_list_item_reviews:UPDATE",
+    ]);
+  });
+});
+
+describe("stella table privilege derivation", () => {
+  const derive = (...sqls: string[]) =>
+    deriveStellaTablePrivileges(
+      sqls.map((sql, index) => ({ name: `0000000000000${index}_case`, sql })),
+      {},
+    );
+  const privilegesOf = (sqls: string[], relation: string) =>
+    [...(derive(...sqls).privileges.get(relation) ?? [])].toSorted();
+
+  test("folds grants and revokes in statement order", () => {
+    expect(
+      privilegesOf(
+        [
+          `CREATE TABLE "t" ("id" text);
+           GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "t" TO stella;
+           REVOKE UPDATE, DELETE ON TABLE "t" FROM stella;`,
+          `GRANT DELETE ON t TO stella_ingestion, stella;`,
+        ],
+        "t",
+      ),
+    ).toEqual(["DELETE", "INSERT", "SELECT"]);
+    expect(
+      privilegesOf(
+        [
+          `CREATE TABLE t (id text);
+           REVOKE ALL PRIVILEGES ON TABLE t FROM stella;
+           GRANT SELECT ON TABLE t TO stella;`,
+        ],
+        "t",
+      ),
+    ).toEqual(["SELECT"]);
+  });
+
+  test("a new relation starts closed and a recreated one starts over", () => {
+    expect(
+      privilegesOf([`CREATE TABLE IF NOT EXISTS t (id text);`], "t"),
+    ).toEqual([]);
+    expect(
+      privilegesOf(
+        [
+          `CREATE TABLE t (id text); GRANT SELECT ON t TO stella;`,
+          `DROP TABLE t; CREATE TABLE t (id text);`,
+        ],
+        "t",
+      ),
+    ).toEqual([]);
+    expect(
+      privilegesOf(
+        [
+          `CREATE TABLE t (id text); GRANT SELECT ON t TO stella;`,
+          `ALTER TABLE t RENAME TO u;`,
+        ],
+        "u",
+      ),
+    ).toEqual(["SELECT"]);
+  });
+
+  test("ignores column grants, other roles, other objects and comments", () => {
+    expect(
+      privilegesOf(
+        [
+          `CREATE TABLE t (id text);
+           -- GRANT SELECT ON t TO stella;
+           GRANT UPDATE (id) ON TABLE t TO stella;
+           GRANT SELECT ON t TO stella_ingestion;
+           GRANT USAGE, SELECT ON SEQUENCE t TO stella;
+           ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO stella;
+           GRANT stella TO stella_ingestion;`,
+        ],
+        "t",
+      ),
+    ).toEqual([]);
+  });
+
+  test("a format() grant must be expanded by hand", () => {
+    const derivation = derive(
+      `DO $$ BEGIN
+         EXECUTE format('REVOKE ALL ON TABLE %I FROM stella', 't');
+       END $$;`,
+    );
+    expect(derivation.unexpandedDynamicMigrations).toEqual([
+      "00000000000000_case",
+    ]);
   });
 });
