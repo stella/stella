@@ -106,6 +106,11 @@ const checkTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Run the authoring checks over one stored template and return their " +
     "findings: broken marker structure and invalid markers, markers with no " +

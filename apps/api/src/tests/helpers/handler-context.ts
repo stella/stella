@@ -13,6 +13,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -78,7 +79,7 @@ const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const DEFAULT_USER_ID = toSafeId<"user">("user_test");
 
-const noopAuditRecorder: AuditRecorder = async () => await Promise.resolve();
+const noopAuditRecorder: AuditRecorder = auditRecorderDouble();
 
 // A handler that reaches for the database without the test providing one is a
 // test bug, not an empty result: fail loudly instead of silently returning

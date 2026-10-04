@@ -916,6 +916,10 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

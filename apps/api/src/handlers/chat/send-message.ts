@@ -344,6 +344,11 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes document inputs in the chat operation and returns its response stream.",
+  },
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
