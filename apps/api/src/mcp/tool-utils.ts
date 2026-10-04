@@ -42,7 +42,10 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
-import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
+import {
+  projectMcpRefusal,
+  statusCodeToErrorCode,
+} from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
@@ -727,18 +730,7 @@ export const internalFailureResult = (
     }
     const code = statusCodeToErrorCode(error.status);
     if (code !== "internal_error") {
-      return structuredErrorResult({
-        code,
-        message: error.message,
-        // A handler that rejected specific input entries names them here, so
-        // the envelope carries the same `issues[].path` detail a schema
-        // rejection does instead of collapsing to one line of prose.
-        issues: error.issues,
-        // The handler's own next step for input it refused: authored text
-        // about the call, never internal detail. Other refusals keep the
-        // envelope's default hint.
-        ...(code === "validation_error" && { hint: error.hint }),
-      });
+      return structuredErrorResult(projectMcpRefusal(error));
     }
   }
   captureError(error, { source: "mcp" });

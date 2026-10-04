@@ -845,7 +845,15 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
       </PopoverTrigger>
-      <PopoverPopup layer={layer} padding="sm" side="bottom" sideOffset={4}>
+      <PopoverPopup
+        // The entry scale would shrink the day cells below their touch and
+        // compact sizes while the popup opens.
+        className="data-starting-style:scale-100"
+        layer={layer}
+        padding="sm"
+        side="bottom"
+        sideOffset={4}
+      >
         <div
           aria-label={labels.dialog}
           className={sizeClassNames.popup}

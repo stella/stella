@@ -45,6 +45,7 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
+  readBodyText,
   readPublisher,
   readPublisherText,
   unreadPublisherError,
@@ -1357,6 +1358,58 @@ const CZ_NS_SOURCE_SURFACES = {
   >,
 } as const satisfies SourceSurfaceCensus;
 
+type ReadCzNsListPageOptions = {
+  start: number;
+  signal: AbortSignal;
+  cursor: string | null;
+};
+
+/** One listing page, read whole up to the shared ceiling; any failure throws. */
+const readCzNsListPage = async ({
+  start,
+  signal,
+  cursor,
+}: ReadCzNsListPageOptions) => {
+  const listUrl =
+    `${BASE_URL}/WebSearch?ReadViewEntries` +
+    `&Count=${PAGE_SIZE}` +
+    `&Start=${start}` +
+    `&OutputFormat=JSON`;
+  const listRead = await readPublisher(listUrl, {
+    fetchStage: "listing",
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    headers: COMMON_HEADERS,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "source",
+  });
+  if (listRead.type !== "present") {
+    throw unreadPublisherError({
+      outcome: listRead,
+      message: "CZ Supreme Court list error",
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      cursor,
+    });
+  }
+  const listBody = await readBodyText(listRead, signal);
+  // An empty body reaches page validation, which rejects it as unreadable.
+  const emptyBody =
+    listBody.type === "unavailable" && listBody.cause.kind === "empty-body";
+  if (listBody.type !== "present" && !emptyBody) {
+    throw unreadPublisherError({
+      outcome: listBody,
+      message: "CZ Supreme Court list error",
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      cursor,
+    });
+  }
+  return {
+    url: listUrl,
+    headers: listRead.value.headers,
+    body: listBody.type === "present" ? listBody.value : "",
+  };
+};
+
 export const czNsAdapter = defineSourceAdapter({
   documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
@@ -1416,7 +1469,13 @@ export const czNsAdapter = defineSourceAdapter({
           : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
-      const json = await read.value.json();
+      const text = await readBodyText(read, signal);
+      if (text.type !== "present") {
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
+      }
+      const json: unknown = JSON.parse(text.value);
       if (!isDominoViewResponse(json)) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -1440,36 +1499,13 @@ export const czNsAdapter = defineSourceAdapter({
       try: async () => {
         const start = cursor ? Number.parseInt(cursor, 10) : 1;
 
-        const listUrl =
-          `${BASE_URL}/WebSearch?ReadViewEntries` +
-          `&Count=${PAGE_SIZE}` +
-          `&Start=${start}` +
-          `&OutputFormat=JSON`;
-
-        const listRead = await readPublisher(listUrl, {
-          fetchStage: "listing",
-          adapterKey: ADAPTER_KEYS.CZ_NS,
-          headers: COMMON_HEADERS,
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-          refusalScope: "source",
-        });
-
-        if (listRead.type !== "present") {
-          throw unreadPublisherError({
-            outcome: listRead,
-            message: "CZ Supreme Court list error",
-            adapterKey: ADAPTER_KEYS.CZ_NS,
-            cursor,
-          });
-        }
-        const listResponse = listRead.value;
+        const listPage = await readCzNsListPage({ start, signal, cursor });
 
         const validatedPage = validatePublisherPage({
           adapterKey: ADAPTER_KEYS.CZ_NS,
           cursor,
-          headers: listResponse.headers,
-          body: await listResponse.text(),
+          headers: listPage.headers,
+          body: listPage.body,
           expectation: {
             kind: "json",
             minBytes: 2,
@@ -1610,7 +1646,7 @@ export const czNsAdapter = defineSourceAdapter({
                   count: refused,
                 },
                 nextCursor: String(start + i),
-                sourceUrl: listUrl,
+                sourceUrl: listPage.url,
               };
             }
             // Page-level signal fired: return partial results. A per-entry
@@ -1628,7 +1664,7 @@ export const czNsAdapter = defineSourceAdapter({
                   count: refused,
                 },
                 nextCursor: String(start + i),
-                sourceUrl: listUrl,
+                sourceUrl: listPage.url,
               };
             }
             throw error;
@@ -1649,7 +1685,7 @@ export const czNsAdapter = defineSourceAdapter({
         return {
           decisions,
           nextCursor,
-          sourceUrl: listUrl,
+          sourceUrl: listPage.url,
           itemBuildFailures: { type: "item_build_failed", count: refused },
         };
       },

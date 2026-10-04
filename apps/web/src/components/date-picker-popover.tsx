@@ -16,6 +16,7 @@ const DatePickerPopover = ({
   previousDecadeLabel,
   previousMonthLabel,
   previousYearLabel,
+  timeLabel,
   todayLabel,
   ...props
 }: DatePickerPopoverProps) => {
@@ -41,6 +42,7 @@ const DatePickerPopover = ({
       previousYearLabel={
         previousYearLabel ?? t("common.datePicker.previousYear")
       }
+      timeLabel={timeLabel ?? t("common.datePicker.time")}
       todayLabel={todayLabel ?? t("common.today")}
     />
   );

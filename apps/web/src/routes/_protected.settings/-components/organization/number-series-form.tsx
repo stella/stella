@@ -35,6 +35,7 @@ import {
   NUMBER_SERIES_PADDING_OPTIONS,
   numberSeriesFormSchema,
 } from "./number-series-form.logic";
+import { NumberSeriesSellerPicker } from "./number-series-seller-picker";
 
 const DOCUMENT_TYPE_LABELS = {
   invoice: "billing.numberSeries.invoice",
@@ -70,6 +71,7 @@ export const NumberSeriesForm = ({
         documentType: series?.documentType ?? "invoice",
         pattern: series?.pattern ?? DEFAULT_NUMBER_SERIES_PATTERN,
         padding: series?.padding ?? 4,
+        sellerProfileId: series?.sellerProfileId ?? null,
       },
       onSubmit: async ({ value }) => {
         if (!pending) {
@@ -208,6 +210,22 @@ export const NumberSeriesForm = ({
                     ))}
                   </SelectPopup>
                 </Select>
+                <FieldError />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="sellerProfileId">
+            {(field) => (
+              <Field name={field.name}>
+                <FieldLabel htmlFor={`${id}-seller`}>
+                  {t("billing.numberSeries.sellerProfile")}
+                </FieldLabel>
+                <NumberSeriesSellerPicker
+                  id={`${id}-seller`}
+                  disabled={disabled}
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                />
                 <FieldError />
               </Field>
             )}

@@ -1568,7 +1568,8 @@ describe("a failed publisher read is never built", () => {
     "status-500": SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
     timeout: "DOMException",
     "no-content-204": SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
-    "empty-body-200": "SyntaxError",
+    // The bounded body read reports an empty body before anything parses it.
+    "empty-body-200": SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
   } as const satisfies Record<ReadFault, string>;
 
   test.each(READ_FAULTS)(

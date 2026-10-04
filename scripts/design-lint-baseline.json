@@ -1079,7 +1079,6 @@
     "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 2,
     "apps/api/src/lib/views/table-export.ts": 1,
     "apps/api/src/lib/views/template-properties.ts": 1,
-    "apps/api/src/lib/workflow-queue.ts": 1,
     "apps/extension/src/lib/tab-executor.ts": 1,
     "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts": 2,
     "apps/web/src/lib/render-storm-canary.ts": 2,

@@ -35,6 +35,7 @@ import type { RequeueFileDerivativeDependencies } from "@/api/lib/file-derivativ
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -204,6 +205,8 @@ const runRepair = async () => {
     db: asTestRaw<SchedulerDb>(testDb),
     job,
     payload: job.payload,
+    dueAt: DueSlot.of(job),
+
     runId: createSafeId<"schedulerJobRun">(),
     scheduleContinuation: () => undefined,
     signal: new AbortController().signal,

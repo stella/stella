@@ -35,6 +35,7 @@ import type {
   CorpusPayload,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /**
  * One ingestion batch, one transfer.
@@ -140,6 +141,7 @@ export const deployedCorpusTransfer = (): CorpusTransfer => {
 export type CorpusPackBatchOptions = {
   scopedDb: ScopedDb;
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   /**
    * How this batch's payloads reach object storage. Production reads the
    * deployment; a test names the layout it exercises and the client that
@@ -248,6 +250,7 @@ const reservationsFor = (
 export const openCorpusPackBatch = ({
   scopedDb,
   signal,
+  s3Policy,
   transfer = deployedCorpusTransfer(),
 }: CorpusPackBatchOptions): CorpusPackBatch => {
   const entries: CorpusPackBatchEntry[] = [];
@@ -393,6 +396,7 @@ export const openCorpusPackBatch = ({
     }
     const transferred = await putPacks({
       packs: packed.value.packs,
+      ...(s3Policy === undefined ? {} : { s3Policy }),
       ...(signal === undefined ? {} : { signal }),
     });
     if (Result.isError(transferred)) {
@@ -449,7 +453,10 @@ export const openCorpusPackBatch = ({
               jurisdiction: entry.entry.jurisdiction,
               stored: entry.entry.stored,
             },
-            signal === undefined ? {} : { signal },
+            {
+              ...(signal === undefined ? {} : { signal }),
+              ...(s3Policy === undefined ? {} : { s3Policy }),
+            },
           ),
         catch: (cause) => cause,
       });

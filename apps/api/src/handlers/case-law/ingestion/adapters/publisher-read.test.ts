@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -11,7 +12,10 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
+  PUBLISHER_BODY_MAX_BYTES,
+  readBodyText,
   readPublisher,
+  readPublisherBytes,
   readPublisherText,
   unreadPublisherError,
   type PublisherReadInit,
@@ -45,9 +49,7 @@ describe("readPublisher", () => {
     serve(() => new Response("<p>text</p>", { status: 200 }));
     const outcome = await readPublisher(URL_UNDER_TEST, init());
     expect(outcome.type).toBe("present");
-    expect(outcome.type === "present" ? await outcome.value.text() : null).toBe(
-      "<p>text</p>",
-    );
+    expect(outcome.type === "present" ? outcome.value.status : null).toBe(200);
   });
 
   test("only 404 and 410 state an absence", async () => {
@@ -96,7 +98,7 @@ describe("readPublisher", () => {
   });
 
   test("a 5xx, a 204 and other 4xx answers are failures to read", async () => {
-    for (const status of [500, 502, 503, 400, 408, 429]) {
+    for (const status of [500, 502, 503, 400, 408]) {
       serve(() => new Response("error", { status }));
       expect(await readPublisher(URL_UNDER_TEST, init())).toEqual({
         type: "unavailable",
@@ -131,6 +133,37 @@ describe("readPublisher", () => {
       readPublisher(URL_UNDER_TEST, init({ signal: controller.signal })),
     );
     expect(rejection).toBeInstanceOf(DOMException);
+  });
+
+  test("a 429 halts the cycle as a typed publisher refusal after one request", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      return await Promise.resolve(
+        new Response("slow down", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        }),
+      );
+    });
+    const rejection = await rejectionOf(
+      readPublisherText(URL_UNDER_TEST, init()),
+    );
+    expect(rejection).toBeInstanceOf(AdapterFetchError);
+    expect(
+      rejection instanceof AdapterFetchError
+        ? {
+            stopKind: rejection.stopKind,
+            httpStatus: rejection.httpStatus,
+            retryAfter: rejection.retryAfter,
+          }
+        : null,
+    ).toEqual({
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+      httpStatus: 429,
+      retryAfter: "120",
+    });
+    expect(requests).toBe(1);
   });
 
   test("a source-level refusal stop still ends the cycle by throwing", async () => {
@@ -220,6 +253,129 @@ describe("readPublisherText", () => {
       value: "body",
     });
   });
+
+  test("decodes UTF-8 as Response.text() does", async () => {
+    const BYTE_ORDER_MARK = String.fromCodePoint(0xfe_ff);
+    const served = `${BYTE_ORDER_MARK}rozhodnutí č. 1 § 2 \u{1F600}`;
+    const bytes = new Uint8Array([...new TextEncoder().encode(served), 0xff]);
+    serve(() => new Response(bytes, { status: 200 }));
+    const outcome = await readPublisherText(URL_UNDER_TEST, init());
+    expect(outcome).toEqual({
+      type: "present",
+      value: await new Response(bytes).text(),
+    });
+  });
+});
+
+const CHUNK_BYTES = 1024 * 1024;
+
+/**
+ * A served body that never ends, counting how many chunks the reader pulled.
+ * One chunk is reused, so the stream itself holds no memory.
+ */
+const endlessBody = () => {
+  const chunk = new Uint8Array(CHUNK_BYTES).fill(0x61);
+  const state = { pulled: 0 };
+  const body = new ReadableStream<Uint8Array>({
+    pull: (controller) => {
+      state.pulled += 1;
+      controller.enqueue(chunk);
+    },
+  });
+  return { body, state };
+};
+
+/** A body that serves one chunk after the headers, then resets. */
+const resetBody = () =>
+  new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(new TextEncoder().encode("<p>partial"));
+    },
+    pull: (controller) => {
+      controller.error(new TypeError("Connection reset by peer"));
+    },
+  });
+
+describe.each([
+  ["readPublisherText", readPublisherText],
+  ["readPublisherBytes", readPublisherBytes],
+] as const)("%s body bounds", (_name, read) => {
+  test("a body over the ceiling is too-large, read no further than the ceiling", async () => {
+    const { body, state } = endlessBody();
+    serve(() => new Response(body, { status: 200 }));
+    expect(await read(URL_UNDER_TEST, init())).toEqual({
+      type: "unavailable",
+      cause: { kind: "too-large", maxBytes: PUBLISHER_BODY_MAX_BYTES },
+    });
+    // The stream never ends, so returning at all proves the read stopped;
+    // the pull count proves where.
+    expect(state.pulled).toBeLessThanOrEqual(
+      PUBLISHER_BODY_MAX_BYTES / CHUNK_BYTES + 2,
+    );
+  });
+
+  test("a body that resets after the headers is a failure to read", async () => {
+    serve(() => new Response(resetBody(), { status: 200 }));
+    const outcome = await read(URL_UNDER_TEST, init());
+    expect(outcome.type).toBe("unavailable");
+    expect(outcome.type === "unavailable" ? outcome.cause.kind : null).toBe(
+      "thrown",
+    );
+  });
+
+  test("an empty 200 body is a failure to read", async () => {
+    serve(() => new Response(new Uint8Array(0), { status: 200 }));
+    expect(await read(URL_UNDER_TEST, init())).toEqual({
+      type: "unavailable",
+      cause: { kind: "empty-body", status: 200 },
+    });
+  });
+});
+
+describe("readBodyText", () => {
+  test("reads an outcome whose headers the caller inspected first", async () => {
+    serve(
+      () =>
+        new Response("body", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+    );
+    const outcome = await readPublisher(URL_UNDER_TEST, init());
+    expect(
+      outcome.type === "present"
+        ? outcome.value.headers.get("Content-Type")
+        : null,
+    ).toBe("text/html");
+    expect(await readBodyText(outcome, undefined)).toEqual({
+      type: "present",
+      value: "body",
+    });
+  });
+
+  test("passes every other outcome through unread", async () => {
+    const absent = { type: "absent", evidence: "http-410" } as const;
+    expect(await readBodyText(absent, undefined)).toEqual(absent);
+  });
+});
+
+describe("readPublisherBytes", () => {
+  test("a served body is present as its exact bytes", async () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]);
+    serve(() => new Response(bytes, { status: 200 }));
+    expect(await readPublisherBytes(URL_UNDER_TEST, init())).toEqual({
+      type: "present",
+      value: bytes,
+    });
+  });
+
+  test("a status outcome is returned without reading a body", async () => {
+    serve(() => new Response("missing", { status: 404 }));
+    expect(await readPublisherBytes(URL_UNDER_TEST, init())).toEqual({
+      type: "absent",
+      evidence: "http-404",
+    });
+  });
 });
 
 test("no publisher status other than 404 and 410 reads as an absence, and only 401, 403 and 451 as a refusal", async () => {
@@ -227,7 +383,7 @@ test("no publisher status other than 404 and 410 reads as an absence, and only 4
     "no publisher status other than 404 and 410 reads as an absence, and only 401, 403 and 451 as a refusal",
     fc.asyncProperty(
       fc.oneof(
-        fc.integer({ min: 200, max: 599 }),
+        fc.integer({ min: 200, max: 599 }).filter((status) => status !== 429),
         fc.constantFrom(204, 401, 403, 404, 410, 451),
       ),
       fc.string({ maxLength: 8 }),

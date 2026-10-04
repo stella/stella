@@ -24,7 +24,7 @@ import {
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   hasGrantedScope,
-  isStaticToolVisibleToRole,
+  isStaticToolShownToMemberRole,
   listOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
@@ -87,6 +87,7 @@ const externalMcpToolAccess = ({
       };
       destructiveBehavior: { type: "upstream" };
       permissions: McpWriteToolPermissions;
+      accountAccess: "standard";
     } =>
   readOnlyHint === true
     ? {
@@ -113,6 +114,9 @@ const externalMcpToolAccess = ({
           reason:
             "The connector's upstream server authorizes the call under the connection's own credentials.",
         },
+        // Connector administration is reserved to standard accounts over
+        // REST; a connector's tools follow it.
+        accountAccess: "standard",
       };
 
 export const listGatewayMcpToolDefinitions = async ({
@@ -161,7 +165,10 @@ export const getGatewayMcpToolDefinition = async ({
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    return isStaticToolVisibleToRole(context, staticTool)
+    // Write authority is not decided here: dispatch refuses it with a
+    // `permission_denied` that names the role or the credential, as it
+    // refuses a gated-off tool with `feature_disabled`.
+    return isStaticToolShownToMemberRole(context, staticTool)
       ? staticTool
       : undefined;
   }

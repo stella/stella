@@ -50,6 +50,7 @@ import {
   validatePublisherPage,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
+  readBodyText,
   readPublisher,
   readPublisherText,
   unreadPublisherError,
@@ -2483,7 +2484,13 @@ export const czRegionalAdapter = defineSourceAdapter({
               read satisfies never;
               return panic(`Unhandled regional count read: ${String(read)}`);
           }
-          const json: unknown = await read.value.json();
+          const text = await readBodyText(read, signal);
+          if (text.type !== "present") {
+            return sourceTotalProbeFailed(
+              SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+            );
+          }
+          const json: unknown = JSON.parse(text.value);
           if (!Array.isArray(json)) {
             return sourceTotalProbeFailed(
               SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,

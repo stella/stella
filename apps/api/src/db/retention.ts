@@ -37,6 +37,10 @@ export const TABLE_RETENTION = {
   audit_logs: {
     boundedBy: "Organization-owned audit history and organization deletion.",
   },
+  system_audit_runs: {
+    ttlColumn: "created_at",
+    sweeper: "audit.purgeSystemRuns",
+  },
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
   },

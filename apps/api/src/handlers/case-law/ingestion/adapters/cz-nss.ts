@@ -52,7 +52,9 @@ import type {
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
+  readBodyText,
   readPublisher,
+  readPublisherBytes,
   readPublisherText,
   unreadPublisherError,
   type UnreadPublisherOutcome,
@@ -938,7 +940,9 @@ const fetchPlainTextContent = async (
   session: SessionState,
   signal: AbortSignal,
 ): Promise<DecisionContentRead> => {
-  const read = await readPublisher(
+  // The bounded byte read reports an empty, oversized or failed body as
+  // unavailable, and rethrows a read the page's signal aborted.
+  const read = await readPublisherBytes(
     `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
     {
       fetchStage: "document",
@@ -968,37 +972,7 @@ const fetchPlainTextContent = async (
       read satisfies never;
       return panic(`Unhandled NSS text read: ${String(read)}`);
   }
-  const response = read.value;
-  const buffer = await Result.tryPromise({
-    try: async () => await response.arrayBuffer(),
-    catch: (cause: unknown) => cause,
-  });
-  if (Result.isError(buffer)) {
-    // A read the page's signal aborts goes back to the crawl, which disposes
-    // of the row together with the rest of its page.
-    if (signal.aborted) {
-      throw buffer.error;
-    }
-    return observeDocumentReadFailed({
-      documentId,
-      phase: CZ_NSS_RAW_PART.TEXT,
-      read: {
-        type: "unavailable",
-        cause: { kind: "thrown", error: buffer.error },
-      },
-    });
-  }
-  if (buffer.value.byteLength === 0) {
-    return observeDocumentReadFailed({
-      documentId,
-      phase: CZ_NSS_RAW_PART.TEXT,
-      read: {
-        type: "unavailable",
-        cause: { kind: "empty-body", status: response.status },
-      },
-    });
-  }
-  const text = new TextDecoder("utf-16").decode(buffer.value);
+  const text = new TextDecoder("utf-16").decode(read.value);
   const body = stripHtml(text);
   const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
   return {
@@ -2042,7 +2016,16 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   }
 
   const response = read.value;
-  const html = await response.text();
+  const htmlRead = await readBodyText(read, signal);
+  if (htmlRead.type !== "present") {
+    throw unreadPublisherError({
+      outcome: htmlRead,
+      message: "NSS session init failed",
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: null,
+    });
+  }
+  const html = htmlRead.value;
   const cookies = extractCookies(response);
   const token = extractAntiforgeryToken(html);
 
@@ -2176,7 +2159,19 @@ const executeSearch = async (
     session.cookies = mergeCookies(session.cookies, newCookies);
   }
 
-  const html = await response.text();
+  const htmlRead = await readBodyText(read, signal);
+  if (htmlRead.type !== "present") {
+    return {
+      type: "unavailable",
+      error: unreadPublisherError({
+        outcome: htmlRead,
+        message: "NSS search failed",
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+      }),
+    };
+  }
+  const html = htmlRead.value;
 
   const statedCount = statedResultCount(html);
   if (statedCount === null) {
@@ -2276,7 +2271,21 @@ const fetchResultPage = async ({
     );
   }
 
-  const html = await read.value.text();
+  const htmlRead = await readBodyText(read, signal);
+  const emptyBody =
+    htmlRead.type === "unavailable" && htmlRead.cause.kind === "empty-body";
+  if (htmlRead.type !== "present" && !emptyBody) {
+    invalidateSession();
+    return Result.err(
+      unreadPublisherError({
+        outcome: htmlRead,
+        message: "NSS pagination failed",
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: `${date}:${page}`,
+      }),
+    );
+  }
+  const html = htmlRead.type === "present" ? htmlRead.value : "";
   // Case-law rule 14: a day ends when the source says there is nothing more.
   // This endpoint answers 200 with an empty body for two different things —
   // a page past the day's last record, and a query it did not recognise —
@@ -2867,7 +2876,13 @@ export const czNssAdapter = defineSourceAdapter({
       // A zero here is not a corpus of nothing; it is a search that did not
       // run, which `sourceTotalRead` refuses along with every other value a
       // total cannot be.
-      const count = statedResultCount(await read.value.text());
+      const text = await readBodyText(read, signal);
+      if (text.type !== "present") {
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
+      }
+      const count = statedResultCount(text.value);
       return count === null
         ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
         : sourceTotalRead(count);

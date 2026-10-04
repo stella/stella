@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pridať číselný rad",
       "advance": "Záloha",
+      "allSellers": "Všetci dodávatelia",
       "archiveConfirm": "Archivovať tento číselný rad? Nebude už dostupný pre nové doklady.",
       "creditNote": "Dobropis",
       "default": "Predvolený rad",
@@ -562,6 +563,9 @@
       "preview": "Ďalšie číslo",
       "previewAllocated": "Toto číslo už bolo pridelené.",
       "previewHelp": "Náhľad používa uložený vzor a nerezervuje číslo.",
+      "sellerProfile": "Profil dodávateľa",
+      "sellerUnavailable": "Dodávateľ je archivovaný alebo nedostupný",
+      "sellerUnavailableHelp": "Tento dodávateľ je archivovaný alebo nedostupný. Ponechajte priradenie alebo vyberte iného dodávateľa.",
       "setDefault": "Nastaviť ako predvolený rad",
       "title": "Číselné rady"
     },
@@ -976,7 +980,6 @@
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
     "removed": "Tento nástroj už nie je dostupný.",
     "sectionOthers": "Ostatné",
-    "sectionRecommended": "Odporúčané",
     "settings": {
       "packTitle": "Odporúčaný balík"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Zatiaľ žiadne zručnosti",
       "pinnedMatters": "Pripnuté spisy",
       "recentChats": "Nedávne chaty",
+      "skillEditedBy": "Upravil(a) {name} · {time}",
       "skills": "Zručnosti"
     },
     "loadEarlierMessages": "Načítať staršie správy",
@@ -1183,8 +1187,10 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
+      "allModels": "Všetky modely ({count, number})",
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
+      "belowFrontier": "Pod najlepšími kompromismi",
       "effortHelpDescription": "Určuje, koľko uvažovania model použije pred odpoveďou. Vyššie úrovne môžu pomôcť pri zložitej práci, ale zvyčajne trvajú dlhšie. Bodka označuje predvolenú úroveň poskytovateľa pre tento model.",
       "effortHelpLabel": "O úrovni uvažovania",
       "effortLabel": "Úroveň uvažovania",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Predvolené",
         "xhigh": "Veľmi vysoké"
       },
+      "newModel": "Nový",
+      "premiumCost": "Nezvyčajne vysoká cena",
+      "recommendedHelpDescription": "Žiadny iný dostupný model nie je zároveň lacnejší a lepšie hodnotený. Modely, ktoré sú na hodnotenie príliš nové, sú označené ako nové. Kvalita: <link>{benchmark} od LMArena</link> ({licence}); cena: cenníkové ceny.",
+      "recommendedHelpLabel": "O odporúčaných modeloch",
       "selectionLabel": "{model} | {effort}",
       "title": "Vybrať model chatu",
       "viaProvider": "cez {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "thinking": "Pracujem s kontextom",
+    "threadFiles": {
+      "title": "Súbory v tomto chate"
+    },
     "tool": {
       "add_comment": "Pridávanie komentára",
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",
@@ -1615,7 +1628,8 @@
       "nextYear": "Nasledujúci rok",
       "previousDecade": "Predchádzajúce desaťročie",
       "previousMonth": "Predchádzajúci mesiac",
-      "previousYear": "Predchádzajúci rok"
+      "previousYear": "Predchádzajúci rok",
+      "time": "Čas"
     },
     "decisions": "Rozhodnutia",
     "decline": "Odmietnuť",
@@ -1777,6 +1791,7 @@
     "properties": "Vlastnosti",
     "queued": "V poradí",
     "reason": "Dôvod",
+    "recommended": "Odporúčané",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
     "refresh": "Obnoviť",
@@ -1902,6 +1917,7 @@
       "addBankAccount": "Pridať bankový účet",
       "noBillingData": "Žiadne fakturačné údaje.",
       "removeBankAccount": "Odstrániť bankový účet",
+      "selectCurrencyForRate": "Na nastavenie hodinovej sadzby vyberte menu.",
       "title": "Fakturačné údaje"
     },
     "columns": {
@@ -2271,10 +2287,14 @@
       "deeplKeyRejected": "Uložený kľúč DeepL bol odmietnutý. Nahraďte ho v nastaveniach organizácie.",
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
+      "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
+      "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
+      "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
+      "matterContactCapacityReached": "Tento spis dosiahol limit kontaktov. Pred pridaním ďalšieho kontaktu odstráňte jedno prepojenie s kontaktom.",
       "mcpAuthorizationApprovalRequired": "Skôr než sa budete môcť pripojiť, musí správca tento konektor schváliť.",
       "notOrganizationMember": "Nie ste členom tejto organizácie.",
       "providerKeyRejected": "Poskytovateľ odmietol kľúč API.",
@@ -4835,6 +4855,7 @@
     "addPart": "Pridať časť",
     "addTag": "Pridať štítok",
     "aiAdaptHint": "AI prispôsobí túto formuláciu každému miestu v dokumente, kde sa objaví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnúť tieto podmienky, preto boli ich časti vyplnené, akoby neplatili: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala navrhnúť tieto polia: {list}",
     "allTemplates": "Všetky vzory",
@@ -4926,6 +4947,7 @@
     "directiveFor": "Cyklus: {expression}",
     "directiveIf": "Ak: {expression}",
     "discoveryFailed": "Nepodarilo sa analyzovať vzor",
+    "documentCreatedIncomplete": "Dokument bol vytvorený, ale vyplnenie nie je úplné",
     "downloadAnyway": "Aj tak stiahnuť",
     "downloadDocx": "Stiahnuť DOCX",
     "downloadPdf": "Stiahnuť PDF",
@@ -5021,6 +5043,7 @@
     "saveFailed": "Nepodarilo sa uložiť vzor",
     "savedLookupFormats": "Uložené výstupné formáty",
     "searchTemplates": "Hľadať vzory…",
+    "structureErrorsInDocument": "Direktívy vzoru, ktoré nebolo možné použiť: {count}. Skontrolujte dokument.",
     "structureWarningParagraph": "Odsek {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry}}",
     "studio": {

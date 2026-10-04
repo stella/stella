@@ -363,6 +363,20 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   {
+    id: "time-entry-amount",
+    capability: "Price recorded time with its no-charge disposition",
+    owner: ["packages/money/"],
+    summary:
+      "timeEntryAmount requires the noCharge field and returns zero for no-charge time. " +
+      "Invoice lines, exports and displayed time amounts use this calculation.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/money"],
+      names: ["prorateHourlyCents"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
@@ -405,6 +419,11 @@ export const OWNERSHIP = [
       allowed: [
         {
           path: "apps/api/src/db/schema.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/db/code-owned-tables.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
@@ -739,16 +758,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason:
-            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
-          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason:
-            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
           reason: "Scheduled organization automation.",
         },
@@ -759,11 +768,6 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/scouts/work-attention.ts",
           reason: "Takes the constructor as an injected dependency type.",
-        },
-        {
-          path: "apps/api/src/lib/workflow-queue.ts",
-          reason:
-            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -776,7 +780,7 @@ export const OWNERSHIP = [
       "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
       "workspace pinned for the run's own rows and its output, and `inputDb` " +
       "reads under the requester's membership as it stands when the run " +
-      "executes. Member-run queues are listed in " +
+      "executes. Member-run queues and scheduler tasks are listed in " +
       "`apps/api/src/lib/member-run-queues.ts`.",
     enforcement: {
       kind: "import",
@@ -790,10 +794,17 @@ export const OWNERSHIP = [
           "apps/api/src/lib/bilingual/run-queue.ts",
           "apps/api/src/handlers/reports/report-export-queue.ts",
           "apps/api/src/lib/lists/verification/run-queue.ts",
+          "apps/api/src/lib/workflow-queue.ts",
         ].map((modulePath) => ({
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
+        // Kept equal to MEMBER_RUN_SCHEDULER_TASKS by scripts/ownership.test.ts.
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Member-run scheduler task; reads each compaction through its owner's inputDb.",
+        },
       ],
     },
   },
@@ -1083,6 +1094,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
+          reason:
+            "Loads persisted source bytes under the replay tick's byte cap and deadline.",
         },
         {
           path: "apps/api/src/handlers/chat/chat-prompt.ts",
@@ -1719,6 +1735,24 @@ export const OWNERSHIP = [
       "reads the same wherever it appears. The `require-relative-time-helpers` " +
       "rule enforces it.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "file-encryption",
+    capability: "Deciding a stored file's `encrypted` attribute",
+    owner: ["apps/api/src/lib/files/detect-file-encryption.ts"],
+    summary:
+      "Every file content writer takes a `FileEncryption`, which only this " +
+      "module makes: from the bytes (PDFs go through the PDF worker), from an " +
+      "Office editor's output, from bytes the server built, or from a stored " +
+      "copy. The PDF probe is confined here, `no-literal-derived-attribute` " +
+      "rejects a literal written to `encrypted` elsewhere in the API, and " +
+      "`file-encryption-writers.test.ts` enumerates the writers.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/files/pdf-utils"],
+      names: ["isEncryptedPdf"],
+      allowed: [],
+    },
   },
   {
     id: "money-arithmetic",

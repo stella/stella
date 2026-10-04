@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -2007,7 +2008,9 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
-    return errorResult(outcome.message);
+    return internalFailureResult(
+      new HandlerError(playbookRunFailureDetails(outcome)),
+    );
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
@@ -2108,10 +2111,15 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ clause: ["create"] }, { clause: ["update"] }],
-      reason: "clause_id selects update; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "clause_id",
+        present: { operation: "update", permissions: { clause: ["update"] } },
+        absent: { operation: "create", permissions: { clause: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
@@ -2131,6 +2139,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "organization's clause library. This is irreversible.",
     inputSchema: deleteClauseArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { clause: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
@@ -2206,10 +2215,15 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ playbook: ["create"] }, { playbook: ["update"] }],
-      reason: "playbook_id selects update; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "playbook_id",
+        present: { operation: "update", permissions: { playbook: ["update"] } },
+        absent: { operation: "create", permissions: { playbook: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_playbook",
@@ -2231,6 +2245,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { playbook: ["apply"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",

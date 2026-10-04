@@ -16,6 +16,7 @@ import {
   corpusS3ObjectExists,
   putCorpusS3ObjectWithSignal,
 } from "@/api/lib/s3";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -85,18 +86,35 @@ type PlanCorpusPacksOptions = {
 type PutCorpusPacksOptions = {
   packs: readonly EncodedPack[];
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   timeoutMs?: number;
   /** Test seams; production writes through the corpus bucket client. */
-  put?: (key: string, bytes: Uint8Array, signal: AbortSignal) => Promise<void>;
-  exists?: (key: string) => Promise<boolean>;
+  put?: (
+    key: string,
+    bytes: Uint8Array,
+    signal: AbortSignal,
+    s3Policy?: S3CredentialRefreshOptions,
+  ) => Promise<void>;
+  exists?: (
+    key: string,
+    signal: AbortSignal,
+    s3Policy?: S3CredentialRefreshOptions,
+  ) => Promise<boolean>;
 };
 
 const putPack = async (
   key: string,
   bytes: Uint8Array,
   signal: AbortSignal,
+  s3Policy?: S3CredentialRefreshOptions,
 ): Promise<void> =>
-  await putCorpusS3ObjectWithSignal(key, bytes, PACK_CONTENT_TYPE, signal);
+  await putCorpusS3ObjectWithSignal({
+    key,
+    bytes,
+    mimeType: PACK_CONTENT_TYPE,
+    signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+  });
 
 /**
  * What one member costs the ceiling beyond its own bytes: its footer entry,
@@ -214,6 +232,7 @@ export const planCorpusPacks = async ({
 export const putCorpusPacks = async ({
   packs,
   signal,
+  s3Policy,
   timeoutMs = LIMITS.corpusObjectIoTimeoutMs,
   put = putPack,
   exists = corpusS3ObjectExists,
@@ -222,13 +241,14 @@ export const putCorpusPacks = async ({
     const written = await Result.tryPromise({
       try: async () => {
         const already = await withTimeout(
-          async () => await exists(pack.packKey),
+          async (probeSignal) =>
+            await exists(pack.packKey, probeSignal, s3Policy),
           { label: "corpus-pack-exists", signal, timeoutMs },
         );
         if (!already) {
           await withTimeout(
             async (writeSignal) =>
-              await put(pack.packKey, pack.bytes, writeSignal),
+              await put(pack.packKey, pack.bytes, writeSignal, s3Policy),
             { label: "corpus-write-pack", signal, timeoutMs },
           );
         }

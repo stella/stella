@@ -21,12 +21,12 @@ export const isThumbnailableMimeType = (mimeType: string): boolean =>
   Object.hasOwn(IMAGE_THUMBNAIL_MIME_TYPES, mimeType);
 
 type ShouldGenerateImageThumbnailOptions = {
-  encrypted?: boolean;
+  encrypted: boolean;
   mimeType: string;
 };
 
 export const shouldGenerateImageThumbnail = ({
-  encrypted = false,
+  encrypted,
   mimeType,
 }: ShouldGenerateImageThumbnailOptions): boolean =>
   !encrypted && isThumbnailableMimeType(mimeType);
