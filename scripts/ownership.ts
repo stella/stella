@@ -366,6 +366,17 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   {
+    id: "query-view",
+    capability: "Presenting non-suspense query results",
+    owner: [
+      "apps/web/src/lib/query-view.logic.ts",
+      "apps/web/src/lib/use-query-view.ts",
+    ],
+    summary:
+      "useQueryView separates pending reads, initial errors with retry, successful empty results and cached items with refetch errors. The query-data-requires-state lint rule rejects data reads without state handling and hooks that discard query state; its exact-set baseline only shrinks.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "entity-sibling-naming",
     capability: "Resolving names for new sibling entities",
     owner: [
@@ -1005,6 +1016,21 @@ export const OWNERSHIP = [
     summary:
       "Cursor query fields come from `tPaginationCursor`, so the byte cap is " +
       "one named constant rather than a literal repeated per route.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "case-law-source-fingerprint",
+    capability:
+      "The change-detection hash of a case-law decision's stored source",
+    owner: ["apps/api/src/handlers/case-law/ingestion/source-fingerprint.ts"],
+    summary:
+      "`sourceFingerprint` is the only constructor of `SourceFingerprint`, " +
+      "derived from the stored envelope and every object stored beside it, so " +
+      "`rawHash` changes whenever a stored byte does. The " +
+      "`raw-hash-from-source-fingerprint` rule rejects a hand-written `rawHash` " +
+      "in adapters, and `scripts/source-fingerprint-baseline.ts` enumerates " +
+      "every registered source, every exempt file and every external-id writer " +
+      "against a shrink-only baseline.",
     enforcement: { kind: "none" },
   },
   {

@@ -29,10 +29,14 @@ export const BASELINE_PATHS = {
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
+  /** scripts/query-data-state-baseline.ts */
+  queryDataState: ".oxlint-plugins/query-data-requires-state-baseline.json",
   /** scripts/failure-as-empty-baseline.ts */
   failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
+  /** scripts/source-fingerprint-baseline.ts */
+  sourceFingerprint: "scripts/source-fingerprint-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
