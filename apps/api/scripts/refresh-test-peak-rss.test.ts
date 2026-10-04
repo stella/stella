@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { refreshTestPeakRss } from "./refresh-test-peak-rss";
-import type { TestRssTable } from "./test-batch-plan";
+import type { TestRssShard, TestRssTable } from "./test-batch-plan";
 
 const FIRST = "scripts/first.test.ts";
 const SECOND = "src/second.test.tsx";
@@ -15,19 +15,36 @@ const ENVIRONMENT = {
   runnerImage: "ubuntu24:20261001",
 };
 const SOURCE = { runId: "123", job: "measure-1" };
+const MEASURED_AT = "2026-10-04T03:10:00.000Z";
+const LATER_MEASURED_AT = "2026-10-04T03:40:00.000Z";
+const ONLY_SHARD = { index: 1, count: 1 };
 const measurement = (file = FIRST, peakMb = 42, exitCode = 0) => ({
   file,
   peakMb,
   exitCode,
 });
-const artifact = (
+type ArtifactOptions = {
+  measurements?: ReturnType<typeof measurement>[];
+  baselineMb?: number;
+  source?: typeof SOURCE;
+  measuredAt?: string;
+  shard?: TestRssShard;
+  plannedFiles?: number;
+};
+const artifact = ({
   measurements = [measurement()],
   baselineMb = 30,
   source = SOURCE,
-) => ({
-  version: 1,
+  measuredAt = MEASURED_AT,
+  shard = ONLY_SHARD,
+  plannedFiles = measurements.length,
+}: ArtifactOptions = {}) => ({
+  version: 3,
   environment: ENVIRONMENT,
   source,
+  measuredAt,
+  shard,
+  plannedFiles,
   baselineMb,
   measurements,
 });
@@ -52,15 +69,19 @@ test("refresh preserves per-shard baselines and provenance in stable sorted byte
   const f = fixture();
   try {
     const secondSource = { runId: "123", job: "measure-2" };
-    const firstArtifact = artifact([measurement()], 50);
-    const secondArtifact = artifact(
-      [measurement(SECOND, 99.5)],
-      30,
-      secondSource,
-    );
+    const firstArtifact = artifact({
+      baselineMb: 50,
+      shard: { index: 1, count: 2 },
+    });
+    const secondArtifact = artifact({
+      measurements: [measurement(SECOND, 99.5)],
+      source: secondSource,
+      measuredAt: LATER_MEASURED_AT,
+      shard: { index: 2, count: 2 },
+    });
     const table = {
-      type: "measured",
       environment: ENVIRONMENT,
+      measuredAt: LATER_MEASURED_AT,
       baselineMb: 50,
       files: {
         [FIRST]: { peakMb: 42, baselineMb: 50, source: SOURCE },
@@ -77,12 +98,40 @@ test("refresh preserves per-shard baselines and provenance in stable sorted byte
     expect(f.refresh().content).toBe(expected);
     expect(f.refresh().changes).toEqual({
       newFiles: [FIRST, SECOND],
+      unmeasuredFiles: [],
+      removedFiles: [],
       biggestRelativeChange: undefined,
     });
+  } finally {
+    f.clean();
+  }
+});
+
+test("a complete run refreshes a tree that moved on since it was measured", () => {
+  const f = fixture();
+  try {
     writeFileSync(path.join(f.apiRoot, "src/added.test.ts"), "");
-    expect(() => f.refresh()).toThrow(
-      "Incomplete test census: src/added.test.ts",
+    f.receipt(
+      "a.json",
+      artifact({
+        measurements: [
+          measurement(FIRST, 42),
+          measurement("src/deleted.test.ts", 70),
+          measurement(SECOND, 99.5),
+        ],
+      }),
     );
+    const refreshed = f.refresh();
+    expect(Object.keys(JSON.parse(refreshed.content).files)).toEqual([
+      FIRST,
+      SECOND,
+    ]);
+    expect(refreshed.changes).toEqual({
+      newFiles: [FIRST, SECOND],
+      unmeasuredFiles: ["src/added.test.ts"],
+      removedFiles: ["src/deleted.test.ts"],
+      biggestRelativeChange: undefined,
+    });
   } finally {
     f.clean();
   }
@@ -93,10 +142,14 @@ test("refresh reports the largest relative magnitude and identifies new files", 
   try {
     f.receipt(
       "a.json",
-      artifact([measurement(FIRST, 42), measurement(SECOND, 99.5)]),
+      artifact({
+        measurements: [measurement(FIRST, 42), measurement(SECOND, 99.5)],
+      }),
     );
     expect(f.refresh({ [FIRST]: 21, [SECOND]: 199 }).changes).toEqual({
       newFiles: [],
+      unmeasuredFiles: [],
+      removedFiles: [],
       biggestRelativeChange: {
         file: FIRST,
         previousPeakMb: 21,
@@ -106,6 +159,8 @@ test("refresh reports the largest relative magnitude and identifies new files", 
     });
     expect(f.refresh({ [FIRST]: 84 }).changes).toEqual({
       newFiles: [SECOND],
+      unmeasuredFiles: [],
+      removedFiles: [],
       biggestRelativeChange: {
         file: FIRST,
         previousPeakMb: 84,
@@ -128,7 +183,7 @@ test.each(
     {},
     { ...artifact(), version: 2 },
     { ...artifact(), measurements: "invalid" },
-    artifact([]),
+    artifact({ measurements: [] }),
     { ...artifact(), measurements: [null] },
   ].map((payload) => ({ payload })),
 )("invalid or empty receipt %j is refused", ({ payload }) => {
@@ -140,6 +195,36 @@ test.each(
     f.clean();
   }
 });
+
+test.each([
+  null,
+  {},
+  { index: 0, count: 1 },
+  { index: 2, count: 1 },
+  { index: 1.5, count: 2 },
+  { index: "1", count: 1 },
+])("invalid shard %j is refused", (shard) => {
+  const f = fixture();
+  try {
+    f.receipt("a.json", { ...artifact(), shard });
+    expect(() => f.refresh()).toThrow("Invalid shard");
+  } finally {
+    f.clean();
+  }
+});
+
+test.each([0, -1, 1.5, "1", null])(
+  "invalid planned file count %s is refused",
+  (plannedFiles) => {
+    const f = fixture();
+    try {
+      f.receipt("a.json", { ...artifact(), plannedFiles });
+      expect(() => f.refresh()).toThrow("Invalid planned file count");
+    } finally {
+      f.clean();
+    }
+  },
+);
 
 test.each([0, -1, Number.NaN, Infinity, "42", null])(
   "invalid peak %s is refused",
@@ -198,7 +283,7 @@ test.each([
 ])("unsafe path %s is refused", (file) => {
   const f = fixture();
   try {
-    f.receipt("a.json", artifact([measurement(file)]));
+    f.receipt("a.json", artifact({ measurements: [measurement(file)] }));
     expect(() => f.refresh()).toThrow("Unsafe test path");
   } finally {
     f.clean();
@@ -228,10 +313,13 @@ test("malformed source and environment snapshots fail closed", () => {
         /Invalid (RSS environment|OS|architecture|runner image)/u,
       );
     }
-    f.receipt("a.json", artifact());
+    f.receipt("a.json", artifact({ shard: { index: 1, count: 2 } }));
     for (const field of ["os", "arch", "bunVersion", "runnerImage"]) {
       f.receipt("shard/b.json", {
-        ...artifact([measurement(SECOND)]),
+        ...artifact({
+          measurements: [measurement(SECOND)],
+          shard: { index: 2, count: 2 },
+        }),
         environment: { ...ENVIRONMENT, [field]: "different" },
       });
       expect(() => f.refresh()).toThrow("Mixed measurement environments");
@@ -241,14 +329,42 @@ test("malformed source and environment snapshots fail closed", () => {
   }
 });
 
-test("stale, duplicate and incomplete artifact unions cannot replace the census", () => {
+test.each([
+  null,
+  1_759_547_400_000,
+  "",
+  "yesterday",
+  "2026-10-04",
+  "2026-10-04T03:10:00Z",
+  "2026-02-30T03:10:00.000Z",
+])("invalid measurement time %j is refused", (measuredAt) => {
   const f = fixture();
   try {
-    f.receipt("a.json", artifact([measurement("src/deleted.test.ts")]));
-    expect(() => f.refresh()).toThrow("Stale test measurement");
-    f.receipt("a.json", artifact());
-    expect(() => f.refresh()).toThrow(`Incomplete test census: ${SECOND}`);
-    f.receipt("shard/b.json", artifact());
+    f.receipt("a.json", { ...artifact(), measuredAt });
+    expect(() => f.refresh()).toThrow("Invalid measurement time in a.json");
+  } finally {
+    f.clean();
+  }
+});
+
+test("partial shards, missing shards and duplicates cannot replace the table", () => {
+  const f = fixture();
+  try {
+    f.receipt("a.json", artifact({ plannedFiles: 2 }));
+    expect(() => f.refresh()).toThrow(
+      "Incomplete shard 1/1 in a.json: measured 1 of 2 files",
+    );
+    f.receipt("a.json", artifact({ shard: { index: 1, count: 3 } }));
+    expect(() => f.refresh()).toThrow(
+      "Incomplete measurement run: missing shard 2/3, 3/3",
+    );
+    f.receipt("shard/b.json", artifact({ shard: { index: 1, count: 3 } }));
+    expect(() => f.refresh()).toThrow("Duplicate shard 1/3");
+    f.receipt("shard/b.json", artifact({ shard: { index: 2, count: 2 } }));
+    expect(() => f.refresh()).toThrow(
+      "Measurement receipts disagree on the shard count: 3 and 2",
+    );
+    f.receipt("a.json", artifact({ shard: { index: 1, count: 2 } }));
     expect(() => f.refresh()).toThrow(`Duplicate test measurement: ${FIRST}`);
   } finally {
     f.clean();
@@ -258,12 +374,16 @@ test("stale, duplicate and incomplete artifact unions cannot replace the census"
 test("shards from different measurement runs cannot form a census", () => {
   const f = fixture();
   try {
-    f.receipt("a.json", artifact([measurement()], 50));
+    f.receipt(
+      "a.json",
+      artifact({ baselineMb: 50, shard: { index: 1, count: 2 } }),
+    );
     f.receipt(
       "b.json",
-      artifact([measurement(SECOND, 99.5)], 30, {
-        runId: "456",
-        job: "measure-2",
+      artifact({
+        measurements: [measurement(SECOND, 99.5)],
+        source: { runId: "456", job: "measure-2" },
+        shard: { index: 2, count: 2 },
       }),
     );
     expect(() => f.refresh()).toThrow(

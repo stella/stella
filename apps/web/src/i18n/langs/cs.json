@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vybrat člena...",
       "deleteAccountTasksDescription": "Máte přiřazené aktivní úkoly. Převést je na jiné členy pracovního prostoru, aby práce pokračovala.",
       "deleteAccountTasksTitle": "Převést aktivní úkoly",
+      "deleteAccountTasksUnassignedNotice": "Úkoly bez vybraného člena zůstanou v pracovním prostoru bez řešitele.",
       "deleteAccountWarning": "Smazání je nezvratný krok. Přihlašovací údaje a soukromá data účtu budou odstraněny.",
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Dokončená historie pracovních prostorů zůstane přiřazená ke smazanému účtu.",
       "desktop": "Aplikace pro počítač",

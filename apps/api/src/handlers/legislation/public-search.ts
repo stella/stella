@@ -20,7 +20,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-export const publicStatuteSearchQuerySchema = t.Object(
+const publicStatuteSearchQuerySchema = t.Object(
   {
     ...t.Omit(searchLegislationBodySchema, ["jurisdiction", "limit"])
       .properties,
@@ -48,7 +48,7 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
         Result.tryPromise(async () => {
           switch (countryRead.kind) {
             case "unavailable":
-              return status(503, countryRead.response);
+              return countryRead.answer;
             case "unreadable":
               return status(400, { message: countryRead.message });
             case "read":

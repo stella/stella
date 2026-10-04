@@ -1253,6 +1253,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Session ownership is passed from agent:up to its detached dev runner.
+  "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
   // Preserve Bun global-store links inside browser containers.

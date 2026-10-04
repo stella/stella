@@ -1299,7 +1299,9 @@ const listTasksArgsSchema = nullAsAbsent(
     assignee: v.optional(
       v.pipe(
         v.picklist(TASK_ASSIGNEE_FILTERS),
-        v.description("'me': only tasks assigned to you. Default 'any'"),
+        v.description(
+          "'me': your assignments; 'unassigned': tasks with no assignee. Default 'any'",
+        ),
       ),
     ),
     date_from: v.optional(

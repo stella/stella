@@ -130,10 +130,10 @@ export const CORPUS_INDEX_COMMIT = {
   waitFor: "wait_for",
 } as const;
 
-export type CorpusIndexCommitMode =
+type CorpusIndexCommitMode =
   (typeof CORPUS_INDEX_COMMIT)[keyof typeof CORPUS_INDEX_COMMIT];
 
-export type CorpusIndexSearchInput = {
+type CorpusIndexSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
   /** Full corpus index query string, including any field:value filter clauses. */
@@ -166,7 +166,7 @@ export type CorpusIndexAggregations = Record<string, unknown>;
 
 export type CorpusIndexHit = Record<string, unknown>;
 
-export type CorpusIndexSearchResponse = {
+type CorpusIndexSearchResponse = {
   numHits: number;
   hits: CorpusIndexHit[];
   snippets: Record<string, unknown>[];
@@ -345,7 +345,7 @@ type CorpusIndexDeleteSettlementsInput = {
  * creation instant plus the merge policy's maturation period, in the
  * metastore's whole seconds.
  */
-export type CorpusIndexSplitMaturity =
+type CorpusIndexSplitMaturity =
   | { type: "mature" }
   | { type: "immature"; maturesAt: Temporal.Instant };
 
@@ -393,7 +393,7 @@ export type CorpusIndexDeleteSettlementRead = Result<
 >;
 
 /** Result of checking one immutable manifest against its physical index. */
-export type CorpusIndexConfigAttestation =
+type CorpusIndexConfigAttestation =
   | { status: "missing" }
   | { status: "matching"; indexUri: string };
 

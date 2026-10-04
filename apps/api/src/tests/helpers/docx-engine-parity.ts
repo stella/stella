@@ -7,7 +7,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-export const engineParityFixtureDirectory = new URL(
+const engineParityFixtureDirectory = new URL(
   "../../lib/docx/fixtures/",
   import.meta.url,
 );

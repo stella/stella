@@ -32,7 +32,7 @@ export const SAVED_STATE_DIR = path.resolve(
 export const MIGRATIONS_DIR = path.resolve(import.meta.dir, "../../../drizzle");
 
 /** The tables a chat thread's saved state lives in, in insert order. */
-export const SAVED_STATE_TABLES = [
+const SAVED_STATE_TABLES = [
   "chat_threads",
   "chat_messages",
   "chat_turns",
@@ -73,7 +73,7 @@ export type SavedStateFixture = {
  * deploys after that release did. `findUnlistedChatDataMigrations` fails when
  * a migration rewrites chat rows and is missing here.
  */
-export const CHAT_DATA_MIGRATIONS: readonly string[] = [
+const CHAT_DATA_MIGRATIONS: readonly string[] = [
   "20260905210000_chat_matter_document_tool_rename",
   "20260907170000_folio_block_ids_in_range",
 ];
