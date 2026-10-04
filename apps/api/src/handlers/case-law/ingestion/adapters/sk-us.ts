@@ -87,10 +87,7 @@ import {
   readPublisher,
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  backoffMs,
-  fetchPublisher,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -375,20 +372,34 @@ type SkUsPdfRead =
   | { type: "not-served"; evidence: AbsenceEvidence | "not-a-pdf" }
   | { type: "unavailable"; cause: ReadUnavailableCause };
 
-/** A failed read as an error, for telemetry and for a page that stops on it. */
-const readFailureError = (url: string, cause: ReadUnavailableCause): object => {
+type ReadFailureErrorOptions = {
+  url: string;
+  cause: ReadUnavailableCause;
+  label: string;
+};
+
+/**
+ * A failed read as an error, with its status where it had one, for
+ * telemetry and for the retry, authentication and stop-kind checks that read
+ * it.
+ */
+const readFailureError = ({
+  url,
+  cause,
+  label,
+}: ReadFailureErrorOptions): Error => {
   switch (cause.kind) {
     case "thrown":
-      return typeof cause.error === "object" && cause.error !== null
+      return cause.error instanceof Error
         ? cause.error
-        : new Error("SK ÚS read failed", { cause: cause.error });
+        : new FetchBoundaryError({ url, message: label, cause: cause.error });
     case "status":
     case "no-content":
     case "empty-body":
       return new FetchBoundaryError({
         url,
         status: cause.status,
-        message: `SK ÚS read failed (${cause.kind}): ${cause.status}`,
+        message: `${label}: ${cause.status}`,
       });
     default:
       cause satisfies never;
@@ -435,7 +446,11 @@ const fetchPdfBytes = async (
       // does not serve.
       observeFailure(
         classifyFailure(
-          readFailureError(DOC_DOWNLOAD_URL, read.cause),
+          readFailureError({
+            url: DOC_DOWNLOAD_URL,
+            cause: read.cause,
+            label: "SK ÚS PDF download failed",
+          }),
           "upstream_unavailable",
         ),
         {
@@ -914,11 +929,65 @@ export type SkUsListingFetchOutcome =
   | { type: "publisher_rate_limited"; error: AdapterFetchError }
   | { type: "retry_later"; error: AdapterFetchError };
 
+/** A search request that established no listing. */
+type SearchReadFailure = Exclude<ReadOutcome<Response>, { type: "present" }>;
+
+/** The status an HTTP absence was stated with. */
+const absenceStatus = (evidence: AbsenceEvidence): number => {
+  switch (evidence) {
+    case "http-404":
+      return 404;
+    case "http-410":
+      return 410;
+    case "stated-zero":
+    case "publisher-typed-absence":
+      return panic(
+        `A publisher request stated a non-HTTP absence: ${evidence}`,
+      );
+    default:
+      evidence satisfies never;
+      return panic(`Unhandled absence evidence: ${String(evidence)}`);
+  }
+};
+
+type ThrowSearchReadFailureOptions = {
+  read: SearchReadFailure;
+  url: string;
+  label: string;
+};
+
+/**
+ * Throw what a failed search request stands for, with its status, so the
+ * retry and authentication checks read it. A 404 from the search endpoint
+ * is the endpoint failing, not a decision absence.
+ */
+const throwSearchReadFailure = ({
+  read,
+  url,
+  label,
+}: ThrowSearchReadFailureOptions): never => {
+  switch (read.type) {
+    case "absent": {
+      const status = absenceStatus(read.evidence);
+      throw new FetchBoundaryError({
+        url,
+        status,
+        message: `${label}: ${status}`,
+      });
+    }
+    case "unavailable":
+      throw readFailureError({ url, cause: read.cause, label });
+    default:
+      read satisfies never;
+      return panic(`Unhandled search read: ${String(read)}`);
+  }
+};
+
 type FetchSkUsListingOptions = {
   documentId: string;
   caseNumber: string;
   signal?: AbortSignal;
-  request?: typeof fetchPublisher;
+  read?: typeof readPublisher;
   pause?: (milliseconds: number) => Promise<void>;
 };
 
@@ -928,7 +997,7 @@ export const fetchSkUsListing = async ({
   documentId,
   caseNumber,
   signal,
-  request = fetchPublisher,
+  read = readPublisher,
   pause = async (milliseconds) => {
     await Bun.sleep(milliseconds);
   },
@@ -936,7 +1005,7 @@ export const fetchSkUsListing = async ({
   for (let attempt = 0; ; attempt += 1) {
     const fetched = await Result.tryPromise({
       try: async (): Promise<SkUsListingFetchOutcome> => {
-        const response = await request(SEARCH_URL, {
+        const listed = await read(SEARCH_URL, {
           adapterKey: ADAPTER_KEYS.SK_US,
           fetchStage: "listing",
           method: "POST",
@@ -965,18 +1034,20 @@ export const fetchSkUsListing = async ({
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
-        if (response.status === 204) {
+        if (
+          listed.type === "unavailable" &&
+          listed.cause.kind === "no-content"
+        ) {
           return { type: "listing_unavailable" };
         }
-        if (!response.ok) {
-          throw new FetchBoundaryError({
+        if (listed.type !== "present") {
+          return throwSearchReadFailure({
+            read: listed,
             url: SEARCH_URL,
-            status: response.status,
-            statusText: response.statusText,
-            message: `SK ÚS listing fetch failed: ${response.status}`,
+            label: "SK ÚS listing fetch failed",
           });
         }
-        const body = await response.text();
+        const body = await listed.value.text();
         const data: unknown = JSON.parse(body);
         if (!isSearchResponse(data)) {
           throw new FetchBoundaryError({
@@ -1090,7 +1161,11 @@ const pageCodelist = async (
         adapterKey: ADAPTER_KEYS.SK_US,
         cursor: null,
         message: "SK ÚS codelist unavailable",
-        cause: readFailureError(`${SERVICE_URL}/${CODELIST_PATH}`, read.cause),
+        cause: readFailureError({
+          url: `${SERVICE_URL}/${CODELIST_PATH}`,
+          cause: read.cause,
+          label: "SK ÚS codelist read failed",
+        }),
       });
     default:
       read satisfies never;
@@ -1698,7 +1773,7 @@ const executeSearch = async ({
   range,
   signal,
 }: ExecuteSearchOptions): Promise<SearchRead> => {
-  const response = await fetchPublisher(SEARCH_URL, {
+  const read = await readPublisher(SEARCH_URL, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
@@ -1731,23 +1806,21 @@ const executeSearch = async ({
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
 
-  if (!response.ok) {
+  if (read.type === "unavailable" && read.cause.kind === "no-content") {
+    return { type: "unavailable" };
+  }
+  if (read.type !== "present") {
     // A 401/403 here means the court put the endpoint back behind
     // authentication. There is no credential to refresh — the adapter
     // needs a real one — so surface it rather than retrying blind.
-    throw new FetchBoundaryError({
+    return throwSearchReadFailure({
+      read,
       url: SEARCH_URL,
-      status: response.status,
-      statusText: response.statusText,
-      message: `SK ÚS search failed: ${response.status}`,
+      label: "SK ÚS search failed",
     });
   }
 
-  if (response.status === 204) {
-    return { type: "unavailable" };
-  }
-
-  const data: unknown = await response.json();
+  const data: unknown = await read.value.json();
   if (!isSearchResponse(data)) {
     const preview = JSON.stringify(data).slice(0, 200);
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
@@ -2975,7 +3048,11 @@ export const skUsAdapter = defineSourceAdapter({
                 failed++;
                 observeFailure(
                   classifyFailure(
-                    readFailureError(SERVICE_URL, built.cause),
+                    readFailureError({
+                      url: SERVICE_URL,
+                      cause: built.cause,
+                      label: `SK ÚS ${built.part} read failed`,
+                    }),
                     "upstream_unavailable",
                   ),
                   {
