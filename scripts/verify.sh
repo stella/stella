@@ -184,7 +184,9 @@ run_module_mock_ledger_guard() {
   bun scripts/check-internal-module-mock-ledger.ts --self-test || return 1
   bun scripts/check-internal-module-mock-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-swallowed-item-error-ledger.ts --self-test || return 1
-  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref"
+  bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref" || return 1
+  bun scripts/calendar-day-ledger.ts --self-test || return 1
+  bun scripts/calendar-day-ledger.ts --base "$base_ref"
 }
 
 run_suppression_waiver_guard() {

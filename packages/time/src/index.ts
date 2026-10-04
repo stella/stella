@@ -25,3 +25,4 @@ export {
   parseIsoDateLocal,
   parsePlainDate,
 } from "./dates.js";
+export { todayFor } from "./today.js";

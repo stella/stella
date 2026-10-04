@@ -34,6 +34,7 @@ const scoutCursor = (
  */
 export const runWorkAttentionScoutTask: SchedulerTask = async ({
   db,
+  dueAt,
   job,
   logger,
   signal,
@@ -47,6 +48,9 @@ export const runWorkAttentionScoutTask: SchedulerTask = async ({
     job.lockedBy ?? panic("Work-attention scout requires a scheduler lease");
   const outcome = await runWorkAttentionScout({
     cursor: scoutCursor(job.payload),
+    // Deadlines and waiting days are judged at the slot that was due, so a
+    // late tick reports what the on-time one would have.
+    now: dueAt.toDate(),
     dependencies: { db, createScopedDb: createRootScopedDb },
   });
 
