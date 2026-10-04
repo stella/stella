@@ -35,7 +35,7 @@ const ORIGIN = "https://feature-projection.example";
 const TEST_FEATURE = "fixture-feature";
 const CAPABILITY = "usage.entitlement.get";
 const TOOL = "get_usage";
-const catalog = await loadBakedCapabilityCatalog();
+const catalog = loadBakedCapabilityCatalog();
 if (catalog === null || !catalog.some((entry) => entry.id === CAPABILITY)) {
   throw new Error("Real catalog fixture is incomplete");
 }
