@@ -1251,6 +1251,9 @@ export const createApiEnv = ({
   ...baseEnv,
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
   BETTER_AUTH_URL: publicApiUrlForPort(ports.api),
+  // The local stack's Postgres is never RDS, so maintenance has no EBS
+  // balance to read; an older apps/api/.env must not block migrations.
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
   // Local development capabilities require an explicit runtime opt-in.
