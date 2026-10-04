@@ -307,7 +307,7 @@ export const useChatSession = ({
   });
   // Latch for the error-transition effect below: `undefined` means "no
   // error has been notified yet" for the current error-free stretch.
-  const lastHandledErrorRef = useRef<Error | undefined>();
+  const lastHandledErrorRef = useRef<Error | undefined>(undefined);
   const messages = useMemo(
     () => projectCanonicalChatUIMessages(snapshot.messages),
     [snapshot.messages],
@@ -432,7 +432,7 @@ export const useChatSession = ({
     [messages, openCreateDocumentDraft],
   );
   const settlingCreateDocumentDraftIdsRef = useRef(new Set<string>());
-  const { addToolResult } = chat;
+  const addToolResult = chat.addToolResult;
   useExternalSyncEffect(() => {
     // TanStack can accept a client tool result while the parent stream is
     // active without issuing its continuation after that stream settles.
@@ -518,10 +518,10 @@ export const useChatSession = ({
     },
     [chat],
   );
-  const { setMessages } = chat;
-  const { stop } = chat;
-  const { leave } = chat;
-  const { resolveToolApproval } = chat;
+  const setMessages = chat.setMessages;
+  const stop = chat.stop;
+  const leave = chat.leave;
+  const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
   // with each older page. Re-seed whenever a fresh runtime is hydrated — both
@@ -1089,7 +1089,7 @@ export const useChatSession = ({
         return;
       }
 
-      const { matterId } = destination;
+      const matterId = destination.matterId;
       const draftMessageId = findReadyCreateDocumentDraftMessageId(
         chat.getSnapshot().messages,
         toolCallId,
@@ -1184,7 +1184,7 @@ export const useChatSession = ({
           throw toAPIError(response.error);
         }
         const created = response.data;
-        const { fileName } = created;
+        const fileName = created.fileName;
         const href = entityReferenceHref({
           entityId: created.entityId,
           matterId,
@@ -1332,7 +1332,7 @@ export const useChatSession = ({
 
   // A Stop the server refused leaves the turn running and Stop available;
   // say so once per refusal.
-  const lastStopFailureRef = useRef<Error | undefined>();
+  const lastStopFailureRef = useRef<Error | undefined>(undefined);
   useExternalSyncEffect(() => {
     if (stopState.status !== "failed") {
       return;
