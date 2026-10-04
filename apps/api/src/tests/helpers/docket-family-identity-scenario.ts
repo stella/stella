@@ -701,9 +701,8 @@ export const describeDocketGrammarFamilyIdentity = (
     // tests hold it to that.
     const { sheet } = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
     if (sheet.type === "supported") {
-      test("a sheet names exactly its sibling, and an unheld one the whole file", async () => {
-        const file = fileOf();
-        const { filed, ids } = file;
+      test("a sheet names exactly its sibling, and an unheld one every sibling not under another sheet", async () => {
+        const { filed, ids } = fileOf();
         const held = `${filed}-${sheet.held}`;
         expect(await searched(held)).toEqual(
           sorted(ids.sheet ?? panic("A sheet file without its sibling")),
@@ -712,8 +711,10 @@ export const describeDocketGrammarFamilyIdentity = (
           status: "unique",
           basis: "selector",
         });
+        // The sibling stored under another sheet is known not to be the one
+        // asked for; every sibling whose sheet is unknown still answers.
         const unheld = `${filed}-${sheet.unheld}`;
-        expect(await searched(unheld)).toEqual(siblingIds(file));
+        expect(await searched(unheld)).toEqual(sorted(ids.plain, ids.part));
         expect(await lookedUp(unheld)).toMatchObject({
           status: "ambiguous",
           reason: "selector_unmatched",
