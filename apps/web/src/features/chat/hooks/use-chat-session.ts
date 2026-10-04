@@ -883,40 +883,35 @@ export const useChatSession = ({
         return;
       }
 
-      // SAFETY: spreading inside `.map` is flagged by no-map-spread,
-      // but slice's elements are shared refs with the original
-      // `messages` array — mutating in place would corrupt the
-      // SDK's history. The spread builds a new message object that
-      // owns the rewritten parts array.
-      const truncated = messages
-        .slice(0, targetIndex + 1)
-        // oxlint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
-        .map((message) => {
-          if (message.role !== "assistant") {
-            return message;
+      // slice's elements are shared refs with the original `messages`
+      // array; mutating in place would corrupt the SDK's history, so the
+      // spread builds a new message object that owns the rewritten parts.
+      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
+        if (message.role !== "assistant") {
+          return message;
+        }
+        // Reset the matching ask-user part so `addToolResult` can
+        // overwrite its output. Keeping `input` on the tool-call
+        // keeps the card body stable during the brief frame between
+        // truncation and the next tool-result write.
+        const nextParts: ChatPart[] = [];
+        for (const part of message.parts) {
+          if (part.type === "tool-result" && part.toolCallId === toolCallId) {
+            continue;
           }
-          // Reset the matching ask-user part so `addToolResult` can
-          // overwrite its output. Keeping `input` on the tool-call
-          // keeps the card body stable during the brief frame between
-          // truncation and the next tool-result write.
-          const nextParts: ChatPart[] = [];
-          for (const part of message.parts) {
-            if (part.type === "tool-result" && part.toolCallId === toolCallId) {
-              continue;
-            }
-            if (
-              part.type === "tool-call" &&
-              part.name === "ask-user" &&
-              part.id === toolCallId &&
-              part.state === "complete"
-            ) {
-              nextParts.push(resetAskUserToolCall(part));
-              continue;
-            }
-            nextParts.push(part);
+          if (
+            part.type === "tool-call" &&
+            part.name === "ask-user" &&
+            part.id === toolCallId &&
+            part.state === "complete"
+          ) {
+            nextParts.push(resetAskUserToolCall(part));
+            continue;
           }
-          return { ...message, parts: nextParts };
-        });
+          nextParts.push(part);
+        }
+        return { ...message, parts: nextParts };
+      });
       setMessages(truncated);
       const replayOptions = snapshotChatRequestOptions({
         docxEditRepresentation: undefined,

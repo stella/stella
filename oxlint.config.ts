@@ -1191,6 +1191,9 @@ export default defineConfig({
     "unicorn/no-nested-ternary": "off",
     // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
+    // Its fix mutates the mapped items and contradicts
+    // no-computed-key-record-assignment: object spread is the one record copy.
+    "oxc/no-map-spread": "off",
 
     // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
