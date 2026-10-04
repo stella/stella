@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
@@ -42,6 +42,7 @@ export const exportPdfHandler = async ({
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         billable: timeEntries.billable,
@@ -85,10 +86,7 @@ export const exportPdfHandler = async ({
       : "Unknown";
     const hours = (row.billedMinutes / 60).toFixed(2);
     const rate = exportAmountText(row.rateAtEntry, row.currency);
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
 
     // Total Hours must reconcile with the per-row billed hours and the
     // amount, which are both derived from billedMinutes; summing raw

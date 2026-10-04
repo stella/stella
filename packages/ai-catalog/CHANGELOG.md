@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.5.0
+
+### Minor Changes
+
+- [#4521](https://github.com/stella/stella/pull/4521) [`ffc2d3c`](https://github.com/stella/stella/commit/ffc2d3cfaed8592c5de1a18fc795129bd931f6b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ai-catalog/benchmarks` and `@stll/ai-catalog/benchmark-frontier`: quality ratings and typical call cost per offered model, and the cost and quality frontier over them.
+
 ## 0.4.0
 
 ### Minor Changes

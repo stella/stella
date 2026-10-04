@@ -276,6 +276,13 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   schedulerJobRun: { type: "non_resource", reason: "job" },
   sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },
+  // Guidance corpus rows have no product resource surface yet.
+  softLawSource: { type: "non_resource", reason: "workflow" },
+  softLawDocument: { type: "non_resource", reason: "projection" },
+  softLawDocumentVersion: { type: "non_resource", reason: "subresource" },
+  softLawDocumentLocator: { type: "non_resource", reason: "association" },
+  softLawIngestionLease: { type: "non_resource", reason: "job" },
+  softLawIngestionAttempt: { type: "non_resource", reason: "job" },
   sharepointConnection: { type: "non_resource", reason: "credential" },
   sharepointOAuthState: { type: "non_resource", reason: "credential" },
   styleSet: { type: "resource", resourceType: RESOURCE_TYPE.STYLE_SET },

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
@@ -137,10 +137,7 @@ export const exportLedesHandler = async ({
         }),
       );
     }
-    const totalCents = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const totalCents = timeEntryAmount(row);
     const userName = escapeLedesField(
       row.userId ? (userMap.get(row.userId) ?? "") : "",
     );

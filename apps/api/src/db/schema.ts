@@ -141,3 +141,5 @@ export type {
   ViewLayout,
   ViewTemplateProperty,
 } from "./schema/common";
+
+export * from "./schema/soft-law";

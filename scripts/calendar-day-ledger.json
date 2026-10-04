@@ -171,7 +171,7 @@
   },
   {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/memory-extractor.ts::persistSuggestions::new Date()",
-    "count": 2,
+    "count": 1,
     "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
   },
   {

@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
 import {
@@ -34,6 +34,43 @@ export const resolveEbsConfiguration = (
   }
   return { type: "missing" };
 };
+
+/** A configuration an operator chose: RDS metrics or an explicit opt-out. */
+export type ConfiguredEbsConfiguration = Exclude<
+  EbsConfiguration,
+  { type: "missing" }
+>;
+
+const EBS_CONFIGURATION_KEYS = [
+  "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
+] as const;
+
+const EBS_CONFIGURATION_MISSING_MESSAGE =
+  "Configure DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER for RDS, or explicitly set DB_LOAD_GATE_EBS_SIGNAL=disabled for non-RDS database maintenance.";
+
+export class EbsConfigurationMissingError extends TaggedError(
+  "EbsConfigurationMissingError",
+)<{
+  message: string;
+  configurationKeys: readonly string[];
+}> {}
+
+/**
+ * Work that must not wait on a setting nobody chose (the migrator) rejects a
+ * missing configuration; background maintenance instead holds on it.
+ */
+export const requireEbsConfiguration = (
+  configuration: EbsConfiguration,
+): Result<ConfiguredEbsConfiguration, EbsConfigurationMissingError> =>
+  configuration.type === "missing"
+    ? Result.err(
+        new EbsConfigurationMissingError({
+          message: EBS_CONFIGURATION_MISSING_MESSAGE,
+          configurationKeys: EBS_CONFIGURATION_KEYS,
+        }),
+      )
+    : Result.ok(configuration);
 
 export type EbsConfigurationEvent = {
   event: "database_load_gate_ebs_configuration_missing";
@@ -190,12 +227,8 @@ export const createEbsSignalReader = ({
           log({
             event: "database_load_gate_ebs_configuration_missing",
             severity: "error",
-            message:
-              "Configure DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER for RDS, or explicitly set DB_LOAD_GATE_EBS_SIGNAL=disabled for non-RDS database maintenance.",
-            configurationKeys: [
-              "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
-              "DB_LOAD_GATE_EBS_SIGNAL",
-            ],
+            message: EBS_CONFIGURATION_MISSING_MESSAGE,
+            configurationKeys: EBS_CONFIGURATION_KEYS,
           });
         }
         return {
