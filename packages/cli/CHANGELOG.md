@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.8.0
+
+### Minor Changes
+
+- [#4424](https://github.com/stella/stella/pull/4424) [`20f5391`](https://github.com/stella/stella/commit/20f539146213cb55c538343d6bd653c71b87b131) Thanks [@shanehobson](https://github.com/shanehobson)! - Add position sources to playbook save and list.
+
 ## 3.7.0
 
 ### Minor Changes
