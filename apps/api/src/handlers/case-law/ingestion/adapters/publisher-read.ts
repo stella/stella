@@ -18,7 +18,10 @@
  * - Every other 401, 403 or 451 answer is about the one address read: it
  *   becomes a `refused` outcome with the caller's `refusalScope` (default
  *   "document"), for the adapter to store as a typed marker.
- * A 429 outside those stops stays `unavailable` (retried later).
+ * - A 429 is the publisher's rate-limit refusal (rule 19a): a typed halt. It
+ *   rejects with an `AdapterFetchError` carrying the status after one
+ *   request, so the page fails with its cursor untouched and no later read in
+ *   the cycle spends the budget the refusal protects.
  *
  * Cancellation by the caller's signal also rejects.
  */
@@ -34,6 +37,7 @@ import {
   type ReadOutcome,
   type ReadRefusalScope,
 } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 import {
   fetchPublisher,
@@ -61,6 +65,9 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
+/** The publisher's rate-limit refusal of a request. */
+const RATE_LIMITED_STATUS = 429;
+
 export type PublisherReadInit = PublisherFetchInit & {
   /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
   refusalScope?: ReadRefusalScope | undefined;
@@ -80,6 +87,17 @@ export const readPublisher = async (
     return fetched.error;
   }
   const response = fetched.value;
+  if (response.status === RATE_LIMITED_STATUS) {
+    const retryAfter = response.headers.get("Retry-After");
+    await response.body?.cancel();
+    throw new AdapterFetchError({
+      message: `Publisher rate limit refused: ${response.status}`,
+      adapterKey: init.adapterKey,
+      cursor: null,
+      httpStatus: response.status,
+      ...(retryAfter === null ? {} : { retryAfter }),
+    });
+  }
   const outcome = readOutcomeOfStatus(
     response.status,
     refusalScope,
