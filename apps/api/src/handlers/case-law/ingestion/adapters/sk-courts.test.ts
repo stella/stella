@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -72,6 +73,25 @@ const storedOutcome = (
     return marker;
   }
   throw new Error("expected a stored read outcome");
+};
+
+/**
+ * A body past the publisher read ceiling, streamed from one reused chunk so
+ * the test holds a megabyte, not the ceiling.
+ */
+const oversizedBody = (): ReadableStream<Uint8Array> => {
+  const chunk = new Uint8Array(1024 * 1024);
+  let served = 0;
+  return new ReadableStream({
+    pull: (controller) => {
+      if (served > PUBLISHER_BODY_MAX_BYTES) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(chunk);
+      served += chunk.byteLength;
+    },
+  });
 };
 
 describe("Slovak court backfill rejects unreadable publisher listings", () => {
@@ -206,7 +226,7 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           expect(unreadItems).toHaveLength(1);
           const unread = unreadItems?.at(0);
           expect(unread?.listing.sourceDocumentId).toBe("bad-detail");
-          expect(unread?.listing.caseNumber).toBe(bad.spisovaZnacka);
+          expect(unread?.listing.caseNumber === bad.spisovaZnacka).toBe(true);
           expect(unread?.listing.isListingOnly).toBe(true);
           expect(unread?.outcome.type).toBe("unavailable");
           expect(
@@ -868,6 +888,7 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
     ["204", () => new Response(null, { status: 204 })],
     ["empty 200", () => new Response("")],
     ["malformed 200", () => Response.json({ ecli: 42 })],
+    ["body over the read ceiling", () => new Response(oversizedBody())],
     [
       "timeout",
       () => {
@@ -921,6 +942,25 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       });
     },
   );
+
+  test("a detail body over the read ceiling is stored, once the bound is spent, with its typed cause", async () => {
+    await serveRecordedListing(() => new Response(oversizedBody()));
+    let streaks: UnavailableStreaks = {};
+    for (let cycle = 1; cycle < UNAVAILABLE_CYCLES_BEFORE_MARKING; cycle++) {
+      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+      streaks = planUnreadItems(page.unreadItems, streaks).streaks;
+    }
+    const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+    const plan = planUnreadItems(page.unreadItems, streaks);
+    expect(plan.terminal.map(storedOutcome)).toEqual([
+      {
+        type: "unavailable",
+        scope: "document",
+        cause: { kind: "too-large", maxBytes: PUBLISHER_BODY_MAX_BYTES },
+        consecutiveCycles: UNAVAILABLE_CYCLES_BEFORE_MARKING,
+      },
+    ]);
+  });
 
   test("a served-no-record detail is listing-only at once, never an unread item", async () => {
     await serveRecordedListing(() => Response.json({}));

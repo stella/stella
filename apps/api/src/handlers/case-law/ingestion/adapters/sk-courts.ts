@@ -8,6 +8,7 @@ import {
   skDocumentErrorDiagnostics,
   skDocumentResponseDiagnostics,
 } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -51,6 +52,7 @@ import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/i
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
+  PUBLISHER_BODY_MAX_BYTES,
   readPublisher,
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
@@ -439,10 +441,7 @@ const fetchDetail = async (
     });
     return read;
   }
-  const json: unknown = Result.try({
-    try: (): unknown => JSON.parse(read.value),
-    catch: () => null,
-  }).unwrapOr(null);
+  const json = parseJsonOrNull(read.value);
   // The service answers a record it holds nothing for with an empty object:
   // its own statement that there is no record, not a failed read.
   if (isRecord(json) && Object.keys(json).length === 0) {
@@ -463,6 +462,13 @@ const fetchDetail = async (
   return readPresent(json);
 };
 
+/** A served JSON body, or null where it does not parse. */
+const parseJsonOrNull = (body: string): unknown =>
+  Result.try({
+    try: (): unknown => JSON.parse(body),
+    catch: () => null,
+  }).unwrapOr(null);
+
 /** What a read that established no value states, for a warning. */
 const readDiagnostics = (
   read: Exclude<ReadOutcome<unknown>, { type: "present" }>,
@@ -473,12 +479,28 @@ const readDiagnostics = (
     case "refused":
       return { outcome: read.type, httpStatus: read.status };
     case "unavailable":
-      return read.cause.kind === "thrown"
-        ? { outcome: read.cause.kind }
-        : { outcome: read.cause.kind, httpStatus: read.cause.status };
+      return { outcome: read.cause.kind, ...causeHttpStatus(read.cause) };
     default:
       read satisfies never;
       return panic(`Unhandled read: ${String(read)}`);
+  }
+};
+
+/** The status a failed read was answered with, where it was answered. */
+const causeHttpStatus = (
+  cause: ReadUnavailableCause,
+): { httpStatus?: number } => {
+  switch (cause.kind) {
+    case "thrown":
+    case "too-large":
+      return {};
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return { httpStatus: cause.status };
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
   }
 };
 
@@ -714,12 +736,15 @@ const readPageDetails = async ({
 /** A record read that failed, as an error, with its status. */
 const detailReadError = (cause: ReadUnavailableCause): AdapterFetchError =>
   new AdapterFetchError({
-    message: "SK courts decision record unavailable",
+    message:
+      cause.kind === "too-large"
+        ? `SK courts decision record exceeded ${cause.maxBytes} bytes`
+        : "SK courts decision record unavailable",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     cursor: null,
     ...(cause.kind === "thrown"
       ? { cause: cause.error }
-      : { httpStatus: cause.status }),
+      : causeHttpStatus(cause)),
   });
 
 type SkCourtsMetadata = Record<string, unknown> & {
@@ -1296,7 +1321,7 @@ type ListedDayPage = {
  * the engine retries on a later pass.
  */
 type ListingReadErrorOptions = {
-  read: Exclude<ReadOutcome<Response>, { type: "present" }>;
+  read: Exclude<ReadOutcome<unknown>, { type: "present" }>;
   cursor: string;
 };
 
@@ -1346,6 +1371,12 @@ const listingFailureError = ({
   switch (cause.kind) {
     case "thrown":
       return thrownReadError(cause.error);
+    case "too-large":
+      return new AdapterFetchError({
+        message: `SK courts listing exceeded ${cause.maxBytes} bytes`,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor,
+      });
     case "status":
     case "no-content":
     case "empty-body":
@@ -1404,7 +1435,7 @@ const listSkCourtsDayPage = async ({
     vydaniaDo: day,
   }).toString()}`;
 
-  const read = await readPublisher(url, {
+  const read = await readPublisherText(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
@@ -1417,9 +1448,8 @@ const listSkCourtsDayPage = async ({
   if (read.type !== "present") {
     throw listingReadError({ read, cursor: day });
   }
-  const response = read.value;
 
-  const json: unknown = await response.json();
+  const json = parseJsonOrNull(read.value);
   if (!isSkApiResponse(json)) {
     throw new AdapterFetchError({
       message:
@@ -2150,7 +2180,7 @@ export const skCourtsAdapter = defineSourceAdapter({
    * largest we hold — has no completeness signal at all.
    */
   async getTotalCount(signal) {
-    const read = await readPublisher(
+    const read = await readPublisherText(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
         fetchStage: "listing",
@@ -2163,10 +2193,18 @@ export const skCourtsAdapter = defineSourceAdapter({
     if (read.type === "unavailable" && read.cause.kind === "thrown") {
       throw thrownReadError(read.cause.error);
     }
+    if (
+      read.type === "unavailable" &&
+      (read.cause.kind === "too-large" || read.cause.kind === "empty-body")
+    ) {
+      return sourceTotalProbeFailed(
+        SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+      );
+    }
     if (read.type !== "present") {
       return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
     }
-    const json: unknown = await read.value.json();
+    const json = parseJsonOrNull(read.value);
     if (!isRecord(json)) {
       return sourceTotalProbeFailed(
         SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -2281,11 +2319,24 @@ const createBackfillPage = (
     ],
 
     parseResponse: async (response) => {
+      const bytes =
+        response.body === null
+          ? new Uint8Array()
+          : await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
+      if (bytes === null) {
+        return Result.err(
+          new AdapterFetchError({
+            message: `SK courts listing exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            cursor: null,
+          }),
+        );
+      }
       const validatedPage = validatePublisherPage({
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         cursor: null,
         headers: response.headers,
-        body: await response.text(),
+        body: new TextDecoder().decode(bytes),
         expectation: {
           kind: "json",
           minBytes: 2,

@@ -226,9 +226,10 @@ export type PdfFetchResult =
   | { type: "absent" }
   /**
    * The body ran past `limitBytes`; reading stopped there. `prefix` holds its
-   * leading bytes, so a body that is not a PDF is still refused as one.
+   * leading bytes, so a body that is not a PDF is still refused as one; null
+   * where the reader that stopped kept none.
    */
-  | { type: "too-large"; limitBytes: number; prefix: Uint8Array }
+  | { type: "too-large"; limitBytes: number; prefix: Uint8Array | null }
   | {
       type: "failed";
       failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
@@ -384,6 +385,8 @@ const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
         failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
         detail: `http-${cause.status}`,
       };
+    case "too-large":
+      return { type: "too-large", limitBytes: cause.maxBytes, prefix: null };
     case "status":
     case "empty-body":
       return publisherStatusPdf(cause.status);
@@ -1705,7 +1708,9 @@ const settleFetchedDocument = async ({
       };
     }
     case "too-large": {
-      assertPdfBody(fetched.prefix);
+      if (fetched.prefix !== null) {
+        assertPdfBody(fetched.prefix);
+      }
       const parked = await parkDocumentFetch({ decision, scopedDb });
       return {
         type: "settled",
