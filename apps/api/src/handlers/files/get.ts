@@ -27,7 +27,7 @@ import {
 import { createFileKey } from "@/api/lib/files/utils";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   parseContentLengthHeader,
@@ -76,7 +76,9 @@ export const readEmailHtmlPreviewHandler = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const fileBuffer = await readS3ArrayBuffer(fileKey);
+  const fileBuffer = (
+    await readStoredFile({ key: fileKey, mimeType: content.mimeType })
+  ).bytes;
   const previewResult = await emailToPreview(fileBuffer, emailMimeType, {
     createAttachmentId: (attachmentIndex) =>
       createEmailAttachmentDescriptor({

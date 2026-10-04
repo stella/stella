@@ -1696,6 +1696,14 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Query data state baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/query-data-state-baseline.test.ts
+          bun run check:query-data-state
+
       - name: SQL performance baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1799,6 +1807,12 @@ jobs:
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
+
+      - name: Module ownership invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Invariants the ownership table cannot state itself, such as
+        # allowlists kept equal to their source lists.
+        run: bun test scripts/ownership.test.ts
 
       - name: Queue authority
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1935,6 +1949,15 @@ jobs:
         run: |
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
+
+      - name: Content delivery declarations
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
+        run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
 
       - name: MCP surface baseline self-test
         if: needs.ci-plan.outputs.package_checks_required == 'true'

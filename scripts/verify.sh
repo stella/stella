@@ -245,7 +245,9 @@ run_mcp_coverage_guard() {
   # is orphaned, and that the `pending` baseline can only shrink. The
   # --self-test run first proves the ratchet detectors still fire.
   bun apps/api/scripts/mcp-coverage-guard.ts --self-test || return 1
-  bun apps/api/scripts/mcp-coverage-guard.ts
+  bun apps/api/scripts/mcp-coverage-guard.ts || return 1
+  bun apps/api/scripts/content-delivery-guard.ts --self-test || return 1
+  bun apps/api/scripts/content-delivery-guard.ts
 }
 
 run_cli_registry_snapshot() {
@@ -416,6 +418,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_query_data_state_guard() {
+  bun test scripts/query-data-state-baseline.test.ts || return 1
+  BASE_SHA="$base_ref" bun run check:query-data-state
+}
+run_step "Query data state baseline" run_query_data_state_guard
 run_failure_as_empty_guard() {
   bun test scripts/failure-as-empty-baseline.test.ts || return 1
   BASE_SHA="$base_ref" bun run check:failure-as-empty

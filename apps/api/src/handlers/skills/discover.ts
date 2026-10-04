@@ -10,6 +10,10 @@ const discoverSkillUrlBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns skill discovery metadata from an external source.",
+  },
   description:
     "Discover importable skills from a GitHub repository or SKILL.md URL.",
   permissions: { agentSkill: ["create"] },

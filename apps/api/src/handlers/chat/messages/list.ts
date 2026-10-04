@@ -90,6 +90,11 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns chat messages and computed context metadata, not stored-file grants.",
+  },
   description:
     "Read the most recent page of one of your own chat threads, together " +
     "with the thread's context matters, model and reasoning-effort settings, " +

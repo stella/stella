@@ -101,6 +101,7 @@ import {
   type RowActionContext,
 } from "@/components/workspaces/row-actions.logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -143,6 +144,7 @@ import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version"
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 export type VirtualAnchor = {
@@ -1708,7 +1710,8 @@ const CreateSubfolderMenuItem = ({
 }: CreateSubfolderMenuItemProps) => {
   const t = useTranslations();
   const createEntities = useCreateEntities();
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
 
   if (isEntitiesLimitReached) {
@@ -1740,13 +1743,16 @@ const CreateSubfolderMenuItem = ({
   };
 
   return (
-    <MenuItem
-      disabled={isWorkflowRunning || createEntities.isPending}
-      onClick={handleCreateSubfolder}
-    >
-      <FolderPlusIcon />
-      {t("workspaces.filesystem.newSubfolder")}
-    </MenuItem>
+    <>
+      <WorkflowQueryFeedback display="menu" view={workflowView} />
+      <MenuItem
+        disabled={workflowDisabled || createEntities.isPending}
+        onClick={handleCreateSubfolder}
+      >
+        <FolderPlusIcon />
+        {t("workspaces.filesystem.newSubfolder")}
+      </MenuItem>
+    </>
   );
 };
 
