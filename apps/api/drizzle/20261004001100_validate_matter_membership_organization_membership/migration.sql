@@ -49,7 +49,7 @@ INSERT INTO "audit_logs" (
   "activity_category"
 )
 SELECT
-  gen_random_uuid(),
+  md5('20261004001100_validate_matter_membership_organization_membership:' || "removed_memberships"."id"::text)::uuid,
   "removed_memberships"."organization_id",
   "removed_memberships"."workspace_id",
   "removed_memberships"."user_id",
