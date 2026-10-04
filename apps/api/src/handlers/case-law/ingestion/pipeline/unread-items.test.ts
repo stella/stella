@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -170,7 +171,13 @@ describe("unread listed items", () => {
             );
             expect(plan.holding).toBe(holding.length);
             expect(
-              plan.terminal.map((row) => row.sourceDocumentId).toSorted(),
+              plan.terminal
+                .map(
+                  (row) =>
+                    row.sourceDocumentId ??
+                    panic("a terminal unread row has no publisher identity"),
+                )
+                .toSorted(),
             ).toEqual(
               unavailableIds.filter((id) => !holding.includes(id)).toSorted(),
             );
