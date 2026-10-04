@@ -21,7 +21,7 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 // an ESLint core rule count.
 const repositoryRuleLayers = flattenLayers(repository, "oxlint.config.ts")
   .map(({ rules }) => rules)
-  .toReversed();
+  .reverse();
 const repositoryRule = (rule: string) => {
   const spellings = [rule, rule.replace(/^eslint\//u, "")];
   for (const layer of repositoryRuleLayers) {
