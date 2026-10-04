@@ -1487,6 +1487,9 @@ jobs:
             bun scripts/check-tauri-package-alignment.ts
           fi
 
+      - name: Tauri counterpart autofix tests
+        run: bun test scripts/fix-tauri-package-alignment.test.ts scripts/tauri-autofix-workflow.test.ts
+
       - name: Lockfile release-age guard
         # Bun applies the release-age quarantine only while it resolves
         # versions; a frozen install takes whatever bun.lock pins. This looks
@@ -1768,6 +1771,17 @@ jobs:
         # Every built-in rule of an enabled plugin is named in the config, on
         # or off, so an oxlint upgrade cannot add rules nobody decided on.
         run: bun scripts/check-oxlint-rule-decisions.ts
+
+      - name: Oxlint effective config
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every base rule's severity, merged from oxlint.config.ts and its
+        # presets by oxlint's documented precedence, must equal the severity
+        # `oxlint --print-config` resolves, so a rule the config turns on cannot
+        # stay off unnoticed. Known mismatches carry a reason in
+        # scripts/oxlint-effective-config-baseline.json, which may only shrink.
+        run: |
+          bun test scripts/oxlint-effective-config.test.ts
+          bun scripts/check-oxlint-effective-config.ts
 
       - name: Result boundary enrolment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
