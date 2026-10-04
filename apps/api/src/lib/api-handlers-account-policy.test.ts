@@ -77,3 +77,42 @@ test("allows sandbox matter mutations without an account growth check", async ()
     expect(checkAccountOperation).not.toHaveBeenCalled();
   }
 });
+
+test("applies declared account access alongside resource permissions", async () => {
+  const definition = createSafeRootHandler(
+    {
+      permissions: { workspace: ["read"] },
+      accountAccess: "standard",
+      mcp: { type: "internal", reason: "mcp_transport" },
+    },
+    async function* () {
+      return Result.ok({ success: true });
+    },
+    {
+      checkAccountOperation: (email) =>
+        checkDemoAccountAccess({
+          email,
+          config: {
+            email: "account@example.test",
+            organizationId: "org_account",
+          },
+          operation: "growth",
+        }),
+    },
+  );
+  for (const email of ["account@example.test", "standard@example.test"]) {
+    const response = await definition.handler(
+      createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        user: { email },
+      }),
+    );
+    if (email === "account@example.test") {
+      expect(response).toMatchObject({
+        code: 403,
+        response: { code: "account_access_unavailable" },
+      });
+    } else {
+      expect(response).toEqual({ success: true });
+    }
+  }
+});

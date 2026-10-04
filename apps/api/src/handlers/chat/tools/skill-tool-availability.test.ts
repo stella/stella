@@ -20,6 +20,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">(
@@ -45,7 +46,7 @@ const chatContext = (
   docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   organizationId,
   orgAIConfig: null,
   managedAIResidency: "eu" as const,
@@ -93,9 +94,11 @@ describe("chat skill availability", () => {
 
   test("a role without template access cannot fill templates", () => {
     expect(availabilityIn("fill_template")).toEqual({ status: "available" });
-    expect(availabilityIn("fill_template", { memberRole: "external" })).toEqual(
-      { status: "unavailable", missingTools: ["fill_template"] },
-    );
+    expect(
+      availabilityIn("fill_template", {
+        memberRole: sessionMemberRole("external"),
+      }),
+    ).toEqual({ status: "unavailable", missingTools: ["fill_template"] });
   });
 
   test("anonymized mode drops the tools it cannot redact", () => {

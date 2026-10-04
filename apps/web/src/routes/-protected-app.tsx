@@ -93,6 +93,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
   isSessionActivityCancelled,
@@ -464,6 +465,7 @@ function ProtectedContent() {
     <>
       <ApiVersionMismatchReporter />
       <SelfhostUpdateBanner />
+      <PaymentRetryBanner />
       <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">
         {isMobile && (
           <>

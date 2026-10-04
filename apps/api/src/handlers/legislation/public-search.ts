@@ -8,7 +8,7 @@ import {
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import { tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
@@ -29,7 +29,7 @@ export const publicStatuteSearchQuerySchema = t.Object(
 
 /** The public HTTP boundary delegates retrieval to the shared corpus operation. */
 export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
-  createSafePublicHandler(
+  createSafeBoundedPublicHandler(
     {
       mcp: { type: "internal", reason: "public_indexing" },
       cache: { kind: "none" },

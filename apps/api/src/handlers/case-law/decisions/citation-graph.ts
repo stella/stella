@@ -56,7 +56,7 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
 };
 
 export const listDecisionCitationsQuerySchema = t.Object({
-  direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
+  direction: t.UnionEnum(CITATION_DIRECTIONS),
   cursor: t.Optional(tPaginationCursor()),
 });
 
@@ -600,7 +600,7 @@ export const decisionCitationSummaryQuery = ({
 export const LEADING_CITATIONS_PER_TREATMENT = 3;
 
 export const listLeadingCitationsQuerySchema = t.Object({
-  direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
+  direction: t.UnionEnum(CITATION_DIRECTIONS),
 });
 
 type ListLeadingCitationsQuery = Static<typeof listLeadingCitationsQuerySchema>;

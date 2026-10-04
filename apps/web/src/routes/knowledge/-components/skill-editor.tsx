@@ -29,7 +29,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
-import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -52,6 +51,7 @@ import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -245,7 +245,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!FILENAME_PATTERN.test(trimmed) || folderPrefixes.has(nextPath)) {
-      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      notifyUserError(undefined, tSkills("invalidPath"));
       return;
     }
     setPendingFolders((current) =>
@@ -544,10 +544,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     const binary = isBinaryUpload(file);
     const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
     if (file.size > maxBytes) {
-      stellaToast.add({
-        title: t("common.unexpectedError"),
+      notifyUserError(undefined, t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
-        type: "error",
       });
       return;
     }
@@ -555,10 +553,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     // afterward if they want a different folder.
     const reserved = reserveKnowledgePath(file.name, binary, takenPaths);
     if (reserved.type === "invalid") {
-      stellaToast.add({
-        title: tSkills("invalidPath"),
-        type: "error",
-      });
+      notifyUserError(undefined, tSkills("invalidPath"));
       return;
     }
     const { path } = reserved;
@@ -583,11 +578,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   const onCreateFile = (path: string, content: string) => {
     if (!SKILL_RESOURCE_PATH_PATTERN.test(path)) {
-      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      notifyUserError(undefined, tSkills("invalidPath"));
       return false;
     }
     if (existingPaths.has(path)) {
-      stellaToast.add({ title: tSkills("fileExists"), type: "error" });
+      notifyUserError(undefined, tSkills("fileExists"));
       return false;
     }
     createResource.mutate({ path, content });
@@ -602,11 +597,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!SKILL_RESOURCE_PATH_PATTERN.test(trimmed)) {
-      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      notifyUserError(undefined, tSkills("invalidPath"));
       return;
     }
     if (existingPaths.has(trimmed)) {
-      stellaToast.add({ title: tSkills("fileExists"), type: "error" });
+      notifyUserError(undefined, tSkills("fileExists"));
       return;
     }
     renameResource.mutate({ oldPath, newPath: trimmed });
@@ -1490,9 +1485,7 @@ const buildSkillNodes = (
 };
 
 const toastError = (error: unknown, fallback: string) => {
-  stellaToast.add({
-    title: fallback,
+  notifyUserError(error, fallback, {
     description: userErrorFromThrown(error, fallback),
-    type: "error",
   });
 };

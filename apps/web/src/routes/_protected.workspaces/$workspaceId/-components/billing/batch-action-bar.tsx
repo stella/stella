@@ -8,9 +8,9 @@ import {
   TrashIcon,
   UndoIcon,
 } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useBatchDeleteTimeEntries,
   useBatchUpdateTimeEntries,
@@ -44,11 +44,8 @@ export const BatchActionBar = ({
       { workspaceId, ids: selectedIds, action },
       {
         onSuccess: () => onClear(),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -59,11 +56,8 @@ export const BatchActionBar = ({
       { workspaceId, ids: selectedIds },
       {
         onSuccess: () => onClear(),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

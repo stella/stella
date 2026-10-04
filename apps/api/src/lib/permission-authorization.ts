@@ -3,9 +3,7 @@ import { panic } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
 
-import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * What the credential behind a request may spend on top of its member role.
@@ -22,16 +20,53 @@ export const SESSION_CREDENTIAL = {
   type: "session",
 } as const satisfies CredentialAuthority;
 
-export type AuthorizedMemberRole = {
+const AUTHORITY = Symbol("member-authority");
+type MemberAuthorityData = {
   role: MemberRole;
   credential: CredentialAuthority;
 };
+class MemberAuthority {
+  readonly #data: MemberAuthorityData;
+  constructor(data: MemberAuthorityData) {
+    this.#data = data;
+  }
+  [AUTHORITY](): MemberAuthorityData {
+    return this.#data;
+  }
+}
+export type AuthorizedMemberRole = MemberAuthority;
 
-/** The authority of a person's own session: the member role, unattenuated. */
-export const sessionMemberRole = (role: MemberRole): AuthorizedMemberRole => ({
-  role,
-  credential: SESSION_CREDENTIAL,
-});
+export const authorizedMemberRole = (
+  data: MemberAuthorityData,
+): AuthorizedMemberRole => new MemberAuthority(data);
+
+export const credentialPermissionsForContext = (
+  authority: AuthorizedMemberRole,
+): PermissionInput | undefined => {
+  const { credential } = authority[AUTHORITY]();
+  switch (credential.type) {
+    case "session":
+      return undefined;
+    case "attenuated":
+      return credential.permissions;
+    default:
+      credential satisfies never;
+      return panic(`Unhandled credential: ${String(credential)}`);
+  }
+};
+
+export const roleForDisplay = (authority: AuthorizedMemberRole): MemberRole =>
+  authority[AUTHORITY]().role;
+
+/** The authority of a person's own session. */
+export const sessionMemberRole = (role: MemberRole): AuthorizedMemberRole =>
+  authorizedMemberRole({ role, credential: SESSION_CREDENTIAL });
+
+/** Revalidates a persisted membership after the request's credential check. */
+export const hasCurrentMemberPermission = (
+  role: MemberRole,
+  permissions: PermissionInput,
+): boolean => hasMemberPermission(sessionMemberRole(role), permissions);
 
 /**
  * A permission set widened to an index signature. An ordinary assignment
@@ -84,10 +119,10 @@ export const hasMemberPermission = (
   authority: AuthorizedMemberRole,
   permissions: PermissionInput,
 ): boolean => {
-  if (!roles[authority.role].authorize(permissions).success) {
+  if (!roles[authority[AUTHORITY]().role].authorize(permissions).success) {
     return false;
   }
-  const { credential } = authority;
+  const { credential } = authority[AUTHORITY]();
   switch (credential.type) {
     case "session":
       return true;
@@ -109,7 +144,7 @@ export const hasManagementPermission = (
   authority: AuthorizedMemberRole,
   permissions: PermissionInput,
 ): boolean =>
-  isOrganizationManagementRole(authority.role) &&
+  isOrganizationManagementRole(authority[AUTHORITY]().role) &&
   hasMemberPermission(authority, permissions);
 
 type MemberRoleContext = {
@@ -119,44 +154,13 @@ type MemberRoleContext = {
 const hasOwnMemberRole = (ctx: object): ctx is MemberRoleContext =>
   Object.hasOwn(ctx, "memberRole");
 
-// The credential is built in-process by the context builders; this read only
-// refuses a context that lacks one, and `grantsPermissions` denies anything
-// it cannot match.
-const isCredentialAuthority = (value: unknown): value is CredentialAuthority =>
-  isRecord(value) &&
-  (value["type"] === "session" ||
-    (value["type"] === "attenuated" && isRecord(value["permissions"])));
+const isAuthorizedMemberRole = (
+  value: unknown,
+): value is AuthorizedMemberRole => value instanceof MemberAuthority;
 
-/**
- * Reads the authority a handler context carries. A context without a valid
- * role and credential yields `null`, which callers answer as forbidden.
- */
 export const readAuthorizedMemberRole = (
   ctx: object,
-): AuthorizedMemberRole | null => {
-  if (!hasOwnMemberRole(ctx)) {
-    return null;
-  }
-
-  const { memberRole } = ctx;
-  if (typeof memberRole !== "object" || memberRole === null) {
-    return null;
-  }
-
-  // Own properties only: an inherited `role` or `credential` is not one the
-  // context builder set.
-  const role: unknown = Object.hasOwn(memberRole, "role")
-    ? Reflect.get(memberRole, "role")
-    : undefined;
-  if (typeof role !== "string" || !isMemberRole(role)) {
-    return null;
-  }
-  const credential: unknown = Object.hasOwn(memberRole, "credential")
-    ? Reflect.get(memberRole, "credential")
-    : undefined;
-  if (!isCredentialAuthority(credential)) {
-    return null;
-  }
-
-  return { role, credential };
-};
+): AuthorizedMemberRole | null =>
+  hasOwnMemberRole(ctx) && isAuthorizedMemberRole(ctx.memberRole)
+    ? ctx.memberRole
+    : null;

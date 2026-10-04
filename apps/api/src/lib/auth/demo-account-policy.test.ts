@@ -58,6 +58,34 @@ describe("account access policy", () => {
     }
   });
 
+  test("normalizes configured account identities for access and session creation", async () => {
+    for (const accountEmail of [email, " Account@Example.Test "]) {
+      for (const configuredEmail of [email, " ACCOUNT@EXAMPLE.TEST "]) {
+        const normalizedConfig = { email: configuredEmail, organizationId };
+        expect(
+          Result.isError(
+            checkDemoAccountAccess({
+              config: normalizedConfig,
+              email: accountEmail,
+              operation: "growth",
+            }),
+          ),
+        ).toBe(true);
+        const createSession = createDemoSessionPolicy({
+          config: normalizedConfig,
+          resolveUser: async () => ({ email: accountEmail }),
+          hasMembership: async () => true,
+        });
+        expect(await createSession({ userId: "user_account" })).toEqual({
+          data: {
+            userId: "user_account",
+            activeOrganizationId: organizationId,
+          },
+        });
+      }
+    }
+  });
+
   test("requires the configured organization for session access", () => {
     for (const activeOrganizationId of [
       undefined,

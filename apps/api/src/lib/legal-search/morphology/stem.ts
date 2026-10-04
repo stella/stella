@@ -1,3 +1,4 @@
+// parser-output-unchanged: Declares query compatibility stemmers; projection stemming is unchanged.
 /**
  * Morphological stemming for legal-corpus terms.
  *
@@ -18,7 +19,10 @@
  * concern, applied to the stem this module returns.
  */
 
-import { stemSlovak } from "@/api/lib/legal-search/morphology/slovak";
+import {
+  stemSlovak,
+  stemSlovakUpstream,
+} from "@/api/lib/legal-search/morphology/slovak";
 import { SNOWBALL_RELEASE } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
 import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
 import { DanishStemmer } from "@/api/lib/legal-search/morphology/snowball/danish.gen";
@@ -64,6 +68,32 @@ export const MORPHOLOGY_LANGUAGES = [
 ] as const;
 
 export type MorphologyLanguage = (typeof MORPHOLOGY_LANGUAGES)[number];
+
+/** Query compatibility algorithms for stems stored by older projections. */
+export const LEGACY_STEMMERS = {
+  cs: null,
+  da: null,
+  de: null,
+  el: null,
+  en: null,
+  es: null,
+  et: null,
+  fi: null,
+  fr: null,
+  ga: null,
+  hu: null,
+  it: null,
+  lt: null,
+  nl: null,
+  pl: null,
+  pt: null,
+  ro: null,
+  sk: stemSlovakUpstream,
+  sv: null,
+} as const satisfies Record<
+  MorphologyLanguage,
+  ((term: string) => string) | null
+>;
 
 /**
  * How many times each language's stemmer has changed its output since
