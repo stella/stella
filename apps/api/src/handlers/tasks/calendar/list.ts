@@ -8,6 +8,7 @@ import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
   buildFilterConditions,
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandValidatedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
@@ -254,13 +256,25 @@ const calendarTasks = createSafeHandler(
     }
 
     const datePropertyIds = unique(body.datePropertyIds);
-    const fieldPropertyIds = unique([
+    const fieldPropertyIds: SafeId<"property">[] = [];
+    for (const requestedId of unique([
       ...datePropertyIds.filter((id) => !isBuiltInDatePropertyId(id)),
       ...(body.endDatePropertyId &&
       !isBuiltInDatePropertyId(body.endDatePropertyId)
         ? [body.endDatePropertyId]
         : []),
-    ]);
+    ])) {
+      const propertyId = brandValidatedPropertyId(requestedId);
+      if (!propertyId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Invalid calendar date property",
+          }),
+        );
+      }
+      fieldPropertyIds.push(propertyId);
+    }
     const dateConditions = buildCalendarDateConditions({
       range,
       datePropertyIds,

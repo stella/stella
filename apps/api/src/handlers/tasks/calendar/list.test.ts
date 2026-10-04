@@ -162,6 +162,26 @@ describe("calendar task handler", () => {
     },
   );
 
+  test.each<Pick<CalendarCtx["body"], "datePropertyIds" | "endDatePropertyId">>(
+    [
+      { datePropertyIds: ["_start-date", "not-a-property-id"] },
+      { datePropertyIds: ["_start-date"], endDatePropertyId: "not-a-property" },
+    ],
+  )("rejects a custom date property that is not an id: %o", async (ids) => {
+    const result = await calendarTasks.handler(
+      createContext({
+        body: { ...baseBody, ...ids },
+        safeDb: async () => {
+          throw new Error("safeDb should not be called");
+        },
+      }),
+    );
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid calendar date property" },
+    });
+  });
+
   test("rejects inverted instants within the same UTC day", async () => {
     const result = await calendarTasks.handler(
       createContext({
