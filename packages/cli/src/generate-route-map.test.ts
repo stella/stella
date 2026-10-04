@@ -185,6 +185,10 @@ describe("generateRouteMap: discriminator split (S2)", () => {
       "--matter-number-padding",
       "--matter-number-pattern",
       "--prompt-caching-enabled",
+      "--time-edit-window-days",
+      "--time-locked-through-month",
+      "--time-minimum-unit-minutes",
+      "--time-narrative-required",
       "--time-zone",
     ]);
     expect(settings?.flags.some((f) => f.required)).toBe(false);

@@ -5007,6 +5007,10 @@
               "matter_number_padding",
               "prompt_caching_enabled",
               "document_processing_mode",
+              "time_minimum_unit_minutes",
+              "time_edit_window_days",
+              "time_locked_through_month",
+              "time_narrative_required",
               "time_zone"
             ],
             "destructive": false
