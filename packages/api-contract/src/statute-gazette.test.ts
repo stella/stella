@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -44,8 +43,9 @@ describe("a gazette's printed abbreviation and its ELI segment", () => {
         abbreviation,
       );
       const scope = readStatuteQueryScope(country);
+      expect(scope.type, `${country} has gazettes`).toBe("supported");
       if (scope.type === "unsupported") {
-        return panic(`${country} has gazettes but no query grammar`);
+        return;
       }
       expect(
         parseStatuteQuery(scope.country, `57/${String(year)} ${abbreviation}`),
