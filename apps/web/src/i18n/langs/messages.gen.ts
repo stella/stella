@@ -548,6 +548,7 @@ type Messages = {
     "numberSeries": {
       "add": "Add number series";
       "advance": "Advance";
+      "allSellers": "All sellers";
       "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
       "creditNote": "Credit note";
       "default": "Default series";
@@ -565,6 +566,9 @@ type Messages = {
       "preview": "Next number";
       "previewAllocated": "This number is already allocated.";
       "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "sellerProfile": "Seller profile";
+      "sellerUnavailable": "Seller archived or unavailable";
+      "sellerUnavailableHelp": "This seller is archived or unavailable. Keep the assignment or select another seller.";
       "setDefault": "Make default series";
       "title": "Number series";
     };

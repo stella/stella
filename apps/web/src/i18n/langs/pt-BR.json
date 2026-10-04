@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Adicionar série de numeração",
       "advance": "Adiantamento",
+      "allSellers": "Todos os vendedores",
       "archiveConfirm": "Arquivar esta série de numeração? Ela não estará mais disponível para novos documentos.",
       "creditNote": "Nota de crédito",
       "default": "Série padrão",
@@ -562,6 +563,9 @@
       "preview": "Próximo número",
       "previewAllocated": "Este número já está atribuído.",
       "previewHelp": "A prévia usa o modelo salvo e não reserva um número.",
+      "sellerProfile": "Perfil de vendedor",
+      "sellerUnavailable": "Vendedor arquivado ou indisponível",
+      "sellerUnavailableHelp": "Este vendedor está arquivado ou indisponível. Mantenha a atribuição ou selecione outro vendedor.",
       "setDefault": "Definir como série padrão",
       "title": "Séries de numeração"
     },

@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Lisa numbriseeria",
       "advance": "Ettemakse",
+      "allSellers": "Kõik müüjad",
       "archiveConfirm": "Kas arhiveerida see numbriseeria? Seda ei saa enam uute dokumentide jaoks kasutada.",
       "creditNote": "Kreeditarve",
       "default": "Vaikeseeria",
@@ -562,6 +563,9 @@
       "preview": "Järgmine number",
       "previewAllocated": "See number on juba määratud.",
       "previewHelp": "Eelvaade kasutab salvestatud malli ega broneeri numbrit.",
+      "sellerProfile": "Müüja profiil",
+      "sellerUnavailable": "Müüja on arhiveeritud või pole saadaval",
+      "sellerUnavailableHelp": "See müüja on arhiveeritud või pole saadaval. Jätke määrang alles või valige teine müüja.",
       "setDefault": "Määra vaikeseeriaks",
       "title": "Numbriseeriad"
     },

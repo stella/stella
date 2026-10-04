@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Dodaj serię numeracji",
       "advance": "Zaliczka",
+      "allSellers": "Wszyscy sprzedawcy",
       "archiveConfirm": "Zarchiwizować tę serię numeracji? Nie będzie już dostępna dla nowych dokumentów.",
       "creditNote": "Nota kredytowa",
       "default": "Seria domyślna",
@@ -562,6 +563,9 @@
       "preview": "Następny numer",
       "previewAllocated": "Ten numer został już przydzielony.",
       "previewHelp": "Podgląd używa zapisanego szablonu i nie rezerwuje numeru.",
+      "sellerProfile": "Profil sprzedawcy",
+      "sellerUnavailable": "Sprzedawca zarchiwizowany lub niedostępny",
+      "sellerUnavailableHelp": "Ten sprzedawca został zarchiwizowany lub jest niedostępny. Zachowaj przypisanie lub wybierz innego sprzedawcę.",
       "setDefault": "Ustaw jako serię domyślną",
       "title": "Serie numeracji"
     },
