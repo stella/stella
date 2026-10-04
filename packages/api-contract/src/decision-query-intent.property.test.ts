@@ -426,12 +426,13 @@ test(
         ),
         fc.integer({ min: 1, max: 6 }),
         (siblings, requested) => {
-          const intent = parseDecisionQuery(`${SHEET_FILE}-${requested}`, {
+          const read = parseDecisionQuery(`${SHEET_FILE}-${requested}`, {
             grammar: DECISION_DOCKET_GRAMMARS.CZE,
           });
-          if (intent.type !== "identifier") {
-            return panic("A sheet reference must read as an identifier");
-          }
+          const intent =
+            read.type === "identifier"
+              ? read
+              : panic("A sheet reference must read as an identifier");
           const modelled = siblings.map(
             ({ reached, sheet, source }, index) => ({
               id: `sibling-${String(index)}`,
