@@ -383,42 +383,77 @@ const insertAuditRows = async (
   }
 };
 
+type BackgroundAuditRecorderBindings = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace"> | null;
+  userId: string;
+  execution: AuditExecutionContext;
+};
+
+type BackgroundAuditGroup = {
+  bindings: BackgroundAuditRecorderBindings;
+  events: AuditEvent[];
+};
+
+type RecordAuditGroupsOptions = {
+  tx: Transaction;
+  groups: readonly BackgroundAuditGroup[];
+  recordAuditEvent?: AuditRecorder | undefined;
+};
+
+/** Retain request metadata when supplied; otherwise keep each tenant group's provenance. */
+export const recordAuditGroups = async ({
+  tx,
+  groups,
+  recordAuditEvent,
+}: RecordAuditGroupsOptions): Promise<void> => {
+  if (recordAuditEvent) {
+    await recordAuditEvent(
+      tx,
+      groups.flatMap(({ events }) => events),
+    );
+    return;
+  }
+  const rows = groups.flatMap(({ bindings, events }) => {
+    const groupId = Bun.randomUUIDv7();
+    const execution = executionColumns(bindings.execution, bindings.userId);
+    return events.map((event) => ({
+      action: event.action,
+      changes: auditChangesForResource(event.resourceType, event.changes),
+      metadata:
+        auditMetadataForResource(event.resourceType, event.metadata) ?? null,
+      organizationId: bindings.organizationId,
+      resourceId: event.resourceId,
+      resourceType: event.resourceType,
+      userId: bindings.userId,
+      workspaceId:
+        event.workspaceId === undefined
+          ? bindings.workspaceId
+          : event.workspaceId,
+      ...execution,
+      activityCategory: activityCategoryForEvent(event),
+      groupId,
+      runId: runIdForEvent(event, execution),
+    }));
+  });
+  if (rows.length === 0) {
+    return;
+  }
+  await insertAuditRows(tx, rows);
+};
+
 /**
  * Audit recorder for background jobs (BullMQ workers) that run without an HTTP
  * request. Same insert shape as {@link createAuditRecorder}, but with no
  * request-derived metadata (IP, UA, forwarded-for) since there is no request.
  */
 export const createBackgroundAuditRecorder =
-  (bindings: {
-    organizationId: SafeId<"organization">;
-    workspaceId: SafeId<"workspace"> | null;
-    userId: string;
-    execution: AuditExecutionContext;
-  }): AuditRecorder =>
+  (bindings: BackgroundAuditRecorderBindings): AuditRecorder =>
   async (tx, event) => {
-    const events = Array.isArray(event) ? event : [event];
-    if (events.length === 0) {
-      return;
-    }
-
-    const groupId = Bun.randomUUIDv7();
-    const execution = executionColumns(bindings.execution, bindings.userId);
-    const toRow = (e: AuditEvent) => ({
-      action: e.action,
-      changes: auditChangesForResource(e.resourceType, e.changes),
-      metadata: auditMetadataForResource(e.resourceType, e.metadata) ?? null,
-      organizationId: bindings.organizationId,
-      resourceId: e.resourceId,
-      resourceType: e.resourceType,
-      userId: bindings.userId,
-      workspaceId:
-        e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
-      ...execution,
-      activityCategory: activityCategoryForEvent(e),
-      groupId,
-      runId: runIdForEvent(e, execution),
+    await recordAuditGroups({
+      tx,
+      groups: [{ bindings, events: Array.isArray(event) ? event : [event] }],
     });
-    await insertAuditRows(tx, events.map(toRow));
   };
 
 export const createAuditRecorder = (

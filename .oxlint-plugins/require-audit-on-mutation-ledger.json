@@ -119,7 +119,6 @@
     "id": "apps/api/src/lib/account-deletion-steps.ts::reassignActiveTaskAssignmentsAndDropMemberships",
     "writes": {
       "delete:member": 1,
-      "delete:taskAssignees": 1,
       "delete:workspaceMembers": 1,
       "insert:workObligationEvents": 1,
       "update:taskAssignees": 1,

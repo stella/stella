@@ -57,9 +57,9 @@ export type SafeDbOrTx =
   | { safeDb?: undefined; tx: Transaction };
 
 /** Reject a transaction callback so its writes roll back, preserving the refusal. */
-export const abortTransaction = (error: unknown): never => {
+export function abortTransaction(error: unknown): never {
   throw error;
-};
+}
 
 /**
  * Recover the failure a transaction callback threw to abort itself.

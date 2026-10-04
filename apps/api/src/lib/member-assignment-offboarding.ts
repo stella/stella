@@ -47,6 +47,7 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
+  recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
@@ -138,7 +139,25 @@ const clearMemberObligationOwners = async ({
   reassignTo,
 }: ClearMemberAssignmentsOptions) => {
   if (scope.type === "organization") {
-    while (true) {
+    const ownershipScope = and(
+      eq(workspaces.organizationId, scope.organizationId),
+      eq(workObligations.ownerUserId, userId),
+      inArray(workObligations.status, [
+        WORK_OBLIGATION_STATUS.ACTIVE,
+        WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      ]),
+    );
+    const ownedRows = tx
+      .select({ id: workObligations.entityId })
+      .from(workObligations)
+      .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
+      .where(ownershipScope);
+    const rowCount = await tx.$count(ownedRows.as("owned_rows"));
+    for (
+      let remaining = rowCount;
+      remaining > 0;
+      remaining -= LIMITS.memberRemovalCleanupBatchSize
+    ) {
       // db-await-in-loop: drain mutable ownership in bounded audited batches.
       const owned = await tx
         .select({
@@ -148,16 +167,7 @@ const clearMemberObligationOwners = async ({
         })
         .from(workObligations)
         .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
-        .where(
-          and(
-            eq(workspaces.organizationId, scope.organizationId),
-            eq(workObligations.ownerUserId, userId),
-            inArray(workObligations.status, [
-              WORK_OBLIGATION_STATUS.ACTIVE,
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-            ]),
-          ),
-        )
+        .where(ownershipScope)
         .orderBy(workObligations.workspaceId, workObligations.entityId)
         .limit(LIMITS.memberRemovalCleanupBatchSize)
         .for("update", { of: workObligations });
@@ -260,7 +270,25 @@ const clearMemberTaskAssignments = async ({
   recordAuditEvent,
 }: ClearMemberAssignmentsOptions) => {
   const workspaceScope = memberWorkspaceScope(scope);
-  while (true) {
+  const assignmentScope = and(
+    eq(taskAssignees.userId, userId),
+    workspaceScope,
+    // Completed and cancelled tasks keep their former assignee as
+    // history; only open work moves or returns to the matter.
+    openTaskStatus,
+  );
+  const assignedRows = tx
+    .select({ id: taskAssignees.entityId })
+    .from(taskAssignees)
+    .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+    .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+    .where(assignmentScope);
+  const rowCount = await tx.$count(assignedRows.as("assigned_rows"));
+  for (
+    let remaining = rowCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
     // db-await-in-loop: drain assignment rows in bounded audited batches.
     const assigned = await tx
       .select({
@@ -272,15 +300,7 @@ const clearMemberTaskAssignments = async ({
       .from(taskAssignees)
       .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
       .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
-      .where(
-        and(
-          eq(taskAssignees.userId, userId),
-          workspaceScope,
-          // Completed and cancelled tasks keep their former assignee as
-          // history; only open work moves or returns to the matter.
-          openTaskStatus,
-        ),
-      )
+      .where(assignmentScope)
       .orderBy(taskAssignees.entityId)
       .limit(LIMITS.memberRemovalCleanupBatchSize);
     if (assigned.length === 0) {
@@ -334,40 +354,45 @@ const clearMemberTaskAssignments = async ({
           });
       }
     }
-    for (const rows of byWorkspace.values()) {
+    const auditGroups = [...byWorkspace.values()].flatMap((rows) => {
       const first = rows.at(0);
       if (!first) {
-        continue;
+        return [];
       }
-      const recorder =
-        recordAuditEvent ??
-        createBackgroundAuditRecorder({
-          organizationId: first.organizationId,
-          workspaceId: first.workspaceId,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+      return [
+        {
+          bindings: {
+            organizationId: first.organizationId,
+            workspaceId: first.workspaceId,
+            userId: actorUserId,
+            execution: {
+              performer: { type: "user" as const, id: actorUserId },
+              trigger: {
+                type: "system" as const,
+                source: "membership_removal",
+              },
+            },
           },
-        });
-      // db-await-in-loop: audit each matter as its own tenant, batched within the matter.
-      await recorder(
-        tx,
-        rows.map((row) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: row.entityId,
-          workspaceId: row.workspaceId,
-          changes: { assigneeUserId: { old: userId, new: reassignTo ?? null } },
-          metadata: {
-            kind: "task",
-            change: reassignTo ? "assignee-reassigned" : "assignee-removed",
-            role: row.role,
-            cause: "membership_removed",
-          },
-        })),
-      );
-    }
+          events: rows.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: row.entityId,
+            workspaceId: row.workspaceId,
+            changes: {
+              assigneeUserId: { old: userId, new: reassignTo ?? null },
+            },
+            metadata: {
+              kind: "task" as const,
+              change: reassignTo ? "assignee-reassigned" : "assignee-removed",
+              role: row.role,
+              cause: "membership_removed",
+            },
+          })),
+        },
+      ];
+    });
+    // db-await-in-loop: audit the changed page before consuming the next counted batch.
+    await recordAuditGroups({ tx, groups: auditGroups, recordAuditEvent });
   }
 };
 
@@ -376,7 +401,7 @@ const closeMemberExchanges = async ({
   scope,
   userId,
 }: ClearMemberAssignmentsOptions) => {
-  // audit: skip - These ephemeral exchanges close within the audited member removal lifecycle.
+  // audit: skip - removeWorkspaceMemberHandler and removeOrganizationMemberInTransaction record lifecycle audit rows; verifyAndDeleteUser calls recordAccountDeletionRequest in the same transaction.
   const workspaceScope = memberWorkspaceScope(scope);
   const scopedWorkspaces = tx
     .select({ id: workspaces.id })
@@ -435,7 +460,19 @@ const clearMemberContactAssignments = async ({
     scope.type === "organization"
       ? eq(contacts.organizationId, scope.organizationId)
       : undefined;
-  while (true) {
+  const attorneyScope = and(
+    contactScope,
+    or(
+      eq(contacts.originatingAttorneyId, userId),
+      eq(contacts.responsibleAttorneyId, userId),
+    ),
+  );
+  const rowCount = await tx.$count(contacts, attorneyScope);
+  for (
+    let remaining = rowCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
     // Matter creation already locks its client before organization membership.
     // Refuse contention here instead of introducing the opposite waiting order.
     const contactResult = await Result.tryPromise({
@@ -449,15 +486,7 @@ const clearMemberContactAssignments = async ({
             responsibleAttorneyId: contacts.responsibleAttorneyId,
           })
           .from(contacts)
-          .where(
-            and(
-              contactScope,
-              or(
-                eq(contacts.originatingAttorneyId, userId),
-                eq(contacts.responsibleAttorneyId, userId),
-              ),
-            ),
-          )
+          .where(attorneyScope)
           .orderBy(contacts.id)
           .limit(LIMITS.memberRemovalCleanupBatchSize)
           .for("update", { noWait: true }),
@@ -497,20 +526,20 @@ const clearMemberContactAssignments = async ({
       contactRows,
       (row) => row.organizationId,
     );
-    for (const [organizationId, rows] of contactsByOrganization) {
-      const recorder = createBackgroundAuditRecorder({
-        organizationId,
-        workspaceId: null,
-        userId: actorUserId,
-        execution: {
-          performer: { type: "user", id: actorUserId },
-          trigger: { type: "system", source: "membership_removal" },
+    // db-await-in-loop: audit the changed contact page before consuming the next counted batch.
+    await recordAuditGroups({
+      tx,
+      groups: [...contactsByOrganization].map(([organizationId, rows]) => ({
+        bindings: {
+          organizationId,
+          workspaceId: null,
+          userId: actorUserId,
+          execution: {
+            performer: { type: "user", id: actorUserId },
+            trigger: { type: "system", source: "membership_removal" },
+          },
         },
-      });
-      // db-await-in-loop: batch audit by the contact's organization ownership.
-      await recorder(
-        tx,
-        rows.map((row) => ({
+        events: rows.map((row) => ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
           resourceId: row.id,
@@ -525,8 +554,8 @@ const clearMemberContactAssignments = async ({
           },
           metadata: { cause: "membership_removed" },
         })),
-      );
-    }
+      })),
+    });
   }
 };
 
@@ -558,7 +587,17 @@ const clearMemberTimeEntryApprovals = async ({
   actorUserId,
   recordAuditEvent,
 }: ClearMemberAssignmentsOptions) => {
-  while (true) {
+  const approvalScope = and(
+    timeEntryApprovalScope(tx, scope),
+    eq(timeEntries.approverUserId, userId),
+    eq(timeEntries.status, BILLING_STATUS.DRAFT),
+  );
+  const rowCount = await tx.$count(timeEntries, approvalScope);
+  for (
+    let remaining = rowCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
     const pending = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain pending approvals in bounded audited batches.
@@ -569,13 +608,7 @@ const clearMemberTimeEntryApprovals = async ({
             workspaceId: timeEntries.workspaceId,
           })
           .from(timeEntries)
-          .where(
-            and(
-              timeEntryApprovalScope(tx, scope),
-              eq(timeEntries.approverUserId, userId),
-              eq(timeEntries.status, BILLING_STATUS.DRAFT),
-            ),
-          )
+          .where(approvalScope)
           .orderBy(timeEntries.id)
           .limit(LIMITS.memberRemovalCleanupBatchSize)
           .for("update", { noWait: true }),
@@ -603,22 +636,18 @@ const clearMemberTimeEntryApprovals = async ({
         ),
       );
     const byOrganization = Map.groupBy(rows, (row) => row.organizationId);
-    for (const [organizationId, grouped] of byOrganization) {
-      const recorder =
-        recordAuditEvent ??
-        createBackgroundAuditRecorder({
+    const auditGroups = [...byOrganization].map(
+      ([organizationId, grouped]) => ({
+        bindings: {
           organizationId,
           workspaceId: null,
           userId: actorUserId,
           execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+            performer: { type: "user" as const, id: actorUserId },
+            trigger: { type: "system" as const, source: "membership_removal" },
           },
-        });
-      // db-await-in-loop: audit each organization's approval batch as its own tenant.
-      await recorder(
-        tx,
-        grouped.map((row) => ({
+        },
+        events: grouped.map((row) => ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
           resourceId: row.id,
@@ -626,8 +655,10 @@ const clearMemberTimeEntryApprovals = async ({
           changes: { approverUserId: { old: userId, new: null } },
           metadata: { cause: "membership_removed" },
         })),
-      );
-    }
+      }),
+    );
+    // db-await-in-loop: audit the changed approval page before consuming the next counted batch.
+    await recordAuditGroups({ tx, groups: auditGroups, recordAuditEvent });
   }
 };
 
@@ -830,29 +861,31 @@ export const selectMemberCleanupWorkspaceIds = async ({
   // once per organization whose matters this cleanup changes: one for
   // organization removal, every such organization (current or already left)
   // for account erasure.
-  const organizationIds = new Set<string>();
-  if (!organizationId) {
-    for (const source of sources) {
-      // db-await-in-loop: one distinct-organization read per kind of row.
-      const rows = await tx
-        .selectDistinct({ id: workspaces.organizationId })
-        .from(workspaces)
-        .where(inArray(workspaces.id, source()));
-      for (const { id } of rows) {
-        organizationIds.add(id);
-      }
-    }
-  }
-  const bound = workspacesPerOrganization * Math.max(organizationIds.size, 1);
-  const ids = new Set<SafeId<"workspace">>();
-  for (const source of sources) {
-    // db-await-in-loop: one indexed read per kind of row removal changes.
-    for (const { id } of await source().limit(bound + 1)) {
-      if (id !== null) {
-        ids.add(id);
-      }
-    }
-  }
+  const affectedWorkspaceIds = sql`(${sql.join(
+    sources.map((source) => source().getSQL()),
+    sql` UNION `,
+  )})`;
+  const affectedWorkspaces = inArray(workspaces.id, affectedWorkspaceIds);
+  const organizationCount = organizationId
+    ? 1
+    : await tx.$count(
+        organization,
+        inArray(
+          organization.id,
+          tx
+            .selectDistinct({ id: workspaces.organizationId })
+            .from(workspaces)
+            .where(affectedWorkspaces),
+        ),
+      );
+  const bound = workspacesPerOrganization * Math.max(organizationCount, 1);
+  const rows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(affectedWorkspaces)
+    .orderBy(workspaces.id)
+    .limit(bound + 1);
+  const ids = new Set(rows.map(({ id }) => id));
   if (ids.size > bound) {
     abortTransaction(
       new HandlerError({
@@ -937,7 +970,28 @@ const cancelMemberFlowRuns = async ({
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(eq(workspaces.organizationId, organizationId));
-  while (true) {
+  const runScope = and(
+    inArray(flowRuns.workspaceId, affectedWorkspaceIds),
+    inArray(flowRuns.status, ["pending", "running", "awaiting_review"]),
+    or(
+      sql`${flowRuns.triggerSource}->>'userId' = ${userId}`,
+      and(
+        sql`${flowRuns.triggerSource}->>'type' <> 'manual'`,
+        eq(flowDefinitions.createdByUserId, userId),
+      ),
+    ),
+  );
+  const pendingRuns = tx
+    .select({ id: flowRuns.id })
+    .from(flowRuns)
+    .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
+    .where(runScope);
+  const rowCount = await tx.$count(pendingRuns.as("pending_runs"));
+  for (
+    let remaining = rowCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
     // db-await-in-loop: cancel bounded run batches while holding the workspace prefix.
     const runs = await tx
       .select({
@@ -947,19 +1001,7 @@ const cancelMemberFlowRuns = async ({
       })
       .from(flowRuns)
       .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
-      .where(
-        and(
-          inArray(flowRuns.workspaceId, affectedWorkspaceIds),
-          inArray(flowRuns.status, ["pending", "running", "awaiting_review"]),
-          or(
-            sql`${flowRuns.triggerSource}->>'userId' = ${userId}`,
-            and(
-              sql`${flowRuns.triggerSource}->>'type' <> 'manual'`,
-              eq(flowDefinitions.createdByUserId, userId),
-            ),
-          ),
-        ),
-      )
+      .where(runScope)
       .orderBy(flowRuns.id)
       .limit(LIMITS.memberRemovalCleanupBatchSize)
       .for("update", { of: flowRuns });
@@ -1107,8 +1149,8 @@ export const removeOrganizationMemberInTransaction = async (
     organizationId,
     tx,
     userId,
-    lockWorkspaces: (transaction) =>
-      lockOrganizationCleanupWorkspaces({
+    lockWorkspaces: async (transaction) =>
+      await lockOrganizationCleanupWorkspaces({
         tx: transaction,
         organizationId,
         userId,

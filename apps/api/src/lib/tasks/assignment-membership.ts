@@ -90,7 +90,7 @@ export const writeTaskAssignments = async ({
   workspaceId,
   assignments,
 }: WriteTaskAssignmentsOptions) => {
-  // audit: skip - The task writer records creation or assignment changes in this same transaction.
+  // audit: skip - createTaskEntityHandler, addAssigneeHandler and moveAssigneeHandler record task events in the same transaction.
   if (assignments.length === 0) {
     return;
   }
@@ -129,7 +129,7 @@ export const removeTaskAssignment = async ({
   entityId,
   userId,
 }: RemoveTaskAssignmentOptions) => {
-  // audit: skip - The remove or move handler records its task mutation in this same transaction.
+  // audit: skip - removeAssigneeHandler and moveAssigneeHandler record task events in the same transaction.
   await tx
     .delete(taskAssignees)
     .where(

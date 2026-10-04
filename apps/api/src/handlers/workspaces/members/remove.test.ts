@@ -135,14 +135,17 @@ describe("removeWorkspaceMember", () => {
     const deletedWorkspaceMembers: unknown[] = [];
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      $count: async () => 0,
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
             ...createSelectQueryMock([]).from(),
-            innerJoin: () => createSelectQueryMock([]).from(),
+            innerJoin: () => ({
+              where: () => ({ as: () => ({}) }),
+            }),
           }),
           where: () => ({
-            orderBy: () => createSelectQueryMock([]).from().where(),
+            orderBy: async () => await createSelectQueryMock([]).from().where(),
             limit: () => ({
               for: async () => [],
             }),

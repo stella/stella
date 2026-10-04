@@ -58,6 +58,29 @@ const lint = async (budgets: Budgets | null) =>
   });
 
 describe("require-audit-on-mutation ledger budgets", () => {
+  test("recognizes tenant group auditing only from its canonical owner", async () => {
+    const mutation = `
+declare const tx: { update: (row: unknown) => void };
+export const save = () => {
+  tx.update({ id: "row" });
+  void recordAuditGroups({ tx, groups: [] });
+};`;
+    expect(
+      await lintSingleRule(
+        RULE,
+        `import { recordAuditGroups } from "@/api/lib/audit-log";${mutation}`,
+        { sourcePath: SOURCE_PATH },
+      ),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        RULE,
+        `import { recordAuditGroups } from "./other-store";${mutation}`,
+        { sourcePath: SOURCE_PATH },
+      ),
+    ).toEqual([4]);
+  });
+
   test("a file without ledger rows is held to the full rule", async () => {
     expect(await lint(null)).toEqual([10, 11, 16, 19, 20]);
   });

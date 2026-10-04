@@ -24,7 +24,11 @@ import {
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { selectMemberCleanupWorkspaceIds } from "@/api/lib/member-assignment-offboarding";
+import { LIMITS } from "@/api/lib/limits";
+import {
+  clearMemberAssignments,
+  selectMemberCleanupWorkspaceIds,
+} from "@/api/lib/member-assignment-offboarding";
 import { cents } from "@/api/lib/money";
 import {
   brandPersistedOrganizationId,
@@ -432,6 +436,128 @@ describe("account erasure spans every organization", () => {
           changes: { approverUserId: { old: ids.userA1, new: null } },
         },
       ]);
+    });
+  });
+
+  test("counted cleanup drains multiple tenant pages and audits every changed row", async () => {
+    await rollingBack(async (tx) => {
+      const raw = asTestRaw<Transaction>(tx);
+      const tasks = Array.from(
+        { length: LIMITS.memberRemovalCleanupBatchSize + 1 },
+        (_, index) => ({
+          id: createSafeId<"entity">(),
+          workspaceId: index % 2 === 0 ? ids.wsA2 : ids.wsB1,
+          kind: "task" as const,
+          name: "Counted cleanup task",
+          status: "open",
+        }),
+      );
+      const attorneys = tasks.map((task) => ({
+        id: createSafeId<"contact">(),
+        organizationId: task.workspaceId === ids.wsA2 ? ids.orgA : ids.orgB,
+        type: "person" as const,
+        displayName: "Counted cleanup contact",
+        responsibleAttorneyId: ids.userA1,
+      }));
+      const approvals = tasks.map(
+        (task) =>
+          ({
+            id: createSafeId<"timeEntry">(),
+            organizationId: task.workspaceId === ids.wsA2 ? ids.orgA : ids.orgB,
+            workspaceId: task.workspaceId,
+            userId: ids.userA1,
+            approverUserId: ids.userA1,
+            status: "draft" as const,
+            dateWorked: "2026-10-01",
+            timezoneId: "UTC",
+            durationMinutes: 1,
+            billedMinutes: 1,
+            rateAtEntry: cents(0),
+            currency: "EUR",
+            narrative: "Counted cleanup approval",
+          }) satisfies typeof timeEntries.$inferInsert,
+      );
+      await tx.insert(entities).values(tasks);
+      await tx.insert(taskAssignees).values(
+        tasks.map((task) => ({
+          entityId: task.id,
+          workspaceId: task.workspaceId,
+          userId: ids.userA1,
+          role: "assignee" as const,
+        })),
+      );
+      await tx.insert(contacts).values(attorneys);
+      await tx.insert(timeEntries).values(approvals);
+
+      await clearMemberAssignments({
+        tx: raw,
+        scope: { type: "account" },
+        userId: brandPersistedUserId(ids.userA1),
+        actorUserId: brandPersistedUserId(ids.userA1),
+      });
+
+      expect(
+        await tx.$count(
+          taskAssignees,
+          inArray(
+            taskAssignees.entityId,
+            tasks.map(({ id }) => id),
+          ),
+        ),
+      ).toBe(0);
+      expect(
+        await tx.$count(
+          contacts,
+          and(
+            inArray(
+              contacts.id,
+              attorneys.map(({ id }) => id),
+            ),
+            eq(contacts.responsibleAttorneyId, ids.userA1),
+          ),
+        ),
+      ).toBe(0);
+      expect(
+        await tx.$count(
+          timeEntries,
+          and(
+            inArray(
+              timeEntries.id,
+              approvals.map(({ id }) => id),
+            ),
+            eq(timeEntries.approverUserId, ids.userA1),
+          ),
+        ),
+      ).toBe(0);
+      const expected = new Map([
+        ...tasks.map(
+          (task) =>
+            [
+              String(task.id),
+              task.workspaceId === ids.wsA2 ? ids.orgA : ids.orgB,
+            ] as const,
+        ),
+        ...attorneys.map(
+          (row) => [String(row.id), row.organizationId] as const,
+        ),
+        ...approvals.map(
+          (row) => [String(row.id), row.organizationId] as const,
+        ),
+      ]);
+      const audits = await tx
+        .select({
+          resourceId: auditLogs.resourceId,
+          organizationId: auditLogs.organizationId,
+        })
+        .from(auditLogs)
+        .where(inArray(auditLogs.resourceId, [...expected.keys()]));
+      expect(audits).toHaveLength(expected.size);
+      expect(new Set(audits.map(({ resourceId }) => resourceId)).size).toBe(
+        expected.size,
+      );
+      for (const row of audits) {
+        expect(expected.get(row.resourceId)).toBe(row.organizationId);
+      }
     });
   });
 
