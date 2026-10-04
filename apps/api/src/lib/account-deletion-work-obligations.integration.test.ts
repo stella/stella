@@ -245,7 +245,7 @@ describe("account deletion governed ownership", () => {
   });
 });
 
-test("account erasure defaults to unassigned tasks and retains attorney history", async () => {
+test("account erasure unassigns open tasks, keeps finished work's assignee and attorney history", async () => {
   try {
     await testDb.transaction(async (tx) => {
       const taskIds = [createSafeId<"entity">(), createSafeId<"entity">()];
@@ -255,7 +255,7 @@ test("account erasure defaults to unassigned tasks and retains attorney history"
           workspaceId: ids.wsA2,
           kind: "task" as const,
           name: "Preserved task",
-          status: index === 0 ? "open" : "completed",
+          status: index === 0 ? "open" : "done",
         })),
       );
       await tx.insert(taskAssignees).values(
@@ -283,12 +283,14 @@ test("account erasure defaults to unassigned tasks and retains attorney history"
       });
       expect(count).toBe(0);
       expect(await tx.$count(entities, inArray(entities.id, taskIds))).toBe(2);
+      const [openTaskId, doneTaskId] = taskIds;
+      // Finished work keeps its former assignee as history.
       expect(
-        await tx.$count(
-          taskAssignees,
-          inArray(taskAssignees.entityId, taskIds),
-        ),
-      ).toBe(0);
+        await tx
+          .select({ entityId: taskAssignees.entityId })
+          .from(taskAssignees)
+          .where(inArray(taskAssignees.entityId, taskIds)),
+      ).toEqual([{ entityId: doneTaskId }]);
       expect(
         await tx
           .select({
@@ -305,17 +307,15 @@ test("account erasure defaults to unassigned tasks and retains attorney history"
         })
         .from(auditLogs)
         .where(inArray(auditLogs.resourceId, [...taskIds, contactId]));
-      expect(history).toHaveLength(3);
-      for (const taskId of taskIds) {
-        expect(history).toContainEqual(
-          expect.objectContaining({
-            resourceId: taskId,
-            changes: expect.objectContaining({
-              assigneeUserId: { old: ids.userA1, new: null },
-            }),
+      expect(history).toHaveLength(2);
+      expect(history).toContainEqual(
+        expect.objectContaining({
+          resourceId: openTaskId,
+          changes: expect.objectContaining({
+            assigneeUserId: { old: ids.userA1, new: null },
           }),
-        );
-      }
+        }),
+      );
       expect(history).toContainEqual(
         expect.objectContaining({
           resourceId: contactId,
