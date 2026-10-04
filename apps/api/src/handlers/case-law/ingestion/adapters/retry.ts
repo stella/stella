@@ -56,7 +56,8 @@ const isStopStatus = (
 ): boolean =>
   STOP_STATUSES[mode ?? "return-response"].some((stop) => stop === status);
 
-export type PublisherFetchInit = FetchWithTimeoutInit & {
+/** Publisher options; kept apart from the timeout union so `Omit` cannot collapse it. */
+export type PublisherFetchOptions = {
   /** Whose publisher budget this request spends. */
   adapterKey: AdapterKey;
   fetchStage: DocumentFetchStage;
@@ -69,6 +70,8 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** Publisher-defined redirect target; use manual redirects to inspect it. */
   isRateLimitRedirect?: (response: Response) => boolean;
 };
+
+export type PublisherFetchInit = FetchWithTimeoutInit & PublisherFetchOptions;
 
 /**
  * A case-law publisher request, with optional retries behind the shared gate.

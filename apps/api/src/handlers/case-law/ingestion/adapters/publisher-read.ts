@@ -29,6 +29,8 @@
 
 import { panic, Result } from "better-result";
 
+import type { FetchWithTimeoutInit } from "@stll/fetch";
+
 import {
   readAbsent,
   readOutcomeOfStatus,
@@ -42,7 +44,7 @@ import {
 import {
   fetchPublisher,
   rethrowCycleStop,
-  type PublisherFetchInit,
+  type PublisherFetchOptions,
 } from "./retry";
 
 /**
@@ -65,12 +67,13 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = Omit<PublisherFetchInit, "refusalMode"> & {
-  /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
-  refusalMode?: "stop-refusal" | undefined;
-  /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
-  refusalScope?: ReadRefusalScope | undefined;
-};
+export type PublisherReadInit = FetchWithTimeoutInit &
+  Omit<PublisherFetchOptions, "refusalMode"> & {
+    /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
+    refusalMode?: "stop-refusal" | undefined;
+    /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
+    refusalScope?: ReadRefusalScope | undefined;
+  };
 
 /** One publisher request, typed by what its answer established. */
 export const readPublisher = async (
