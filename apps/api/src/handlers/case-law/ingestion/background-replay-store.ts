@@ -251,12 +251,17 @@ const chooseSource = async (
   );
   // The cheap per-source reads run once for every source; only the lag probe
   // and the budget check stay lazy, per candidate, in the walk below.
-  const gateNames = availableSources.map((source) =>
-    checkpointName({
-      id: source.id,
-      currentParserVersion: PARSER_VERSIONS[source.adapterKey],
-    }),
-  );
+  const gateNames = ordered.flatMap((adapterKey) => {
+    const source = sourceByAdapter.get(adapterKey);
+    return source === undefined
+      ? []
+      : [
+          checkpointName({
+            id: source.id,
+            currentParserVersion: PARSER_VERSIONS[adapterKey],
+          }),
+        ];
+  });
   const { gateStates, pendingSourceIds } = await withReplayTransaction(
     db,
     async (tx) => {
