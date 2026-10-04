@@ -26,6 +26,7 @@ import path from "node:path";
 import { libraryRules } from "@stll/oxlint-config";
 
 import config from "../oxlint.config.ts";
+import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { isRecord, repoRoot } from "./oxlint-config-scopes.ts";
 import {
   checkBaseline,
@@ -41,7 +42,7 @@ import { builtinRules, ruleCanonicalizer } from "./oxlint-rule-ids.ts";
 
 const CONFIG_FILE = "oxlint.config.ts";
 const LIBRARY_LAYER = "@stll/oxlint-config libraryRules";
-const BASELINE_PATH = "scripts/oxlint-effective-config-baseline.json";
+const BASELINE_PATH = BASELINE_PATHS.oxlintEffectiveConfig;
 const SECTIONS = ["effective", "shadowed"] as const;
 type Section = (typeof SECTIONS)[number];
 
