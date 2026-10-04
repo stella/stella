@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -9,7 +9,6 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
-import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -26,7 +25,7 @@ import {
   uploadTriggeredFlowPolicy,
 } from "@/api/handlers/entities/upload-origin";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -38,10 +37,10 @@ import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { insertNamedEntity } from "@/api/lib/entities/sibling-name-insert";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -70,6 +69,7 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { resolveEntityCreateFileName } from "@/api/lib/uploads/entity-create";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const uploadEntityBodySchema = t.Object({
@@ -188,12 +188,6 @@ export const resolveGeneratedDocumentDraftThreadLinkPreflight = ({
   hasExistingLink: boolean;
 }): "conflict" | "continue" => (hasExistingLink ? "conflict" : "continue");
 
-type ResolveFileNameProps = {
-  tx: Transaction;
-  propertyId: SafeId<"property">;
-  name: SanitizedFileName;
-};
-
 type UploadWriteFailureReason =
   | "content-mismatch"
   | "draft-thread-not-bound"
@@ -256,8 +250,6 @@ const uploadWriteFailureStatus = (
       return panic(`Unhandled reason: ${String(reason)}`);
   }
 };
-
-const MAX_FILENAME_LENGTH = 255;
 
 type CleanupUploadedS3KeysOptions = {
   keys: string[];
@@ -720,41 +712,6 @@ const preflightGeneratedDocumentDraft = async ({
     }
   });
 
-const resolveFileName = async ({
-  tx,
-  propertyId,
-  name,
-}: ResolveFileNameProps) => {
-  const lastDot = name.lastIndexOf(".");
-  const base = lastDot === -1 ? name : name.slice(0, lastDot);
-  const ext = lastDot === -1 ? "" : name.slice(lastDot);
-
-  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
-
-  const fieldsCount = await tx.$count(
-    fields,
-    and(
-      eq(fields.propertyId, propertyId),
-      like(jsonField(fields.content, "v1")("fileName"), pattern),
-    ),
-  );
-
-  if (fieldsCount === 0) {
-    return { renamed: false as const, value: name };
-  }
-
-  // Reserve space for the suffix so truncation cannot eat it.
-  const suffix = `_${fieldsCount}`;
-  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
-  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
-
-  // SAFETY: name is already sanitized; the suffix is digits and underscore only
-  return {
-    renamed: true as const,
-    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
-  };
-};
-
 const uploadEntityHandler = async function* ({
   safeDb,
   organizationId,
@@ -1046,14 +1003,19 @@ const uploadEntityHandler = async function* ({
           return { ok: false as const, reason: "entity-limit" as const };
         }
 
-        const resolvedName = await resolveFileName({ tx, propertyId, name });
+        const resolvedName = await resolveEntityCreateFileName({
+          tx,
+          workspaceId,
+          parentId: null,
+          name,
+        });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-        await tx.insert(entities).values({
+        await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
-          name: resolvedName.value,
+          name: resolvedName.name,
           createdBy: userId,
           docSequence: entityStamp.docSequence,
         });
@@ -1291,6 +1253,7 @@ const config = {
     "cannot send multipart: use uploads.create with purpose entity_create " +
     "and then uploads.update.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -1331,6 +1294,7 @@ const uploadEntity = createSafeHandler(
 
 const generatedDocumentConfig = {
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
 } satisfies WorkspaceHandlerConfig;

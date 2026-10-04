@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,6 +13,7 @@ const config = {
     "Permanently delete a matter and all its documents, tasks, fields, and " +
     "chat history. This is irreversible.",
   permissions: { workspace: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "delete_matter" },
 } satisfies WorkspaceHandlerConfig;
 

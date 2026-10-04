@@ -18,10 +18,13 @@ import type {
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   describeDocketFamilyIdentity,
+  describeDocketGrammarFamilyIdentity,
   docketFamilyDecisionRows,
   docketFamilyIdentifierRows,
   docketFamilyKeyGrantSql,
   docketFamilyScenario,
+  docketGrammarFamilyDecisionRows,
+  docketGrammarFamilyScenario,
 } from "@/api/tests/helpers/docket-family-identity-scenario";
 import {
   createTestPglite,
@@ -37,6 +40,7 @@ import {
 
 const sourceId = createSafeId<"caseLawSource">();
 const scenario = docketFamilyScenario(100);
+const grammarScenario = docketGrammarFamilyScenario(100);
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -75,6 +79,9 @@ beforeAll(
       .insert(caseLawDecisions)
       .values(docketFamilyDecisionRows(scenario, sourceId));
     await db
+      .insert(caseLawDecisions)
+      .values(docketGrammarFamilyDecisionRows(grammarScenario, sourceId));
+    await db
       .insert(caseLawDecisionIdentifiers)
       .values(docketFamilyIdentifierRows(scenario));
   },
@@ -89,6 +96,11 @@ describeDocketFamilyIdentity(() => ({
   caseLawDb,
   scenario,
   setFamilyKeyGrant,
+}));
+
+describeDocketGrammarFamilyIdentity(() => ({
+  caseLawDb,
+  scenario: grammarScenario,
 }));
 
 test("an entry naming two files is not read as either", () => {
