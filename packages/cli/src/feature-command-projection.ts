@@ -46,7 +46,7 @@ export const projectFeatureCommands = ({
           ? node
           : null;
       case "route": {
-        const children: Record<string, RouteNode> = {};
+        const children = new Map<string, RouteNode>();
         let projection: "unchanged" | "changed" = "unchanged";
         for (const [name, child] of Object.entries(node.children)) {
           const visible = project(child);
@@ -54,13 +54,15 @@ export const projectFeatureCommands = ({
             projection = "changed";
           }
           if (visible !== null) {
-            children[name] = visible;
+            children.set(name, visible);
           }
         }
-        if (Object.keys(children).length === 0) {
+        if (children.size === 0) {
           return null;
         }
-        return projection === "unchanged" ? node : { ...node, children };
+        return projection === "unchanged"
+          ? node
+          : { ...node, children: Object.fromEntries(children) };
       }
       default: {
         node satisfies never;

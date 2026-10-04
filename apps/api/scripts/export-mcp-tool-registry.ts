@@ -24,6 +24,7 @@ import {
   dynamicToolNamespacePrefix,
   isDynamicToolNamespace,
 } from "@/api/lib/mcp-upstream/namespace";
+import { pickDefined } from "@/api/lib/pick-defined";
 import { CHATGPT_APP_SUBMISSION_PROFILE } from "@/api/mcp/chatgpt-app-submission-profile";
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -55,7 +56,7 @@ const deriveCliAnnotation = (
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
   const annotation = {
     ...declared,
-    ...(tool.featureId === undefined ? {} : { featureId: tool.featureId }),
+    ...pickDefined(tool, ["featureId"]),
   };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;

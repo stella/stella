@@ -188,7 +188,7 @@ export const resolveCommandTree = async ({
   registry,
   featureAccess,
   bakedTree = generatedRouteMap,
-  loadCatalog = async () => loadBakedCapabilityCatalog(),
+  loadCatalog = loadBakedCapabilityCatalog,
   annotations = TOOL_ANNOTATIONS,
 }: {
   serverOrigin: string | undefined;
@@ -196,7 +196,10 @@ export const resolveCommandTree = async ({
   registry?: CurrentRegistry;
   featureAccess?: CallerFeatureAccess;
   bakedTree?: RouteNode;
-  loadCatalog?: () => Promise<readonly CapabilityCatalogEntry[] | null>;
+  loadCatalog?: () =>
+    | readonly CapabilityCatalogEntry[]
+    | null
+    | Promise<readonly CapabilityCatalogEntry[] | null>;
   annotations?: Readonly<Record<string, ToolAnnotation>>;
 }): Promise<ResolvedCommandTree> => {
   const file =
