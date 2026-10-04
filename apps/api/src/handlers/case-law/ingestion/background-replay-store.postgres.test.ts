@@ -60,6 +60,7 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   withGatedTestClients,
   openGatedTestDatabase,
@@ -391,7 +392,7 @@ if (!databaseUrl || !enabled) {
           >[0],
         ) => ({
           type: "parsed" as const,
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "CZE",
@@ -404,7 +405,7 @@ if (!databaseUrl || !enabled) {
             ),
             fulltext: "Text rozhodnutí po opravě parseru.",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       };
       const fake = startFakeS3();
@@ -591,7 +592,7 @@ if (!databaseUrl || !enabled) {
             >[0],
           ) => ({
             type: "parsed" as const,
-            result: {
+            result: plainTextIngestionResult({
               caseNumber: stored.caseNumber,
               court: stored.court,
               country: "CZE",
@@ -604,7 +605,7 @@ if (!databaseUrl || !enabled) {
               ),
               fulltext,
               documentAst: EMPTY_AST,
-            },
+            }),
           }),
         };
         const lease = await acquireCaseLawSourceIngestionLease({

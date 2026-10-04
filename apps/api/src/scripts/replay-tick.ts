@@ -166,7 +166,7 @@ const releaseReplayDb: ScopedDb = async (work) => {
     await import("@/api/db/scoped");
   return await createIngestionDb(
     markRlsDatabase({ transaction: cleanupReplayTransaction }),
-    { laneWaitMs: 0 },
+    { laneWaitMs: CLEANUP_TIMEOUT_MS },
   )(work);
 };
 
@@ -657,11 +657,9 @@ const resetReplayDryRun = async ({
   signal,
 }: ResetReplayDryRunOptions): Promise<boolean> => {
   signal.throwIfAborted();
-  const [{ createBackgroundReplayStore }, { caseLawSources }] =
-    await Promise.all([
-      import("@/api/handlers/case-law/ingestion/background-replay-store"),
-      import("@/api/db/schema"),
-    ]);
+  const { createBackgroundReplayStore } =
+    await import("@/api/handlers/case-law/ingestion/background-replay-store");
+  const { caseLawSources } = await import("@/api/db/schema");
   signal.throwIfAborted();
   const reset = await enterCaseLawMaintenanceLane({
     mode: "bounded",
