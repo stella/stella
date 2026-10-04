@@ -1,3 +1,4 @@
+// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome; a successful read returns the same response.
 /**
  * The typed way a case-law adapter reads its publisher.
  *
@@ -64,21 +65,25 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = PublisherFetchInit & {
-  /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
-  refusalScope?: ReadRefusalScope | undefined;
+type GatedReadOptions = {
+  /** The request, already behind its publisher's gate. */
+  request: () => Promise<Response>;
+  signal: AbortSignal | undefined;
+  /** What a 401, 403 or 451 answer withholds. */
+  refusalScope: ReadRefusalScope;
 };
 
-/** One publisher request, typed by what its answer established. */
-export const readPublisher = async (
-  url: string | URL,
-  { refusalScope = "document", ...init }: PublisherReadInit,
-): Promise<ReadOutcome<Response>> => {
-  const fetched = await readStep(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
-    async () => await fetchPublisher(url, init),
-    init.signal ?? undefined,
-  );
+/**
+ * One request sent through a publisher gate, typed by what its answer
+ * established. {@link readPublisher} is this read over the shared gate; an
+ * adapter whose publisher has a gate of its own passes that gate's request.
+ */
+export const readGatedResponse = async ({
+  request,
+  signal,
+  refusalScope,
+}: GatedReadOptions): Promise<ReadOutcome<Response>> => {
+  const fetched = await readStep(request, signal);
   if (Result.isError(fetched)) {
     return fetched.error;
   }
@@ -111,21 +116,20 @@ export const readPublisher = async (
 };
 
 /**
- * One publisher request whose body is text. A served but empty body is a
+ * {@link readGatedResponse} whose body is text. A served but empty body is a
  * failure to read, not an empty document.
  */
-export const readPublisherText = async (
-  url: string | URL,
-  init: PublisherReadInit,
+export const readGatedResponseText = async (
+  options: GatedReadOptions,
 ): Promise<ReadOutcome<string>> => {
-  const outcome = await readPublisher(url, init);
+  const outcome = await readGatedResponse(options);
   if (outcome.type !== "present") {
     return outcome;
   }
   const response = outcome.value;
   const text = await readStep(
     async () => await response.text(),
-    init.signal ?? undefined,
+    options.signal,
   );
   if (Result.isError(text)) {
     return text.error;
@@ -134,6 +138,35 @@ export const readPublisherText = async (
     ? readUnavailable({ kind: "empty-body", status: response.status })
     : readPresent(text.value);
 };
+
+export type PublisherReadInit = PublisherFetchInit & {
+  /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
+  refusalScope?: ReadRefusalScope | undefined;
+};
+
+const sharedGateRead = (
+  url: string | URL,
+  { refusalScope = "document", ...init }: PublisherReadInit,
+): GatedReadOptions => ({
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
+  request: async () => await fetchPublisher(url, init),
+  signal: init.signal ?? undefined,
+  refusalScope,
+});
+
+/** One publisher request, typed by what its answer established. */
+export const readPublisher = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<Response>> =>
+  await readGatedResponse(sharedGateRead(url, init));
+
+/** {@link readPublisher} whose body is text; an empty body is unread. */
+export const readPublisherText = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<string>> =>
+  await readGatedResponseText(sharedGateRead(url, init));
 
 /** A read that established no value: an absence or a failure. */
 export type UnreadPublisherOutcome = Exclude<

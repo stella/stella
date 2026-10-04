@@ -64,7 +64,7 @@ import {
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
   ecjRawParts,
@@ -1158,16 +1158,53 @@ const CZ_US_LISTING_ROW = {
   ecli: "ECLI:CZ:US:2026:Pl.US.9.26.1",
 } as const satisfies ListedDecision;
 
+/** What the court serves on each page one listed record is built from. */
+const CZ_US_PAGES: Readonly<Record<string, string>> = {
+  // The search form, whose only part a record build reads is its session.
+  "/Search/Search.aspx": "<html><body><form></form></body></html>",
+  "/Search/GetText.aspx": CZ_US_TEXT_PAGE,
+  "/Search/ResultDetail.aspx": CZ_US_RECORD_CARD,
+  "/Search/GetAbstract.aspx": CZ_US_ABSTRACT_PAGE,
+};
+
+/**
+ * Built the way the reconciliation builds a listed record: a session, then
+ * the text, the record card and the abstract, each read from the court.
+ */
 export const czUsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      buildCzUsDecision({
-        listed: { ...CZ_US_LISTING_ROW },
-        textHtml: CZ_US_TEXT_PAGE,
-        recordCard: { type: "read", html: CZ_US_RECORD_CARD },
-        abstractHtml: CZ_US_ABSTRACT_PAGE,
-      }) ?? panic("cz-us fixture did not build"),
-    ),
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const { pathname } = new URL(
+        input instanceof Request ? input.url : String(input),
+      );
+      return await Promise.resolve(
+        new Response(
+          CZ_US_PAGES[pathname] ?? panic(`cz-us fixture serves no ${pathname}`),
+          {
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Set-Cookie": "ASP.NET_SessionId=fixture-session; Path=/",
+            },
+          },
+        ),
+      );
+    });
+
+    // The court's gate paces requests seconds apart; the build is the same
+    // decision without the wait.
+    const sleep = Bun.sleep;
+    Bun.sleep = async () => {
+      await Promise.resolve();
+    };
+    const built = await czUsAdapter.reconciliation
+      .buildDecision({ ...CZ_US_LISTING_ROW })
+      .finally(() => {
+        Bun.sleep = sleep;
+      });
+    return built.type === "built"
+      ? built.decision
+      : panic(`cz-us fixture did not build: ${built.type}`);
+  },
 });
 
 // ── EU ECJ fixture ───────────────────────────────────────
