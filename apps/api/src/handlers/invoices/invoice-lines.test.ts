@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { cents } from "@stll/money";
 
+import { INVOICE_ATTACHMENT } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 
 import {
@@ -35,6 +36,7 @@ test("legacy invoice totals and entry line drafts use the same no-charge disposi
     narrative: "Work",
     invoiceNarrative: "Courtesy work",
     noCharge: true,
+    invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
   };
   expect(timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)).toMatchObject({
     quantity: "1",
