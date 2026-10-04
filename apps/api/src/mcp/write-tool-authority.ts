@@ -114,7 +114,7 @@ export const selectableOperations = (
  * The operation a normalized input selects, or `null` when it selects none
  * (an enum value without a declared operation): the caller refuses then.
  */
-export const selectWriteToolOperation = (
+const selectWriteToolOperation = (
   select: McpWriteToolOperationSelector,
   input: Readonly<Record<string, unknown>>,
 ): McpWriteToolOperation | null => {

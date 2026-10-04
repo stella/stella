@@ -145,6 +145,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -2532,18 +2533,13 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     inputSchema: deleteDocumentArgsSchema,
     access: "write",
     accountAccess: "sandbox",
-    permissions: {
-      type: "input",
-      select: {
-        by: "presence",
-        property: "version_id",
-        present: {
-          operation: "delete_version",
-          permissions: { entity: ["update"] },
-        },
-        absent: { operation: "delete", permissions: { entity: ["delete"] } },
+    permissions: selectOperationByPresence("version_id", {
+      present: {
+        operation: "delete_version",
+        permissions: { entity: ["update"] },
       },
-    },
+      absent: { operation: "delete", permissions: { entity: ["delete"] } },
+    }),
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_document",

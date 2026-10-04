@@ -160,6 +160,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
@@ -612,15 +613,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   access: "write",
   accountAccess: "sandbox",
-  permissions: {
-    type: "input",
-    select: {
-      by: "presence",
-      property: "template_id",
-      present: { operation: "update", permissions: { template: ["update"] } },
-      absent: { operation: "create", permissions: { template: ["create"] } },
-    },
-  },
+  permissions: selectOperationByPresence("template_id", {
+    present: { operation: "update", permissions: { template: ["update"] } },
+    absent: { operation: "create", permissions: { template: ["create"] } },
+  }),
   anonymized: { exposure: "excluded", reason: "write" },
   name: "create_template",
   scope: "stella:templates",
