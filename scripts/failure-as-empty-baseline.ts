@@ -58,9 +58,16 @@ export const failureAsEmptyCensus = (): string[] => {
   const directory = mkdtempSync(path.join(tmpdir(), "failure-as-empty-"));
   const config = path.join(directory, "oxlint.config.ts");
   const report = path.join(directory, "report.json");
-  const sources = Bun.spawnSync(["git", "ls-files", "--", ...SOURCE_PATTERNS], {
-    cwd: ROOT,
-  });
+  // `:(glob)` so `**/` also matches no directory (files directly in `src/`).
+  const sources = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "--",
+      ...SOURCE_PATTERNS.map((pattern) => `:(glob)${pattern}`),
+    ],
+    { cwd: ROOT },
+  );
   if (sources.exitCode !== 0) {
     panic("Cannot enumerate failure-as-empty source files");
   }
@@ -88,20 +95,25 @@ export const failureAsEmptyCensus = (): string[] => {
     config,
     `export default ${JSON.stringify({ categories: { correctness: "off" }, jsPlugins: [path.join(ROOT, ".oxlint-plugins", `${RULE}.ts`)], rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] } })};\n`,
   );
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      config,
-      "--format=json",
-      ".",
-    ],
-    { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
-  );
-  const output = readFileSync(report, "utf-8");
-  rmSync(directory, { recursive: true, force: true });
+  const { result, output } = (() => {
+    try {
+      const spawned = Bun.spawnSync(
+        [
+          process.execPath,
+          "--bun",
+          path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
+          "-c",
+          config,
+          "--format=json",
+          ".",
+        ],
+        { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
+      );
+      return { result: spawned, output: readFileSync(report, "utf-8") };
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  })();
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     panic(`Failure-as-empty census failed: ${result.stderr.toString()}`);
   }

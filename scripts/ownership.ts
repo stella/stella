@@ -365,6 +365,22 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   {
+    id: "entity-sibling-naming",
+    capability: "Resolving names for new sibling entities",
+    owner: [
+      "apps/api/src/lib/entities/sibling-name.ts",
+      "apps/api/src/lib/entities/sibling-name-insert.ts",
+    ],
+    summary:
+      "The insert owner reads current matter and parent names, reserves pending batch names, and supplies a resolved display name plus a derived sanitized file name to single and batch inserts. The existing typed extraction-file selector identifies each current version's primary file; secondary attachment names remain independent. The pure producer is confined to that owner so callers cannot substitute an empty sibling set.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/entities/sibling-name"],
+      names: ["resolveSiblingName"],
+      allowed: [],
+    },
+  },
+  {
     id: "provider-event-records",
     capability: "Minimal verified provider event persistence",
     owner: [
@@ -706,7 +722,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/flows/flow-executor.ts",
           reason:
-            "Flow steps; their authority model is still to be classified.",
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/folio-collab-rooms.ts",
@@ -715,11 +731,13 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
@@ -736,7 +754,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/workflow-queue.ts",
           reason:
-            "Workflow property generation; its authority model is still to be classified.",
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -1990,6 +2008,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
           reason:
             "Types the injected publisher fetch of its RIS walk; sends no request itself.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
         },
       ],
     },

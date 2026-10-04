@@ -16,7 +16,7 @@ import {
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -78,6 +78,7 @@ const config = {
     "Practice jurisdictions are set through " +
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;

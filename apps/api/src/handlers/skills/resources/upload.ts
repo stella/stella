@@ -11,7 +11,7 @@ import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -63,6 +63,7 @@ const config = {
     "The path, duplicate, file-count, and editability rules match " +
     "skills.resources.create, which takes the text directly as JSON.",
   permissions: { agentSkill: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

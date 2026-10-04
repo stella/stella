@@ -8,7 +8,12 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import {
+  AUDIT_MUTATION_LEDGER_SCOPE,
+  auditMutationBudgets,
+} from "./scripts/audit-mutation-ledger-scope.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -169,6 +174,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
   ]),
+  fixtureRuleOverride("require-contract-domains.fixture.tsx", [
+    "require-contract-domains/require-contract-domains",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -328,8 +336,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-field-write.fixture.ts", [
     "no-direct-field-write/no-direct-field-write",
   ]),
+  fixtureRuleOverride("no-chat-table-write.fixture.ts", [
+    "no-chat-table-write/no-chat-table-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
+  ]),
+  fixtureRuleOverride("no-direct-entity-insert.fixture.ts", [
+    "no-direct-entity-insert/no-direct-entity-insert",
   ]),
   fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
     "no-unvalidated-clause-write/no-unvalidated-clause-write",
@@ -961,6 +975,7 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
@@ -1224,6 +1239,7 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
@@ -1342,9 +1358,11 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-entity-insert.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
@@ -2455,6 +2473,15 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Chat tools write rows through the shared write primitives in
+      // `apps/api/src/lib`, which own each write's checks and audit event.
+      files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/chat/tools/**/*.test.ts"],
+      rules: {
+        "no-chat-table-write/no-chat-table-write": "error",
       },
     },
     {
@@ -3795,14 +3822,29 @@ export default defineConfig({
     },
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
-      // ISO 27001). Scope to handler files — DB writes elsewhere
-      // (auth lifecycle hooks, job framework internals, RLS session
-      // setup) have different audit semantics and would generate
-      // false positives.
+      // ISO 27001). Handlers are held to the full rule; the block below
+      // extends it to MCP and library code with a reasoned ledger.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // The same rule over MCP tools and shared library code. Writes that
+      // predate this scope are budgeted per owning function by the reasoned
+      // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
+      // other unaudited write fails like it does in a handler.
+      files: [...AUDIT_MUTATION_LEDGER_SCOPE],
+      excludeFiles: [
+        "apps/api/src/mcp/**/*.test.ts",
+        "apps/api/src/lib/**/*.test.ts",
+      ],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { budgets: auditMutationBudgets(auditMutationLedger) },
+        ],
       },
     },
     {
@@ -4926,6 +4968,10 @@ export default defineConfig({
       rules: {
         "no-imported-class-constant/no-imported-class-constant": "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: { "require-contract-domains/require-contract-domains": "error" },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables
