@@ -594,7 +594,7 @@ const calculateInvoiceAmounts = (
   );
 
 /** Invoice totals and VAT breakdown over the given lines. */
-export const invoiceTotals = (
+const invoiceTotals = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType = "invoice",
 ): Result<InvoiceTotals, HandlerError> =>
@@ -675,7 +675,7 @@ const readInvoiceSourceLines = (
 };
 
 /** Totals for an invoice read, which never writes. */
-export const readInvoiceAmounts = (invoice: InvoiceForReadTotals) =>
+const readInvoiceAmounts = (invoice: InvoiceForReadTotals) =>
   calculateInvoiceAmounts(
     readInvoiceSourceLines(invoice),
     invoice.documentType,
