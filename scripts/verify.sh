@@ -178,8 +178,8 @@ run_desktop_rust_inputs_guard() {
 }
 
 run_queue_authority_guard() {
-  # Every BullMQ queue has a declared authority; member-run queues build
-  # their handles with the run actor. Shrink-only baseline.
+  # Every BullMQ queue and scheduler task has a declared authority; member
+  # runs settle their member's access when they run. Shrink-only baselines.
   bun scripts/queue-authority.ts --self-test || return 1
   BASE_SHA="$base_ref" bun scripts/queue-authority.ts --check
 }
@@ -192,6 +192,10 @@ run_module_mock_ledger_guard() {
   bun scripts/check-internal-module-mock-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-swallowed-item-error-ledger.ts --self-test || return 1
   bun scripts/check-swallowed-item-error-ledger.ts --base "$base_ref" || return 1
+  bun scripts/check-audit-mutation-ledger.ts --self-test || return 1
+  bun scripts/check-audit-mutation-ledger.ts --base "$base_ref" || return 1
+  bun scripts/check-write-tool-authority-ledger.ts --self-test || return 1
+  bun scripts/check-write-tool-authority-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-contract-domain-ledger.ts --self-test || return 1
   bun scripts/check-contract-domain-ledger.ts --base "$base_ref" || return 1
   # Case-law rawHash files and external-id writers: exact sets, shrink-only.
@@ -401,6 +405,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_failure_as_empty_guard() {
+  bun test scripts/failure-as-empty-baseline.test.ts || return 1
+  BASE_SHA="$base_ref" bun run check:failure-as-empty
+}
+run_step "Failure-as-empty baseline" run_failure_as_empty_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts
@@ -417,7 +426,8 @@ run_step "Projection totality" run_projection_totality_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
-run_step "Oxlint plugin self-tests" bun test ./.oxlint-plugins/__tests__
+run_step "Custom lint rule coverage self-tests" bun test scripts/check-oxlint-rule-coverage.test.ts
+run_step "Custom lint rule coverage" env BASE_SHA="$base_ref" bun scripts/check-oxlint-rule-coverage.ts
 run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "Instruction references" run_instruction_reference_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
