@@ -16,6 +16,7 @@ import {
   DOCUMENT_FETCH_FAILURE,
   fetchPdfBytes,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   parkedDocumentPredicate,
   type PdfFetchResult,
@@ -212,6 +213,48 @@ describe("one document's download", () => {
       failure: DOCUMENT_FETCH_FAILURE.NETWORK,
       detail: "TimeoutError",
     });
+  });
+
+  test("a body over the byte ceiling is refused typed, without reading it to the end", async () => {
+    const chunkBytes = 1024 * 1024;
+    const servedBytes = MAX_DOCUMENT_PDF_BYTES + 8 * chunkBytes;
+    let pulledBytes = 0;
+    const oversized = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (pulledBytes >= servedBytes) {
+          controller.close();
+          return;
+        }
+        pulledBytes += chunkBytes;
+        controller.enqueue(new Uint8Array(chunkBytes));
+      },
+    });
+
+    const result = await download(
+      async () => await Promise.resolve(new Response(oversized)),
+    );
+
+    expect(result).toMatchObject({
+      type: "too-large",
+      limitBytes: MAX_DOCUMENT_PDF_BYTES,
+    });
+    expect(result.type === "too-large" ? result.prefix.byteLength : 0).toBe(
+      1024,
+    );
+    expect(pulledBytes).toBeLessThan(servedBytes);
+  });
+
+  test("a body at the byte ceiling is the document", async () => {
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(new Uint8Array(MAX_DOCUMENT_PDF_BYTES)),
+        ),
+    );
+
+    expect(result.type === "document" ? result.bytes.byteLength : 0).toBe(
+      MAX_DOCUMENT_PDF_BYTES,
+    );
   });
 
   test("a body failure that is not the download's own still throws", async () => {

@@ -25,6 +25,7 @@ import {
 const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
 
 const config = {
+  contentDelivery: { type: "audited" },
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
