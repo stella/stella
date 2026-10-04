@@ -1616,6 +1616,16 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
+    "datePicker": {
+      "label": "Datuma atlasītājs",
+      "nextDecade": "Nākamā desmitgade",
+      "nextMonth": "Nākamais mēnesis",
+      "nextYear": "Nākamais gads",
+      "previousDecade": "Iepriekšējā desmitgade",
+      "previousMonth": "Iepriekšējais mēnesis",
+      "previousYear": "Iepriekšējais gads",
+      "time": "Laiks"
+    },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",

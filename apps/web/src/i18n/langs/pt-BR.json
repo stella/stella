@@ -1616,6 +1616,16 @@
     "currency": "Moeda",
     "currentPage": "Página atual",
     "date": "Data",
+    "datePicker": {
+      "label": "Seletor de data",
+      "nextDecade": "Próxima década",
+      "nextMonth": "Próximo mês",
+      "nextYear": "Próximo ano",
+      "previousDecade": "Década anterior",
+      "previousMonth": "Mês anterior",
+      "previousYear": "Ano anterior",
+      "time": "Horário"
+    },
     "decisions": "Decisões",
     "decline": "Recusar",
     "delete": "Excluir",

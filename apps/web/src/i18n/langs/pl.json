@@ -1616,6 +1616,16 @@
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
     "date": "Data",
+    "datePicker": {
+      "label": "Wybór daty",
+      "nextDecade": "Następna dekada",
+      "nextMonth": "Następny miesiąc",
+      "nextYear": "Następny rok",
+      "previousDecade": "Poprzednia dekada",
+      "previousMonth": "Poprzedni miesiąc",
+      "previousYear": "Poprzedni rok",
+      "time": "Godzina"
+    },
     "decisions": "Orzeczenia",
     "decline": "Odrzuć",
     "delete": "Usuń",

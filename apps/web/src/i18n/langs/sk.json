@@ -1616,6 +1616,16 @@
     "currency": "Mena",
     "currentPage": "Aktuálna stránka",
     "date": "Dátum",
+    "datePicker": {
+      "label": "Výber dátumu",
+      "nextDecade": "Nasledujúce desaťročie",
+      "nextMonth": "Nasledujúci mesiac",
+      "nextYear": "Nasledujúci rok",
+      "previousDecade": "Predchádzajúce desaťročie",
+      "previousMonth": "Predchádzajúci mesiac",
+      "previousYear": "Predchádzajúci rok",
+      "time": "Čas"
+    },
     "decisions": "Rozhodnutia",
     "decline": "Odmietnuť",
     "delete": "Vymazať",

@@ -1616,6 +1616,16 @@
     "currency": "Měna",
     "currentPage": "Aktuální stránka",
     "date": "Datum",
+    "datePicker": {
+      "label": "Výběr data",
+      "nextDecade": "Další desetiletí",
+      "nextMonth": "Další měsíc",
+      "nextYear": "Další rok",
+      "previousDecade": "Předchozí desetiletí",
+      "previousMonth": "Předchozí měsíc",
+      "previousYear": "Předchozí rok",
+      "time": "Čas"
+    },
     "decisions": "Rozhodnutí",
     "decline": "Odmítnout",
     "delete": "Smazat",
