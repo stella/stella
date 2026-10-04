@@ -876,9 +876,7 @@ export default defineConfig({
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
     // A `.then` callback returns or throws; `no-useless-return` is off below
-    // so the trailing `return;` this asks for can stay. `oxc/no-map-spread`
-    // stays off as the core preset declares: its fix mutates the mapped
-    // items, and object spread is the one record-copy form.
+    // so the trailing `return;` this asks for can stay.
     "promise/always-return": "error",
     "typescript/no-unnecessary-condition": [
       "error",
@@ -1187,13 +1185,13 @@ export default defineConfig({
     "unicorn/no-useless-spread": "off",
     // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
-    // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
-    "unicorn/no-nested-ternary": "off",
     // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
-    // Its fix mutates the mapped items and contradicts
-    // no-computed-key-record-assignment: object spread is the one record copy.
-    "oxc/no-map-spread": "off",
+    // `oxc/no-map-spread` stays off as the core preset declares (an entry
+    // here would restate it and fail the liveness test): its fix mutates the
+    // mapped items and contradicts no-computed-key-record-assignment, so
+    // object spread is the one record copy. scripts/oxlint-rule-decisions.test.ts
+    // holds it off.
 
     // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
