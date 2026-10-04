@@ -58,6 +58,11 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const PRE_MIGRATION_DOCUMENT_TYPE_KEY = "pre-migration";
+const preMigrationScopedId = createSafeId<"playbookDefinition">();
+const preMigrationUnscopedId = createSafeId<"playbookDefinition">();
+const PRE_MIGRATION_ORPHAN_KEY = "pre-migration-deleted";
+const preMigrationOrphanId = createSafeId<"playbookDefinition">();
 
 const orgContext = (organizationId = ids.orgA) => {
   const bindings = {
@@ -161,21 +166,54 @@ const applyMigration = async (migration: URL) => {
 
 beforeAll(async () => {
   testDb = await getTestDb();
-  // PGlite starts from the Drizzle schema. Rebuild this slice from the
-  // deployment SQL so omitting the migration's FK cannot hide behind it.
+  // PGlite starts from the Drizzle schema plus the installed trigger. Rebuild
+  // this slice from the deployment SQL so omitting the migration's column
+  // derivation, backfill or FK cannot hide behind the test harness.
   await testDb.$client.exec(`
     ALTER TABLE "playbook_definitions" DROP CONSTRAINT "playbook_definitions_document_type_fk";
+    DROP TRIGGER "playbook_definitions_derive_document_type_key" ON "playbook_definitions";
+    DROP FUNCTION "derive_playbook_definition_document_type_key"();
     ALTER TABLE "playbook_definitions" DROP COLUMN "document_type_key";
   `);
+  ids = createTestIds();
+  await setupRlsTestData(testDb, ids);
+  // Definitions written before the migration, by the previous schema.
+  await testDb.insert(documentTypes).values({
+    id: createSafeId<"documentType">(),
+    organizationId: ids.orgA,
+    key: PRE_MIGRATION_DOCUMENT_TYPE_KEY,
+    label: "Pre-migration type",
+  });
+  // The orphan names a type its organization deleted before the reference
+  // existed; the validating migration restores that type.
+  await testDb.$client.query(
+    `INSERT INTO "playbook_definitions" ("id", "organization_id", "name", "scope", "positions")
+     VALUES ($1, $2, 'Scoped before migration', $3::text::jsonb, $5::text::jsonb),
+            ($4, $2, 'Unscoped before migration', NULL, $5::text::jsonb),
+            ($6, $2, 'Orphaned before migration', $7::text::jsonb, $5::text::jsonb)`,
+    [
+      preMigrationScopedId,
+      ids.orgA,
+      JSON.stringify({ documentTypeKey: PRE_MIGRATION_DOCUMENT_TYPE_KEY }),
+      preMigrationUnscopedId,
+      JSON.stringify({ version: 3, items: [] }),
+      preMigrationOrphanId,
+      JSON.stringify({ documentTypeKey: PRE_MIGRATION_ORPHAN_KEY }),
+    ],
+  );
   await applyMigration(
     new URL(
       "../../../drizzle/20261003125200_playbook_document_type_reference/migration.sql",
       import.meta.url,
     ),
   );
-  ids = createTestIds();
-  await setupRlsTestData(testDb, ids);
 });
+
+const readDocumentTypeKey = async (playbookId: SafeId<"playbookDefinition">) =>
+  await testDb
+    .select({ documentTypeKey: playbookDefinitions.documentTypeKey })
+    .from(playbookDefinitions)
+    .where(eq(playbookDefinitions.id, playbookId));
 
 afterAll(async () => {
   await releaseTestDb();
@@ -274,6 +312,71 @@ describe("playbook document type references", () => {
         .from(playbookDefinitions)
         .where(eq(playbookDefinitions.id, playbookId)),
     ).toEqual([]);
+  });
+
+  test("backfills the key of definitions written before the migration", async () => {
+    expect(await readDocumentTypeKey(preMigrationScopedId)).toEqual([
+      { documentTypeKey: PRE_MIGRATION_DOCUMENT_TYPE_KEY },
+    ]);
+    expect(await readDocumentTypeKey(preMigrationUnscopedId)).toEqual([
+      { documentTypeKey: null },
+    ]);
+    expect(await readDocumentTypeKey(preMigrationOrphanId)).toEqual([
+      { documentTypeKey: PRE_MIGRATION_ORPHAN_KEY },
+    ]);
+  });
+
+  test("every direct write stores the scope's key, whatever key the writer supplies", async () => {
+    const suffix = createSafeId<"documentType">();
+    const keys = [`first-${suffix}`, `second-${suffix}`] as const;
+    await testDb.insert(documentTypes).values(
+      keys.map((key) => ({
+        organizationId: ids.orgA,
+        key,
+        label: "Derived key type",
+      })),
+    );
+    const scopeKey = fc.option(fc.constantFrom(...keys), { nil: undefined });
+    const suppliedKey = fc.option(fc.constantFrom(...keys), { nil: null });
+    await assertProperty(
+      "every direct write stores the scope's key, whatever key the writer supplies",
+      fc.asyncProperty(
+        scopeKey,
+        suppliedKey,
+        scopeKey,
+        suppliedKey,
+        async (insertedKey, insertedSupplied, updatedKey, updatedSupplied) => {
+          const scopeOf = (key: string | undefined): PlaybookScope | null =>
+            key === undefined ? null : { documentTypeKey: key };
+          const playbookId = createSafeId<"playbookDefinition">();
+          await testDb.insert(playbookDefinitions).values({
+            id: playbookId,
+            organizationId: ids.orgA,
+            name: "Derived key",
+            scope: scopeOf(insertedKey),
+            documentTypeKey: insertedSupplied,
+            positions: { version: 3, items: [] },
+          });
+          expect(await readDocumentTypeKey(playbookId)).toEqual([
+            { documentTypeKey: insertedKey ?? null },
+          ]);
+          await testDb
+            .update(playbookDefinitions)
+            .set({ documentTypeKey: updatedSupplied })
+            .where(eq(playbookDefinitions.id, playbookId));
+          expect(await readDocumentTypeKey(playbookId)).toEqual([
+            { documentTypeKey: insertedKey ?? null },
+          ]);
+          await testDb
+            .update(playbookDefinitions)
+            .set({ scope: scopeOf(updatedKey) })
+            .where(eq(playbookDefinitions.id, playbookId));
+          expect(await readDocumentTypeKey(playbookId)).toEqual([
+            { documentTypeKey: updatedKey ?? null },
+          ]);
+        },
+      ),
+    );
   });
 
   test("stale and missing scoped updates preserve definitions and commit no audit", async () => {
@@ -598,6 +701,18 @@ describe("playbook document type references", () => {
   });
 
   test("validates the deployed reference while retaining NO ACTION for organization teardown", async () => {
+    const readTypes = async () =>
+      await testDb
+        .select({
+          organizationId: documentTypes.organizationId,
+          key: documentTypes.key,
+          label: documentTypes.label,
+        })
+        .from(documentTypes);
+    const before = await readTypes();
+    expect(before).not.toContainEqual(
+      expect.objectContaining({ key: PRE_MIGRATION_ORPHAN_KEY }),
+    );
     await applyMigration(
       new URL(
         "../../../drizzle/20261003125300_validate_playbook_document_type_reference/migration.sql",
@@ -611,5 +726,21 @@ describe("playbook document type references", () => {
         AND conname = 'playbook_definitions_document_type_fk'
     `);
     expect(constraint.rows).toEqual([{ validated: true, delete_action: "a" }]);
+    // Only the deleted type a definition still names is restored.
+    const after = await readTypes();
+    expect(after).toHaveLength(before.length + 1);
+    expect(after).toEqual(
+      expect.arrayContaining([
+        ...before,
+        {
+          organizationId: ids.orgA,
+          key: PRE_MIGRATION_ORPHAN_KEY,
+          label: PRE_MIGRATION_ORPHAN_KEY,
+        },
+      ]),
+    );
+    expect(await readDocumentTypeKey(preMigrationOrphanId)).toEqual([
+      { documentTypeKey: PRE_MIGRATION_ORPHAN_KEY },
+    ]);
   });
 });

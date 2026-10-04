@@ -44,7 +44,7 @@ const UNPROJECTED_PLAYBOOK_LIST_COLUMNS = [
   "positions",
   "approvedAt",
   "approvedBy",
-  // Generated from `scope.documentTypeKey` for the document-type foreign key;
+  // Derived from `scope.documentTypeKey` for the document-type foreign key;
   // never a separate client field.
   "documentTypeKey",
 ] as const satisfies readonly (keyof PlaybookDefinitionRow)[];
@@ -219,7 +219,7 @@ const UNPROJECTED_PLAYBOOK_DETAIL_COLUMNS = [
   // (`playbooks/approve.ts`) but never read back to the client anywhere;
   // possibly a real gap ("approved by whom") rather than deliberate.
   "approvedBy",
-  // Generated from `scope.documentTypeKey` for the document-type foreign key;
+  // Derived from `scope.documentTypeKey` for the document-type foreign key;
   // the detail already returns `scope`.
   "documentTypeKey",
 ] as const satisfies readonly (keyof PlaybookDefinitionRow)[];

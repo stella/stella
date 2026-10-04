@@ -157,9 +157,10 @@ export const playbookDefinitions = p.pgTable(
     starterId: p.varchar("starter_id", { length: 64 }),
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
-    documentTypeKey: p
-      .text("document_type_key")
-      .generatedAlwaysAs(sql`"scope"->>'documentTypeKey'`),
+    // Derived from `scope.documentTypeKey` by the
+    // `playbook_definitions_derive_document_type_key` trigger on every
+    // insert and update; a value a writer supplies is replaced.
+    documentTypeKey: p.text("document_type_key"),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
     // Advisory approval status (v1): "draft" | "approved". Editing
     // (`update-by-id.ts`) always reverts this to "draft"; approving
