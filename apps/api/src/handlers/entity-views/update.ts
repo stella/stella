@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { entityViews } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,6 +19,7 @@ const config = {
   description:
     "Change the name or layout of one personal cross-matter view. Other users' views cannot be changed.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
