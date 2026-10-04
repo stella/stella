@@ -1337,7 +1337,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     );
   });
 
-  test("the crawl stores nothing for a document whose text read fails and counts it", async () => {
+  test("a document whose text read fails fails the page, so its cursor is kept", async () => {
     mockFetch({
       search: [
         {
@@ -1364,16 +1364,68 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       },
     );
 
-    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+    const page = await skUsAdapter.fetchPage("2021:0", {});
 
-    expect(page.decisions.map((decision) => decision.sourceDocumentId)).toEqual(
-      [PLENARY_OPINION.documentId],
-    );
-    expect(page.itemBuildFailures).toEqual({
-      type: "item_build_failed",
-      count: 1,
-    });
+    expect(page.isErr()).toBe(true);
+    if (page.isOk()) {
+      return;
+    }
+    expect(page.error).toBeInstanceOf(AdapterFetchError);
+    expect(page.error.cursor).toBe("2021:0");
   });
+
+  test.each([
+    ["500", { type: "status", status: 500 }],
+    ["204", { type: "status", status: 204 }],
+    [
+      "timeout",
+      {
+        type: "fails",
+        error: new DOMException("The operation timed out.", "TimeoutError"),
+      },
+    ],
+  ] as const)(
+    "a document file read answering %s fails the page, so its cursor is kept",
+    async (_label, download) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download,
+      });
+
+      const page = await skUsAdapter.fetchPage("2021:0", {});
+
+      expect(page.isErr()).toBe(true);
+      if (page.isOk()) {
+        return;
+      }
+      expect(page.error).toBeInstanceOf(AdapterFetchError);
+      expect(page.error.cursor).toBe("2021:0");
+    },
+  );
+
+  test.each([
+    ["404", { type: "status", status: 404 }],
+    ["a 200 that is not a PDF", { type: "not-a-pdf" }],
+  ] as const)(
+    "a document file the court states it does not serve (%s) keeps a listing-only row",
+    async (_label, download) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download,
+      });
+
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+      expect(
+        page.decisions.map(({ sourceDocumentId, isListingOnly }) => ({
+          sourceDocumentId,
+          isListingOnly,
+        })),
+      ).toEqual([
+        { sourceDocumentId: PLENARY_OPINION.documentId, isListingOnly: true },
+      ]);
+    },
+  );
 
   test("a codelist read that fails fails the page, so its cursor is kept", async () => {
     mockFetch({
@@ -1422,7 +1474,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     });
   });
 
-  test("holds a row whose document download fails and reports the download", async () => {
+  test("builds nothing for a document whose download fails and reports the download", async () => {
     mockFetch({
       search: [],
       download: { type: "fails", error: new TypeError("fetch failed") },
@@ -1432,8 +1484,8 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
 
       expect(built).toMatchObject({
-        type: "detail-unavailable",
-        decision: { isListingOnly: true },
+        type: "read-unavailable",
+        part: "document-file",
       });
       expect(
         logs

@@ -465,23 +465,6 @@ const fetchPdfBytes = async (
   }
 };
 
-/**
- * The bytes worth keeping. Every other answer holds the row listing-only,
- * which the reconciliation asks about again.
- */
-const servedPdfBytes = (read: SkUsPdfRead): Uint8Array | undefined => {
-  switch (read.type) {
-    case "pdf":
-      return read.bytes;
-    case "not-served":
-    case "unavailable":
-      return undefined;
-    default:
-      read satisfies never;
-      return panic(`Unhandled PDF read: ${String(read)}`);
-  }
-};
-
 // ── The other responses served for one decision ──────────
 
 /**
@@ -1114,7 +1097,12 @@ export type SkUsBuildResult =
     };
 
 /** The per-decision responses a build cannot do without once requested. */
-type SkUsReadPart = "document" | "facets" | "collection-listing" | "file";
+type SkUsReadPart =
+  | "document"
+  | "facets"
+  | "collection-listing"
+  | "file"
+  | "document-file";
 
 type SkUsPartRead<T> =
   | { type: "read"; value: T | undefined }
@@ -1625,7 +1613,17 @@ export const buildSkUsDecision = async (
   }
   // Last: the most expensive read, worth paying only once every other
   // response is in hand.
-  const pdfBytes = servedPdfBytes(await fetchPdfBytes(documentId, signal));
+  const pdf = await fetchPdfBytes(documentId, signal);
+  if (pdf.type === "unavailable") {
+    return {
+      type: "read-unavailable",
+      part: "document-file",
+      cause: pdf.cause,
+    };
+  }
+  // Where the court states there is no document, the row is held
+  // listing-only, which the reconciliation asks about again.
+  const pdfBytes = pdf.type === "pdf" ? pdf.bytes : undefined;
 
   const rapporteurs = skUsRapporteurs(doc);
   const dissenters = facetValues(facetsJson, "mkDifferentViewJudges");
@@ -3042,31 +3040,20 @@ export const skUsAdapter = defineSourceAdapter({
               case "built":
                 decisions.push(built.decision);
                 break;
-              // Nothing is stored for this document; the reconciliation walk
-              // lists it again and builds it once the read succeeds.
+              // A read that failed says nothing about the document, so the
+              // page fails and its cursor is retried rather than moving past
+              // a document nothing was stored for.
               case "read-unavailable":
-                failed++;
-                observeFailure(
-                  classifyFailure(
-                    readFailureError({
-                      url: SERVICE_URL,
-                      cause: built.cause,
-                      label: `SK ÚS ${built.part} read failed`,
-                    }),
-                    "upstream_unavailable",
-                  ),
-                  {
-                    sink: detailReadFailed,
-                    ctx: {
-                      adapterKey: ADAPTER_KEYS.SK_US,
-                      stage: built.part,
-                      ...(typeof doc.documentId === "string"
-                        ? { documentId: doc.documentId }
-                        : {}),
-                    },
-                  },
-                );
-                break;
+                throw new AdapterFetchError({
+                  adapterKey: ADAPTER_KEYS.SK_US,
+                  cursor: encodeCursor({ year, offset }),
+                  message: `SK ÚS ${built.part} read unavailable`,
+                  cause: readFailureError({
+                    url: SERVICE_URL,
+                    cause: built.cause,
+                    label: `SK ÚS ${built.part} read failed`,
+                  }),
+                });
               default: {
                 built satisfies never;
                 panic(`Unhandled SK ÚS build result: ${String(built)}`);
