@@ -199,10 +199,9 @@ const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
   );
   closeSync(log);
   const pid = child.pid ?? fail("The dev runner did not start");
-  let exited = false;
+  const hasExited = () => child.exitCode !== null || child.signalCode !== null;
   const exit = new Promise<void>((resolve) => {
     child.once("exit", () => {
-      exited = true;
       resolve();
     });
   });
@@ -240,7 +239,7 @@ const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
   if (registered.isErr()) {
     const errors = [registered.error.message];
     for (const signal of ["SIGTERM", "SIGKILL"] as const) {
-      if (exited) {
+      if (hasExited()) {
         break;
       }
       const sent = Result.try(() => child.kill(signal));
@@ -249,7 +248,7 @@ const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
       }
       await Promise.race([exit, Bun.sleep(DOWN_FORCE_TIMEOUT_MS)]);
     }
-    if (!exited) {
+    if (!hasExited()) {
       fail(`${errors.join("; ")}; runner ${pid} did not exit`);
     }
     await exit;

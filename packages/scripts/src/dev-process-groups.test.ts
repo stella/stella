@@ -476,7 +476,7 @@ test("surviving groups fail explicitly and retain recovery state", async () => {
     expect((await fetch(`http://127.0.0.1:${tree.port}`)).ok).toBe(true);
     const port = tree.port;
     const bound = await Result.tryPromise({
-      try: () => assertPortFree(port),
+      try: async () => await assertPortFree(port),
       catch: (cause) => {
         if (!(cause instanceof Error)) {
           panic("Port binding must reject with an OS error");

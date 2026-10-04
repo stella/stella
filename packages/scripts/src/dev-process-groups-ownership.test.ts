@@ -38,7 +38,6 @@ const unownedSpawns = (source: string) => {
           expression.name.text === "spawn") ||
         (ts.isElementAccessExpression(expression) &&
           expression.expression.getText(file) === "Bun" &&
-          expression.argumentExpression &&
           ts.isStringLiteral(expression.argumentExpression) &&
           expression.argumentExpression.text === "spawn");
       if (rawSpawn && currentOwner !== "openBrowser") {
