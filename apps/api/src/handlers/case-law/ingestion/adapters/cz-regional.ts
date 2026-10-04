@@ -799,9 +799,7 @@ export const fetchCzRegionalAffectingDocs = async (
   if (read.type !== "present") {
     return read;
   }
-  const parsed = parsedJson(read.value);
-  const chain =
-    parsed === null ? null : readCzRegionalChain(JSON.stringify(parsed));
+  const chain = readCzRegionalChain(read.value);
   return chain === null
     ? readUnavailable({
         kind: "thrown",
