@@ -62,6 +62,7 @@ const claimSoftLawSource = async ({
   Result<SoftLawSourceClaim, SoftLawIngestionError>
 > =>
   await scopedDb(async (tx) => {
+    // audit: skip - ephemeral mutual-exclusion state for public ingestion
     const row = (
       await tx
         .select()
@@ -145,6 +146,7 @@ const renewSoftLawLease = async ({
 }: SoftLawStoreContext) => {
   const renewed = await scopedDb(
     async (tx) =>
+      // audit: skip - renews ephemeral ownership for public ingestion
       await tx
         .update(softLawSources)
         .set({
@@ -301,6 +303,7 @@ const persistSoftLawRows = async (
   tx: Transaction,
   { items, sourceId, adapter, runId, observedAt }: PersistSoftLawRowsOptions,
 ) => {
+  // audit: skip - background ingestion of public documents and locator history
   const rows = items.map((item) => {
     const { metadata } = item.input;
     return {
@@ -379,6 +382,7 @@ const persistSoftLawVersions = async (
   tx: Transaction,
   { items, observedAt }: PersistSoftLawVersionsOptions,
 ) => {
+  // audit: skip - public corpus versions retain their own observation history
   if (!items.length) {
     return;
   }
@@ -439,6 +443,7 @@ const persistRejectedSoftLawListings = async (
     observedAt,
   }: PersistRejectedSoftLawListingsOptions,
 ) => {
+  // audit: skip - public source listing evidence is ingestion bookkeeping
   // A rejected body is still evidence that its current locator was listed.
   const rejectedUrls = attempts
     .filter((attempt) => attempt.status === "rejected")
@@ -541,6 +546,7 @@ const persistSoftLawPage = async (
     checkpoint: nextCursor,
     runInTransaction: scopedDb,
     persistItems: async (tx, items) => {
+      // audit: skip - public ingestion outcomes persist in the attempt ledger
       const locked = (
         await tx
           .select({ id: softLawSources.id, now: sql<Date>`now()` })
@@ -615,6 +621,7 @@ const persistSoftLawPage = async (
       }
     },
     persistCheckpoint: async (tx, checkpointCursor) => {
+      // audit: skip - public corpus listing reconciliation and run lifecycle bookkeeping
       if (Result.isError(result) || pendingRetries) {
         return;
       }
@@ -716,6 +723,7 @@ const settleSoftLawSource = async (
   state: SoftLawSettlement,
 ) =>
   await scopedDb(async (tx) => {
+    // audit: skip - public ingestion lease and failure lifecycle bookkeeping
     switch (state.status) {
       case "paused":
         await tx
