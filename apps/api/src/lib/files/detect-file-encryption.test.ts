@@ -62,7 +62,20 @@ describe("detectFileEncryption", () => {
     expect(detection.status).toBe("unreadable");
   });
 
-  test("does not inspect types other than PDF", async () => {
+  test("does not inspect types other than PDF and OOXML", async () => {
+    const probe = mock(isEncryptedPdf);
+    const detection = await detectFileEncryption({
+      mimeType: "text/plain",
+      scanned: pdfFile(await createEncryptedPdf()),
+      probe,
+    });
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(detection.status).toBe("known");
+    expect(detection.encryption.basis).toBe("type-not-inspected");
+  });
+
+  test("never sends an Office file to the PDF worker", async () => {
     const probe = mock(isEncryptedPdf);
     const detection = await detectFileEncryption({
       mimeType: DOCX_MIME_TYPE,
@@ -72,7 +85,8 @@ describe("detectFileEncryption", () => {
 
     expect(probe).not.toHaveBeenCalled();
     expect(detection.status).toBe("known");
-    expect(detection.encryption.basis).toBe("type-not-inspected");
+    expect(detection.encryption.encrypted).toBe(false);
+    expect(detection.encryption.basis).toBe("inspected");
   });
 
   test("an inspection the timeout cuts short is unsure, not corrupted", async () => {

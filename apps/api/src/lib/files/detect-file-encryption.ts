@@ -12,9 +12,13 @@
  *
  * - `detectFileEncryption`: bytes a caller received (an upload, a new version,
  *   an email attachment, a provider's output). PDFs go through the PDF worker;
- *   other types are not inspected today and are recorded as unencrypted.
+ *   zip-based Office types (DOCX, XLSX, PPTX and their variants) are read for
+ *   the password-protection container (`encrypted-ooxml.ts`); other types are
+ *   not inspected and are recorded as unencrypted.
  * - `officeFileEncryption`: Office bytes an editor produced (desktop editing,
- *   collaboration publishes). Office files are not inspected today.
+ *   collaboration publishes). Both paths only accept a readable OOXML zip
+ *   (desktop edit validates the archive, folio writes it), and a zip is never
+ *   the encrypted form, so these are unencrypted.
  * - `serverBuiltFileEncryption`: bytes this server built itself (filled
  *   templates, conversions, redlines, signatures). It never writes an
  *   encrypted file, and its PDF inputs are refused when encrypted.
@@ -32,11 +36,31 @@
  * access control, and the consumers that open the bytes (text extraction,
  * signing) meet an encrypted PDF as their own typed failure. The upload paths
  * report the unsure outcome so a pattern of them is visible.
+ *
+ * Office files: a password-protected DOCX/XLSX/PPTX is recorded encrypted and
+ * from then on takes every path an encrypted PDF takes (the consumers read the
+ * attribute, not the type). The Office reading differs from the PDF one in
+ * what a broken file means. A CFB container the reader finds malformed is
+ * recorded unencrypted, not refused: Office encryption is recognised only by
+ * its two streams, a container without them readable is not that, and the
+ * consumers that open the bytes fail on a broken Office file on their own.
+ * Only a container the reader stopped reading at one of its limits (directory
+ * size, chain length, nesting) is `unsure`.
+ *
+ * Legacy binary .doc/.xls/.ppt files are CFB containers too, but they keep
+ * their encryption flags inside the document streams (FIB, BIFF FILEPASS,
+ * PowerPoint CryptSession); they are not inspected and are recorded as
+ * unencrypted. ODF encryption (per entry, inside the zip) is not inspected
+ * either.
  */
 import { captureError } from "@/api/lib/analytics/capture";
 import type { DesktopEditMimeType } from "@/api/lib/desktop-edit-file-types";
 import type { SubprocessError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  OOXML_MIME_TYPES,
+  probeEncryptedOoxml,
+} from "@/api/lib/files/encrypted-ooxml";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import type { PdfEncryptionProbe } from "@/api/lib/files/pdf-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -81,7 +105,7 @@ type FileEncryptionDetection =
   | {
       status: "unsure";
       encryption: FileEncryption;
-      cause: SubprocessError | string;
+      cause: Error | string;
     }
   /**
    * The PDF parser refused the bytes. Upload paths refuse the file; a path
@@ -106,6 +130,9 @@ export const detectFileEncryption = async ({
   scanned,
   probe = isEncryptedPdf,
 }: DetectFileEncryptionInput): Promise<FileEncryptionDetection> => {
+  if (OOXML_MIME_TYPES.has(mimeType)) {
+    return detectOoxmlEncryption(scanned);
+  }
   if (mimeType !== PDF_MIME_TYPE) {
     return { status: "known", encryption: mint(false, "type-not-inspected") };
   }
@@ -127,6 +154,23 @@ export const detectFileEncryption = async ({
     status: "unreadable",
     encryption: mint(false, "unreadable"),
     cause: result.cause,
+  };
+};
+
+const detectOoxmlEncryption = (
+  scanned: ScannedFile,
+): FileEncryptionDetection => {
+  const result = probeEncryptedOoxml(new Uint8Array(scanned.bytes));
+  if (result.status === "unsure") {
+    return {
+      status: "unsure",
+      encryption: mint(false, "unsure"),
+      cause: result.cause,
+    };
+  }
+  return {
+    status: "known",
+    encryption: mint(result.status === "encrypted", "inspected"),
   };
 };
 
@@ -152,7 +196,7 @@ export const uploadFileEncryption = (
   return null;
 };
 
-/** Office bytes an editor produced; Office encryption is not inspected today. */
+/** Office bytes an editor produced: a readable OOXML zip, never encrypted. */
 export const officeFileEncryption = (
   _mimeType: DesktopEditMimeType,
 ): FileEncryption => mint(false, "office-editor");

@@ -68,6 +68,14 @@ const resolveOne = (
       }),
     );
   }
+  if (field.content.encrypted) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Encrypted document content cannot be extracted.",
+      }),
+    );
+  }
 
   return Result.ok({
     workspaceId: entity.workspaceId,

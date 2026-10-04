@@ -127,6 +127,14 @@ const createVerification = createSafeHandler(
       );
     }
     const file = field.content;
+    if (file.encrypted) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Encrypted document content cannot be extracted.",
+        }),
+      );
+    }
     if (!isVerifiableFile(file)) {
       return Result.err(
         new HandlerError({

@@ -6,6 +6,7 @@ import type { ScanContext } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
 import { aggregateVerdict } from "@/api/lib/file-scan/verdict";
 import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
+import { isEncryptedOoxmlContainer } from "@/api/lib/files/encrypted-ooxml";
 
 class FileScanError extends TaggedError("FileScanError")<{
   message: string;
@@ -27,7 +28,14 @@ export const scanFile = async ({
     try: async () => {
       const findings: ScanFinding[] = [];
 
-      if (ZIP_BASED_MIMES.includes(declaredMimeType) && !hasZipMagic(buffer)) {
+      // A password-protected Office document is a CFB container around the
+      // encrypted zip, not a zip; it is accepted under its declared type and
+      // recorded as encrypted, like an encrypted PDF.
+      if (
+        ZIP_BASED_MIMES.includes(declaredMimeType) &&
+        !hasZipMagic(buffer) &&
+        !isEncryptedOoxmlContainer(declaredMimeType, buffer)
+      ) {
         findings.push({
           rule: "corrupt-zip",
           severity: "reject",
