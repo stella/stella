@@ -689,10 +689,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
           reason: "Extracts a user's own chat memory.",
         },
