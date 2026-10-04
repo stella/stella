@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
@@ -18,7 +19,7 @@ describe("public case-law routes", () => {
       const response = await publicCaseLawRoute.handle(
         new Request(`http://localhost/case/decisions?country=${country}`),
       );
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country,
@@ -86,7 +87,9 @@ describe("public case-law routes", () => {
     );
     for (const request of requests) {
       const response = await publicCaseLawRoute.handle(request);
-      expect(response.status, request.url).toBe(503);
+      expect(response.status, request.url).toBe(
+        PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+      );
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",
