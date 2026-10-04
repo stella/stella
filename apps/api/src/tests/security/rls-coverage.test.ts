@@ -247,8 +247,9 @@ describe("policy coverage", () => {
     const definition = result.rows.at(0)?.definition ?? "";
     const roleLists = [
       ...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu),
-    ].map(([, list = ""]) =>
-      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
+    ].map(
+      ([, list = ""]) =>
+        new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
     );
 
     expect(roleLists).toEqual([new Set(CLIENT_MATTER_ADMIN_ROLES)]);
