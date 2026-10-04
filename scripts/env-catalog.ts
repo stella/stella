@@ -74,6 +74,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "MCP_READ_TENANT_USER_BYTES",
   "MCP_READ_PUBLIC_ORG_BYTES",
   "MCP_READ_PUBLIC_USER_BYTES",
+  "MCP_CASE_LAW_SEARCH_GUIDANCE",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
@@ -421,6 +422,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "identifier with the build version and a contact URL; set it so a fork " +
     "does not identify as the upstream project. Browser-like values are " +
     "refused by publishers that gate bots.",
+  MCP_CASE_LAW_SEARCH_GUIDANCE:
+    'Query guidance in the search_case_law tool: "off" keeps today\'s description, "v1" explains how phrasings are matched and how the limit is shared, names apex courts per admitted country, and warns when a long phrasing fills fewer slots than it was given.',
   MICROSOFT_AUTH_CLIENT_ID:
     "Microsoft OAuth client ID; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_CLIENT_SECRET:
@@ -709,6 +712,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   LOGS_OTLP_URL: ENV_CREDENTIAL_KIND.notCredential,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS: ENV_CREDENTIAL_KIND.notCredential,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_CASE_LAW_SEARCH_GUIDANCE: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_PUBLIC_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_PUBLIC_USER_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_TENANT_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,

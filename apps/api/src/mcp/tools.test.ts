@@ -62,6 +62,7 @@ import type {
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
+import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -4443,6 +4444,88 @@ describe("OpenAI-compatible MCP tools", () => {
    * search runs unfiltered instead of answering nothing, and the reading is
    * reported beside the result.
    */
+  describe("search_case_law warns about a long phrasing that came back short", () => {
+    const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
+    const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
+
+    const searchFor = async ({
+      guidance,
+      queryUsed,
+      hits,
+      limit,
+    }: {
+      guidance: CaseLawSearchGuidanceMode;
+      queryUsed: string;
+      hits: number;
+      limit: number;
+    }) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: Array.from({ length: hits }, (_, index) =>
+          createCaseLawHit(`decision-${String(index)}`, "Holding"),
+        ),
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits),
+        queryUsed,
+        warnings: [],
+      });
+      const baseContext = createContext();
+      const result = await handleMcpToolCall({
+        args: { queries: [queryUsed], country: "CZE", limit },
+        context: {
+          ...baseContext,
+          testDependencies: {
+            ...baseContext.testDependencies,
+            caseLawSearchGuidance: guidance,
+          },
+        },
+        toolName: "search_case_law",
+      });
+      const payload = parseToolPayload(result);
+      if (!isRecord(payload) || !Array.isArray(payload["searches"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["searches"].flatMap((search: unknown) =>
+        isRecord(search) && Array.isArray(search["warnings"])
+          ? search["warnings"].flatMap((warning: unknown) =>
+              isRecord(warning) && warning["code"] === "many_required_terms"
+                ? [warning]
+                : [],
+            )
+          : [],
+      );
+    };
+
+    test("six required terms filling fewer slots than given are named", async () => {
+      const warnings = await searchFor({
+        guidance: "v1",
+        queryUsed: SIX_TERMS,
+        hits: 2,
+        limit: 3,
+      });
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings.at(0)?.["message"]).toContain(
+        SIX_TERMS.split(" ").join(", "),
+      );
+      // Read from the page already returned: one engine call per phrasing.
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+
+    test.each([
+      [
+        "five required terms",
+        { guidance: "v1", queryUsed: FIVE_TERMS, hits: 2 },
+      ],
+      ["every slot filled", { guidance: "v1", queryUsed: SIX_TERMS, hits: 3 }],
+      ["guidance off", { guidance: "off", queryUsed: SIX_TERMS, hits: 2 }],
+    ] as const)("%s raises no warning", async (_name, options) => {
+      expect(await searchFor({ ...options, limit: 3 })).toEqual([]);
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("search_case_law reads a full-property client's placeholders", () => {
     const searchedBody = (): Record<string, unknown> => {
       const args = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);

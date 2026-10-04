@@ -189,6 +189,17 @@ const apexCourtPatterns = new Map<
   readonly (readonly [RegExp, string])[]
 >(Object.entries(APEX_COURT_PATTERNS));
 
+/**
+ * The apex-court abbreviations a stored country's court names carry, in the
+ * registry's order; empty for a country the registry has no patterns for.
+ */
+export const apexCourtAbbreviations = (country: string): readonly string[] => {
+  const patterns = apexCourtPatterns.get(country.toUpperCase());
+  return patterns === undefined
+    ? []
+    : patterns.map(([, abbreviation]) => abbreviation);
+};
+
 /** The abbreviation a jurisdiction's apex-court names carry, or none. */
 const courtAbbreviationFromName = (
   country: string,
