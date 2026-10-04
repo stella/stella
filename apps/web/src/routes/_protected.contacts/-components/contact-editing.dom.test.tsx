@@ -6,6 +6,7 @@ import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
@@ -238,7 +239,7 @@ for (const currency of ["EUR", "JPY", "KWD", null]) {
     const original = {
       ...contact(A, null),
       currency: "GBP",
-      defaultHourlyRate: 100,
+      defaultHourlyRate: cents(100),
     };
     client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, original);
     const { view } = await mountPage(ratePage, client);
@@ -266,7 +267,7 @@ test("ordinary page unmount commits an active hourly-rate draft", async () => {
   client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, {
     ...contact(A, null),
     currency: "GBP",
-    defaultHourlyRate: 100,
+    defaultHourlyRate: cents(100),
   });
   const { view } = await mountPage(ratePage, client);
   testing.fireEvent.click(view.getByRole("button"));
