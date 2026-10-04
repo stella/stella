@@ -97,7 +97,10 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchWithRetry,
+  rethrowCycleStop,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
@@ -532,16 +535,35 @@ const fetchDocument = async (
   if (target === null) {
     return panic("eakta.birosag.hu download escaped the publisher origin");
   }
-  const response = await fetchWithRetry(
-    target.toString(),
-    { redirect: "error" },
-    {
-      fetchStage: "document",
-      adapterKey: ADAPTER_KEYS.HU_BHGY,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.PAGE,
-    },
-  );
+  const requested = await Result.tryPromise({
+    try: async () =>
+      await fetchWithRetry(
+        target.toString(),
+        { redirect: "error" },
+        {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.HU_BHGY,
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.PAGE,
+        },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(requested)) {
+    // A timeout, a reset connection or spent retries: unread like a 5xx, so
+    // the cycle bound applies to it. Cancellation and source stops end the
+    // cycle.
+    rethrowCycleStop(requested.error, signal);
+    return {
+      type: "unread",
+      outcome: {
+        type: "unavailable",
+        cause: { kind: "thrown", error: requested.error },
+      },
+      error: searchError(cursor, "download did not answer"),
+    };
+  }
+  const response = requested.value;
   if (response.status === 404 || response.status === 410) {
     // The listing states the decision exists and the download does not serve
     // it: a durable listing-only observation, not a page failure (rule 20).

@@ -840,6 +840,31 @@ describe("a listed decision the download will not serve", () => {
     },
   );
 
+  test("a download that throws is reported as an unavailable unread item", async () => {
+    const stub = stubPublisher((call) => {
+      if (isSearch(call)) {
+        return searchResponse([rowAt(7, "2026-09-19T13:00:00+02:00")], 10_000);
+      }
+      throw new TypeError("connection reset");
+    });
+    try {
+      const page = (
+        await huBhgyAdapter.fetchPage("tip|head|2026-09-19T12:00:00+02:00", {})
+      ).unwrap();
+      expect(page.decisions).toEqual([]);
+      const [unread] = page.unreadItems ?? [];
+      expect(unread?.outcome.type).toBe("unavailable");
+      expect(
+        unread?.outcome.type === "unavailable"
+          ? unread.outcome.cause.kind
+          : null,
+      ).toBe("thrown");
+      expect(unread?.listing.sourceDocumentId).toBe("id-7");
+    } finally {
+      stub.restore();
+    }
+  });
+
   test("a download answering 429 halts the page after one request (rule 19)", async () => {
     const stub = stubPublisher((call) =>
       isSearch(call)
