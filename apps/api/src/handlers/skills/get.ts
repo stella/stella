@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,6 +20,7 @@ const config = {
     "resource file with its content. A team skill is readable by every " +
     "member of the organization; a private one only by its author.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
