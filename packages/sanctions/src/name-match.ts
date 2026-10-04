@@ -854,11 +854,11 @@ const rankCandidateGroups = ({
       }
       estimate = candidateEstimate({ index, alias, query });
     }
+    estimates.set(alias.patternKey, estimate);
     const bound = ceiling(estimate.bound * estimate.bound);
     if (bound < cutoff) {
       continue;
     }
-    estimates.set(alias.patternKey, estimate);
     const rank = rankEntry(
       alias.entry,
       estimate.rank * (alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1),

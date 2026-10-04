@@ -315,6 +315,65 @@ const clearSubject = {
 
 describe("public sanctions search parity", () => {
   test(
+    "a public reader grant failure does not poison signed-in screening",
+    async () => {
+      const context = new InMemoryRateLimitContext();
+      const route = createPublicSanctionsRoute({
+        db: publicDb,
+        now: FRESH_NOW,
+        rateLimitOptions: {
+          context,
+          generator: scopedGenerator("failure-isolation-test"),
+          duration: 60_000,
+          max: 1000,
+        },
+      });
+      await db.execute(sql`REVOKE SELECT (content_hash, payload)
+        ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
+      try {
+        const response = await route.handle(
+          new Request("http://localhost/sanctions/search", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              subject: { type: "organization", name: clearSubject.name },
+            }),
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({
+          status: "unavailable",
+          lists: sanctionsSourceIds().map((source) => ({
+            source,
+            status: "unavailable",
+            reason: "load-failed",
+          })),
+        });
+        const inProduct = (
+          await screenSanctionsSubject({
+            db: requestDb,
+            subject: {
+              type: "organization",
+              name: clearSubject.name,
+              identifiers: [],
+            },
+            practiceJurisdictions: [],
+            now: FRESH_NOW,
+          })
+        ).unwrap();
+        expect(inProduct.status).toBe("clear");
+        expect(inProduct.lists.every(({ status }) => status === "clear")).toBe(
+          true,
+        );
+      } finally {
+        await db.execute(sql`GRANT SELECT (content_hash, payload)
+          ON sanctions_entry_payloads TO stella_public_sanctions_reader`);
+        context.kill();
+      }
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+  test(
     "runs under a read-only role with no privileges outside the sanctions corpus",
     async () => {
       const corpusTables = [

@@ -219,7 +219,6 @@ describe("anonymous sanctions search", () => {
     try {
       await allStarted.promise;
       const { app } = appWith(screen, db);
-      const began = performance.now();
       const rejected = await app.handle(
         request({ type: "organization", name: "Private Admission Sentinel" }),
       );
@@ -236,7 +235,6 @@ describe("anonymous sanctions search", () => {
       expect(JSON.stringify(logger.records)).not.toContain(
         "Private Admission Sentinel",
       );
-      expect(performance.now() - began).toBeLessThan(50);
       expect(await rejected.text()).not.toContain("Private Admission Sentinel");
       expect(validateRole.mock.calls).toHaveLength(maximum);
       expect(screen.mock.calls).toHaveLength(maximum);

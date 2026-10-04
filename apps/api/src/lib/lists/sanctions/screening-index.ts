@@ -300,6 +300,6 @@ export const createSanctionsIndexCache = ({
   };
 };
 
-/** Shared by every screening in this process: the in-product check and public search. */
+/** Shared by signed-in screening callers in this process. */
 export const sharedSanctionsIndexCache: SanctionsIndexCache =
   createSanctionsIndexCache();

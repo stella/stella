@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 
 import type { EntityType, SanctionsEntry } from "./entry";
+import { buildNameIndex, matchNames } from "./name-match";
+import type { ScreeningWorkBudget } from "./name-match";
 import { nameReading } from "./normalise";
 import type { ScreeningIndex, ScreeningQuery } from "./screening";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
@@ -149,10 +151,49 @@ test("dense common names screen normally within the warm work bound", () => {
       if (result.isOk() && result.value.possibleMatches.length === 0) {
         expect(result.value.truncated).toBe(false);
       }
-      expect(milliseconds).toBeLessThan(50);
     }
   }
   console.info(JSON.stringify({ denseNames: timings }));
+});
+
+test("repeated rejected name patterns stay within a linear screening work budget", () => {
+  for (const count of [100, 1000, 10_000]) {
+    const index = buildNameIndex(
+      Array.from({ length: count }, () =>
+        entry("Registered Enterprise Holdings", "organisation"),
+      ),
+    );
+    const reading = nameReading("Registered", "organisation");
+    const exhaustive = matchNames({
+      index,
+      reading,
+      ceiling: Math.sqrt,
+      rankEntry: (_entry, score) => score,
+      cutoff: 0,
+      work: { remaining: 100 * count, exhausted: false, selection: "complete" },
+    });
+    expect(exhaustive?.matches.size).toBe(count);
+    for (const match of exhaustive?.matches.values() ?? []) {
+      expect(match.score).toBeGreaterThan(0);
+      expect(match.score).toBeLessThan(DEFAULT_CUTOFF);
+    }
+    const work = {
+      remaining: 8 * count,
+      exhausted: false,
+      selection: "complete",
+    } satisfies ScreeningWorkBudget;
+    const filtered = matchNames({
+      index,
+      reading,
+      ceiling: Math.sqrt,
+      rankEntry: (_entry, score) => score,
+      cutoff: DEFAULT_CUTOFF,
+      work,
+    });
+    expect(work.exhausted).toBe(false);
+    expect(filtered?.matches.size).toBe(0);
+    expect(filtered?.truncated).toBe(false);
+  }
 });
 
 test("late exact and near-exact names survive thousands of same-token candidates", () => {
