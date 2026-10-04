@@ -957,39 +957,39 @@ const absenceStatus = (evidence: AbsenceEvidence): number => {
   }
 };
 
-type ThrowSearchReadFailureOptions = {
+type SearchReadFailureOptions = {
   read: SearchReadFailure;
   url: string;
   label: string;
 };
 
 /**
- * Throw what a failed search request stands for, with its status, so the
- * retry and authentication checks read it. A 404 from the search endpoint
- * is the endpoint failing, not a decision absence.
+ * What a failed search request stands for, with its status, so the retry
+ * and authentication checks read it. A 404 from the search endpoint is the
+ * endpoint failing, not a decision absence.
  */
-const throwSearchReadFailure = ({
+const searchReadFailure = ({
   read,
   url,
   label,
-}: ThrowSearchReadFailureOptions): never => {
+}: SearchReadFailureOptions): Error => {
   switch (read.type) {
     case "absent": {
       const status = absenceStatus(read.evidence);
-      throw new FetchBoundaryError({
+      return new FetchBoundaryError({
         url,
         status,
         message: `${label}: ${status}`,
       });
     }
     case "refused":
-      throw new FetchBoundaryError({
+      return new FetchBoundaryError({
         url,
         status: read.status,
         message: `${label}: ${read.status}`,
       });
     case "unavailable":
-      throw readFailureError({ url, cause: read.cause, label });
+      return readFailureError({ url, cause: read.cause, label });
     default:
       read satisfies never;
       return panic(`Unhandled search read: ${String(read)}`);
@@ -1054,7 +1054,7 @@ export const fetchSkUsListing = async ({
           return { type: "listing_unavailable" };
         }
         if (listed.type !== "present") {
-          return throwSearchReadFailure({
+          throw searchReadFailure({
             read: listed,
             url: SEARCH_URL,
             label: "SK ÚS listing fetch failed",
@@ -1130,6 +1130,7 @@ export type SkUsBuildResult =
 
 /** The per-decision responses a build cannot do without once requested. */
 type SkUsReadPart =
+  | "codelist"
   | "document"
   | "facets"
   | "collection-listing"
@@ -1163,41 +1164,6 @@ const partRead = <T>(read: ReadOutcome<T>): SkUsPartRead<T> => {
     default:
       read satisfies never;
       return panic(`Unhandled SK ÚS read: ${String(read)}`);
-  }
-};
-
-/**
- * The page's vocabularies. They are corpus-level and shared by every
- * decision on the page, so a failed read fails the page and keeps its
- * cursor rather than failing each item past it. A refusal withholds the
- * vocabularies as a part.
- */
-const pageCodelist = async (
-  page: SkUsPageContext,
-  signal: AbortSignal | undefined,
-): Promise<Exclude<SkUsPartRead<SkUsCodelist>, { type: "unread" }>> => {
-  const read = await page.codelist(signal);
-  switch (read.type) {
-    case "present":
-      return { type: "read", value: read.value };
-    case "absent":
-      return { type: "read", value: undefined };
-    case "refused":
-      return { type: "withheld", refusal: read };
-    case "unavailable":
-      throw new AdapterFetchError({
-        adapterKey: ADAPTER_KEYS.SK_US,
-        cursor: null,
-        message: "SK ÚS codelist unavailable",
-        cause: readFailureError({
-          url: `${SERVICE_URL}/${CODELIST_PATH}`,
-          cause: read.cause,
-          label: "SK ÚS codelist read failed",
-        }),
-      });
-    default:
-      read satisfies never;
-      return panic(`Unhandled SK ÚS codelist read: ${String(read)}`);
   }
 };
 
@@ -1814,9 +1780,14 @@ export const buildSkUsDecision = async (
     },
   });
 
-  take(await pageCodelist(page, signal), (value) => {
+  // The page's vocabularies, shared by every decision on it: a refusal
+  // withholds them as a part, an unavailable read leaves each item unread.
+  const codelistStop = take(partRead(await page.codelist(signal)), (value) => {
     responses.codelist = value;
   });
+  if (codelistStop !== undefined) {
+    return unread("codelist", codelistStop);
+  }
   const documentStop = take(
     partRead(await fetchDocumentXhtml(documentId, signal)),
     (value) => {
@@ -1967,7 +1938,7 @@ const executeSearch = async ({
     // A 401/403 here means the court put the endpoint back behind
     // authentication. There is no credential to refresh — the adapter
     // needs a real one — so surface it rather than retrying blind.
-    return throwSearchReadFailure({
+    throw searchReadFailure({
       read,
       url: SEARCH_URL,
       label: "SK ÚS search failed",

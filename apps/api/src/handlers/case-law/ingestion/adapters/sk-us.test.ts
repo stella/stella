@@ -1284,17 +1284,22 @@ describe("sk-us buildDecision", () => {
   );
 
   test.each(FAILED_READS)(
-    "a codelist read that fails fails the build, not the decision (%o)",
+    "a codelist read that fails is an unavailable unread item (%o)",
     async (answer) => {
       mockFetch({ search: [], supplementary: { codelist: answer } });
-      expect(
-        await rejectionOf(buildSkUsDecision(PLENARY_OPINION)),
-      ).toBeInstanceOf(AdapterFetchError);
+      expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
+        type: "unread",
+        part: "codelist",
+        item: {
+          listing: { isListingOnly: true },
+          outcome: { type: "unavailable" },
+        },
+      });
 
       mockFetch({ search: [], supplementary: { codelist: answer } });
-      expect(
-        await rejectionOf(reconciliation.buildDecision(PLENARY_OPINION)),
-      ).toBeInstanceOf(AdapterFetchError);
+      expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
+        type: "detail-unavailable",
+      });
     },
   );
 
@@ -1634,20 +1639,18 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     },
   );
 
-  test("a codelist read that fails fails the page, so its cursor is kept", async () => {
+  test("a codelist read that fails leaves the page's items unread, so the pipeline holds the page", async () => {
     mockFetch({
       search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
       supplementary: { codelist: { type: "status", status: 500 } },
     });
 
-    const page = await skUsAdapter.fetchPage("2021:0", {});
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
 
-    expect(page.isErr()).toBe(true);
-    if (page.isOk()) {
-      return;
-    }
-    expect(page.error).toBeInstanceOf(AdapterFetchError);
-    expect(page.error.message).toBe("SK ÚS codelist unavailable");
+    expect(page.decisions).toEqual([]);
+    expect(page.unreadItems?.map(({ outcome }) => outcome)).toEqual([
+      { type: "unavailable", cause: { kind: "status", status: 500 } },
+    ]);
   });
 
   test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
