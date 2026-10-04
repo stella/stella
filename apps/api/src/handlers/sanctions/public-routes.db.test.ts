@@ -4,7 +4,7 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
-import { SANCTIONS_SOURCES } from "@stll/sanctions";
+import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import type { Transaction } from "@/api/db/root";
@@ -689,7 +689,40 @@ describe("public sanctions search parity", () => {
             partialAliases.length,
         })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
-      const cache = createSanctionsIndexCache();
+      const compiled = new Map<
+        SanctionsSource,
+        {
+          inputDigest: string;
+          index: ReturnType<typeof buildScreeningIndex>;
+        }
+      >();
+      // Each role still loads its own rows. Share only pure compilation, after
+      // proving the entire reader input equals the first role's input.
+      const build = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
+        const list = lists.at(0) ?? panic("Missing benchmark list");
+        const inputHash = createHash("sha256");
+        for (const input of lists) {
+          inputHash.update(
+            JSON.stringify({
+              version: input.version,
+              entryCount: input.entries.length,
+            }),
+          );
+          for (const payload of input.entries) {
+            inputHash.update(JSON.stringify(payload));
+          }
+        }
+        const inputDigest = inputHash.digest("hex");
+        const known = compiled.get(list.version.source);
+        if (known !== undefined) {
+          expect(inputDigest).toBe(known.inputDigest);
+          return known.index;
+        }
+        const index = buildScreeningIndex(lists);
+        compiled.set(list.version.source, { inputDigest, index });
+        return index;
+      };
+      const cache = createSanctionsIndexCache({ build });
       const context = new InMemoryRateLimitContext();
       const route = createPublicSanctionsRoute({
         db: publicDb,
@@ -776,7 +809,7 @@ describe("public sanctions search parity", () => {
           }
         }
         const parityCaches = {
-          product: createSanctionsIndexCache(),
+          product: createSanctionsIndexCache({ build }),
           public: cache,
         };
         for (const name of [

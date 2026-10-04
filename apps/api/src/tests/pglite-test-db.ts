@@ -694,9 +694,8 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();
   }
-  const snapshotBytes = await Bun.file(snapshotPath).arrayBuffer();
   return await PGlite.create({
     extensions: { pg_trgm },
-    loadDataDir: new Blob([snapshotBytes]),
+    loadDataDir: Bun.file(snapshotPath),
   });
 };
