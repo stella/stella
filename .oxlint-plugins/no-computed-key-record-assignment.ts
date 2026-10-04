@@ -45,6 +45,17 @@ const resolveType = (context: ScopeContext, value: unknown): AstNode | null => {
       return node;
     }
     const variable = resolveVariable(context, node.typeName);
+    if (
+      node.typeName.name === "Readonly" &&
+      !variable?.defs.length &&
+      isAstNode(node.typeArguments) &&
+      Array.isArray(node.typeArguments.params) &&
+      node.typeArguments.params.length === 1
+    ) {
+      // The global Readonly<T> is transparent for key lookups.
+      node = node.typeArguments.params[0];
+      continue;
+    }
     const definition = variable?.defs.at(0)?.node;
     if (
       !variable ||

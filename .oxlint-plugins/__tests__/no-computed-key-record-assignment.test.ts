@@ -25,6 +25,24 @@ describe.serial("no-computed-key-record-assignment", () => {
     ).toEqual([4, 5, 6]);
   });
 
+  test("sees through the global Readonly wrapper but not a local one", async () => {
+    expect(
+      await lint([
+        "const FROZEN: Readonly<Record<string, number>> = {};",
+        "type Table = Readonly<Record<string, number>>;",
+        "const ALIASED: Table = {};",
+        "const OPERATOR: { readonly [key: string]: number } = {};",
+        "export const frozen = (key: string) => FROZEN[key];",
+        "export const aliased = (key: string) => ALIASED[key];",
+        "export const operator = (key: string) => OPERATOR[key];",
+        "export const guarded = (key: string) => Object.hasOwn(FROZEN, key) ? FROZEN[key] : undefined;",
+        "export const closed = (key: 'a') => FROZEN[key];",
+        "const local = () => { type Readonly<T> = { ok: T }; const SHADOW: Readonly<Record<string, number>> = { ok: {} }; return (key: string) => SHADOW[key]; };",
+        "export { local };",
+      ]),
+    ).toEqual([5, 6, 7]);
+  });
+
   test("terminates local alias and class-field cycles", async () => {
     expect(
       await lint([
