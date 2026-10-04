@@ -1769,6 +1769,35 @@ const countShadowedNamespaces = (content: string): number => {
   return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
+const UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE =
+  "apps/api/src/lib/resource-set-realtime.registry.test.ts";
+
+/**
+ * Write capabilities that do not yet declare what they announce to open tabs
+ * (UNCLASSIFIED_WRITE_CAPABILITIES in the resource-set realtime registry
+ * test). The list only shrinks; it is absent from trees older than the
+ * declaration, and a head tree that renames or drops the constant fails
+ * loudly rather than reading as zero.
+ */
+const countUnclassifiedRealtimeWriteCapabilities: RoleSensitiveFileCounter = (
+  content,
+  { role },
+) => {
+  const block =
+    /const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string\[\] = \[([\s\S]*?)\];/u.exec(
+      content,
+    )?.[1];
+  if (block === undefined) {
+    if (role === "base") {
+      return 0;
+    }
+    return panic(
+      "unclassified-realtime-write-capabilities: UNCLASSIFIED_WRITE_CAPABILITIES not found",
+    );
+  }
+  return (block.match(/^[ \t]*"/gmu) ?? []).length;
+};
+
 const PG_TABLE_MARKER = "p.pgTable(";
 const WORKSPACE_ONLY_POLICIES_MARKER = "...wsPolicies()";
 const ORGANIZATION_ID_COLUMN_MARKER = "organizationId:";
@@ -3257,6 +3286,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["packages/cli/src/generate-capability-tree.test.ts"],
     exclude: () => false,
     count: countShadowedNamespaces,
+  },
+  {
+    scope: "file",
+    id: "unclassified-realtime-write-capabilities",
+    description:
+      "write capabilities listed in UNCLASSIFIED_WRITE_CAPABILITIES because their handler does not yet declare what it announces to open tabs (a resource set or noResourceSetUpdates); classify a capability and remove it from the list, never add one",
+    include: [UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE],
+    exclude: () => false,
+    measurement: "role-sensitive",
+    count: countUnclassifiedRealtimeWriteCapabilities,
   },
   {
     scope: "file",
@@ -5651,6 +5690,56 @@ const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+// Two listed capabilities; the comment line and the neighbouring array are
+// not entries.
+const SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = `
+const OTHER_LIST: readonly string[] = ["not.counted"];
+const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string[] = [
+  // grouped by domain
+  "clauses.create",
+  "clauses.delete",
+];
+`;
+const EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = 2;
+
+const unclassifiedRealtimeWriteCapabilitiesSelfTestFailures = (
+  snapshot: Baseline,
+): string[] => {
+  const failures: string[] = [];
+  const metric = requireSnapshot(
+    snapshot,
+    "unclassified-realtime-write-capabilities",
+  );
+  if (metric.count !== EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES) {
+    failures.push(
+      `unclassified-realtime-write-capabilities counted ${metric.count}, expected ${EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES}`,
+    );
+  }
+  const withoutList = "export {};\n";
+  if (
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "base",
+    }) !== 0
+  ) {
+    failures.push(
+      "unclassified-realtime-write-capabilities did not read a base without the list as 0",
+    );
+  }
+  const renamed = Result.try(() =>
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "head",
+    }),
+  );
+  if (renamed.isOk()) {
+    failures.push(
+      "unclassified-realtime-write-capabilities read a head without the list as a count",
+    );
+  }
+  return failures;
+};
+
 const legacyPaintSelfTestFailures = (snapshot: Baseline): string[] => {
   const metric = requireSnapshot(snapshot, "legacy-paint-transitions");
   if ("apps/web/dist/generated.css" in metric.files) {
@@ -6027,6 +6116,11 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/legacy-realtime-invalidations.ts",
       SELF_TEST_LEGACY_REALTIME_INVALIDATIONS,
+    );
+    writeFixture(
+      root,
+      UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES,
     );
     writeFixture(
       root,
@@ -6414,6 +6508,10 @@ const runSelfTest = (): number => {
         `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
       );
     }
+
+    failures.push(
+      ...unclassifiedRealtimeWriteCapabilitiesSelfTestFailures(snapshot),
+    );
 
     const adHocSubjectGateMetric = requireSnapshot(
       snapshot,

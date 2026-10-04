@@ -14,7 +14,9 @@ import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 //
 // Write capabilities that predate the declaration and have not been classified
 // yet. This list only shrinks: a capability that gains a declaration must
-// leave it, and nothing new may join it.
+// leave it (the stale-entry test below), and nothing new may join it (the
+// `unclassified-realtime-write-capabilities` metric in scripts/ratchet.ts
+// fails `ratchet --check` when the list grows against the merge base).
 const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string[] = [
   "case-law.analysis.generate",
   "case-law.matter-links.batch.create",
