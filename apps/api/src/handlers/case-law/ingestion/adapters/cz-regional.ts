@@ -1,5 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: failed publisher reads are held unread instead of built; decisions from successful reads are unchanged.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -50,9 +51,11 @@ import {
   validatePublisherPage,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
-  fetchPublisher,
-  fetchWithRetry,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -74,6 +77,11 @@ import {
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
+import {
+  readPresent,
+  readUnavailable,
+  type ReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   FetchBoundaryError,
@@ -442,23 +450,29 @@ type CzRegionalPageRead =
   | { type: "unavailable"; error: AdapterFetchError };
 
 const readCzRegionalPage = async (
-  response: Response,
+  read: ReadOutcome<Response>,
   cursor: string | null,
 ): Promise<CzRegionalPageRead> => {
-  if (response.status === 404) {
-    return { type: "absent" };
+  switch (read.type) {
+    case "present":
+      break;
+    case "absent":
+      return { type: "absent" };
+    case "unavailable":
+      return {
+        type: "unavailable",
+        error: unreadPublisherError({
+          outcome: read,
+          message: "CZ Regional API error",
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          cursor,
+        }),
+      };
+    default:
+      read satisfies never;
+      return panic(`Unhandled regional page read: ${String(read)}`);
   }
-  if (!response.ok) {
-    return {
-      type: "unavailable",
-      error: new AdapterFetchError({
-        message: `CZ Regional API error: ${response.status}`,
-        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        cursor,
-        httpStatus: response.status,
-      }),
-    };
-  }
+  const response = read.value;
   const validatedPage = validatePublisherPage({
     body: await response.text(),
     headers: response.headers,
@@ -596,120 +610,150 @@ export const readCzRegionalChain = (
     : null;
 };
 
-/** A document request or JSON read that failed. */
+/** A document request or body read that failed. */
 const documentReadFailed = failureSink({
   event: "case_law.ingestion.detail_fetch_failed",
   expected: [],
 });
 
+const FINALDOC_SHAPE_FIELDS = [
+  "uuid",
+  "verdictText",
+  "justificationText",
+  "header",
+  "verdict",
+  "justification",
+  "information",
+  "styles",
+  "metadata",
+] as const;
+
+/**
+ * Whether a failed finaldoc read earns its one retry: the publisher answered
+ * with a 5xx or did not answer in time.
+ */
+const isRetryableFinaldocRead = (read: ReadOutcome<Response>): boolean => {
+  if (read.type !== "unavailable") {
+    return false;
+  }
+  switch (read.cause.kind) {
+    case "status":
+      return read.cause.status >= 500;
+    case "thrown":
+      return isTimeoutError(read.cause.error);
+    case "no-content":
+    case "empty-body":
+      return false;
+    default:
+      read.cause satisfies never;
+      return panic(`Unhandled read failure: ${String(read.cause)}`);
+  }
+};
+
+/** One finaldoc request, retried once where the publisher failed to answer. */
+const retryFinaldocRead = async (
+  read: () => Promise<ReadOutcome<Response>>,
+): Promise<ReadOutcome<Response>> => {
+  const first = await read();
+  if (!isRetryableFinaldocRead(first)) {
+    return first;
+  }
+  logger.warn("case_law.ingestion.fetch_retry", {
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    attempt: 1,
+    maxRetries: 1,
+  });
+  await Bun.sleep(backoffMs(0));
+  return await read();
+};
+
+/**
+ * What one finaldoc read established. `link-rejected` is a link outside the
+ * publisher's document path, which is never requested.
+ */
+type CzRegionalFinaldocRead =
+  | ReadOutcome<CzRegionalDocumentPayload>
+  | { readonly type: "link-rejected" };
+
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.
  *
- * Keeps a valid response's original bytes. A missing document is listing-only;
- * an invalid page fails the crawl instead of being stored as a document.
+ * Keeps a valid response's original bytes. Only a 404 or 410 states that the
+ * publisher holds no document; a request or body read that failed is
+ * unavailable, never a document. An invalid page fails as a typed page error
+ * instead of being stored as a document.
  */
 const fetchFinaldoc = async (
   docUrl: string,
   caseNumber: string,
   signal?: AbortSignal,
-): Promise<CzRegionalDocumentPayload | null> => {
+): Promise<CzRegionalFinaldocRead> => {
   const target = restrictCzRegionalFinaldocUrl(docUrl);
   if (target === null) {
     logger.warn("case_law.ingestion.outbound_url_rejected", {
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       caseNumber,
     });
-    return null;
+    return { type: "link-rejected" };
   }
 
-  try {
-    const response = await fetchWithRetry(
-      target.toString(),
-      {
-        headers: { Accept: "application/json" },
-        redirect: "error",
-      },
-      {
-        maxRetries: 1,
-        signal,
+  const read = await retryFinaldocRead(
+    async () =>
+      await readPublisher(target.toString(), {
         fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      },
-    );
-
-    if (!response.ok) {
-      if (response.status === 404 || response.status === 410) {
-        return null;
-      }
-      throw new AdapterFetchError({
-        message: `CZ Regional document request failed: ${response.status}`,
-        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        cursor: null,
-        httpStatus: response.status,
-      });
-    }
-
-    const bytes =
-      response.body === null
+        signal,
+        headers: {
+          Accept: "application/json",
+          "User-Agent": INGESTION_USER_AGENT,
+        },
+        redirect: "error",
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      }),
+  );
+  if (read.type !== "present") {
+    return read;
+  }
+  const { body, headers } = read.value;
+  const bytes = await Result.tryPromise({
+    try: async () =>
+      body === null
         ? new Uint8Array()
-        : await readCappedBytes(response.body, MAX_FINALDOC_RESPONSE_BYTES);
-    if (bytes === null) {
-      throw new AdapterFetchError({
-        message: `CZ Regional document exceeds ${MAX_FINALDOC_RESPONSE_BYTES} bytes`,
-        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        cursor: null,
-      });
+        : await readCappedBytes(body, MAX_FINALDOC_RESPONSE_BYTES),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(bytes)) {
+    // The caller's cancellation ends the page.
+    if (signal?.aborted) {
+      throw bytes.error;
     }
-    const raw = new TextDecoder().decode(bytes);
-    const validatedPage = validatePublisherPage({
-      body: raw,
-      headers: response.headers,
+    return readUnavailable({ kind: "thrown", error: bytes.error });
+  }
+  if (bytes.value === null) {
+    throw new AdapterFetchError({
+      message: `CZ Regional document exceeds ${MAX_FINALDOC_RESPONSE_BYTES} bytes`,
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       cursor: null,
-      expectation: {
-        kind: "json",
-        minBytes: 2,
-        shape: (value) =>
-          isCzRegionalFinaldoc(value) &&
-          [
-            "uuid",
-            "verdictText",
-            "justificationText",
-            "header",
-            "verdict",
-            "justification",
-            "information",
-            "styles",
-            "metadata",
-          ].some((field) => Object.hasOwn(value, field)),
-      },
     });
-    if (validatedPage.isErr()) {
-      throw validatedPage.error;
-    }
-    return readCzRegionalDocument(raw);
-  } catch (error) {
-    // The caller's cancellation ends the page.
-    if (signal?.aborted || error instanceof AdapterFetchError) {
-      throw error;
-    }
-    // The row is held listing-only for a later read, and the failed read is
-    // reported, graded as the upstream being unavailable: a request that
-    // failed or a body that is not the JSON the publisher serves.
-    observeFailure(
-      classifyFailure(
-        typeof error === "object" && error !== null
-          ? error
-          : new Error("Document read failed", { cause: error }),
-        "upstream_unavailable",
-      ),
-      {
-        sink: documentReadFailed,
-        ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
-      },
-    );
-    return null;
   }
+  const raw = new TextDecoder().decode(bytes.value);
+  const validatedPage = validatePublisherPage({
+    body: raw,
+    headers,
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    cursor: null,
+    expectation: {
+      kind: "json",
+      minBytes: 2,
+      shape: (value) =>
+        isCzRegionalFinaldoc(value) &&
+        FINALDOC_SHAPE_FIELDS.some((field) => Object.hasOwn(value, field)),
+    },
+  });
+  if (validatedPage.isErr()) {
+    throw validatedPage.error;
+  }
+  return readPresent(readCzRegionalDocument(raw));
 };
 
 /**
@@ -722,17 +766,20 @@ const fetchFinaldoc = async (
  * which is why the crawl does not make it: the chain pass in
  * `cz-regional-chain-backfill.ts` spends that budget under an operator and
  * writes the part onto rows already held.
+ *
+ * A payload that is not the list the publisher serves is unavailable, never
+ * an empty chain.
  */
 export const fetchCzRegionalAffectingDocs = async (
   sourceDocumentId: string,
   signal?: AbortSignal,
-): Promise<CzRegionalChainPayload | null> => {
-  const response = await fetchPublisher(
+): Promise<ReadOutcome<CzRegionalChainPayload>> => {
+  const read = await readPublisherText(
     `${BASE_URL}/finalDocChain/affectingDocs/${encodeURIComponent(sourceDocumentId)}`,
     {
       fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      ...(signal === undefined ? {} : { signal }),
+      signal,
       headers: {
         Accept: "application/json",
         "User-Agent": INGESTION_USER_AGENT,
@@ -740,10 +787,20 @@ export const fetchCzRegionalAffectingDocs = async (
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     },
   );
-  if (!response.ok) {
-    return null;
+  if (read.type !== "present") {
+    return read;
   }
-  return readCzRegionalChain(JSON.stringify(await response.json()));
+  const chain = readCzRegionalChain(JSON.stringify(JSON.parse(read.value)));
+  return chain === null
+    ? readUnavailable({
+        kind: "thrown",
+        error: new AdapterFetchError({
+          message: "CZ Regional document chain is not a list",
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          cursor: null,
+        }),
+      })
+    : readPresent(chain);
 };
 
 /**
@@ -1236,6 +1293,57 @@ const buildCzRegionalListingFallback = (
 };
 
 /**
+ * The document a finaldoc read yields, or null where none is in hand.
+ *
+ * A publisher error status fails the page, as it always has, so the cursor
+ * holds. A request that did not answer or an empty 204 is reported, and the
+ * row is held listing-only for a later read; it is never assembled as though
+ * the publisher had no document.
+ */
+const finaldocOf = ({
+  read,
+  caseNumber,
+}: {
+  read: CzRegionalFinaldocRead;
+  caseNumber: string;
+}): CzRegionalDocumentPayload | null => {
+  switch (read.type) {
+    case "present":
+      return read.value;
+    case "absent":
+    case "link-rejected":
+      return null;
+    case "unavailable": {
+      const error = unreadPublisherError({
+        outcome: read,
+        message: "CZ Regional document request failed",
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor: null,
+      });
+      if (read.cause.kind === "status") {
+        throw error;
+      }
+      // A request that threw is reported as its own error, graded as the
+      // upstream being unavailable.
+      const reported =
+        read.cause.kind === "thrown" &&
+        typeof read.cause.error === "object" &&
+        read.cause.error !== null
+          ? read.cause.error
+          : error;
+      observeFailure(classifyFailure(reported, "upstream_unavailable"), {
+        sink: documentReadFailed,
+        ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+      });
+      return null;
+    }
+    default:
+      read satisfies never;
+      return panic(`Unhandled regional document read: ${String(read)}`);
+  }
+};
+
+/**
  * Fetch the document for a listed item and assemble the decision.
  * The crawl retains identifiable rows whose metadata cannot be read;
  * valid identity fields still drive the document fetch when optional metadata drifts.
@@ -1274,11 +1382,11 @@ export const buildCzRegionalDecision = async (
   if (publishedDocumentUrl === undefined) {
     return assembleCzRegionalDecision({ item, document: null, chain: null });
   }
-  const document = await fetchFinaldoc(
-    publishedDocumentUrl,
-    splitCaseReference(item.jednaciCislo).caseNumber,
-    signal,
-  );
+  const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
+  const document = finaldocOf({
+    read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
+    caseNumber,
+  });
   const built = assembleCzRegionalDecision({
     item,
     rawListing: raw,
@@ -1397,7 +1505,7 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           .split("-")
           .map(Number);
         const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
-        const response = await fetchPublisher(url, {
+        const read = await readPublisher(url, {
           fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           signal: attemptSignal,
@@ -1408,16 +1516,24 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
 
-        if (response.status >= 500) {
+        // A request that failed or a 5xx is retried; every other outcome is
+        // the page's to read.
+        if (read.type === "unavailable" && read.cause.kind === "thrown") {
+          throw read.cause.error;
+        }
+        if (
+          read.type === "unavailable" &&
+          read.cause.kind === "status" &&
+          read.cause.status >= 500
+        ) {
           throw new FetchBoundaryError({
             url,
-            status: response.status,
-            statusText: response.statusText,
-            message: `CZ Regional API error: ${response.status}`,
+            status: read.cause.status,
+            message: `CZ Regional API error: ${read.cause.status}`,
           });
         }
 
-        return response;
+        return read;
       },
       catch: (cause) => {
         if (cause instanceof FetchBoundaryError) {
@@ -1507,9 +1623,9 @@ export const listCzRegionalDayPage = async ({
   if (Result.isError(responseResult)) {
     throw responseResult.error;
   }
-  const response = responseResult.value;
+  const listing = responseResult.value;
 
-  const read = await readCzRegionalPage(response, cursor);
+  const read = await readCzRegionalPage(listing, cursor);
   switch (read.type) {
     case "absent":
       return { items: [], totalPages: 0 };
@@ -2278,26 +2394,44 @@ export const czRegionalAdapter = defineSourceAdapter({
       );
       const perYear = await Promise.all(
         years.map(async (year) => {
-          const response = await fetchPublisher(
-            `${BASE_URL}/opendata/${year}`,
-            {
-              fetchStage: "listing",
-              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-              signal,
-              timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-            },
-          );
-          if (!response.ok) {
-            return null;
+          const read = await readPublisher(`${BASE_URL}/opendata/${year}`, {
+            fetchStage: "listing",
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            signal,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          });
+          switch (read.type) {
+            case "present":
+              break;
+            case "absent":
+              return sourceTotalProbeFailed(
+                SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
+              );
+            case "unavailable":
+              return read.cause.kind === "thrown"
+                ? ({
+                    type: "probe-failed",
+                    errorTag: errorTag(read.cause.error),
+                  } as const)
+                : sourceTotalProbeFailed(
+                    SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
+                  );
+            default:
+              read satisfies never;
+              return panic(`Unhandled regional count read: ${String(read)}`);
           }
-          const json: unknown = await response.json();
+          const json: unknown = await read.value.json();
           if (!Array.isArray(json)) {
-            return null;
+            return sourceTotalProbeFailed(
+              SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+            );
           }
           let sum = 0;
           for (const month of json) {
             if (!isRecord(month) || typeof month["pocet"] !== "number") {
-              return null;
+              return sourceTotalProbeFailed(
+                SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+              );
             }
             sum += month["pocet"];
           }
@@ -2308,10 +2442,8 @@ export const czRegionalAdapter = defineSourceAdapter({
       for (const sum of perYear) {
         // One unreadable year makes the sum a floor rather than a total, and a
         // floor recorded as a total reads as coverage the corpus does not have.
-        if (sum === null) {
-          return sourceTotalProbeFailed(
-            SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
-          );
+        if (typeof sum !== "number") {
+          return sum;
         }
         total += sum;
       }
@@ -2395,9 +2527,9 @@ export const czRegionalAdapter = defineSourceAdapter({
           }
           throw responseResult.error;
         }
-        const response = responseResult.value;
+        const listing = responseResult.value;
 
-        const read = await readCzRegionalPage(response, cursor);
+        const read = await readCzRegionalPage(listing, cursor);
         switch (read.type) {
           case "absent": {
             const today = todayIso();

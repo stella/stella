@@ -58,10 +58,10 @@ import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vw
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
-  assembleCzRegionalDecision,
+  buildCzRegionalDecision,
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
-  readCzRegionalDocument,
+  fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
@@ -578,18 +578,24 @@ const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
 
 /**
  * Built through the two paths that write this source's envelope: the crawl
- * assembles the listing row with the document, and the chain pass adds the
- * part it alone fetches and re-parses the result. Driving both is what makes
- * the `chain` part evidence of a pass that exists rather than of a payload
- * written by hand.
+ * reads the listed row's document and assembles the two, and the chain pass
+ * reads the part it alone fetches and re-parses the result. Driving both
+ * reads is what makes the `chain` part evidence of a pass that exists rather
+ * than of a payload written by hand.
  */
 export const czRegionalFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const crawled = assembleCzRegionalDecision({
-      item: CZ_REGIONAL_LISTING_ROW,
-      document: readCzRegionalDocument(CZ_REGIONAL_DOCUMENT_PAYLOAD),
-      chain: null,
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url.includes("/finalDocChain/affectingDocs/")
+        ? CZ_REGIONAL_CHAIN_PAYLOAD
+        : CZ_REGIONAL_DOCUMENT_PAYLOAD;
+      return await Promise.resolve(
+        new Response(body, { headers: { "Content-Type": "application/json" } }),
+      );
     });
+
+    const crawled = await buildCzRegionalDecision(CZ_REGIONAL_LISTING_ROW);
     if (crawled.type !== "built") {
       return panic(`cz-regional fixture did not build: ${crawled.type}`);
     }
@@ -597,10 +603,17 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
     if (parts === null) {
       return panic("the cz-regional fixture stored no envelope");
     }
+    const chain = await fetchCzRegionalAffectingDocs(
+      crawled.decision.sourceDocumentId ??
+        panic("the cz-regional fixture states no publisher id"),
+    );
+    if (chain.type !== "present") {
+      return panic(`cz-regional fixture read no chain: ${chain.type}`);
+    }
 
     const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(
-        czRegionalEnvelopeWithChain(parts, CZ_REGIONAL_CHAIN_PAYLOAD),
+        czRegionalEnvelopeWithChain(parts, chain.value.raw),
       ),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: crawled.decision.caseNumber,
