@@ -34,10 +34,11 @@ import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  ActionAdmissionError,
   actionAdmissionRefusal,
+  type ActionAdmissionError,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -1242,6 +1243,7 @@ describe("send message disconnect handling", () => {
   const refusalReasons = {
     busy: "busy",
     period_exhausted: "period_exhausted",
+    daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
     unavailable: "unavailable",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
@@ -1249,16 +1251,11 @@ describe("send message disconnect handling", () => {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
         const refusal = actionAdmissionRefusal(
-          new ActionAdmissionError({
-            reason,
-            message: "Admission refused",
-          }),
+          actionAdmissionErrorFor(reason, "Admission refused"),
         );
         const admission = new AbortController();
         const loseAdmission = () =>
-          admission.abort(
-            new ActionAdmissionError({ reason, message: "Admission refused" }),
-          );
+          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({

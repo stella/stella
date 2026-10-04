@@ -15,6 +15,11 @@ const bodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason:
+        "Stores document content and returns operation metadata rather than stored-file bytes.",
+    },
     description:
       "Create a document in a matter whose file is a fresh empty DOCX built " +
       "from the stella template, optionally inside a parent folder. Returns " +

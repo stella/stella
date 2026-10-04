@@ -289,6 +289,11 @@ const duplicateEntityHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy one document, or a folder with its whole subtree, inside the same " +
     "matter, placing the copy alongside the original. Stored files are " +

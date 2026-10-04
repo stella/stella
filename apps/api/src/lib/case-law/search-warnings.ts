@@ -100,18 +100,24 @@ export const caseLawSearchWarnings = ({
 
 /**
  * Warnings only an agent surface raises, about a filter value it had to read
- * before searching. The web sends filters it took from its own facets, so it
- * never meets these; they stay out of the shared contract for that reason.
+ * before searching or a phrasing it was sent. The web sends filters it took
+ * from its own facets and one query per search, so it never meets these; they
+ * stay out of the shared contract for that reason.
  *
  * - `filter_read`: the value named one known value in another spelling (a
  *   case, an abbreviation, an English name), and the search used that value.
  * - `filter_dropped`: the value named no known value, or several different
  *   ones, so the search ran without that filter rather than returning
  *   nothing for it.
+ * - `many_required_terms`: a phrasing required many words in one passage and
+ *   filled fewer result slots than it was given, so dropping a word is the
+ *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
+ *   `v1`, from the page already returned: it costs no search.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
   "filter_dropped",
+  "many_required_terms",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -164,6 +170,23 @@ export const filterDroppedWarning = ({
   hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
 });
 
+export const manyRequiredTermsWarning = ({
+  terms,
+  wordCount,
+  slots,
+}: {
+  /** The terms and quoted phrases the phrasing required, as `queryUsed` spells them. */
+  terms: readonly string[];
+  /** The words those terms hold, a phrase counting each of its words. */
+  wordCount: number;
+  /** The result slots the phrasing was given on this page. */
+  slots: number;
+}): AgentCaseLawSearchWarning => ({
+  code: "many_required_terms",
+  message: `This phrasing required ${String(wordCount)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
+  hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
+});
+
 /**
  * The values a facet counted for an empty page's filters, appended to its
  * `no_hits_filtered` hint so the next call can pick a value that exists
@@ -213,6 +236,19 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       filter: "court",
       received: '"Česká republika"',
       known: 'Known values include "Nejvyšší soud".',
+    }),
+  many_required_terms: () =>
+    manyRequiredTermsWarning({
+      terms: [
+        "promlčení",
+        "náhrady",
+        "škody",
+        "subjektivní",
+        "lhůta",
+        "vědomost",
+      ],
+      wordCount: 6,
+      slots: 5,
     }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,

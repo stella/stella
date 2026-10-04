@@ -104,6 +104,10 @@ const certificateConflict = () =>
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  contentDelivery: {
+    type: "none",
+    reason: "Verifies signing inputs without returning stored-file bytes.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
     keys: ["sessionToken", "certificate"],

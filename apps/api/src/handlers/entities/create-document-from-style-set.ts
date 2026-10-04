@@ -16,6 +16,11 @@ const bodySchema = t.Object({
 
 const config = {
   access: "write",
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Creates a document from a style configuration without delivering stored-file bytes.",
+  },
   permissions: { entity: ["create"], styleSet: ["use"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityFileRealtimeUpdates,

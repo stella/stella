@@ -18,6 +18,10 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -66,6 +70,11 @@ const resolveDocumentFileName = (
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Fill a stored template and save the result as a new document in a " +
     "matter rather than returning bytes. Same values and clauseOverrides " +
@@ -291,7 +300,9 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     if (Result.isError(created)) {
       return Result.err(
-        new HandlerError({ status: 400, message: created.error.message }),
+        DocumentWriteRefusedError.is(created.error)
+          ? documentWriteRefusalHandlerError(created.error)
+          : new HandlerError({ status: 400, message: created.error.message }),
       );
     }
 

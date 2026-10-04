@@ -1028,3 +1028,53 @@ export const isDatabaseWriteCall = (
   const text = writeSqlText(context, call.arguments.at(0));
   return text !== null && WRITE_SQL.some((pattern) => pattern.test(text));
 };
+
+// `a`, `a.b`, `a.b.c`: the dotted name of a table reference, or null.
+const dottedName = (node: unknown, depth = 0): string | null => {
+  const expression = unwrapExpression(node);
+  if (expression === null || depth > MAX_SQL_RESOLVE_DEPTH) {
+    return null;
+  }
+  if (isIdentifier(expression)) {
+    return expression.name;
+  }
+  if (expression.type !== "MemberExpression") {
+    return null;
+  }
+  const object = dottedName(expression.object, depth + 1);
+  const property = memberPropertyName(expression);
+  return object === null || property === null ? null : `${object}.${property}`;
+};
+
+const SQL_WRITE_TARGET =
+  /\b(?<verb>INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+(?<table>[\w."]+)/iu;
+
+/**
+ * What a write `isDatabaseWriteCall` accepts touches, as `<verb>:<table>`
+ * (`insert:entities`, `update:schema.members`). Raw SQL reads the verb and
+ * table from its static text. `?` stands for a table the source does not
+ * name statically. Lets a per-owner budget tell one write from another
+ * instead of counting them.
+ */
+export const databaseWriteTarget = (
+  context: DatabaseWriteContext,
+  node: unknown,
+): string => {
+  const call = unwrapExpression(node);
+  const callee =
+    call?.type === "CallExpression" ? unwrapExpression(call.callee) : null;
+  const method =
+    callee?.type === "MemberExpression" ? memberPropertyName(callee) : null;
+  const args =
+    call !== null && Array.isArray(call.arguments) ? call.arguments : [];
+  if (method !== null && MUTATION_METHODS.has(method)) {
+    return `${method}:${dottedName(args.at(0)) ?? "?"}`;
+  }
+  const text = writeSqlText(context, args.at(0));
+  const match = text === null ? null : SQL_WRITE_TARGET.exec(text);
+  const verb = match?.groups?.verb?.split(/\s+/u).at(0)?.toLowerCase();
+  const table = match?.groups?.table?.replaceAll('"', "");
+  const named =
+    table === undefined || table === SQL_PLACEHOLDER.trim() ? "?" : table;
+  return `${verb ?? "execute"}:${named}`;
+};

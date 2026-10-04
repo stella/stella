@@ -33,6 +33,10 @@ const installSkillBody = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Installs a bundled skill without returning stored-file bytes.",
+  },
   description:
     "Install one catalogue skill into the organization by slug, at team " +
     "scope (the default) or private scope. Team scope requires admin or " +

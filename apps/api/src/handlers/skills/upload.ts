@@ -25,6 +25,10 @@ const uploadSkillBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Stores a skill upload without delivering stored-file bytes.",
+  },
   description:
     "Install an agent skill by uploading a skill pack or a bare SKILL.md " +
     "file; the parser reads the bytes rather than trusting the declared " +

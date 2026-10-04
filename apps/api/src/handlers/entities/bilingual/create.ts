@@ -19,6 +19,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
+import {
+  DocumentWriteRefusedError,
+  documentWriteRefusalHandlerError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -49,6 +53,11 @@ const createBilingualBody = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Creates a translated document without returning stored-file bytes.",
+  },
   description:
     "Create a two-column bilingual copy of a DOCX document (source text on the left, a copy to translate on the right) as a new document.",
   permissions: { entity: ["create"] },
@@ -201,7 +210,9 @@ export const createBilingualEntityHandler = (
       });
       if (Result.isError(created)) {
         return Result.err(
-          new HandlerError({ status: 400, message: created.error.message }),
+          DocumentWriteRefusedError.is(created.error)
+            ? documentWriteRefusalHandlerError(created.error)
+            : new HandlerError({ status: 400, message: created.error.message }),
         );
       }
 

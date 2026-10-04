@@ -68,7 +68,12 @@ import {
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
-import { withFacetValues } from "@/api/lib/case-law/search-warnings";
+import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
+import {
+  type AgentCaseLawSearchWarning,
+  manyRequiredTermsWarning,
+  withFacetValues,
+} from "@/api/lib/case-law/search-warnings";
 import {
   type AssertNoExtraFields,
   type LIST_MATTERS_DETAIL_PROJECTION,
@@ -94,6 +99,7 @@ import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -123,6 +129,11 @@ import {
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
+import {
+  CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS,
+  MANY_REQUIRED_TERMS_THRESHOLD,
+  searchCaseLawTexts,
+} from "@/api/mcp/case-law-search-guidance";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
@@ -648,6 +659,11 @@ export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
     3,
 );
 
+/** Read once at module load: tools/list is fixed for a running server. */
+const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
+  envBase.MCP_CASE_LAW_SEARCH_GUIDANCE,
+);
+
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
     queries: v.pipe(
@@ -660,9 +676,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       ),
       v.minLength(1),
       v.maxLength(LIMITS.caseLawSearchQueriesMax),
-      v.description(
-        `Several phrasings of ONE question, at most ${LIMITS.caseLawSearchQueriesMax}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
-      ),
+      v.description(SEARCH_CASE_LAW_TEXTS.queries),
     ),
     limit: v.optional(
       v.pipe(
@@ -670,9 +684,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_SEARCH_LIMIT),
-        v.description(
-          "Merged-page size, split evenly across the queries (at least one hit each)",
-        ),
+        v.description(SEARCH_CASE_LAW_TEXTS.limit),
       ),
     ),
     cursor: cursorInput({
@@ -693,9 +705,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
         v.minLength(1),
         v.maxLength(16),
-        v.description(
-          'Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. Combined with court, both filters must match.',
-        ),
+        v.description(SEARCH_CASE_LAW_TEXTS.courts),
       ),
     ),
     category: v.optional(
@@ -978,20 +988,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description:
-      "Search case law within one country. `queries` carries phrasings of " +
-      "one question and merges their results; matchedQueries names the " +
-      "phrasings behind each hit. `limit` is the merged page, split evenly " +
-      "across them. Filters: court, language, dates, decision type, " +
-      "source_id (a `facets.source` bucket's `value`). Facets describe the " +
-      "first phrasing on page one, null later. Total is not counted for " +
-      "multiple phrasings. Function words are not required terms; " +
-      "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
-      "`strict` requires every word. Each hit carries citationAuthority " +
-      "(the score ranking blends in), matchingPassages, a route-independent " +
-      "resourceName and caseNumber, its citable reference: not always a " +
-      "docket. read_case_law_decision types it; read_case_law_citations " +
-      "gives citing polarity.",
+    description: SEARCH_CASE_LAW_TEXTS.description,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1194,6 +1191,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "all",
+      permissions: { organizationSettings: ["update"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: SET_PRACTICE_JURISDICTIONS_TOOL,
     inputNormalization: {
@@ -2092,6 +2093,64 @@ const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
   testDependencies?.corpusIndexQueryVariant ??
   envBase.CORPUS_INDEX_QUERY_VARIANT;
 
+const mcpCaseLawSearchGuidance = ({ testDependencies }: McpRequestContext) =>
+  testDependencies?.caseLawSearchGuidance ??
+  envBase.MCP_CASE_LAW_SEARCH_GUIDANCE;
+
+type ManyRequiredTermsOptions = {
+  guidance: CaseLawSearchGuidanceMode;
+  /** The phrasing's cursor this call: `undefined` is its first page. */
+  subCursor: string | null | undefined;
+  /** The cursor the page returned: non-null while results remain unread. */
+  nextCursor: string | null;
+  /** What the phrasing required, a fixed point of the tokenizer. */
+  queryUsed: string;
+  hitCount: number;
+  /** The result slots the phrasing was given. */
+  slots: number;
+};
+
+/**
+ * `many_required_terms` for a long phrasing exhausted on its first page,
+ * read from the page already returned. A continuation is not asked about: it
+ * is short at the end of every result set. A short first page that still
+ * carries a cursor (a ranked row gone before hydration) has unread results,
+ * so it is not exhausted either. A quoted phrase requires each of its words.
+ */
+const manyRequiredTermsWarnings = ({
+  guidance,
+  subCursor,
+  nextCursor,
+  queryUsed,
+  hitCount,
+  slots,
+}: ManyRequiredTermsOptions): AgentCaseLawSearchWarning[] => {
+  if (
+    !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
+    subCursor !== undefined ||
+    nextCursor !== null ||
+    hitCount >= slots
+  ) {
+    return [];
+  }
+  const tokens = tokenizeCorpusFreeText(queryUsed);
+  const wordCount = tokens.reduce(
+    (count, { value }) => count + value.split(" ").length,
+    0,
+  );
+  return wordCount < MANY_REQUIRED_TERMS_THRESHOLD
+    ? []
+    : [
+        manyRequiredTermsWarning({
+          terms: tokens.map((token) =>
+            token.type === "phrase" ? `"${token.value}"` : token.value,
+          ),
+          wordCount,
+          slots,
+        }),
+      ];
+};
+
 const caseLawSearchResult = ({
   hit,
   matchedQueries,
@@ -2298,42 +2357,53 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
 
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.
-  const searches = requests.map(({ interpretation, query }, index) => {
-    const outcome = pages.at(index);
-    if (outcome === undefined || outcome.exhausted) {
-      // A phrasing its cursor declared exhausted ran nothing this call, so it
-      // carries no warning about a page. What it required is still what it
-      // required on the page that exhausted it, which is why `queryUsed`
-      // comes from the interpretation rather than from the phrasing as sent.
+  const guidance = mcpCaseLawSearchGuidance(context);
+  const searches = requests.map(
+    ({ interpretation, query, subCursor }, index) => {
+      const outcome = pages.at(index);
+      if (outcome === undefined || outcome.exhausted) {
+        // A phrasing its cursor declared exhausted ran nothing this call, so it
+        // carries no warning about a page. What it required is still what it
+        // required on the page that exhausted it, which is why `queryUsed`
+        // comes from the interpretation rather than from the phrasing as sent.
+        return {
+          query,
+          queryUsed: interpretation.queryUsed,
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          warnings: filterWarnings,
+        };
+      }
+      const values = facetValuesForFilters({
+        facets: outcome.page.facets,
+        filters: {
+          court:
+            courtListFilter ??
+            (courtFilter === undefined ? undefined : [courtFilter]),
+          decisionType,
+          language,
+        },
+      });
       return {
         query,
-        queryUsed: interpretation.queryUsed,
-        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-        warnings: filterWarnings,
+        queryUsed: outcome.page.queryUsed,
+        paginationOutcome: outcome.page.paginationOutcome,
+        warnings: [
+          ...filterWarnings,
+          ...outcome.page.warnings.map((warning) =>
+            withFacetValues(warning, values),
+          ),
+          ...manyRequiredTermsWarnings({
+            guidance,
+            subCursor,
+            nextCursor: outcome.page.nextCursor,
+            queryUsed: outcome.page.queryUsed,
+            hitCount: outcome.page.hits.length,
+            slots: perQueryLimit,
+          }),
+        ],
       };
-    }
-    const values = facetValuesForFilters({
-      facets: outcome.page.facets,
-      filters: {
-        court:
-          courtListFilter ??
-          (courtFilter === undefined ? undefined : [courtFilter]),
-        decisionType,
-        language,
-      },
-    });
-    return {
-      query,
-      queryUsed: outcome.page.queryUsed,
-      paginationOutcome: outcome.page.paginationOutcome,
-      warnings: [
-        ...filterWarnings,
-        ...outcome.page.warnings.map((warning) =>
-          withFacetValues(warning, values),
-        ),
-      ],
-    };
-  });
+    },
+  );
 
   return toolDataResult({
     facets: first.exhausted ? null : first.page.facets,

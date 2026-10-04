@@ -32,6 +32,12 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  cleanupObjectAfterWriter,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
@@ -56,6 +62,7 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import {
   organizationFileUsageHandlerError,
+  OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
@@ -63,7 +70,13 @@ import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  S3_OBJECT_WRITE_CERTAINTY,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -72,6 +85,11 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { resolveEntityCreateFileName } from "@/api/lib/uploads/entity-create";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const cleanupSettlementFailure = failureSink({
+  event: "entities.upload_cleanup_settlement_failed",
+  expected: [],
+});
 
 const uploadEntityBodySchema = t.Object({
   file: t.File({
@@ -92,6 +110,8 @@ const uploadGeneratedDocumentBodySchema = t.Object({
 });
 
 type UploadEntityHandlerProps = {
+  fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
+  processEntity?: typeof processExtraction;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -253,6 +273,7 @@ const uploadWriteFailureStatus = (
 };
 
 type CleanupUploadedS3KeysOptions = {
+  fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   keys: string[];
   fileId: string;
   workspaceId: SafeId<"workspace">;
@@ -270,13 +291,15 @@ const cleanupUploadedS3Keys = async ({
   keys,
   fileId,
   workspaceId,
-}: CleanupUploadedS3KeysOptions): Promise<void> => {
+  fileUsageDb,
+}: CleanupUploadedS3KeysOptions): Promise<boolean> => {
   const cleanup = Result.flatten(
     await Result.tryPromise({
       try: async () =>
         await deleteOrganizationFilesWithSignal(
           keys,
           AbortSignal.timeout(10_000),
+          fileUsageDb === undefined ? {} : { fileUsageDb },
         ),
       catch: (cause) => cause,
     }),
@@ -288,6 +311,7 @@ const cleanupUploadedS3Keys = async ({
       workspaceId,
     });
   }
+  return Result.isOk(cleanup);
 };
 
 type ResolveSavedGeneratedDocumentProps = {
@@ -713,7 +737,9 @@ const preflightGeneratedDocumentDraft = async ({
     }
   });
 
-const uploadEntityHandler = async function* ({
+export const uploadEntityHandler = async function* ({
+  fileUsageDb,
+  processEntity = processExtraction,
   safeDb,
   organizationId,
   workspaceId,
@@ -872,40 +898,63 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
-  if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-    await writeS3ObjectWithRetry({
-      contentType: file.type,
-      data: storedBytes,
-      key: sourceKey,
-    });
-  }
-  // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
-  // so a database error here skips `catch` entirely (finally still runs).
-  // Track intent to keep the object instead of relying on catch to clean it up.
+  const cleanupIntentId = yield* Result.await(
+    reserveObjectCleanupIntent({
+      objectKey: sourceKey,
+      organizationId,
+      safeDb,
+      workspaceId,
+    }),
+  );
+  // Exhausted attempts can still finish late; only a confirmed write narrows this.
+  let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
   let keepUploadedFile = false;
-  let writeOutcomeUncertain = false;
   try {
     if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       const organizationFileWrite = await writeOrganizationFile({
         organizationId,
         objectKey: sourceKey,
         sizeBytes: storedSizeBytes,
-        write: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: file.type,
-            data: storedBytes,
-            key: sourceKey,
-          }),
+        ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
+        write: async () => {
+          writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+          return await writeS3ObjectWithRetry(
+            {
+              contentType: file.type,
+              data: storedBytes,
+              key: sourceKey,
+            },
+            { type: "cleanup-intent", intent: cleanupIntentId },
+          );
+        },
       });
       if (Result.isError(organizationFileWrite)) {
-        // A storage timeout or failed ledger commit can leave an object behind.
-        // The reservation remains until object-state reconciliation settles it.
-        writeOutcomeUncertain =
-          organizationFileWrite.error.reason === "storage_unavailable";
         return Result.err(
           organizationFileUsageHandlerError(organizationFileWrite.error),
         );
       }
+      writeState = organizationFileWrite.value;
+    } else {
+      writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+      writeState = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: file.type,
+                data: storedBytes,
+                key: sourceKey,
+              },
+              { type: "cleanup-intent", intent: cleanupIntentId },
+            ),
+          catch: (cause) =>
+            new OrganizationFileUsageError({
+              reason: "storage_unavailable",
+              message: "Organization file usage is unavailable",
+              cause,
+            }),
+        }),
+      );
     }
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
@@ -916,6 +965,7 @@ const uploadEntityHandler = async function* ({
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
 
         let generatedDraftLocator: {
           partIndex: number;
@@ -1161,6 +1211,10 @@ const uploadEntityHandler = async function* ({
           },
         });
 
+        await retirePublishedObjectCleanupIntentsInTransaction({
+          intentIds: [cleanupIntentId],
+          tx,
+        });
         return { ok: true as const, resolvedName, status: "created" as const };
       }),
     );
@@ -1183,7 +1237,7 @@ const uploadEntityHandler = async function* ({
     keepUploadedFile = true;
     const fileName = writeResult.resolvedName;
 
-    await processExtraction(entityId).catch((error: unknown) =>
+    await processEntity(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
 
@@ -1238,13 +1292,35 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } finally {
-    if (!keepUploadedFile && !writeOutcomeUncertain) {
-      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
+    if (!keepUploadedFile) {
+      const settled = await cleanupObjectAfterWriter({
+        safeDb,
+        intentId: cleanupIntentId,
+        writeState,
+        deleteObject: async () =>
+          await cleanupUploadedS3Keys({
+            keys: s3Keys,
+            fileId,
+            workspaceId,
+            fileUsageDb,
+          }),
+      });
+      if (Result.isError(settled)) {
+        observeFailure(settled.error, {
+          sink: cleanupSettlementFailure,
+          ctx: { workspaceId },
+        });
+      }
     }
   }
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   description:
     "Upload a file as a new document in the current matter over a multipart " +
     "request: the file, a name, and the propertyId of the matter's file " +
@@ -1295,6 +1371,11 @@ const uploadEntity = createSafeHandler(
 );
 
 const generatedDocumentConfig = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityFileRealtimeUpdates,

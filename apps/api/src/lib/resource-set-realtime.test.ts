@@ -120,6 +120,69 @@ const baseConfig = {
 } satisfies WorkspaceHandlerConfig;
 
 describe("a matter handler's declared resource sets", () => {
+  for (const realtime of [
+    undefined,
+    noResourceSetUpdates("Owned by the handler"),
+  ]) {
+    test(`a handler with ${realtime?.scope ?? "undeclared"} announcements needs no broadcast context`, async () => {
+      const { session: _session, ...context } = requestContext();
+      let attempts = 0;
+      const endpoint = createSafeHandler(
+        { ...baseConfig, realtime },
+        async function* () {
+          return Result.ok({ ok: true });
+        },
+        {
+          announce: () => {
+            attempts += 1;
+          },
+        },
+      );
+
+      expect(await endpoint.handler(asTestRaw(context))).toEqual({ ok: true });
+      expect(attempts).toBe(0);
+    });
+  }
+
+  for (const realtime of [
+    workspaceResourceSetUpdates(RESOURCE_TYPE.ENTITY),
+    organizationResourceSetUpdates(RESOURCE_TYPE.AGENT_SKILL),
+  ]) {
+    test(`a ${realtime.scope} broadcast failure preserves the committed result and is captured`, async () => {
+      const analytics = installRecordingAnalytics();
+      let committed = false;
+      let attempts = 0;
+      const payload = { ok: true };
+      const endpoint = createSafeHandler(
+        { ...baseConfig, realtime },
+        async function* () {
+          committed = true;
+          return Result.ok(payload);
+        },
+        {
+          announce: () => {
+            expect(committed).toBe(true);
+            attempts += 1;
+            throw new DatabaseError({ message: "broadcast unavailable" });
+          },
+        },
+      );
+
+      try {
+        expect(await endpoint.handler(asTestRaw(requestContext()))).toBe(
+          payload,
+        );
+        expect(attempts).toBe(1);
+        expect(analytics.exceptions()).toHaveLength(1);
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          context: "resource-set-realtime.announce",
+        });
+      } finally {
+        analytics.restore();
+      }
+    });
+  }
+
   test("a success announces each declared set once to the handler's matter", async () => {
     const { announcements, announce } = recorder();
     const endpoint = createSafeHandler(
