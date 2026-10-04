@@ -9,12 +9,18 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   type PublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  type SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -24,7 +30,6 @@ import {
 } from "@/api/lib/usage/action-costs/context";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
 import {
   defaultReadGatedDecisionWithDocument,
   defaultReadPublicLegislationHandler,
@@ -180,13 +185,18 @@ const caseLawDecisionHeading = ({
 type CorpusPage = {
   results: McpCompatSearchResult[];
   cursors: Record<string, string | null>;
+  paginationOutcome: SearchPaginationOutcome;
 };
 
 type CorpusPageOutcome =
   | { type: "page"; page: CorpusPage }
   | { type: "failed"; message: string };
 
-const EMPTY_PAGE: CorpusPage = { results: [], cursors: {} };
+const EMPTY_PAGE: CorpusPage = {
+  results: [],
+  cursors: {},
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+};
 
 /**
  * A source's page cap split across the countries it is asked for, summing to
@@ -304,8 +314,8 @@ const searchDecisions = async ({
       }
       return {
         country,
-        result: await search(
-          {
+        result: await search({
+          body: {
             query,
             limit,
             country,
@@ -313,14 +323,18 @@ const searchDecisions = async ({
               ? {}
               : { cursor: position.cursor }),
           },
-          caseLawPublicReadDb,
+          caseLawDb: caseLawPublicReadDb,
           observer,
-        ),
+        }),
       } as const;
     },
   });
 
-  const page: CorpusPage = { results: [], cursors: {} };
+  const page: CorpusPage = {
+    results: [],
+    cursors: {},
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  };
   for (const { country, result } of outcomes) {
     if (result === null) {
       page.cursors[country] = null;
@@ -332,6 +346,9 @@ const searchDecisions = async ({
       return { type: "failed", message: "Case-law search failed" };
     }
     page.cursors[country] = result.nextCursor;
+    if (result.paginationOutcome.type === "truncated") {
+      page.paginationOutcome = result.paginationOutcome;
+    }
     for (const hit of result.hits) {
       page.results.push({
         kind: "corpus",
@@ -414,7 +431,11 @@ const searchStatutes = async ({
     },
   });
 
-  const page: CorpusPage = { results: [], cursors: {} };
+  const page: CorpusPage = {
+    results: [],
+    cursors: {},
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  };
   for (const { jurisdiction, result } of outcomes) {
     if (result === null) {
       page.cursors[jurisdiction] = null;
@@ -424,6 +445,9 @@ const searchStatutes = async ({
       return { type: "failed", message: "Legislation search failed" };
     }
     page.cursors[jurisdiction] = result.nextCursor;
+    if (result.paginationOutcome.type === "truncated") {
+      page.paginationOutcome = result.paginationOutcome;
+    }
     for (const hit of result.items) {
       // With the public-law surface off there is no address in the app; the
       // publisher's own is then the one address there is, and a hit with
@@ -454,6 +478,7 @@ export type CompatCorpusSearchOutcome =
       type: "page";
       results: readonly McpCompatSearchResult[];
       cursors: CompatCorpusCursors;
+      paginationOutcome: SearchPaginationOutcome;
     }
   | { type: "failed"; message: string };
 
@@ -500,6 +525,11 @@ export const searchCompatCorpus = async ({
   return {
     type: "page",
     results: [...decisions.page.results, ...statutes.page.results],
+    paginationOutcome:
+      decisions.page.paginationOutcome.type === "truncated" ||
+      statutes.page.paginationOutcome.type === "truncated"
+        ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+        : SEARCH_PAGINATION_COMPLETE,
     cursors: {
       decisions: decisions.page.cursors,
       statutes: statutes.page.cursors,

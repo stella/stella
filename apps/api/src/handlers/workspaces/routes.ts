@@ -31,6 +31,7 @@ import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agen
 import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readJustifications from "@/api/handlers/workspaces/justifications/list";
 import readWorkspaces from "@/api/handlers/workspaces/list";
+import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
@@ -48,7 +49,7 @@ import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -74,6 +75,7 @@ const workspaceRealtimeUpdates = workspaceResourceSetUpdates(
 const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
@@ -95,6 +97,7 @@ const readWorkspace = createSafeHandler(
 const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -115,6 +118,7 @@ const readOverview = createSafeHandler(
 const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -135,6 +139,7 @@ const readWorkspaceContacts = createSafeHandler(
 const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -170,6 +175,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   })
   .get("/", readWorkspaces.handler, {
     permissions: readWorkspaces.config.permissions,
+  })
+  .get("/member-previews", listWorkspaceMemberPreviews.handler, {
+    permissions: listWorkspaceMemberPreviews.config.permissions,
+    query: listWorkspaceMemberPreviews.config.query,
   })
   .get("/navigation", readWorkspaceNavigation.handler, {
     permissions: readWorkspaceNavigation.config.permissions,

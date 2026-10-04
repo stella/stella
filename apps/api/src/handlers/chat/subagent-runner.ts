@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -28,7 +29,6 @@ import {
   guardModelToolSchemas,
   redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
@@ -37,9 +37,7 @@ import {
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   abortControllerFromSignal,
-  mergeGenerationOptions,
   resolveTanStackTextModel,
-  systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   addTokenUsage,
@@ -199,7 +197,7 @@ export const runSubagent = async (
   options: RunSubagentOptions,
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
-  const model = dependencies.resolveModel({
+  const model = await dependencies.resolveModel({
     dataClass: "customer",
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
@@ -237,12 +235,9 @@ export const runSubagent = async (
     boundary: options.thirdPartyBoundary,
     tools: options.tools,
   });
-  const projectedTools = projectChatToolSchemasForProvider({
-    modelTools: guardModelToolSchemas({
-      tools: chatToolMapToArray(boundaryTools),
-      workspaceIds: options.tenantWorkspaceIds,
-    }),
-    provider: model.provider,
+  const modelTools = guardModelToolSchemas({
+    tools: chatToolMapToArray(boundaryTools),
+    workspaceIds: options.tenantWorkspaceIds,
   });
 
   // Subagent calls have no caller-supplied cache scope key, so prompt caching
@@ -302,19 +297,15 @@ export const runSubagent = async (
   const stream = streamChatChunks({
     adapter: model.adapter,
     messages: guardedMessages,
-    tools: projectedTools,
     agentLoopStrategy: maxIterations(options.maxSteps),
     abortController,
-    ...systemPromptsPatch({
+    ...chatRequestOptions({
       caching,
-      model,
-      system: guardedSystem,
-    }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
       maxOutputTokens: undefined,
+      model,
+      modelTools,
       serviceTier: options.metering.serviceTier,
+      system: guardedSystem,
       temperature: getTemperatureForRole(options.role),
     }),
     middleware: [analytics.middleware],

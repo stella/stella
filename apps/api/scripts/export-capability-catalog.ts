@@ -1,7 +1,7 @@
 import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
-// (`packages/cli/capability-catalog.json`).
+// (`packages/cli/capabilities/*.json`).
 //
 // A "capability" is any safe handler whose `mcp` disposition is `tool`,
 // `covered`, or `capability` (an `internal` disposition is a permanent reviewed
@@ -15,12 +15,12 @@ import { KindGuard } from "@sinclair/typebox";
 // trip), permissions, handler-scope kind, access (read/write) + destructive
 // flag, and the MCP OAuth scope for the capability's domain.
 //
-// The snapshot is compact JSON (id-sorted entries, no indentation). Each
+// Each capability is a compact JSON shard with sorted object keys. Each
 // entry's input schema goes through `$defs` compaction (repeated subschemas
 // hoisted, occurrences replaced by same-document `$ref`s), then must fit
 // MAX_CAPABILITY_SCHEMA_BYTES. Compaction is asserted lossless per capability:
-// re-expanding the compacted schema must reproduce the source serialization
-// byte for byte, or the export fails. An entry still over the cap after
+// re-expanding must reproduce the source serialization byte for byte, including
+// its original key and array order, or the export fails. An entry over the cap after
 // compaction also fails the export — no capability ships without a describable
 // input shape.
 //
@@ -35,6 +35,7 @@ import { KindGuard } from "@sinclair/typebox";
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -59,11 +60,13 @@ import {
   type CatalogServiceClassification,
   type ServiceClassification,
 } from "../src/lib/rate-limit/service-classification";
+import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
-import type { McpToolDefinition } from "../src/mcp/tool-types";
+import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
+import { generateCapabilityRuntime } from "./generate-capability-runtime";
 import {
   type CapabilityDispatchRecord,
   type AccessResolution,
@@ -78,7 +81,6 @@ import {
   deriveDomain,
   deriveHandlerImportPath,
   DOMAIN_ACTION_VERBS,
-  findCatalogFormatProblems,
   findInlineCapabilityMismatches,
   inputSchemaByteSize,
   isAllowedActionVerb,
@@ -101,25 +103,25 @@ import {
   writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
 import {
+  serializeCapabilityShard,
+  syncCapabilityShards,
+} from "./lib/capability-shards";
+import {
   type CompactedCapabilityInputSchema,
   compactSchemaDefs,
 } from "./lib/compact-schema-defs";
 import {
   discoverSafeHandlers,
-  type HandlerKind,
   isRecord,
   type ParsedExposure,
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
 
-const CATALOG_PATH = path.resolve(
-  REPO_ROOT,
-  "packages/cli/capability-catalog.json",
-);
+const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
 const DISPATCH_PATH = path.resolve(
   REPO_ROOT,
-  "apps/api/src/mcp/generated/capability-dispatch.ts",
+  "apps/api/src/mcp/generated/capability-dispatch",
 );
 
 // Generated capability-coverage table: one section per domain plus the
@@ -142,24 +144,28 @@ const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
  * format gate can never disagree. The temp file lives outside the repo so no
  * ignore rules apply to it.
  */
-const formatGeneratedArtifact = async (
-  raw: string,
-  fileName: string,
-): Promise<string> => {
+const formatGeneratedArtifacts = async (
+  artifacts: ReadonlyMap<string, string>,
+): Promise<Map<string, string>> => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "capability-artifact-"));
-  const tmpFile = path.join(dir, fileName);
   try {
-    await Bun.write(tmpFile, raw);
-    const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, tmpFile], {
+    for (const [fileName, raw] of artifacts) {
+      await Bun.write(path.join(dir, fileName), raw);
+    }
+    const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, dir], {
       stderr: "pipe",
       stdout: "pipe",
     });
     if (proc.exitCode !== 0) {
       return panic(
-        `export-capability-catalog: oxfmt failed on generated ${fileName}: ${proc.stderr.toString()}`,
+        `export-capability-catalog: oxfmt failed: ${proc.stderr.toString()}`,
       );
     }
-    return await Bun.file(tmpFile).text();
+    const formatted = new Map<string, string>();
+    for (const fileName of artifacts.keys()) {
+      formatted.set(fileName, await Bun.file(path.join(dir, fileName)).text());
+    }
+    return formatted;
   } finally {
     await rm(dir, { force: true, recursive: true });
   }
@@ -417,12 +423,35 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  * Waivers for capability endpoints mounted under a route-level
  * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
  * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
- * gate is also enforced in the handler config (id -> justification), or the
- * export fails on the hit. Empty: the one prior hit (`case-law.ingestion.get`)
- * moved its admin/owner gate into the handler config (`auditLog: ["read"]`), so
- * no capability endpoint sits under a route hook.
+ * gate is also enforced on the invoke path (id -> justification), or the export
+ * fails on the hit. A `deploymentFeatureGate` over a canonical flag needs no
+ * waiver when the entry carries that feature tag; custom hooks are listed here.
  */
-const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
+const ROUTE_HOOK_WAIVERS: Record<string, string> = {
+  "template-packs.get":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.installs.create":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.list":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.visibility.update":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "usage.entitlement.get":
+    "usage onRequest only 404s /usage paths while FEATURE_USAGE is off (the provider webhook keeps its own contract); get_usage carries FEATURE_USAGE",
+};
+
+/** Source of an `@/api/...` module, for the route-hook guard's feature-gate helpers. */
+const readApiModule = (importPath: string): string | undefined => {
+  if (!importPath.startsWith("@/api/")) {
+    return undefined;
+  }
+  const file = path.join(
+    import.meta.dir,
+    "../src",
+    `${importPath.slice("@/api/".length)}.ts`,
+  );
+  return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+};
 
 /**
  * Deployment feature flag per capability domain, mirroring the `feature` field
@@ -445,8 +474,8 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  *    corpus decisions, ingestion admin) are corpus-backed.
  *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
  *    mechanically, no capability-disposition entries), so `usage` needs no row.
- * Web-only flags (FEATURE_CHAT, FEATURE_CONTACTS, FEATURE_TODOS, ...) gate UI
- * routes, not any API surface (their REST routes mount unconditionally), so
+ * Flags read only by the web build gate UI routes, not any API surface (their
+ * REST routes mount unconditionally), so
  * they are deliberately NOT applied here: invoke stays exactly as gated as the
  * REST + static-tool surface, no stricter.
  *
@@ -491,6 +520,7 @@ type CapabilityEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
   consumesServices: CatalogServiceClassification;
   scope: string;
@@ -852,6 +882,40 @@ const serviceConsumptionOf = (
   );
 };
 
+type ResolveReadClassificationOptions = {
+  id: string;
+  access: "read" | "write";
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >;
+  toolReadClassesByName: ReadonlyMap<string, McpToolDefinition["readClass"]>;
+};
+
+/** Resolve read ownership before projecting the generated transport contract. */
+const resolveReadClassification = ({
+  id,
+  access,
+  exposure,
+  toolReadClassesByName,
+}: ResolveReadClassificationOptions) => {
+  if (access === "write") {
+    return undefined;
+  }
+  if (exposure.readClass !== undefined) {
+    return exposure.readClass;
+  }
+  if (exposure.type === "capability") {
+    return panic(`Missing read classification for capability ${id}`);
+  }
+  const covering = exposure.type === "tool" ? exposure.name : exposure.by;
+  const classification = toolReadClassesByName.get(covering);
+  if (classification === undefined || typeof classification === "function") {
+    return panic(`Missing static read classification for capability ${id}`);
+  }
+  return classification;
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
@@ -859,6 +923,7 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   consumesServices: ServiceClassification;
+  readClass: McpReadClass | undefined;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -889,6 +954,7 @@ const buildCatalogEntry = ({
   kind,
   access,
   consumesServices,
+  readClass,
   scope,
   additionalScopes,
   requestTimeoutMs,
@@ -903,6 +969,7 @@ const buildCatalogEntry = ({
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
+  ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
   consumesServices:
     typeof consumesServices === "function"
@@ -926,7 +993,8 @@ const buildCatalogEntry = ({
  * make the compacted artifact trustworthy checked on the spot:
  *
  *  1. LOSSLESS: re-expanding the compacted schema must reproduce the source
- *     serialization byte for byte. This is the gate that stops a compacted
+ *     original JSON serialization byte for byte, preserving key and array
+ *     order. This stops a compacted
  *     schema from ever describing a different input set than the handler
  *     validates — a widened schema would accept input the handler rejects, a
  *     narrowed one would make the CLI reject input the handler accepts.
@@ -1051,11 +1119,20 @@ const collectClassGuardErrors = ({
   const routeHooks = scanRouteHookGuards({
     routeFiles,
     capabilityIds: capabilityIdSet,
+    capabilityFeatures: new Map(
+      entries.map((entry) => [entry.id, entry.feature]),
+    ),
+    readModule: readApiModule,
     waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+    );
+  }
+  for (const { routeFile, route } of routeHooks.childRouteMounts) {
+    errors.push(
+      `route-hook: ${routeFile} mounts child route ${route} under a route-level hook, so the hook covers handlers this guard cannot attribute. Apply the hook inside ${route}, or mount it outside the hooked instance`,
     );
   }
   for (const id of routeHooks.staleWaivers) {
@@ -1123,7 +1200,8 @@ const collectClassGuardErrors = ({
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, importErrors } = await discoverSafeHandlers();
+  const { endpoints, files, routeFiles, importErrors } =
+    await discoverSafeHandlers();
   const errors: string[] = [];
 
   for (const { id, message } of importErrors) {
@@ -1136,6 +1214,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const toolReadClassesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.readClass]),
+  );
   const toolServicesByName = new Map(
     toolDefinitions.map((tool) => [tool.name, tool.consumesServices]),
   );
@@ -1153,7 +1234,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       return typeof feature === "string" ? [[tool.name, feature] as const] : [];
     }),
   );
-  // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
+  // DOMAIN_FEATURE values are plain strings (the DeploymentFeatureFlag key-of-env
   // type collapses outside the app tsconfig), so validate every flag against
   // the REAL deployment env at export time: a typo'd or removed flag fails the
   // build here instead of silently fail-closing every entry at runtime.
@@ -1539,6 +1620,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         consumesServices,
+        readClass: resolveReadClassification({
+          id,
+          access: accessResolution.access,
+          exposure: endpoint.exposure,
+          toolReadClassesByName,
+        }),
         scope,
         additionalScopes,
         requestTimeoutMs,
@@ -1571,7 +1658,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const message of collectClassGuardErrors({
     entries,
     entrySources,
-    routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
+    routeFiles,
     toolFeatureByName,
   })) {
     errors.push(message);
@@ -1645,89 +1732,6 @@ const printErrors = (errors: readonly string[]): void => {
   for (const error of errors) {
     console.error(`  ${error}`);
   }
-};
-
-// Committed entries are untrusted JSON, so id lookup goes through a guard rather
-// than assuming the CapabilityEntry shape.
-const entryId = (entry: unknown): string | undefined =>
-  isRecord(entry) && typeof entry["id"] === "string" ? entry["id"] : undefined;
-
-const byId = (entries: readonly unknown[]): Map<string, unknown> => {
-  const map = new Map<string, unknown>();
-  for (const entry of entries) {
-    const id = entryId(entry);
-    if (id !== undefined) {
-      map.set(id, entry);
-    }
-  }
-  return map;
-};
-
-const summarizeDrift = (
-  committed: readonly unknown[],
-  generated: readonly CapabilityEntry[],
-): void => {
-  const committedById = byId(committed);
-  const generatedById = byId(generated);
-
-  const added = [...generatedById.keys()].filter(
-    (id) => !committedById.has(id),
-  );
-  const removed = [...committedById.keys()].filter(
-    (id) => !generatedById.has(id),
-  );
-  const changed = [...generatedById.keys()].filter((id) => {
-    const committedEntry = committedById.get(id);
-    if (committedEntry === undefined) {
-      return false;
-    }
-    return (
-      JSON.stringify(committedEntry) !== JSON.stringify(generatedById.get(id))
-    );
-  });
-
-  console.error(
-    "\nexport-capability-catalog: committed catalog is out of date. Regenerate with:",
-  );
-  console.error(
-    "  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
-  );
-  if (added.length > 0) {
-    console.error(
-      `\n  added (${added.length}): ${added.toSorted().join(", ")}`,
-    );
-  }
-  if (removed.length > 0) {
-    console.error(
-      `\n  removed (${removed.length}): ${removed.toSorted().join(", ")}`,
-    );
-  }
-  if (changed.length > 0) {
-    console.error(
-      `\n  changed (${changed.length}): ${changed.toSorted().join(", ")}`,
-    );
-  }
-  if (added.length === 0 && removed.length === 0 && changed.length === 0) {
-    console.error(
-      "\n  (only formatting/order differs — regenerate to normalize)",
-    );
-  }
-};
-
-const parseCommitted = async (): Promise<unknown[] | null> => {
-  const file = Bun.file(CATALOG_PATH);
-  if (!(await file.exists())) {
-    return null;
-  }
-  // Malformed committed JSON is drift, not a crash: `null` routes the caller to
-  // the "regenerate" message instead of letting `file.json()` throw.
-  const parsed = await Result.tryPromise(
-    async (): Promise<unknown> => await file.json(),
-  );
-  if (Result.isError(parsed)) {
-    return null;
-  }
-  return Array.isArray(parsed.value) ? parsed.value : null;
 };
 
 /** Collect every capability leaf's real command path from the generated tree. */
@@ -1832,17 +1836,19 @@ const main = async (): Promise<number> => {
   }
 
   const serialized = serializeCatalog(entries);
-  // The layout is what keeps independent catalog changes from colliding on
-  // merge (one sorted entry per line, no stored counts). Asserting it on every
-  // run, `--check` included, stops a serializer change from quietly undoing it.
-  const formatProblems = findCatalogFormatProblems(serialized);
-  if (formatProblems.length > 0) {
-    printErrors(formatProblems.map((problem) => `catalog format: ${problem}`));
-    return 1;
-  }
-  const dispatchSerialized = await formatGeneratedArtifact(
-    serializeDispatchModule(dispatchRecords),
-    "capability-dispatch.ts",
+  const catalogShards = new Map(
+    entries.map((entry) => [
+      `${entry.id}.json`,
+      serializeCapabilityShard(entry),
+    ]),
+  );
+  const dispatchShards = await formatGeneratedArtifacts(
+    new Map(
+      dispatchRecords.map((record) => [
+        `${record.id}.ts`,
+        serializeDispatchModule([record]),
+      ]),
+    ),
   );
 
   const { cliCommandPathById, errors: pathErrors } =
@@ -1894,57 +1900,46 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
+  const mode = checkMode ? "check" : "write";
+  const catalogDrift = await syncCapabilityShards({
+    directory: CATALOG_PATH,
+    shards: catalogShards,
+    mode,
+  });
+  const dispatchDrift = await syncCapabilityShards({
+    directory: DISPATCH_PATH,
+    shards: dispatchShards,
+    mode,
+  });
   if (!checkMode) {
-    await Bun.write(CATALOG_PATH, serialized);
-    await Bun.write(DISPATCH_PATH, dispatchSerialized);
+    await generateCapabilityRuntime();
     await Bun.write(COVERAGE_DOC_PATH, doc);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${DISPATCH_PATH}, and ${COVERAGE_DOC_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capability and dispatch shards\n`,
     );
     return 0;
   }
-
-  const committedText = await Bun.file(CATALOG_PATH)
-    .text()
-    .catch(() => null);
-  const committedDispatch = await Bun.file(DISPATCH_PATH)
-    .text()
-    .catch(() => null);
   const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
     .text()
     .catch(() => null);
   if (
-    committedText === serialized &&
-    committedDispatch === dispatchSerialized &&
+    catalogDrift.length === 0 &&
+    dispatchDrift.length === 0 &&
     committedDoc === doc
   ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog, dispatch module, and coverage doc are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capability and dispatch shards are up to date.`,
     );
     return 0;
   }
-
-  if (committedDispatch !== dispatchSerialized) {
-    console.error(
-      "\nexport-capability-catalog: committed capability-dispatch.ts is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
-    );
+  for (const file of catalogDrift) {
+    console.error(`Capability shard drift: ${file}`);
   }
-
+  for (const file of dispatchDrift) {
+    console.error(`Dispatch shard drift: ${file}`);
+  }
   if (committedDoc !== doc) {
-    console.error(
-      "\nexport-capability-catalog: docs/capability-coverage.md is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
-    );
-  }
-
-  if (committedText !== serialized) {
-    const committed = await parseCommitted();
-    if (committed === null) {
-      console.error(
-        "\nexport-capability-catalog: committed catalog is missing or malformed. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
-      );
-      return 1;
-    }
-    summarizeDrift(committed, entries);
+    console.error("Capability coverage doc drift");
   }
   return 1;
 };

@@ -29,7 +29,7 @@ type StatuteCitationCountsQuery = Static<
 >;
 
 /** A hard response bound; exceeding it hides counts rather than truncating. */
-const PROVISION_COUNT_LIMIT = 10_000;
+export const PROVISION_COUNT_LIMIT = 10_000;
 
 export const readStatuteCitationCountsHandler = async (
   query: StatuteCitationCountsQuery,
@@ -41,6 +41,9 @@ export const readStatuteCitationCountsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     parameter: "jurisdiction",
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }

@@ -7,6 +7,8 @@ import type {
 import { EventType } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -945,20 +947,25 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       expect(
-        generateChatObject({
-          adapter,
-          messages: [{ role: "user", content: "Return JSON" }],
-          outputSchema: {
-            type: "object",
-            properties: { value: { type: "string" } },
-            required: ["value"],
-          },
-          middleware: [callbacks.middleware],
-        }).catch((error: unknown) => {
-          callbacks.captureError(error);
-          throw error;
-        }),
-      ).rejects.toThrow("the maximum token limit was reached");
+        await rejectionOf(
+          generateChatObject({
+            adapter,
+            messages: [{ role: "user", content: "Return JSON" }],
+            outputSchema: {
+              type: "object",
+              properties: { value: { type: "string" } },
+              required: ["value"],
+            },
+            middleware: [callbacks.middleware],
+          }).catch((error: unknown) => {
+            callbacks.captureError(error);
+            throw error;
+          }),
+        ),
+      ).toHaveProperty(
+        "message",
+        expect.stringContaining("the maximum token limit was reached"),
+      );
       expect(
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",
@@ -1215,6 +1222,75 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       input_tokens_bucket: "5k_20k",
       output_tokens_bucket: "1k_5k",
     });
+  });
+
+  test("reports each model call's prompt-cache hit rate for a measured surface, a parked run's included", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { resetMetricLineSinkForTesting, setMetricLineSinkForTesting } =
+      await import("@/api/lib/observability/request-metrics");
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    try {
+      const runOn = async (promptCacheSurface: "chat" | undefined) => {
+        const callbacks = createTanStackAIAnalyticsCallbacks({
+          analytics: {
+            capture: () => undefined,
+            flush: async () => undefined,
+            identifyOrganizationGroup: () => undefined,
+          },
+          dataClass: "customer",
+          feature: "chat.stream",
+          orgAIConfig: createAnthropicOrgAIConfig(),
+          promptCacheSurface,
+          traceId: "trace_prompt_cache",
+        });
+        // A tool-calling turn on a warm Anthropic cache: the first call
+        // writes the prefix, the second reads it. Anthropic's input count
+        // excludes both.
+        const ctx0 = createMiddlewareContext({ iteration: 0 });
+        const ctx1 = createMiddlewareContext({ iteration: 1 });
+        await callbacks.middleware.onUsage?.(ctx0, {
+          completionTokens: 40,
+          promptTokens: 100,
+          promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 900 },
+          totalTokens: 140,
+        });
+        // The run then parks at an approval: no terminal hook follows.
+        await callbacks.middleware.onUsage?.(ctx1, {
+          completionTokens: 60,
+          promptTokens: 200,
+          promptTokensDetails: { cachedTokens: 900, cacheWriteTokens: 0 },
+          totalTokens: 260,
+        });
+      };
+
+      await runOn(undefined);
+      expect(lines).toEqual([]);
+
+      await runOn("chat");
+      // 100 + 900 written, then 200 + 900 read.
+      expect(lines.map((line): unknown => JSON.parse(line))).toMatchObject([
+        {
+          PromptCacheHitRate: 0,
+          PromptCachedInputTokens: 0,
+          PromptInputTokens: 1000,
+          provider: "anthropic",
+          surface: "chat",
+        },
+        {
+          PromptCacheHitRate: 81.82,
+          PromptCachedInputTokens: 900,
+          PromptInputTokens: 1100,
+          provider: "anthropic",
+          surface: "chat",
+        },
+      ]);
+    } finally {
+      resetMetricLineSinkForTesting();
+    }
   });
 
   test("keeps concurrent runs on one callbacks instance apart", async () => {

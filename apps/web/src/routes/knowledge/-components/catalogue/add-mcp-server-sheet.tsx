@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -16,11 +17,13 @@ import {
 } from "@stll/ui/sheet";
 import { stellaToast } from "@stll/ui/toast";
 
+import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -38,7 +41,19 @@ type AddMcpServerSheetProps = {
 
 type WizardState =
   | { step: "url"; url: string }
+  | {
+      step: "confirmation";
+      url: string;
+      issuer: string;
+      endpointOrigins: string[];
+    }
   | { step: "token"; createdConnector: CreatedConnector; token: string };
+
+type AddServerParams = {
+  url: string;
+  confirmedIssuer?: string;
+  confirmedEndpointOrigins?: string[];
+};
 
 const initialWizard = (): WizardState => ({ step: "url", url: "" });
 
@@ -72,13 +87,11 @@ export const AddMcpServerSheet = ({
   };
 
   const handleApiError = (error: unknown) => {
-    stellaToast.add({
-      title: t("knowledge.mcp.errorTitle"),
+    notifyUserError(error, t("knowledge.mcp.errorTitle"), {
       description: userErrorFromThrown(
         error,
         t("knowledge.mcp.errorDescription"),
       ),
-      type: "error",
     });
   };
 
@@ -97,10 +110,8 @@ export const AddMcpServerSheet = ({
       if (data.type === "oauth2") {
         const openStatus = openMcpOAuthWindow(data.authorizeUrl);
         if (openStatus === "invalid") {
-          stellaToast.add({
-            title: t("knowledge.mcp.errorTitle"),
+          notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
             description: t("knowledge.mcp.errorDescription"),
-            type: "error",
           });
           return;
         }
@@ -119,15 +130,27 @@ export const AddMcpServerSheet = ({
   });
 
   const addServerMutation = useMutation({
-    mutationFn: async (trimmedUrl: string) => {
-      const response = await api.mcp.connectors.post({
-        url: trimmedUrl,
-      });
+    mutationFn: async (params: AddServerParams) => {
+      const response = await api.mcp.connectors.post(params);
       return unwrapEden(response);
     },
-    onSuccess: (data) => {
-      invalidate();
-      connectMutation.mutate(data.connector);
+    onSuccess: (data, { url }) => {
+      switch (data.type) {
+        case "confirmation_required":
+          setWizard({
+            step: "confirmation",
+            url,
+            issuer: data.issuer,
+            endpointOrigins: data.endpointOrigins,
+          });
+          return;
+        case "created":
+          invalidate();
+          connectMutation.mutate(data.connector);
+          return;
+        default:
+          panic(data satisfies never);
+      }
     },
     onError: handleApiError,
   });
@@ -164,7 +187,18 @@ export const AddMcpServerSheet = ({
     if (!trimmedUrl || busy) {
       return;
     }
-    addServerMutation.mutate(trimmedUrl);
+    addServerMutation.mutate({ url: trimmedUrl });
+  };
+
+  const confirmAuthorization = () => {
+    if (wizard.step !== "confirmation" || busy) {
+      return;
+    }
+    addServerMutation.mutate({
+      url: wizard.url,
+      confirmedIssuer: wizard.issuer,
+      confirmedEndpointOrigins: wizard.endpointOrigins,
+    });
   };
 
   const submitToken = () => {
@@ -197,7 +231,7 @@ export const AddMcpServerSheet = ({
           <SheetTitle>{t("knowledge.mcp.addServerCardTitle")}</SheetTitle>
         </SheetHeader>
         <SheetPanel>
-          {wizard.step === "url" ? (
+          {wizard.step === "url" && (
             <form
               className="flex flex-col gap-3"
               onSubmit={(event) => {
@@ -225,7 +259,14 @@ export const AddMcpServerSheet = ({
                 {t("knowledge.mcp.bearerTokenDescription")}
               </p>
             </form>
-          ) : (
+          )}
+          {wizard.step === "confirmation" && (
+            <McpAuthorizationReview
+              issuer={wizard.issuer}
+              endpointOrigins={wizard.endpointOrigins}
+            />
+          )}
+          {wizard.step === "token" && (
             <form
               className="flex flex-col gap-3"
               onSubmit={(event) => {
@@ -261,7 +302,7 @@ export const AddMcpServerSheet = ({
           <Button onClick={close} type="button" variant="ghost">
             {t("common.cancel")}
           </Button>
-          {wizard.step === "url" ? (
+          {wizard.step === "url" && (
             <Button
               disabled={busy || !wizard.url.trim()}
               onClick={submitUrl}
@@ -270,7 +311,18 @@ export const AddMcpServerSheet = ({
               {busy && <LoaderIcon className="size-4 animate-spin" />}
               {t("knowledge.mcp.addAndConnect")}
             </Button>
-          ) : (
+          )}
+          {wizard.step === "confirmation" && (
+            <Button
+              disabled={busy}
+              onClick={confirmAuthorization}
+              type="button"
+            >
+              {busy && <LoaderIcon className="size-4 animate-spin" />}
+              {t("common.approve")}
+            </Button>
+          )}
+          {wizard.step === "token" && (
             <Button
               disabled={busy || !wizard.token.trim()}
               onClick={submitToken}

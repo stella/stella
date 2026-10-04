@@ -49,7 +49,7 @@ let scheduledJobsReady = false;
  * stand-in can stand in for.
  */
 export const probeRedis = async (signal: AbortSignal): Promise<void> => {
-  const client = createRedisClient();
+  const client = createRedisClient({ storeClass: "cache" });
   const close = () => {
     client.close();
   };

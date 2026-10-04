@@ -11,7 +11,7 @@ import {
   FORMAT_LIMITS,
   toResponse,
 } from "@/api/handlers/templates/lookup-formats/projection";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
@@ -29,9 +29,11 @@ const config = {
   description:
     "List shared company specification formats and the default for a business registry in the active organization.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "template_authoring_ui",
     consumesServices: false,
   },

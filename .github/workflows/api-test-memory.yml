@@ -1,0 +1,65 @@
+name: API test memory measurements
+
+on:
+  schedule:
+    - cron: "23 2 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-test-memory-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      API_TEST_SHARD: ${{ matrix.shard }}/4
+      API_TEST_LANES: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        env:
+          NPM_TOKEN: ""
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Generate sources
+        run: bun run generate
+
+      - name: Measure every test in this shard
+        run: |
+          bun --filter @stll/api test -- \
+            --measure-rss "$GITHUB_WORKSPACE/api-test-rss-${{ matrix.shard }}.json" \
+            --measure-rss-image "$ImageOS:$ImageVersion" \
+            --measure-rss-source '{"runId":"${{ github.run_id }}","job":"${{ github.job }}-${{ matrix.shard }}"}'
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-rss-${{ matrix.shard }}
+          path: api-test-rss-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 30

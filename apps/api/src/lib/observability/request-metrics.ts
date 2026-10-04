@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 
-import type { AIProvider } from "@stll/ai-catalog";
+import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -27,6 +28,23 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
+  const name = "AdmissionStoreEvictionPolicyRefused";
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: name, Unit: "Count" }],
+        },
+      ],
+    },
+    [name]: refused ? 1 : 0,
+  });
+};
 
 // Test seam, like the logger's: when set, every EMF line goes here instead of
 // stdout, whatever the environment, so a test reads the line CloudWatch would
@@ -104,6 +122,51 @@ export const emitRequestDurationMetric = (
       timestamp: Temporal.Now.instant().epochMilliseconds,
     }),
   );
+};
+
+export type OpenRouterTokenExchangeOutcome =
+  | "ok"
+  | "sts_error"
+  | "exchange_4xx"
+  | "exchange_429"
+  | "exchange_5xx"
+  | "timeout";
+
+export const emitOpenRouterTokenExchange = (
+  outcome: OpenRouterTokenExchangeOutcome,
+  policyId: string,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["outcome"]],
+          Metrics: [{ Name: "OpenRouterTokenExchange", Unit: "Count" }],
+        },
+      ],
+    },
+    outcome,
+    federation_policy_id: policyId,
+    OpenRouterTokenExchange: 1,
+  });
+};
+
+export const emitManagedCredentialUnavailable = (): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: "ManagedCredentialUnavailable", Unit: "Count" }],
+        },
+      ],
+    },
+    ManagedCredentialUnavailable: 1,
+  });
 };
 
 type FailureMetricInput = {
@@ -198,6 +261,77 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
     },
     ...payload.values,
   });
+};
+
+const PROMPT_CACHE_METRIC = {
+  cachedInputTokens: "PromptCachedInputTokens",
+  hitRate: "PromptCacheHitRate",
+  inputTokens: "PromptInputTokens",
+} as const;
+
+/** The AI surfaces whose prompt caching is measured: a closed set, so the
+ *  `surface` dimension stays bounded. */
+export type PromptCacheMetricSurface = "chat";
+
+type PromptCacheMetricInput = {
+  /** Input tokens the provider read from its prompt cache. */
+  cachedInputTokens: number;
+  /** Every input token of the call: uncached, cache reads and cache writes. */
+  inputTokens: number;
+  provider: TanStackAIProvider;
+  surface: PromptCacheMetricSurface;
+};
+
+/**
+ * One model call's prompt-cache use, as EMF
+ * dimensioned by surface and provider: its input tokens, the tokens the
+ * provider served from its cache, and that share as a percentage. An alarm on
+ * a drop divides the summed counts, which weighs each call by its size; the
+ * per-call rate is for dashboards. Cardinality is the surface set times the
+ * provider set; no model, tenant or thread id becomes a dimension.
+ */
+const buildPromptCacheRecord = ({
+  cachedInputTokens,
+  inputTokens,
+  provider,
+  surface,
+  timestamp,
+}: PromptCacheMetricInput & { timestamp: number }) => ({
+  _aws: {
+    Timestamp: timestamp,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [["surface", "provider"]],
+        Metrics: [
+          { Name: PROMPT_CACHE_METRIC.inputTokens, Unit: "Count" },
+          { Name: PROMPT_CACHE_METRIC.cachedInputTokens, Unit: "Count" },
+          { Name: PROMPT_CACHE_METRIC.hitRate, Unit: "Percent" },
+        ],
+      },
+    ],
+  },
+  provider,
+  surface,
+  [PROMPT_CACHE_METRIC.inputTokens]: inputTokens,
+  [PROMPT_CACHE_METRIC.cachedInputTokens]: cachedInputTokens,
+  [PROMPT_CACHE_METRIC.hitRate]:
+    inputTokens > 0
+      ? Math.round((cachedInputTokens / inputTokens) * 10_000) / 100
+      : 0,
+});
+
+/** A call that reported no input tokens emits nothing: it has no rate. */
+export const emitPromptCacheMetric = (input: PromptCacheMetricInput): void => {
+  if (input.inputTokens <= 0) {
+    return;
+  }
+  writeMetricLine(
+    buildPromptCacheRecord({
+      ...input,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
 };
 
 export const emitActionCostDropMetric = (dropped: number): void => {
@@ -366,6 +500,30 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+
+type PublicCorpusAdmissionMetric = {
+  class: Exclude<PublicCorpusClass, "browse">;
+  outcome: "refused";
+};
+
+export const emitPublicCorpusAdmissionMetric = (
+  input: PublicCorpusAdmissionMetric,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["class", "outcome"]],
+          Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
+        },
+      ],
+    },
+    ...input,
+    PublicCorpusAdmissions: 1,
+  });
+};
 
 export const emitActionResponseOversizeMetric = (
   transport: "http" | "mcp",

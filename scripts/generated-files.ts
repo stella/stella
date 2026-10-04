@@ -1,7 +1,3 @@
-import { BASELINE_PATHS } from "./baseline-paths";
-
-export const RATCHET_GENERATOR_ID = "ratchet-improvements";
-
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
@@ -9,6 +5,7 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
+  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
@@ -34,27 +31,11 @@ const MODEL_CATALOG_INPUTS = [
 
 export const GENERATORS = [
   {
-    id: RATCHET_GENERATOR_ID,
-    outputs: [BASELINE_PATHS.ratchet],
-    // Whole-tree metrics include source, configuration and workspace structure.
-    inputs: ["**"],
-    write: [
-      "bun",
-      "--no-install",
-      "--no-env-file",
-      "scripts/ratchet.ts",
-      "--write-improvements-only",
-    ],
-    check: null,
-    checkedBy: "Ratchet guard",
-    autofix: true,
-    after: [],
-  },
-  {
     id: "capability-catalog",
+    outputKind: "committed",
     outputs: [
-      "packages/cli/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-dispatch.ts",
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
       "docs/capability-coverage.md",
     ],
     inputs: [
@@ -75,9 +56,35 @@ export const GENERATORS = [
     after: [],
   },
   {
-    id: "cli-registry",
+    id: "capability-runtime",
+    outputKind: "derived",
     outputs: [
-      "packages/cli/src/generated/**",
+      "apps/api/src/mcp/generated/capability-catalog.ts",
+      "apps/api/src/mcp/generated/capability-dispatch.ts",
+    ],
+    inputs: [
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
+      "apps/api/scripts/generate-capability-runtime.ts",
+      "packages/cli/src/capability-catalog-data.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+    check: null,
+    checkedBy: "CLI sharded registry and derived runtime guard",
+    autofix: true,
+    after: ["capability-catalog"],
+  },
+  {
+    id: "cli-registry",
+    outputKind: "committed",
+    outputs: [
+      "packages/cli/src/generated/api-contract.ts",
+      "packages/cli/src/generated/cli-version.ts",
+      "packages/cli/src/generated/document-version-upload-transport.ts",
+      "packages/cli/src/generated/mcp-contract.ts",
+      "packages/cli/src/generated/registry-snapshot.json",
+      "packages/cli/src/generated/resource-tree.ts",
+      "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
       "chatgpt-app-submission.json",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
@@ -89,16 +96,50 @@ export const GENERATORS = [
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",
-      "packages/cli/capability-catalog.json",
+      "packages/cli/capabilities/**",
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
     check: null,
-    checkedBy: "CLI registry snapshot guard",
+    checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
-    after: ["capability-catalog"],
+    after: ["capability-runtime"],
+  },
+  {
+    id: "cli-runtime",
+    outputKind: "derived",
+    outputs: [
+      "packages/cli/src/generated/route-map.ts",
+      "packages/cli/src/generated/tool-annotations.ts",
+    ],
+    inputs: [
+      "packages/cli/package.json",
+      "packages/cli/capabilities/**",
+      "packages/cli/src/codegen.ts",
+      "packages/cli/src/capability-catalog-data.ts",
+      "packages/cli/src/write-generated-file.ts",
+      "packages/cli/src/capability-catalog-load.ts",
+      "packages/cli/src/generate-capability-tree.ts",
+      "packages/cli/src/generate-route-map.ts",
+      "packages/cli/src/annotations.ts",
+      "packages/cli/src/expand-schema-defs.ts",
+      "packages/cli/src/flag-name.ts",
+      "packages/cli/src/route-types.ts",
+      "packages/cli/src/generated/registry-snapshot.json",
+      "packages/cli/src/generated/mcp-contract.ts",
+      "package.json",
+      "bunfig.toml",
+      "bun.lock",
+      "patches/**",
+    ],
+    write: ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
+    check: null,
+    checkedBy: "CLI sharded registry and derived runtime guard",
+    autofix: true,
+    after: ["cli-registry"],
   },
   {
     id: "mcp-app-bundles",
+    outputKind: "committed",
     outputs: ["apps/api/src/mcp/apps/*/generated/app.html.txt"],
     inputs: [
       "apps/api/src/mcp/apps/**",
@@ -115,6 +156,7 @@ export const GENERATORS = [
   },
   {
     id: "mcp-surface",
+    outputKind: "committed",
     outputs: ["apps/api/mcp-surface-baseline.json"],
     inputs: [
       "apps/api/src/**",
@@ -131,6 +173,7 @@ export const GENERATORS = [
   },
   {
     id: "module-ownership",
+    outputKind: "committed",
     outputs: ["docs/module-ownership.md"],
     inputs: [
       "scripts/ownership.ts",
@@ -147,6 +190,7 @@ export const GENERATORS = [
   },
   {
     id: "design-tokens",
+    outputKind: "committed",
     outputs: ["DESIGN.md"],
     blocks: [
       {
@@ -174,6 +218,7 @@ export const GENERATORS = [
   },
   {
     id: "published-package-list",
+    outputKind: "committed",
     outputs: ["CONTRIBUTING.md", ".changeset/README.md"],
     blocks: [
       {
@@ -199,6 +244,7 @@ export const GENERATORS = [
   },
   {
     id: "route-tree",
+    outputKind: "derived",
     outputs: ["apps/web/src/routeTree.gen.ts"],
     inputs: [
       "apps/web/src/routes/**",
@@ -216,26 +262,29 @@ export const GENERATORS = [
   },
   {
     id: "model-rates",
+    outputKind: "committed",
     outputs: ["packages/ai-catalog/src/model-rates.gen.ts"],
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
   {
     id: "model-capabilities",
+    outputKind: "committed",
     outputs: ["packages/ai-catalog/src/capabilities.gen.ts"],
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:capabilities"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
   {
     id: "i18n-messages-web",
+    outputKind: "committed",
     outputs: ["apps/web/src/i18n/langs/messages.gen.ts"],
     inputs: [
       "apps/web/src/i18n/langs/*.json",
@@ -257,6 +306,7 @@ export const GENERATORS = [
   },
   {
     id: "i18n-messages-landing",
+    outputKind: "committed",
     outputs: ["apps/landing/src/i18n/messages/messages.gen.ts"],
     inputs: [
       "apps/landing/src/i18n/messages/*.json",
@@ -278,6 +328,7 @@ export const GENERATORS = [
   },
   {
     id: "i18n-messages-transactional",
+    outputKind: "committed",
     outputs: ["packages/transactional/i18n/langs/messages.gen.ts"],
     inputs: [
       "packages/transactional/i18n/langs/*.json",
@@ -299,6 +350,7 @@ export const GENERATORS = [
   },
   {
     id: "i18n-glossary",
+    outputKind: "committed",
     outputs: ["apps/web/src/i18n/TERMINOLOGY.md"],
     blocks: [
       ...[
@@ -331,6 +383,7 @@ export const GENERATORS = [
   },
   {
     id: "prepaint-locales",
+    outputKind: "committed",
     outputs: ["apps/web/public/prepaint-init.js"],
     blocks: [
       {
@@ -350,10 +403,12 @@ export const GENERATORS = [
   },
   {
     id: "env-examples",
+    outputKind: "committed",
     outputs: [
       "apps/api/.env.example",
       "apps/web/.env.example",
       "apps/collab/.env.example",
+      "packages/runtime-mode/src/secret-examples.generated.ts",
       "apps/web/build-env-contract.json",
     ],
     inputs: [
@@ -370,6 +425,7 @@ export const GENERATORS = [
   },
   {
     id: "selfhost",
+    outputKind: "committed",
     outputs: [
       "docker-compose.selfhost.yml",
       "deploy/selfhost/.env.example",
@@ -411,6 +467,7 @@ export const GENERATORS = [
   },
   {
     id: "desktop-rpc",
+    outputKind: "committed",
     outputs: ["packages/api-contract/src/desktop-rpc.gen.ts"],
     inputs: ["apps/desktop/src-tauri/src/types.rs"],
     write: ["bun", "--filter", "@stll/desktop", "rpc:generate"],
@@ -422,6 +479,7 @@ export const GENERATORS = [
   },
   {
     id: "catalogue",
+    outputKind: "committed",
     outputs: [
       "packages/catalogue/src/catalogue.gen.ts",
       "packages/catalogue/src/catalogue-install-payloads.gen.ts",
@@ -442,6 +500,7 @@ export const GENERATORS = [
   },
   {
     id: "template-packs",
+    outputKind: "committed",
     outputs: [
       "packages/template-packs/src/packs.gen.ts",
       "packages/template-packs/src/fixtures/packs.gen.ts",
@@ -459,6 +518,7 @@ export const GENERATORS = [
   },
   {
     id: "skill-blueprints",
+    outputKind: "committed",
     outputs: ["packages/skills/src/blueprints.gen.ts"],
     inputs: [
       "packages/skills/blueprints/**",
@@ -476,6 +536,7 @@ export const GENERATORS = [
   },
   {
     id: "built-in-skills",
+    outputKind: "committed",
     outputs: ["packages/skills/src/skills.gen.ts"],
     inputs: [
       "packages/skills/skills/**",
@@ -493,6 +554,7 @@ export const GENERATORS = [
   },
   {
     id: "us-courts",
+    outputKind: "committed",
     outputs: [
       "packages/api-contract/src/us-courts.generated.ts",
       "packages/api-contract/src/us-abbreviated-courts.generated.ts",
@@ -509,6 +571,7 @@ export const GENERATORS = [
   },
   {
     id: "us-reporters",
+    outputKind: "committed",
     outputs: [
       "packages/api-contract/src/us-reporter-editions.generated.ts",
       "packages/api-contract/src/us-reporters.LICENSE",
@@ -523,6 +586,7 @@ export const GENERATORS = [
   },
   {
     id: "snowball",
+    outputKind: "committed",
     outputs: [
       "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
       "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/*.conformance.txt",
@@ -537,6 +601,7 @@ export const GENERATORS = [
   },
   {
     id: "infosoud-codes",
+    outputKind: "committed",
     outputs: ["packages/infosoud/src/code-catalog.generated.ts"],
     inputs: ["packages/infosoud/scripts/extract-codes.ts"],
     write: ["bun", "--filter", "@stll/infosoud", "extract:codes"],
@@ -547,6 +612,7 @@ export const GENERATORS = [
   },
   {
     id: "mojibake-exemplars",
+    outputKind: "committed",
     outputs: ["packages/mojibake/src/exemplars.generated.ts"],
     inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
@@ -558,6 +624,7 @@ export const GENERATORS = [
   },
   {
     id: "chat-transcripts",
+    outputKind: "committed",
     outputs: [
       "apps/web/src/components/chat/__fixtures__/recorded-conversations/*.gen.json",
     ],
@@ -575,6 +642,7 @@ export const GENERATORS = [
   },
   {
     id: "ai-instructions",
+    outputKind: "committed",
     outputs: [
       "AGENTS.md",
       "GEMINI.md",
@@ -685,11 +753,12 @@ export const generatorsForFiles = (files: readonly string[]) => {
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
-  // The ratchet output requires a separate trusted proof, never the plan alone.
+  // A planner cannot authorize recreating the retired ratchet budget.
   ...new Set(
     generators
+      .filter((generator) => generator.outputKind === "committed")
       .flatMap((generator) => generator.outputs)
-      .filter((output) => output !== BASELINE_PATHS.ratchet),
+      .filter((output) => output !== "scripts/ratchet-baseline.json"),
   ),
 ];
 

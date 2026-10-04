@@ -31,6 +31,7 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
@@ -278,6 +279,7 @@ const compatSearchArgsSchema = nullAsAbsent(
       v.description("Search query"),
     ),
     cursor: cursorInput({
+      maxLength: COMPAT_SEARCH_CURSOR_MAX_LENGTH,
       description:
         "Opaque cursor from a previous search call to fetch the next page",
     }),
@@ -294,6 +296,31 @@ const compatFetchArgsSchema = nullAsAbsent(
   }),
 );
 
+export const resolveCompatFetchReadClass = (args: unknown) => {
+  if (
+    typeof args !== "object" ||
+    args === null ||
+    !("id" in args) ||
+    typeof args.id !== "string"
+  ) {
+    return undefined;
+  }
+  const target = decodeCompatId(args.id);
+  if (target === null) {
+    return undefined;
+  }
+  switch (target.kind) {
+    case "document":
+      return "tenant";
+    case "decision":
+    case "statute":
+      return "public";
+    default:
+      target satisfies never;
+      return panic("Unhandled compat read target");
+  }
+};
+
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: true,
@@ -304,6 +331,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "both",
     anonymized: {
       exposure: "anonymize",
       textFields: ["title"],
@@ -331,6 +359,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
       textFields: ["title", "text"],
@@ -493,6 +522,7 @@ const handleCompatSearchTool: McpToolHandler<
   // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: exhausted
       ? null
       : encodeCompatSearchCursor({

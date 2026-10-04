@@ -2,6 +2,9 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { caseLawSources } from "@/api/db/schema";
 import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
@@ -128,6 +131,107 @@ test("source pages preserve microseconds across the created_at/id cursor", async
     createdAt,
   );
   expect(walked[0]?.createdAt).toMatch(/\.000001Z/u);
+});
+
+test("source page walks partition tied microsecond rows without skips or duplicates", async () => {
+  const sourceId = await createSource();
+  const otherSourceId = await createSource();
+  const timestamps = [
+    "2026-03-01T12:00:00.000001Z",
+    "2026-03-01T12:00:00.000001Z",
+    "2026-03-01T12:00:00.000001Z",
+    "2026-03-01T12:00:00.000002Z",
+    "2026-03-01T12:00:00.000002Z",
+    "2026-03-01T12:00:00.000003Z",
+    "2026-03-01T12:00:00.000003Z",
+  ];
+  const fixture = timestamps.map((createdAt) => ({
+    id: createSafeId<"caseLawDecision">(),
+    createdAt,
+  }));
+  for (const { id, createdAt } of fixture) {
+    await insertDecision({ sourceId, id, createdAt });
+  }
+  const unrelatedTimestamps = [timestamps.at(0), timestamps.at(3)];
+  for (const createdAt of unrelatedTimestamps) {
+    if (createdAt === undefined) {
+      throw new TypeError("fixture timestamp is missing");
+    }
+    await insertDecision({
+      sourceId: otherSourceId,
+      id: createSafeId<"caseLawDecision">(),
+      createdAt,
+    });
+  }
+
+  const expected = fixture
+    .toSorted((left, right) => {
+      const leftKey = `${left.createdAt}/${left.id}`;
+      const rightKey = `${right.createdAt}/${right.id}`;
+      if (leftKey === rightKey) {
+        return 0;
+      }
+      return leftKey < rightKey ? -1 : 1;
+    })
+    .map(({ id }) => id);
+  const ids = new Set<string>(fixture.map(({ id }) => id));
+
+  const walk = async (pageSizes: readonly number[]) => {
+    const walked: string[] = [];
+    let after: { createdAt: string; id: SafeId<"caseLawDecision"> } | null =
+      null;
+    for (let pageIndex = 0; pageIndex <= expected.length; pageIndex++) {
+      const limit = pageSizes.at(pageIndex % pageSizes.length);
+      if (limit === undefined) {
+        throw new TypeError("page size fixture is empty");
+      }
+      expect(limit).toBeGreaterThanOrEqual(1);
+      expect(limit).toBeLessThanOrEqual(200);
+      const rows = rowsFrom(
+        await db.execute(
+          selectSkUsRawPageStatement({ sourceId, after, limit }),
+        ),
+      );
+      expect(rows.length).toBeLessThanOrEqual(limit);
+      if (rows.length === 0) {
+        return walked;
+      }
+      for (const row of rows) {
+        expect(ids.has(row.id)).toBe(true);
+        walked.push(row.id);
+      }
+      const last = rows.at(-1);
+      if (last === undefined) {
+        throw new TypeError("non-empty page has no last row");
+      }
+      const id = fixture.find((candidate) => candidate.id === last.id)?.id;
+      if (id === undefined) {
+        throw new TypeError("page returned a decision outside the fixture");
+      }
+      after = { createdAt: last.createdAt, id };
+    }
+    throw new TypeError("page walk did not terminate within the fixture size");
+  };
+
+  await assertProperty(
+    "source page walks partition tied microsecond rows without skips or duplicates",
+    fc.asyncProperty(
+      fc.array(fc.integer({ min: 1, max: 200 }), {
+        minLength: 1,
+        maxLength: 8,
+      }),
+      async (pageSizes) => {
+        const walkedAtLimitOne = await walk([1]);
+        expect(walkedAtLimitOne).toEqual(expected);
+        expect(new Set(walkedAtLimitOne).size).toBe(expected.length);
+
+        const walkedWithPartitions = await walk(pageSizes);
+        expect(walkedWithPartitions).toEqual(expected);
+        expect(new Set(walkedWithPartitions).size).toBe(expected.length);
+      },
+    ),
+    { numRuns: 20, seed: 20_261_002 },
+  );
 });
 
 test("source page selection uses the covering index without a table scan", async () => {
@@ -263,6 +367,70 @@ test("a compare-and-set skips a pointer changed by a concurrent writer", async (
     source_raw_content_type: "application/pdf",
     source_hash: PUBLISHER_HASH,
   });
+});
+
+test("raw pointer completion compares nullable content types under an unchanged key", async () => {
+  const sourceId = await createSource();
+  for (const oldContentType of [null, "application/pdf"]) {
+    for (const currentContentType of [null, "application/pdf", "text/plain"]) {
+      const id = createSafeId<"caseLawDecision">();
+      const oldKey = `case-law/raw/legacy/${id}`;
+      const newKey = `case-law/raw/completed/${id}`;
+      await insertDecision({
+        sourceId,
+        id,
+        createdAt: "2026-03-01 12:00:00+00",
+        rawKey: oldKey,
+        contentType: oldContentType,
+      });
+      await db.execute(sql`
+        UPDATE case_law_decisions SET source_raw_content_type = ${currentContentType}
+        WHERE id = ${id}::uuid
+      `);
+      const before = executedRows(
+        await db.execute(sql`
+          SELECT to_jsonb(d) AS state FROM case_law_decisions d
+          WHERE id = ${id}::uuid
+        `),
+      );
+      const updated = executedRows(
+        await db.execute(
+          completeSkUsRawStatement({
+            sourceId,
+            id,
+            oldKey,
+            newKey,
+            oldContentType,
+          }),
+        ),
+      );
+      const unchanged = currentContentType === oldContentType;
+      expect(updated).toHaveLength(unchanged ? 1 : 0);
+      const after = executedRows(
+        await db.execute(sql`
+          SELECT to_jsonb(d) AS state FROM case_law_decisions d
+          WHERE id = ${id}::uuid
+        `),
+      );
+      if (!unchanged) {
+        expect(after).toEqual(before);
+        continue;
+      }
+      expect(
+        executedRows(
+          await db.execute(sql`
+            SELECT source_raw_s3_key, source_raw_content_type
+            FROM case_law_decisions WHERE id = ${id}::uuid
+          `),
+        ),
+      ).toEqual([
+        {
+          source_raw_s3_key: newKey,
+          source_raw_content_type: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        },
+      ]);
+    }
+  }
 });
 
 test("a compare-and-set skips a redacted decision", async () => {

@@ -31,7 +31,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import {
   listSkippedImportFiles,
@@ -148,10 +148,7 @@ const ImportSkillDialogBody = ({
       );
     },
     onError: (error) => {
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
-      });
+      notifyUserError(error, t("common.unexpectedError"));
     },
   });
 
@@ -226,10 +223,7 @@ const ImportSkillDialogBody = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
-      });
+      notifyUserError(error, t("common.unexpectedError"));
     },
   });
 

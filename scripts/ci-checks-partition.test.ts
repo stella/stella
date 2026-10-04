@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
+
 const jobSchema = v.looseObject({
   steps: v.array(v.looseObject({ name: v.string() })),
 });
@@ -71,10 +73,54 @@ const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
 const baseline = readBaseline(baseJobs);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
+// A full commit SHA pin is version metadata that dependency updates bump; the
+// action path, the fact that it is pinned, and everything else about the step
+// must stay intact. A branch or tag ref is left as written, so moving a step
+// from a pin to a mutable ref still reads as a modified check.
+const PINNED_REF = /@[0-9a-f]{40}$/u;
+const usesOf = (step: Step): string | undefined =>
+  v.parse(v.looseObject({ uses: v.optional(v.string()) }), step).uses;
+const withoutActionRef = (step: Step): Step => {
+  const uses = usesOf(step);
+  return uses === undefined
+    ? step
+    : { ...step, uses: uses.replace(PINNED_REF, "@<pinned>") };
+};
+const setupSteps = (steps: readonly Step[]) =>
+  steps.filter(({ name }) => prerequisites.has(name)).map(withoutActionRef);
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withoutActionRef)
     .toSorted((left, right) => left.name.localeCompare(right.name));
+
+// YAML folding changes whitespace outside literals, not the condition's tokens.
+const conditionTokens = (condition: string) =>
+  condition
+    .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
+      token.startsWith("'") ? token : " ",
+    )
+    .trim();
+type ScopeOptions = {
+  current: Record<string, unknown>;
+  base: Record<string, unknown>;
+};
+const expectScope = ({ current, base }: ScopeOptions) => {
+  const { if: condition, ...scope } = current;
+  const { if: originalCondition, ...originalScope } = base;
+  expect(scope).toEqual(originalScope);
+  if (condition === originalCondition) {
+    return;
+  }
+  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
+  // may change their scope; every token of the base condition stays intact.
+  const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
+    conditionTokens(v.parse(v.string(), condition)),
+  );
+  expect(wrapped?.at(1)).toBe(
+    conditionTokens(v.parse(v.string(), originalCondition)),
+  );
+};
 
 type CoverageOptions = {
   current: readonly Step[];
@@ -118,7 +164,35 @@ const legSteps = (
     );
   });
 const actualSteps = legSteps(partitions, partitionIds);
-const baseSteps = legSteps(baseline, baselineIds);
+const lintFixtureCommand = ["bun", ...CUSTOM_LINT_TEST_ARGS].join(" ");
+const stepFieldsSchema = v.looseObject({
+  env: v.optional(v.unknown()),
+  if: v.optional(v.string()),
+  run: v.optional(v.string()),
+});
+const stepFields = (step: Step | undefined) =>
+  v.parse(stepFieldsSchema, step ?? {});
+const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+  const fields = stepFields(step);
+  if (
+    step.name !== "Documentation source policy rule" ||
+    fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
+  ) {
+    return step;
+  }
+  // The coverage owner now runs these fixtures and records their outcomes.
+  const coverage = stepFields(
+    actualSteps.find(({ name }) => name === "Custom lint rule coverage"),
+  );
+  expect(coverage.if).toBe(fields.if);
+  expect(coverage.run).toBe(
+    "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
+  );
+  expect(coverage.env).toEqual({
+    BASE_SHA: `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+  });
+  return Object.assign(step, { run: "bun run check:docs-sources" });
+});
 
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
@@ -169,17 +243,13 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       ...originalScope
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
-    const originalSetup = originalSteps.filter(({ name }) =>
-      prerequisites.has(name),
-    );
+    const originalSetup = setupSteps(originalSteps);
     expect(originalSetup).toHaveLength(prerequisites.size);
-    expect(scope).toEqual(originalScope);
+    expectScope({ current: scope, base: originalScope });
     expect(timeout).toBe(
       partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
     );
-    expect(steps.filter(({ name }) => prerequisites.has(name))).toEqual(
-      originalSetup,
-    );
+    expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
@@ -190,6 +260,68 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       "bash scripts/retry.sh bun ci --ignore-scripts",
     );
   }
+});
+
+test("CI check scope permits only the heavy-only wrapper around the unchanged condition", () => {
+  const base = {
+    if: "needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+    needs: "ci-plan",
+    permissions: { contents: "read" },
+    "runs-on": "ubuntu-latest",
+  };
+  const wrapped = {
+    ...base,
+    if: `inputs.heavy_only != true && (\n ${base.if}\n )`,
+  };
+  expectScope({ current: base, base });
+  expectScope({ current: wrapped, base });
+  for (const condition of [
+    `inputs.heavy_only == true && (${base.if})`,
+    `inputs.heavy_only != true || (${base.if})`,
+    `inputs.heavy_only != true && ${base.if}`,
+    `inputs.heavy_only != true && (${base.if} || true)`,
+    `inputs.heavy_only != true && (${base.if.replace("trusted", "other")})`,
+    `inputs.heavy_only != true && (${base.if.replace("workflow_dispatch", "push")})`,
+    `(${base.if}) && inputs.heavy_only != true`,
+    `inputs.heavy_ only != true && (${base.if})`,
+    `inputs.heavy_only != true && (${base.if.replace("trusted", "trus ted")})`,
+  ]) {
+    expect(() =>
+      expectScope({ current: { ...wrapped, if: condition }, base }),
+    ).toThrow("Expected:");
+  }
+  const mutations = [
+    { ...wrapped, needs: [] },
+    { ...wrapped, permissions: { contents: "write" } },
+    { ...wrapped, "runs-on": "self-hosted" },
+    { ...wrapped, "continue-on-error": true },
+  ];
+  for (const current of mutations) {
+    expect(() => expectScope({ current, base })).toThrow("toEqual");
+  }
+  const { if: omitted, ...missingCondition } = wrapped;
+  expect(omitted).toBe(wrapped.if);
+  expect(() => expectScope({ current: missingCondition, base })).toThrow(
+    "Invalid type",
+  );
+});
+
+test("CI check scope preserves whitespace inside quoted condition values", () => {
+  const base = { if: "github.event_name == 'workflow dispatch'" };
+  expectScope({
+    current: {
+      if: "inputs.heavy_only != true && ( github.event_name == 'workflow dispatch' )",
+    },
+    base,
+  });
+  expect(() =>
+    expectScope({
+      current: {
+        if: "inputs.heavy_only != true && (github.event_name == 'workflow  dispatch')",
+      },
+      base,
+    }),
+  ).toThrow("Expected:");
 });
 
 test("CI coverage rejects a dropped check and accepts only an explicitly listed removal", () => {
@@ -224,6 +356,68 @@ test("CI coverage accepts a new check alongside every merge-base check", () => {
   expect(() =>
     expectCoverage({ current: renamed, base: baseSteps, removed: [] }),
   ).toThrow("toEqual");
+});
+
+const otherSha = "0".repeat(40);
+const pinnedAction = (
+  steps: readonly Step[],
+  names: (name: string) => boolean,
+) => {
+  const step = steps.find(
+    (current) => names(current.name) && PINNED_REF.test(usesOf(current) ?? ""),
+  );
+  const uses = step === undefined ? undefined : usesOf(step);
+  if (step === undefined || uses === undefined) {
+    panic("Merge-base CI checks contain no SHA-pinned action step");
+  }
+  const withUses = (next: string) =>
+    steps.map((current) =>
+      current.name === step.name ? { ...current, uses: next } : current,
+    );
+  return { action: uses.replace(PINNED_REF, ""), withUses };
+};
+
+test("CI coverage accepts a pinned action bump but not a different action or a mutable ref", () => {
+  const { action, withUses } = pinnedAction(
+    baseSteps,
+    (name) => !prerequisites.has(name),
+  );
+  expectCoverage({
+    current: withUses(`${action}@${otherSha}`),
+    base: baseSteps,
+    removed: [],
+  });
+  for (const changed of [
+    `${action}-other@${otherSha}`,
+    `${action}@main`,
+    `${action}@v1`,
+  ]) {
+    expect(
+      () =>
+        expectCoverage({
+          current: withUses(changed),
+          base: baseSteps,
+          removed: [],
+        }),
+      changed,
+    ).toThrow("toEqual");
+  }
+});
+
+test("each leg's setup accepts a pinned action bump but not a mutable ref", () => {
+  const leg = partitions.at(0);
+  if (!leg) {
+    panic("CI checks have no legs");
+  }
+  const { action, withUses } = pinnedAction(leg.steps, (name) =>
+    prerequisites.has(name),
+  );
+  expect(setupSteps(withUses(`${action}@${otherSha}`))).toEqual(
+    setupSteps(leg.steps),
+  );
+  expect(setupSteps(withUses(`${action}@main`))).not.toEqual(
+    setupSteps(leg.steps),
+  );
 });
 
 test("CI coverage rejects duplicate and modified checks", () => {

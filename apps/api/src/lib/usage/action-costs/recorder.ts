@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 import { createObservationBuffer } from "./buffer";
@@ -46,7 +47,7 @@ const createRecorder = () => {
 };
 
 export const getActionCostRecorder = (): ActionCostRecorder | undefined => {
-  if (!env.FEATURE_ACTION_COST_RECORDS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")) {
     return undefined;
   }
   recorder ??= createRecorder();

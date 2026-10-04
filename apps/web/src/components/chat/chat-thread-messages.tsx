@@ -16,7 +16,6 @@ import {
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -86,6 +85,11 @@ import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { ReferenceRenderScope } from "@/components/references/reference-chip";
+import {
+  mentionAttrsToHref,
+  mentionTagAttrs,
+} from "@/components/references/reference.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -96,6 +100,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
@@ -349,7 +354,9 @@ export const ChatThreadMessages = ({
   );
 
   return (
-    <>
+    // Sent messages persist a same-matter mention without its matter; the
+    // scope gives every reference chip below the thread's matter.
+    <ReferenceRenderScope workspaceId={workspaceId}>
       {branchSource !== undefined && scrollRef !== null && (
         <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
       )}
@@ -407,7 +414,7 @@ export const ChatThreadMessages = ({
             onRemove={onRemoveQueuedMessage}
           />
         )}
-    </>
+    </ReferenceRenderScope>
   );
 };
 
@@ -684,16 +691,19 @@ const USER_STREAMDOWN_COMPONENTS = {
   ),
 };
 
+// A just-sent message still holds the composer's `<entity-mention>` tags; show
+// each as the link the server will persist for it, so the chip does not
+// change when the server's copy replaces this one.
 const replaceMentionTag = (rawAttrs: string) => {
-  const id = getMentionTagAttr(rawAttrs, "data-id");
-  const label = getMentionTagAttr(rawAttrs, "data-label");
-  const category = getMentionTagAttr(rawAttrs, "data-category");
+  const attrs = mentionTagAttrs((name) => getMentionTagAttr(rawAttrs, name));
+  const href = mentionAttrsToHref(attrs);
+  const label = attrs.label;
 
-  if (!id || !label || !category) {
+  if (href === null || !label) {
     return "";
   }
 
-  return `<a href="#stella-${category}=${id}">${label}</a>`;
+  return `<a href="${href}">${label}</a>`;
 };
 
 const normalizeUserMessageTextForDisplay = (text: string) => {
@@ -773,7 +783,7 @@ const downloadDataAttachment = ({
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
     getAnalytics().captureError(decoded.error);
-    stellaToast.add({ title: errorTitle, type: "error" });
+    notifyUserError(decoded.error, errorTitle);
     return;
   }
 
@@ -1557,6 +1567,9 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "text") {
+      if (!part.content.trim()) {
+        return null;
+      }
       return (
         <AssistantTextPart
           className={cn(
@@ -1690,9 +1703,6 @@ const AssistantMessageParts = ({
   };
   return (
     <>
-      {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
-        <AssistantReasoningTokenSummary count={reasoningTokenCount} />
-      )}
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
           return renderEntry(group.entry, group.index);
@@ -1824,19 +1834,6 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     }
   }
   return false;
-};
-
-const AssistantReasoningTokenSummary = ({ count }: { count: number }) => {
-  const t = useTranslations();
-  return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-      <span>{t("chat.reasoning")}</span>
-      <span aria-hidden="true" className="text-foreground-placeholder">
-        ·
-      </span>
-      <ReasoningTokenCount count={count} />
-    </div>
-  );
 };
 
 const ReasoningTokenCount = ({ count }: { count: number }) => {

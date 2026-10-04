@@ -17,7 +17,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
@@ -27,9 +27,15 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import {
   createChatAttachmentPart,
+  chatMessageContentFromMessage,
+  chatMessageFromPersisted,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -38,6 +44,10 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  COMPACTION_SUMMARY_MESSAGE_ID,
+  createCompactionSummaryMessage,
+} from "@/api/handlers/chat/compaction";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
@@ -63,6 +73,7 @@ import {
   guardModelToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
@@ -80,9 +91,11 @@ import {
   buildWireSnapshot,
   unsafeFixture,
 } from "@/api/tests/helpers/chat-fixtures";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import { buildGlobalPromptParts } from "./chat-prompt";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
@@ -479,6 +492,39 @@ const persistNativeInterruptTurn = async (
   return { emitted, finish: terminal.finish, source };
 };
 
+test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
+  const whitespace = " \n\t\u00a0";
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    chat({
+      adapter: createTextReplyAdapter(whitespace),
+      messages: [{ role: "user", content: "Summarize the NDA" }],
+      threadId: "thread-whitespace",
+    }),
+  );
+  expect(
+    source.some(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+        chunk.delta === whitespace,
+    ),
+  ).toBe(true);
+  expect(finish?.outcome).toEqual({
+    type: "failed",
+    error: "empty_completion",
+  });
+  expect(finish?.responseMessage.parts).toEqual([]);
+  expect(emitted.at(-1)?.type).toBe(EventType.RUN_ERROR);
+
+  // RUN_ERROR does not finalize the browser processor as RUN_FINISHED would.
+  const live = new StreamProcessor();
+  for (const chunk of emitted) {
+    live.processChunk(chunk);
+  }
+  expect(
+    live.getMessages().findLast(({ role }) => role === "assistant")?.parts,
+  ).toContainEqual({ type: "text", content: whitespace });
+});
+
 /**
  * A turn that is cut while the model thinks about a tool result: the run is
  * aborted, the provider request rejects, and the adapter reports that as its
@@ -797,6 +843,74 @@ const persistAdmissionLoss = async ({
   });
 };
 
+describe("admission loss before message production identifies the persisted assistant", () => {
+  for (const exit of ["drain", "throw", "adapter-error"] as const) {
+    test(`${exit} announces one mapped assistant before its refusal`, async () => {
+      const admission = new AbortController();
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        admission.abort(
+          new ActionAdmissionError({
+            reason: "unavailable",
+            message: "Admission lost",
+          }),
+        );
+        if (exit === "throw") {
+          throw new HandlerError({ status: 503, message: "Provider aborted" });
+        }
+        if (exit === "adapter-error") {
+          yield {
+            type: EventType.RUN_ERROR,
+            code: "provider_unavailable",
+            message: "Provider aborted",
+          };
+        }
+      };
+      const { emitted, finish } = await persistNativeInterruptTurn(source(), {
+        abortSignal: admission.signal,
+        deadlineSignal: new AbortController().signal,
+      });
+      expect(
+        emitted.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_START),
+      ).toEqual([
+        expect.objectContaining({
+          messageId: finish?.responseMessage.id,
+          role: "assistant",
+        }),
+      ]);
+      const client = new StreamProcessor();
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+      }
+      if (finish === null) {
+        panic("Admission loss did not settle");
+      }
+      const reloaded = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(reloaded.metadata?.turnOutcome).toEqual(finish.outcome);
+      expect(
+        new Set([...client.getMessages(), reloaded].map(({ id }) => id)).size,
+      ).toBe(1);
+      expect(client.getMessages()).toHaveLength(1);
+      expect(client.getMessages().at(0)?.id).toBe(finish.responseMessage.id);
+      expect(emitted.at(0)?.type).toBe(EventType.TEXT_MESSAGE_START);
+      expect(emitted.at(1)).toEqual(
+        expect.objectContaining({
+          type: EventType.RUN_ERROR,
+          code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        }),
+      );
+      expect(finish.responseMessage.metadata.turnOutcome).toEqual(
+        finish.outcome,
+      );
+    });
+  }
+});
+
 describe("admission loss preserves complete interaction checkpoints", () => {
   for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
     for (const checkpoint of [
@@ -812,7 +926,16 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         });
         expect(finish?.outcome).toEqual(
           checkpoint === "incomplete"
-            ? { type: "failed", error: "provider_unavailable" }
+            ? {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              }
             : {
                 type: "awaiting-user",
                 interaction: { type: checkpoint, toolCallId: "call-1" },
@@ -820,7 +943,7 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         );
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(checkpoint === "incomplete" && exit !== "teardown");
         expect(
           finish?.responseMessage.parts.some(
             (part) => part.type === "tool-call",
@@ -942,7 +1065,16 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(finish?.outcome).toEqual(
           completed
             ? { type: "completed" }
-            : { type: "failed", error: "provider_unavailable" },
+            : {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              },
         );
         expect(finish?.responseMessage.parts).toContainEqual({
           type: "text",
@@ -951,7 +1083,7 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(charges).toBe(completed ? 1 : 0);
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(!completed && exit !== "teardown");
         if (completed && exit !== "teardown") {
           expect(
             emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),
@@ -1100,6 +1232,89 @@ describe("native interrupt boundary persistence", () => {
     ]);
   });
 
+  for (const compacted of [false, true]) {
+    test(`keeps model summaries off the live approval page (compacted: ${String(compacted)})`, async () => {
+      const summary = createCompactionSummaryMessage({
+        summarizedMessageCount: 4,
+        summary: "Earlier conversation context",
+      });
+      // Identical text in a real user message must remain visible.
+      const user = {
+        id: "user-1",
+        role: "user",
+        parts: summary.parts,
+      } satisfies ChatMessage;
+      const initialMessages = compacted ? [summary, user] : [user];
+      const approvalTool = toolDefinition({
+        name: "mcp__external__delete",
+        description: "Server tool behind an approval",
+        inputSchema: draftToolInputSchema,
+        needsApproval: true,
+      }).server(async () => "deleted");
+      const { emitted, finish, source } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createSingleToolCallAdapter({
+            arguments: '{"name":"NDA","source":"@title NDA"}',
+            toolName: "mcp__external__delete",
+          }),
+          agentLoopStrategy: maxIterations(3),
+          messages: initialMessages,
+          threadId: "thread-1",
+          tools: [approvalTool],
+        }),
+      );
+      const engineSnapshot = source.find(
+        (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+      );
+      if (engineSnapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+        throw new Error("Expected the real engine's approval snapshot");
+      }
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+      expect(finish?.outcome).toMatchObject({
+        type: "awaiting-user",
+        interaction: { type: "approval", toolCallId: "call-1" },
+      });
+      const visible = await collectChunks(
+        transformClientVisibleStream({
+          source: streamChunks(emitted),
+          storedHistory: NOTHING_REWRITTEN,
+        }),
+      );
+      const { processor } = createStreamMessageCapture({
+        initialMessages: [user],
+        capture: (message) => message,
+      });
+      for (const chunk of visible) {
+        processor.processChunk(chunk);
+      }
+      if (finish === null) {
+        throw new Error("Expected the real engine to finish the turn");
+      }
+      expect(
+        processor
+          .getMessages()
+          .map(({ id, role, parts }) => ({ id, role, parts })),
+      ).toEqual([
+        user,
+        {
+          id: finish.responseMessage.id,
+          role: "assistant",
+          parts: finish.responseMessage.parts,
+        },
+      ]);
+      // Presentation must not mutate the history the model and persistence read.
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+    });
+  }
+
   // The same pause, driven by the real `suggest_changes` apply tool rather
   // than a fixture: it carries folio's raw JSON Schema wrapped as a Standard
   // Schema, so its `inputSchema` has to survive `normalizeApprovalSchema`
@@ -1116,10 +1331,13 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
-      workspaceId: toSafeId<"workspace">(
-        "44444444-4444-4444-8444-444444444444",
-      ),
-      entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      access: memberDocumentWriteAccess({
+        type: "new_version",
+        workspaceId: toSafeId<"workspace">(
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      }),
       fileFieldId: toSafeId<"field">("77777777-7777-4777-8777-777777777777"),
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -2737,7 +2955,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
         code: "quota_exhausted",
-        rawEvent: { statusCode: 429 },
       },
     ]);
     expect(outcomes).toEqual(["failed"]);
@@ -2788,12 +3005,6 @@ describe("outgoing chat stream message ids", () => {
     ).toMatchObject({
       code: "provider_credentials_rejected",
       message: "provider_credentials_rejected",
-      rawEvent: {
-        code: "invalid_api_key",
-        message: "Incorrect API key",
-        param: null,
-        type: "invalid_request_error",
-      },
       type: EventType.RUN_ERROR,
     });
     expect(outcomes).toEqual(["failed"]);
@@ -2868,7 +3079,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "unknown",
         code: "unknown",
-        rawEvent: expect.any(HandlerError),
       });
       expect(errorSpy).not.toHaveBeenCalledWith(
         "chat.stream_failed",
@@ -3041,7 +3251,6 @@ describe("outgoing chat stream message ids", () => {
       type: EventType.RUN_ERROR,
       message: "provider_billing",
       code: "provider_billing",
-      rawEvent: { statusCode: 402 },
     });
     expect(outcomes).toEqual(["failed"]);
   });
@@ -3758,6 +3967,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      systemLayers: buildGlobalPromptParts({ userContext: null }).safeLayers,
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };

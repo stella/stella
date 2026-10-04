@@ -7,6 +7,7 @@ import {
   publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import {
   caseLawDecisions,
@@ -14,6 +15,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -62,7 +64,7 @@ type SitemapDecisionAlternate = {
   caseNumber: string;
   country: string;
   court: string;
-  id: string;
+  id: SafeId<"caseLawDecision">;
   language: string;
   slug: string | null;
   updatedAt: Date;
@@ -243,6 +245,10 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const unavailable = publicCountryUnavailable(query.country);
+  if (unavailable !== null) {
+    return status(503, unavailable);
+  }
   const country = publicCaseLawCountry(query.country);
   if (country === null) {
     return status(404, { message: "Not Found" });
@@ -303,6 +309,7 @@ export const listSitemapShardDecisionsHandler = async (
 
   const { alternateRows, rows } = queryResult;
   const alternatesByGroupKey = new Map<string, SitemapDecisionAlternate[]>();
+  const overflowedGroups = new Set<string>();
   for (const alternate of alternateRows) {
     if (alternate.languageGroupKey === null) {
       continue;
@@ -324,6 +331,17 @@ export const listSitemapShardDecisionsHandler = async (
           normalizedLanguage,
       )
     ) {
+      continue;
+    }
+
+    if (groupedAlternates.length >= MAX_LANGUAGES_PER_ALTERNATE_GROUP) {
+      if (!overflowedGroups.has(alternate.languageGroupKey)) {
+        overflowedGroups.add(alternate.languageGroupKey);
+        logger.warn("case_law.sitemap.language_group_overflow", {
+          groupKey: alternate.languageGroupKey,
+          limit: MAX_LANGUAGES_PER_ALTERNATE_GROUP,
+        });
+      }
       continue;
     }
 

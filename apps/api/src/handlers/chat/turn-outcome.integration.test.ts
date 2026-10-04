@@ -37,6 +37,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";
 import {
@@ -156,49 +157,13 @@ type KnownRule = {
   oracles: readonly OracleViolation["oracle"][];
 };
 
-/** What the page shows of a whitespace-only answer on a new message is what
- *  a reload shows. Gemini's adapter hands the page no whitespace-only
- *  delta. */
-const WHITESPACE_RULE: KnownRule = {
-  name: "a whitespace-only answer reloads as the page showed it",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
-/** The page of a summarized thread shows the thread, never the summary the
- *  model reads in its place, including when the turn pauses on a card. */
-const COMPACTION_SUMMARY_RULE: KnownRule = {
-  name: "a compacted thread's summary stays off the page",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
 /**
  * The rules a combination's turn does not keep yet. Each such combination
  * runs as a known finding under the rules' names: it must still break them,
  * and only them, so a broken setup fails it like any other test, and it
- * fails loudly once the turn keeps the rules and the entry goes.
+ * fails loudly once the turn keeps the rules and the entry goes. None today.
  */
-const knownTurnRulesOf = ({
-  position,
-  provider,
-  shape,
-}: TurnCombination): KnownRule[] => {
-  const rules: KnownRule[] = [];
-  if (
-    shape === "whitespace" &&
-    provider !== "google" &&
-    (position === "fresh" ||
-      position === "after-compaction" ||
-      position === "resume-after-restart" ||
-      position === "skill-run" ||
-      position === "fallback")
-  ) {
-    rules.push(WHITESPACE_RULE);
-  }
-  if (shape === "tool-call" && position === "after-compaction") {
-    rules.push(COMPACTION_SUMMARY_RULE);
-  }
-  return rules;
-};
+const knownTurnRulesOf = (_combination: TurnCombination): KnownRule[] => [];
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -737,7 +702,7 @@ const SURFACE_SHOWS = {
     const answer: unknown = await getSuggestedPrompts.handler(
       asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
         createTestHandlerContext({
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
           managedAIResidency: "eu" as const,

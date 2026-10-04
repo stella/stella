@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 // Type-only, so the decision reader's component graph never loads here.
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { publicToolCrawlPaths } from "@/public-crawl-policy";
@@ -171,16 +173,21 @@ describe("public law sitemap", () => {
     };
 
     expect(
-      fetchPublicSitemapDecisions({
-        fetchImpl,
-        shard: {
-          bucket: "all",
-          country: "xaa",
-          month: "01",
-          year: "2026",
-        },
-      }),
-    ).rejects.toThrow("The case-law sitemap shard is not published");
+      await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: {
+            bucket: "all",
+            country: "xaa",
+            month: "01",
+            year: "2026",
+          },
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("The case-law sitemap shard is not published"),
+    );
     expect(requested).toBe(false);
   });
 

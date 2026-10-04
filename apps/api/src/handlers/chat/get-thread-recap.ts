@@ -16,7 +16,7 @@ import {
 } from "@/api/handlers/chat/thread-recap";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +25,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 
 const config = {
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),

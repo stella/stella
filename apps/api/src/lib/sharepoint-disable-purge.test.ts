@@ -18,6 +18,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -165,7 +166,7 @@ describe("disconnect is never gated on org enablement", () => {
         safeDb,
         session: { activeOrganizationId: ids.orgB },
         user: { id: ids.userB1 },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         recordAuditEvent,
         request: new Request(
           "https://api.example.test/v1/sharepoint/connection",

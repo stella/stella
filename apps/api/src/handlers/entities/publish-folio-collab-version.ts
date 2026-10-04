@@ -16,10 +16,9 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -34,6 +33,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
@@ -400,14 +400,17 @@ const storePublicationSource = async ({
   safeDb,
   source,
 }: StorePublicationSourceOptions) => {
-  const written = !env.FEATURE_FILE_USAGE_LIMITS
+  const written = !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: bytes,
-            key: source.key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: bytes,
+              key: source.key,
+            },
+            { type: "cleanup-intent", intent: source.cleanupIntentId },
+          ),
         catch: (cause) => cause,
       })
     : Result.mapError(
@@ -416,11 +419,14 @@ const storePublicationSource = async ({
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: bytes,
-              key: source.key,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: bytes,
+                key: source.key,
+              },
+              { type: "cleanup-intent", intent: source.cleanupIntentId },
+            ),
         }),
         (cause): unknown => cause,
       );
@@ -910,8 +916,13 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "session_token_exchange" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({

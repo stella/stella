@@ -26,6 +26,10 @@ const CSS_IMPORT_PATTERN =
   /@import\s+(?:url\(\s*)?["'](?<specifier>[^"']+)["']/gu;
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
 const TURBO_INSTALL_PATTERN = /\bbun\s+install\s+-g\s+turbo@\d+\.\d+\.\d+\b/gu;
+// Bun 1.4 reads `bun --cwd <dir> run <script>` as a bare `bun run`: it prints
+// usage and exits 0 without running the script. `bun run --cwd <dir>` and
+// `bun --cwd=<dir> run` both run it.
+const BUN_SPACED_CWD_RUN_PATTERN = /\bbun\s+--cwd\s+\S+\s+run\b/gu;
 const TURBO_VERSION_PATTERN = /^(?<version>\d+\.\d+\.\d+)$/u;
 const BABEL_CORE_DEPENDENCY = "@babel/core";
 const BUN_TYPES_DEPENDENCY = "bun-types";
@@ -46,7 +50,8 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    script: "bun --bun astro check",
+    script:
+      "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
     specifier: "^0.9.9",
   },
   compilerApi: {
@@ -665,6 +670,40 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
   return issues;
 };
 
+const isBunCommandFile = (filePath: string) => {
+  const name = path.basename(filePath);
+  return (
+    name === "package.json" ||
+    name === "Dockerfile" ||
+    [".md", ".sh", ".yml", ".yaml"].includes(path.extname(name))
+  );
+};
+
+const findBunCommandFiles = (rootDir: string) => [
+  path.resolve(rootDir, "package.json"),
+  ...[
+    "apps",
+    "packages",
+    "scripts",
+    "docs",
+    path.join(".github", "workflows"),
+  ].flatMap((directory) =>
+    findFiles(path.resolve(rootDir, directory), isBunCommandFile),
+  ),
+];
+
+const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
+  findBunCommandFiles(rootDir)
+    .filter((filePath) => existsSync(filePath))
+    .flatMap((filePath) => {
+      const content = readFileSync(filePath, "utf-8");
+      return [...content.matchAll(BUN_SPACED_CWD_RUN_PATTERN)].map((match) => ({
+        message:
+          "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`",
+        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+      }));
+    });
+
 export const validateWorkspaceRoot = (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
@@ -672,6 +711,7 @@ export const validateWorkspaceRoot = (
   const issues: WorkspaceIssue[] = [
     ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
+    ...validateBunCwdRunForm(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),
   ];

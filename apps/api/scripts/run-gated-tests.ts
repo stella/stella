@@ -73,6 +73,28 @@ export const runGatedTests = async ({
     return 1;
   }
 
+  // The same derived sources the package `test` script generates first: the
+  // suites import the capability runtime, which is never committed.
+  for (const { generator, cwd } of [
+    {
+      generator: "codegen:runtime",
+      cwd: path.resolve(apiRoot, "../../packages/cli"),
+    },
+    { generator: "generate:capability-runtime", cwd: apiRoot },
+  ]) {
+    const generationProcess = Bun.spawn({
+      cmd: [process.execPath, "run", generator],
+      cwd,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const generationStatus = await generationProcess.exited;
+    if (generationStatus !== 0) {
+      return generationStatus;
+    }
+  }
+
   console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
   const testProcess = Bun.spawn({
     cmd: buildApiTestCommand({

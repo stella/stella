@@ -181,6 +181,7 @@ describe("resolveMemberAuthorization", () => {
 
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${ownerInFull}@test.local`,
       role: "owner",
       workspace: null,
     });
@@ -193,6 +194,7 @@ describe("resolveMemberAuthorization", () => {
     );
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${loneMemberInFull}@test.local`,
       role: "member",
       workspace: null,
     });
@@ -859,10 +861,11 @@ describe("session freshness", () => {
     // security decision, not a tuning knob: widen it deliberately, in both
     // this test and the SESSION_COOKIE_CACHE_MAX_AGE_SECONDS constant,
     // never by dependency-default drift (better-auth defaults to 300s).
-    expect(getAuth().options.session.cookieCache).toEqual({
+    expect(getAuth().options.session.cookieCache).toMatchObject({
       enabled: true,
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
+    expect(typeof getAuth().options.session.cookieCache.version).toBe("string");
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });
@@ -930,12 +933,13 @@ describe("organization lifecycle hook wiring", () => {
     }
     const hooks = orgPlugin.options.organizationHooks;
     expect(hooks.afterCreateOrganization).toBeFunction();
-    expect(hooks.afterUpdateOrganization).toBeFunction();
+    const afterUpdateOrganization = hooks.afterUpdateOrganization;
+    expect(afterUpdateOrganization).toBeFunction();
 
     const identify = spyOn(getServerAnalytics(), "identifyOrganizationGroup");
     try {
       const organizationId = orgId();
-      await hooks.afterUpdateOrganization({
+      await afterUpdateOrganization({
         organization: { id: organizationId, name: "Renamed Org" },
       });
       expect(identify).toHaveBeenCalledWith({

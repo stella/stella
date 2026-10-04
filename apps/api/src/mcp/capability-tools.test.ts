@@ -48,8 +48,10 @@ const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
 const { synthesizeCapabilityContext } =
   await import("@/api/mcp/capability-context");
 const { ElysiaCustomStatusResponse } = await import("elysia");
-const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
-  .default;
+const { readCapabilityCatalog } =
+  await import("@stll/cli/capability-catalog-data");
+const { parseCatalog } = await import("@/api/mcp/capability-tools");
+const capabilityCatalog = parseCatalog(readCapabilityCatalog());
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -185,6 +187,7 @@ const createContext = ({
     scopedDb,
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 
@@ -2340,7 +2343,7 @@ describe("invoke_capability deployment feature gate", () => {
       .toSorted();
     expect(hidden).toContain("usage.entitlement.get");
     expect(
-      featureOmittedCapabilityIds(
+      await featureOmittedCapabilityIds(
         (feature) => feature === undefined || !disabledFeatures.has(feature),
       ),
     ).toEqual(hidden);

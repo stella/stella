@@ -31,10 +31,11 @@ import {
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
 import { BracesIcon, RepeatIcon, SplitIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import "@stll/folio-react/editor.css";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
+import "@stll/folio-react/editor.css";
+
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -45,7 +46,9 @@ import { optionalArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   isTemplateFillDiscoverKey,
   knowledgeKeys,
@@ -693,10 +696,7 @@ export const TemplateStudioPage = ({
         (range) => from < range.to && to > range.from,
       );
       if (intersects) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.studio.noNestedMarkers"),
-        });
+        notifyUserError(undefined, t("templates.studio.noNestedMarkers"));
         return;
       }
       view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
@@ -882,13 +882,13 @@ export const TemplateStudioPage = ({
     const { selected } = useTemplateStudioStore.getState();
     const expr = selected?.expr.trim() ?? "";
     if (!view || !selected || selected.kind !== kind || expr === "") {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(undefined, t("errors.actionFailed"));
       return;
     }
     const sibling = findSiblingCell(view.state, selected.from);
     const range = sibling === null ? null : siblingWrapRange(sibling);
     if (range === null) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(undefined, t("errors.actionFailed"));
       return;
     }
     if (kind === "if") {
@@ -1091,12 +1091,11 @@ export const TemplateStudioPage = ({
         useTemplateStudioStore.getState().pendingSlotRenames;
       const projected = await projectSessionIntoDocument();
       if (projected.status === "noEditor") {
-        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        notifyUserError(undefined, t("templates.saveFailed"));
         return false;
       }
       if (projected.status === "refused") {
-        stellaToast.add({
-          title: t("templates.saveFailed"),
+        notifyUserError(undefined, t("templates.saveFailed"), {
           description:
             projected.refused.reason === "unwritable"
               ? t("templates.studio.fieldSettingBrackets", {
@@ -1105,13 +1104,12 @@ export const TemplateStudioPage = ({
               : t("templates.studio.ruleWithCalculation", {
                   fieldPath: projected.refused.path,
                 }),
-          type: "error",
         });
         return false;
       }
       const bytes = await editor.save();
       if (!bytes) {
-        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        notifyUserError(undefined, t("templates.saveFailed"));
         return false;
       }
       const file = new File([bytes], fileName, { type: DOCX_MIME });
@@ -1123,13 +1121,11 @@ export const TemplateStudioPage = ({
         .templates({ templateId: toSafeId<"template">(templateId) })
         .document.post({ file });
       if (stored.error) {
-        stellaToast.add({
-          title: t("templates.saveFailed"),
+        notifyUserError(toAPIError(stored.error), t("templates.saveFailed"), {
           description: userErrorMessage(
             stored.error,
             t("common.unexpectedError"),
           ),
-          type: "error",
         });
         return false;
       }
@@ -1157,6 +1153,7 @@ export const TemplateStudioPage = ({
       const { dropPendingSlotRenames } = useTemplateStudioStore.getState();
       const pendingSlotRenames = pendingAtSave;
       let slotRenameErrorMessage: string | null = null;
+      let slotRenameError: unknown;
       if (pendingSlotRenames.length > 0) {
         // Flush SEQUENTIALLY by replaying the ordered step log in recorded (edit)
         // order. A chained or cyclic reuse of a freed slot name — e.g. a swap
@@ -1188,12 +1185,14 @@ export const TemplateStudioPage = ({
               // Capture the first hard failure for a single toast, then stop:
               // this step and everything after it stay pending for the next
               // save.
+              slotRenameError = toAPIError(patched.error);
               slotRenameErrorMessage = userErrorMessage(
                 patched.error,
                 t("common.unexpectedError"),
               );
             }
-          } catch {
+          } catch (error) {
+            slotRenameError = error;
             slotRenameErrorMessage = t("common.unexpectedError");
           }
           if (slotRenameErrorMessage !== null) {
@@ -1208,9 +1207,7 @@ export const TemplateStudioPage = ({
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.
           markDirty();
-          stellaToast.add({
-            type: "error",
-            title: t("common.error"),
+          notifyUserError(slotRenameError, t("common.error"), {
             description: slotRenameErrorMessage,
           });
         }
@@ -1245,7 +1242,7 @@ export const TemplateStudioPage = ({
           .then(
             async () =>
               await queryClient.invalidateQueries({
-                queryKey: knowledgeKeys.templates.fillDiscover(
+                queryKey: knowledgeKeys.templates.fillDiscoverRoot(
                   activeOrganizationId,
                   templateId,
                 ),
@@ -1266,7 +1263,7 @@ export const TemplateStudioPage = ({
       return slotRenameErrorMessage === null;
     } catch (error) {
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+      notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {
       setIsSaving(false);

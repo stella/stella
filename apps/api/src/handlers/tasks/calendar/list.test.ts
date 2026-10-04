@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import calendarTasks from "./list";
@@ -32,7 +33,7 @@ const createContext = ({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body,
     safeDb,
     request: new Request("https://example.test/v1/tasks/calendar"),
@@ -125,6 +126,79 @@ describe("calendar task handler", () => {
         ],
       },
     ]);
+  });
+
+  test("accepts an ordered range with different offsets", async () => {
+    const safeDb: CalendarCtx["safeDb"] = async <T>() =>
+      Result.ok(asTestRaw<T>([]));
+    const result = await calendarTasks.handler(
+      createContext({
+        body: {
+          ...baseBody,
+          dateFrom: "2026-10-02T23:00:00+02:00",
+          dateTo: "2026-10-02T22:00:00Z",
+        },
+        safeDb,
+      }),
+    );
+    expect(result).toEqual({ tasks: [] });
+  });
+
+  test.each(["invalid", "2026-02-30T00:00:00Z"])(
+    "returns a typed 400 for invalid instant %s",
+    async (dateFrom) => {
+      const result = await calendarTasks.handler(
+        createContext({
+          body: { ...baseBody, dateFrom },
+          safeDb: async () => {
+            throw new Error("safeDb should not be called");
+          },
+        }),
+      );
+      expect(result).toEqual({
+        code: 400,
+        response: { message: "Invalid calendar date range" },
+      });
+    },
+  );
+
+  test.each<Pick<CalendarCtx["body"], "datePropertyIds" | "endDatePropertyId">>(
+    [
+      { datePropertyIds: ["_start-date", "not-a-property-id"] },
+      { datePropertyIds: ["_start-date"], endDatePropertyId: "not-a-property" },
+    ],
+  )("rejects a custom date property that is not an id: %o", async (ids) => {
+    const result = await calendarTasks.handler(
+      createContext({
+        body: { ...baseBody, ...ids },
+        safeDb: async () => {
+          throw new Error("safeDb should not be called");
+        },
+      }),
+    );
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid calendar date property" },
+    });
+  });
+
+  test("rejects inverted instants within the same UTC day", async () => {
+    const result = await calendarTasks.handler(
+      createContext({
+        body: {
+          ...baseBody,
+          dateFrom: "2026-10-02T12:00:00Z",
+          dateTo: "2026-10-02T15:00:00+05:45",
+        },
+        safeDb: async () => {
+          throw new Error("safeDb should not be called");
+        },
+      }),
+    );
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid calendar date range" },
+    });
   });
 
   test("rejects inverted date ranges", async () => {

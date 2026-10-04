@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
+
 import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
@@ -10,6 +12,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { extractFileText, resolveExtractionMimeType } from "./extract-content";
+import { canExtractMimeType } from "./extractable-mime-types";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
   const encoded = new TextEncoder().encode(value);
@@ -22,6 +25,18 @@ const readFixture = async (fileName: string): Promise<ArrayBuffer> =>
   await Bun.file(`${import.meta.dir}/__fixtures__/${fileName}`).arrayBuffer();
 
 describe("resolveExtractionMimeType", () => {
+  test.each(
+    Object.entries(OFFICE_ARCHIVE_FORMATS).filter(([, format]) =>
+      canExtractMimeType(format.mimeType),
+    ),
+  )("recovers the canonical office format %s", (extension, format) => {
+    expect(
+      resolveExtractionMimeType({
+        fileName: `fixture.${extension.toUpperCase()}`,
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe(format.mimeType);
+  });
   test("recovers email MIME types from generic stored files", () => {
     expect(
       resolveExtractionMimeType({

@@ -17,6 +17,7 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
+  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
@@ -60,6 +61,7 @@ const lawCompatSearchArgsSchema = nullAsAbsent(
       v.description("Search query"),
     ),
     cursor: cursorInput({
+      maxLength: LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
       description:
         "Opaque cursor from a previous search call to fetch the next page",
     }),
@@ -88,6 +90,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
@@ -108,6 +111,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
@@ -155,6 +159,7 @@ const handleLawCompatSearchTool: McpToolHandler<
   // serialize the same way.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: hasMoreCorpusPages(corpus.cursors)
       ? encodeCompatSearchCursor({ matter: null, corpus: corpus.cursors })
       : null,

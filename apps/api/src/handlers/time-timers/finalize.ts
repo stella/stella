@@ -76,6 +76,7 @@ const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
   "taskCode",
   "activityCode",
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   "timerStartedAt",
   "timerStoppedAt",

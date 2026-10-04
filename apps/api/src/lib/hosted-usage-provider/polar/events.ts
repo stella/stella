@@ -29,6 +29,9 @@
  * double-grant.
  */
 
+import { panic } from "better-result";
+import * as v from "valibot";
+
 import type { NormalizedProviderEvent } from "@/api/lib/hosted-usage-provider/provider-event-normalizer";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -41,8 +44,14 @@ export const POLAR_HANDLED_EVENT_TYPES = [
   "subscription.uncanceled",
   "subscription.canceled",
   "subscription.revoked",
+  "subscription.cycled",
+  "subscription.paused",
+  "subscription.resumed",
+  "subscription.migrated",
   "order.paid",
 ] as const;
+
+const nativeEventTypeSchema = v.picklist(POLAR_HANDLED_EVENT_TYPES);
 
 const ignored = (raw: unknown): NormalizedProviderEvent => ({
   candidate: raw,
@@ -93,6 +102,7 @@ const handledAllocation = (
   candidate: {
     type: "allocation.created",
     data: {
+      occurred_at: occurredAtOf(data),
       id: data["id"],
       account_ref: data["customer_id"],
       policy_ref: data["product_id"],
@@ -135,15 +145,27 @@ export const normalizePolarEvent = (
   // returns 400 so the provider retries, rather than silently acking a
   // broken event we were meant to act on.
   const data = isRecord(raw) && isRecord(raw["data"]) ? raw["data"] : null;
-  switch (nativeType) {
+  const parsedType = v.safeParse(nativeEventTypeSchema, nativeType);
+  if (!parsedType.success) {
+    return ignored(raw);
+  }
+  const eventType = parsedType.output;
+  switch (eventType) {
     case "subscription.created":
       return handledEntitlement("entitlement.created", data ?? {});
     case "subscription.active":
       return handledEntitlement("entitlement.active", data ?? {});
+    case "subscription.cycled":
+    case "subscription.resumed":
     case "subscription.updated":
     case "subscription.past_due":
     case "subscription.uncanceled":
       return handledEntitlement("entitlement.updated", data ?? {});
+    case "subscription.paused":
+      return handledEntitlement("entitlement.paused", data ?? {});
+    // Imported external state requires operator reconciliation before access.
+    case "subscription.migrated":
+      return handledEntitlement("entitlement.reconciliation", data ?? {});
     case "subscription.canceled":
       return handledEntitlement("entitlement.canceled", data ?? {});
     case "subscription.revoked":
@@ -165,6 +187,7 @@ export const normalizePolarEvent = (
       return { candidate: raw, handled: true };
     }
     default:
-      return ignored(raw);
+      eventType satisfies never;
+      return panic(`Unhandled provider event: ${String(eventType)}`);
   }
 };

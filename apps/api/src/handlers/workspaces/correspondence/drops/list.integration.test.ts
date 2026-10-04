@@ -11,6 +11,7 @@ import { inArray, sql } from "drizzle-orm";
 import { correspondenceDropLogs } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -99,7 +100,7 @@ const read = async ({
 } = {}) =>
   await listDrops.handler(
     asTestRaw<Parameters<typeof listDrops.handler>[0]>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request(
         "https://api.example.test/v1/workspaces/correspondence/drops",
       ),

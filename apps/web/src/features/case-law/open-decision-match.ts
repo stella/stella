@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
+  type DecisionIdentityResolution,
   type DecisionQueryIntent,
   parseDecisionQuery,
   resolveDecisionIdentity,
@@ -19,12 +20,14 @@ import {
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
+import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
 export type CaseLawSearchScope = CaseLawIndexSearch;
@@ -65,6 +68,7 @@ export const createDecisionFiltersFromSearch = (
     lang,
     q,
     sort,
+    sourceId,
     strict,
     to,
     type,
@@ -85,6 +89,7 @@ export const createDecisionFiltersFromSearch = (
     country: scope,
     excerpt,
     ...(court ? { court } : {}),
+    ...(sourceId ? { sourceId: toSafeId<"caseLawSource">(sourceId) } : {}),
     ...(range.from === undefined ? {} : { dateFrom: range.from }),
     ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),
@@ -117,10 +122,43 @@ type OpenDecisionMatchOptions = {
 };
 
 /**
- * Open the decision the entry names, when exactly one answers to it. Several
- * (the decisions of one file, the same docket at several courts, or a sheet
- * no decision is known to carry) are left to the reader to choose between,
- * so the caller falls back to its list; the return value says which happened.
+ * The decision a resolution lets the page open, and whether the reader should
+ * be told its case file may hold others. One decision found where stored
+ * dockets can still carry their sheet opens too: the reader came for that
+ * file, and the note says the read may not have reached every decision in it.
+ * Several candidates, or a sheet or part no candidate is known to carry, stay
+ * with the list.
+ */
+export const decisionMatchToOpen = <THit>(
+  resolution: DecisionIdentityResolution<THit>,
+):
+  | { readonly decision: THit; readonly fileMayHoldOthers: boolean }
+  | undefined => {
+  switch (resolution.status) {
+    case "unique":
+      return { decision: resolution.decision, fileMayHoldOthers: false };
+    case "ambiguous": {
+      const [only, ...rest] = resolution.candidates;
+      return resolution.reason === "file_incomplete" &&
+        only !== undefined &&
+        rest.length === 0
+        ? { decision: only, fileMayHoldOthers: true }
+        : undefined;
+    }
+    case "none":
+      return undefined;
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled decision resolution: ${String(resolution)}`);
+    }
+  }
+};
+
+/**
+ * Open the decision the entry names, when one answers to it. Several (the
+ * decisions of one file, the same docket at several courts, or a sheet no
+ * decision is known to carry) are left to the reader to choose between, so
+ * the caller falls back to its list; the return value says which happened.
  */
 export const openDecisionMatch = async ({
   excerpt,
@@ -152,11 +190,16 @@ export const openDecisionMatch = async ({
     return false;
   }
 
-  const resolution = resolveDecisionIdentity(intent, firstPage.decisions);
-  if (resolution.status !== "unique") {
+  const match = decisionMatchToOpen(
+    resolveDecisionIdentity(intent, firstPage.decisions),
+  );
+  if (match === undefined) {
     return false;
   }
-  const only = resolution.decision;
+  const only = match.decision;
+  const decisionSearch = match.fileMayHoldOthers
+    ? { match: PUBLIC_DECISION_MATCH.FILE_INCOMPLETE }
+    : {};
 
   const preferred = pickPreferredCaseLawLanguageVariant({
     alternates: only.languageAlternates,
@@ -193,6 +236,7 @@ export const openDecisionMatch = async ({
           court: params.court,
           slug: params.slug,
         },
+        search: decisionSearch,
         to: "/law/$country/cases/$court/$slug",
       })
     : navigate({
@@ -202,6 +246,7 @@ export const openDecisionMatch = async ({
           language: params.language,
           slug: params.slug,
         },
+        search: decisionSearch,
         to: "/law/$country/cases/$court/$language/$slug",
       }));
 

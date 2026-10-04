@@ -5,12 +5,13 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
+import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -74,6 +75,121 @@ const marketingCapture = readFileSync(
   "utf-8",
 );
 
+// This contract is exercised before CI installs dependencies.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const contractRecord = (value: unknown): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new TypeError("Expected workflow object");
+  }
+  return value;
+};
+const requiredExpression = (value: unknown) => {
+  if (typeof value !== "string") {
+    throw new TypeError("Missing workflow expression");
+  }
+  return value;
+};
+type ContractStep = {
+  name?: string;
+  uses?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+};
+const contractStep = (value: unknown): ContractStep => {
+  const record = contractRecord(value);
+  const step: ContractStep = {};
+  for (const field of ["name", "uses", "run"] as const) {
+    if (record[field] !== undefined) {
+      step[field] = requiredExpression(record[field]);
+    }
+  }
+  if (record["with"] !== undefined) {
+    step.with = contractRecord(record["with"]);
+  }
+  return step;
+};
+type ContractJob = {
+  if?: string;
+  needs?: string | string[];
+  with?: Record<string, unknown>;
+  outputs?: Record<string, string>;
+  steps?: ContractStep[];
+};
+const contractJob = (value: unknown): ContractJob => {
+  const record = contractRecord(value);
+  const job: ContractJob = {};
+  if (record["if"] !== undefined) {
+    job.if = requiredExpression(record["if"]);
+  }
+  if (record["needs"] !== undefined) {
+    const needs = record["needs"];
+    job.needs = Array.isArray(needs)
+      ? needs.map(requiredExpression)
+      : requiredExpression(needs);
+  }
+  if (record["with"] !== undefined) {
+    job.with = contractRecord(record["with"]);
+  }
+  if (record["outputs"] !== undefined) {
+    job.outputs = Object.fromEntries(
+      Object.entries(contractRecord(record["outputs"])).map(
+        ([key, output]) => [key, requiredExpression(output)] as const,
+      ),
+    );
+  }
+  if (record["steps"] !== undefined) {
+    const steps = record["steps"];
+    if (!Array.isArray(steps)) {
+      throw new TypeError("Expected workflow steps array");
+    }
+    job.steps = steps.map(contractStep);
+  }
+  return job;
+};
+const contractWorkflow = (value: unknown) => ({
+  jobs: Object.fromEntries(
+    Object.entries(contractRecord(contractRecord(value)["jobs"])).map(
+      ([key, job]) => [key, contractJob(job)] as const,
+    ),
+  ),
+});
+const ciContract = contractWorkflow(Bun.YAML.parse(workflow));
+const marketingContract = contractWorkflow(Bun.YAML.parse(marketingWorkflow));
+const mainHeavyContract = contractWorkflow(
+  Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "../.github/workflows/main-heavy.yml"),
+      "utf-8",
+    ),
+  ),
+);
+const evaluateExpression = (expression: string, context: object) =>
+  new Script(
+    expression
+      .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1")
+      .replaceAll(
+        /needs\.([\w-]+)/gu,
+        (_, job: string) => `needs[${JSON.stringify(job)}]`,
+      ),
+  ).runInNewContext(context);
+const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
+  (job.steps ?? []).filter(
+    (step) =>
+      step.uses?.startsWith("actions/checkout@") &&
+      step.with?.["ref"] !== undefined,
+  ),
+);
+const marketingCheckout = (job: string) => {
+  const checkout = marketingContract.jobs[job]?.steps?.find(
+    ({ name }) => name === "Checkout",
+  );
+  if (!checkout) {
+    throw new Error(`Missing marketing ${job} checkout`);
+  }
+  return requiredExpression(checkout.with?.["ref"]);
+};
+
 const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
   const start = source.indexOf(marker);
@@ -130,7 +246,10 @@ const workflowStepRun = (job: string, stepName: string): string => {
   return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
 };
 
-const detects = (scope: "core" | "landing" | "marketing", files: string[]) =>
+const detects = (
+  scope: "core" | "landing" | "marketing" | "pr-core",
+  files: string[],
+) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
     stdout: "pipe",
   })
@@ -147,6 +266,16 @@ describe("detect-e2e-changes", () => {
     const files = ["apps/api/src/handlers/tasks/get.ts"];
     expect(detects("core", files)).toBe("true");
     expect(detects("landing", files)).toBe("false");
+  });
+
+  test.each([
+    ".github/actions/prepare-network-baseline/action.yml",
+    ".github/actions/prepare-network-baseline/prepare.sh",
+    "scripts/network-baseline-scope.ts",
+    "scripts/network-baseline-comparison.test.ts",
+  ])("network comparison inputs require core E2E: %s", (file) => {
+    expect(detects("core", [file])).toBe("true");
+    expect(detects("landing", [file])).toBe("false");
   });
 
   test("a marketing-test-only change waits for the nightly suite", () => {
@@ -286,7 +415,7 @@ describe("detect-e2e-changes", () => {
       "needs.ci-plan.outputs.service_suites_required == 'true'",
     );
     expect(collabRedis).toContain(
-      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true'")}`,
+      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'")}`,
     );
     expect(collabRedis).toContain(
       "bun --filter @stll/collab test src/server.test.ts",
@@ -487,7 +616,7 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
-      "Release marketing freshness warning",
+      "Release marketing staleness warning",
     ]) {
       expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
     }
@@ -525,7 +654,7 @@ describe("detect-e2e-changes", () => {
 
     const driftGuard = workflowStep(
       workflowJob("ci-checks-rest"),
-      "Model catalog snapshot drift guard",
+      "Model catalog snapshot drift check",
     );
     expect(driftGuard).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -536,7 +665,13 @@ describe("detect-e2e-changes", () => {
     expect(driftGuard).toContain(
       "bun --filter @stll/ai-catalog gen:capabilities --check",
     );
-    expect(driftGuard).not.toContain("package_checks_required");
+    // Path-scoped: the drift output is a required operand, never one of
+    // several alternatives. The package-checks operand only ties the step to
+    // the dependency install its generators import from.
+    expect(driftGuard).toMatch(
+      /if: >-\n\s+needs\.ci-plan\.outputs\.package_checks_required == 'true'\n\s+&& needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'\n/u,
+    );
+    expect(driftGuard).not.toContain("||");
   });
 
   test("checks shipped product screenshots on planned releases", () => {
@@ -549,14 +684,63 @@ describe("detect-e2e-changes", () => {
     );
 
     const screenshots = workflowJob("marketing-screenshots");
-    expect(screenshots).toContain("needs: [ci-plan, web-build]");
+    expect(ciContract.jobs["marketing-screenshots"]?.needs).toEqual([
+      "ci-plan",
+      "web-build",
+      "heavy-web-build",
+    ]);
     expect(screenshots).toContain("always()");
     expect(screenshots).toContain(
       "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
     );
-    expect(screenshots).toContain(
-      "needs.ci-plan.outputs.web_build_required != 'true'\n          || needs.web-build.result == 'success'",
+    const predicate = requiredExpression(
+      ciContract.jobs["marketing-screenshots"]?.if,
     );
+    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+      for (const planned of [false, true]) {
+        for (const trusted of [false, true]) {
+          for (const buildRequired of [false, true]) {
+            for (const webResult of ["success", "skipped", "failure"]) {
+              for (const heavyResult of ["success", "skipped", "failure"]) {
+                for (const cancelled of [false, true]) {
+                  const context = {
+                    github: { event_name: event },
+                    needs: {
+                      "ci-plan": {
+                        outputs: {
+                          queue_depth: "full",
+                          trusted: String(trusted),
+                          marketing_screenshots_required: String(planned),
+                          web_build_required: String(buildRequired),
+                        },
+                      },
+                      "web-build": { result: webResult },
+                      "heavy-web-build": { result: heavyResult },
+                    },
+                    always: () => true,
+                    cancelled: () => cancelled,
+                  };
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    planned &&
+                      (trusted || event === "workflow_dispatch") &&
+                      (!buildRequired ||
+                        webResult === "success" ||
+                        heavyResult === "success") &&
+                      (event !== "merge_group" || !cancelled),
+                  );
+                  if (predicate.includes("queue_depth")) {
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     expect(screenshots).toContain(
       "uses: ./.github/workflows/marketing-screenshots.yml",
     );
@@ -603,15 +787,124 @@ describe("detect-e2e-changes", () => {
       update.indexOf("- name: Mint App token"),
     );
 
-    // The checked-out code and the push target are the named branch, never
-    // the ref the workflow itself runs from. The check job takes no ref and
-    // stays on its triggering one.
+    // Updates capture the named branch; ordinary checks keep the event's
+    // ref. Only the validated main-heavy caller selects an explicit SHA.
     expect(workflowStep(update, "Checkout")).toContain(
       `ref: ${githubExpression("inputs.ref")}`,
     );
+    expect(checkoutRefs.length).toBeGreaterThan(0);
+    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+      const context = {
+        github: {
+          event_name: event,
+          workflow: "CI Checks",
+          sha: "event-sha",
+          workflow_sha: "workflow-sha",
+        },
+        inputs: {
+          heavy_only: false,
+          sha: "unvalidated-sha",
+          ref: "unvalidated-ref",
+        },
+      };
+      expect(evaluateExpression(marketingCheckout("check"), context)).toBe("");
+      expect(
+        evaluateExpression(
+          requiredExpression(
+            ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
+          ),
+          context,
+        ),
+      ).toBe("");
+      for (const checkout of checkoutRefs) {
+        expect(
+          evaluateExpression(
+            requiredExpression(checkout.with?.["ref"]),
+            context,
+          ),
+        ).toBe(
+          checkout.with?.["path"] === ".workflow-tooling" ? "workflow-sha" : "",
+        );
+      }
+      for (const job of Object.values(ciContract.jobs)) {
+        for (const item of job.steps ?? []) {
+          const expectedSha = item.with?.["expected-sha"];
+          if (expectedSha !== undefined) {
+            expect(
+              evaluateExpression(requiredExpression(expectedSha), context),
+            ).toBe("event-sha");
+          }
+        }
+      }
+    }
+    const validatedSha = "a".repeat(40);
+    const validationOutput = requiredExpression(
+      mainHeavyContract.jobs["validate"]?.outputs?.["sha"],
+    );
+    const forwardedSha = evaluateExpression(validationOutput, {
+      steps: { ancestor: { outputs: { sha: validatedSha } } },
+    });
+    const suites = mainHeavyContract.jobs["suites"];
+    expect(suites?.with?.["heavy_only"]).toBe(true);
+    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    const callerSha = evaluateExpression(
+      requiredExpression(suites?.with?.["sha"]),
+      { needs: { validate: { outputs: { sha: forwardedSha } } } },
+    );
+    expect(callerSha).toBe(validatedSha);
+    const heavyContext = {
+      github: {
+        workflow: "Main heavy suites",
+        sha: "event-sha",
+        workflow_sha: "workflow-sha",
+      },
+      inputs: { heavy_only: true, sha: callerSha, ref: callerSha },
+    };
+    for (const checkout of checkoutRefs) {
+      expect(
+        evaluateExpression(
+          requiredExpression(checkout.with?.["ref"]),
+          heavyContext,
+        ),
+      ).toBe(
+        checkout.with?.["path"] === ".workflow-tooling"
+          ? "workflow-sha"
+          : validatedSha,
+      );
+    }
     expect(
-      workflowStep(jobOf(marketingWorkflow, "check"), "Checkout"),
-    ).not.toContain("ref:");
+      evaluateExpression(
+        requiredExpression(
+          ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
+        ),
+        heavyContext,
+      ),
+    ).toBe(validatedSha);
+    expect(evaluateExpression(marketingCheckout("check"), heavyContext)).toBe(
+      validatedSha,
+    );
+    for (const job of Object.values(ciContract.jobs)) {
+      for (const item of job.steps ?? []) {
+        const expectedSha = item.with?.["expected-sha"];
+        if (expectedSha !== undefined) {
+          expect(
+            evaluateExpression(requiredExpression(expectedSha), heavyContext),
+          ).toBe(validatedSha);
+        }
+      }
+    }
+    expect(
+      evaluateExpression(marketingCheckout("update"), {
+        inputs: { ref: "named-branch" },
+      }),
+    ).toBe("named-branch");
+    const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
+    expect(
+      validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
+    ).toContain("^[0-9a-f]{40}$");
+    expect(
+      validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
+    ).toContain("git merge-base --is-ancestor");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
@@ -622,8 +915,7 @@ describe("detect-e2e-changes", () => {
     expect(push).toContain("mode: append");
     expect(push).toContain(`branch: ${githubExpression("inputs.ref")}`);
 
-    // Check-mode callers pass no ref and stay on their own triggering ref.
-    expect(workflowJob("marketing-screenshots")).not.toContain("ref:");
+    // Nightly checks continue to use their triggering ref.
     expect(nightlyWorkflow).not.toContain("ref: ");
   });
 
@@ -698,7 +990,7 @@ describe("detect-e2e-changes", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       [
-        'if [[ "$e2e_core_required" == "true" ]]; then',
+        'if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then',
         "            web_build_required=true",
         "          fi",
       ].join("\n"),
@@ -711,21 +1003,69 @@ describe("detect-e2e-changes", () => {
     expect(e2eWebBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
     const production = workflowJob("e2e-production-shard");
-    const productionHeader = production.slice(
-      0,
-      production.indexOf("\n    runs-on:"),
-    );
-    expect(productionHeader).toContain(
-      [
-        "    needs: [ci-plan, web-build]",
-        "    if: >-",
-        "      always()",
-        "      && (needs.ci-plan.outputs.trusted == 'true'",
-        "          || github.event_name == 'workflow_dispatch')",
-        "      && needs.ci-plan.outputs.e2e_core_required == 'true'",
-        "      && needs.web-build.result == 'success'",
-      ].join("\n"),
-    );
+    const productionJob = ciContract.jobs["e2e-production-shard"];
+    expect(productionJob?.needs).toEqual([
+      "ci-plan",
+      "web-build",
+      "heavy-web-build",
+    ]);
+    const predicate = requiredExpression(productionJob?.if);
+    for (const event of [
+      "pull_request",
+      "merge_group",
+      "workflow_dispatch",
+      "push",
+      "schedule",
+    ]) {
+      for (const depth of ["fast", "full"]) {
+        for (const planned of [false, true]) {
+          for (const trusted of [false, true]) {
+            for (const webResult of ["success", "skipped", "failure"]) {
+              for (const heavyResult of ["success", "skipped", "failure"]) {
+                for (const heavyOnly of [false, true]) {
+                  for (const cancelled of [false, true]) {
+                    const context = {
+                      github: { event_name: event },
+                      inputs: { heavy_only: heavyOnly },
+                      needs: {
+                        "ci-plan": {
+                          outputs: {
+                            queue_depth: "full",
+                            suite_depth: depth,
+                            trusted: String(trusted),
+                            e2e_production_required: String(planned),
+                          },
+                        },
+                        "web-build": { result: webResult },
+                        "heavy-web-build": { result: heavyResult },
+                      },
+                      always: () => true,
+                      cancelled: () => cancelled,
+                    };
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                      `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
+                    ).toBe(
+                      planned &&
+                        (trusted || event === "workflow_dispatch") &&
+                        (webResult === "success" ||
+                          heavyResult === "success") &&
+                        (event !== "merge_group" || !cancelled),
+                    );
+                    if (predicate.includes("queue_depth")) {
+                      context.needs["ci-plan"].outputs.queue_depth = "thin";
+                      expect(
+                        Boolean(evaluateExpression(predicate, context)),
+                      ).toBe(false);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     expect(production).not.toContain("Build web for route checks");
     expect(production).not.toContain("Wait for production web build");
     expect(production).toContain(
@@ -986,13 +1326,98 @@ describe("detect-e2e-changes", () => {
   });
 });
 
+describe("PR production E2E scope", () => {
+  test("follows the production config's actual spec directory", () => {
+    const source = readFileSync(
+      path.join(import.meta.dirname, "../apps/web/e2e/playwright.config.ts"),
+      "utf-8",
+    );
+    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(source)?.[1];
+    if (testDir === undefined) {
+      throw new TypeError("Production config must declare testDir");
+    }
+    const spec = path.posix.join("apps/web/e2e", testDir, "future.spec.ts");
+    expect(detects("pr-core", [spec])).toBe("true");
+  });
+
+  test("runs for specs, helpers, fixtures and Playwright configuration", () => {
+    for (const file of [
+      "apps/web/e2e/specs/new.spec.ts",
+      "apps/web/e2e/specs/nested/new.spec.ts",
+      "apps/web/e2e/helpers/test.ts",
+      "apps/web/e2e/fixtures/simple.docx",
+      "apps/web/e2e/playwright.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("true");
+    }
+  });
+
+  test("leaves marketing-only inputs to the marketing workflow", () => {
+    for (const file of [
+      "apps/web/e2e/marketing/product-screenshots.spec.ts",
+      "apps/web/e2e/playwright.marketing.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+      expect(detects("marketing", [file]), file).toBe("true");
+    }
+  });
+
+  test("does not widen PR shards for runtime or orchestration changes", () => {
+    for (const file of [
+      "apps/api/src/handlers/tasks/get.ts",
+      "apps/web/src/routes/index.tsx",
+      "packages/ui/src/button.tsx",
+      "README.md",
+      "apps/web/e2e/new.spec.ts",
+      "apps/web/e2e/collab/room.spec.ts",
+      "apps/web/e2e/playwright.collab.config.ts",
+      "apps/web/e2e/fixtures/generate.ts",
+      "bun.lock",
+      ".github/workflows/ci.yml",
+      "scripts/detect-e2e-changes.sh",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+    }
+    expect(detects("pr-core", [])).toBe("false");
+  });
+
+  test("marketing exclusions cannot hide a core spec in the same diff", () => {
+    const files = [
+      "apps/web/e2e/marketing/product.spec.ts",
+      "apps/web/e2e/specs/new.spec.ts",
+    ];
+    expect(detects("pr-core", files)).toBe("true");
+    expect(detects("pr-core", files.toReversed())).toBe("true");
+  });
+});
+
 test("every workflow browser command uses the pinned image and no reachable browser action installs system packages", () => {
   const root = path.resolve(import.meta.dirname, "..");
-  const stepSchema = v.object({
-    run: v.optional(v.string()),
-    uses: v.optional(v.string()),
-  });
-  const actionSteps = new Map<string, v.InferOutput<typeof stepSchema>[]>();
+  // CI runs this file without the dependency install, so workflow shapes are
+  // read by hand rather than through a schema library.
+  type Step = { run?: string; uses?: string };
+  const optionalText = (value: unknown, where: string): string | undefined => {
+    expect(value === undefined || typeof value === "string", where).toBe(true);
+    return typeof value === "string" ? value : undefined;
+  };
+  const stepsOf = (value: unknown, where: string): Step[] => {
+    expect(Array.isArray(value), where).toBe(true);
+    return (Array.isArray(value) ? value : []).map((step: unknown) => {
+      expect(isRecord(step), where).toBe(true);
+      const record = isRecord(step) ? step : {};
+      const parsedStep: Step = {};
+      const run = optionalText(record["run"], `${where}: run`);
+      const uses = optionalText(record["uses"], `${where}: uses`);
+      if (run !== undefined) {
+        parsedStep.run = run;
+      }
+      if (uses !== undefined) {
+        parsedStep.uses = uses;
+      }
+      return parsedStep;
+    });
+  };
+  const actionSteps = new Map<string, Step[]>();
   const forbidden =
     /\b(?:apt-get|apt|dpkg)\b|playwright\s+install(?:-deps)?\b/u;
   const browserCommand = (run: string) =>
@@ -1006,9 +1431,7 @@ test("every workflow browser command uses the pinned image and no reachable brow
         (command.includes("test:e2e") || command.includes("test:browser"))
       );
     });
-  const reachableSteps = (
-    steps: v.InferOutput<typeof stepSchema>[],
-  ): v.InferOutput<typeof stepSchema>[] =>
+  const reachableSteps = (steps: Step[]): Step[] =>
     steps.flatMap((step) => {
       if (!step.uses?.startsWith("./.github/actions/")) {
         return [step];
@@ -1017,35 +1440,35 @@ test("every workflow browser command uses the pinned image and no reachable brow
       if (cached !== undefined) {
         return [step, ...cached];
       }
-      const action = v.parse(
-        v.object({ runs: v.object({ steps: v.array(stepSchema) }) }),
-        Bun.YAML.parse(
-          readFileSync(path.join(root, step.uses, "action.yml"), "utf-8"),
-        ),
+      const action: unknown = Bun.YAML.parse(
+        readFileSync(path.join(root, step.uses, "action.yml"), "utf-8"),
       );
-      const reached = reachableSteps(action.runs.steps);
+      const runs =
+        isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
+      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });
   for (const file of readdirSync(path.join(root, ".github/workflows")).filter(
     (name) => name.endsWith(".yml"),
   )) {
-    const jobs = v.parse(
-      v.object({
-        jobs: v.record(
-          v.string(),
-          v.object({
-            steps: v.optional(v.array(stepSchema)),
-            container: v.optional(v.object({ image: v.string() })),
-          }),
-        ),
-      }),
-      Bun.YAML.parse(
-        readFileSync(path.join(root, ".github/workflows", file), "utf-8"),
-      ),
-    ).jobs;
-    for (const [job, body] of Object.entries(jobs)) {
-      const steps = reachableSteps(body.steps ?? []);
+    const parsedWorkflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(root, ".github/workflows", file), "utf-8"),
+    );
+    const jobs =
+      isRecord(parsedWorkflow) && isRecord(parsedWorkflow["jobs"])
+        ? parsedWorkflow["jobs"]
+        : {};
+    expect(Object.keys(jobs).length, file).toBeGreaterThan(0);
+    for (const [job, value] of Object.entries(jobs)) {
+      expect(isRecord(value), `${file}:${job}`).toBe(true);
+      const body = isRecord(value) ? value : {};
+      const container = isRecord(body["container"]) ? body["container"] : {};
+      const steps = reachableSteps(
+        body["steps"] === undefined
+          ? []
+          : stepsOf(body["steps"], `${file}:${job}`),
+      );
       const imageJob = file === "ci.yml" && job === "ci-browser";
       const browserSteps = steps.filter((step) =>
         browserCommand(step.run ?? ""),
@@ -1054,7 +1477,7 @@ test("every workflow browser command uses the pinned image and no reachable brow
         continue;
       }
       if (imageJob) {
-        expect(body.container?.image).toBe(
+        expect(container["image"]).toBe(
           githubExpression("needs.ci-plan.outputs.playwright_image"),
         );
       }
@@ -1098,7 +1521,19 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     import.meta.dirname,
     "../.github/actions/setup-playwright/run-in-image.sh",
   );
-  const root = path.resolve(import.meta.dirname, "..");
+  // A self-contained workspace: the runner reads the pinned image and the
+  // installed Playwright package from it, and CI runs this test without the
+  // dependency install, so the real checkout may have no node_modules.
+  const root = path.join(realpathSync(directory), "workspace");
+  const imageFile = ".github/actions/setup-playwright/image.txt";
+  mkdirSync(path.join(root, path.dirname(imageFile)), { recursive: true });
+  writeFileSync(
+    path.join(root, imageFile),
+    readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
+  );
+  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
+    recursive: true,
+  });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(

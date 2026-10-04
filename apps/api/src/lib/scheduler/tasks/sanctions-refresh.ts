@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { SanctionsSource } from "@stll/sanctions";
+
 import { envBase } from "@/api/env-base";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
@@ -7,6 +9,7 @@ import {
   recordUnexpectedSanctionsFailure,
   refreshSanctionsSource,
 } from "@/api/lib/lists/sanctions/refresh";
+import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -19,6 +22,7 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
 }) => {
   const db = getCaseLawIngestionDb();
   const sources = sanctionsSourceIds();
+  const activated = new Set<SanctionsSource>();
   const refreshNextSource = async (index: number): Promise<void> => {
     const source = sources.at(index);
     if (source === undefined) {
@@ -55,6 +59,9 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
       return;
     }
     const outcome = attempt.value;
+    if (outcome.status === "activated") {
+      activated.add(source);
+    }
     signal.throwIfAborted();
     logger.info("scheduler.sanctions_source_refreshed", {
       "sanctions.source": source,
@@ -72,6 +79,26 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
 
   signal.throwIfAborted();
   const freshness = await readSanctionsFreshness({ db });
+  // Scheduled jobs run inside the API process, so a list this process already
+  // screens against gets the new edition's index here rather than on the next
+  // check's request path. Other replicas build theirs on their next check.
+  // One index at a time bounds the memory held while building.
+  const prepareNextIndex = async (index: number): Promise<void> => {
+    const source = freshness.at(index);
+    if (source === undefined) {
+      return;
+    }
+    if (activated.has(source.source) && source.edition !== null) {
+      signal.throwIfAborted();
+      await sharedSanctionsIndexCache.refresh({
+        db,
+        source: source.source,
+        edition: source.edition,
+      });
+    }
+    await prepareNextIndex(index + 1);
+  };
+  await prepareNextIndex(0);
   for (const source of freshness) {
     if (source.status === "unavailable" || source.annotation !== null) {
       logger.warn("scheduler.sanctions_source_status", {

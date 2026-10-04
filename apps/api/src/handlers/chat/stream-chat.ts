@@ -16,7 +16,11 @@ import {
   resolveStellaSandboxRun,
   type StellaSandboxRunInput,
 } from "@stll/agent-engine";
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import {
+  getModelImageInputCapability,
+  type ModelRole,
+  type ReasoningEffort,
+} from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   createThirdPartyBoundaryRefusalPayload,
@@ -29,6 +33,7 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
@@ -45,10 +50,15 @@ import {
   isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { chatSafePromptText } from "@/api/handlers/chat/chat-prompt";
 import type {
-  ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import {
+  chatAttemptRequestOptions,
+  chatSystemPrompts,
+} from "@/api/handlers/chat/chat-request";
 import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
@@ -68,6 +78,7 @@ import {
   findHandedOutInteraction,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -121,8 +132,8 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching } from "@/api/lib/ai-config";
 import {
   classifyAIError,
   isAnticipatedAIFailure,
@@ -154,10 +165,13 @@ import type {
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import {
+  IMAGE_INPUT_UNSUPPORTED_CODE,
+  imageInputUnsupportedError,
+} from "@/api/lib/chat/provider-image-input";
+import {
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import {
@@ -177,24 +191,23 @@ import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
-import type {
-  ChatTerminalError,
-  HandlerError,
-} from "@/api/lib/errors/tagged-errors";
+import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import {
-  chatTurnOutputTokens,
-  mergeGenerationOptions,
-  resolveTanStackTextModel,
-  systemPromptsPatch,
-} from "@/api/lib/tanstack-ai-generate";
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
+import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import {
+  safeTokenUsageFromTerminalChunk,
+  tokenUsageFromTerminalChunk,
+} from "@/api/lib/tanstack-ai-usage";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
@@ -279,7 +292,8 @@ type StreamChatProps = {
   /** The turn's run: it owns the abort, the stop and the settlement. */
   run: ChatTurnRun;
   safeDb: SafeDb;
-  systemSafe: ChatSafePrompt;
+  /** The prompt's cacheable layers, sent verbatim. */
+  systemSafe: ChatSafePromptLayers;
   systemUntrusted: ChatUntrustedPromptSuffix;
   /**
    * The org's accessible workspace ids, for the model-ingress guard: the
@@ -340,9 +354,7 @@ export const prepareResumeForThirdParty = async ({
 }: {
   boundary: ChatThirdPartyBoundary;
   resume: RunAgentResumeItem[] | undefined;
-}): Promise<
-  Result<RunAgentResumeItem[] | undefined, HandlerError<422 | 500>>
-> => {
+}): Promise<Result<RunAgentResumeItem[] | undefined, AnonymizationRefusal>> => {
   if (resume === undefined || boundary.type === "raw") {
     return Result.ok(resume);
   }
@@ -372,6 +384,10 @@ export const prepareResumeForThirdParty = async ({
     }),
   );
 };
+
+export type StreamChatOutcome =
+  | { type: "streaming"; response: Response }
+  | { type: "refused"; response: ChatTurnFailureResponse };
 
 export const streamChat = async ({
   devModelId,
@@ -408,30 +424,37 @@ export const streamChat = async ({
   externalMcpToolSource,
   userId,
   workspaceId,
-}: StreamChatProps): Promise<Response> => {
+}: StreamChatProps): Promise<StreamChatOutcome> => {
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
   });
   if (agentBoundaryError !== null) {
-    return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(agentBoundaryError),
+    };
   }
+  const systemSafeText = chatSafePromptText(systemSafe);
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary: thirdPartyBoundary,
-    value: [systemSafe, systemUntrusted, messages, resume, tools],
+    value: [systemSafeText, systemUntrusted, messages, resume, tools],
   });
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
     text: systemUntrusted,
   });
   if (Result.isError(preparedUntrusted)) {
-    return thirdPartyBoundaryRefusalResponse(preparedUntrusted.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(preparedUntrusted.error),
+    };
   }
   const system =
     preparedUntrusted.value.length > 0
-      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
-      : systemSafe;
+      ? `${systemSafeText}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
+      : systemSafeText;
   // The system prompt is entirely server-built; a tenant workspace id in it
   // is a Stella bug (matter scope, active-file, and connected-matter
   // sections must all speak in chat refs), so this fails closed.
@@ -445,14 +468,20 @@ export const streamChat = async ({
     messages,
   });
   if (Result.isError(rawPreparedMessages)) {
-    return thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error),
+    };
   }
   const preparedResumeResult = await prepareResumeForThirdParty({
     boundary: thirdPartyBoundary,
     resume,
   });
   if (Result.isError(preparedResumeResult)) {
-    return thirdPartyBoundaryRefusalResponse(preparedResumeResult.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(preparedResumeResult.error),
+    };
   }
   const preparedResume = preparedResumeResult.value;
   // Messages carry user-authored and historical text (mention hrefs from
@@ -465,7 +494,7 @@ export const streamChat = async ({
     workspaceIds: tenantWorkspaceIds,
   });
 
-  const primaryModel = resolveTanStackTextModel({
+  const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
@@ -500,37 +529,65 @@ export const streamChat = async ({
     documentAttachmentMimeTypes.some(
       (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
     );
+  const hasImageAttachments = preparedMessageList.some((message) =>
+    message.parts.some((part) => part.type === "image"),
+  );
+  const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
+    hasImageAttachments &&
+    getModelImageInputCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
+  if (modelRejectsImages(primaryModel)) {
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          code: IMAGE_INPUT_UNSUPPORTED_CODE,
+          message: imageInputUnsupportedError().message,
+        },
+        status: 422,
+      }),
+    };
+  }
+
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
     // trigger for the "send without anonymization" retry, which cannot fix a
     // model that simply cannot read the attachment's format.
-    return new Response(
-      JSON.stringify({
-        message:
-          "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          message:
+            "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
+        },
+        status: 422,
       }),
-      { status: 422, headers: { "Content-Type": "application/json" } },
-    );
+    };
   }
 
   if (modelRejectsStreamingTools(primaryModel)) {
-    return new Response(
-      JSON.stringify({
-        message:
-          "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          message:
+            "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
+        },
+        status: 422,
       }),
-      { status: 422, headers: { "Content-Type": "application/json" } },
-    );
+    };
   }
 
   const resolvedFallbackModel =
     devModelId === undefined
-      ? resolveFallbackTextModel({
+      ? await resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
           managedAIResidency,
@@ -544,6 +601,7 @@ export const streamChat = async ({
   const fallbackModel =
     resolvedFallbackModel !== null &&
     (modelRejectsAnyDocument(resolvedFallbackModel) ||
+      modelRejectsImages(resolvedFallbackModel) ||
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
@@ -579,6 +637,7 @@ export const streamChat = async ({
         workspaceIds: tenantWorkspaceIds,
       }),
       system: guardedSystem,
+      systemLayers: systemSafe,
       tenantWorkspaceIds,
       tools: modelTools,
     },
@@ -675,19 +734,40 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  return run.produce(output);
+  return { type: "streaming", response: run.produce(output) };
 };
 
-const thirdPartyBoundaryRefusalResponse = (
-  error: HandlerError<422 | 500>,
-): Response =>
-  new Response(
-    JSON.stringify(createThirdPartyBoundaryRefusalPayload(error.message)),
-    {
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json" },
-      status: error.status,
-    },
-  );
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
+
+const thirdPartyBoundaryRefusalResponse = (
+  error: AnonymizationRefusal,
+): ChatTurnFailureResponse =>
+  new ChatTurnFailureResponse({
+    failureCode: error.failureCode,
+    payload: createThirdPartyBoundaryRefusalPayload(error.message),
+    status: error.status,
+  });
 
 type ResolveAgentRunBoundaryErrorInput = {
   boundary: Pick<ChatThirdPartyBoundary, "type">;
@@ -697,7 +777,7 @@ type ResolveAgentRunBoundaryErrorInput = {
 export const resolveAgentRunBoundaryError = ({
   boundary,
   runMode,
-}: ResolveAgentRunBoundaryErrorInput): HandlerError<422> | null => {
+}: ResolveAgentRunBoundaryErrorInput): AnonymizationRefusal<422> | null => {
   if (
     runMode !== CHAT_RUN_MODE.agent ||
     boundary.type !== CHAT_SEND_MODE.anonymized
@@ -904,15 +984,15 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
-const resolveFallbackTextModel = ({
+const resolveFallbackTextModel = async ({
   organizationId,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
-    const fallbackModel = resolveTanStackTextModel({
+    const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
       orgAIConfig,
@@ -940,6 +1020,7 @@ type CreateChatAttemptAnalyticsProps = {
   modelRole: ModelRole;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  promptCacheSurface?: PromptCacheMetricSurface | undefined;
   safeDb: SafeDb;
   /** Explicit per-turn model selection; undefined = role default. */
   selectedModelId: string | undefined;
@@ -955,6 +1036,7 @@ const createChatAttemptAnalytics = ({
   modelRole,
   organizationId,
   orgAIConfig,
+  promptCacheSurface,
   safeDb,
   selectedModelId,
   usageLane,
@@ -964,6 +1046,7 @@ const createChatAttemptAnalytics = ({
 }: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
   createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
+    promptCacheSurface,
     usageMetering: {
       actionType: "chat",
       lane: usageLane,
@@ -998,6 +1081,9 @@ export type GuardedChatSurfaces = {
    *  right after its step. */
   messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
+  /** The cacheable layers `system` begins with, where its cache markers go
+   *  (`chat-request.ts`). */
+  systemLayers: ChatSafePromptLayers;
   /**
    * The guard's own input, carried alongside its output because the surfaces
    * are not final: the runtime middleware rewrites messages and system prompt
@@ -1151,47 +1237,6 @@ const runChatAttempts = async function* ({
   }
 };
 
-/**
- * What a chat attempt hands the engine that shapes the provider request: the
- * adapter bound to the run's tool call ids, the tools as the provider reads
- * them, the system prompt, and the generation options. The provider wire
- * test builds its requests here too, so what it sends is what a chat turn
- * sends. `maxOutputTokens` defaults to the chat turn's ceiling.
- */
-export const chatAttemptRequestOptions = ({
-  caching,
-  maxOutputTokens,
-  model,
-  modelTools,
-  role,
-  system,
-  toolCallIds,
-}: {
-  caching: ReturnType<typeof resolveCaching>;
-  maxOutputTokens?: number | undefined;
-  model: ResolvedTanStackTextModel;
-  modelTools: Parameters<
-    typeof projectChatToolSchemasForProvider
-  >[0]["modelTools"];
-  role: ChatAttemptRole;
-  system: string | undefined;
-  toolCallIds: ToolCallIdLedger;
-}) => ({
-  adapter: withRunToolCallIds(model.adapter, toolCallIds),
-  tools: projectChatToolSchemasForProvider({
-    modelTools,
-    provider: model.provider,
-  }),
-  ...systemPromptsPatch({ caching, model, system }),
-  modelOptions: mergeGenerationOptions({
-    caching,
-    model,
-    maxOutputTokens: maxOutputTokens ?? chatTurnOutputTokens(model),
-    serviceTier: "standard",
-    temperature: getTemperatureForRole(role),
-  }),
-});
-
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1262,6 +1307,7 @@ const runChatAttempt = async function* ({
   const {
     messages: preparedMessages,
     system: baseSystem,
+    systemLayers,
     tenantWorkspaceIds,
     tools: modelTools,
   } = surfaces;
@@ -1282,6 +1328,8 @@ const runChatAttempt = async function* ({
     modelRole: role,
     organizationId,
     orgAIConfig,
+    // The turn's own model calls; compaction below builds another prompt.
+    promptCacheSurface: sandboxRun ? undefined : "chat",
     safeDb,
     selectedModelId: servedModelId,
     usageLane: servedLane,
@@ -1337,6 +1385,7 @@ const runChatAttempt = async function* ({
         createChatRuntimeMiddleware({
           abortSignal,
           baseSystem,
+          caching,
           compactionAnalytics,
           compactionFeature,
           model,
@@ -1346,6 +1395,7 @@ const runChatAttempt = async function* ({
           managedAIResidency,
           role,
           state,
+          systemLayers,
           tenantWorkspaceIds,
           threadId,
         }),
@@ -1362,6 +1412,7 @@ const runChatAttempt = async function* ({
       modelTools,
       role,
       system: baseSystem,
+      systemLayers,
       toolCallIds,
     }),
     messages: preparedMessages,
@@ -1390,6 +1441,7 @@ const runChatAttempt = async function* ({
       createChatRuntimeMiddleware({
         abortSignal,
         baseSystem,
+        caching,
         compactionAnalytics,
         compactionFeature,
         model,
@@ -1399,6 +1451,7 @@ const runChatAttempt = async function* ({
         managedAIResidency,
         role,
         state,
+        systemLayers,
         tenantWorkspaceIds,
         threadId,
       }),
@@ -1457,6 +1510,7 @@ export const guardedCompactedMessages = ({
 type ChatRuntimeMiddlewareProps = {
   abortSignal: AbortSignal;
   baseSystem: GuardedSystemPrompt;
+  caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
   compactionFeature: string;
   model: ResolvedTanStackTextModel;
@@ -1466,6 +1520,7 @@ type ChatRuntimeMiddlewareProps = {
   managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
   state: ChatAttemptState;
+  systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
 };
@@ -1473,6 +1528,7 @@ type ChatRuntimeMiddlewareProps = {
 const createChatRuntimeMiddleware = ({
   abortSignal,
   baseSystem,
+  caching,
   compactionAnalytics,
   compactionFeature,
   model,
@@ -1482,6 +1538,7 @@ const createChatRuntimeMiddleware = ({
   managedAIResidency,
   role,
   state,
+  systemLayers,
   tenantWorkspaceIds,
   threadId,
 }: ChatRuntimeMiddlewareProps): ChatMiddleware => {
@@ -1528,10 +1585,18 @@ const createChatRuntimeMiddleware = ({
         const recoveryKey = getLoopRecoveryKey(loopDetection);
         if (recoveryKey !== lastLoopRecoveryKey) {
           lastLoopRecoveryKey = recoveryKey;
-          patch.systemPrompts = guardedLoopRecoveryPrompts({
+          const [recoverySystem] = guardedLoopRecoveryPrompts({
             baseSystem,
             detection: loopDetection,
             tenantWorkspaceIds,
+          });
+          // The recovery section joins the turn layer, so the cached layers
+          // before it keep their markers.
+          patch.systemPrompts = chatSystemPrompts({
+            caching,
+            model,
+            system: recoverySystem ?? baseSystem,
+            systemLayers,
           });
         }
       }
@@ -1688,10 +1753,13 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
   reportStreamFailure(error, kind);
+  const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
-    ...chunk,
+    type: EventType.RUN_ERROR,
+    ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
+    ...(usage === undefined ? {} : { usage }),
   };
 };
 
@@ -1936,6 +2004,7 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
@@ -1956,6 +2025,7 @@ const createStreamSettlement = ({
   toolCallsWithCompleteInput,
   getUsage,
   getProducedAnswer,
+  announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -1971,8 +2041,8 @@ const createStreamSettlement = ({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
     });
-  const admissionLossOutcome = () =>
-    resolveAdmissionLossOutcome({
+  const admissionLossOutcome = (): ChatTurnOutcome => {
+    const outcome = resolveAdmissionLossOutcome({
       deferredRunFinishedChunks,
       getRestorableCheckpoint,
       getResponseMessage,
@@ -1980,6 +2050,19 @@ const createStreamSettlement = ({
       producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
+    if (
+      outcome.type !== "failed" ||
+      outcome.error === "empty_completion" ||
+      !ActionAdmissionError.is(abortSignal.reason)
+    ) {
+      return outcome;
+    }
+    return {
+      type: "failed",
+      error: outcome.error,
+      refusal: actionAdmissionRefusal(abortSignal.reason),
+    };
+  };
   const terminalize = async ({
     flushProcessor = false,
     outcome,
@@ -2037,11 +2120,28 @@ const createStreamSettlement = ({
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  const admissionFailureChunks = function* (
+    outcome: ChatTurnOutcome,
+  ): Generator<PublicStreamChunk> {
+    if (outcome.type !== "failed" || outcome.refusal === undefined) {
+      return;
+    }
+    const refusal = outcome.refusal;
+    yield* announceBeforeFailure();
+    yield {
+      type: EventType.RUN_ERROR,
+      code: refusal.code,
+      message: refusal.message,
+      rawEvent: refusal,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    };
+  };
   return {
     admissionLost,
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   };
 };
@@ -2146,6 +2246,28 @@ const processPersistenceChunk = ({
   return { type: "chunk", chunk, lifecycle };
 };
 
+type FailedRunDetailsOptions = {
+  chunk: PublicStreamChunk;
+  sourceChunk: PublicStreamChunk;
+};
+
+const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
+  if (
+    chunk.type !== EventType.RUN_ERROR ||
+    sourceChunk.type !== EventType.RUN_ERROR
+  ) {
+    panic("Unhandled TanStack failed stream event");
+  }
+  return {
+    chunk,
+    usage: tokenUsageFromTerminalChunk(chunk),
+    outcome: {
+      type: "failed",
+      error: classifyRunErrorChunk(sourceChunk),
+    } as const satisfies ChatTurnOutcome,
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -2182,6 +2304,7 @@ export const processServerChatStream = async function* ({
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   } = createStreamSettlement({
     abortSignal,
@@ -2198,6 +2321,7 @@ export const processServerChatStream = async function* ({
     toolCallsWithCompleteInput,
     getUsage: () => usage,
     getProducedAnswer: () => producedAnswer,
+    announceBeforeFailure: () => announceBeforeFailure(),
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2242,15 +2366,14 @@ export const processServerChatStream = async function* ({
         (admissionLost() || admissionCutByControl())
       ) {
         usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
-        await terminalize({
-          flushProcessor: admissionCutByControl(),
-          outcome: admissionCutByControl()
-            ? cutShortOutcome()
-            : admissionLossOutcome(),
-        });
+        const outcome = admissionCutByControl()
+          ? cutShortOutcome()
+          : admissionLossOutcome();
+        await terminalize({ flushProcessor: admissionCutByControl(), outcome });
         for (const finish of deferredRunFinishedChunks.splice(0)) {
           yield finish;
         }
+        yield* admissionFailureChunks(outcome);
         return;
       }
       const processed = processPersistenceChunk({
@@ -2269,31 +2392,28 @@ export const processServerChatStream = async function* ({
       }
       const { chunk, lifecycle } = processed;
       if (lifecycle === "failed") {
-        if (chunk.type !== EventType.RUN_ERROR) {
-          panic("Unhandled TanStack failed stream event");
-        }
-        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
+        const failure = failedRunDetails({ chunk, sourceChunk });
+        usage = failure.usage ?? usage;
         await terminalize({
           flushProcessor: true,
-          outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
+          outcome: failure.outcome,
         });
         yield* announceBeforeFailure();
-        yield chunk;
+        yield failure.chunk;
         return;
       }
       yield chunk;
     }
 
     if (admissionLost() || admissionCutByControl()) {
-      await terminalize({
-        flushProcessor: admissionCutByControl(),
-        outcome: admissionCutByControl()
-          ? cutShortOutcome()
-          : admissionLossOutcome(),
-      });
+      const outcome = admissionCutByControl()
+        ? cutShortOutcome()
+        : admissionLossOutcome();
+      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
       for (const chunk of deferredRunFinishedChunks.splice(0)) {
         yield chunk;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -2327,10 +2447,12 @@ export const processServerChatStream = async function* ({
     }
   } catch (error) {
     if (admissionLost()) {
-      await terminalize({ outcome: admissionLossOutcome() });
+      const outcome = admissionLossOutcome();
+      await terminalize({ outcome });
       for (const finish of deferredRunFinishedChunks.splice(0)) {
         yield finish;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const kind = classifyAIError(error);

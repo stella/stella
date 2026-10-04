@@ -10,7 +10,7 @@ import {
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
@@ -27,8 +27,10 @@ const config = {
     "caching, memory extraction, and time policy. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "anonymization_admin",
     consumesServices: false,
   },

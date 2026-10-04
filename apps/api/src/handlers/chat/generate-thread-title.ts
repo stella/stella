@@ -105,119 +105,124 @@ const generateAdmittedThreadTitle = async ({
     return;
   }
 
-  try {
-    const text = await generateTanStackTextForRole({
-      dataClass: "customer",
-      abortSignal:
-        admissionSignal === undefined
-          ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
-          : AbortSignal.any([
-              AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
-              admissionSignal,
-            ]),
-      finishPolicy: TITLE_FINISH_POLICY,
-      maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-      role: "fast",
-      serviceTier: "batch",
-      orgAIConfig,
-      managedAIResidency,
-      organizationId,
-      analytics: aiAnalytics,
-      caching: resolveCaching({
-        promptCachingEnabled,
+  const generated = await Result.tryPromise({
+    try: async () =>
+      await generateTanStackTextForRole({
+        dataClass: "customer",
+        abortSignal:
+          admissionSignal === undefined
+            ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
+            : AbortSignal.any([
+                AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
+                admissionSignal,
+              ]),
+        finishPolicy: TITLE_FINISH_POLICY,
+        maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
         role: "fast",
-        scopeKey: threadId,
+        serviceTier: "batch",
+        orgAIConfig,
+        managedAIResidency,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
+          promptCachingEnabled,
+          role: "fast",
+          scopeKey: threadId,
+        }),
+        tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
+        prompt: buildThreadTitlePrompt(messages),
       }),
-      tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
-      prompt: buildThreadTitlePrompt(messages),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(generated)) {
+    aiAnalytics.captureError(generated.error);
+    if (isUnanticipatedAIFailure(generated.error)) {
+      captureError(generated.error, { threadId });
+    }
+    return;
+  }
+  const text = generated.value;
+
+  const title = cleanGeneratedTitle(text);
+  if (!title) {
+    return;
+  }
+
+  const updateResult = await safeDb(async (tx) => {
+    const currentThread = await tx.query.chatThreads.findFirst({
+      where: {
+        id: { eq: threadId },
+      },
+      columns: {
+        title: true,
+        titleSource: true,
+      },
     });
 
-    const title = cleanGeneratedTitle(text);
-    if (!title) {
-      return;
+    // Only replace a still-default placeholder title whose text still
+    // matches what this request set at creation. A "user" rename or a
+    // prior "ai" title is left untouched: the generator writes once, and a
+    // rename that raced this fire-and-forget path must win.
+    //
+    // The title-text comparison (not just titleSource) also covers a
+    // rolling-deploy window: an old API task's rename-thread implementation
+    // predates titleSource and only writes `title`, so a rename it serves
+    // leaves titleSource="default" behind. Requiring the title to still
+    // equal initialTitle catches that stale-column case too, since any
+    // rename necessarily changes the text.
+    if (
+      !currentThread ||
+      !aiTitlingMayReplace(currentThread.titleSource) ||
+      currentThread.title !== initialTitle
+    ) {
+      return false;
     }
 
-    const updateResult = await safeDb(async (tx) => {
-      const currentThread = await tx.query.chatThreads.findFirst({
-        where: {
-          id: { eq: threadId },
+    const updatedRows = await tx
+      .update(chatThreads)
+      .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          // Re-check inside the UPDATE so a rename committing between the
+          // read above and this write cannot be clobbered.
+          eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
+          eq(chatThreads.title, initialTitle),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+
+    if (updatedRows.length === 0) {
+      return false;
+    }
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: threadId,
+      workspaceId: threadWorkspaceId,
+      changes: {
+        titleChanged: { old: false, new: true },
+        titleSource: {
+          old: currentThread.titleSource,
+          new: CHAT_TITLE_SOURCE.AI,
         },
-        columns: {
-          title: true,
-          titleSource: true,
-        },
-      });
-
-      // Only replace a still-default placeholder title whose text still
-      // matches what this request set at creation. A "user" rename or a
-      // prior "ai" title is left untouched: the generator writes once, and a
-      // rename that raced this fire-and-forget path must win.
-      //
-      // The title-text comparison (not just titleSource) also covers a
-      // rolling-deploy window: an old API task's rename-thread implementation
-      // predates titleSource and only writes `title`, so a rename it serves
-      // leaves titleSource="default" behind. Requiring the title to still
-      // equal initialTitle catches that stale-column case too, since any
-      // rename necessarily changes the text.
-      if (
-        !currentThread ||
-        !aiTitlingMayReplace(currentThread.titleSource) ||
-        currentThread.title !== initialTitle
-      ) {
-        return false;
-      }
-
-      const updatedRows = await tx
-        .update(chatThreads)
-        .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
-        .where(
-          and(
-            eq(chatThreads.id, threadId),
-            // Re-check inside the UPDATE so a rename committing between the
-            // read above and this write cannot be clobbered.
-            eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
-            eq(chatThreads.title, initialTitle),
-          ),
-        )
-        .returning({ id: chatThreads.id });
-
-      if (updatedRows.length === 0) {
-        return false;
-      }
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-        resourceId: threadId,
-        workspaceId: threadWorkspaceId,
-        changes: {
-          title: { old: currentThread.title, new: title },
-          titleSource: {
-            old: currentThread.titleSource,
-            new: CHAT_TITLE_SOURCE.AI,
-          },
-        },
-      });
-
-      return true;
+      },
     });
 
-    if (Result.isError(updateResult)) {
-      captureError(updateResult.error, { threadId });
-      return;
-    }
+    return true;
+  });
 
-    // Re-index so the new AI-generated title is searchable. Best effort:
-    // a failure is reported, never thrown. Awaited, so whoever waits for
-    // this title (the turn's follow-ups) waits for its indexing too.
-    if (updateResult.value) {
-      await indexThread(threadId).catch(captureError);
-    }
-  } catch (error) {
-    aiAnalytics.captureError(error);
-    if (isUnanticipatedAIFailure(error)) {
-      captureError(error, { threadId });
-    }
+  if (Result.isError(updateResult)) {
+    captureError(updateResult.error, { threadId });
+    return;
+  }
+
+  // Re-index so the new AI-generated title is searchable. Best effort:
+  // a failure is reported, never thrown. Awaited, so whoever waits for
+  // this title (the turn's follow-ups) waits for its indexing too.
+  if (updateResult.value) {
+    await indexThread(threadId).catch(captureError);
   }
 };
 
@@ -226,6 +231,8 @@ export const generateThreadTitle = async (
   props: GenerateThreadTitleProps,
 ): Promise<void> => {
   const admitted = await startChatExecutionAdmission({
+    mode: "concurrency-only",
+    actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
   });
@@ -239,9 +246,9 @@ export const generateThreadTitle = async (
   try {
     await generateAdmittedThreadTitle({
       ...props,
-      admissionSignal: admitted.value?.signal,
+      admissionSignal: admitted.value.signal,
     });
   } finally {
-    await admitted.value?.release();
+    await admitted.value.release();
   }
 };

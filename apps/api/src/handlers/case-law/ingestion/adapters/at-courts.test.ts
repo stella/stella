@@ -5,6 +5,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -16,6 +17,8 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
+import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
+import { AT_UMSE_SOURCE } from "./at-umse";
 import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
@@ -218,6 +221,41 @@ const fixtureXml = async (): Promise<string> =>
   ).text();
 
 describe("Austrian RIS adapter", () => {
+  it("quarantines a rejected docket and finishes a stable RIS slice", async () => {
+    const poison = listingItem(SECOND_SOURCE_ID);
+    nestedValue(poison, ["Data", "Metadaten", "Judikatur"])["Geschaeftszahl"] =
+      { item: "\\rtf1" };
+    nestedValue(poison, [
+      "Data",
+      "Metadaten",
+      "Judikatur",
+      "Justiz",
+      "Entscheidungstexte",
+      "item",
+    ])["Geschaeftszahl"] = "\\rtf1";
+    const fixtures = queuedRequest([
+      listingResponse([listingItem(), poison]),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+    ]);
+    const adapter = createAtCourtsAdapter({
+      request: fixtures.request,
+      sleep: async () => {},
+    });
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.decisions).toHaveLength(2);
+    const quarantine = page.decisions.find(
+      ({ sourceDocumentId }) => sourceDocumentId === SECOND_SOURCE_ID,
+    );
+    expect(quarantine?.caseNumberIsPlaceholder).toBe(true);
+    expect(quarantine?.sourceRaw).toContain("rtf1");
+    expect(page.nextCursor).toContain("verify");
+  });
+
   it("declares the source and the publisher's crawl delay", () => {
     const adapter = createAtCourtsAdapter();
     expect(adapter.key).toBe("at-courts");
@@ -269,10 +307,10 @@ describe("Austrian RIS adapter", () => {
     expect(firstPage.decisions).toHaveLength(1);
     const decision = firstPage.decisions[0];
     expect(decision?.sourceDocumentId).toBe(SOURCE_ID);
-    expect(decision?.caseNumber).toBe(CASE_NUMBER);
+    expect(decision?.caseNumber === CASE_NUMBER).toBe(true);
     expect(decision?.ecli).toMatch(/^ECLI:AT:OGH0002:/u);
     expect(decision?.decisionDate).toBe("2026-01-15");
-    expect(decision?.decisionType).toBe("beschluss");
+    expect(decision?.decisionType === "beschluss").toBe(true);
     expect(decision?.documentAst).not.toEqual({});
     expect(
       Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
@@ -317,8 +355,13 @@ describe("Austrian RIS adapter", () => {
       result.unwrap().decisions.map((decision) => decision.sourceDocumentId),
     ).toEqual([SOURCE_ID, SECOND_SOURCE_ID]);
     expect(
-      new Set(result.unwrap().decisions.map((decision) => decision.caseNumber)),
-    ).toEqual(new Set([CASE_NUMBER]));
+      Bun.deepEquals(
+        new Set(
+          result.unwrap().decisions.map((decision) => decision.caseNumber),
+        ),
+        new Set([CASE_NUMBER]),
+      ),
+    ).toBe(true);
   });
 
   it("validates publisher pagination across collection and verification", async () => {
@@ -427,9 +470,10 @@ describe("Austrian RIS adapter", () => {
     expect(page.decisions[0]?.sourceDocumentId).toMatch(
       /^ris-quarantine:[a-f0-9]+$/u,
     );
-    expect(page.decisions[0]?.metadata["detailStatus"]).toBe(
-      "publisher-id-unavailable",
-    );
+    expect(
+      page.decisions[0]?.metadata["detailStatus"] ===
+        "publisher-id-unavailable",
+    ).toBe(true);
     expect(page.decisions[1]?.sourceDocumentId).toBe(SOURCE_ID);
     expect(page.decisions[1]?.sourceDocumentIdRepairAliases).toContain(
       page.decisions[0]?.sourceDocumentId,
@@ -452,7 +496,7 @@ describe("Austrian RIS adapter", () => {
     expect(decision?.sourceDocumentId).toBe(SOURCE_ID);
     expect(decision?.isListingOnly).toBe(true);
     expect(decision?.fulltext).toBeUndefined();
-    expect(decision?.metadata["detailStatus"]).toBe("detail-http-404");
+    expect(decision?.metadata["detailStatus"] === "detail-http-404").toBe(true);
   });
 
   it("throws on transient or unparseable listings and accepts an explicit zero", async () => {
@@ -666,14 +710,16 @@ describe("Austrian RIS adapter", () => {
     expect(
       new URL(headnoteQuery ?? "").searchParams.get("Geschaeftszahl"),
     ).toBe(CASE_NUMBER);
-    expect(decision?.metadata["headnotes"]).toEqual([
-      {
-        sourceDocumentId: HEADNOTE_ID,
-        caseNumbers: [CASE_NUMBER],
-        ecli: "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.001",
-        documentUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=${HEADNOTE_ID}`,
-      },
-    ]);
+    expect(
+      Bun.deepEquals(decision?.metadata["headnotes"], [
+        {
+          sourceDocumentId: HEADNOTE_ID,
+          caseNumbers: [CASE_NUMBER],
+          ecli: "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.001",
+          documentUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=${HEADNOTE_ID}`,
+        },
+      ]),
+    ).toBe(true);
     expect(
       decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["headnote-listing"],
     ).toContain(HEADNOTE_ID);
@@ -718,4 +764,118 @@ describe("Austrian RIS adapter", () => {
       rebuilt.filter((decision) => decision.isListingOnly === true),
     ).toEqual([]);
   });
+});
+
+describe("RIS metadata URL provenance", () => {
+  for (const candidate of [
+    " https://example.org/document?a=1&amp;b=2#part ",
+    "https://example.org/%26amp%3B?a=1&b=2",
+    "//example.org/document",
+    "/document",
+    "ftp://example.org/document",
+    "data:text/plain,document",
+    "mailto:publisher@example.org",
+  ]) {
+    it(`keeps or omits every declared address for ${candidate}`, async () => {
+      const item = listingItem();
+      nestedValue(item, ["Data", "Metadaten", "Judikatur"])[
+        "EntscheidungstextUrl"
+      ] = candidate;
+      for (const format of contentUrlsOf(item)) {
+        format["Url"] = candidate;
+      }
+      const headnote = headnoteItem();
+      nestedValue(headnote, ["Data", "Metadaten", "Allgemein"])["DokumentUrl"] =
+        candidate;
+      const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
+        documentXml: await fixtureXml(),
+        headnoteListing: await listingResponse([headnote]).text(),
+      });
+      const parts = decision.metadata["documentParts"];
+      const part = Array.isArray(parts) ? parts.at(0) : undefined;
+      const formats = isRecord(part) ? part["formats"] : undefined;
+      const format = Array.isArray(formats) ? formats.at(0) : undefined;
+      const headnotes = decision.metadata["headnotes"];
+      const summary = Array.isArray(headnotes) ? headnotes.at(0) : undefined;
+      if (candidate.trim().startsWith("https://")) {
+        expect(decision.metadata).toHaveProperty(
+          "decisionTextDocument",
+          candidate.trim(),
+        );
+        expect(isRecord(format) ? format["url"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(isRecord(summary) ? summary["documentUrl"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(Object.hasOwn(decision.metadata, "decisionTextDocument")).toBe(
+          false,
+        );
+        expect(isRecord(format) && Object.hasOwn(format, "url")).toBe(false);
+        expect(isRecord(summary) && Object.hasOwn(summary, "documentUrl")).toBe(
+          false,
+        );
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: [
+            {
+              address: "decisionTextDocument",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[0].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[1].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "headnotes[0].documentUrl",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+          ],
+          overflowCount: 0,
+        });
+      }
+    });
+  }
+});
+
+it("RIS related decisions remain display text even when they resemble a URL", async () => {
+  const listing: unknown = await Bun.file(
+    new URL("__fixtures__/at-ris-listing-umse.json", import.meta.url),
+  ).json();
+  const item = nestedValue(listing, [
+    "OgdSearchResult",
+    "OgdDocumentResults",
+    "OgdDocumentReference",
+  ]);
+  nestedValue(item, ["Data", "Metadaten", "Judikatur", "Umse", "Bezug"])[
+    "item"
+  ] = "https://example.org/item?a=1&amp;b=2";
+  const decision = assembleAtRisDecision(AT_UMSE_SOURCE, item, {
+    documentXml: await Bun.file(
+      new URL("../parsers/__fixtures__/at-ris-umse-text.xml", import.meta.url),
+    ).text(),
+  });
+  const projected = toPlainTextIngestionResult(
+    decision,
+    AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  ).unwrap();
+  for (const metadata of [decision.metadata, projected.metadata]) {
+    expect(metadata).toHaveProperty("relatedDecisions", [
+      "https://example.org/item?a=1&b=2",
+    ]);
+    expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+  }
 });

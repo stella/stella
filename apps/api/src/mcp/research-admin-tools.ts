@@ -221,6 +221,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // fields cannot be enumerated for redaction, so this read tool fails closed
   // and never appears on the anonymized surface.
   access: "read",
+  readClass: "tenant",
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
@@ -481,6 +482,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
   name: "search_boe_legislation",
@@ -892,6 +894,15 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { workspace: ["update"] },
+      { organizationSettings: ["update"] },
+    ],
+    reason:
+      "action selects matter membership changes (a matter update) or organization settings.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: {
     type: "input-discriminator",

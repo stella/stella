@@ -6,6 +6,7 @@ import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/le
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments } from "@/api/db/schema";
+import { projectResolveStatutesResponse } from "@/api/handlers/legislation/catalog-response";
 import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
 import type { WorkAtDateRequest } from "@/api/lib/legal-search/legislation-works-at-date";
 import {
@@ -100,8 +101,19 @@ export const resolveStatutesHandler = async (
 
   const statuteById = new Map(statutes.map((row) => [row.id, row]));
 
-  return {
+  return projectResolveStatutesResponse({
     items: body.works.map((work, index) => {
+      const countryRead = readPublicLawCountry(work.country, {
+        admitted: PUBLIC_LEGISLATION_COUNTRIES,
+      });
+      if (countryRead.kind === "unavailable") {
+        return {
+          ...work,
+          statute: null,
+          unresolvedReason: countryRead.response.reason,
+          availability: countryRead.response,
+        };
+      }
       const key = String(index);
       const id = idByKey.get(key);
       const statute = id === undefined ? null : (statuteById.get(id) ?? null);
@@ -116,5 +128,5 @@ export const resolveStatutesHandler = async (
             : null,
       };
     }),
-  };
+  });
 };

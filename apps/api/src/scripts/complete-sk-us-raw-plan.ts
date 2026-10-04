@@ -82,6 +82,22 @@ export const SK_US_RAW_OUTCOMES = [
 ] as const;
 export type SkUsRawOutcome = (typeof SK_US_RAW_OUTCOMES)[number];
 
+export const SK_US_RAW_OUTCOME_DISPOSITIONS = {
+  already_complete: "terminal",
+  completed: "terminal",
+  would_complete: "preview",
+  listing_unavailable: "terminal",
+  listing_identity_mismatch: "terminal",
+  raw_unavailable: "terminal",
+  raw_read_rejected: "terminal",
+  publisher_rate_limited: "retryable",
+  retry_later: "retryable",
+  concurrent_write: "retryable",
+} as const satisfies Record<
+  SkUsRawOutcome,
+  "terminal" | "retryable" | "preview"
+>;
+
 type SkUsRawInput = {
   raw: Uint8Array;
   contentType: string | null;
@@ -213,6 +229,12 @@ type RunSkUsRawPageOptions = {
     row: SkUsRawCursor,
     mode: "apply" | "dry-run",
   ) => Promise<SkUsRawOutcome>;
+  /**
+   * Every attempted row in both modes, before its journal record: the
+   * operator's per-row evidence, which outlives the task's local files.
+   */
+  record: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => void;
+  journal: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => Promise<void>;
   checkpoint: (cursor: SkUsRawCursor, outcome: SkUsRawOutcome) => Promise<void>;
 };
 
@@ -221,6 +243,8 @@ export const runSkUsRawPage = async ({
   rows,
   mode,
   complete,
+  record,
+  journal,
   checkpoint,
 }: RunSkUsRawPageOptions) => {
   const counts = Object.fromEntries(
@@ -234,11 +258,11 @@ export const runSkUsRawPage = async ({
       panic(`Unknown completion outcome: ${outcome}`);
     }
     counts[outcome] = count + 1;
-    if (
-      outcome === "retry_later" ||
-      outcome === "concurrent_write" ||
-      outcome === "publisher_rate_limited"
-    ) {
+    record(row, outcome);
+    if (mode === "apply") {
+      await journal(row, outcome);
+    }
+    if (SK_US_RAW_OUTCOME_DISPOSITIONS[outcome] === "retryable") {
       return { counts, cursor, stopped: true };
     }
     if (mode === "apply") {
@@ -247,4 +271,38 @@ export const runSkUsRawPage = async ({
     cursor = row;
   }
   return { counts, cursor, stopped: false };
+};
+
+type RunSkUsRawBatchOptions = RunSkUsRawPageOptions & {
+  pageSize: number;
+  after: SkUsRawCursor | null;
+};
+
+/** Consume one bounded selection; a stopped page prevents later pages running. */
+export const runSkUsRawBatch = async ({
+  rows,
+  pageSize,
+  after,
+  ...options
+}: RunSkUsRawBatchOptions) => {
+  const counts: Record<string, number> = {};
+  let scanned = 0;
+  let cursor = after;
+  let stopped = false;
+  for (let offset = 0; offset < rows.length; offset += pageSize) {
+    const result = await runSkUsRawPage({
+      ...options,
+      rows: rows.slice(offset, offset + pageSize),
+    });
+    for (const [outcome, count] of Object.entries(result.counts)) {
+      counts[outcome] = (counts[outcome] ?? 0) + count;
+      scanned += count;
+    }
+    cursor = result.cursor ?? cursor;
+    if (result.stopped) {
+      stopped = true;
+      break;
+    }
+  }
+  return { scanned, counts, cursor, stopped };
 };

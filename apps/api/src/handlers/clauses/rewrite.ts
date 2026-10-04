@@ -19,7 +19,7 @@ import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -96,6 +96,7 @@ const config = {
     "one that carries markers. A changed paragraph loses its inline " +
     "formatting. Consumes AI usage.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

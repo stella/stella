@@ -10,8 +10,7 @@ endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
 
 ## Overview
 
-Stella guards performance the same way it guards schema safety: committed
-baselines, diffed on every run. A regression either fails CI outright or shows
+Stella guards performance with recorded budgets, diffed on every run. A regression either fails CI outright or shows
 up as a reviewable diff in the PR. Six guards exist today:
 
 - **Network baseline** (`apps/web/e2e/network-baseline.json`, checked by
@@ -55,18 +54,26 @@ green is not a mechanical step; it is a product decision that the regression
 is acceptable, and it must be justified in the PR description (why the extra
 request, the deeper wait, or the bigger chunk is worth it).
 
-The network baseline has two write modes for exactly this distinction:
+Main owns network recordings. The main-only recorder runs after route/runtime
+merges and nightly; the delivery workflow validates and publishes a baseline
+artifact keyed by the recorded commit. PR and merge-queue checks load the
+newest published recording at or before their merge base (or the committed
+file at that same base when recording is unavailable). They never edit the shared JSON or request a
+`baseline:record` delivery.
 
-For a new or changed smoked route, add the `baseline:record` label to its pull request; CI records the entry with the pull request's own code, commits it, and opens a review thread on it. Review the recorded values as budget changes and resolve the thread to accept them.
+New and removed routes are scoped from changed route sources and reported in
+the job summary. Existing routes retain every allowance, including routes
+whose source changed. An intentional increase requires a reviewed JSON file
+in `apps/web/e2e/network-budgets/<change>.json` with `route`, a nonempty
+`reason`, and a complete `budget` entry (`depth`, `requests`, and applicable
+`requestCounts`, `dbQueries`, `responseSizes`). Only declarations added or
+modified since the merge base apply; inherited declarations cannot repeatedly
+widen future checks. Use one file per change, so unrelated changes do not
+share a generated baseline conflict.
 
-- `E2E_NETWORK_BASELINE=write` merges into the existing baseline: requests
-  accumulate as a union, depth and DB-query budgets take the max. Safe to run
-  repeatedly (e.g. to re-accumulate timing-conditional requests); used for
-  legitimate additions such as a new endpoint a route now legitimately calls.
-- `E2E_NETWORK_BASELINE=rewrite` snapshots from scratch, discarding anything
-  not observed on this run. Use it after a perf fix, to tighten a depth or
-  budget back down. Follow a `rewrite` with a few `write` runs to
-  re-accumulate any timing-conditional requests the single rewrite run missed.
+`E2E_NETWORK_BASELINE=write` and `rewrite` remain local measurement modes;
+main recording defaults to `write`; dispatch with `mode=rewrite` after a
+performance fix to tighten it. Do not commit measurement output on a PR.
 
 The bundle baseline mirrors this with `--write-baseline` (regenerate) and a
 `RATCHET_DOWN` prompt (not a failure) when a chunk shrinks by more than 3%,
@@ -79,7 +86,7 @@ number, don't just silence the check" norm.
 ### New request on route
 
 `network.ts` reports `New API request(s) on <route>`. The route now
-calls an endpoint it did not before. If intentional, `write` the baseline. If
+calls an endpoint it did not before. If intentional, declare the reviewed budget. If
 not, find what changed (a new hook mount, a widened `select`, an added
 `useQuery`) and remove the call.
 

@@ -9,7 +9,6 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
@@ -24,7 +23,7 @@ import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sh
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
@@ -110,12 +109,7 @@ export const WorkspaceBreadcrumb = ({
                   refInputEl?.focus();
                   return;
                 }
-
-                const message = userErrorFromThrown(
-                  error,
-                  t("errors.actionFailed"),
-                );
-                stellaToast.add({ title: message, type: "error" });
+                notifyUserError(error, t("errors.actionFailed"));
               },
             },
           );
@@ -157,10 +151,7 @@ export const WorkspaceBreadcrumb = ({
             refInputEl?.focus();
             return;
           }
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

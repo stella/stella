@@ -1,8 +1,10 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
@@ -57,6 +59,8 @@ let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
 let shelfDb: LegislationReadDb;
 let shelfClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
+let historyDb: LegislationReadDb;
+let historyClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let ownerDb: LegislationReadDb;
 
 const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
@@ -233,6 +237,32 @@ const statuteAst = (deliveryText: string | null): DocumentAst => {
     ],
   };
 };
+
+const HISTORY_WINDOWS = [
+  { validFrom: "2010-01-01", validTo: "2013-12-31" },
+  { validFrom: "2014-01-01", validTo: "2016-12-31" },
+  { validFrom: "2017-01-01", validTo: "2019-12-31" },
+  { validFrom: "2020-01-01", validTo: null },
+] as const;
+
+/**
+ * Every pattern of which of a Work's four consecutive versions carry the
+ * provision (bit i = the i-th oldest version), so a page boundary can fall
+ * anywhere relative to the versions that predate or repeal it.
+ */
+const HISTORY_PATTERNS = Array.from(
+  { length: 2 ** HISTORY_WINDOWS.length },
+  (_, mask) => ({
+    mask,
+    eli: `CZ/2001/${String(mask + 1)}`,
+    versions: HISTORY_WINDOWS.map(({ validFrom, validTo }, index) => ({
+      validFrom,
+      validTo,
+      id: createSafeId<"legislationDocument">(),
+      carries: Math.floor(mask / 2 ** index) % 2 === 1,
+    })),
+  }),
+);
 
 beforeAll(
   async () => {
@@ -552,11 +582,39 @@ beforeAll(
       }),
     ]);
     shelfDb = readDb(shelfOwner);
+
+    // One Work per pattern of which versions carry the provision, in a
+    // fixture of its own so the extra Works stay out of the listing suites.
+    historyClient = await createTestPglite();
+    const historyOwner = drizzle({ client: historyClient });
+    await historyOwner.execute(sql.raw("SET TIME ZONE 'UTC'"));
+    await historyOwner
+      .insert(legislationSources)
+      .values({ id: openSourceId, adapterKey: "history-open", name: "Open" });
+    await historyOwner.insert(legislationDocuments).values(
+      HISTORY_PATTERNS.flatMap(({ eli, versions }) =>
+        versions.map(({ id, carries, validFrom, validTo }) =>
+          seedDocument({
+            id,
+            sourceId: openSourceId,
+            eli,
+            title: `History walk ${eli}`,
+            documentAst: statuteAst(carries ? `Wording of ${id}` : null),
+            versionValidFrom: validFrom,
+            versionValidTo: validTo,
+          }),
+        ),
+      ),
+    );
+    historyDb = readDb(historyOwner);
   },
   { timeout: propertyTestTimeout(30_000) },
 );
 
 afterAll(async () => {
+  if (historyClient !== undefined) {
+    await historyClient.close();
+  }
   if (shelfClient !== undefined) {
     await shelfClient.close();
   }
@@ -1479,6 +1537,14 @@ describe("batched point-in-time statute resolve", () => {
       null,
       null,
     ]);
+    expect(items.at(3)).toMatchObject({
+      unresolvedReason: "pending_public",
+      availability: {
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+      },
+    });
   });
 
   test("answers an act cited after it ended with its last consolidation", async () => {
@@ -1778,17 +1844,76 @@ describe("provision history", () => {
       civilCodeSuperseded,
     ]);
   });
+
+  // A walk that returned the provision must end in an ordinary last page,
+  // whichever page the versions without the anchor land on. Not found is an
+  // answer only a first page that holds every version can give; a Work no
+  // version of which carries the anchor otherwise walks to an empty end.
+  test.each(HISTORY_PATTERNS)(
+    "walking every cursor collects each carrying version once (pattern $mask)",
+    async ({ mask, versions }) => {
+      const newest = versions.at(-1) ?? panic("history fixture has versions");
+      const carrying = versions
+        .filter(({ carries }) => carries)
+        .map(({ id }) => id)
+        .toReversed();
+
+      for (let limit = 1; limit <= versions.length; limit += 1) {
+        if (mask === 0 && limit >= versions.length) {
+          expect(
+            await readProvisionHistoryHandler({
+              documentId: newest.id,
+              anchor: DELIVERY_ANCHOR,
+              query: { limit },
+              legislationDb: historyDb,
+            }),
+          ).toMatchObject({
+            code: 404,
+            response: { message: "Provision not found" },
+          });
+          continue;
+        }
+
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        let requests = 0;
+        do {
+          requests += 1;
+          const page: ProvisionHistoryPage = expectHistoryPage(
+            await readProvisionHistoryHandler({
+              documentId: newest.id,
+              anchor: DELIVERY_ANCHOR,
+              query: { limit, ...(cursor === null ? {} : { cursor }) },
+              legislationDb: historyDb,
+            }),
+          );
+          seen.push(...page.items.map((item) => item.documentId));
+          cursor = page.nextCursor;
+        } while (cursor !== null && requests <= versions.length);
+
+        expect({ limit, cursor, seen }).toEqual({
+          limit,
+          cursor: null,
+          seen: carrying,
+        });
+      }
+    },
+  );
 });
 
 describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const page = expectPage(
-        await listStatutesHandler({ country }, legislationDb),
-      );
-      expect(page.items).toEqual([]);
-      expect(page.nextCursor).toBeNull();
+      const unavailable = publicCountryUnavailable(country);
+      const listed = await listStatutesHandler({ country }, legislationDb);
+      if (unavailable === null) {
+        const page = expectPage(listed);
+        expect(page.items).toEqual([]);
+        expect(page.nextCursor).toBeNull();
+      } else {
+        expect(listed).toMatchObject({ code: 503, response: unavailable });
+      }
       expect(
         await readPublicLegislationHandler(id, legislationDb),
       ).toMatchObject({ code: 404 });

@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -36,9 +36,11 @@ const config = {
     "task behind it, each with its action, the actor's name, the recorded " +
     "changes, and the operation label.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workspace_schema",
     consumesServices: false,
   },

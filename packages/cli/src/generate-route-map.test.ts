@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { TOOL_ANNOTATIONS } from "./annotations.js";
 import {
   classifyProp,
   generateRouteMap,
   RouteGenerationError,
 } from "./generate-route-map.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import type {
   FlagSpec,
   LeafCommandSpec,
@@ -377,6 +377,7 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(findLeaf(tree, ["template", "fill"])?.inputOnly).toEqual(["values"]);
     expect(findLeaf(tree, ["clause", "save"])?.inputOnly).toEqual([
       "body",
+      "expected_body",
       "metadata",
     ]);
     // set_field_value.content has an untyped `value` child -> whole object to --input.

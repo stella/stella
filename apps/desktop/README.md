@@ -6,7 +6,7 @@ Tauri 2 companion app for managed Office file editing from stella.
 
 ```bash
 bun --filter @stll/desktop dev
-bun --cwd apps/desktop run dev
+bun run --cwd apps/desktop dev
 bun run dev:desktop
 ```
 
@@ -94,7 +94,7 @@ Runtime bridge configuration:
   one-click hosted deployments.
 
 - `STELLA_DESKTOP_ALLOWED_ORIGINS`
-  - Comma-separated exact web origins allowed to call the privileged localhost bridge
+  - Comma-separated exact web origins allowed to request desktop connection status
   - Read at runtime; appended to the built-in defaults (loopback + hosted SPA)
   - Use this for selfhost or staging origins
 - `STELLA_DESKTOP_ALLOWED_API_BASE_URLS`
@@ -113,12 +113,12 @@ Example:
 
 ```bash
 export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop/prod"
-bun --cwd apps/desktop run build
+bun run --cwd apps/desktop build
 ```
 
 ### Notes
 
-- The bridge runs on `127.0.0.1:45901`
+- The bridge runs on `127.0.0.1:45901` and serves status reads with a native connection proof
 - The desktop view runs on `127.0.0.1:5177`
 - Exact origins are required; wildcards are intentionally unsupported
 - Local development does not need extra bridge configuration unless the web app is served from a non-default origin

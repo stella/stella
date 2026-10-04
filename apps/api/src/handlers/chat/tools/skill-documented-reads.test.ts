@@ -38,6 +38,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -82,7 +83,7 @@ const turnProps = (
   editApplyMode: "manual",
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   memoryEnabled: false,
   organizationId,
   orgAIConfig: null,
@@ -102,6 +103,7 @@ const turnProps = (
     accessibleWorkspaceIds: [workspaceId],
   }),
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
   workspaceId,
@@ -115,7 +117,7 @@ const resolveBuiltInSkill = async (
 ): Promise<ActiveChatSkillContext> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName },
-    memberRole: { role: "member" },
+    memberRole: sessionMemberRole("member"),
     organizationId,
     safeDb: noInstalledSkillsSafeDb,
     userId,
@@ -132,7 +134,7 @@ const resolveDeclaredBuiltInSkill = async (
 ): Promise<ActiveSkillContext> => {
   const resolved = await resolveActiveSkillContext({
     activeSkill: { skillName },
-    memberRole: { role: "member" },
+    memberRole: sessionMemberRole("member"),
     organizationId,
     safeDb: noInstalledSkillsSafeDb,
     userId,
@@ -304,7 +306,7 @@ describe("skill-documented chat reads", () => {
     const surface = createChatCodeModeSurface({
       concurrencyKey: "skill-documented-reads-test",
       documentedReads: [documented],
-      runReadTool: async () => ({}),
+      runReadTool: async () => Result.ok({}),
     });
 
     expect(surface.systemPrompt).toContain(stubOf(documented));

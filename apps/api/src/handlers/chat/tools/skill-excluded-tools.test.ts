@@ -27,6 +27,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const PLAYBOOK_BUILDER = "playbook-builder";
@@ -62,7 +63,7 @@ const turnProps = (
   editApplyMode: "manual",
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   memoryEnabled: false,
   organizationId,
   orgAIConfig: null,
@@ -82,6 +83,7 @@ const turnProps = (
     accessibleWorkspaceIds: [workspaceId],
   }),
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
   workspaceId,
@@ -100,7 +102,7 @@ const resolveBuiltInSkill = async (
 ): Promise<ActiveChatSkillContext> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName },
-    memberRole: { role: "member" },
+    memberRole: sessionMemberRole("member"),
     organizationId,
     safeDb: noInstalledSkillsSafeDb,
     userId,

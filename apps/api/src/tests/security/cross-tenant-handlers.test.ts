@@ -22,6 +22,7 @@ import {
 import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  billingArrangements,
   caseLawResearchAnswers,
   caseLawResearchColumns,
   chatMessages,
@@ -100,6 +101,7 @@ import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
@@ -125,6 +127,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -153,7 +157,7 @@ type TestHandlerContext = {
   getWorkspaceAccess: (
     workspaceId: SafeId<"workspace">,
   ) => Promise<{ id: SafeId<"workspace">; status: "active" } | null>;
-  memberRole: { role: "owner" };
+  memberRole: AuthorizedMemberRole;
   orgAIConfig: null;
   orgAIConfigStatus: "ok";
   managedAIResidency: "eu";
@@ -380,9 +384,12 @@ const chatOrgAIConfig = {
 // the stream has passed every tenant boundary on the way.
 const streamChatStub = mock(
   async () =>
-    new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    }),
+    ({
+      type: "streaming",
+      response: new Response("stream started", {
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    }) as const,
 );
 
 const sendChatMessage = createSendMessage({
@@ -678,6 +685,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgA,
         workspaceId: testIds.wsA1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     runBPositive: async ({ ids: testIds, workspaceB }) =>
       await runHandler(readEmailHtmlPreviewHandler, workspaceB, {
@@ -685,6 +693,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgB,
         workspaceId: testIds.wsB1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     expectDenied: expectStatus(404),
     // The shared isolation fixture has a text field. A same-workspace lookup
@@ -976,7 +985,7 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsA1,
         }),
-        { query: {}, memberRole: { role: "admin" } },
+        { query: {}, memberRole: sessionMemberRole("admin") },
       ),
     runBPositive: async ({ ids: testIds }) =>
       await runHandler(
@@ -987,7 +996,7 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsB1,
         }),
-        { query: {}, memberRole: { role: "admin" } },
+        { query: {}, memberRole: sessionMemberRole("admin") },
       ),
     expectDenied: (result) => expectPageExcludesId(result, adminTimeTimerB),
     expectPositive: (result) => expectPageContainsId(result, adminTimeTimerB),
@@ -1006,7 +1015,7 @@ const isolationCases: IsolationCase[] = [
         {
           params: { id: stopTimeTimerB },
           body: {},
-          memberRole: { role: "admin" },
+          memberRole: sessionMemberRole("admin"),
         },
       ),
     runBPositive: async ({ ids: testIds }) =>
@@ -1021,13 +1030,29 @@ const isolationCases: IsolationCase[] = [
         {
           params: { id: stopTimeTimerB },
           body: {},
-          memberRole: { role: "admin" },
+          memberRole: sessionMemberRole("admin"),
         },
       ),
     expectDenied: expectStatus(404),
     expectPositive: (result) => {
       expect(getStatusCode(result)).toBeNull();
       expect(result).toHaveProperty("id");
+    },
+  },
+  {
+    name: "matter billing arrangement read",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(getBillingArrangement, workspaceA, {
+        workspaceId: testIds.wsB1,
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getBillingArrangement, workspaceB, {}),
+    expectDenied: (result) => expect(result).toEqual({ arrangement: null }),
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toMatchObject({
+        arrangement: { mode: "hourly", currency: "USD" },
+      });
     },
   },
   {
@@ -1250,7 +1275,7 @@ const isolationCases: IsolationCase[] = [
     name: "governed work queue",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(listMyWork, workspaceA, {
-        user: { id: testIds.userB1 },
+        user: { id: testIds.userB1, email: "user-b@example.test" },
         query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     runBPositive: async ({ workspaceB }) =>
@@ -1793,6 +1818,12 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(billingArrangements).values({
+    workspaceId: ids.wsB1,
+    organizationId: ids.orgB,
+    mode: "hourly",
+    currency: "USD",
+  });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
     organizationId: ids.orgB,
@@ -2224,7 +2255,7 @@ const createWorkspaceContext = ({
       activeWorkspaceIds.includes(targetWorkspaceId)
         ? { id: targetWorkspaceId, status: "active" }
         : null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,

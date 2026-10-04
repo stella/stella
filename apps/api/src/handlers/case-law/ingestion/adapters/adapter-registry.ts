@@ -140,3 +140,7 @@ export const listAdapters = (): readonly AdapterRegistry[AdapterKey][] =>
 /** List all registered adapter keys. */
 export const listAdapterKeys = (): readonly AdapterKey[] =>
   Object.values(ADAPTER_KEYS);
+
+/** Decision-producing sources with an inline or deferred document stage. */
+export const listDocumentStageAdapters = () =>
+  listAdapters().map(({ key, documentStage }) => ({ key, documentStage }));

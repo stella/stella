@@ -11,14 +11,17 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingArrangements,
   organizationSettings,
   timeEntries,
   timeTimers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -26,6 +29,12 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import {
+  authorizedMemberRole,
+  roleForDisplay,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -48,6 +57,7 @@ type UpdateCtx = Parameters<typeof updateTimeEntry.handler>[0];
 let db: TestDatabase;
 let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
+const capWorkspaceIds: SafeId<"workspace">[] = [];
 const timerIds: SafeId<"timeTimer">[] = [];
 const DAY = Temporal.Now.plainDateISO("UTC").subtract({ days: 1 }).toString();
 const START = new Date(`${DAY}T10:00:00Z`);
@@ -69,6 +79,14 @@ const cleanup = async () => {
     await db
       .delete(timeEntries)
       .where(inArray(timeEntries.id, entryIds.splice(0)));
+  }
+  if (capWorkspaceIds.length) {
+    await db
+      .delete(auditLogs)
+      .where(inArray(auditLogs.workspaceId, capWorkspaceIds));
+    await db
+      .delete(workspaces)
+      .where(inArray(workspaces.id, capWorkspaceIds.splice(0)));
   }
   await db
     .update(organizationSettings)
@@ -124,7 +142,7 @@ const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
     route: "/time-entries/approval-queue",
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
     scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
     getActiveWorkspaceIds: async () => [ids.wsA2],
@@ -522,6 +540,116 @@ describe("approval policy serialization", () => {
   });
 });
 
+test("one approval batch reconciles each client matter independently and excludes unpriced internal work", async () => {
+  const firstMatter = createSafeId<"workspace">();
+  const secondMatter = createSafeId<"workspace">();
+  const matters = [firstMatter, secondMatter];
+  await db.insert(workspaces).values(
+    matters.map((id) => ({
+      id,
+      organizationId: ids.orgA,
+      name: "Approval cap test",
+      reference: id,
+    })),
+  );
+  capWorkspaceIds.push(...matters);
+  await db.insert(billingArrangements).values([
+    {
+      workspaceId: firstMatter,
+      organizationId: ids.orgA,
+      mode: "hourly",
+      currency: "USD",
+      capAmount: cents(10_000),
+      alertThresholdBps: 8000,
+    },
+    {
+      workspaceId: secondMatter,
+      organizationId: ids.orgA,
+      mode: "hourly",
+      currency: "USD",
+      capAmount: cents(20_000),
+      alertThresholdBps: 8000,
+    },
+  ]);
+  const first = await seedEntry({
+    workspaceId: firstMatter,
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(10_000),
+    billable: true,
+  });
+  const second = await seedEntry({
+    workspaceId: secondMatter,
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(10_000),
+    billable: true,
+  });
+  const internal = await seedEntry({
+    activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+    workspaceId: null,
+    billable: false,
+    noCharge: false,
+    billedMinutes: 0,
+    rateAtEntry: cents(0),
+    currency: UNPRICED_TIME_ENTRY_CURRENCY,
+  });
+  const ctx = {
+    ...context(ids.userAdmin, "owner"),
+    safeDb: createSafeDb(db, matters, ids.orgA, ids.userAdmin),
+    scopedDb: createScopedDb(db, matters, ids.orgA, ids.userAdmin),
+    getActiveWorkspaceIds: async () => matters,
+    body: { ids: [first, internal, second] },
+  };
+  expect(await approve.handler(asTestRaw<ApproveCtx>(ctx))).toEqual({
+    results: [
+      { id: first, status: "approved" },
+      { id: internal, status: "approved" },
+      { id: second, status: "approved" },
+    ],
+  });
+  const states = await db
+    .select()
+    .from(billingArrangements)
+    .where(inArray(billingArrangements.workspaceId, matters));
+  expect(states.find((row) => row.workspaceId === firstMatter)).toMatchObject({
+    capState: "above",
+    thresholdState: "above",
+    currencyState: "matched",
+    crossingSequence: 2,
+  });
+  expect(states.find((row) => row.workspaceId === secondMatter)).toMatchObject({
+    capState: "below",
+    thresholdState: "below",
+    currencyState: "matched",
+    crossingSequence: 0,
+  });
+  const crossings = await db
+    .select()
+    .from(auditLogs)
+    .where(inArray(auditLogs.workspaceId, matters));
+  expect(
+    crossings.filter(
+      (row) => row.metadata?.["event"] === "billing_cap_crossed",
+    ),
+  ).toHaveLength(2);
+  const internalAudit = await db
+    .select()
+    .from(auditLogs)
+    .where(eq(auditLogs.resourceId, internal));
+  expect(internalAudit).toHaveLength(1);
+  expect(internalAudit.at(0)).toMatchObject({ workspaceId: null });
+  expect(await approve.handler(asTestRaw<ApproveCtx>(ctx))).toMatchObject({
+    results: ctx.body.ids.map((id) => ({ id, status: "approved" })),
+  });
+  expect(
+    await db
+      .select()
+      .from(auditLogs)
+      .where(inArray(auditLogs.workspaceId, matters)),
+  ).toHaveLength(crossings.length);
+});
+
 describe("internal work approvals", () => {
   const seedInternal = async (
     overrides: Partial<Omit<typeof timeEntries.$inferInsert, "id">> = {},
@@ -639,5 +767,76 @@ describe("internal work approvals", () => {
       results: [{ id, status: "refused", reason: "time_period_locked" }],
     });
     expect((await stored(id))?.status).toBe("draft");
+  });
+});
+
+describe("approval with a credential narrowed below its owner's role", () => {
+  const key = (
+    role: "member" | "owner",
+    permissions: PermissionInput,
+  ): AuthorizedMemberRole =>
+    authorizedMemberRole({
+      role,
+      credential: { type: "attenuated", permissions },
+    });
+  const approveWith = async (
+    selected: SafeId<"timeEntry">[],
+    actor: SafeId<"user">,
+    memberRole: AuthorizedMemberRole,
+  ) =>
+    await approve.handler(
+      asTestRaw<ApproveCtx>({
+        ...context(
+          actor,
+          roleForDisplay(memberRole) === "owner" ? "owner" : "member",
+        ),
+        memberRole,
+        body: { ids: selected },
+      }),
+    );
+
+  test("an owner's read-only key approves nobody else's entry; the approve grant does", async () => {
+    const unassigned = await seedEntry({ approverUserId: null });
+
+    expect(
+      await approveWith(
+        [unassigned],
+        ids.userAdmin,
+        key("owner", { timeEntry: ["read"] }),
+      ),
+    ).toMatchObject({ results: [{ id: unassigned, status: "refused" }] });
+    expect(await stored(unassigned)).toMatchObject({
+      status: "draft",
+      approvedByUserId: null,
+    });
+
+    expect(
+      await approveWith(
+        [unassigned],
+        ids.userAdmin,
+        key("owner", { timeEntry: ["read", "approve"] }),
+      ),
+    ).toEqual({ results: [{ id: unassigned, status: "approved" }] });
+  });
+
+  test("the assigned approver's key needs update to approve its own queue", async () => {
+    const assigned = await seedEntry();
+
+    expect(
+      await approveWith(
+        [assigned],
+        ids.userA2,
+        key("member", { timeEntry: ["read"] }),
+      ),
+    ).toMatchObject({ results: [{ id: assigned, status: "refused" }] });
+    expect((await stored(assigned))?.status).toBe("draft");
+
+    expect(
+      await approveWith(
+        [assigned],
+        ids.userA2,
+        key("member", { timeEntry: ["read", "update"] }),
+      ),
+    ).toEqual({ results: [{ id: assigned, status: "approved" }] });
   });
 });

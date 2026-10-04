@@ -3,7 +3,7 @@ import { Elysia } from "elysia";
 import type { InternalRoute } from "elysia";
 import { encodePath, getLoosePath } from "elysia/utils";
 
-import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   actionSizeErrorResponse,
   boundActionJsonResponse,
@@ -152,7 +152,7 @@ export const runTenantHttpAction = (
     handleRequest,
     isTenantAction,
     policy = getActionSizePolicy,
-    enabled = env.FEATURE_ACTION_ADMISSION,
+    enabled = isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION"),
     decorateRefusal,
   }: TenantHttpActionOptions,
 ): Response | Promise<Response> => {

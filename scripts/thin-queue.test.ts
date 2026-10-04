@@ -1,0 +1,736 @@
+import { panic } from "better-result";
+import { expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Script } from "node:vm";
+import * as v from "valibot";
+
+import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+
+const root = new URL("../", import.meta.url).pathname;
+const stepSchema = v.looseObject({
+  name: v.optional(v.string()),
+  if: v.optional(v.string()),
+  run: v.optional(v.string()),
+  env: v.optional(v.record(v.string(), v.string())),
+});
+const workflowSchema = v.object({
+  "run-name": v.optional(v.string()),
+  concurrency: v.optional(
+    v.object({
+      group: v.string(),
+      "cancel-in-progress": v.union([v.boolean(), v.string()]),
+    }),
+  ),
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
+      steps: v.optional(v.array(stepSchema)),
+    }),
+  ),
+});
+const readWorkflow = (name: string) =>
+  v.parse(
+    workflowSchema,
+    Bun.YAML.parse(
+      readFileSync(path.join(root, ".github/workflows", name), "utf-8"),
+    ),
+  );
+const ci = readWorkflow("ci.yml");
+const main = readWorkflow("main-heavy.yml");
+const heavy = mainHeavyJobs(ci);
+type StepOptions = { workflow: typeof ci; job: string; name: string };
+const step = ({ workflow, job, name }: StepOptions) => {
+  const found = workflow.jobs[job]?.steps?.find((item) => item.name === name);
+  if (!found?.run) {
+    panic(`Missing ${job}/${name} script`);
+  }
+  return { ...found, run: found.run };
+};
+const depth = step({
+  workflow: ci,
+  job: "ci-plan",
+  name: "Resolve suite depth",
+});
+const outcome = step({
+  workflow: ci,
+  job: "ci-result",
+  name: "Evaluate CI outcome",
+});
+const scopes = v.parse(
+  v.record(v.string(), v.nullable(v.string())),
+  JSON.parse(outcome.env?.["JOB_SCOPES"] ?? ""),
+);
+const needs = v.parse(v.array(v.string()), ci.jobs["ci-result"]?.needs);
+const plan = {
+  ...Object.fromEntries(
+    Object.values(scopes).flatMap((scope) =>
+      scope === null ? [] : [[scope, "true"]],
+    ),
+  ),
+  agent_sandbox_docker_required: "true",
+  api_image_deps_required: "true",
+  trusted: "true",
+  suite_depth: "full",
+  fix_tests_on_base_required: "false",
+};
+const events = [
+  { event: "merge_group", message: "ordinary" },
+  { event: "pull_request", message: "ordinary" },
+  { event: "push", message: "ordinary" },
+  { event: "push", message: "chore: release v1.2.3" },
+  { event: "schedule", message: "ordinary" },
+  { event: "workflow_dispatch", message: "ordinary" },
+];
+type ContextOptions = {
+  event: (typeof events)[number];
+  variable: string;
+  queueDepth: string;
+};
+const context = ({
+  event: { event, message },
+  variable,
+  queueDepth,
+}: ContextOptions) => ({
+  github: {
+    event_name: event,
+    event: { head_commit: { message }, pull_request: { draft: false } },
+  },
+  vars: { MERGE_QUEUE_DEPTH: variable },
+  inputs: { heavy_only: false },
+  needs: Object.fromEntries(
+    needs.map((job) => {
+      const outputs: Record<string, string> =
+        job === "ci-plan" ? { ...plan, queue_depth: queueDepth } : {};
+      return [job, { result: "success", outputs }];
+    }),
+  ),
+  always: () => true,
+  cancelled: () => false,
+  startsWith: (value: string, prefix: string) => value.startsWith(prefix),
+});
+const selected = (condition: string | undefined, value: object) => {
+  const expression = (condition ?? "true")
+    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1")
+    .replaceAll(
+      /needs\.([\w-]+)/gu,
+      (_, job: string) => `needs[${JSON.stringify(job)}]`,
+    );
+  return new Script(`Boolean(${expression})`).runInNewContext(value);
+};
+const templateValue = (template: string, value: object) =>
+  template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
+    v.parse(v.string(), new Script(`(${expression})`).runInNewContext(value)),
+  );
+
+type ConcurrencyContextOptions = {
+  event: (typeof events)[number];
+  variable: string;
+  eventSha: string;
+  testedSha: string;
+};
+const concurrencyContext = ({
+  event,
+  variable,
+  eventSha,
+  testedSha,
+}: ConcurrencyContextOptions) => {
+  const value = context({ event, variable, queueDepth: "full" });
+  return {
+    ...value,
+    github: { ...value.github, sha: eventSha },
+    inputs: {
+      ...value.inputs,
+      sha: event.event === "workflow_dispatch" ? testedSha : "",
+    },
+    format: (template: string, sha: string) =>
+      template.replace("{0}", () => sha),
+  };
+};
+
+const assertMainConcurrency = (workflow: typeof main) => {
+  const concurrency = workflow.concurrency;
+  const runName = workflow["run-name"];
+  if (!concurrency || !runName) {
+    panic("Main heavy workflow requires concurrency and a run name");
+  }
+  expect(
+    concurrency["cancel-in-progress"],
+    "running heavy work is never cancelled",
+  ).toBe(false);
+  const shaA = "a".repeat(40);
+  const shaB = "b".repeat(40);
+  for (const event of events.filter(({ event: eventName }) =>
+    mainTriggered(eventName),
+  )) {
+    for (const variable of ["", "full", "thin"]) {
+      const groups = [];
+      for (const eventSha of [shaA, shaB]) {
+        let testedSha = eventSha;
+        if (event.event === "workflow_dispatch") {
+          testedSha = eventSha === shaA ? shaB : shaA;
+        }
+        const value = concurrencyContext({
+          event,
+          variable,
+          eventSha,
+          testedSha,
+        });
+        const group = templateValue(concurrency.group, value);
+        const coalesced =
+          event.event === "push" &&
+          variable === "thin" &&
+          !event.message.startsWith("chore: release v");
+        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+          coalesced ? "main-heavy-push" : `main-heavy-${testedSha}`,
+        );
+        expect(
+          templateValue(runName, value),
+          `${event.event}/tested SHA title`,
+        ).toBe(`Main heavy suites ${testedSha}`);
+        if (
+          event.event === "push" &&
+          event.message === "ordinary" &&
+          variable !== "thin"
+        ) {
+          expect(
+            selected(workflow.jobs["validate"]?.if, value),
+            `${variable}/ordinary push skipped`,
+          ).toBe(false);
+        }
+        groups.push(group);
+      }
+      const [first, second] = groups;
+      if (
+        event.event === "push" &&
+        event.message === "ordinary" &&
+        variable === "thin"
+      ) {
+        expect(first, "ordinary thin pushes share one pending group").toBe(
+          second,
+        );
+      } else {
+        expect(
+          first,
+          `${event.event}/${event.message}/${variable}/distinct SHAs`,
+        ).not.toBe(second);
+      }
+    }
+  }
+};
+
+let baselineWorkflows: { ci: typeof ci; main: typeof main } | undefined;
+const original = (name: "ci.yml" | "main-heavy.yml") => {
+  if (baselineWorkflows) {
+    return name === "ci.yml" ? baselineWorkflows.ci : baselineWorkflows.main;
+  }
+  const history = Bun.spawnSync(
+    [
+      "git",
+      "log",
+      "-n",
+      "30",
+      "--format=%H",
+      "--",
+      ".github/workflows/main-heavy.yml",
+    ],
+    { cwd: root },
+  );
+  expect(history.exitCode).toBe(0);
+  for (const revision of history.stdout.toString().trim().split("\n")) {
+    const priorMain = Bun.spawnSync(
+      ["git", "show", `${revision}:.github/workflows/main-heavy.yml`],
+      { cwd: root },
+    );
+    if (priorMain.exitCode !== 0) {
+      continue;
+    }
+    const source = priorMain.stdout.toString();
+    const parsed = v.parse(workflowSchema, Bun.YAML.parse(source));
+    const validate = parsed.jobs["validate"]?.if;
+    if (
+      !source.includes("schedule:") ||
+      !parsed.jobs["suites"]?.if ||
+      !validate ||
+      validate.includes("MERGE_QUEUE_DEPTH")
+    ) {
+      continue;
+    }
+    const priorCi = Bun.spawnSync(
+      ["git", "show", `${revision}:.github/workflows/ci.yml`],
+      { cwd: root },
+    );
+    expect(priorCi.exitCode).toBe(0);
+    baselineWorkflows = {
+      ci: v.parse(workflowSchema, Bun.YAML.parse(priorCi.stdout.toString())),
+      main: parsed,
+    };
+    return name === "ci.yml" ? baselineWorkflows.ci : baselineWorkflows.main;
+  }
+  return panic(
+    "No prior full-queue workflow baseline in bounded main-heavy history",
+  );
+};
+
+const mainTriggered = (event: string) =>
+  ["push", "schedule", "workflow_dispatch"].includes(event);
+type MainSelectionOptions = {
+  workflow: typeof main;
+  event: (typeof events)[number];
+  variable: string;
+};
+const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
+  const value = context({ event, variable, queueDepth: "full" });
+  const validationSelected =
+    mainTriggered(event.event) &&
+    selected(workflow.jobs["validate"]?.if, value);
+  let validationResult = "skipped";
+  if (validationSelected) {
+    const validation = workflow.jobs["validate"]?.steps?.find(
+      ({ name }) => name === "Validate merge queue depth",
+    );
+    const result = validation?.run
+      ? Bun.spawnSync(["bash", "-e", "-c", validation.run], {
+          cwd: root,
+          env: { ...process.env, MERGE_QUEUE_DEPTH: variable },
+        }).exitCode
+      : 0;
+    validationResult = result === 0 ? "success" : "failure";
+  }
+  const dependentContext = {
+    ...value,
+    needs: { validate: { result: validationResult } },
+  };
+  const suites =
+    mainTriggered(event.event) &&
+    selected(workflow.jobs["suites"]?.if, dependentContext);
+  const status =
+    mainTriggered(event.event) &&
+    selected(workflow.jobs["status"]?.if, dependentContext);
+  return {
+    validate: validationSelected,
+    suites,
+    status,
+    publishes: status && validationResult === "success",
+  };
+};
+const assertMainSelection = (workflow: typeof main) => {
+  for (const event of events) {
+    for (const variable of ["", "full", "thin", "typo"]) {
+      const validationSelected =
+        mainTriggered(event.event) &&
+        (event.event !== "push" ||
+          event.message.startsWith("chore: release v") ||
+          (variable !== "" && variable !== "full"));
+      const valid = variable !== "typo";
+      expect(
+        mainSelection({ workflow, event, variable }),
+        `${event.event}/${event.message}/${variable}`,
+      ).toEqual({
+        validate: validationSelected,
+        suites: validationSelected && valid,
+        status: validationSelected,
+        publishes: validationSelected && valid,
+      });
+    }
+  }
+};
+
+test("unset and full preserve baseline job predicates across the event matrix", () => {
+  const baseline = original("ci.yml");
+  const baselineMain = original("main-heavy.yml");
+  expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  expect(Object.keys(ci.jobs)).toEqual(Object.keys(baseline.jobs));
+  for (const event of events) {
+    for (const variable of ["", "full"]) {
+      const value = context({ event, variable, queueDepth: "full" });
+      for (const [job, body] of Object.entries(baseline.jobs)) {
+        expect(
+          selected(ci.jobs[job]?.if, value),
+          `${event.event}/${event.message}/${variable}/${job}`,
+        ).toBe(selected(body.if, value));
+      }
+      expect(mainSelection({ workflow: main, event, variable })).toEqual(
+        mainSelection({ workflow: baselineMain, event, variable }),
+      );
+    }
+  }
+}, 30_000);
+
+test("one variable moves only derived heavy jobs from merge groups to ordinary main pushes", () => {
+  const baseline = original("ci.yml");
+  for (const event of events) {
+    for (const variable of ["", "full", "thin", "typo"]) {
+      const heavyOnly = mainTriggered(event.event);
+      const resolved = runDepth({ event: event.event, variable, heavyOnly });
+      const thinQueue =
+        !heavyOnly && event.event === "merge_group" && variable === "thin";
+      const outputs = Object.fromEntries(
+        resolved.output
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=")),
+      );
+      const value = context({
+        event,
+        variable,
+        queueDepth: outputs["queue_depth"] ?? "full",
+      });
+      value.inputs.heavy_only = heavyOnly;
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.result = resolved.exitCode === 0 ? "success" : "failure";
+      planner.outputs["suite_depth"] = outputs["suite_depth"] ?? "";
+      if (heavyOnly) {
+        planner.outputs["landing_build_required"] = "false";
+        planner.outputs["fix_tests_on_base_required"] = "false";
+        planner.outputs["heavy_web_build_required"] = "true";
+      }
+      const invoked =
+        !heavyOnly || mainSelection({ workflow: main, event, variable }).suites;
+      for (const job of needs.filter((name) => name !== "ci-plan")) {
+        const runs =
+          invoked &&
+          resolved.exitCode === 0 &&
+          selected(ci.jobs[job]?.if, value);
+        if (heavyOnly) {
+          const scope = scopes[job];
+          const planned =
+            scope === null ||
+            (scope !== undefined && planner.outputs[scope] === "true");
+          expect(runs, `${event.event}/${variable}/${job}`).toBe(
+            invoked &&
+              resolved.exitCode === 0 &&
+              heavy.includes(job) &&
+              planned,
+          );
+          continue;
+        }
+        expect(runs, `${event.event}/${variable}/${job}`).toBe(
+          resolved.exitCode !== 0 || (thinQueue && heavy.includes(job))
+            ? false
+            : selected(baseline.jobs[job]?.if, value),
+        );
+      }
+    }
+  }
+  assertMainSelection(main);
+}, 30_000);
+
+type RunDepthOptions = { event: string; variable: string; heavyOnly?: boolean };
+const runDepth = ({ event, variable, heavyOnly = false }: RunDepthOptions) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "thin-depth-"));
+  const output = path.join(directory, "output");
+  writeFileSync(output, "");
+  try {
+    const result = Bun.spawnSync(["bash", "-e", "-c", depth.run], {
+      cwd: root,
+      env: {
+        ...process.env,
+        EVENT_NAME: event,
+        MERGE_QUEUE_DEPTH: variable,
+        DISPATCH_DEPTH: "full",
+        HEAVY_ONLY: String(heavyOnly),
+        GITHUB_OUTPUT: output,
+      },
+    });
+    return {
+      exitCode: result.exitCode,
+      output: readFileSync(output, "utf-8"),
+      diagnostic: result.stdout.toString() + result.stderr.toString(),
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+test("the actual depth resolver fails closed and retains full suite scopes for thin queues", () => {
+  expect(depth.env?.["MERGE_QUEUE_DEPTH"]).toBe(
+    `\${{ vars.MERGE_QUEUE_DEPTH }}`,
+  );
+  for (const { event } of events) {
+    for (const variable of ["", "full", "thin", "typo"]) {
+      const result = runDepth({ event, variable });
+      if (variable === "typo") {
+        expect(result.exitCode).toBe(1);
+        expect(result.diagnostic).toContain("::error::");
+        expect(result.diagnostic).toContain("MERGE_QUEUE_DEPTH");
+        expect(result.output).toBe("");
+        continue;
+      }
+      if (
+        !["merge_group", "pull_request", "workflow_dispatch"].includes(event)
+      ) {
+        expect(result.exitCode).toBe(1);
+        continue;
+      }
+      expect(result.exitCode).toBe(0);
+      const outputs = Object.fromEntries(
+        result.output
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=")),
+      );
+      expect(outputs["queue_depth"] ?? "full").toBe(
+        event === "merge_group" && variable === "thin" ? "thin" : "full",
+      );
+      expect(result.output).toContain(
+        `suite_depth=${event === "pull_request" ? "fast" : "full"}\n`,
+      );
+    }
+  }
+  expect(
+    runDepth({ event: "merge_group", variable: "thin", heavyOnly: true })
+      .output,
+  ).not.toContain("queue_depth=thin");
+  expect(
+    runDepth({ event: "merge_group", variable: "typo", heavyOnly: true })
+      .output,
+  ).toBe("");
+}, 30_000);
+
+type EvaluateOptions = {
+  queueDepth: string;
+  job?: string;
+  result?: string;
+  script?: string;
+};
+const evaluate = ({
+  queueDepth,
+  job,
+  result,
+  script = outcome.run,
+}: EvaluateOptions) => {
+  const dependencies = Object.fromEntries(
+    needs.map((name) => {
+      if (name === job) {
+        return [name, { result, outputs: {} }];
+      }
+      return [
+        name,
+        { result: heavy.includes(name) ? "skipped" : "success", outputs: {} },
+      ];
+    }),
+  );
+  return Bun.spawnSync(["bash", "-e", "-c", script], {
+    cwd: root,
+    env: {
+      ...process.env,
+      ...outcome.env,
+      EVENT: "merge_group",
+      PLAN_RESULT: "success",
+      TRUSTED: "true",
+      SUITE_DEPTH: "full",
+      HEAVY_ONLY: "false",
+      QUEUE_DEPTH: queueDepth,
+      THIN_JOBS: JSON.stringify(THIN_JOBS),
+      HEAVY_JOBS: JSON.stringify(heavy),
+      PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
+      NEEDS: JSON.stringify(dependencies),
+    },
+  }).exitCode;
+};
+
+test("thin aggregation accepts only intended heavy skips and still requires every planned thin check", () => {
+  expect(outcome.env?.["QUEUE_DEPTH"]).toBe(
+    `\${{ needs.ci-plan.outputs.queue_depth || 'full' }}`,
+  );
+  expect(outcome.env?.["THIN_JOBS"]).toBe(
+    `\${{ needs.ci-plan.outputs.thin_jobs || '[]' }}`,
+  );
+  expect(evaluate({ queueDepth: "thin" })).toBe(0);
+  expect(evaluate({ queueDepth: "full" })).toBe(1);
+  for (const job of [...THIN_JOBS, ...heavy]) {
+    for (const result of ["failure", "cancelled", "timed_out"]) {
+      expect(
+        evaluate({ queueDepth: "thin", job, result }),
+        `${job}/${result}`,
+      ).toBe(1);
+    }
+  }
+  for (const job of THIN_JOBS) {
+    expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
+      1,
+    );
+  }
+}, 30_000);
+
+test("ignoring queue depth in the result gate breaks intended thin skips", () => {
+  expect(evaluate({ queueDepth: "thin" })).toBe(0);
+  expect(
+    evaluate({
+      queueDepth: "thin",
+      script: `QUEUE_DEPTH=full\n${outcome.run}`,
+    }),
+  ).toBe(1);
+}, 30_000);
+
+test("thin ordinary pushes coalesce pending work while releases, schedules and dispatches stay per SHA", () => {
+  assertMainConcurrency(main);
+}, 30_000);
+
+test("dropping push coalescing or cancelling running heavy work violates the concurrency contract", () => {
+  const perSha = structuredClone(main);
+  const cancelling = structuredClone(main);
+  if (!perSha.concurrency || !cancelling.concurrency) {
+    panic("Missing main heavy concurrency");
+  }
+  perSha.concurrency.group = `main-heavy-\${{ inputs.sha || github.sha }}`;
+  expect(perSha.concurrency.group).not.toBe(main.concurrency?.group);
+  expect(() => assertMainConcurrency(perSha)).toThrow(
+    "push/ordinary/thin/group",
+  );
+  cancelling.concurrency["cancel-in-progress"] = true;
+  expect(() => assertMainConcurrency(cancelling)).toThrow(
+    "running heavy work is never cancelled",
+  );
+}, 30_000);
+
+test("running main heavy on ordinary full-depth pushes violates the scheduling contract", () => {
+  assertMainSelection(main);
+  const mutated = structuredClone(main);
+  const validate = mutated.jobs["validate"];
+  if (!validate) {
+    panic("Missing main validation job");
+  }
+  validate.if = "true";
+  expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
+}, 30_000);
+
+test("invalid configuration is validated before fetching code and publishes no commit status", () => {
+  const validation = step({
+    workflow: main,
+    job: "validate",
+    name: "Validate merge queue depth",
+  });
+  expect(main.jobs["validate"]?.steps?.at(0)).toEqual(validation);
+  expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
+    `\${{ vars.MERGE_QUEUE_DEPTH }}`,
+  );
+  for (const variable of ["", "full", "thin", "typo"]) {
+    const result = Bun.spawnSync(["bash", "-e", "-c", validation.run], {
+      cwd: root,
+      env: { ...process.env, MERGE_QUEUE_DEPTH: variable },
+    });
+    expect(result.exitCode).toBe(variable === "typo" ? 1 : 0);
+    if (variable === "typo") {
+      expect(result.stdout.toString() + result.stderr.toString()).toContain(
+        "::error::",
+      );
+    }
+  }
+  expect(
+    selected(main.jobs["suites"]?.if, {
+      needs: { validate: { result: "failure" } },
+    }),
+  ).toBe(false);
+  const status = step({
+    workflow: main,
+    job: "status",
+    name: "Publish heavy conclusion",
+  });
+  const directory = mkdtempSync(path.join(tmpdir(), "thin-status-"));
+  const marker = path.join(directory, "called");
+  writeFileSync(
+    path.join(directory, "gh"),
+    `#!/bin/sh\nprintf called > '${marker}'\n`,
+    { mode: 0o755 },
+  );
+  const inheritedPath = process.env["PATH"];
+  if (inheritedPath === undefined) {
+    panic("Status publication test requires PATH");
+  }
+  try {
+    const result = Bun.spawnSync(["bash", "-e", "-c", status.run], {
+      cwd: root,
+      env: {
+        ...process.env,
+        PATH: `${directory}:${inheritedPath}`,
+        SHA: "",
+        RESULTS: JSON.stringify({
+          validate: { result: "failure" },
+          suites: { result: "skipped" },
+        }),
+      },
+    });
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(marker)).toBe(false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("the planner emits the canonical thin set only when derived planning is selected", () => {
+  const derive = step({
+    workflow: ci,
+    job: "ci-plan",
+    name: "Derive heavy jobs",
+  });
+  for (const { event } of events) {
+    for (const heavyOnly of [false, true]) {
+      for (const queueDepth of ["full", "thin"]) {
+        expect(
+          selected(derive.if, {
+            github: { event_name: event },
+            inputs: { heavy_only: heavyOnly },
+            steps: { depth: { outputs: { queue_depth: queueDepth } } },
+          }),
+        ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));
+      }
+    }
+  }
+  const result = Bun.spawnSync(
+    ["bun", "scripts/main-heavy-plan.ts", ".github/workflows/ci.yml"],
+    { cwd: root },
+  );
+  expect(result.exitCode).toBe(0);
+  const outputs = Object.fromEntries(
+    result.stdout
+      .toString()
+      .trim()
+      .split("\n")
+      .map((line) => {
+        const separator = line.indexOf("=");
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      }),
+  );
+  expect(JSON.parse(outputs["thin_jobs"] ?? "")).toEqual(THIN_JOBS);
+  expect(JSON.parse(outputs["heavy_jobs"] ?? "")).toEqual(heavy);
+}, 30_000);
+
+test("main release and scheduled runs execute the planned version compiler in either queue mode", () => {
+  expect(heavy).toContain("release-typecheck");
+  expect(scopes["release-typecheck"]).toBe("release_typecheck_required");
+  for (const event of [
+    { event: "push", message: "chore: release v1.2.3" },
+    { event: "schedule", message: "ordinary" },
+  ]) {
+    for (const variable of ["full", "thin"]) {
+      expect(mainSelection({ workflow: main, event, variable }).suites).toBe(
+        true,
+      );
+      const value = context({ event, variable, queueDepth: "full" });
+      value.inputs.heavy_only = true;
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["release_typecheck_required"] = "true";
+      expect(
+        selected(ci.jobs["release-typecheck"]?.if, value),
+        `${event.event}/${variable}`,
+      ).toBe(true);
+    }
+  }
+}, 30_000);

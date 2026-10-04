@@ -1,0 +1,105 @@
+import { useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/utils";
+
+import Tooltip from "@/components/tooltip";
+import { UserIdentityAvatar } from "@/components/user-avatar";
+import { getDisplayName } from "@/lib/get-display-name";
+import type { Workspace } from "@/lib/workspaces/types";
+
+type TeamAvatarMember = Pick<
+  Workspace["members"][number],
+  "userEmail" | "userId" | "userImage" | "userName"
+>;
+
+type TeamAvatarsProps = {
+  members: readonly TeamAvatarMember[];
+  leadUserId: string | null;
+  /** Size in tailwind units, e.g. "size-6". */
+  size?: string;
+  /** Inner text size class, e.g. "text-3xs". */
+  textSize?: string;
+  maxVisible?: number;
+  totalCount?: number;
+  emptyFallback?: React.ReactNode;
+};
+
+export const TeamAvatars = ({
+  members,
+  leadUserId,
+  size = "size-6",
+  textSize = "text-3xs",
+  maxVisible = 3,
+  totalCount = members.length,
+  emptyFallback,
+  // Explicit ReactNode: `emptyFallback` widens the inferred return to a type
+  // containing React 19's Promise<AwaitedReactNode> member, which
+  // promise-function-async would otherwise flag on this sync component.
+}: TeamAvatarsProps): React.ReactNode => {
+  const t = useTranslations();
+  if (totalCount === 0) {
+    return emptyFallback === undefined ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      emptyFallback
+    );
+  }
+  const visible = members.slice(0, maxVisible);
+  const overflow = totalCount - visible.length;
+
+  return (
+    <div className="flex items-center -space-x-1">
+      {visible.map((m) => {
+        const isLead = leadUserId === m.userId;
+        const displayName =
+          getDisplayName(m.userName, m.userEmail) ?? t("common.unknownUser");
+        return (
+          <Tooltip
+            content={
+              isLead ? `${displayName} · ${t("workspaces.lead")}` : displayName
+            }
+            key={m.userId}
+            render={
+              <span
+                className={cn(
+                  "ring-background inline-flex shrink-0 rounded-full ring-2",
+                  isLead && "ring-primary",
+                )}
+              />
+            }
+          >
+            <UserIdentityAvatar
+              className={cn(size, textSize)}
+              image={m.userImage}
+              name={displayName}
+            />
+          </Tooltip>
+        );
+      })}
+      {overflow > 0 && (
+        <Tooltip
+          content={members
+            .slice(maxVisible)
+            .map(
+              (m) =>
+                getDisplayName(m.userName, m.userEmail) ??
+                t("common.unknownUser"),
+            )
+            .join(", ")}
+          render={
+            <span
+              className={cn(
+                "bg-muted text-muted-foreground ring-background relative z-10",
+                "flex items-center justify-center rounded-full font-medium tabular-nums ring-2",
+                size,
+                textSize,
+              )}
+            >
+              +{overflow}
+            </span>
+          }
+        />
+      )}
+    </div>
+  );
+};

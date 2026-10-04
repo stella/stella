@@ -26,6 +26,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
@@ -80,7 +81,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
+  "apps/api/src/lib/github/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
@@ -114,6 +117,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
+  "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
@@ -121,15 +125,18 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
+  "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
+  "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
+  "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
@@ -141,6 +148,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/concurrency/src/**/*.ts",
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
+  "packages/db-load-gate/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -160,6 +168,11 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Better Auth invokes these hooks and consumes rejected APIError values.
+  "apps/api/src/lib/auth/demo-account-hooks.ts",
+  // Better Auth consumes adapter failures through Promise rejection.
+  "apps/api/src/lib/auth/registration-adapter.ts",
+
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
   "apps/api/src/handlers/**/*route.ts",
@@ -186,6 +199,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
+  // reservation callbacks whose rejection rolls back the kickoff transaction.
+  "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   // Web worker entry modules. The browser, not our code, invokes the message
@@ -208,6 +224,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.
+  // Fetch-compatible callback used by Better Auth's customFetchImpl. The SDK
+  // consumes Response/rejection, so this HTTP boundary cannot return Result.
+  "packages/fetch/src/index.ts",
+  // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
+  // adapters convert its typed failures to Result at their ingestion boundary.
+  "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

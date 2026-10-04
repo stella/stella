@@ -8,7 +8,7 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -46,7 +46,13 @@ const config = {
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: readExpensesQuerySchema,
 } satisfies WorkspaceHandlerConfig;

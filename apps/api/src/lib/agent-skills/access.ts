@@ -1,13 +1,16 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  hasManagementPermission,
+  hasMemberPermission,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 type LoadVisibleSkillOptions = {
   skillId: SafeId<"agentSkill">;
@@ -74,26 +77,34 @@ export const loadVisibleSkill = async (
 
 type CanManageSkillOptions = {
   skill: Pick<VisibleSkill, "scope" | "userId">;
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   userId: SafeId<"user">;
+  /** The skill permission the write spends: `delete` removes the skill,
+   *  `update` covers every other direct write. */
+  spends: "update" | "delete";
 };
 
 /**
  * Who may write to a skill directly (edit it, accept a proposal against it,
- * remove someone else's proposal or comment): admins and owners for team
- * skills, the author for private ones. Everyone else who can see the skill
- * proposes and comments instead.
+ * remove someone else's proposal or comment, delete it): admins and owners for
+ * team skills, the author for private ones, each spending the permission the
+ * write needs. Everyone else who can see the skill proposes and comments
+ * instead.
  */
 export const canManageSkill = ({
   skill,
   memberRole,
   userId,
+  spends,
 }: CanManageSkillOptions): boolean => {
+  const permission = { agentSkill: [spends] };
   switch (skill.scope) {
     case "team":
-      return isOrganizationManagementRole(memberRole.role);
+      return hasManagementPermission(memberRole, permission);
     case "private":
-      return skill.userId === userId;
+      return (
+        skill.userId === userId && hasMemberPermission(memberRole, permission)
+      );
     default: {
       skill.scope satisfies never;
       return panic(`Unhandled scope: ${String(skill.scope)}`);

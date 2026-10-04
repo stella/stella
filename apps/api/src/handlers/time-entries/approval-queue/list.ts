@@ -6,7 +6,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   tPaginationCursor,
@@ -66,6 +66,7 @@ const QUEUE_OMITTED_COLUMNS = [
   "taskCode",
   "activityCode",
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   "timerStartedAt",
   "timerStoppedAt",
@@ -90,8 +91,10 @@ const listApprovalQueue = createSafeRootHandler(
     description:
       "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "billing_admin",
       consumesServices: false,
     },

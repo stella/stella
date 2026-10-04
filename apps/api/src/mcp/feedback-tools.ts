@@ -337,6 +337,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "prepare_feedback",
     scope: "stella:feedback",
@@ -366,6 +367,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: {
       type: "outbound",

@@ -1,9 +1,26 @@
 import type { Transaction } from "@/api/db/root";
-import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
+import type {
+  AuditAction,
+  AuditRecorder,
+  AuditResourceType,
+} from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import type { S3SigningKeyspace } from "@/api/lib/s3-presign";
+
+export type ContentDisposition = "attachment" | "inline";
+
+/**
+ * The audit action for delivering stored content: a saved copy is a download,
+ * an in-browser rendering is an access. Every content grant records its action
+ * through this map, so the audit log names a view and a download apart.
+ */
+export const CONTENT_DELIVERY_AUDIT_ACTION = {
+  attachment: AUDIT_ACTION.DOWNLOAD,
+  inline: AUDIT_ACTION.ACCESS,
+} as const satisfies Record<ContentDisposition, AuditAction>;
 
 type AuditedPresignDownloadOptions = {
   tx: Transaction;
@@ -14,11 +31,8 @@ type AuditedPresignDownloadOptions = {
   expiresInSeconds: number;
   /**
    * When set, the returned URL forces a download with this filename
-   * via RFC 6266 content-disposition. Omit for inline (in-browser)
-   * delivery — but note: inline delivery of privileged content is
-   * still a "download" event from the audit point of view; the
-   * recorded metadata includes `disposition` so reviewers can
-   * distinguish later.
+   * via RFC 6266 content-disposition and records a download. Omit for
+   * inline (in-browser) delivery, which records an access.
    */
   fileName?: string;
   /** Additional audit metadata (e.g., sizeBytes, contentType). */
@@ -26,12 +40,13 @@ type AuditedPresignDownloadOptions = {
   organizationId?: SafeId<"organization"> | null;
   s3Keyspace?: S3SigningKeyspace;
   workspaceId?: SafeId<"workspace"> | null;
+  signDownload?: typeof presignDownloadUrl;
 };
 
 /**
  * Single choke point for granting an S3 download URL to a user.
- * Records a DOWNLOAD audit row in the supplied transaction, then
- * returns the presigned URL. The audit row commits with the
+ * Records a download (attachment) or access (inline) audit row in the
+ * supplied transaction, then returns the presigned URL. The audit row commits with the
  * surrounding work — if the tx rolls back, the audit row does too.
  *
  * Use this for every user-facing download path. Internal proxies
@@ -51,22 +66,26 @@ export const auditedPresignDownload = async ({
   organizationId,
   s3Keyspace,
   workspaceId,
+  signDownload = presignDownloadUrl,
 }: AuditedPresignDownloadOptions): Promise<string> => {
+  const disposition: ContentDisposition = fileName ? "attachment" : "inline";
   await recordAuditEvent(tx, {
-    action: AUDIT_ACTION.DOWNLOAD,
+    action: CONTENT_DELIVERY_AUDIT_ACTION[disposition],
     resourceType,
     resourceId,
     ...(workspaceId !== undefined ? { workspaceId } : {}),
     metadata: {
       s3Key,
       expiresInSeconds,
-      disposition: fileName ? "attachment" : "inline",
+      disposition,
       ...(fileName ? { fileName } : {}),
       ...metadata,
     },
   });
 
-  return await presignDownloadUrl(s3Key, {
+  recordContentDeliveryReceipt();
+
+  return await signDownload(s3Key, {
     expiresIn: expiresInSeconds,
     ...(fileName ? { fileName } : {}),
     ...(organizationId

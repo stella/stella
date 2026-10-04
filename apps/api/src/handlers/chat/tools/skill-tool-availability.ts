@@ -1,20 +1,22 @@
-import type { roles } from "@stll/permissions";
-
 import {
   getChatTools,
   type GetChatToolsProps,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
-  chatProjectableReadToolNames,
+  chatScriptReadToolNames,
   CODE_MODE_EXECUTE_TOOL_NAME,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
   restrictChatToolsToScope,
   type ChatToolScope,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { roleForDisplay } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { isMemberAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 /**
  * A registry tool counts as offered only where its own registry gates pass:
@@ -23,7 +25,7 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  */
 const isRegistryToolUsable = (
   toolName: string,
-  memberRole: keyof typeof roles,
+  memberRole: AuthorizedMemberRole,
 ): boolean => {
   const definition = getStaticMcpToolDefinition(toolName);
   if (definition === undefined) {
@@ -31,7 +33,8 @@ const isRegistryToolUsable = (
   }
   return (
     isMcpToolFeatureEnabled(definition.feature) &&
-    (definition.isVisibleToMemberRole?.(memberRole) ?? true)
+    isMemberAuthorizedForMcpTool(memberRole, definition) &&
+    (definition.isVisibleToMemberRole?.(roleForDisplay(memberRole)) ?? true)
   );
 };
 
@@ -45,14 +48,21 @@ const chatOfferedToolNames = ({
   memberRole,
   tools,
 }: {
-  memberRole: keyof typeof roles;
+  memberRole: AuthorizedMemberRole;
   tools: ChatToolMap;
 }): ReadonlySet<string> => {
   const names = Object.entries(tools).flatMap(([name, tool]) =>
     tool === undefined ? [] : [name],
   );
   if (names.includes(CODE_MODE_EXECUTE_TOOL_NAME)) {
-    names.push(...chatProjectableReadToolNames());
+    names.push(...chatScriptReadToolNames());
+  }
+  for (const [readName, directTool] of Object.entries(
+    DIRECT_ONLY_CHAT_READ_TOOLS,
+  )) {
+    if (names.includes(directTool)) {
+      names.push(readName);
+    }
   }
   return new Set(
     names.filter((name) => isRegistryToolUsable(name, memberRole)),

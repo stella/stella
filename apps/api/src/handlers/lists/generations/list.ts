@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListGenerationRuns } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
@@ -33,9 +33,11 @@ const config = {
     "each run's status, its instruction, and its created, updated, and " +
     "completed timestamps.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workflow_orchestration",
     consumesServices: false,
   },

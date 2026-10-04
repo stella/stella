@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -127,7 +127,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -255,7 +255,7 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           EMAIL_PROVIDER: smtp
           FRONTEND_URL: "http://127.0.0.1:3000"
-          GOTENBERG_PASSWORD: gotenberg
+          GOTENBERG_PASSWORD: migration-smoke-password
           GOTENBERG_URL: "http://127.0.0.1:3000"
           GOTENBERG_USERNAME: gotenberg
           REDIS_URL: "redis://127.0.0.1:6379"

@@ -20,6 +20,7 @@ describe("API service shutdown", () => {
     const events: string[] = [];
 
     const shutdown = shutdownApiServices({
+      closeManagedProviderChecks: async () => undefined,
       closeBackgroundWorkers: async () => undefined,
       closeDatabaseLoginProbe: async () => undefined,
       drainScheduler: Promise.resolve(),
@@ -59,6 +60,7 @@ describe("API service shutdown", () => {
 
     const outcome = observeWithinDeadline(
       shutdownApiServices({
+        closeManagedProviderChecks: async () => undefined,
         closeBackgroundWorkers: async () => await never,
         closeDatabaseLoginProbe: async () => await never,
         drainScheduler: never,
@@ -78,6 +80,7 @@ describe("API service shutdown", () => {
     "chat-turn-runs",
     "http",
     "login-probe",
+    "provider-checks",
     "scheduler",
     "workers",
   ] as const) {
@@ -88,6 +91,11 @@ describe("API service shutdown", () => {
 
       const outcome = await observeWithinDeadline(
         shutdownApiServices({
+          closeManagedProviderChecks: async () => {
+            if (failedService === "provider-checks") {
+              throw failure;
+            }
+          },
           closeBackgroundWorkers: async () => {
             if (failedService === "workers") {
               throw failure;
