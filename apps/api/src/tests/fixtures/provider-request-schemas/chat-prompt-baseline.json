@@ -12,6 +12,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33513
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33720
       }
     ],
     "anthropic/extended": [
@@ -26,6 +30,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34002
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34211
       }
     ],
     "bedrock/default": [
@@ -40,6 +48,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33746
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33953
       }
     ],
     "bedrock/extended": [
@@ -54,6 +66,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34234
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34442
       }
     ],
     "google/default": [
@@ -96,6 +112,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35118
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35331
       }
     ],
     "mistral/extended": [
@@ -110,6 +130,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35644
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35857
       }
     ],
     "openai/default": [
@@ -124,6 +148,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34721
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34933
       }
     ],
     "openai/extended": [
@@ -138,6 +166,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35236
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35449
       }
     ],
     "openrouter-anthropic/default": [
@@ -152,6 +184,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34795
       }
     ],
     "openrouter-anthropic/extended": [
@@ -166,6 +202,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35295
       }
     ],
     "openrouter/default": [
@@ -180,6 +220,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34795
       }
     ],
     "openrouter/extended": [
@@ -194,6 +238,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35295
       }
     ]
   },
