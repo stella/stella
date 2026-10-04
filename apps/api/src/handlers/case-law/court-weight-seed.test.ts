@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { US_COURTS } from "@stll/api-contract/us-courts";
 
 import {
@@ -93,6 +94,21 @@ describe("court weight seed", () => {
     );
   });
 
+  test("the flat seed keeps the jurisdiction order the migrations rendered", () => {
+    // The migrations above pin row order within the full seed; this pins
+    // where each jurisdiction's block sits, USA last, as the declaration
+    // map's entry order must keep it.
+    expect([...new Set(COURT_WEIGHT_SEED.map((row) => row.country))]).toEqual([
+      "CZE",
+      "SVK",
+      "POL",
+      "AUT",
+      "HUN",
+      "EU",
+      "USA",
+    ]);
+  });
+
   test("a jurisdiction's own seed names no other jurisdiction and removes nothing", () => {
     const rendered = courtWeightJurisdictionSeedSql("USA");
     expect(rendered.includes("DELETE")).toBe(false);
@@ -135,7 +151,11 @@ describe("court weight seed", () => {
     // The stored spellings, taken from the adapters' fixtures: full names,
     // bracketed abbreviations, bare abbreviations. A spelling the seed misses
     // silently demotes a supreme court to a district court.
-    const stored: readonly [country: string, court: string, label: string][] = [
+    const stored: readonly [
+      country: CaseLawJurisdiction,
+      court: string,
+      label: string,
+    ][] = [
       ["CZE", "Ústavní soud", "constitutional"],
       ["CZE", "Nejvyšší soud", "supreme"],
       ["CZE", "Nejvyšší správní soud", "supreme"],
