@@ -75,10 +75,15 @@ test("source changes disable human autofix while the independent CI guard remain
   );
   const alignment = ci.slice(
     ci.indexOf("- name: Tauri package alignment"),
+    ci.indexOf("- name: Tauri counterpart autofix tests"),
+  );
+  expect(alignment).toContain("bun scripts/check-tauri-package-alignment.ts");
+  const autofixTests = ci.slice(
+    ci.indexOf("- name: Tauri counterpart autofix tests"),
     ci.indexOf("- name: Lockfile release-age guard"),
   );
-  expect(alignment).toContain("scripts/fix-tauri-package-alignment.test.ts");
-  expect(alignment).toContain("bun scripts/check-tauri-package-alignment.ts");
+  expect(autofixTests).toContain("scripts/fix-tauri-package-alignment.test.ts");
+  expect(autofixTests).toContain("scripts/tauri-autofix-workflow.test.ts");
 });
 
 test("npm Tauri updates form their own group without changing the existing cadence", () => {
