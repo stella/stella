@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -22,6 +23,7 @@ const config = {
   },
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({
     justificationId: tSafeId("justification"),

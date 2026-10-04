@@ -6,6 +6,7 @@ import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
@@ -73,6 +74,8 @@ const { Route: invoiceRoute } =
   await import("@/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId");
 const { ContactNotesEditor } =
   await import("@/routes/_protected.contacts/-components/contact-notes-editor");
+const { EditableRow } =
+  await import("@/routes/_protected.contacts/-components/editable-row");
 const { ContactCommunicationEditor } =
   await import("@/routes/_protected.contacts/-components/contact-communication-editor");
 const { ContactCustomFieldsEditor } =
@@ -122,6 +125,7 @@ const contact = (id: typeof A, notes: string | null) =>
     responsibleAttorney: null,
     dateOfBirth: null,
     nationalityCodes: [],
+    sanctionsMonitoringMode: "included",
     createdBy: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
@@ -217,6 +221,68 @@ const notesPage = () => {
   );
   return <ContactNotesEditor contact={data} />;
 };
+
+const ratePage = () => {
+  const { data } = query.useSuspenseQuery(contactOptions(ORGANIZATION, A));
+  return (
+    <EditableRow
+      key={`default-hourly-rate-${data.currency ?? "none"}`}
+      contact={data}
+      field="defaultHourlyRate"
+      label="Hourly rate"
+    />
+  );
+};
+
+for (const currency of ["EUR", "JPY", "KWD", null]) {
+  test(`changing currency to ${currency ?? "none"} discards an active hourly-rate draft`, async () => {
+    const client = createClient();
+    const original = {
+      ...contact(A, null),
+      currency: "GBP",
+      defaultHourlyRate: cents(100),
+    };
+    client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, original);
+    const { view } = await mountPage(ratePage, client);
+    testing.fireEvent.click(view.getByRole("button"));
+    testing.fireEvent.change(view.getByRole("textbox"), {
+      target: { value: "150.50" },
+    });
+    await testing.act(async () => {
+      client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, {
+        ...original,
+        currency,
+      });
+    });
+    await testing.waitFor(() => {
+      expect(view.queryByRole("textbox") === null).toBe(true);
+    });
+    view.unmount();
+    expect(posts).toEqual([]);
+    client.clear();
+  });
+}
+
+test("ordinary page unmount commits an active hourly-rate draft", async () => {
+  const client = createClient();
+  client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, {
+    ...contact(A, null),
+    currency: "GBP",
+    defaultHourlyRate: cents(100),
+  });
+  const { view } = await mountPage(ratePage, client);
+  testing.fireEvent.click(view.getByRole("button"));
+  testing.fireEvent.change(view.getByRole("textbox"), {
+    target: { value: "150.50" },
+  });
+  view.unmount();
+  const post = await nextPost();
+  expect(post.body).toEqual({ defaultHourlyRate: 15_050 });
+  await testing.act(async () =>
+    post.response.resolve(Response.json({ success: true })),
+  );
+  client.clear();
+});
 
 test("a same-contact refetch preserves an active notes draft", async () => {
   const client = createClient();

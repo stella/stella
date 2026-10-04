@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -14,6 +15,7 @@ const config = {
     "chat history. This is irreversible.",
   permissions: { workspace: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "tool", name: "delete_matter" },
 } satisfies WorkspaceHandlerConfig;
 

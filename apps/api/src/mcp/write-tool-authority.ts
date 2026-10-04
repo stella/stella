@@ -244,16 +244,18 @@ export const isAccountAuthorizedForMcpTool = (
   definition.access === "read" ||
   definition.accountAccess === "sandbox" ||
   Result.isOk(checkAccountOperation(userEmail));
+type McpToolAuthorityDenial = "member-role" | "credential";
+
 /**
  * Which half of the request's authority refuses the tool: the member role
  * itself, or a credential whose own permission set is narrower than the role.
  * `null` when the tool is authorized. The two need different recoveries (a
  * role change versus a credential that carries the grant).
  */
-export const mcpToolAuthorityDenial = (
+const mcpToolAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
-): "member-role" | "credential" | null => {
+): McpToolAuthorityDenial | null => {
   if (hasMcpToolAuthority(authority, definition)) {
     return null;
   }
@@ -270,7 +272,7 @@ export const mcpToolInputAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
-): "member-role" | "credential" | null => {
+): McpToolAuthorityDenial | null => {
   if (hasMcpToolInputAuthority(authority, definition, input)) {
     return null;
   }
@@ -281,4 +283,71 @@ export const mcpToolInputAuthorityDenial = (
   )
     ? "credential"
     : "member-role";
+};
+
+type McpToolAuthorityRefusal = {
+  code: "permission_denied";
+  message: string;
+  hint?: string;
+};
+
+/**
+ * The refusal for `subject` (a tool, or the operation its input selects). A
+ * credential narrower than the role needs a different credential, not a role
+ * change, so the two are told apart.
+ */
+export const mcpToolAuthorityDenialRefusal = (
+  subject: string,
+  denial: McpToolAuthorityDenial,
+): McpToolAuthorityRefusal => {
+  switch (denial) {
+    case "member-role":
+      return {
+        code: "permission_denied",
+        message: `Your member role does not permit ${subject}`,
+        hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
+      };
+    case "credential":
+      return {
+        code: "permission_denied",
+        message: `This credential's permissions do not include ${subject}`,
+        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+      };
+    default:
+      denial satisfies never;
+      return panic(`Unhandled MCP tool authority denial: ${String(denial)}`);
+  }
+};
+
+type McpToolAuthorityRefusalOptions = {
+  authority: McpEffectiveAuthority;
+  definition: McpToolAuthorityDeclaration;
+  toolName: string;
+  userEmail: string;
+};
+
+/**
+ * The refusal for a tool the request's authority (member permissions
+ * narrowed by the credential, then account access) does not cover, or `null`
+ * when it is authorized. The HTTP transport answers it before action
+ * admission, so an unauthorized call never spends the caller's action budget;
+ * dispatch answers it again for callers that enter there directly.
+ */
+export const mcpToolAuthorityRefusal = ({
+  authority,
+  definition,
+  toolName,
+  userEmail,
+}: McpToolAuthorityRefusalOptions): McpToolAuthorityRefusal | null => {
+  const denial = mcpToolAuthorityDenial(authority, definition);
+  if (denial !== null) {
+    return mcpToolAuthorityDenialRefusal(toolName, denial);
+  }
+  if (!isAccountAuthorizedForMcpTool(userEmail, definition)) {
+    return {
+      code: "permission_denied",
+      message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+    };
+  }
+  return null;
 };

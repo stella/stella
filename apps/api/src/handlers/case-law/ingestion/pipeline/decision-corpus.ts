@@ -40,6 +40,8 @@ export const enqueueCorpusMirror = async ({
 }: EnqueueCorpusMirrorOptions): Promise<ProcessResult | null> => {
   const {
     decisionId,
+    signal,
+    s3Policy,
     existing,
     result,
     observationOrder,
@@ -47,6 +49,7 @@ export const enqueueCorpusMirror = async ({
     plan: { corpusPayload, corpusPlan, mirrorCarriesDocument },
     rawArtifact: { s3UploadFailed },
   } = write;
+  signal?.throwIfAborted();
   if (
     corpusPlan.type === "postgres-mirrored" ||
     corpusPlan.type === "object-storage"
@@ -77,7 +80,12 @@ export const enqueueCorpusMirror = async ({
       // fence redaction takes.
       const batch =
         corpusBatch ??
-        openCorpusPackBatch({ scopedDb, transfer: corpus.transfer });
+        openCorpusPackBatch({
+          scopedDb,
+          transfer: corpus.transfer,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        });
       batch.enqueue({
         decisionId,
         jurisdiction: corpusPayload.jurisdiction,

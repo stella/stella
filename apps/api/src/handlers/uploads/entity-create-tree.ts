@@ -9,6 +9,7 @@ import {
   type PendingUploadPurposeData,
   workspaces,
 } from "@/api/db/schema";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -539,6 +540,7 @@ const createPendingRows = async ({
 const config = {
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityUploadRealtimeUpdates,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;

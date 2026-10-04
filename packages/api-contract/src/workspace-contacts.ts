@@ -15,3 +15,8 @@ export const WORKSPACE_CONTACT_ROLES = [
 ] as const;
 
 export type WorkspaceContactRole = (typeof WORKSPACE_CONTACT_ROLES)[number];
+
+export const MATTER_CONTACT_CAPACITY_CODE = {
+  reached: "matter_contact_capacity_reached",
+  exceeded: "matter_contact_capacity_exceeded",
+} as const;

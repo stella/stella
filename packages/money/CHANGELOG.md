@@ -1,5 +1,11 @@
 # @stll/money
 
+## 0.3.0
+
+### Minor Changes
+
+- [#4582](https://github.com/stella/stella/pull/4582) [`b8a1d41`](https://github.com/stella/stella/commit/b8a1d41da558c4c148fd696a714d56621ecb2db3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared time-entry amount calculation that honors no-charge time.
+
 ## 0.2.3
 
 ### Patch Changes

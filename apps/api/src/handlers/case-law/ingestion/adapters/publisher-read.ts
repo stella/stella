@@ -8,6 +8,12 @@
  * refusal cannot be mistaken for an absence, so a helper built on it cannot
  * hand its caller "nothing here" for a 500, a timeout, an empty 204 or a 403.
  *
+ * Bodies are read through {@link readPublisherText} or
+ * {@link readPublisherBytes}, which stop at a byte ceiling; a caller that
+ * inspects the headers first hands the outcome to {@link readBodyText}.
+ * `no-unbounded-response-body` reports a whole-body read of the `Response`
+ * that {@link readPublisher} returns.
+ *
  * Where a refusal ends the cycle and where it describes one read:
  * - It ends the cycle (rejects) when it is a source-level stop: the caller
  *   opted into `refusalMode: "stop-refusal"` (a session workflow, where a
@@ -29,7 +35,7 @@
 
 import { panic, Result } from "better-result";
 
-import type { FetchWithTimeoutInit } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
   readAbsent,
@@ -44,7 +50,7 @@ import {
 import {
   fetchPublisher,
   rethrowCycleStop,
-  type PublisherFetchOptions,
+  type PublisherFetchInit,
 } from "./retry";
 
 /**
@@ -67,13 +73,16 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = FetchWithTimeoutInit &
-  Omit<PublisherFetchOptions, "refusalMode"> & {
-    /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
-    refusalMode?: "stop-refusal" | undefined;
-    /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
-    refusalScope?: ReadRefusalScope | undefined;
-  };
+/**
+ * An intersection, not `Omit`: `Omit` over the timeout union collapses it, and
+ * the intersection narrows `refusalMode` all the same.
+ */
+export type PublisherReadInit = PublisherFetchInit & {
+  /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
+  refusalMode?: "stop-refusal" | undefined;
+  /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
+  refusalScope?: ReadRefusalScope | undefined;
+};
 
 /** One publisher request, typed by what its answer established. */
 export const readPublisher = async (
@@ -82,7 +91,7 @@ export const readPublisher = async (
 ): Promise<ReadOutcome<Response>> => {
   const fetched = await readStep(
     async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher, readPublisherBytes or readPublisherText is called
       await fetchPublisher(url, {
         ...init,
         refusalMode: refusalMode ?? "stop-rate-limit",
@@ -121,26 +130,73 @@ export const readPublisher = async (
 };
 
 /**
- * One publisher request whose body is text. A served but empty body is a
- * failure to read, not an empty document.
+ * The most a publisher body read through this module may hold in memory. It
+ * matches the largest per-adapter ceiling (a full listing export) and the raw
+ * payload verification ceiling, so anything larger could not be stored and
+ * verified as a raw source payload anyway.
  */
-export const readPublisherText = async (
-  url: string | URL,
-  init: PublisherReadInit,
-): Promise<ReadOutcome<string>> => {
-  const outcome = await readPublisher(url, init);
+export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * The body of a present read, whole, up to {@link PUBLISHER_BODY_MAX_BYTES}.
+ * A body over the ceiling stops the read at the ceiling and is `too-large`; a
+ * served but empty body is `empty-body`; a body that fails after the headers
+ * is `thrown`. All three are failures to read, never a document. Any other
+ * outcome passes through unread.
+ */
+const readBodyBytes = async (
+  outcome: ReadOutcome<Response>,
+  signal: AbortSignal | undefined,
+): Promise<ReadOutcome<Uint8Array>> => {
   if (outcome.type !== "present") {
     return outcome;
   }
-  const response = outcome.value;
-  const text = await readStep(
-    async () => await response.text(),
-    init.signal ?? undefined,
-  );
-  if (Result.isError(text)) {
-    return text.error;
+  const { body, status } = outcome.value;
+  if (body === null) {
+    return readUnavailable({ kind: "empty-body", status });
   }
-  return text.value.length === 0
-    ? readUnavailable({ kind: "empty-body", status: response.status })
-    : readPresent(text.value);
+  const bytes = await readStep(
+    async () => await readCappedBytes(body, PUBLISHER_BODY_MAX_BYTES),
+    signal,
+  );
+  if (Result.isError(bytes)) {
+    return bytes.error;
+  }
+  if (bytes.value === null) {
+    return readUnavailable({
+      kind: "too-large",
+      maxBytes: PUBLISHER_BODY_MAX_BYTES,
+    });
+  }
+  return bytes.value.length === 0
+    ? readUnavailable({ kind: "empty-body", status })
+    : readPresent(bytes.value);
 };
+
+/**
+ * The body of a present read as UTF-8 text, with the bounds and failures of
+ * {@link readBodyBytes}. Decoding matches `Response.text()`.
+ */
+export const readBodyText = async (
+  outcome: ReadOutcome<Response>,
+  signal: AbortSignal | undefined,
+): Promise<ReadOutcome<string>> => {
+  const bytes = await readBodyBytes(outcome, signal);
+  return bytes.type === "present"
+    ? readPresent(new TextDecoder().decode(bytes.value))
+    : bytes;
+};
+
+/** One publisher request whose body is binary; see {@link readBodyBytes}. */
+export const readPublisherBytes = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<Uint8Array>> =>
+  await readBodyBytes(await readPublisher(url, init), init.signal ?? undefined);
+
+/** One publisher request whose body is text; see {@link readBodyText}. */
+export const readPublisherText = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<string>> =>
+  await readBodyText(await readPublisher(url, init), init.signal ?? undefined);

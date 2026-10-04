@@ -10,6 +10,7 @@ import {
 
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
@@ -992,6 +993,7 @@ export default defineConfig({
       "error",
     "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-direct-clause-variant-insert/no-direct-clause-variant-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
@@ -1378,6 +1380,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
@@ -3784,7 +3787,9 @@ export default defineConfig({
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
               "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-replay.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -3957,18 +3962,24 @@ export default defineConfig({
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
       // ISO 27001). Handlers are held to the full rule; the block below
-      // extends it to MCP and library code with a reasoned ledger.
+      // extends it to MCP and library code with a reasoned ledger. A handler
+      // module registered in SYSTEM_AUDIT_MODULES is audited by its actor's
+      // run, as in library code.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "require-audit-on-mutation/require-audit-on-mutation": "error",
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { systemModules: SYSTEM_AUDIT_MODULES },
+        ],
       },
     },
     {
       // The same rule over MCP tools and shared library code. Writes that
       // predate this scope are budgeted per owning function by the reasoned
       // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
-      // other unaudited write fails like it does in a handler.
+      // other unaudited write fails like it does in a handler. System
+      // modules (SYSTEM_AUDIT_MODULES) are audited by their actor's run.
       files: [...AUDIT_MUTATION_LEDGER_SCOPE],
       excludeFiles: [
         "apps/api/src/mcp/**/*.test.ts",
@@ -3977,7 +3988,10 @@ export default defineConfig({
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": [
           "error",
-          { budgets: auditMutationBudgets(auditMutationLedger) },
+          {
+            budgets: auditMutationBudgets(auditMutationLedger),
+            systemModules: SYSTEM_AUDIT_MODULES,
+          },
         ],
       },
     },
