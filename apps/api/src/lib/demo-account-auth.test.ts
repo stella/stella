@@ -307,7 +307,7 @@ describe("account authentication operations", () => {
       const requests = [
         {
           method: "GET",
-          path: `/oauth2/authorize?${authorizeQuery}`,
+          path: `/oauth2/authorize?${authorizeQuery.toString()}`,
           body: undefined,
         },
         { method: "POST", path: "/oauth2/consent", body: { accept: true } },
