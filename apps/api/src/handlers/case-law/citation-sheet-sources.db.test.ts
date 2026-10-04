@@ -512,9 +512,6 @@ const SINGLE_SOURCE_DECISIONS = {
   "ecli-identifier": { ...NOTHING_ELSE, ecliIdentifiers: [CITED_ECLI] },
 } as const satisfies Record<DecisionSheetSource, DecisionSpec>;
 
-const PROPERTY =
-  "the resolver's SQL admits exactly the decisions a lookup of the sources it reads says carry the printed sheet";
-
 describe("a decision's sheet from any source", () => {
   test("a lookup sees each source alone carry the printed sheet, and SQL each source it reads", async () => {
     const scenario: Scenario = {
@@ -547,10 +544,10 @@ describe("a decision's sheet from any source", () => {
   });
 
   test(
-    PROPERTY,
+    "the resolver's SQL admits exactly the decisions a lookup of the sources it reads says carry the printed sheet",
     async () => {
       await assertProperty(
-        PROPERTY,
+        "the resolver's SQL admits exactly the decisions a lookup of the sources it reads says carry the printed sheet",
         fc.asyncProperty(scenarioArb, async (scenario) => {
           const written = await writeScenario(scenario, scenario.decisions);
           const admitted = await admittedBySql(scenario, written);
