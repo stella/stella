@@ -63,6 +63,7 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -337,6 +338,10 @@ const InvoiceDetail = ({
           )}
         </div>
         <div className="flex items-center gap-2">
+          <InvoicePdfDownloadButton
+            invoiceId={invoiceId}
+            workspaceId={workspaceId}
+          />
           <InvoiceActions
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}

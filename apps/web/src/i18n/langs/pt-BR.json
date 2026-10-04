@@ -3477,6 +3477,7 @@
         "approvedOn": "Aprovado em {date}",
         "approvedToast": "Playbook aprovado",
         "saveBeforeApprove": "Salve as alterações antes de aprovar este playbook.",
+        "sourcesNotice": "Antes de aprovar, verifique se nenhuma posição menciona um documento, um caso ou uma contraparte: toda a organização pode ler este playbook.",
         "statusApproved": "Aprovado",
         "statusDraft": "Rascunho"
       },
@@ -3575,6 +3576,7 @@
       "referenceStandard": "Da referência",
       "removeCheck": "Remover verificação",
       "removeIdeal": "Remover a redação ideal",
+      "removeSource": "Remover a fonte {documentName}",
       "reorderPosition": "Reordenar posição",
       "review": {
         "changePlaybook": "Escolher outro playbook",
@@ -3606,6 +3608,10 @@
         "blocker": "Bloqueador"
       },
       "severityLabel": "Gravidade",
+      "staleCopy": {
+        "loaded": "Uma versão mais recente deste playbook foi carregada. Recarregue antes de editar.",
+        "unavailable": "Não foi possível carregar a versão mais recente deste playbook. Esta é a última cópia carregada e pode estar desatualizada."
+      },
       "starters": {
         "addedToast": "Playbook adicionado",
         "browseButton": "Explorar playbooks iniciais",

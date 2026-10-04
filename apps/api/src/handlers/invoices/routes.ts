@@ -9,6 +9,7 @@ import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
+import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -77,4 +78,13 @@ export const invoicesRoute = new Elysia({
   .delete("/:invoiceId/lines/:lineId", deleteInvoiceLine.handler, {
     params: deleteInvoiceLine.config.params,
     permissions: deleteInvoiceLine.config.permissions,
+  })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
+  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
+    params: exportInvoicePdf.config.params,
+    permissions: exportInvoicePdf.config.permissions,
   });

@@ -2615,7 +2615,45 @@ describe("registry write tool approval policy", () => {
   });
 });
 
-describe("a subagent's code-mode script", () => {
+describe("a code-mode script", () => {
+  test("a feature-hidden tool has no subagent unavailability reason", async () => {
+    const request = {
+      ...autoApplyBaseArgs,
+      memberRole: sessionMemberRole("owner"),
+      editApplyMode: "manual",
+    } as const;
+    const full = getChatTools(request);
+    const tools = getChatTools({
+      ...request,
+      testDependencies: {
+        featureAccessBindings: {
+          tools: new Map([["create-document", "fixture-hidden-document"]]),
+          capabilities: new Map<string, string>(),
+          resources: new Map<string, string>(),
+        },
+      },
+    });
+    expect(Object.keys(full)).toContain("create-document");
+    expect(Object.keys(tools)).not.toContain("create-document");
+    const execute =
+      tools[CODE_MODE_EXECUTE_TOOL_NAME]?.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `return await create_document({ name: "Memo" });`,
+    });
+    await awaitSandboxAdmissionIdle();
+
+    expect(output).toMatchObject({
+      success: false,
+      error: {
+        name: "not-a-script-function",
+        message:
+          "`create-document` is not available in this chat. Continue without it.",
+      },
+    });
+  });
+
   test("is told a tool its projection dropped is unavailable, not that it can call it directly", async () => {
     const full = getChatTools({
       ...autoApplyBaseArgs,

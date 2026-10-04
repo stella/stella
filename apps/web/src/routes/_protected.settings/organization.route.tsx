@@ -33,7 +33,10 @@ export const Route = createFileRoute("/_protected/settings/organization")({
           }
           await prefetchRouteQuery(
             context.queryClient,
-            organizationSettingsOptions(context.user.activeOrganizationId),
+            organizationSettingsOptions({
+              organizationId: context.user.activeOrganizationId,
+              userId: context.user.id,
+            }),
             (error) => getAnalytics().captureError(error),
           );
         })(),

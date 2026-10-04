@@ -15,6 +15,13 @@ const KANBAN_DRAG_INTERACTIONS_PATH = path.resolve(
 );
 const ATLASKIT_DRAG_IMPORT =
   /from "(@atlaskit\/pragmatic-drag-and-drop[^"]+)";/gu;
+const I18N_STORE_PATH = path.resolve(
+  import.meta.dirname,
+  "src/i18n/i18n-store.ts",
+);
+// Runtime catalog modules only; the `locales` entry is a type-only import.
+const FOLIO_CATALOG_IMPORT =
+  /"(@stll\/folio-react\/messages\/(?!locales")[^"]+)"/gu;
 
 describe("vite config", () => {
   test("keeps opaque effect wrappers out of React compilation", () => {
@@ -142,6 +149,19 @@ describe("vite config", () => {
     expect(runtimeImports).not.toHaveLength(0);
     expect(resolveConfig("test").optimizeDeps?.include).toEqual(
       expect.arrayContaining(runtimeImports),
+    );
+  });
+
+  test("prebundles every folio locale catalog the i18n store loads", () => {
+    const storeSource = readFileSync(I18N_STORE_PATH, "utf-8");
+    const catalogImports = Array.from(
+      storeSource.matchAll(FOLIO_CATALOG_IMPORT),
+      (match) => match[1],
+    );
+
+    expect(catalogImports).toContain("@stll/folio-react/messages/cs");
+    expect(resolveConfig("test").optimizeDeps?.include).toEqual(
+      expect.arrayContaining(catalogImports),
     );
   });
 

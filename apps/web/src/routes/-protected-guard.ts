@@ -76,7 +76,10 @@ export const loadProtectedContext = async ({
           return;
         }
         await context.queryClient.query({
-          ...organizationSettingsOptions(activeOrganizationId),
+          ...organizationSettingsOptions({
+            organizationId: activeOrganizationId,
+            userId: authContext.user.id,
+          }),
           staleTime: "static",
         });
       })(),
