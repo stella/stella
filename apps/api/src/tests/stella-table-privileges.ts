@@ -135,6 +135,12 @@ const EVENT = new RegExp(
   "giu",
 );
 
+const ALL_TABLES_IN_SCHEMA =
+  /^ALL\s+TABLES\s+IN\s+SCHEMA\s+(?<schemas>[^;]+)$/iu;
+
+/** The object class of `ALTER DEFAULT PRIVILEGES ... ON TABLES`. */
+const DEFAULT_TABLES = /^TABLES$/iu;
+
 const NOT_A_RELATION =
   /^(?:ALL\s+(?:TABLES|SEQUENCES|FUNCTIONS|PROCEDURES|ROUTINES)\b|TABLES\b|SEQUENCES\b|FUNCTIONS\b|SCHEMA\b|SEQUENCE\b|FUNCTION\b|PROCEDURE\b|ROUTINE\b|DATABASE\b|DOMAIN\b|TYPE\b|LANGUAGE\b|LARGE\s+OBJECT\b|FOREIGN\b|TABLESPACE\b|PARAMETER\b)/iu;
 
@@ -200,6 +206,32 @@ export type StellaPrivilegeDerivation = {
   unexpandedDynamicMigrations: readonly string[];
   /** Expansions no migration needs any more. */
   unusedDynamicExpansions: readonly string[];
+  /** Statements granting `stella` a form the fold cannot apply. */
+  unsupportedStatements: readonly string[];
+};
+
+type ApplyPrivilegesOptions = {
+  state: StellaPrivilegeState;
+  verb: string;
+  privileges: readonly TablePrivilege[];
+  relations: readonly string[];
+};
+
+const applyPrivileges = ({
+  state,
+  verb,
+  privileges,
+  relations,
+}: ApplyPrivilegesOptions): void => {
+  for (const relation of relations) {
+    if (verb === "GRANT") {
+      grantTo(state, relation, privileges);
+      continue;
+    }
+    for (const privilege of privileges) {
+      state.get(relation)?.privileges.delete(privilege);
+    }
+  }
 };
 
 /**
@@ -217,6 +249,7 @@ export const deriveStellaTablePrivileges = (
   const state: StellaPrivilegeState = new Map();
   const unexpanded = new Set<string>();
   const used = new Set<string>();
+  const unsupported = new Set<string>();
 
   for (const migration of migrations) {
     let dynamicApplied = false;
@@ -271,6 +304,33 @@ export const deriveStellaTablePrivileges = (
         continue;
       }
       const objects = (groups["objects"] ?? "").trim();
+      const privileges = tablePrivileges(groups["privileges"] ?? "");
+      const allTables = ALL_TABLES_IN_SCHEMA.exec(objects);
+      if (allTables !== null) {
+        // PostgreSQL's ALL TABLES covers views and materialized views too;
+        // only the public schema is mirrored.
+        const schemas = splitTopLevel(allTables.groups?.["schemas"] ?? "");
+        if (schemas.some((schema) => relationName(schema) === "public")) {
+          applyPrivileges({
+            state,
+            verb,
+            privileges,
+            relations: [...state.keys()],
+          });
+        }
+        continue;
+      }
+      // Default privileges reach only relations created later. The fold
+      // starts every relation closed, which a default REVOKE agrees with; a
+      // default GRANT would open them, so it is reported, not dropped.
+      if (DEFAULT_TABLES.test(objects)) {
+        if (verb === "GRANT") {
+          unsupported.add(
+            `${migration.name}: ${match[0].replaceAll(/\s+/gu, " ")}`,
+          );
+        }
+        continue;
+      }
       if (NOT_A_RELATION.test(objects)) {
         continue;
       }
@@ -285,21 +345,19 @@ export const deriveStellaTablePrivileges = (
         }
         continue;
       }
-      const privileges = tablePrivileges(groups["privileges"] ?? "");
-      for (const object of splitTopLevel(objects.replace(/^TABLE\s+/iu, ""))) {
-        const name = relationName(object);
-        if (verb === "GRANT") {
-          grantTo(state, name, privileges);
-        } else {
-          for (const privilege of privileges) {
-            state.get(name)?.privileges.delete(privilege);
-          }
-        }
-      }
+      applyPrivileges({
+        state,
+        verb,
+        privileges,
+        relations: splitTopLevel(objects.replace(/^TABLE\s+/iu, "")).map(
+          relationName,
+        ),
+      });
     }
   }
 
   return {
+    unsupportedStatements: [...unsupported].toSorted(),
     privileges: new Map(
       [...state].map(([name, current]) => [name, current.privileges]),
     ),

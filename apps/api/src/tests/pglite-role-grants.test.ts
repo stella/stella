@@ -283,13 +283,19 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
     return privileges;
   };
 
-  /** `relation:PRIVILEGE` on one side only, labelled by the side holding it. */
+  /**
+   * `relation:PRIVILEGE` on one side only, labelled by the side holding it,
+   * over the relations of both sides: one the harness never builds still
+   * counts with no privileges.
+   */
   const privilegeDrift = (
     harness: ReadonlyMap<string, ReadonlySet<string>>,
     migrations: ReadonlyMap<string, ReadonlySet<TablePrivilege>>,
   ): string[] => {
     const drift: string[] = [];
-    for (const [relation, held] of harness) {
+    const relations = new Set([...harness.keys(), ...migrations.keys()]);
+    for (const relation of relations) {
+      const held: ReadonlySet<string> = harness.get(relation) ?? new Set();
       const expected: ReadonlySet<string> =
         migrations.get(relation) ?? new Set();
       for (const privilege of held) {
@@ -312,6 +318,7 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
 
     expect(derived.unexpandedDynamicMigrations).toEqual([]);
     expect(derived.unusedDynamicExpansions).toEqual([]);
+    expect(derived.unsupportedStatements).toEqual([]);
     expect(privilegeDrift(harness, derived.privileges)).toEqual([]);
 
     // A comparison over an empty catalog would pass; pin each kind of
@@ -357,6 +364,19 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
     );
     expect(privilegeDrift(harness, widened.privileges)).toEqual([
       "migrations only: legal_list_item_reviews:UPDATE",
+    ]);
+
+    // A relation the harness never builds is compared too: granted, it is
+    // drift; closed, there is nothing to differ.
+    const missing = deriveStellaTablePrivileges(
+      synthetic(
+        `CREATE TABLE "migration_only" (id text);
+         CREATE TABLE "migration_only_closed" (id text);
+         GRANT SELECT ON "migration_only" TO stella;`,
+      ),
+    );
+    expect(privilegeDrift(harness, missing.privileges)).toEqual([
+      "migrations only: migration_only:SELECT",
     ]);
   });
 });
@@ -427,12 +447,40 @@ describe("stella table privilege derivation", () => {
            GRANT UPDATE (id) ON TABLE t TO stella;
            GRANT SELECT ON t TO stella_ingestion;
            GRANT USAGE, SELECT ON SEQUENCE t TO stella;
-           ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO stella;
            GRANT stella TO stella_ingestion;`,
         ],
         "t",
       ),
     ).toEqual([]);
+  });
+
+  test("a schema-wide grant reaches every public relation that exists", () => {
+    const derivation = derive(
+      `CREATE TABLE t (id text);
+       CREATE VIEW v AS SELECT id FROM t;
+       GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO stella;
+       REVOKE INSERT ON ALL TABLES IN SCHEMA "public" FROM stella;
+       GRANT DELETE ON ALL TABLES IN SCHEMA audit TO stella;
+       CREATE TABLE later (id text);`,
+    );
+    const privileges = (relation: string) =>
+      [...(derivation.privileges.get(relation) ?? [])].toSorted();
+    expect(privileges("t")).toEqual(["SELECT"]);
+    expect(privileges("v")).toEqual(["SELECT"]);
+    expect(privileges("later")).toEqual([]);
+    expect(derivation.unsupportedStatements).toEqual([]);
+  });
+
+  test("a default table grant is reported, a default revoke agrees", () => {
+    const derivation = derive(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA public
+         REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM stella;
+       ALTER DEFAULT PRIVILEGES IN SCHEMA public
+         GRANT SELECT ON TABLES TO stella;`,
+    );
+    expect(derivation.unsupportedStatements).toEqual([
+      "00000000000000_case: GRANT SELECT ON TABLES TO stella",
+    ]);
   });
 
   test("a format() grant must be expanded by hand", () => {
