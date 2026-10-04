@@ -1249,29 +1249,27 @@ type ListedDayPage = {
  * and everything else — a 5xx, a timeout, a body without a count — is an error
  * the engine retries on a later pass.
  */
-type ServedListingOptions = {
-  read: ReadOutcome<Response>;
+type ListingReadErrorOptions = {
+  read: Exclude<ReadOutcome<Response>, { type: "present" }>;
   cursor: string;
 };
 
 /**
- * The served listing response, or the error a listing request that served
- * none stands for: with its status, so the engine reads a refusal or an
- * outage as it did, and the original error where the request threw.
+ * The error a listing request that served no listing stands for: with its
+ * status, so the engine reads a refusal or an outage as it did, and the
+ * original error where the request threw.
  */
-const servedListing = ({ read, cursor }: ServedListingOptions): Response => {
+const listingReadError = ({ read, cursor }: ListingReadErrorOptions): Error => {
   switch (read.type) {
-    case "present":
-      return read.value;
     case "absent":
-      throw listingStatusError({
+      return listingStatusError({
         status: absenceStatus(read.evidence),
         cursor,
       });
     case "refused":
-      throw listingStatusError({ status: read.status, cursor });
+      return listingStatusError({ status: read.status, cursor });
     case "unavailable":
-      throw listingFailureError({ cause: read.cause, cursor });
+      return listingFailureError({ cause: read.cause, cursor });
     default:
       read satisfies never;
       return panic(`Unhandled listing read: ${String(read)}`);
@@ -1370,7 +1368,10 @@ const listSkCourtsDayPage = async ({
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
-  const response = servedListing({ read, cursor: day });
+  if (read.type !== "present") {
+    throw listingReadError({ read, cursor: day });
+  }
+  const response = read.value;
 
   const json: unknown = await response.json();
   if (!isSkApiResponse(json)) {
