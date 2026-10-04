@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/system-audit holds the system run actors, the system module registry and the recorder that writes one append-only row per system run."
+}

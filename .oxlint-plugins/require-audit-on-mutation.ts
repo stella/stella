@@ -41,8 +41,15 @@
 //     recorder (`recordAuditEvent`, `ctx.recordAuditEvent`, a
 //     `record*AuditEvent` parameter), a recorder built by the audit-log
 //     factories, or an imported audited helper (`auditedPresignDownload`,
-//     `recordWebhookAuditEvent`, `recordCorpusWithdrawalAuditEvent`). A
-//     locally defined function of the same name does not count.
+//     `recordWebhookAuditEvent`, `recordCorpusWithdrawalAuditEvent`,
+//     `recordSystemAudit`). A locally defined function of the same name does
+//     not count.
+//   - The file is a system module: the `systemModules` option (generated from
+//     SYSTEM_AUDIT_MODULES in apps/api/src/lib/system-audit/modules.ts) maps
+//     it to a system run actor, whose run records one aggregated
+//     `system_audit_runs` row through `recordSystemAudit`. A member-run module
+//     (MEMBER_RUN_MODULES) or an unknown actor in that map is reported instead.
+//     The system-audit recorder module itself writes the audit record.
 //   - The function carries a `// audit: skip - <reason>` directive in its own
 //     body, with a reason of at least three words. The `audit-skip-directives`
 //     ratchet metric counts these directives so they can only shrink.
@@ -58,6 +65,8 @@ import path from "node:path";
 
 import { readVerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/attestation.ts";
 import type { VerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
+import { isSystemRunActor } from "../apps/api/src/lib/system-audit/actors.ts";
+import { MEMBER_RUN_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
 import {
   type AstNode,
@@ -97,7 +106,16 @@ const AUDITED_HELPERS = [
     module: "apps/api/src/lib/legal-search/corpus-index-job-audit",
     names: new Set(["recordCorpusWithdrawalAuditEvent"]),
   },
+  {
+    module: "apps/api/src/lib/system-audit/record",
+    names: new Set(["recordSystemAudit"]),
+  },
 ] as const;
+// The system-audit recorder: its one write is the audit record.
+const SYSTEM_AUDIT_RECORDER_FILE = "apps/api/src/lib/system-audit/record.ts";
+const MEMBER_RUN_MODULE_FILES: ReadonlySet<string> = new Set(
+  MEMBER_RUN_MODULES,
+);
 const AUDIT_LOG_MODULE = "apps/api/src/lib/audit-log";
 const AUDIT_RECORDER_FACTORIES: ReadonlySet<string> = new Set([
   "createAuditRecorder",
@@ -317,6 +335,22 @@ const budgetsFromOptions = (
   );
 };
 
+/** `systemModules` option: `<repo-relative file>` to its system run actor. */
+const systemModulesFromOptions = (
+  options: unknown,
+): ReadonlyMap<string, unknown> => {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    !("systemModules" in options) ||
+    typeof options.systemModules !== "object" ||
+    options.systemModules === null
+  ) {
+    return new Map();
+  }
+  return new Map(Object.entries(options.systemModules));
+};
+
 /** `census` option: report every unaudited write with its owner, ignoring budgets. */
 const censusFromOptions = (options: unknown): boolean =>
   typeof options === "object" &&
@@ -419,10 +453,40 @@ const AUDIT_RULE_SCHEMA = [
       },
       census: { type: "boolean" },
       root: { type: "string" },
+      systemModules: {
+        type: "object",
+        additionalProperties: { type: "string" },
+      },
     },
     additionalProperties: false,
   },
 ] as const satisfies RuleOptionsSchema;
+
+const AUDIT_RULE_MESSAGES = {
+  missingAudit:
+    "This function writes to the database (insert / update / " +
+    "delete, or a raw write through execute) but does not call an " +
+    "audit recorder. Add an audit emission in the same transaction, " +
+    "or annotate the function with `// audit: skip - <reason>` (at " +
+    "least three words) if the write legitimately needs no audit " +
+    "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+  overBudget:
+    "{{owner}} holds {{actual}} unaudited {{target}} writes; the " +
+    "audit ledger allows {{budget}}. Add an audit emission in the " +
+    "same transaction (or `// audit: skip - <reason>`); the ledger " +
+    "only shrinks.",
+  memberRunSystemModule:
+    "{{file}} runs on behalf of a member, so it cannot be a system " +
+    "module: remove it from SYSTEM_AUDIT_MODULES and audit its writes " +
+    "through the member's actor.",
+  unknownSystemActor:
+    "{{file}} is registered to {{actor}}, which is not a system run " +
+    "actor (SYSTEM_RUN_ACTOR_COUNTS).",
+  staleBudget:
+    "The audit ledger allows {{budget}} unaudited {{target}} writes " +
+    "for {{owner}} but {{actual}} remain. Lower the row with " +
+    "`bun scripts/audit-mutation-ledger.ts --write`.",
+};
 
 export const createAuditOnMutationPlugin = (
   verifiedTables: () => readonly VerifiedCorpusMembership[],
@@ -434,24 +498,7 @@ export const createAuditOnMutationPlugin = (
         meta: {
           type: "problem",
           schema: AUDIT_RULE_SCHEMA,
-          messages: {
-            missingAudit:
-              "This function writes to the database (insert / update / " +
-              "delete, or a raw write through execute) but does not call an " +
-              "audit recorder. Add an audit emission in the same transaction, " +
-              "or annotate the function with `// audit: skip - <reason>` (at " +
-              "least three words) if the write legitimately needs no audit " +
-              "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
-            overBudget:
-              "{{owner}} holds {{actual}} unaudited {{target}} writes; the " +
-              "audit ledger allows {{budget}}. Add an audit emission in the " +
-              "same transaction (or `// audit: skip - <reason>`); the ledger " +
-              "only shrinks.",
-            staleBudget:
-              "The audit ledger allows {{budget}} unaudited {{target}} writes " +
-              "for {{owner}} but {{actual}} remain. Lower the row with " +
-              "`bun scripts/audit-mutation-ledger.ts --write`.",
-          },
+          messages: AUDIT_RULE_MESSAGES,
         },
         createOnce(context) {
           const tables = verifiedTables();
@@ -461,6 +508,9 @@ export const createAuditOnMutationPlugin = (
           let fileBudgets = new Map<string, TargetBudgets>();
           // `census: true` (the ledger generator) groups every file by owner.
           let census = false;
+          // A registered system module, or the system-audit recorder: its
+          // writes are recorded by its actor's run, not per function.
+          let systemFile = false;
           const isBudgeted = () => census || fileBudgets.size > 0;
           const unauditedByOwner = new Map<string, Mutation[]>();
           // Justified `audit: skip - <reason>` comments, collected once per
@@ -541,6 +591,7 @@ export const createAuditOnMutationPlugin = (
               unauditedByOwner.clear();
               fileBudgets = new Map();
               census = false;
+              systemFile = false;
             },
             "Program:exit"(node) {
               if (!isBudgeted()) {
@@ -569,6 +620,32 @@ export const createAuditOnMutationPlugin = (
                   path.resolve(filenameForContext(context)),
                 )
                 .replaceAll("\\", "/");
+              const systemActor =
+                systemModulesFromOptions(options).get(relative);
+              if (systemActor !== undefined) {
+                if (MEMBER_RUN_MODULE_FILES.has(relative)) {
+                  context.report({
+                    node,
+                    messageId: "memberRunSystemModule",
+                    data: { file: relative },
+                  });
+                } else if (
+                  typeof systemActor !== "string" ||
+                  !isSystemRunActor(systemActor)
+                ) {
+                  context.report({
+                    node,
+                    messageId: "unknownSystemActor",
+                    data: {
+                      file: relative,
+                      actor: JSON.stringify(systemActor),
+                    },
+                  });
+                } else {
+                  systemFile = true;
+                }
+              }
+              systemFile ||= relative === SYSTEM_AUDIT_RECORDER_FILE;
               const fileKey = `${relative}::`;
               fileBudgets = new Map(
                 [...budgetsFromOptions(options)].flatMap(([key, budget]) =>
@@ -610,6 +687,7 @@ export const createAuditOnMutationPlugin = (
               if (isAuditCall(context, node)) {
                 scope.hasAuditCall = true;
               } else if (
+                !systemFile &&
                 isDatabaseWriteCall(context, node) &&
                 !isPublicCorpusMutation({ context, node, tables })
               ) {

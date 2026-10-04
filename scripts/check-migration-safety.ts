@@ -30,6 +30,7 @@ import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json";
+import type { MigrationSafetyRuleId } from "./migration-safety-rule-ids";
 
 type Statement = {
   line: number;
@@ -55,7 +56,7 @@ type Statement = {
 type GuardedCategory = (typeof GUARDED_CATEGORIES)[number];
 
 type GuardedRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   category: GuardedCategory;
   pattern?: RegExp;
@@ -64,14 +65,14 @@ type GuardedRule = {
 
 // Never acknowledgeable: the statement has to be rewritten.
 type StatementInvariantRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   matches: (statement: Statement) => boolean;
   guidance: string;
 };
 
 type FileInvariantRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   matches: (statements: Statement[]) => boolean;
   guidance: string;
@@ -136,7 +137,8 @@ const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
 // Migrations applied before the current rule set. Shared with squawk via
 // scripts/check-migrations.sh. Entries are immutable migrations, so the list
-// may only shrink; a listed file that no longer exists is an error.
+// only shrinks (scripts/check-migration-baseline.ts); a listed file that no
+// longer exists is an error.
 const BASELINE_FILE = "scripts/migration-baseline.txt";
 
 const ALTER_TABLE_PATTERN = /\bALTER\s+TABLE\b/iu;
@@ -406,7 +408,7 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
-const GUARDED_RULES: GuardedRule[] = [
+const GUARDED_RULES = [
   {
     id: "drop-object",
     description: "drops a database object",
@@ -574,10 +576,11 @@ const GUARDED_RULES: GuardedRule[] = [
     category: "access-control",
     pattern: /\bSET\s+SCHEMA\b/iu,
   },
-];
+] satisfies GuardedRule[];
 
 const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
-const HIGH_VOLUME_INDEX_BUILD_RULE_ID = "high-volume-index-build";
+const HIGH_VOLUME_INDEX_BUILD_RULE_ID =
+  "high-volume-index-build" satisfies MigrationSafetyRuleId;
 
 const DML_VERBS = ["INSERT", "UPDATE", "DELETE", "MERGE"] as const;
 type DmlVerb = (typeof DML_VERBS)[number];
@@ -684,7 +687,7 @@ const isVolatileDataWrite = (statement: Statement): boolean =>
   VOLATILE_VALUE_PATTERN.test(statement.text) &&
   executedDmlTargets(statement).some(({ verb }) => verb !== "DELETE");
 
-const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
+const STATEMENT_INVARIANT_RULES = [
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
@@ -713,9 +716,9 @@ const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
     matches: isHighVolumeTableDml,
     guidance: `The table holds millions of rows in production and the statement runs under the migration's statement budget whatever its WHERE clause matches. Keep the migration to DDL and register the data repair as an online repair in apps/api/src/db/online-migrations.ts (bounded batches over an indexed access path, resumable, validated on completion). Registered tables: ${HIGH_VOLUME_TABLES.join(", ")}.`,
   },
-];
+] satisfies StatementInvariantRule[];
 
-const STATEMENT_INVARIANT_RULE_IDS = new Set([
+const STATEMENT_INVARIANT_RULE_IDS = new Set<string>([
   ...STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
   HIGH_VOLUME_INDEX_BUILD_RULE_ID,
 ]);
@@ -741,7 +744,7 @@ const isTimeoutSetBeforeFirstOperation = (
   return false;
 };
 
-const FILE_INVARIANT_RULES: FileInvariantRule[] = [
+const FILE_INVARIANT_RULES = [
   {
     id: "missing-lock-timeout",
     description:
@@ -760,9 +763,19 @@ const FILE_INVARIANT_RULES: FileInvariantRule[] = [
     guidance:
       "Start the migration with SET LOCAL statement_timeout = '<bound>'; so a slow statement cannot hold locks indefinitely.",
   },
-];
+] satisfies FileInvariantRule[];
 
-const KNOWN_RULE_IDS = new Set(GUARDED_RULES.map((rule) => rule.id));
+// Every id in MIGRATION_SAFETY_RULE_IDS names a rule defined above.
+type DefinedRuleId =
+  | (typeof GUARDED_RULES)[number]["id"]
+  | (typeof STATEMENT_INVARIANT_RULES)[number]["id"]
+  | (typeof FILE_INVARIANT_RULES)[number]["id"]
+  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID;
+true satisfies [Exclude<MigrationSafetyRuleId, DefinedRuleId>] extends [never]
+  ? true
+  : never;
+
+const KNOWN_RULE_IDS = new Set<string>(GUARDED_RULES.map((rule) => rule.id));
 
 const usage = () => {
   console.error(

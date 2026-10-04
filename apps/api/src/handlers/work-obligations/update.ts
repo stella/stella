@@ -14,6 +14,7 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import type { WorkObligationSource } from "@/api/db/schema";
+import { workObligationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -150,6 +151,7 @@ const updateWorkObligation = createSafeHandler(
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: workObligationRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "workflow_orchestration",
