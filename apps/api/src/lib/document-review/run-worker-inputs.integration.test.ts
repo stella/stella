@@ -8,10 +8,16 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { documentReviewRuns, fields, workspaceMembers } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+  workspaceMembers,
+} from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -48,10 +54,18 @@ const runId = createSafeId<"documentReviewRun">();
 const originalField = await testDb.query.fields.findFirst({
   where: { id: { eq: ids.fieldA2 } },
 });
-const originalMembership = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA2 } },
-});
-if (!originalField || !originalMembership) {
+const originalMemberships = await testDb
+  .select()
+  .from(workspaceMembers)
+  .where(inArray(workspaceMembers.id, [ids.memberA1wsA1, ids.memberA1wsA2]));
+const originalOrganizationMember = (
+  await testDb.select().from(member).where(eq(member.id, ids.memberA1org))
+).at(0);
+if (
+  !originalField ||
+  originalMemberships.length !== 2 ||
+  !originalOrganizationMember
+) {
   panic("Review worker fixture is incomplete");
 }
 
@@ -167,8 +181,12 @@ afterEach(async () => {
     .delete(documentReviewRuns)
     .where(eq(documentReviewRuns.id, runId));
   await testDb
+    .insert(member)
+    .values(originalOrganizationMember)
+    .onConflictDoNothing();
+  await testDb
     .insert(workspaceMembers)
-    .values(originalMembership)
+    .values(originalMemberships)
     .onConflictDoNothing();
   await testDb
     .update(fields)
@@ -182,6 +200,48 @@ afterAll(async () => {
   fetchSpy.mockRestore();
   analytics.restore();
   await releaseRlsFixture();
+});
+
+const readRun = async () =>
+  (
+    await testDb
+      .select()
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId))
+      .limit(1)
+  ).at(0);
+
+const expectStoppedBeforeReading = async () => {
+  await processDocumentReviewRun(actor);
+  const run = await readRun();
+  expect(run).toMatchObject({
+    status: "failed",
+    errorCode: "pin_unresolved",
+  });
+  expect(run?.finishedAt).not.toBeNull();
+  expect(
+    await testDb
+      .select({ id: documentReviewFindings.id })
+      .from(documentReviewFindings)
+      .where(eq(documentReviewFindings.runId, runId)),
+  ).toHaveLength(0);
+  expect(preparationSpy).not.toHaveBeenCalled();
+  expect(modelSpy).not.toHaveBeenCalled();
+  expect(fetchSpy).not.toHaveBeenCalled();
+};
+
+describe("document review run revocation", () => {
+  test("a run stops when its requester no longer has access to the matter", async () => {
+    await testDb
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a run stops when its requester has left the organization", async () => {
+    await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
 });
 
 describe("document review input readiness", () => {
