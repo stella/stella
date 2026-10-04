@@ -18,10 +18,7 @@ import {
   CONTACT_CURSOR_MAX_LENGTH,
   listContactsPage,
 } from "@/api/handlers/contacts/list-query";
-import {
-  MAX_CONTACT_NATIONALITY_CODES,
-  validatePersonDetails,
-} from "@/api/handlers/contacts/person-details";
+import { validatePersonDetails } from "@/api/handlers/contacts/person-details";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
@@ -51,6 +48,7 @@ import {
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {

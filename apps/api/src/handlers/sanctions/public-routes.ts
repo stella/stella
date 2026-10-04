@@ -4,7 +4,7 @@ import publicSanctionsSearch, {
   createPublicSanctionsSearchHandler,
 } from "@/api/handlers/sanctions/search";
 import type { PublicSanctionsSearchOptions } from "@/api/handlers/sanctions/search";
-import { createPublicSanctionsRateLimitOptions } from "@/api/lib/rate-limit/public-sanctions";
+import { createPublicSanctionsRateLimitOptions } from "@/api/lib/rate-limit/public-corpus-rate-limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 import { applyResponseCachePolicy } from "@/api/lib/security-headers";
