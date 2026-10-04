@@ -17,9 +17,13 @@ import {
   isReadRefusal,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
+  type StoredReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
-import type { UnreadListedItem } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  UnreadListedItem,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const listing = (id: string): UnreadListedItem["listing"] => ({
@@ -36,6 +40,21 @@ const listing = (id: string): UnreadListedItem["listing"] => ({
   sourceDocumentId: id,
   isListingOnly: true,
 });
+
+/**
+ * The stored unavailable marker, typed as the stored shape: metadata values
+ * are branded plain text, so the narrowed metadata value cannot be compared
+ * with a literal directly.
+ */
+const storedUnavailable = (
+  row: IngestionResult | undefined,
+): StoredReadUnavailable => {
+  const marker = row?.metadata[READ_OUTCOME_METADATA_KEY];
+  if (!isStoredReadUnavailable(marker)) {
+    throw new Error("expected a stored unavailable outcome");
+  }
+  return marker;
+};
 
 const unavailable = (id: string): UnreadListedItem => ({
   listing: listing(id),
@@ -66,11 +85,7 @@ describe("unread listed items", () => {
     expect(spent.holding).toBe(0);
     expect(spent.streaks).toEqual({});
     expect(spent.terminal.map((row) => row.sourceDocumentId)).toEqual(["a"]);
-    const marker = spent.terminal.at(0)?.metadata[READ_OUTCOME_METADATA_KEY];
-    if (!isStoredReadUnavailable(marker)) {
-      throw new Error("expected a stored unavailable outcome");
-    }
-    expect(marker).toEqual({
+    expect(storedUnavailable(spent.terminal.at(0))).toEqual({
       type: "unavailable",
       scope: "document",
       cause: { kind: "no-content", status: 204 },
@@ -107,11 +122,7 @@ describe("unread listed items", () => {
       { t: UNAVAILABLE_CYCLES_BEFORE_MARKING - 1 },
     );
 
-    const marker = plan.terminal.at(0)?.metadata[READ_OUTCOME_METADATA_KEY];
-    if (!isStoredReadUnavailable(marker)) {
-      throw new Error("expected a stored unavailable outcome");
-    }
-    expect(marker).toEqual({
+    expect(storedUnavailable(plan.terminal.at(0))).toEqual({
       type: "unavailable",
       scope: "document",
       cause: { kind: "thrown" },
