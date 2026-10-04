@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
  *
@@ -85,6 +86,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -110,9 +112,13 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -1081,12 +1087,15 @@ const statedDay = (
 const supplementaryMetadata = (
   row: Record<string, unknown>,
   detail: PlKisDetail | undefined,
-): Record<string, unknown> => {
+) => {
   const attachments = detail?.fields.get("ZALACZNIKI")?.value;
   return {
     attachments: Array.isArray(attachments) ? attachments : [],
     officialPublication: statedString(row, detail, "MIEJ_PUB"),
-    otherSourceUrl: statedString(row, detail, "INN_ZROD"),
+    otherSourceUrl: toMetadataUrl(
+      statedString(row, detail, "INN_ZROD"),
+      "transport-json",
+    ),
     decisionKind: labelsOf(row["RODZAJ_DECYZJI"])[0],
     decisionKindId: detailString(detail, "RODZAJ_DECYZJI"),
     validFrom: statedDay(row, detail, "DAT_WAZ_OD"),
@@ -1122,7 +1131,7 @@ const relatedDocumentsOf = (
         {
           relation: category?.relation ?? "amends",
           eurekaId: amended,
-          sourceUrl: plKisWebUrl(amended),
+          sourceUrl: toMetadataUrl(plKisWebUrl(amended), "constructed"),
         },
       ];
 };
@@ -1262,90 +1271,101 @@ export const assemblePlKisDecision = async ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = parsed === undefined;
 
-  const decision: IngestionResult = {
-    caseNumber,
-    ...(signature === undefined
-      ? { caseNumberIsPlaceholder: true }
-      : { identifiers: [{ type: "case-number", value: signature }] }),
-    sourceDocumentId: id,
-    // The quarantine key keeps meeting the row stored while the id was
-    // missing, so the observation that recovers it enriches that row.
-    ...(publisherId === undefined
-      ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
-    language: LANGUAGE,
-    ...(decisionDate === undefined ? {} : { decisionDate }),
-    ...(decisionType === undefined ? {} : { decisionType }),
-    ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
-    ...(listingOnly ? { isListingOnly: true } : {}),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-    ...(documentUrl === undefined ? {} : { documentUrl }),
-    textFields: {
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      headnote: thesisField(statedString(row, detail, "TEZA")),
-    },
-    metadata: checkedDecisionMetadata({
-      eurekaId: id,
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
       caseNumber,
+      ...(signature === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : { identifiers: [{ type: "case-number", value: signature }] }),
+      sourceDocumentId: id,
+      // The quarantine key keeps meeting the row stored while the id was
+      // missing, so the observation that recovers it enriches that row.
+      ...(publisherId === undefined
+        ? {}
+        : { sourceDocumentIdRepairAliases: [quarantineId] }),
       court,
-      decisionDate,
-      decisionType,
-      category:
-        category === undefined
-          ? { id: categoryId, label: categoryLabels[0] }
-          : {
-              id: category.id,
-              label: categoryLabels[0],
-              disposition: category.disposition,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
+      language: LANGUAGE,
+      ...(decisionDate === undefined ? {} : { decisionDate }),
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
+      ...(listingOnly ? { isListingOnly: true } : {}),
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+      ...(documentUrl === undefined ? {} : { documentUrl }),
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        headnote: thesisField(statedString(row, detail, "TEZA")),
+      },
+      metadata: checkedDecisionMetadata(
+        {
+          eurekaId: id,
+          caseNumber,
+          court,
+          decisionDate,
+          decisionType,
+          category:
+            category === undefined
+              ? { id: categoryId, label: categoryLabels[0] }
+              : {
+                  id: category.id,
+                  label: categoryLabels[0],
+                  disposition: category.disposition,
+                },
+          authorities,
+          authorityIds: detailIds(detail, "AUTOR"),
+          status: statusOf(statusId),
+          statusId,
+          statusLabel: statusLabels[0],
+          publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
+          keywords,
+          keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
+          provisions,
+          provisionIds: detailIds(detail, "PRZEPISY"),
+          taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
+          issues: issues.map((label) => ({
+            path: issuePathOf(label),
+            raw: label,
+          })),
+          issueIds: detailIds(detail, "ZAGADNIENIA"),
+          taxes: [
+            ...new Set(
+              issues.flatMap((label) => issuePathOf(label).slice(0, 1)),
+            ),
+          ],
+          relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
+          ...supplementaryMetadata(row, detail),
+          ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
+          ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
+          ...(listingOnly
+            ? { detailStatus: detailProblem ?? "document-empty" }
+            : {}),
+          sourceAttribution:
+            "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
+        },
+        PL_KIS_METADATA_URL_SCHEMA,
+      ),
+      // The PDF is stored beside the envelope rather than in it, so a corrected
+      // rendition under an unchanged detail has to change the hash too.
+      rawHash:
+        parsed?.from === "pdf" && pdfBytes !== undefined
+          ? hashContent(
+              `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
+            )
+          : hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
+      documentAst,
+      sourceRaw,
+      ...(parsed?.from === "pdf" && pdfBytes !== undefined
+        ? {
+            sourceRawObjects: {
+              [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
             },
-      authorities,
-      authorityIds: detailIds(detail, "AUTOR"),
-      status: statusOf(statusId),
-      statusId,
-      statusLabel: statusLabels[0],
-      publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
-      keywords,
-      keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
-      provisions,
-      provisionIds: detailIds(detail, "PRZEPISY"),
-      taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
-      issues: issues.map((label) => ({ path: issuePathOf(label), raw: label })),
-      issueIds: detailIds(detail, "ZAGADNIENIA"),
-      taxes: [
-        ...new Set(issues.flatMap((label) => issuePathOf(label).slice(0, 1))),
-      ],
-      relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
-      ...supplementaryMetadata(row, detail),
-      ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
-      ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
-      ...(listingOnly
-        ? { detailStatus: detailProblem ?? "document-empty" }
+          }
         : {}),
-      sourceAttribution:
-        "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
-    }),
-    // The PDF is stored beside the envelope rather than in it, so a corrected
-    // rendition under an unchanged detail has to change the hash too.
-    rawHash:
-      parsed?.from === "pdf" && pdfBytes !== undefined
-        ? hashContent(
-            `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
-          )
-        : hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
-    documentAst,
-    sourceRaw,
-    ...(parsed?.from === "pdf" && pdfBytes !== undefined
-      ? {
-          sourceRawObjects: {
-            [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
-          },
-        }
-      : {}),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_KIS_METADATA_URL_SCHEMA,
+  );
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1933,7 +1953,11 @@ const readBoundary = async (
     : Result.ok(newest);
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async (
   rows: Record<string, unknown>[],
@@ -1941,18 +1965,32 @@ const collectDecisions = async (
   signal?: AbortSignal,
 ): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const row of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await buildPlKisDecision(row, cursor, signal);
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIS,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await buildPlKisDecision(row, cursor, signal),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
     // The crawl keeps a listing-only row; only the reconciliation refuses it.
     decisions.push(attempted.value.decision);
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 const sweepPage = async (
@@ -2011,13 +2049,33 @@ const sweepPage = async (
       if (Result.isError(collected)) {
         return collected;
       }
-      const { aborted, decisions } = collected.value;
+      const { aborted, decisions, itemBuildFailures } = collected.value;
       if (aborted) {
-        return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+        return Result.ok({
+          decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
+          sourceUrl: url,
+          nextCursor: cursor,
+        });
       }
       if ((page + 1) * CRAWL_PAGE_SIZE < totalHits) {
         return Result.ok({
           decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
           sourceUrl: url,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
@@ -2025,6 +2083,14 @@ const sweepPage = async (
       const after = nextMonth();
       return Result.ok({
         decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
         sourceUrl: url,
         nextCursor:
           after === null
@@ -2102,12 +2168,36 @@ const tipPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   if (reachedFrontier) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   if ((page + 2) * CRAWL_PAGE_SIZE > PL_KIS_RESULT_WINDOW) {
     // The next page is past what the search serves. The rows between here and
@@ -2118,12 +2208,32 @@ const tipPage = async (
       frontier: start.frontier,
       pending,
     });
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   // A descending listing grows only at its head, so the next page can re-read
   // a row but cannot step over one.
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor({
       phase: "tip",
@@ -2169,12 +2279,32 @@ const undatedPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated
@@ -2262,6 +2392,37 @@ export const plKisAdapter = defineSourceAdapter({
   getTotalCount: plKisTotalCount,
 
   reconciliation: {
+    // The declared listing columns hold record content, without result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            ID_INFORMACJI: payload["ID_INFORMACJI"],
+            KATEGORIA_INFORMACJI: payload["KATEGORIA_INFORMACJI"],
+            SYG: payload["SYG"],
+            DT_WYD: payload["DT_WYD"],
+            TEZA: payload["TEZA"],
+            STATUS_INFORMACJI: payload["STATUS_INFORMACJI"],
+            DATA_PUBLIKACJI: payload["DATA_PUBLIKACJI"],
+            AUTOR: payload["AUTOR"],
+            SLOWA_KLUCZOWE: payload["SLOWA_KLUCZOWE"],
+            PRZEPISY: payload["PRZEPISY"],
+            ZAGADNIENIA: payload["ZAGADNIENIA"],
+            INFORMACJA_ZMIENIANA: payload["INFORMACJA_ZMIENIANA"],
+            MIEJ_PUB: payload["MIEJ_PUB"],
+            INN_ZROD: payload["INN_ZROD"],
+            RODZAJ_DECYZJI: payload["RODZAJ_DECYZJI"],
+            DAT_WAZ_OD: payload["DAT_WAZ_OD"],
+            DAT_WAZ_DO: payload["DAT_WAZ_DO"],
+            STAN_PRAW: payload["STAN_PRAW"],
+            NOMENKLATURA_SCALONA: payload["NOMENKLATURA_SCALONA"],
+            KLASYFIKACJA_PKWIU: payload["KLASYFIKACJA_PKWIU"],
+            KLASYFIKACJA_PKOB: payload["KLASYFIKACJA_PKOB"],
+            RODZAJ_WYROBU_AKCYZOWEGO: payload["RODZAJ_WYROBU_AKCYZOWEGO"],
+            DATA_REJESTRACJI: payload["DATA_REJESTRACJI"],
+            KOMENTARZE_BIP: payload["KOMENTARZE_BIP"],
+            KOM_BIP_OPIS: payload["KOM_BIP_OPIS"],
+          }
+        : null,
     firstSlice: PL_KIS_FIRST_SLICE,
     sliceOf,
     nextSlice: (slice) => plKisNextSlice(slice),

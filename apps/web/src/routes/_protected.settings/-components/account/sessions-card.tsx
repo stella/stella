@@ -40,7 +40,7 @@ import { authClient, revokeAuthSession } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 
 const MISSING_VALUE = "-";
@@ -210,13 +210,10 @@ const RevokeSessionButton = ({ sessionId }: RevokeSessionButtonProps) => {
       const result = await revokeAuthSession({ sessionId: sessionIdToRevoke });
 
       if (result.error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(result.error);
       }
 
@@ -259,13 +256,10 @@ const RevokeAllDialog = () => {
       const result = await authClient.revokeOtherSessions();
 
       if (result.error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(result.error);
       }
 

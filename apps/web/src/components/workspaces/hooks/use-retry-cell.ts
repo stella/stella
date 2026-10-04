@@ -1,13 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { EntityId, PropertyId, WorkspaceId } from "@/lib/types";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -55,10 +54,10 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
         // workflow, read-only entity) — without this the user just
         // sees the menu close and nothing happens. `userErrorMessage`
         // hides 5xx detail behind a generic fallback.
-        stellaToast.add({
-          title: userErrorMessage(response.error, t("errors.actionFailed")),
-          type: "error",
-        });
+        notifyUserError(
+          toAPIError(response.error),
+          userErrorMessage(response.error, t("errors.actionFailed")),
+        );
         return undefined;
       }
 
@@ -74,10 +73,7 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
       return response.data;
     } catch (error) {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
       return undefined;
     }
   };

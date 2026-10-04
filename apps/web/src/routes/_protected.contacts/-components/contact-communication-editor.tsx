@@ -7,9 +7,9 @@ import * as v from "valibot";
 import { Button } from "@stll/ui/button";
 import { InboxIcon, MailIcon, PhoneIcon, Trash2Icon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { normalizeOptionalArray, optionalArray } from "@/lib/arrays";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { AddContactMethodForm } from "@/routes/_protected.contacts/-components/add-contact-method-form";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
@@ -43,10 +43,7 @@ export const ContactCommunicationEditor = ({
     }
 
     if (!v.safeParse(EMAIL_SCHEMA, address).success) {
-      stellaToast.add({
-        title: t("contacts.communication.invalidEmail"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.communication.invalidEmail"));
       return;
     }
 
@@ -55,10 +52,7 @@ export const ContactCommunicationEditor = ({
         (email) => email.address.toLowerCase() === address.toLowerCase(),
       )
     ) {
-      stellaToast.add({
-        title: t("contacts.communication.alreadyExists"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
       return;
     }
 
@@ -85,10 +79,7 @@ export const ContactCommunicationEditor = ({
     }
 
     if (phones.some((phone) => phone.number === number)) {
-      stellaToast.add({
-        title: t("contacts.communication.alreadyExists"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
       return;
     }
 
@@ -115,18 +106,12 @@ export const ContactCommunicationEditor = ({
     }
 
     if (!DATA_BOX_ID_PATTERN.test(id)) {
-      stellaToast.add({
-        title: t("contacts.communication.invalidDataBox"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.communication.invalidDataBox"));
       return;
     }
 
     if (dataBoxes.some((dataBox) => dataBox.id === id)) {
-      stellaToast.add({
-        title: t("contacts.communication.alreadyExists"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
       return;
     }
 

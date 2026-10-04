@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { envBase } from "@/api/env-base";
 import {
   deleteS3ObjectWithSignal,
@@ -31,6 +33,23 @@ describe("fake S3 carries the real s3 helpers", () => {
 
   afterEach(() => {
     fake.stop();
+  });
+
+  test("a held PUT exposes completion only after applying its bytes", async () => {
+    const key = "org_1/ws_1/held.txt";
+    const hold = fake.holdNext({ method: "PUT", keyIncludes: key });
+    const pending = writeS3ObjectWithRetry(
+      { key, data: "held bytes" },
+      { type: "fixture" },
+    );
+    await hold.reached;
+    expect(fake.objects.has(`${bucket}/${key}`)).toBe(false);
+    hold.release();
+    await hold.completed;
+    expect(
+      new TextDecoder().decode(fake.objects.get(`${bucket}/${key}`)?.bytes),
+    ).toBe("held bytes");
+    await pending;
   });
 
   test("round-trips an object through the SDK and presigned transports", async () => {
@@ -219,13 +238,21 @@ describe("fake S3 carries the real s3 helpers", () => {
 
   test("retries a transient write and stops on a terminal rejection", async () => {
     fake.failNext({ method: "PUT", code: "InternalError", status: 500 });
-    await writeS3ObjectWithRetry({ key: "retry/ok", data: "payload" });
+    await writeS3ObjectWithRetry(
+      { key: "retry/ok", data: "payload" },
+      { type: "fixture" },
+    );
     expect(fake.objects.has(`${bucket}/retry/ok`)).toBe(true);
 
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     expect(
-      writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
-    ).rejects.toThrow(/AccessDenied/u);
+      await rejectionOf(
+        writeS3ObjectWithRetry(
+          { key: "retry/denied", data: "payload" },
+          { type: "fixture" },
+        ),
+      ),
+    ).toHaveProperty("message", expect.stringMatching(/AccessDenied/u));
     expect(fake.objects.has(`${bucket}/retry/denied`)).toBe(false);
   });
 });

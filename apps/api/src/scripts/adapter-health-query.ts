@@ -79,6 +79,7 @@ export const adapterHealthPageStatement = ({
       ? sql``
       : sql`AND ${caseLawDecisions.id} > ${afterId}::uuid`;
 
+  // sql-perf-allow: bounded by materialized decision_page LIMIT 5000 maximum and indexed per-decision citation reads
   return sql`
     WITH decision_page AS MATERIALIZED (
       SELECT ${caseLawDecisions.id} AS id,

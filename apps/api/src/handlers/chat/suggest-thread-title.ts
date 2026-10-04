@@ -17,6 +17,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   admitFiniteAction,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
@@ -36,6 +37,7 @@ const config = {
   // cannot rename cannot spend metered model calls proposing a title they
   // have no way to apply.
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),

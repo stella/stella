@@ -1,4 +1,4 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -34,9 +34,8 @@
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -83,6 +82,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -91,6 +91,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -98,6 +102,8 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -288,6 +294,28 @@ type PlKioListingPage = {
   rows: PlKioListingItem[];
 };
 
+const readPlKioListingItem = (
+  node: cheerio.Cheerio<AnyNode>,
+  readText = visibleHtmlText,
+): PlKioListingItem => {
+  const item: PlKioListingItem = { html: node.toString() };
+  const labels = node.find("label");
+  labels.each((index) => {
+    const label = labels.eq(index);
+    const name = collapse(readText(label)).replace(/:$/u, "");
+    if (!isListingLabel(name)) {
+      return;
+    }
+    const parent = label.parent().clone();
+    parent.find("label").remove();
+    item[LISTING_LABELS[name]] = presentText(readText(parent));
+  });
+  const href = node.find("a.link-details").attr("href");
+  item.id =
+    href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"];
+  return item;
+};
+
 /**
  * Read a listing page, or `null` for anything that is not one.
  *
@@ -308,25 +336,7 @@ export const readPlKioListing = (html: string): PlKioListingPage | null => {
 
   const rows = $(".search-list-item")
     .toArray()
-    .map((element) => {
-      const item: PlKioListingItem = { html: $.html(element) };
-      const node = $(element);
-      node.find("label").each((_, label) => {
-        const name = collapse($(label).text()).replace(/:$/u, "");
-        if (!isListingLabel(name)) {
-          return;
-        }
-        const parent = $(label).parent().clone();
-        parent.find("label").remove();
-        item[LISTING_LABELS[name]] = presentText(parent.text());
-      });
-      const href = node.find("a.link-details").attr("href");
-      item.id =
-        href === undefined
-          ? undefined
-          : DETAILS_HREF.exec(href)?.groups?.["id"];
-      return item;
-    });
+    .map((element) => readPlKioListingItem($(element)));
 
   return { counts: [all, kio, so, sa, sn], rows };
 };
@@ -365,6 +375,19 @@ const plKioQuarantineId = (item: PlKioListingItem): string =>
       issueDate: item.issueDate,
     }),
   )}`;
+
+// Raw-text digests are repair aliases only; newly quarantined rows use visible fields.
+const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
+  const canonicalId = plKioQuarantineId(item);
+  if (item.html === undefined) {
+    return [canonicalId];
+  }
+  const $ = cheerio.load(item.html);
+  const legacyId = plKioQuarantineId(
+    readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
+  );
+  return [...new Set([canonicalId, legacyId])];
+};
 
 /** The database's own record id, where the row states a usable one. */
 const publisherIdOf = (item: PlKioListingItem): string | undefined => {
@@ -467,13 +490,14 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   }
 
   const heading = presentText(
-    $("#pageContent h2.section-title")
-      .first()
-      .clone()
-      .children()
-      .remove()
-      .end()
-      .text(),
+    visibleHtmlText(
+      $("#pageContent h2.section-title")
+        .first()
+        .clone()
+        .children()
+        .remove()
+        .end(),
+    ),
   );
   const kindHref = $('a[href^="/Home/PdfMetrics/"]').attr("href");
   const kindText =
@@ -486,7 +510,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   const fields = new Map<string, string>();
   const cases: PlKioCase[] = [];
   metrics.find("label").each((_, element) => {
-    const label = collapse($(element).text());
+    const label = collapse(visibleHtmlText($(element)));
     const container = $(element).parent();
     if (isCaseListLabel(label)) {
       // Recorded even when empty, so the inventory sees the label.
@@ -494,7 +518,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
       container.find("li").each((__, item) => {
         cases.push(
           ...plKioCaseOf(
-            $(item).text(),
+            visibleHtmlText($(item)),
             label === "Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia",
           ),
         );
@@ -503,18 +527,18 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
     }
     const value = container.clone();
     value.find("label").remove();
-    fields.set(label, collapse(value.text()));
+    fields.set(label, collapse(visibleHtmlText(value)));
   });
 
   const lists = new Map<string, string[]>();
   metrics.find("b").each((_, element) => {
-    const title = collapse($(element).text());
+    const title = collapse(visibleHtmlText($(element)));
     const items = $(element)
       .nextAll("p")
       .first()
       .find("a")
       .toArray()
-      .flatMap((anchor) => $(anchor).text().split("|"))
+      .flatMap((anchor) => visibleHtmlText($(anchor)).split("|"))
       .map((item) => presentText(item))
       .filter((item) => item !== undefined);
     lists.set(title, items);
@@ -711,7 +735,7 @@ export const normalizeProcurementDocket = (docket: string): string => {
 
 /** What the ruling key is read from: stored columns only. */
 type ProcurementRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "identifiers" | "court" | "decisionDate" | "decisionType"
 >;
 
@@ -978,7 +1002,7 @@ export const assemblePlKioDecision = ({
     decisionType,
   };
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -988,7 +1012,7 @@ export const assemblePlKioDecision = ({
     // quarantined, so the repair enriches that row.
     ...(id === undefined
       ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
+      : { sourceDocumentIdRepairAliases: plKioQuarantineRepairIds(item) }),
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
     language: PL_KIO_LANGUAGE,
     fulltext,
@@ -1031,7 +1055,7 @@ export const assemblePlKioDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return listingOnly
     ? { type: "detail-unavailable", decision }
@@ -1460,7 +1484,11 @@ const advanceToPopulatedMonth = async (
     : Result.ok(last);
 };
 
-type Built = { decisions: IngestionResult[]; aborted: boolean };
+type Built = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const buildRows = async (
   rows: readonly PlKioListingItem[],
@@ -1468,11 +1496,25 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const item of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await fetchPlKioDecision({ cursor, item, signal });
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+
+      rawListing: JSON.stringify(item),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await fetchPlKioDecision({ cursor, item, signal }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -1488,7 +1530,7 @@ const buildRows = async (
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 /**
@@ -1527,9 +1569,17 @@ const fetchTailPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.value.url,
     nextCursor: aborted
       ? cursor
@@ -1557,11 +1607,19 @@ const plKioFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   if (aborted) {
     // Replay the page rather than checkpoint past rows never reached.
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor(cursor),
     });
@@ -1570,6 +1628,14 @@ const plKioFetchPage = async (
   if (reached < listed.total) {
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
@@ -1577,6 +1643,14 @@ const plKioFetchPage = async (
   const next = monthAfter(cursor.month);
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.url,
     nextCursor: encodePlKioCursor(
       next === null
@@ -1698,6 +1772,17 @@ export const plKioAdapter = defineSourceAdapter({
   getTotalCount: plKioTotalCount,
 
   reconciliation: {
+    // Listing identity and decision labels exclude row markup and result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            court: payload["court"],
+            documentType: payload["documentType"],
+            signature: payload["signature"],
+            issueDate: payload["issueDate"],
+          }
+        : null,
     firstSlice: PL_KIO_FIRST_SLICE,
     ...plKioDaySlices.walk,
     tipWindowDays: PL_KIO_TIP_WINDOW_DAYS,

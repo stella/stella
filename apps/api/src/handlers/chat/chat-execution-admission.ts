@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -46,6 +45,7 @@ const chatAdmissionError = (error: unknown) => {
 type StartChatExecutionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  /** Overrides the deployment flag `withActionAdmission` reads. */
   enabled?: boolean;
   admit?: typeof withActionAdmission;
 } & (
@@ -59,20 +59,19 @@ type StartChatExecutionAdmissionOptions = {
 
 // Transport readiness and execution settlement are separate: returning a
 // response cannot release the execution's lease. Continuations acquire anew.
+// Disabled admission still yields an execution: `withActionAdmission` owns that
+// decision and applies the demo account's daily budget either way.
 export const startChatExecutionAdmission = async ({
   organizationId,
   userId,
-  enabled = env.FEATURE_ACTION_ADMISSION,
+  enabled,
   admit = withActionAdmission,
   mode,
   actionKind,
   periodIdentity,
 }: StartChatExecutionAdmissionOptions): Promise<
-  Result<ChatExecutionAdmission | undefined, HandlerError>
+  Result<ChatExecutionAdmission, HandlerError>
 > => {
-  if (!enabled) {
-    return Result.ok(undefined);
-  }
   const ready =
     Promise.withResolvers<Result<ChatExecutionAdmission, HandlerError>>();
   const finished = Promise.withResolvers<undefined>();
@@ -80,7 +79,7 @@ export const startChatExecutionAdmission = async ({
     status: "acquiring",
   };
   const completion = admit({
-    enabled: true,
+    ...(enabled === undefined ? {} : { enabled }),
     scope: "independent",
     organizationId,
     userId,

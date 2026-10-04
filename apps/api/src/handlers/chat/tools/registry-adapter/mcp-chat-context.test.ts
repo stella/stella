@@ -1,8 +1,15 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  authorizedMemberRole,
+  roleForDisplay,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -21,7 +28,7 @@ const buildDeps = (
     organizationId: toSafeId<"organization">("org_1"),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     safeDb,
     scopedDb,
     toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -53,7 +60,7 @@ describe("buildMcpContextFromChat", () => {
         [workspaceTwo, "active"],
       ]),
     );
-    expect(context.memberRole).toBe(deps.memberRole);
+    expect(context.memberRole).toBe(roleForDisplay(deps.memberRole));
     expect(context.organizationId).toBe(deps.organizationId);
     expect(context.userId).toBe(deps.userId);
     expect(context.userEmail).toBe(deps.userEmail);
@@ -116,4 +123,20 @@ describe("buildMcpContextFromChat", () => {
       "archived",
     );
   });
+});
+
+test("preserves credential permissions when serializing a chat context", () => {
+  const permissions = {
+    entity: ["update"],
+  } satisfies PermissionInput;
+  const context = buildMcpContextFromChat(
+    buildDeps({
+      memberRole: authorizedMemberRole({
+        role: "admin",
+        credential: { type: "attenuated", permissions },
+      }),
+    }),
+  );
+  expect(context.memberRole).toBe("admin");
+  expect(context.credentialPermissions).toEqual(permissions);
 });

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   createContainer,
   demuxExecStream,
@@ -76,14 +78,14 @@ describe("Docker exec stream demultiplexing", () => {
       streamChunks([dockerFrame(3, new TextEncoder().encode("bad"))]),
     );
 
-    expect(operation).rejects.toBeInstanceOf(DockerApiError);
+    expect(await rejectionOf(operation)).toBeInstanceOf(DockerApiError);
   });
 
   test("rejects a truncated final frame", async () => {
     const frame = dockerFrame(1, new TextEncoder().encode("partial"));
     const operation = collectFrames(streamChunks([frame.slice(0, -1)]));
 
-    expect(operation).rejects.toBeInstanceOf(DockerApiError);
+    expect(await rejectionOf(operation)).toBeInstanceOf(DockerApiError);
   });
 });
 
@@ -194,8 +196,13 @@ describe("Docker container isolation", () => {
     );
 
     expect(
-      pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
-    ).rejects.toThrow("Docker pull failed for sandbox:test: denied");
+      await rejectionOf(
+        pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("Docker pull failed for sandbox:test: denied"),
+    );
   });
 
   test("bounds an unterminated pull progress line", async () => {
@@ -210,7 +217,12 @@ describe("Docker container isolation", () => {
     );
 
     expect(
-      pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
-    ).rejects.toThrow("Docker pull progress line exceeded");
+      await rejectionOf(
+        pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test"),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("Docker pull progress line exceeded"),
+    );
   });
 });

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { Temporal } from "@stll/time";
 /**
  * The order the deferred court documents are fetched in.
@@ -19,6 +21,7 @@ import { Temporal } from "@stll/time";
  */
 
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type { RemainingDocumentScanResult } from "@/api/lib/legal-search/sk-document-remaining-scan";
 
 export const DOCUMENT_TIER = {
   /** Asked for by a reader the read path could not serve in time. */
@@ -30,7 +33,7 @@ export const DOCUMENT_TIER = {
 export type DocumentTier = (typeof DOCUMENT_TIER)[keyof typeof DOCUMENT_TIER];
 
 /** A decision to fetch, and which tier it came from. */
-export type QueuedDocument = {
+type QueuedDocument = {
   tier: DocumentTier;
   decision: PendingDocument;
 };
@@ -42,17 +45,21 @@ export type QueuedDocument = {
  */
 export type PendingDocumentTierLoaders = {
   loadRequested: (limit: number) => Promise<PendingDocument[]>;
-  loadRemaining: (limit: number) => Promise<PendingDocument[]>;
+  loadRemaining: (limit: number) => Promise<RemainingDocumentScanResult>;
 };
 
+type PendingDocumentQueueResult =
+  | { type: "row"; row: QueuedDocument }
+  | { type: "budget-spent" }
+  | { type: "exhausted" };
+
 export type PendingDocumentQueue = {
-  /** The next decision to fetch, or nothing while the queue is empty. */
-  next: () => Promise<QueuedDocument | undefined>;
+  next: () => Promise<PendingDocumentQueueResult>;
 };
 
 export type PendingDocumentQueueOptions = {
   loaders: PendingDocumentTierLoaders;
-  /** Rows read per tier query. */
+  /** Ready rows buffered per tier; candidate scan pages have their own limit. */
   pageSize: number;
   /**
    * Shortest gap between two requested-tier probes. Zero probes before
@@ -73,11 +80,11 @@ export type PendingDocumentQueueOptions = {
  * never merged: a requested document that arrives while a bulk page is
  * half-consumed still overtakes the remainder of that page.
  *
- * Nothing here remembers which decisions it has served. It does not have
- * to: fetching a decision claims it, and a claimed decision leaves both
- * tiers for the length of its cooldown, so the next page starts past it.
- * A decision whose fetch failed before it could be claimed comes back,
- * which is the retry.
+ * The remaining loader carries the bounded outstanding scan's read cursor;
+ * the buffer and cursor share the queue's lifetime. Durable claims exclude
+ * completed work on a restart; cooling and parked candidates still count
+ * against the scan budget. Unprocessed buffered rows replay from the newest
+ * boundary. A periodic paginated head probe finds newly due decisions.
  */
 export const createPendingDocumentQueue = ({
   loaders,
@@ -103,26 +110,35 @@ export const createPendingDocumentQueue = ({
     return requested.shift();
   };
 
-  const takeRemaining = async (): Promise<PendingDocument | undefined> => {
-    const buffered = remaining.shift();
-    if (buffered) {
-      return buffered;
-    }
-    remaining = await loaders.loadRemaining(pageSize);
-    return remaining.shift();
-  };
-
   return {
     next: async () => {
       const priority = await takeRequested();
       if (priority) {
-        return { tier: DOCUMENT_TIER.REQUESTED, decision: priority };
+        return {
+          type: "row",
+          row: { tier: DOCUMENT_TIER.REQUESTED, decision: priority },
+        };
       }
-
-      const bulk = await takeRemaining();
-      return bulk
-        ? { tier: DOCUMENT_TIER.REMAINING, decision: bulk }
-        : undefined;
+      if (remaining.length === 0) {
+        const result = await loaders.loadRemaining(pageSize);
+        switch (result.type) {
+          case "rows":
+            remaining = result.rows;
+            break;
+          case "budget-spent":
+          case "exhausted":
+            return result;
+          default: {
+            result satisfies never;
+            panic("Unexpected remaining document scan outcome");
+          }
+        }
+      }
+      const decision = remaining.shift();
+      if (!decision) {
+        panic("Ready scan result must contain a document");
+      }
+      return { type: "row", row: { tier: DOCUMENT_TIER.REMAINING, decision } };
     },
   };
 };

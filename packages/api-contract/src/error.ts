@@ -1,3 +1,7 @@
+export const CLAUSE_DIRECTIVES_INVALID_CODE =
+  "clause_directives_invalid" as const;
+export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
+
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
 /** The submitted chat continuation does not match the server-owned pending turn. */

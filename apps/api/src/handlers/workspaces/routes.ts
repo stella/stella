@@ -49,7 +49,7 @@ import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -75,6 +75,7 @@ const workspaceRealtimeUpdates = workspaceResourceSetUpdates(
 const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
@@ -96,6 +97,7 @@ const readWorkspace = createSafeHandler(
 const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -116,6 +118,7 @@ const readOverview = createSafeHandler(
 const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -136,6 +139,7 @@ const readWorkspaceContacts = createSafeHandler(
 const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {

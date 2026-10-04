@@ -1,0 +1,5 @@
+{
+  "metric": "slice-owned-web-components",
+  "delta": 1,
+  "reason": "The consent page's app details component sits with the other OAuth screens in components/auth, which the consent route renders."
+}

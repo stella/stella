@@ -15,8 +15,15 @@ import nodePath from "node:path";
 
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { runMigrations } from "./migration-runner";
+import { CORPUS_SCHEMA_LANE } from "./corpus-schema-lane";
+import {
+  MIGRATION_LOCK_WAIT_FAILURE,
+  MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+  MigrationLockWaitError,
+  runMigrations,
+} from "./migration-runner";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -31,6 +38,11 @@ const REWRITTEN_CREATE_PROBE = `-- alias rewrite in a newer bundle\n${CREATE_PRO
 const INSERT_B = "INSERT INTO migration_probe (event) VALUES ('B');";
 const INSERT_C = "INSERT INTO migration_probe (event) VALUES ('C');";
 const CREATE_PROBE_B = `CREATE TABLE migration_probe (event text NOT NULL);--> statement-breakpoint\n${INSERT_B}`;
+const CREATE_LOCK_PROBE = "CREATE TABLE lock_probe (id integer)";
+// A short wait keeps the lost attempts cheap; production migrations wait 1s.
+const ALTER_LOCK_PROBE =
+  "SET lock_timeout = '100ms';--> statement-breakpoint\n" +
+  "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
 const CORPUS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 
 setDefaultTimeout(120_000);
@@ -183,6 +195,55 @@ const waitUntilBlocked = async (observer: SQL, pid: number) => {
     await Bun.sleep(10);
   }
   throw new Error(`Migration backend ${String(pid)} never waited on the lane`);
+};
+
+type LockProbeHolder = {
+  held: Promise<undefined>;
+  /** Ends the holding transaction; resolves once it has committed. */
+  release: () => Promise<void>;
+};
+
+/** A second session holding a lock the ALTER in `ALTER_LOCK_PROBE` conflicts with. */
+const holdLockProbe = (client: SQL): LockProbeHolder => {
+  const held = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const done = client.begin(async (tx) => {
+    await tx.unsafe("LOCK TABLE lock_probe IN ACCESS SHARE MODE");
+    held.resolve(undefined);
+    await release.promise;
+  });
+  // A holder that fails before locking fails the test waiting on `held`;
+  // `release` awaits `done` and rethrows any later failure.
+  void done.catch((error: unknown) => {
+    held.reject(error);
+  });
+  return {
+    held: held.promise,
+    release: async () => {
+      release.resolve(undefined);
+      await done;
+    },
+  };
+};
+
+const lockProbeColumns = async (observer: SQL) =>
+  (
+    await observer.unsafe<{ name: string }[]>(
+      "SELECT column_name AS name FROM information_schema.columns WHERE table_name = 'lock_probe' ORDER BY ordinal_position",
+    )
+  ).map(({ name }) => name);
+
+/** Sessions holding this database's corpus schema lane exclusive. */
+const laneHolders = async (observer: SQL) => {
+  const [row] = await observer.unsafe<{ holders: number }[]>(
+    `SELECT count(*)::int AS holders FROM pg_locks
+     WHERE locktype = 'advisory' AND mode = 'ExclusiveLock' AND granted
+       AND objsubid = 2
+       AND classid = hashtext($1)::oid AND objid = hashtext($2)::oid
+       AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
+    [CORPUS_SCHEMA_LANE.domain, CORPUS_SCHEMA_LANE.lane],
+  );
+  return row?.holders ?? Number.NaN;
 };
 
 if (!runPostgresTests || databaseUrl === undefined) {
@@ -539,6 +600,124 @@ if (!runPostgresTests || databaseUrl === undefined) {
               );
             },
           );
+        },
+      );
+    });
+
+    test("a pending set that loses a lock wait reruns under the lane and records each migration once", async () => {
+      await withBundle(
+        [
+          { name: A, sql: CREATE_PROBE },
+          { name: B, sql: ALTER_LOCK_PROBE },
+        ],
+        async (folder) => {
+          await withScratch(async ({ observer, openClient }) => {
+            await observer.unsafe(CREATE_LOCK_PROBE);
+            const holder = holdLockProbe(openClient());
+            const connection = await openClient().reserve();
+            const sleeps: number[] = [];
+            const stdout = spyOn(process.stdout, "write").mockImplementation(
+              () => true,
+            );
+            try {
+              await holder.held;
+              const result = await runMigrations({
+                connection,
+                migrationsFolder: folder,
+                runOnline: async () => undefined,
+                lockWaitRetry: {
+                  delaysMs: [10, 10, 10],
+                  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                  now: () => performance.now(),
+                  sleep: async (ms) => {
+                    sleeps.push(ms);
+                    // The lane is still this connection's while it pauses.
+                    expect(await laneHolders(observer)).toBe(1);
+                    await holder.release();
+                  },
+                },
+              });
+              expect(sleeps).toEqual([10]);
+              expect(appliedResult(result).insertedNames).toEqual([A, B]);
+            } finally {
+              stdout.mockRestore();
+              await holder.release();
+              connection.release();
+            }
+            expect(
+              (await ledgerRows(observer)).map(({ name }) => name),
+            ).toEqual([A, B]);
+            expect(await probeEvents(observer)).toEqual(["A"]);
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+            expect(await laneHolders(observer)).toBe(0);
+          });
+        },
+      );
+    });
+
+    test("a lock wait that never clears fails after bounded attempts and records nothing", async () => {
+      await withBundle(
+        [
+          { name: A, sql: CREATE_PROBE },
+          { name: B, sql: ALTER_LOCK_PROBE },
+        ],
+        async (folder) => {
+          await withScratch(async ({ observer, openClient, run }) => {
+            await observer.unsafe(CREATE_LOCK_PROBE);
+            const holder = holdLockProbe(openClient());
+            const connection = await openClient().reserve();
+            const sleeps: number[] = [];
+            const stdout = spyOn(process.stdout, "write").mockImplementation(
+              () => true,
+            );
+            try {
+              await holder.held;
+              const rejection = await rejectionOf(
+                async () =>
+                  await runMigrations({
+                    connection,
+                    migrationsFolder: folder,
+                    runOnline: async () => undefined,
+                    lockWaitRetry: {
+                      delaysMs: [10, 10],
+                      budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                      now: () => performance.now(),
+                      sleep: async (ms) => {
+                        sleeps.push(ms);
+                        await Promise.resolve();
+                      },
+                    },
+                  }),
+              );
+              expect(MigrationLockWaitError.is(rejection)).toBe(true);
+              expect(rejection).toMatchObject({
+                reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
+                attempts: 3,
+              });
+              expect(isPgError(rejection, PG_ERROR.LOCK_NOT_AVAILABLE)).toBe(
+                true,
+              );
+              expect(sleeps).toEqual([10, 10]);
+              expect(await ledgerRows(observer)).toEqual([]);
+              const [probe] = await observer.unsafe<{ exists: boolean }[]>(
+                "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",
+              );
+              expect(probe?.exists).toBe(false);
+              expect(await lockProbeColumns(observer)).toEqual(["id"]);
+            } finally {
+              stdout.mockRestore();
+              await holder.release();
+              connection.release();
+            }
+            // The failed run released the lane; the next one applies the set.
+            expect(appliedResult(await run(folder)).insertedNames).toEqual([
+              A,
+              B,
+            ]);
+          });
         },
       );
     });

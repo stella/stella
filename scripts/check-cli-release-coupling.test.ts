@@ -24,6 +24,7 @@ import {
   findSurfaceDrift,
   parseGeneratedConstants,
   readHeadSurface,
+  readPublishedPackageSurface,
   verdictFromClassification,
   type CliContractSurface,
   type PublishedCli,
@@ -381,6 +382,131 @@ describe("release workflows run the gate", () => {
   });
 });
 
+describe("catalog storage layout preserves the release contract", () => {
+  const entries = [
+    {
+      id: "matters.get",
+      inputSchema: { properties: { id: { type: "string" } }, type: "object" },
+    },
+    { id: "matters.list", inputSchema: { type: "object", properties: {} } },
+  ];
+
+  const withPackageFixture = (callback: (root: string) => void): void => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-cli-surface-"));
+    try {
+      for (const [part, metadata] of Object.entries(CLI_CONTRACT_SURFACE)) {
+        if (part === "capability-catalog.json") {
+          continue;
+        }
+        for (const relativePath of [
+          `packages/cli/${part}`,
+          `package/${metadata.published}`,
+        ]) {
+          const file = path.join(root, relativePath);
+          mkdirSync(path.dirname(file), { recursive: true });
+          writeFileSync(
+            file,
+            metadata.kind === "json" ? "{}" : "export const contract = {};",
+          );
+        }
+      }
+      mkdirSync(path.join(root, "packages/cli/capabilities"));
+      // Reverse creation order and object keys: neither is contract drift.
+      for (const entry of entries.toReversed()) {
+        writeFileSync(
+          path.join(root, "packages/cli/capabilities", `${entry.id}.json`),
+          JSON.stringify({ inputSchema: entry.inputSchema, id: entry.id }),
+        );
+      }
+      return callback(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test.each(["legacy", "shards"])(
+    "compares the head shards against %s published data",
+    (layout) => {
+      withPackageFixture((root) => {
+        const publishedRoot = path.join(root, "package");
+        if (layout === "legacy") {
+          writeFileSync(
+            path.join(publishedRoot, "capability-catalog.json"),
+            JSON.stringify(entries),
+          );
+        } else {
+          mkdirSync(path.join(publishedRoot, "capabilities"));
+          for (const entry of entries) {
+            writeFileSync(
+              path.join(publishedRoot, "capabilities", `${entry.id}.json`),
+              JSON.stringify(entry),
+            );
+          }
+        }
+        const publishedSurface = readPublishedPackageSurface(publishedRoot);
+        expect(
+          findSurfaceDrift({
+            head: readHeadSurface(root),
+            published: publishedSurface,
+          }),
+        ).toEqual([]);
+        writeFileSync(
+          path.join(root, "packages/cli/capabilities/matters.list.json"),
+          '{"id":"matters.list","inputSchema":{"changed":true}}',
+        );
+        expect(
+          findSurfaceDrift({
+            head: readHeadSurface(root),
+            published: publishedSurface,
+          }),
+        ).toEqual(["capability-catalog.json"]);
+      });
+    },
+  );
+
+  test("reads the head contract in a checkout without installed dependencies", () => {
+    withPackageFixture((root) => {
+      const directory = path.join(root, "scripts");
+      mkdirSync(directory);
+      for (const file of [
+        "check-cli-release-coupling.ts",
+        "changeset-guard.ts",
+        "changeset-entry.ts",
+      ]) {
+        copyFileSync(
+          path.join(REPO_ROOT, "scripts", file),
+          path.join(directory, file),
+        );
+      }
+      writeFileSync(
+        path.join(root, "read-surface.ts"),
+        'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
+          'process.stdout.write(readHeadSurface(import.meta.dirname)["capability-catalog.json"]);\n',
+      );
+      const result = Bun.spawnSync([process.execPath, "read-surface.ts"], {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.stderr.toString()).toBe("");
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toEqual(entries);
+    });
+  });
+
+  test("fails closed when a shard does not match its filename", () => {
+    withPackageFixture((root) => {
+      writeFileSync(
+        path.join(root, "packages/cli/capabilities/matters.list.json"),
+        JSON.stringify(entries),
+      );
+      expect(() => readHeadSurface(root)).toThrow(
+        "must contain one entry matching its filename",
+      );
+    });
+  });
+});
+
 test("release contract reads committed data without installed dependencies or derived runtime outputs", () => {
   const root = mkdtempSync(
     path.join(tmpdir(), "stella-cli-release-no-install-"),
@@ -399,6 +525,23 @@ test("release contract reads committed data without installed dependencies or de
       );
     }
     for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
+      // The catalog's committed data is the per-capability shard directory.
+      if (part === "capability-catalog.json") {
+        const archive = spawnSync(
+          "git",
+          ["archive", "--format=tar", "HEAD", "packages/cli/capabilities"],
+          { cwd: REPO_ROOT, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 },
+        );
+        expect(archive.error).toBeUndefined();
+        expect(archive.status, archive.stderr.toString()).toBe(0);
+        const extracted = spawnSync("tar", ["-x", "-C", root], {
+          input: archive.stdout,
+          timeout: 10_000,
+        });
+        expect(extracted.error).toBeUndefined();
+        expect(extracted.status, extracted.stderr.toString()).toBe(0);
+        continue;
+      }
       const relativePath = `packages/cli/${part}`;
       const committed = spawnSync("git", ["show", `HEAD:${relativePath}`], {
         cwd: REPO_ROOT,
@@ -412,6 +555,9 @@ test("release contract reads committed data without installed dependencies or de
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, committed.stdout);
     }
+    expect(
+      existsSync(path.join(root, "packages/cli/capability-catalog.json")),
+    ).toBe(false);
     expect(existsSync(path.join(root, "node_modules"))).toBe(false);
     for (const file of ["route-map.ts", "tool-annotations.ts"]) {
       expect(

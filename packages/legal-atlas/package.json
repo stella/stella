@@ -43,6 +43,10 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
+    "./provision-citation-profiles": {
+      "types": "./src/provision-citation-profiles.ts",
+      "import": "./src/provision-citation-profiles.ts"
+    },
     "./provision-extraction-admission": {
       "types": "./src/provision-extraction-admission.ts",
       "import": "./src/provision-extraction-admission.ts"
@@ -66,6 +70,10 @@
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
+    },
+    "./ingestion-cycle": {
+      "types": "./src/ingestion-cycle.ts",
+      "import": "./src/ingestion-cycle.ts"
     }
   },
   "scripts": {

@@ -13,6 +13,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -129,5 +130,36 @@ test("the public list read stays inside the country boundary", async () => {
   if ("items" in listed) {
     expect(listed.items).toHaveLength(4);
     expect(listed.items.every((item) => item.country === country)).toBe(true);
+  }
+});
+
+test("sitemap bounds every language group even within a larger batch", async () => {
+  const languageGroupKey = "sitemap-overflow-group";
+  const variants = Array.from(
+    { length: LIMITS.caseLawLanguageAlternatesPerGroupMax + 1 },
+    (_, index) => ({
+      id: createSafeId<"caseLawDecision">(),
+      sourceId,
+      caseNumber: "sitemap-overflow",
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: `q${String.fromCodePoint(97 + Math.floor(index / 26))}${String.fromCodePoint(97 + (index % 26))}`,
+      languageGroupKey,
+      decisionDate: "2020-06-01",
+    }),
+  );
+  await db.insert(caseLawDecisions).values(variants);
+  const response = await listSitemapShardDecisionsHandler(
+    { country: "cze", year: "2020", month: "06", bucket: "all" },
+    caseLawDb,
+  );
+  if (!("items" in response)) {
+    panic("Sitemap overflow fixture failed to load");
+  }
+  expect(response.items.length).toBe(variants.length);
+  for (const item of response.items) {
+    expect(item.languageAlternates.length).toBe(
+      LIMITS.caseLawLanguageAlternatesPerGroupMax,
+    );
   }
 });

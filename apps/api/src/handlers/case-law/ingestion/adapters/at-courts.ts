@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -37,6 +38,7 @@ import {
   AT_RIS_DOCUMENT_ORIGINS,
   fetchAtRisWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -57,7 +59,14 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import {
+  AT_RIS_METADATA_URL_SCHEMA,
+  AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+} from "./at-courts.metadata-urls";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const LANGUAGE = "de";
@@ -722,7 +731,7 @@ const decisionMetadata = (
   source: AtRisSourceDefinition,
   data: RisListingMetadata,
   sections: RisDocumentSections,
-): Record<string, unknown> => ({
+) => ({
   ecli: data.ecli,
   court: data.court,
   decisionDate: data.decisionDate,
@@ -735,8 +744,17 @@ const decisionMetadata = (
   submitter: data.submitter,
   documentKind: data.documentKind,
   keywords: data.keywords,
-  decisionTextDocument: data.decisionTextDocument,
-  documentParts: data.documentParts,
+  decisionTextDocument: toMetadataUrl(
+    data.decisionTextDocument,
+    "transport-json",
+  ),
+  documentParts: data.documentParts.map((part) => ({
+    ...part,
+    formats: part.formats.map((format) => ({
+      ...format,
+      url: toMetadataUrl(format.url, "transport-json"),
+    })),
+  })),
   contentFormats: data.contentFormats,
   ...atRisStoredValues(profileOf(source), {
     branch: data.sourceMetadata,
@@ -891,16 +909,19 @@ const headnoteNamesDecision = (
   );
 };
 
-const headnoteSummary = (
-  headnote: Record<string, unknown>,
-): Record<string, unknown> => {
+const headnoteSummary = (headnote: Record<string, unknown>) => {
   const judicature = nestedRecord(headnote, "Data", "Metadaten", "Judikatur");
   return {
     sourceDocumentId: rawSourceDocumentIdOf(headnote),
     caseNumbers: itemValues(judicature?.["Geschaeftszahl"]),
     ecli: optionalString(judicature?.["EuropeanCaseLawIdentifier"]),
-    documentUrl: optionalString(
-      nestedRecord(headnote, "Data", "Metadaten", "Allgemein")?.["DokumentUrl"],
+    documentUrl: toMetadataUrl(
+      optionalString(
+        nestedRecord(headnote, "Data", "Metadaten", "Allgemein")?.[
+          "DokumentUrl"
+        ],
+      ),
+      "transport-json",
     ),
   };
 };
@@ -947,7 +968,7 @@ const headnotesOf = (
   source: AtRisSourceDefinition,
   headnoteListing: string | undefined,
   sourceDocumentId: string,
-): readonly Record<string, unknown>[] => {
+) => {
   if (headnoteListing === undefined) {
     return [];
   }
@@ -1013,39 +1034,47 @@ const buildListingOnly = ({
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
   const raw = storedRaw({ item, documentXml: rawDetail });
-  return {
-    sourceDocumentId,
-    sourceDocumentIdRepairAliases,
-    caseNumber,
-    ...(data.caseNumber === undefined ? { caseNumberIsPlaceholder: true } : {}),
-    isListingOnly: true,
-    ecli: data.ecli,
-    court,
-    country: ADAPTER_MANIFESTS[source.key].country,
-    language: LANGUAGE,
-    decisionDate: data.decisionDate,
-    decisionType: data.decisionType,
-    sourceUrl: data.sourceUrl,
-    documentUrl: listedDocumentUrl(
-      source,
-      item,
+  return plainTextIngestionResult(
+    {
       sourceDocumentId,
-      "Html",
-      "html",
-    ),
-    // The listing states a text of its own for some applications, so a row
-    // without its document is still not a row whose publisher wrote nothing.
-    textFields: decisionTextFields(source, data, NO_SECTIONS),
-    metadata: checkedDecisionMetadata({
-      ...decisionMetadata(source, data, NO_SECTIONS),
+      sourceDocumentIdRepairAliases,
+      caseNumber,
+      ...(data.caseNumber === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : {}),
+      isListingOnly: true,
+      ecli: data.ecli,
       court,
-      detailStatus: reason,
-    }),
-    rawHash: hashContent(raw.sourceRaw),
-    documentAst: EMPTY_AST,
-    parserVersion: PARSER_VERSIONS[source.key],
-    ...raw,
-  };
+      country: ADAPTER_MANIFESTS[source.key].country,
+      language: LANGUAGE,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      sourceUrl: data.sourceUrl,
+      documentUrl: listedDocumentUrl(
+        source,
+        item,
+        sourceDocumentId,
+        "Html",
+        "html",
+      ),
+      // The listing states a text of its own for some applications, so a row
+      // without its document is still not a row whose publisher wrote nothing.
+      textFields: decisionTextFields(source, data, NO_SECTIONS),
+      metadata: checkedDecisionMetadata(
+        {
+          ...decisionMetadata(source, data, NO_SECTIONS),
+          court,
+          detailStatus: reason,
+        },
+        AT_RIS_METADATA_URL_SCHEMA,
+      ),
+      rawHash: hashContent(raw.sourceRaw),
+      documentAst: EMPTY_AST,
+      parserVersion: PARSER_VERSIONS[source.key],
+      ...raw,
+    },
+    AT_RIS_METADATA_URL_SCHEMA,
+  );
 };
 
 type BuildDecisionOptions = {
@@ -1214,36 +1243,42 @@ export const assembleAtRisDecision = (
   const parsed = parseResult.value;
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
-  return {
-    sourceDocumentId,
-    sourceDocumentIdRepairAliases,
-    caseNumber: data.caseNumber,
-    ecli: data.ecli,
-    court: data.court,
-    country: ADAPTER_MANIFESTS[source.key].country,
-    language: LANGUAGE,
-    decisionDate: data.decisionDate,
-    decisionType: data.decisionType,
-    fulltext: parsed.fulltext,
-    sourceUrl: data.sourceUrl,
-    documentUrl: listedDocumentUrl(
-      source,
-      item,
+  return plainTextIngestionResult(
+    {
       sourceDocumentId,
-      "Html",
-      "html",
-    ),
-    textFields: decisionTextFields(source, data, parsed.sections),
-    metadata: checkedDecisionMetadata({
-      ...decisionMetadata(source, data, parsed.sections),
-      headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
-    }),
-    rawHash: hashContent(raw.sourceRaw),
-    documentAst: parsed.documentAst,
-    sections: sectionsFromAst(parsed.documentAst.blocks),
-    parserVersion: PARSER_VERSIONS[source.key],
-    ...raw,
-  };
+      sourceDocumentIdRepairAliases,
+      caseNumber: data.caseNumber,
+      ecli: data.ecli,
+      court: data.court,
+      country: ADAPTER_MANIFESTS[source.key].country,
+      language: LANGUAGE,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      fulltext: parsed.fulltext,
+      sourceUrl: data.sourceUrl,
+      documentUrl: listedDocumentUrl(
+        source,
+        item,
+        sourceDocumentId,
+        "Html",
+        "html",
+      ),
+      textFields: decisionTextFields(source, data, parsed.sections),
+      metadata: checkedDecisionMetadata(
+        {
+          ...decisionMetadata(source, data, parsed.sections),
+          headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+        },
+        AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+      ),
+      rawHash: hashContent(raw.sourceRaw),
+      documentAst: parsed.documentAst,
+      sections: sectionsFromAst(parsed.documentAst.blocks),
+      parserVersion: PARSER_VERSIONS[source.key],
+      ...raw,
+    },
+    AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  );
 };
 
 type FetchListingOptions = {
@@ -1405,8 +1440,11 @@ const buildReconciliationDecision = async (
   ) {
     return { type: "detail-unavailable" };
   }
+  if (typeof detailStatus !== "string") {
+    return panic("RIS listing-only decision has no detail status");
+  }
   throw new AdapterFetchError({
-    message: `RIS reconciliation could not build detail: ${String(detailStatus)}`,
+    message: `RIS reconciliation could not build detail: ${detailStatus}`,
     adapterKey: source.key,
     cursor: null,
   });
@@ -1438,6 +1476,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
     maxSyncPages: 1,
 
     reconciliation: {
+      // Decision metadata and document references describe the item, without search result coordinates.
+      revisionOf: (payload) =>
+        isRecord(payload)
+          ? {
+              metadata: nestedRecord(payload, "Data", "Metadaten"),
+              documents: nestedRecord(payload, "Data", "Dokumentliste"),
+            }
+          : null,
       firstSlice: source.firstSlice,
       sliceOf: (now) => tipSlice(source, now),
       nextSlice: (slice) => {
@@ -1583,21 +1629,48 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             };
           }
 
-          const decisions = await Array.fromAsync(
-            page.items.filter((item) => !isExcludedItem(source, item)),
-            async (item) =>
-              await buildDecision({
-                cursor,
-                dependencies,
-                item,
-                signal,
-                source,
-              }),
-          );
+          const decisions: IngestionResult[] = [];
+          let refused = 0;
+          for (const item of page.items.filter(
+            (candidate) => !isExcludedItem(source, candidate),
+          )) {
+            const outcome = await buildPlainTextItem({
+              adapterKey: source.key,
+
+              rawListing: JSON.stringify(item),
+              decisionOf: (decision) => decision,
+              build: async () =>
+                await buildDecision({
+                  cursor,
+                  dependencies,
+                  item,
+                  signal,
+                  source,
+                }),
+            });
+            signal?.throwIfAborted();
+            switch (outcome.type) {
+              case "built":
+                decisions.push(outcome.value);
+                break;
+              case "item_build_failed":
+                refused += 1;
+                decisions.push(outcome.decision);
+                break;
+              default:
+                outcome satisfies never;
+                panic(`Unhandled RIS item outcome: ${String(outcome)}`);
+            }
+          }
+          const itemBuildFailures = {
+            type: "item_build_failed",
+            count: refused,
+          } as const;
           const collected = state.collected + decisions.length;
           if (state.page < totalPages) {
             return {
               decisions,
+              itemBuildFailures,
               nextCursor: encodeCursor({
                 ...state,
                 page: state.page + 1,
@@ -1617,6 +1690,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           }
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: encodeCursor({
               slice: state.slice,
               phase: CURSOR_PHASE.VERIFY,

@@ -2,8 +2,6 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
@@ -17,6 +15,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { isUnauthorizedError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type DesktopOpenTarget = {
   entityId: string;
@@ -87,33 +86,39 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
     } catch (error) {
       setIsOpening(false);
       if (error instanceof Error && isUnauthorizedError(error)) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.authRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          t("workspaces.files.desktopEdit.authRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.authRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
       if (error instanceof DesktopBridgeIncompatibleError) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.updateRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          t("workspaces.files.desktopEdit.updateRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.updateRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
       getAnalytics().captureError(error);
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.unavailableDescription"),
-        title: t("workspaces.files.desktopEdit.unavailableTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        error,
+        t("workspaces.files.desktopEdit.unavailableTitle"),
+        {
+          description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        },
+      );
       return;
     }
     setIsOpening(false);

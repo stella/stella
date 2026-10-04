@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
@@ -30,6 +30,7 @@ const config = {
     "media type. It is stored with an upload origin and stays editable. Team " +
     "scope requires admin or owner.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

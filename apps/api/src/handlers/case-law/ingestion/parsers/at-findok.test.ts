@@ -50,3 +50,21 @@ describe("Austrian Findok XML parser", () => {
     }
   });
 });
+
+it("excludes script and style text from embedded XHTML and validation", () => {
+  const parsed = parseFindokDecisionXml({
+    caseNumber: "RV/1/2026",
+    court: "BFG",
+    decisionDate: "2026-07-14",
+    decisionType: "erkenntnis",
+    sourceDocumentId: "test",
+    sourceUrl: "https://findok.bmf.gv.at/",
+    xml: "<Segmente><Segk><txt><![CDATA[<body><h1>Title</h1><script>script-only</script><style>style-only</style><p>Visible<script>nested-script</script><style>nested-style</style> decision</p></body>]]></txt></Segk></Segmente>",
+  }).unwrap();
+  expect(parsed.documentAst.blocks.map((block) => block.plainText)).toEqual([
+    "Title",
+    "Visible decision",
+  ]);
+  expect(parsed.fulltext).toBe("Title\n\nVisible decision");
+  expect(parsed.validationIssues).toEqual([]);
+});

@@ -15,13 +15,13 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { PencilIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   formatHotkeyForPlatform,
   formatShortcutBinding,
@@ -203,7 +203,7 @@ const RebindableBinding = ({
       setPending(null);
     } catch (error) {
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
     }
@@ -215,7 +215,7 @@ const RebindableBinding = ({
       await onReset(id);
     } catch (error) {
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
     }

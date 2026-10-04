@@ -5,6 +5,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 
 export const scanEmailAttachmentForSave = async ({
   bytes,
@@ -30,6 +31,7 @@ export const scanEmailAttachmentForSave = async ({
     fileName,
   });
   if (Result.isError(scanResult)) {
+    observeScanFailures(scanResult.error);
     if (!FileScanRejectedError.is(scanResult.error)) {
       return Result.err(
         new HandlerError({ status: 422, message: "File security scan failed" }),

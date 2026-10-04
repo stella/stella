@@ -36,6 +36,7 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -178,7 +179,7 @@ const buildChatReadTools = ({
 export type ChatCodeModeReadRunner = (
   toolName: RegistryReadToolName,
   args: Record<string, unknown>,
-) => Promise<unknown>;
+) => Promise<Result<unknown, ChatToolError>>;
 
 type CreateChatCodeModeSurfaceProps = {
   concurrencyKey: string;
@@ -205,8 +206,12 @@ export const createChatCodeModeSurface = ({
     }),
     tools: buildChatReadTools({
       documentedReads,
-      runReadTool: async (toolName, args) =>
-        await runReadTool(toolName, isRecord(args) ? args : {}),
+      runReadTool: async (toolName, args) => {
+        const result = await runReadTool(toolName, isRecord(args) ? args : {});
+        return Result.isError(result)
+          ? raiseChatToolError(result.error)
+          : result.value;
+      },
     }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });
@@ -302,10 +307,12 @@ export const buildChatCodeMode = (
       // server defect this turn is refused before dispatch. "Do not retry this
       // call" is enforced here, not left to the model's reading of error prose.
       if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: knownDefectRefusalMessage(toolName),
-        });
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: knownDefectRefusalMessage(toolName),
+          }),
+        );
       }
       const result = await runRegistryReadTool({
         toolName,
@@ -313,13 +320,10 @@ export const buildChatCodeMode = (
         context,
         refRegistry,
       });
-      if (Result.isError(result)) {
-        if (result.error.kind === "server-defect") {
-          toolDefectMemo.recordDefect(toolName, toolArgs);
-        }
-        throw result.error;
+      if (Result.isError(result) && result.error.kind === "server-defect") {
+        toolDefectMemo.recordDefect(toolName, toolArgs);
       }
-      return result.value;
+      return result;
     },
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.

@@ -18,7 +18,10 @@ import { createWorkflowRunStateStore } from "@/api/lib/workflow/run-state-store"
 // happen through this holder: `ready()` awaits the connection before any
 // caller is handed the client.
 const rootRedis = createLazyRedisClient(() =>
-  createRedisClient({ enableOfflineQueue: false }),
+  createRedisClient({
+    storeClass: "durable-coordination",
+    overrides: { enableOfflineQueue: false },
+  }),
 );
 
 // The connect climbs a cold-start ladder longer than any one command should

@@ -1,3 +1,4 @@
+import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
@@ -111,6 +112,88 @@ const refusalFrom = async (response: Response): Promise<string> => {
 };
 
 describe("OAuth client ID metadata documents", () => {
+  const ELEVATED_SCOPES = [
+    "stella:admin_read",
+    "stella:admin_write",
+    "stella:external_mcps",
+  ];
+  const ELEVATED_SCOPE = ELEVATED_SCOPES.join(" ");
+
+  const elevatedIn = (scope: string | null) =>
+    (scope ?? "").split(" ").filter((value) => ELEVATED_SCOPES.includes(value));
+
+  /** The scope the provider signs into the authorization request it continues. */
+  const signedScope = async (clientId: string, scope: string | null) => {
+    requestsIssued += 1;
+    const parameters = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+      code_challenge_method: "S256",
+      ...(scope === null ? {} : { scope }),
+    });
+    const authorized = await getAuth().handler(
+      new Request(
+        `${getAuthEndpointUrl("oauth2/authorize")}?${parameters.toString()}`,
+        {
+          headers: {
+            "x-forwarded-for": `198.51.100.${String(requestsIssued)}`,
+          },
+        },
+      ),
+    );
+    expect(authorized.status).toBe(302);
+    const location = v.parse(v.string(), authorized.headers.get("location"));
+    const signed = v.parse(
+      v.string(),
+      new URLSearchParams(new URL(location).hash.slice(1)).get("oauth_query"),
+    );
+    return new URLSearchParams(signed).get("scope");
+  };
+
+  test("grants other discovered apps the open capability subset", async () => {
+    const clientId = "https://capabilities.example.com/oauth/client.json";
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({
+        client_id: clientId,
+        scope: `openid ${ELEVATED_SCOPE}`,
+      }),
+    );
+    // The first request discovers the app and names no scope.
+    const discovered = await signedScope(clientId, null);
+    expect(discovered?.split(" ")).toContain("stella:read");
+    expect(elevatedIn(discovered)).toEqual([]);
+    const context = await getAuth().$context;
+    const client = await context.adapter.findOne<
+      SchemaClient<readonly string[]>
+    >({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: clientId }],
+    });
+    expect(client?.clientDiscoveryId).toBe("cimd");
+    expect(await signedScope(clientId, null)).toBe(discovered);
+    expect(await signedScope(clientId, `openid ${ELEVATED_SCOPE}`)).toBe(
+      "openid",
+    );
+  });
+
+  test("retains configured capabilities for documented apps", async () => {
+    const clientId = "https://claude.ai/oauth/claude-code-client-metadata";
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({
+        client_id: clientId,
+        scope: `openid ${ELEVATED_SCOPE}`,
+      }),
+    );
+    expect(elevatedIn(await signedScope(clientId, null))).toEqual(
+      ELEVATED_SCOPES,
+    );
+    expect(await signedScope(clientId, ELEVATED_SCOPE)).toBe(ELEVATED_SCOPE);
+  });
+
   test("accepts a document whose redirect_uris cover the request", async () => {
     documentsByUrl.set(DOCUMENT_URL, metadataDocument());
     requestedUrls.length = 0;
