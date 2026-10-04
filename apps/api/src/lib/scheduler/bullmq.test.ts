@@ -35,7 +35,7 @@ const realBullmq = await import("bullmq");
 void mock.module("bullmq", () => ({ ...realBullmq, Queue: MockQueue }));
 const { createBullMqConnection } = await import("@/api/lib/redis-client");
 const { createBullMqDispatchTask } = await import("@/api/lib/scheduler/bullmq");
-const { MEMBER_RUN_QUEUES } = await import("@/api/lib/member-run-queues");
+const { QUEUE_AUTHORITY } = await import("@/api/lib/member-run-queues");
 
 type ContextOptions = {
   nextRunAt?: Date;
@@ -122,14 +122,14 @@ describe("createBullMqDispatchTask target queue", () => {
     ]);
   });
 
-  test.each([
-    ...MEMBER_RUN_QUEUES.map(({ queue }) => [queue, "member-run"] as const),
-    ...(["workflow", "workflow-flex", "flow-run"] as const).map(
-      (queue) => [queue, "unclassified"] as const,
-    ),
-  ])(
-    "refuses queue %s (%s) without constructing a queue",
-    async (queueName, authority) => {
+  test.each(
+    Object.entries(QUEUE_AUTHORITY)
+      .filter(([, { authority }]) => authority === "member-run")
+      .map(([queue]) => queue),
+  )(
+    "refuses member-run queue %s without constructing a queue",
+    async (queueName) => {
+      const authority = "member-run";
       reset();
       const task = createBullMqDispatchTask({
         createConnection: createBullMqConnection,
