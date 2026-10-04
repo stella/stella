@@ -896,7 +896,7 @@ describe("replay of a source", () => {
       adapter: stubAdapter({
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "EU",
@@ -908,7 +908,7 @@ describe("replay of a source", () => {
             rawHash: "stored-hash-42",
             documentAst: EMPTY_AST,
             parserVersion: 4,
-          },
+          }),
         }),
       }),
       scopedDb,

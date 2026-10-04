@@ -253,7 +253,7 @@ export const createCaseLawMaintenanceCleanupHandles = async ({
       ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
     },
     ingestionDb: createIngestionDb(markRlsDatabase({ transaction }), {
-      laneWaitMs: 0,
+      laneWaitMs: timeoutMs,
     }),
   };
 };
@@ -308,9 +308,12 @@ const runBoundedMaintenanceLane = async <T>({
       const queuedDatabase = { transaction: queuedTransaction };
       const transaction: CaseLawRootHandle["transaction"] = async (fn) => {
         signal.throwIfAborted();
+        // The caller's lock budget bounds the lane wait too: a zero budget
+        // would refuse even an uncontended grant once the try took any time.
         return await runUnderCorpusSchemaLane({
           database: queuedDatabase,
-          laneWaitMs: 0,
+          laneWaitMs: lockTimeout,
+          signal,
           work: async (tx) => {
             signal.throwIfAborted();
             const result = await fn(tx);
@@ -326,7 +329,8 @@ const runBoundedMaintenanceLane = async <T>({
         ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
       };
       const scoped = createIngestionDb(markRlsDatabase(queuedDatabase), {
-        laneWaitMs: 0,
+        laneWaitMs: lockTimeout,
+        signal,
       });
       const ingestionDb: CaseLawIngestionHandle = async (fn) =>
         await scoped(async (tx) => {

@@ -730,13 +730,16 @@ const markCompletionWriteTx = (
     }
     return Result.ok();
   });
+// The write runs inside a transaction that already holds the lane; the budget
+// only needs to cover the re-entrant try, and a zero budget refuses even that.
+const COMPLETION_WRITE_LANE_WAIT_MS = 5000;
 const createCompletionWriteDb = (context: CompletionWriteContext) =>
   createIngestionDb(
     markRlsDatabase({
       transaction: context.rootDb.transaction.bind(context.rootDb),
     }),
     {
-      laneWaitMs: 0,
+      laneWaitMs: COMPLETION_WRITE_LANE_WAIT_MS,
       maintenance: {
         before: async (tx) => {
           await context.beforeWriteFence?.();

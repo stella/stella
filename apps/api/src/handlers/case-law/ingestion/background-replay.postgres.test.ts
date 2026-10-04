@@ -61,6 +61,7 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   openGatedTestDatabase,
@@ -374,6 +375,8 @@ if (!databaseUrl || !enabled) {
           listSourceFields: () => [],
         },
         sourceSurfaces: { surfaces: {} },
+        documentStage: "inline",
+        observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
         name: "background replay canonical fixture",
         country: "CZE",
         language: "cs",
@@ -386,13 +389,14 @@ if (!databaseUrl || !enabled) {
           nextSlice: () => null,
           previousSlice: () => null,
           tipWindowDays: 1,
+          revisionOf: (payload) => payload,
           listSlicePage: async () => panic("Fixture replay listed publisher"),
           buildDecision: async () =>
             panic("Fixture replay built publisher data"),
         },
         reparseStoredRaw: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "CZE",
@@ -406,7 +410,7 @@ if (!databaseUrl || !enabled) {
             documentAst: EMPTY_AST,
             rawHash: "fixture-parser-hash",
             metadata: {},
-          },
+          }),
         }),
       } satisfies SourceAdapter;
       return { adapter };
@@ -737,8 +741,14 @@ if (!databaseUrl || !enabled) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const upgrade = openClient();
         const cleanup = openClient();
-        const zeroWait: ScopedDb = async (work) =>
-          await runUnderCorpusSchemaLane({ database: db, work, laneWaitMs: 0 });
+        // The lease is taken before the upgrade holds the lane, so a short
+        // budget is enough; a zero budget refuses even an uncontended grant.
+        const acquireDb: ScopedDb = async (work) =>
+          await runUnderCorpusSchemaLane({
+            database: db,
+            work,
+            laneWaitMs: 1000,
+          });
         const retryReached = Promise.withResolvers<undefined>();
         const resume = Promise.withResolvers<undefined>();
         const releaseDb: ScopedDb = async (work) =>
@@ -752,7 +762,7 @@ if (!databaseUrl || !enabled) {
             },
           });
         const lease = await acquireCaseLawSourceIngestionLease({
-          scopedDb: zeroWait,
+          scopedDb: acquireDb,
           sourceId: state.source.id,
           releaseDb,
         });
