@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   disableSanctionsMonitoring,
   enableSanctionsMonitoring,
@@ -9,6 +9,7 @@ import {
 
 export default createSafeRootHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.standard,
     description:
       "Enable or disable sanctions monitoring for the active organization. Disabling hides active hits and preserves history. Enabling queues a bounded backfill; contact opt-outs still apply. Read contacts.sanctions.get for eventual screening results. Changes are audited.",
     permissions: { organizationSettings: ["update"] },

@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalLists, workspaces } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,6 +23,8 @@ const config = {
     "number of lists. Add structure afterwards with lists.sections.create " +
     "and lists.columns.create.",
   permissions: { view: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

@@ -35,12 +35,12 @@ export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
   desktopEditFileTypeForMimeType(mimeType) !== null;
 
 type ShouldGeneratePdfDerivativeOptions = {
-  encrypted?: boolean;
+  encrypted: boolean;
   mimeType: string;
 };
 
 export const shouldGeneratePdfDerivative = ({
-  encrypted = false,
+  encrypted,
   mimeType,
 }: ShouldGeneratePdfDerivativeOptions): boolean =>
   !encrypted &&

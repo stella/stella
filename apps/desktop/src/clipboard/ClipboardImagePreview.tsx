@@ -11,6 +11,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { isClipboardImagePreviewDataUrl } from "./clipboard-types";
@@ -91,9 +92,10 @@ export const ClipboardImagePreview = ({
         }
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
           ...PREVIEW_TELEMETRY[surface],
         });
         if (!disposed) {

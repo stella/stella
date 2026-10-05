@@ -4,7 +4,7 @@ import { stableStringify } from "@stll/stable-stringify";
 
 import { toJsonValue } from "@/api/lib/json-value";
 
-export class ReconciliationPayloadSerializationError extends TaggedError(
+class ReconciliationPayloadSerializationError extends TaggedError(
   "ReconciliationPayloadSerializationError",
 )<{
   message: string;

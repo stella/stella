@@ -86,7 +86,10 @@ export const sanctionsMonitoringBackfills = p.pgTable(
     editionId: safeUuid<"sanctionsEdition">("edition_id"),
     cursorContactId: safeUuid<"contact">("cursor_contact_id"),
     generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
-    state: p.text({ enum: BACKFILL_STATES }).notNull().default("pending"),
+    status: p
+      .text("state", { enum: BACKFILL_STATES })
+      .notNull()
+      .default("pending"),
     scheduledAt: timestamptz("scheduled_at").notNull().defaultNow(),
   },
   (table) => [
@@ -110,10 +113,15 @@ export const sanctionsMonitoringBackfills = p.pgTable(
     p.primaryKey({ columns: [table.organizationId, table.sourceId] }),
     p
       .index("sanctions_monitoring_backfills_due_idx")
-      .on(table.state, table.scheduledAt, table.organizationId, table.sourceId),
+      .on(
+        table.status,
+        table.scheduledAt,
+        table.organizationId,
+        table.sourceId,
+      ),
     p.check(
       "sanctions_monitoring_backfills_state_check",
-      sql`${table.state} IN (${sql.join(
+      sql`${table.status} IN (${sql.join(
         BACKFILL_STATES.map((state) => sql`${state}`),
         sql`, `,
       )})`,
@@ -141,7 +149,10 @@ export const sanctionsEditionFanouts = p.pgTable(
       .text("freshness_status", { enum: FANOUT_FRESHNESS_STATES })
       .notNull()
       .default("unknown"),
-    state: p.text({ enum: BACKFILL_STATES }).notNull().default("pending"),
+    status: p
+      .text("state", { enum: BACKFILL_STATES })
+      .notNull()
+      .default("pending"),
   },
   (table) => [
     p.check(
@@ -153,7 +164,7 @@ export const sanctionsEditionFanouts = p.pgTable(
     ),
     p.check(
       "sanctions_edition_fanouts_state_check",
-      sql`${table.state} IN (${sql.join(
+      sql`${table.status} IN (${sql.join(
         BACKFILL_STATES.map((state) => sql`${state}`),
         sql`, `,
       )})`,

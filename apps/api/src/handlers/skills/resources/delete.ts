@@ -3,13 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import {
   lockSkillForResourceWrite,
   refreshSkillContentHash,
 } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -29,6 +30,8 @@ const config = {
     "skill and its other resources are untouched. Bundled skills are read-only " +
     "and are refused.",
   permissions: { agentSkill: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

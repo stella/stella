@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { reviewSanctionsMatch } from "@/api/lib/lists/sanctions/monitoring-review";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 export default createSafeRootHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     description:
       "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's reviewTarget, then supply disposition and reason. A stale reviewTarget is rejected; read the contact again before retrying. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",
     permissions: { contact: ["update"] },

@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
@@ -147,4 +148,119 @@ describe.serial("legislation revision corpus ownership", () => {
       ),
     ).toEqual([]);
   });
+});
+
+describe.serial("task assignment ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "task-assignment-membership");
+  test("confines direct and aliased assignment primitives to their owners", async () => {
+    expect(entry).toBeDefined();
+    const source =
+      'import { taskAssignees as assignments } from "@/api/db/schema";\nawait tx.insert(assignments).values({});\n';
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/handlers/tasks/new-writer.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/lib/tasks/assignment-membership.ts",
+      }),
+    ).toEqual([]);
+  });
+});
+
+const storedContentEntries = OWNERSHIP.filter(({ id }) =>
+  [
+    "stored-file-read",
+    "stored-tenant-file-read",
+    "audited-download-grant",
+    "content-delivery-intent",
+    "content-delivery-receipt",
+    "content-delivery-scope",
+  ].includes(id),
+);
+
+describe.serial("confine-owner stored content rows", () => {
+  test("covers each stored content owner", () => {
+    expect(storedContentEntries.map(({ id }) => id)).toEqual([
+      "stored-file-read",
+      "stored-tenant-file-read",
+      "audited-download-grant",
+      "content-delivery-intent",
+      "content-delivery-receipt",
+      "content-delivery-scope",
+    ]);
+  });
+
+  for (const entry of storedContentEntries) {
+    test(`${entry.id} confines each binding through static and dynamic module access`, async () => {
+      if (entry.enforcement.kind !== "import") {
+        throw new TypeError("Stored content ownership must confine imports.");
+      }
+      const module = entry.enforcement.specifiers.at(0);
+      const names: readonly string[] | undefined =
+        "names" in entry.enforcement ? entry.enforcement.names : undefined;
+      const ownerPath = entry.owner.at(0);
+      if (
+        module === undefined ||
+        names === undefined ||
+        names.length === 0 ||
+        ownerPath === undefined
+      ) {
+        throw new TypeError(
+          "Stored content ownership must name a module, bindings, and owner.",
+        );
+      }
+      const sources = [
+        `import * as owned from "${module}";`,
+        `export * from "${module}";`,
+        `const module = await import("${module}");`,
+      ];
+      for (const name of names) {
+        sources.push(
+          `import { ${name} as import_${name} } from "${module}";`,
+          `export { ${name} as export_${name} } from "${module}";`,
+          `const { ${name}: destructured_${name} } = await import("${module}");`,
+          `const member_${name} = (await import("${module}")).${name};`,
+        );
+      }
+      const source = sources.join("\n");
+      const ruleOptions = { entries: [entry] };
+      expect(
+        await lintSingleRule("confine-owner", source, { ruleOptions }),
+      ).toEqual(sources.map((_, index) => index + 1));
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions,
+          sourcePath: ownerPath,
+        }),
+      ).toEqual([]);
+    });
+  }
+});
+
+test("translation availability is consumed by the dialog owner", async () => {
+  const source =
+    'import { deepLAvailabilityOptions, deepLConfigOptions } from "@/lib/deepl/queries";';
+  for (const sourcePath of [
+    "apps/web/src/components/translate-document-dialog.tsx",
+    "apps/web/src/components/workspaces/row-actions.tsx",
+    "apps/web/src/components/other-dialog.tsx",
+  ]) {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptionsForRoot: (root) => ({
+          entries: OWNERSHIP.filter(
+            ({ id }) => id === "deepl-availability",
+          ).map((entry) => ({
+            ...entry,
+            owner: entry.owner.map((owner) => path.join(root, owner)),
+          })),
+        }),
+        sourcePath,
+      }),
+    ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
+  }
 });

@@ -5,6 +5,7 @@ import type { CountryCode } from "@stll/country-codes";
 import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
+  MAX_QUERY_TOKENS,
   SANCTIONS_SOURCES,
   screen,
 } from "@stll/sanctions";
@@ -17,15 +18,19 @@ import type {
   SanctionsIssuer,
   SanctionsSource,
   ScreeningQuery,
-  ScreeningIndex,
+  ScreeningQueryError,
+  ScreeningResult,
 } from "@stll/sanctions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import type {
+  SanctionsActiveEdition,
+  SanctionsIndexCache,
+} from "@/api/lib/lists/sanctions/screening-index";
 import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
@@ -163,9 +168,15 @@ export type SanctionsScreening = {
 const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
+export const SANCTIONS_SUBJECT_ERROR_MESSAGES = {
+  "empty-query": "The name to screen has no letters",
+  "invalid-birth-date": "The date of birth is not a valid calendar date",
+  "excess-query-tokens": `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+} as const satisfies Record<ScreeningQueryError["code"], string>;
+
 /** The subject cannot be screened as given; the caller corrects it. */
-class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
-  code: "empty-query" | "invalid-birth-date";
+export class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
+  code: ScreeningQueryError["code"];
   message: string;
 }> {}
 
@@ -173,11 +184,13 @@ const EMPTY_INDEX = buildScreeningIndex([]);
 
 const toScreeningQuery = (
   subject: SanctionsScreeningSubject,
+  nameSource: NonNullable<ScreeningQuery["nameSource"]>,
 ): ScreeningQuery => {
   switch (subject.type) {
     case "organization": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "organisation",
         identifiers: subject.identifiers,
       };
@@ -185,6 +198,7 @@ const toScreeningQuery = (
     case "person": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "person",
         ...(subject.birthDate !== null && { birthDate: subject.birthDate }),
         nationality: subject.nationalityCodes,
@@ -282,103 +296,100 @@ const toPossibleMatch = (
   },
 });
 
-type LoadedSanctionsList =
-  | { status: "unavailable"; outcome: SanctionsListOutcome }
-  | {
-      status: "ready";
-      index: ScreeningIndex;
-      entryCount: number;
-      base: ListOutcomeBase;
-      edition: ScreenedEdition;
-    };
+type SanctionsListMatcher = (props: {
+  db: SanctionsReadDb;
+  source: SanctionsSource;
+  edition: SanctionsActiveEdition;
+  query: ScreeningQuery;
+  limit: number;
+}) => Promise<ScreeningResult | null>;
 
-type LoadSanctionsListOptions = {
-  db: ScopedDb;
+type ScreenListProps = {
+  db: SanctionsReadDb;
   freshness: SanctionsSourceFreshness;
+  query: ScreeningQuery;
   base: ListOutcomeBase;
   indexCache: SanctionsIndexCache;
+  matcher: SanctionsListMatcher | undefined;
+  resultMode: "bounded" | "complete";
 };
 
-const loadSanctionsList = async ({
+const screenList = async ({
   db,
   freshness,
+  query,
   base,
   indexCache,
-}: LoadSanctionsListOptions): Promise<LoadedSanctionsList> => {
+  matcher,
+  resultMode,
+}: ScreenListProps): Promise<SanctionsListOutcome> => {
   const { edition, lastSuccessfulVerifiedAt } = freshness;
+  // Stale or missing data never answers: only a fresh edition can be clear.
   if (
     freshness.status === "unavailable" ||
     edition === null ||
     lastSuccessfulVerifiedAt === null
   ) {
-    return {
-      status: "unavailable",
-      outcome: unavailableList(
-        base,
-        freshness.reason ?? "not-loaded",
-        freshness,
-      ),
-    };
+    return unavailableList(base, freshness.reason ?? "not-loaded", freshness);
   }
-  const index = await Result.tryPromise(
-    async () => await indexCache.get({ db, source: freshness.source, edition }),
-  );
-  if (index.isErr()) {
-    return {
-      status: "unavailable",
-      outcome: unavailableList(base, "load-failed", freshness),
-    };
-  }
-  if (index.value.isErr()) {
-    return {
-      status: "unavailable",
-      outcome: unavailableList(base, index.value.error.code, freshness),
-    };
-  }
-  return {
-    status: "ready",
-    index: index.value.value,
-    entryCount: edition.entryCount,
-    base,
-    edition: {
-      editionId: edition.id,
-      publishedAt: edition.publishedAt,
-      verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
-    },
-  };
-};
-
-type ScreenLoadedListOptions = {
-  loaded: LoadedSanctionsList;
-  query: ScreeningQuery;
-  resultMode: "bounded" | "complete";
-};
-
-const screenLoadedList = ({
-  loaded,
-  query,
-  resultMode,
-}: ScreenLoadedListOptions): SanctionsListOutcome => {
-  if (loaded.status === "unavailable") {
-    return loaded.outcome;
-  }
-  const { index, entryCount, base, edition: screenedEdition } = loaded;
-  const screened = screen(index, query, {
-    cutoff: DEFAULT_CUTOFF,
-    limit:
-      resultMode === "complete"
-        ? Math.max(1, entryCount)
-        : SANCTIONS_MATCH_LIMIT,
+  const limit =
+    resultMode === "complete"
+      ? Math.max(1, edition.entryCount)
+      : SANCTIONS_MATCH_LIMIT;
+  const matched = await Result.tryPromise(async () => {
+    if (matcher !== undefined) {
+      return Result.ok(
+        await matcher({
+          db,
+          source: freshness.source,
+          edition,
+          query,
+          limit,
+        }),
+      );
+    }
+    const index = await indexCache.get({
+      db,
+      source: freshness.source,
+      edition,
+    });
+    if (index.isErr()) {
+      return Result.err(index.error);
+    }
+    const screened = screen(index.value, query, {
+      cutoff: DEFAULT_CUTOFF,
+      limit,
+    });
+    if (screened.isErr()) {
+      if (screened.error.code === "work-limit") {
+        return Result.err({ code: "load-failed" as const });
+      }
+      return panic("A validated sanctions query was rejected");
+    }
+    return Result.ok(screened.value);
   });
-  if (screened.isErr()) {
-    // The query was validated against an empty index first, and these
-    // errors depend on the query alone.
-    return panic("A validated sanctions query was rejected");
+  if (matched.isErr()) {
+    return unavailableList(base, "load-failed", freshness);
   }
-  const [first, ...rest] = screened.value.possibleMatches.map((match) =>
-    toPossibleMatch(match, screenedEdition.editionId),
+  if (matched.value.isErr()) {
+    return unavailableList(base, matched.value.error.code, freshness);
+  }
+  if (matched.value.value === null) {
+    return unavailableList(base, "load-failed", freshness);
+  }
+  const screened = matched.value.value;
+  const screenedEdition: ScreenedEdition = {
+    editionId: edition.id,
+    publishedAt: edition.publishedAt,
+    verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
+  };
+  const [first, ...rest] = screened.possibleMatches.map((match) =>
+    toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
+    if (screened.truncated) {
+      return unavailableList(base, "load-failed", freshness);
+    }
     return {
       ...base,
       ...screenedEdition,
@@ -394,29 +405,26 @@ const screenLoadedList = ({
     ...screenedEdition,
     status: "possible-match",
     reason: null,
-    totalMatches: screened.value.totalMatches,
-    truncated: screened.value.truncated,
+    totalMatches: screened.totalMatches,
+    truncated: screened.truncated,
     possibleMatches: [first, ...rest],
   };
 };
 
 type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
-  db: ScopedDb;
+  db: SanctionsReadDb;
   subject: SanctionsScreeningSubject;
+  nameSource?: ScreeningQuery["nameSource"];
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];
   /** Internal monitoring must diff the complete hit set. */
   resultMode?: "bounded" | "complete";
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
+  matcher?: SanctionsListMatcher;
 };
 
-/**
- * Screen one subject against every registered list's active edition. Each
- * list answers for itself: a list that is stale, not loaded or unreadable is
- * `unavailable` and never `clear`, and the others still answer.
- */
 export const SANCTIONS_SCREENING_BATCH_SIZE = 100;
 
 type ScreenSanctionsSubjectsOptions = Omit<
@@ -430,82 +438,94 @@ type ScreenSanctionsSubjectsOptions = Omit<
 export const screenSanctionsSubjects = async ({
   db,
   subjects,
+  nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
   resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
+  matcher,
 }: ScreenSanctionsSubjectsOptions): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>[]
 > => {
   if (subjects.length > SANCTIONS_SCREENING_BATCH_SIZE) {
     panic("Sanctions screening batch exceeds its bound");
   }
+  const unavailable = () =>
+    Result.ok(
+      unavailableSanctionsScreening({
+        reason: "load-failed",
+        practiceJurisdictions,
+        now,
+      }),
+    );
   const validated = subjects.map((subject) => {
-    const query = toScreeningQuery(subject);
+    const query = toScreeningQuery(subject, nameSource);
     const result = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
-    return result.isErr()
-      ? Result.err(
-          new SanctionsSubjectError({
-            code: result.error.code,
-            message: result.error.message,
-          }),
-        )
-      : Result.ok(query);
+    if (result.isOk()) {
+      return { status: "ready", query } as const;
+    }
+    if (result.error.code === "work-limit") {
+      return { status: "answered", result: unavailable() } as const;
+    }
+    return {
+      status: "answered",
+      result: Result.err(
+        new SanctionsSubjectError({
+          code: result.error.code,
+          message: result.error.message,
+        }),
+      ),
+    } as const;
   });
-  if (validated.every((result) => result.isErr())) {
-    return validated.map((result) => {
-      if (result.isErr()) {
-        return result;
-      }
-      return panic("Unexpected valid screening query");
-    });
+  if (validated.every((query) => query.status === "answered")) {
+    return validated.map((query) => query.result);
   }
   const freshness = await Result.tryPromise(
     async () => await readSanctionsFreshness({ db, now }),
   );
   if (freshness.isErr()) {
-    return validated.map((result) =>
-      result.isErr()
-        ? result
-        : Result.ok(
-            unavailableSanctionsScreening({
-              reason: "load-failed",
-              practiceJurisdictions,
-              now,
-            }),
-          ),
+    return validated.map((query) =>
+      query.status === "answered" ? query.result : unavailable(),
     );
   }
-  // db-await-in-loop: one concurrent read per sanctions source (a small fixed set); each list's index is cached per edition, so a warm screening reads nothing
-  const loaded = await Promise.all(
-    freshness.value.map(
-      async (sourceFreshness) =>
-        await loadSanctionsList({
+  const results: Result<SanctionsScreening, SanctionsSubjectError>[] = [];
+  for (const query of validated) {
+    if (query.status === "answered") {
+      results.push(query.result);
+      continue;
+    }
+    const lists: SanctionsListOutcome[] = [];
+    for (const sourceFreshness of freshness.value) {
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      lists.push(
+        // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
+        await screenList({
           db,
           freshness: sourceFreshness,
+          query: query.query,
           base: listBase({
             source: sourceFreshness.source,
             practiceJurisdictions,
             heldUpdate: sourceFreshness.heldUpdate,
           }),
           indexCache,
+          matcher,
+          resultMode,
         }),
-    ),
-  );
-  return validated.map((result) => {
-    if (result.isErr()) {
-      return result;
+      );
     }
-    const lists = loaded.map((list) =>
-      screenLoadedList({ loaded: list, query: result.value, resultMode }),
+    results.push(
+      Result.ok({
+        status: aggregateSanctionsStatus(lists),
+        checkedAt: now.toISOString(),
+        cutoff: DEFAULT_CUTOFF,
+        lists,
+      }),
     );
-    return Result.ok({
-      status: aggregateSanctionsStatus(lists),
-      checkedAt: now.toISOString(),
-      cutoff: DEFAULT_CUTOFF,
-      lists,
-    });
-  });
+  }
+  return results;
 };
 
 export const screenSanctionsSubject = async ({

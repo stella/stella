@@ -139,8 +139,12 @@ For each graded position, fill every field that applies:
   why the term matters from the organization's side.
 - `tiers`: `acceptable` rules, `ideal` wording, `fallback` alternatives from
   best to worst, and `not_acceptable` red lines.
-- `guidance`: what a reviewer examines in the clause. When a position comes
-  from the contracts, name the documents it rests on here.
+- `guidance`: what a reviewer examines in the clause.
+- `sources`: the documents the position was taken or revised from, by the
+  ids the listing returned. An extract position takes `sources` too. This
+  list is the only record of where a position came from: a playbook is
+  visible to the whole organization, so never write a document, matter, or
+  counterparty name in any saved text.
 - `negotiation`: `rationale`, `talking_points`, and `escalation`. Who decides
   a deviation, and when to route it to them, goes in `escalation`, never in a
   tier rule.
@@ -166,6 +170,8 @@ them.
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,
   omit `source_id`. Remove with `remove_source_ids`.
+- On a change, leave `sources` out to keep the stored list; a list you send
+  replaces it.
 - A refused entry comes back in `issues` with its fix; apply the fix.
 - The user may be editing the playbook beside the chat. A version conflict
   means they did: read the playbook again with `list_playbooks`, keep their
@@ -178,4 +184,5 @@ them.
 
 When the positions are settled, summarize the playbook in a few lines: its
 name, the positions, and what the user still needs to decide. Tell the user it
-is a draft to review and approve in the playbook editor before it can run.
+is a draft to review and approve in the playbook editor before it can run,
+and to check before approving that no position names a document or a matter.

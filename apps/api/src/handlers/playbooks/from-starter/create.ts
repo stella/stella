@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -24,6 +24,7 @@ const config = {
     "existing playbook instead of creating a copy. Browse the starters with " +
     "playbooks.starters.list.",
   permissions: { playbook: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",
@@ -40,6 +41,7 @@ const createPlaybookFromStarter = createSafeRootHandler(
   config,
   async function* ({
     body,
+    getActiveWorkspaceIds,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
@@ -55,9 +57,13 @@ const createPlaybookFromStarter = createSafeRootHandler(
       );
     }
 
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

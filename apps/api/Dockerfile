@@ -142,6 +142,12 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# One bounded, load-aware background replay tick; enrolment is reviewed in code.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/replay-tick.js \
+    apps/api/src/scripts/replay-tick.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
 # documents bucket, so they run inside the API task, whose role may:
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
@@ -248,14 +254,22 @@ RUN bun build \
     --target bun \
     --outfile /app/apps/api/src/db/migrate.js \
     apps/api/src/db/migrate.ts
-# The extraction worker builds with `--outdir`, not `--outfile`: it pulls in a
-# native addon, which the bundler emits as a sidecar `.node` asset next to the
-# entry point and references relatively. `--outfile` refuses to write more than
-# one output. The whole directory is copied into the runtime image below, so the
-# sidecar travels with the bundle. The same-stage `cp` calls below copy regular
-# files whose path may traverse a package symlink under an isolated install;
-# cp follows it and materializes each asset before the cross-stage COPY.
+# The sanctions matcher and extraction workers build with `--outdir`, not
+# `--outfile`: each pulls in a native addon, which the bundler emits as a
+# sidecar `.node` asset next to the entry point and references relatively.
+# `--outfile` refuses to write more than one output; `--entry-naming` pins the
+# entry file name the runtime loads. The whole directory is copied into the
+# runtime image below, so the sidecar travels with the bundle. The same-stage
+# `cp` calls below copy regular files whose path may traverse a package symlink
+# under an isolated install; cp follows it and materializes each asset before
+# the cross-stage COPY.
 RUN mkdir -p /app/runtime-workers && \
+    bun build \
+      --define __STELLA_RELEASE__=true \
+      --target bun \
+      --outdir /app/runtime-workers \
+      --entry-naming sanctions-matcher-worker.js \
+      apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
@@ -353,6 +367,7 @@ COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/b
 COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
+COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
 COPY --chown=stella:stella --from=builder /app/complete-sk-us-raw.js /app/complete-sk-us-raw.js

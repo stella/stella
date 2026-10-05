@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "Move the existing grant schema and feature registry from auth into one shared declaration directory. Environment validation and public routes can validate registered grants without importing authentication; policy and catalog exporters consume the same declarations."
+}

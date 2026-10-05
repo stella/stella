@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, isNotNull, ne, or } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
@@ -7,17 +7,30 @@ import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   organizationSettings,
-  sanctionsContactMatches,
+  sanctionsContactMarks,
+  sanctionsOrganizationMarks,
   sanctionsContactScreenings,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  transitionScopedBatch,
+  transitionScopedCount,
+  transitionUpsertBatch,
+} from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
+import { lapseSanctionsMatches } from "@/api/lib/lists/sanctions/monitoring-lapse";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
-import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
+import { prepareSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
+import {
+  CONTACT_MONITORING_TRANSITIONS,
+  FIRM_MONITORING_TRANSITIONS,
+  SCREENING_COVERAGE_TRANSITIONS,
+} from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { SANCTIONS_SCREENING_STATUSES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 type ContactMonitoringOptions = {
@@ -56,54 +69,47 @@ export const excludeSanctionsContact = async (
     );
   }
   const excluded = { ...contact, sanctionsMonitoringMode: "excluded" } as const;
-  await tx
-    .update(contacts)
-    .set({ sanctionsMonitoringMode: "excluded" })
-    .where(
-      and(
-        eq(contacts.organizationId, organizationId),
-        eq(contacts.id, contactId),
-      ),
-    );
-  await tx
-    .insert(sanctionsContactScreenings)
-    .values(
-      sanctionsSourceIds().map((sourceId) => ({
-        organizationId,
-        contactId,
-        sourceId,
-        editionId: null,
-        status: "excluded" as const,
-        reason: "contact-excluded",
-        contactFingerprint: monitoringFingerprint(excluded),
-        checkedAt: now,
-      })),
-    )
-    .onConflictDoUpdate({
-      target: [
-        sanctionsContactScreenings.organizationId,
-        sanctionsContactScreenings.contactId,
-        sanctionsContactScreenings.sourceId,
-      ],
-      set: {
-        editionId: null,
-        status: "excluded",
-        reason: "contact-excluded",
-        contactFingerprint: sql`excluded.contact_fingerprint`,
-        checkedAt: now,
+  const transitions = { count: 0 };
+  if (contact.sanctionsMonitoringMode !== "excluded") {
+    const changed = await transitionScopedBatch({
+      tx,
+      spec: CONTACT_MONITORING_TRANSITIONS,
+      identities: [{ id: contactId }],
+      options: { from: [contact.sanctionsMonitoringMode], to: "excluded" },
+      recordTransitionAuditEvent: (_auditTx, rows) => {
+        transitions.count += rows.length;
       },
     });
-  await tx
-    .update(sanctionsContactMatches)
-    .set({ state: "lapsed", updatedAt: now })
-    .where(
-      and(
-        eq(sanctionsContactMatches.organizationId, organizationId),
-        eq(sanctionsContactMatches.contactId, contactId),
-        eq(sanctionsContactMatches.state, "active"),
-      ),
-    );
-  if (contact.sanctionsMonitoringMode !== "excluded") {
+    if (changed.length !== 1) {
+      panic("Locked contact mode changed during exclusion");
+    }
+  }
+  await transitionUpsertBatch({
+    tx,
+    spec: SCREENING_COVERAGE_TRANSITIONS,
+    values: sanctionsSourceIds().map((sourceId) => ({
+      organizationId,
+      contactId,
+      sourceId,
+      editionId: null,
+      status: "excluded" as const,
+      reason: "contact-excluded",
+      contactFingerprint: monitoringFingerprint(excluded),
+      checkedAt: now,
+    })),
+    recordTransitionAuditEvent: (_auditTx, rows) => {
+      transitions.count += rows.length;
+    },
+  });
+  await lapseSanctionsMatches(tx, {
+    organizationId,
+    contactIds: [contactId],
+    now,
+    recordTransitionAuditEvent: (_auditTx, count) => {
+      transitions.count += count;
+    },
+  });
+  if (contact.sanctionsMonitoringMode !== "excluded" || transitions.count > 0) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
@@ -139,36 +145,65 @@ export const disableSanctionsMonitoring = async (
       .limit(1)
       .for("no key update")
   ).at(0);
-  await tx
-    .insert(organizationSettings)
-    .values({
-      id: createSafeId<"organizationSettings">(),
-      organizationId,
-      sanctionsMonitoringMode: "disabled",
-    })
-    .onConflictDoUpdate({
-      target: organizationSettings.organizationId,
-      set: { sanctionsMonitoringMode: "disabled" },
-    });
+  const transitions = { count: 0 };
+  await transitionUpsertBatch({
+    tx,
+    spec: FIRM_MONITORING_TRANSITIONS,
+    values: [
+      {
+        id: settings?.id ?? createSafeId<"organizationSettings">(),
+        organizationId,
+        sanctionsMonitoringMode: "disabled",
+      },
+    ],
+    recordTransitionAuditEvent: (_auditTx, rows) => {
+      transitions.count += rows.length;
+    },
+  });
+  const fromStatuses = SANCTIONS_SCREENING_STATUSES.filter(
+    (status) => status !== "excluded",
+  );
+  const firstStatus =
+    fromStatuses.at(0) ?? panic("Screening coverage has no included state");
+  await transitionScopedCount({
+    tx,
+    spec: SCREENING_COVERAGE_TRANSITIONS,
+    where: eq(sanctionsContactScreenings.organizationId, organizationId),
+    options: {
+      from: [firstStatus, ...fromStatuses.slice(1)],
+      to: "excluded",
+      set: { reason: "monitoring-disabled", editionId: null, checkedAt: now },
+    },
+    recordTransitionAuditEvent: (_auditTx, count) => {
+      transitions.count += count;
+    },
+  });
+  // Coverage metadata can change without reopening the excluded lifecycle.
   await tx
     .update(sanctionsContactScreenings)
-    .set({
-      status: "excluded",
-      reason: "monitoring-disabled",
-      editionId: null,
-      checkedAt: now,
-    })
-    .where(eq(sanctionsContactScreenings.organizationId, organizationId));
-  await tx
-    .update(sanctionsContactMatches)
-    .set({ state: "lapsed", updatedAt: now })
+    .set({ reason: "monitoring-disabled", editionId: null, checkedAt: now })
     .where(
       and(
-        eq(sanctionsContactMatches.organizationId, organizationId),
-        eq(sanctionsContactMatches.state, "active"),
+        eq(sanctionsContactScreenings.organizationId, organizationId),
+        eq(sanctionsContactScreenings.status, "excluded"),
+        or(
+          ne(sanctionsContactScreenings.reason, "monitoring-disabled"),
+          isNull(sanctionsContactScreenings.reason),
+          isNotNull(sanctionsContactScreenings.editionId),
+        ),
       ),
     );
-  if (settings?.sanctionsMonitoringMode !== "disabled") {
+  await lapseSanctionsMatches(tx, {
+    organizationId,
+    now,
+    recordTransitionAuditEvent: (_auditTx, count) => {
+      transitions.count += count;
+    },
+  });
+  if (
+    settings?.sanctionsMonitoringMode !== "disabled" ||
+    transitions.count > 0
+  ) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -213,25 +248,44 @@ export const includeSanctionsContact = async (
       new HandlerError({ status: 404, message: "Contact not found" }),
     );
   }
-  await tx
-    .update(contacts)
-    .set({ sanctionsMonitoringMode: "included" })
-    .where(
-      and(
-        eq(contacts.organizationId, organizationId),
-        eq(contacts.id, contactId),
-      ),
-    );
-  await requestSanctionsMonitoringRefresh(tx, {
+  if (contact.sanctionsMonitoringMode !== "included") {
+    const changed = await transitionScopedBatch({
+      tx,
+      spec: CONTACT_MONITORING_TRANSITIONS,
+      identities: [{ id: contactId }],
+      options: { from: [contact.sanctionsMonitoringMode], to: "included" },
+      recordTransitionAuditEvent: (_auditTx, rows) => {
+        if (rows.length !== 1) {
+          panic("Contact inclusion transition missing");
+        }
+      },
+    });
+    if (changed.length !== 1) {
+      panic("Locked contact mode changed during inclusion");
+    }
+  }
+  const request = prepareSanctionsMonitoringRefresh({
     organizationId,
     contactIds: [contactId],
   });
-  if (contact.sanctionsMonitoringMode !== "included") {
+  if (request.type !== "contacts") {
+    panic("Contact inclusion requires contact refresh marks");
+  }
+  const marks = await tx
+    .insert(sanctionsContactMarks)
+    .values(request.rows)
+    .onConflictDoNothing()
+    .returning({ contactId: sanctionsContactMarks.contactId });
+  if (contact.sanctionsMonitoringMode !== "included" || marks.length > 0) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
       resourceId: contactId,
       workspaceId: null,
+      metadata: {
+        monitoringMarkCount:
+          contact.sanctionsMonitoringMode !== "included" ? 1 : marks.length,
+      },
       changes: {
         sanctionsMonitoringMode: {
           old: contact.sanctionsMonitoringMode,
@@ -256,25 +310,46 @@ export const enableSanctionsMonitoring = async (
       .limit(1)
       .for("no key update")
   ).at(0);
-  await tx
-    .insert(organizationSettings)
-    .values({
-      id: createSafeId<"organizationSettings">(),
-      organizationId,
-      sanctionsMonitoringMode: "enabled",
-    })
-    .onConflictDoUpdate({
-      target: organizationSettings.organizationId,
-      set: { sanctionsMonitoringMode: "enabled" },
-    });
-  await requestSanctionsMonitoringRefresh(tx, { organizationId });
-  if (settings?.sanctionsMonitoringMode === "disabled") {
+  const transitions = { count: 0 };
+  await transitionUpsertBatch({
+    tx,
+    spec: FIRM_MONITORING_TRANSITIONS,
+    values: [
+      {
+        id: settings?.id ?? createSafeId<"organizationSettings">(),
+        organizationId,
+        sanctionsMonitoringMode: "enabled",
+      },
+    ],
+    recordTransitionAuditEvent: (_auditTx, rows) => {
+      transitions.count += rows.length;
+    },
+  });
+  const request = prepareSanctionsMonitoringRefresh({ organizationId });
+  if (request.type !== "organization") {
+    panic("Firm inclusion requires an organization refresh mark");
+  }
+  const marks = await tx
+    .insert(sanctionsOrganizationMarks)
+    .values(request.rows.at(0) ?? panic("Organization refresh mark missing"))
+    .onConflictDoNothing()
+    .returning({ organizationId: sanctionsOrganizationMarks.organizationId });
+  if (transitions.count > 0 || marks.length > 0) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
       resourceId: organizationId,
       workspaceId: null,
-      changes: { sanctionsMonitoringMode: { old: "disabled", new: "enabled" } },
+      metadata: {
+        monitoringMarkCount:
+          settings?.sanctionsMonitoringMode !== "enabled" ? 1 : marks.length,
+      },
+      changes: {
+        sanctionsMonitoringMode: {
+          old: settings?.sanctionsMonitoringMode ?? "enabled",
+          new: "enabled",
+        },
+      },
     });
   }
   return { mode: "enabled" } as const;

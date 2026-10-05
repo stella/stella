@@ -46,6 +46,7 @@
 //
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
+//   bun scripts/merge-bar.ts --disarm <pr-number> [--repo owner/name] [--dry-run]
 //
 // A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
 // recognized release pull requests remain exempt, including --jump.
@@ -57,12 +58,15 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readRuntimeMode } from "@stll/runtime-mode";
+
 import { findMigrationIdentityViolation } from "./check-migration-order";
 import {
   extractPlanSelector,
   type PlanSelectorError,
   runPlanScopes,
 } from "./ci-plan-selector";
+import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -750,6 +754,10 @@ export const readFastRequiredJobs = (
     return panic(`Expected a "${CI_RESULT_STEP}" step in ${CI_RESULT_JOB}`);
   }
   const env = readRecord(step["env"], `${CI_RESULT_STEP} env`);
+  // A gate without a fast-required list has no fast depth to recheck.
+  if (!Object.hasOwn(env, "FAST_REQUIRED")) {
+    return null;
+  }
   const required = readJsonEnv(env, "FAST_REQUIRED");
   if (
     !Array.isArray(required) ||
@@ -1420,6 +1428,66 @@ export const readMergeHandoff = (raw: Record<string, unknown>) => {
 };
 
 type MergeHandoff = ReturnType<typeof readMergeHandoff>;
+
+export class DisarmError extends TaggedError("DisarmError")<{
+  message: string;
+}> {}
+
+type DisarmPullRequestOptions = {
+  gateway: Pick<GitHubGateway, "readArmState" | "mutateHandoff">;
+  dryRun: boolean;
+};
+
+export const disarmPullRequest = ({
+  gateway,
+  dryRun,
+}: DisarmPullRequestOptions) =>
+  Result.try(() => {
+    const before = armState(gateway.readArmState());
+    if (dryRun) {
+      return Result.ok({ status: "dry-run", id: before.id } as const);
+    }
+    const variables = { id: before.id, sha: before.headSha };
+    if (before.autoMerge !== null) {
+      gateway.mutateHandoff(
+        `mutation($id:ID!) { disablePullRequestAutoMerge(input:{pullRequestId:$id}) { pullRequest { id } } }`,
+        variables,
+      );
+    }
+    // Disabling can race with auto-merge enqueueing; inspect queue membership
+    // again before removing it, then verify both independent fields are clear.
+    const current = armState(gateway.readArmState());
+    if (current.id !== before.id) {
+      panic("Disarm read returned a different pull request");
+    }
+    if (current.queue !== null) {
+      gateway.mutateHandoff(
+        `mutation($id:ID!) { dequeuePullRequest(input:{id:$id}) { clientMutationId } }`,
+        variables,
+      );
+    }
+    const after = armState(gateway.readArmState());
+    if (after.id !== before.id) {
+      panic("Disarm read returned a different pull request");
+    }
+    if (after.autoMerge !== null || after.queue !== null) {
+      return Result.err(
+        new DisarmError({
+          message:
+            "NOT DISARMED: Disarm verification failed: auto-merge or queue membership remains",
+        }),
+      );
+    }
+    return Result.ok({
+      status: "disarmed",
+      id: after.id,
+      headSha: after.headSha,
+    } as const);
+  })
+    .mapError(
+      (error) => new DisarmError({ message: `NOT DISARMED: ${error.message}` }),
+    )
+    .andThen((result) => result);
 
 const RELEASE_TITLE_PREFIX = "chore: release v";
 
@@ -2733,13 +2801,15 @@ type MergeBarOptions = {
   dryRun: boolean;
   // Enqueue at the front of the queue only when explicitly requested.
   jump: boolean;
+  mode: "merge" | "disarm";
 };
 
-const parseOptions = (argv: readonly string[]): MergeBarOptions => {
+export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
   let repo: MergeBarRepository = DEFAULT_REPO;
   let dryRun = false;
   let jump = false;
+  let mode: MergeBarOptions["mode"] = "merge";
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -2758,6 +2828,10 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       jump = true;
       continue;
     }
+    if (argument === "--disarm") {
+      mode = "disarm";
+      continue;
+    }
     if (argument === undefined || argument.startsWith("--")) {
       panic(`Unknown argument: ${argument ?? "<empty>"}`);
     }
@@ -2771,7 +2845,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(
       `Expected exactly one PR number, got ${positional.length}. ` +
         "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--dry-run] [--jump]",
+        "[--dry-run] [--jump | --disarm]",
     );
   }
   const rawNumber = positional[0] ?? panic("unreachable: length checked above");
@@ -2783,7 +2857,10 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(`PR number must be a positive integer, got: ${rawNumber}`);
   }
 
-  return { pullNumber, repo, dryRun, jump };
+  if (mode === "disarm" && jump) {
+    panic("--disarm cannot be combined with --jump");
+  }
+  return { pullNumber, repo, dryRun, jump, mode };
 };
 
 const formatVerdict = (verdict: MergeBarVerdict): string =>
@@ -2844,11 +2921,44 @@ export const ratchetFreshnessFor = ({
 
 if (import.meta.main) {
   const options = parseOptions(Bun.argv.slice(2));
+  // Before any read: a stale checkout runs a bar main has since fixed. The
+  // CLI tests drive this script offline with a fake gh; only a local test
+  // run can skip the check.
+  const repositoryRoot = path.dirname(import.meta.dir);
+  const barFreshness =
+    process.env["STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS"] === "1" &&
+    readRuntimeMode().isLocalTestRun
+      ? ({ type: "current" } as const)
+      : decideBarFreshness(
+          readBarFreshness({
+            repositoryRoot,
+            entry: path.relative(repositoryRoot, import.meta.filename),
+          }),
+        );
+  if (barFreshness.type === "refuse") {
+    console.error(barFreshness.message);
+    process.exit(1);
+  }
+  if (barFreshness.type === "branch-bar") {
+    console.log(barFreshness.message);
+  }
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
     migrationDirectory: MERGE_BAR_REPOSITORIES[options.repo].migrationDirectory,
   });
+
+  if (options.mode === "disarm") {
+    const receipt = disarmPullRequest({ gateway, dryRun: options.dryRun });
+    if (receipt.isErr()) {
+      console.error(receipt.error.message);
+      process.exit(1);
+    }
+    console.log(
+      `${receipt.value.status === "dry-run" ? "DRY RUN: would disarm" : "DISARMED"} ${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,
+    );
+    process.exit(0);
+  }
 
   // Version Packages uses this CLI as release-pr.yml's auto-merge-command too.
   const hold = checkMergeHold({

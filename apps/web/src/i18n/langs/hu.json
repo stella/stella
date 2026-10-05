@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Számsorozat hozzáadása",
       "advance": "Előleg",
+      "allSellers": "Minden eladó",
       "archiveConfirm": "Archiválja ezt a számsorozatot? Új bizonylatokhoz többé nem lesz elérhető.",
       "creditNote": "Jóváírás",
       "default": "Alapértelmezett sorozat",
@@ -562,6 +563,9 @@
       "preview": "Következő szám",
       "previewAllocated": "Ez a szám már ki van osztva.",
       "previewHelp": "Az előnézet a mentett sablont használja, és nem foglal le számot.",
+      "sellerProfile": "Eladói profil",
+      "sellerUnavailable": "Az eladó archivált vagy nem érhető el",
+      "sellerUnavailableHelp": "Ez az eladó archivált vagy nem érhető el. Tartsa meg a hozzárendelést, vagy válasszon másik eladót.",
       "setDefault": "Beállítás alapértelmezett sorozatként",
       "title": "Számsorozatok"
     },
@@ -976,7 +980,6 @@
     "packPartial": "{installed} telepítve, {failed} sikertelen",
     "removed": "Ez az eszköz már nem érhető el.",
     "sectionOthers": "Egyéb",
-    "sectionRecommended": "Ajánlott",
     "settings": {
       "packTitle": "Ajánlott csomag"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Még nincsenek készségek",
       "pinnedMatters": "Kitűzött ügyek",
       "recentChats": "Legutóbbi csevegések",
+      "skillEditedBy": "{name} szerkesztette · {time}",
       "skills": "Készségek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
@@ -1183,8 +1187,10 @@
       "label": "Szimulált AI"
     },
     "modelSelector": {
+      "allModels": "Összes modell ({count, number})",
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
+      "belowFrontier": "A legjobb kompromisszumok alatt",
       "effortHelpDescription": "Meghatározza, mennyi gondolkodást használjon a modell válaszadás előtt. A magasabb szintek segíthetnek az összetett feladatoknál, de általában több időt vesznek igénybe. A pont a szolgáltató alapértelmezett szintjét jelöli ennél a modellnél.",
       "effortHelpLabel": "A gondolkodási szintről",
       "effortLabel": "Gondolkodási szint",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Alapértelmezett",
         "xhigh": "Nagyon magas"
       },
+      "newModel": "Új",
+      "premiumCost": "Szokatlanul magas költség",
+      "recommendedHelpDescription": "Nincs más elérhető modell, amely egyszerre olcsóbb és jobbra értékelt. Az értékeléshez még túl új modellek „Új” jelölést kapnak. Minőség: <link>LMArena {benchmark}</link> ({licence}); költség: listaárak.",
+      "recommendedHelpLabel": "Az ajánlott modellekről",
       "selectionLabel": "{model} | {effort}",
       "title": "Csevegési modell kiválasztása",
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
+    "threadFiles": {
+      "title": "Fájlok ebben a csevegésben"
+    },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
@@ -1482,6 +1495,7 @@
     "noResults": "Még nincsenek záradékok",
     "noVariants": "Nincs változat",
     "outdatedVersion": "Frissítés elérhető",
+    "overrideNotRenderedWarning": "A(z) {clauseName} záradék helyettesítése nem lett felhasználva: a helye nem jelenik meg ebben a dokumentumban.",
     "renameSlot": "Foglalat átnevezése",
     "renameSlotInvalid": "A foglalatok neveinek egyedinek kell lenniük, és nem tartalmazhatnak szóközt, kettőspontot vagy kapcsos zárójelet.",
     "restoreVersion": "Verzió visszaállítása",
@@ -1608,6 +1622,16 @@
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
     "date": "Dátum",
+    "datePicker": {
+      "label": "Dátumválasztó",
+      "nextDecade": "Következő évtized",
+      "nextMonth": "Következő hónap",
+      "nextYear": "Következő év",
+      "previousDecade": "Előző évtized",
+      "previousMonth": "Előző hónap",
+      "previousYear": "Előző év",
+      "time": "Időpont"
+    },
     "decisions": "Határozatok",
     "decline": "Elutasítás",
     "delete": "Törlés",
@@ -1768,6 +1792,7 @@
     "properties": "Tulajdonságok",
     "queued": "Sorba állítva",
     "reason": "Ok",
+    "recommended": "Ajánlott",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1893,6 +1918,7 @@
       "addBankAccount": "Bankszámla hozzáadása",
       "noBillingData": "Nincsenek számlázási adatok.",
       "removeBankAccount": "Bankszámla eltávolítása",
+      "selectCurrencyForRate": "Az óradíj megadásához válasszon pénznemet.",
       "title": "Számlázási adatok"
     },
     "columns": {
@@ -2132,6 +2158,7 @@
     "markHandled": "Megjelölés elintézettként",
     "markNew": "Megjelölés újként",
     "noAddress": "Nincs aktív e-mail-cím.",
+    "openSourceFile": "E-mail-fájl megnyitása",
     "originalSender": "Eredeti feladó",
     "originalSenderUnverified": "Eredeti feladó (közölt, nem ellenőrzött)",
     "originalSignatureVerified": "Eredeti aláírás ellenőrizve (<identifier>d={domain}</identifier>)",
@@ -2140,11 +2167,14 @@
     "rotateAddress": "Cím cseréje",
     "sentAt": "Elküldve",
     "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "statedInFile": "Fejlécek (a fájl szerint)",
     "states": {
       "handled": "Elintézett"
     },
     "title": "Levelezés",
-    "unknownApprover": "Ismeretlen jóváhagyó"
+    "unknownApprover": "Ismeretlen jóváhagyó",
+    "uploadedBy": "Feltöltötte: {name}",
+    "uploadedFile": "Feltöltött e-mail-fájl"
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
@@ -2262,10 +2292,14 @@
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
+      "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
+      "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
+      "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
+      "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
@@ -3448,6 +3482,7 @@
         "approvedOn": "Jóváhagyva: {date}",
         "approvedToast": "Playbook jóváhagyva",
         "saveBeforeApprove": "A playbook jóváhagyása előtt mentse a módosításokat.",
+        "sourcesNotice": "Jóváhagyás előtt ellenőrizze, hogy egyik álláspont sem nevez meg dokumentumot, ügyet vagy ellenfelet: ezt a playbookot az egész szervezet olvashatja.",
         "statusApproved": "Jóváhagyva",
         "statusDraft": "Piszkozat"
       },
@@ -3546,6 +3581,7 @@
       "referenceStandard": "A referenciából",
       "removeCheck": "Ellenőrzés eltávolítása",
       "removeIdeal": "Ideális megfogalmazás eltávolítása",
+      "removeSource": "{documentName} forrás eltávolítása",
       "reorderPosition": "Álláspont átrendezése",
       "review": {
         "changePlaybook": "Másik playbook választása",
@@ -3577,6 +3613,10 @@
         "blocker": "Blokkoló"
       },
       "severityLabel": "Súlyosság",
+      "staleCopy": {
+        "loaded": "A playbook újabb verziója betöltődött. Szerkesztés előtt töltse újra.",
+        "unavailable": "A playbook legfrissebb verzióját nem sikerült betölteni. Ez az utoljára betöltött példány, amely elavult lehet."
+      },
       "starters": {
         "addedToast": "Playbook hozzáadva",
         "browseButton": "Kezdő playbookok böngészése",
@@ -4277,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
       "deleteAccountTasksDescription": "Aktív feladatok vannak Önhöz rendelve. Adja át őket a munkaterület más tagjainak, hogy a munka folytatódjon.",
       "deleteAccountTasksTitle": "Aktív feladatok átadása",
+      "deleteAccountTasksUnassignedNotice": "A kiválasztott tag nélküli feladatok felelős nélkül maradnak a munkaterületen.",
       "deleteAccountWarning": "A törlés visszafordíthatatlan. Bejelentkezési adatai és a fiók privát adatai törlődnek.",
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",
@@ -4826,6 +4867,7 @@
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az AI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiConditionsUndecided": "Az AI nem tudta eldönteni ezeket a feltételeket, ezért a hozzájuk tartozó részeket úgy töltötte ki, mintha nem teljesülnének: {list}",
     "aiDecidedConditions": "Az AI dönti el",
     "aiFieldsNotDrafted": "Az AI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",
@@ -4917,6 +4959,7 @@
     "directiveFor": "Ciklus: {expression}",
     "directiveIf": "Ha: {expression}",
     "discoveryFailed": "Nem sikerült elemezni a sablont",
+    "documentCreatedIncomplete": "A dokumentum létrejött, de a kitöltés hiányos",
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",
     "downloadPdf": "Letöltés PDF-ként",
@@ -5012,6 +5055,7 @@
     "saveFailed": "Nem sikerült menteni a sablont",
     "savedLookupFormats": "Mentett kimeneti formátumok",
     "searchTemplates": "Sablonok keresése…",
+    "structureErrorsInDocument": "Nem alkalmazható sablonutasítások: {count}. Ellenőrizze a dokumentumot.",
     "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {

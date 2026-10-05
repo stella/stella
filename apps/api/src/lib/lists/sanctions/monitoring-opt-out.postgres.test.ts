@@ -3,10 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   contacts,
+  auditLogs,
+  sanctionsContactMarks,
+  sanctionsOrganizationMarks,
   organizationSettings,
   sanctionsContactMatches,
   sanctionsContactScreenings,
@@ -14,6 +19,7 @@ import {
   sanctionsSources,
   sanctionsScreeningEvents,
 } from "@/api/db/schema";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -24,6 +30,8 @@ import { monitoringFingerprint } from "./monitoring-input";
 import {
   disableSanctionsMonitoring,
   excludeSanctionsContact,
+  includeSanctionsContact,
+  enableSanctionsMonitoring,
 } from "./monitoring-opt-out";
 import type { SanctionsPossibleMatch } from "./screening-service";
 import { sanctionsSourceIds, SANCTIONS_SOURCE_CONFIG } from "./source-config";
@@ -38,6 +46,114 @@ if (!runPostgresTests || databaseUrl === undefined) {
     });
   });
 } else {
+  test("re-enabling persists refresh marks with its audit and rolls back both on audit failure", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const admin = openClient().db;
+      const organizationId = mintAuthProviderId<"organization">();
+      await admin.insert(organization).values({
+        id: organizationId,
+        name: "Monitoring audit fixture",
+        slug: organizationId,
+        createdAt: new Date(),
+      });
+      try {
+        const contact =
+          (
+            await admin
+              .insert(contacts)
+              .values({
+                organizationId,
+                type: "person",
+                displayName: "Synthetic Person",
+                sanctionsMonitoringMode: "excluded",
+              })
+              .returning()
+          ).at(0) ?? panic("Contact fixture missing");
+        await admin.insert(organizationSettings).values({
+          id: createSafeId<"organizationSettings">(),
+          organizationId,
+          sanctionsMonitoringMode: "disabled",
+        });
+        const recordAuditEvent = createBackgroundAuditRecorder({
+          organizationId,
+          workspaceId: null,
+          userId: "system:sanctions-monitoring-drain",
+          execution: {
+            performer: {
+              type: "service",
+              id: "system:sanctions-monitoring-drain",
+              name: "Monitoring fixture",
+            },
+            trigger: { type: "system" },
+          },
+        });
+        const mutate = async (fail: boolean) =>
+          await admin.transaction(async (tx) => {
+            await tx.execute(sql`SET LOCAL ROLE stella`);
+            await tx.execute(
+              sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+            );
+            const options = {
+              organizationId,
+              recordAuditEvent: fail
+                ? async () => panic("Synthetic refresh audit failure")
+                : recordAuditEvent,
+            };
+            (
+              await includeSanctionsContact(tx, {
+                ...options,
+                contactId: contact.id,
+              })
+            ).unwrap();
+            await enableSanctionsMonitoring(tx, options);
+          });
+        const census = async () => ({
+          contacts: await admin
+            .select()
+            .from(contacts)
+            .where(eq(contacts.organizationId, organizationId)),
+          settings: await admin
+            .select()
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId)),
+          contactMarks: await admin
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.organizationId, organizationId)),
+          firmMarks: await admin
+            .select()
+            .from(sanctionsOrganizationMarks)
+            .where(
+              eq(sanctionsOrganizationMarks.organizationId, organizationId),
+            ),
+          audits: await admin
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
+        });
+        const before = await census();
+        expect(String(await rejectionOf(mutate(true)))).toContain(
+          "Synthetic refresh audit failure",
+        );
+        expect(await census()).toEqual(before);
+        await mutate(false);
+        const after = await census();
+        expect(after.contactMarks).toHaveLength(1);
+        expect(after.firmMarks).toHaveLength(1);
+        expect(after.audits).toHaveLength(2);
+        expect(after.audits.map((row) => row.metadata)).toEqual([
+          { monitoringMarkCount: 1 },
+          { monitoringMarkCount: 1 },
+        ]);
+        await mutate(false);
+        expect(await census()).toEqual(after);
+      } finally {
+        await admin
+          .delete(organization)
+          .where(eq(organization.id, organizationId));
+      }
+    });
+  }, 60_000);
   for (const operation of [
     "serial-disable",
     "commit-first",

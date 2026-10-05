@@ -114,6 +114,7 @@ import {
   restoreReviewRun,
   restoredRunId,
   reviewDecisionProgress,
+  reviewHistoryPresentation,
   reviewRunView,
   reviewSkeletonCardCount,
 } from "@/components/ai-suggestions/document-review-run.logic";
@@ -245,8 +246,62 @@ import {
   playbookDetailOptions,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+
+import { PlaybookQuerySection } from "./playbook-query-section";
+
+/**
+ * The wait for a run whose findings have not arrived yet. Its shape is the
+ * results view's, row for row — the summary sentence, the queue row, the two
+ * filter tabs, the clause band, then the cards — so nothing jumps when the run
+ * lands. `cardCount` is what the history row said the run was planned against,
+ * which is why the column does not resize under the reader.
+ */
+const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-busy="true"
+      aria-label={t("common.loading")}
+      className="bg-background flex h-full flex-col"
+    >
+      <header className="space-y-2 border-b px-3 py-2.5">
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+        {/* The document's queue row: pending count, hide-accepted, accept-all. */}
+        <div className="flex items-center gap-1">
+          <Skeleton className="me-auto h-3 w-20" />
+          <Skeleton className="size-6 rounded-md" />
+          <Skeleton className="h-6 w-24 rounded-md" />
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden px-2 py-2">
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <Skeleton className="h-3 w-16" />
+          <div className="bg-muted flex gap-0.5 rounded-lg p-0.5">
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </div>
+        <ul className="space-y-1.5">
+          {Array.from({ length: cardCount }, (_unused, index) => (
+            <li className="bg-card rounded-lg border" key={index}>
+              <span className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="ms-auto h-3 w-16 shrink-0" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
 
 type PlaybookFacetProps = {
   entityId: string;
@@ -358,15 +413,15 @@ export const PlaybookFacet = ({
   // Which version of the document is on screen now. The tab's facet bar reads
   // the same query for its version badge, so a restored run learns whether it
   // still describes the current document without a request of its own.
-  const { data: versions } = useQuery(
+  const versionsQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
-  const currentEntityVersionId = versions?.currentVersionId ?? null;
+  const versions = useQueryView(versionsQuery);
 
   const playbooks = usePlaybookPickerItems(user.activeOrganizationId);
 
   const {
-    historyPending,
+    history,
     historyRunId,
     restoreAllowed,
     runs,
@@ -707,8 +762,44 @@ export const PlaybookFacet = ({
   // Deciding between a restored run and the launcher needs the history answer
   // first; showing the launcher meanwhile would flash a review the document
   // has already had.
-  if (restoreAllowed && sessionRunId === null && historyPending) {
-    return <ReviewLauncherSkeleton />;
+  const historyPresentation = reviewHistoryPresentation({
+    history,
+    restoreAllowed,
+    sessionRunId,
+    shownRunId,
+  });
+  let historyFeedback: ReactNode = null;
+  switch (historyPresentation.type) {
+    case "pending":
+      return <ReviewLauncherSkeleton />;
+    case "error":
+      return (
+        <ErrorState
+          message={t("common.somethingWentWrong")}
+          onRetry={() => {
+            detached(
+              historyPresentation.retry(),
+              "playbook-facet.retry-history",
+            );
+          }}
+        />
+      );
+    case "ready": {
+      const { feedback } = historyPresentation;
+      if (feedback !== null) {
+        historyFeedback = (
+          <ReviewHistoryRetry
+            onRetry={() => {
+              detached(feedback.retry(), "playbook-facet.retry-history");
+            }}
+          />
+        );
+      }
+      break;
+    }
+    default:
+      historyPresentation satisfies never;
+      return panic("Unhandled review history presentation");
   }
 
   // Rendered alongside whichever branch is on screen: a refused start
@@ -735,38 +826,51 @@ export const PlaybookFacet = ({
     return (
       <>
         {sizeConfirmDialog}
-        <ReviewRunPanel
-          chatSection={chatSectionWith(null)}
-          currentEntityVersionId={currentEntityVersionId}
-          editorAvailable={editorAvailable}
-          editorRef={targetEditorRef}
-          entityId={entityId}
-          queueControls={queueControls}
-          history={{
-            mode: historyRunId === null ? "tracked" : "history",
-            onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
-            onSelect: (runId) =>
-              viewHistoricalRun(entityId, fileFieldId, runId),
-            runs,
-            shownRunId,
-          }}
-          onAcceptSuggestion={acceptSuggestion}
-          onAddCounterpartyNote={addCounterpartyNote}
-          onOpenReferenceCitation={openReferenceCitation}
-          onRejectSuggestion={rejectSuggestion}
-          onRetry={(basis) => {
-            detached(retryRun(basis), "playbook-facet.retry-run");
-          }}
-          onReviewAgain={() => resetSession(entityId, fileFieldId)}
-          onScrollToBlock={scrollToBlock}
-          organizationId={user.activeOrganizationId}
-          paneSwap={paneSwap}
-          runId={shownRunId}
-          suggestions={suggestions}
-          targetFileFieldId={fileFieldId}
-          versions={versions?.versions ?? EMPTY_VERSIONS}
-          workspaceId={workspaceId}
-        />
+        {historyFeedback}
+        <PlaybookQuerySection
+          view={versions}
+          pending={
+            <ReviewResultsSkeleton
+              cardCount={reviewSkeletonCardCount({ runs, runId: shownRunId })}
+            />
+          }
+          empty={null}
+        >
+          {(answer) => (
+            <ReviewRunPanel
+              chatSection={chatSectionWith(null)}
+              currentEntityVersionId={answer.currentVersionId}
+              editorAvailable={editorAvailable}
+              editorRef={targetEditorRef}
+              entityId={entityId}
+              queueControls={queueControls}
+              history={{
+                mode: historyRunId === null ? "tracked" : "history",
+                onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
+                onSelect: (runId) =>
+                  viewHistoricalRun(entityId, fileFieldId, runId),
+                runs,
+                shownRunId,
+              }}
+              onAcceptSuggestion={acceptSuggestion}
+              onAddCounterpartyNote={addCounterpartyNote}
+              onOpenReferenceCitation={openReferenceCitation}
+              onRejectSuggestion={rejectSuggestion}
+              onRetry={(basis) => {
+                detached(retryRun(basis), "playbook-facet.retry-run");
+              }}
+              onReviewAgain={() => resetSession(entityId, fileFieldId)}
+              onScrollToBlock={scrollToBlock}
+              organizationId={user.activeOrganizationId}
+              paneSwap={paneSwap}
+              runId={shownRunId}
+              suggestions={suggestions}
+              targetFileFieldId={fileFieldId}
+              versions={answer.versions}
+              workspaceId={workspaceId}
+            />
+          )}
+        </PlaybookQuerySection>
       </>
     );
   }
@@ -774,6 +878,7 @@ export const PlaybookFacet = ({
   return (
     <>
       {sizeConfirmDialog}
+      {historyFeedback}
       <Launcher
         chatSection={chatSectionWith(queueControls)}
         history={
@@ -812,11 +917,8 @@ export const PlaybookFacet = ({
 // Stable empty reads: a `?? []` inside a store selector would hand Zustand a
 // fresh array on every call and re-render forever.
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
-const EMPTY_VERSIONS: readonly EntityVersion[] = [];
 const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
-/** The sides are absent while the detection query is pending or has failed —
- *  which is not the same as a document with no parties, but reads the same
- *  here: the picker offers what it was given. */
+/** A successful detection with no sides still offers the neutral perspective. */
 const EMPTY_PARTIES: readonly ReviewParty[] = [];
 /** A finding graded against an authored standard has no reference document
  *  behind it to quote, so the groups are absent rather than empty. */
@@ -997,21 +1099,6 @@ type ShownReviewRunArgs = {
   workspaceId: string;
 };
 
-type ShownReviewRun = {
-  /** Every run the document's list endpoint returned. */
-  runs: readonly DocumentReviewRunSummary[];
-  /** Whether that list is still being read for the first time. */
-  historyPending: boolean;
-  /** Whether the facet may still adopt the document's latest server run. */
-  restoreAllowed: boolean;
-  /** The run this session started, or `null` while it started none. */
-  sessionRunId: string | null;
-  /** The earlier run opened from the history, or `null` while none is. */
-  historyRunId: string | null;
-  /** The run on screen: the history's record, else the tracked one. */
-  shownRunId: string | null;
-};
-
 /**
  * Which of the document's runs the facet shows.
  *
@@ -1025,21 +1112,32 @@ const useShownReviewRun = ({
   fileFieldId,
   session,
   workspaceId,
-}: ShownReviewRunArgs): ShownReviewRun => {
+}: ShownReviewRunArgs) => {
   const sessionRunId = session === undefined ? null : session.runId;
   const restoreAllowed =
     session === undefined ||
     (session.runId === null && session.restore === "allowed");
   // Read unconditionally: the same answer decides what to restore and fills
   // the History section, which a facet already tracking a run still shows.
-  const { data: runHistory, isPending: historyPending } = useQuery(
-    documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
-  );
-  const runs = runHistory?.items ?? EMPTY_RUNS;
-  const restoredRun =
-    runHistory === undefined
-      ? null
-      : restoredRunId(resolveReviewRunRestore(runs));
+  const query = useQuery({
+    ...documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
+    select: (data) => data.items,
+  });
+  const history = useQueryView(query);
+  let runs: readonly DocumentReviewRunSummary[] = EMPTY_RUNS;
+  switch (history.type) {
+    case "pending":
+    case "error":
+    case "empty":
+      break;
+    case "items":
+      runs = history.items;
+      break;
+    default:
+      history satisfies never;
+      return panic("Unhandled review history query state");
+  }
+  const restoredRun = restoredRunId(resolveReviewRunRestore(runs));
   const trackedRunId =
     sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
   // An earlier run opened from the history is a record: it is shown in place
@@ -1051,7 +1149,7 @@ const useShownReviewRun = ({
       ? selection.runId
       : null;
   return {
-    historyPending,
+    history,
     historyRunId,
     restoreAllowed,
     runs,
@@ -1472,9 +1570,11 @@ const Launcher = ({
   // The document's own sides, read before a reference is even chosen: the
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
-  const { data: partiesAnswer, isPending: partiesPending } = useQuery(
-    documentReviewPartiesOptions({ workspaceId, ...target }),
-  );
+  const partiesQuery = useQuery({
+    ...documentReviewPartiesOptions({ workspaceId, ...target }),
+    select: (answer) => answer.parties,
+  });
+  const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {
     ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
@@ -1511,15 +1611,25 @@ const Launcher = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {partiesPending ? (
-          <PerspectivePickerSkeleton />
-        ) : (
-          <PerspectivePicker
-            onSelect={onPerspectiveChange}
-            parties={partiesAnswer?.parties ?? EMPTY_PARTIES}
-            value={perspective}
-          />
-        )}
+        <PlaybookQuerySection
+          view={parties}
+          pending={<PerspectivePickerSkeleton />}
+          empty={
+            <PerspectivePicker
+              onSelect={onPerspectiveChange}
+              parties={EMPTY_PARTIES}
+              value={perspective}
+            />
+          }
+        >
+          {(items) => (
+            <PerspectivePicker
+              onSelect={onPerspectiveChange}
+              parties={items}
+              value={perspective}
+            />
+          )}
+        </PlaybookQuerySection>
         <PlaybookPicker
           onSelect={setSelectedPlaybookId}
           playbooks={playbooks}
@@ -2498,58 +2608,24 @@ const ReviewLauncherSkeleton = () => {
   );
 };
 
-/**
- * The wait for a run whose findings have not arrived yet. Its shape is the
- * results view's, row for row — the summary sentence, the queue row, the two
- * filter tabs, the clause band, then the cards — so nothing jumps when the run
- * lands. `cardCount` is what the history row said the run was planned against,
- * which is why the column does not resize under the reader.
- */
-const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
+// -- Error --
+
+const ReviewHistoryRetry = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations();
   return (
     <div
-      aria-busy="true"
-      aria-label={t("common.loading")}
-      className="bg-background flex h-full flex-col"
+      className="flex items-center justify-center gap-2 px-3 py-2"
+      role="alert"
     >
-      <header className="space-y-2 border-b px-3 py-2.5">
-        <div className="min-w-0 space-y-1.5">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-3/4" />
-          <Skeleton className="h-3 w-40" />
-        </div>
-        {/* The document's queue row: pending count, hide-accepted, accept-all. */}
-        <div className="flex items-center gap-1">
-          <Skeleton className="me-auto h-3 w-20" />
-          <Skeleton className="size-6 rounded-md" />
-          <Skeleton className="h-6 w-24 rounded-md" />
-        </div>
-      </header>
-      <div className="flex-1 overflow-hidden px-2 py-2">
-        <div className="mb-2 flex items-center justify-between gap-2 px-1">
-          <Skeleton className="h-3 w-16" />
-          <div className="bg-muted flex gap-0.5 rounded-lg p-0.5">
-            <Skeleton className="h-8 w-20 rounded-md" />
-            <Skeleton className="h-8 w-20 rounded-md" />
-          </div>
-        </div>
-        <ul className="space-y-1.5">
-          {Array.from({ length: cardCount }, (_unused, index) => (
-            <li className="bg-card rounded-lg border" key={index}>
-              <span className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="ms-auto h-3 w-16 shrink-0" />
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <p className="text-destructive text-sm">
+        {t("common.somethingWentWrong")}
+      </p>
+      <Button onClick={onRetry} size="xs" variant="ghost">
+        {t("common.retry")}
+      </Button>
     </div>
   );
 };
-
-// -- Error --
 
 type ErrorStateProps = {
   message: string;
@@ -2557,7 +2633,7 @@ type ErrorStateProps = {
    *  it is what identifies the failure without exposing provider text. */
   detail?: string | null;
   onRetry: () => void;
-  onChangeBasis: () => void;
+  onChangeBasis?: () => void;
 };
 
 const ErrorState = ({
@@ -2579,9 +2655,11 @@ const ErrorState = ({
         <Button onClick={onRetry} size="sm">
           {t("common.retry")}
         </Button>
-        <Button onClick={onChangeBasis} size="sm" variant="outline">
-          {t("inspector.review.changeBasis")}
-        </Button>
+        {onChangeBasis !== undefined && (
+          <Button onClick={onChangeBasis} size="sm" variant="outline">
+            {t("inspector.review.changeBasis")}
+          </Button>
+        )}
       </div>
     </div>
   );

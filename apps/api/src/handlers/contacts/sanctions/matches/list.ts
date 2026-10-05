@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   listOpenSanctionsMatches,
@@ -10,6 +10,7 @@ import {
 
 export default createSafeRootHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     description:
       "List open sanctions matches for the active organization in bounded cursor pages with binding versus informational classification from the firm's practice jurisdictions. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. To review a match, read contacts.sanctions.get with the returned contactId and copy its reviewTarget to contacts.sanctions.reviews.update with a disposition and reason.",
     permissions: { workspace: ["read"] },

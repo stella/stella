@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   excludeSanctionsContact,
@@ -10,6 +10,7 @@ import {
 
 export default createSafeRootHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     description:
       "Set a contact to included or excluded from sanctions monitoring. Excluding hides active hits and preserves history. Including queues a re-screen; read contacts.sanctions.get for its eventual result. Firm-level disablement still applies. Changes are audited.",
     permissions: { contact: ["update"] },

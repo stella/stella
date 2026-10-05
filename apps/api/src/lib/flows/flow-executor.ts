@@ -14,7 +14,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { resultTx } from "@/api/db/safe-db";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -36,6 +36,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
@@ -43,6 +44,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -238,6 +240,21 @@ export const executeFlowStep = async (
       current.step?.status === "awaiting_review"
     ) {
       return null;
+    }
+    const authorization = await resolveMemberAuthorization(
+      {
+        organizationId: scope.organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+      },
+      tx,
+    );
+    if (!authorization?.workspace) {
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer a member of this matter.",
+        }),
+      );
     }
     await tx
       .update(flowRunSteps)
@@ -833,6 +850,7 @@ const runCreateDocumentStep = async ({
         // before the extension-preserving pass could protect it.
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation

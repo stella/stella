@@ -10,6 +10,7 @@ import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
@@ -26,7 +27,9 @@ import {
   maxRssBytesToMb,
 } from "./resource-usage";
 import {
+  measuredTestRssTable,
   parseRssMeasurementArguments,
+  staleTestRssTableAnnotation,
   testRssArtifact,
   TEST_BATCH_KIND,
   type TestBatchKind,
@@ -74,6 +77,16 @@ if (shard !== null) {
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );
+}
+// One annotation per run: the first shard speaks for all of them.
+if (rssMode.mode === "batched" && (shard === null || shard.index === 1)) {
+  const staleTable = staleTestRssTableAnnotation(
+    measuredTestRssTable().measuredAt,
+    new Date(),
+  );
+  if (staleTable !== undefined) {
+    console.log(staleTable);
+  }
 }
 
 // Hidden directories are tool caches; `node_modules` is third-party code. A
@@ -149,7 +162,8 @@ const CHILD_STOP_GRACE_MS = 10_000;
 const awaitChild = async (child: Bun.Subprocess): Promise<number> => {
   liveChildren.add(child);
   try {
-    return await child.exited;
+    await child.exited;
+    return childExitStatus(child);
   } finally {
     liveChildren.delete(child);
   }
@@ -526,6 +540,7 @@ const runTests = async (
       switch (verdict.type) {
         case BATCH_MEMORY.within:
           break;
+        case BATCH_MEMORY.planDrift:
         case BATCH_MEMORY.nearCap:
           log.out(verdict.annotation);
           break;
@@ -614,9 +629,12 @@ if (rssMode.mode === "measure-rss") {
     rssMode.outputPath,
     testRssArtifact({
       measurements,
+      measuredAt: new Date().toISOString(),
       baselineMb,
       environment: rssMode.environment,
       source: rssMode.source,
+      shard: shard ?? { index: 1, count: 1 },
+      plannedFiles: testPaths.length,
     }),
   );
   print(

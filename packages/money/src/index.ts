@@ -41,6 +41,20 @@ export const prorateHourlyCents = ({
   return cents(Number((product + 30n) / 60n));
 };
 
+type TimeEntryAmountInput = {
+  billedMinutes: number;
+  rateAtEntry: CentsAmount;
+  noCharge: boolean;
+};
+
+export const timeEntryAmount = (entry: TimeEntryAmountInput): CentsAmount =>
+  entry.noCharge
+    ? cents(0)
+    : prorateHourlyCents({
+        billedMinutes: entry.billedMinutes,
+        hourlyRateCents: entry.rateAtEntry,
+      });
+
 export type ApplyMarkupCentsInput = {
   amountCents: CentsAmount;
   markupPercent: number;

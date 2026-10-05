@@ -1,7 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { entities, taskAssignees } from "@/api/db/schema";
+import { member } from "@/api/db/auth-schema";
+import {
+  entities,
+  taskAssignees,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -32,19 +38,43 @@ const createMock = ({
   const lockedTables: unknown[] = [];
 
   const { safeDb, getCallCount } = createScopedDbMock({
-    // Mirrors the handler's own chain: `.select({...}).from(entities)
-    // .where(...).for("update")` — no `.limit()`, matching
-    // handlers/entities/rename.ts's lock-then-guard-in-tx shape.
     select: () => ({
-      from: (table: unknown) => ({
-        where: () => ({
-          for: async (lock: string) => {
-            lockedTables.push(table);
-            expect(lock).toBe("update");
-            return table === entities && task ? [task] : [];
-          },
-        }),
-      }),
+      from: (table: unknown) => {
+        let rows: unknown[] = [];
+        if (table === entities) {
+          rows = task ? [task] : [];
+        } else if (table === workspaces) {
+          rows = [{ organizationId: mintAuthProviderId<"organization">() }];
+        } else if (
+          (table === workspaceMembers || table === member) &&
+          isMember
+        ) {
+          rows = [{ userId: toUserId }];
+        }
+        return {
+          where: (): unknown =>
+            table === member
+              ? Promise.resolve(rows)
+              : {
+                  orderBy: () => ({
+                    limit: () => ({
+                      for: async (lock: string) => {
+                        lockedTables.push(table);
+                        expect(lock).toBe("key share");
+                        return rows;
+                      },
+                    }),
+                  }),
+                  for: async (lock: string) => {
+                    lockedTables.push(table);
+                    expect(lock).toBe(
+                      table === entities ? "update" : "key share",
+                    );
+                    return rows;
+                  },
+                },
+        };
+      },
     }),
     query: {
       workspaceMembers: {
@@ -59,10 +89,10 @@ const createMock = ({
       },
     }),
     insert: (table: unknown) => ({
-      values: (values: Record<string, unknown>) => ({
+      values: (values: Record<string, unknown>[]) => ({
         onConflictDoUpdate: async () => {
           if (table === taskAssignees) {
-            insertedValues.push(values);
+            insertedValues.push(...values);
           }
         },
       }),
@@ -223,7 +253,13 @@ describe("moveAssigneeHandler", () => {
     // run inside ONE transaction — the fix for the two-transaction TOCTOU
     // gap between validating and writing.
     expect(getCallCount()).toBe(1);
-    expect(lockedTables).toEqual([entities]);
+    expect(lockedTables).toEqual([
+      workspaces,
+      workspaceMembers,
+      entities,
+      workspaces,
+      workspaceMembers,
+    ]);
     expect(deletedWhere).toHaveLength(1);
     expect(insertedValues).toEqual([
       expect.objectContaining({

@@ -16,6 +16,8 @@
  *   is covered when its `if:` implies the install step's `if:`: every
  *   top-level `&&` operand of the install condition is an operand of the
  *   step's condition, or is an `||` expression one of whose operands is.
+ *   A guard requiring the install step's successful outcome also covers it,
+ *   including when that install allows failure with `continue-on-error`.
  * - A local composite action's steps are walked in place, and an
  *   unconditional install inside one counts as an install by the step that
  *   uses it. A job that calls a local reusable workflow is walked as that
@@ -460,6 +462,23 @@ type ImpliesConditionOptions = {
   readonly step: readonly string[];
 };
 
+const impliesOperand = (expression: string, operand: string): boolean => {
+  if (expression === operand) {
+    return true;
+  }
+  const alternatives = splitTopLevel(expression, "||");
+  if (alternatives.length > 1) {
+    return alternatives.every((alternative) =>
+      impliesOperand(alternative, operand),
+    );
+  }
+  const conjunction = splitTopLevel(expression, "&&");
+  return (
+    conjunction.length > 1 &&
+    conjunction.some((part) => impliesOperand(part, operand))
+  );
+};
+
 /** Whether a step guarded by `step` runs only when `install` held. */
 export const impliesCondition = ({
   install,
@@ -467,8 +486,10 @@ export const impliesCondition = ({
 }: ImpliesConditionOptions): boolean =>
   install.every(
     (operand) =>
-      step.includes(operand) ||
-      splitTopLevel(operand, "||").some((disjunct) => step.includes(disjunct)),
+      step.some((expression) => impliesOperand(expression, operand)) ||
+      splitTopLevel(operand, "||").some((disjunct) =>
+        step.some((expression) => impliesOperand(expression, disjunct)),
+      ),
   );
 
 // ---------------------------------------------------------------------------
@@ -1345,6 +1366,16 @@ const walkSteps = ({
       step["continue-on-error"] === false
     ) {
       installs.push(...stepInstalls);
+    }
+    // Outcome reflects failure before continue-on-error is applied; conclusion
+    // does not. Only commands already proved to install on every path qualify.
+    if (typeof step["id"] === "string") {
+      for (const { dir } of stepInstalls) {
+        installs.push({
+          condition: [`steps.${step["id"]}.outcome == 'success'`],
+          dir,
+        });
+      }
     }
   }
   return { installs, invocations };

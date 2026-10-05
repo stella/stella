@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments, agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
@@ -14,7 +15,7 @@ import {
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,6 +65,8 @@ const config = {
     "someone with edit rights accepts the proposal, the comments stay " +
     "unresolved, and bundled skills are refused. Consumes AI usage.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

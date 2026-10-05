@@ -6,7 +6,7 @@ import type { CORRESPONDENCE_HANDLING_STATES } from "@stll/api-contract/correspo
 
 import { member } from "@/api/db/auth-schema";
 import { correspondence, workspaceMembers } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -22,6 +22,7 @@ const config = {
   description:
     "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "correspondence",
@@ -145,6 +146,8 @@ const updateCorrespondence = createSafeHandler(
           });
         }
         const {
+          source,
+          sourceEntityId,
           intake,
           originalSignature,
           authenticatedSenderAddress,
@@ -163,6 +166,8 @@ const updateCorrespondence = createSafeHandler(
           record: {
             ...publicRecord,
             ...readCorrespondenceProvenance({
+              source,
+              sourceEntityId,
               intake,
               originalSignature,
               authenticatedSenderAddress,

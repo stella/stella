@@ -1,6 +1,7 @@
 // parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 // parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
 // parser-output-unchanged: fetch entry takes an ID and writes require the claimed snapshot; parsing is unchanged.
+// parser-output-unchanged: the PDF download is read under a byte ceiling; a download within it parses as before.
 /**
  * Fetch and parse the PDFs behind Slovak court decisions.
  *
@@ -46,6 +47,7 @@ import {
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -68,6 +70,10 @@ import {
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import type {
+  ReadOutcome,
+  ReadUnavailableCause,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
@@ -159,13 +165,18 @@ type ClaimedPendingDocument = PendingDocument & {
  * be counted against that publisher's budget. The gate lives in the ingestion
  * slice, which `lib` may not import, so the caller supplies it — required, and
  * never defaulted, because a call site that forgot it would download outside
- * the budget and nothing would say so. `undefined` when the gate refuses the
- * URL as off the publisher's hosts.
+ * the budget and nothing would say so. `refused-target` when the gate refuses
+ * the URL as off the publisher's hosts.
  */
 export type SkDocumentFetch = (
   url: URL,
   init: { signal?: AbortSignal },
-) => Promise<Response | undefined>;
+) => Promise<SkDocumentRead>;
+
+/** What one gated download established. */
+export type SkDocumentRead =
+  | ReadOutcome<Response>
+  | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;
@@ -185,6 +196,8 @@ const DOCUMENT_FETCH_FAILURES = [
   "network",
   /** The download is a PDF the parser could not read. */
   "unparseable",
+  /** The download is larger than {@link MAX_DOCUMENT_PDF_BYTES}. */
+  "too-large",
 ] as const;
 
 export type DocumentFetchFailure = (typeof DOCUMENT_FETCH_FAILURES)[number];
@@ -193,16 +206,33 @@ export const DOCUMENT_FETCH_FAILURE = {
   PUBLISHER_STATUS: DOCUMENT_FETCH_FAILURES[0],
   NETWORK: DOCUMENT_FETCH_FAILURES[1],
   UNPARSEABLE: DOCUMENT_FETCH_FAILURES[2],
+  TOO_LARGE: DOCUMENT_FETCH_FAILURES[3],
 } as const satisfies Record<string, DocumentFetchFailure>;
+
+/**
+ * The most bytes one decision's PDF download may hold. Generous for a court
+ * decision, scanned ones included; a larger body is refused before it is
+ * buffered, and the decision is parked rather than stored without its text.
+ */
+export const MAX_DOCUMENT_PDF_BYTES = 32 * 1024 * 1024;
+
+/** The leading bytes kept of a body over the ceiling, for its type check. */
+const OVERSIZED_PREFIX_BYTES = 1024;
 
 /** What one download produced. */
 export type PdfFetchResult =
   | { type: "document"; bytes: Uint8Array }
   /** The publisher states there is nothing to fetch. */
   | { type: "absent" }
+  /**
+   * The body ran past `limitBytes`; reading stopped there. `prefix` holds its
+   * leading bytes, so a body that is not a PDF is still refused as one; null
+   * where the reader that stopped kept none.
+   */
+  | { type: "too-large"; limitBytes: number; prefix: Uint8Array | null }
   | {
       type: "failed";
-      failure: Exclude<DocumentFetchFailure, "unparseable">;
+      failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
       /** A short tag for telemetry: the status or the error's code. */
       detail: string;
     };
@@ -239,6 +269,33 @@ const brokenBodyDetail = (error: unknown): string | undefined => {
   return undefined;
 };
 
+type CappedBody =
+  | { type: "complete"; bytes: Uint8Array }
+  | { type: "over"; prefix: Uint8Array };
+
+/**
+ * Read a body up to {@link MAX_DOCUMENT_PDF_BYTES}, keeping the leading bytes
+ * of one that runs past it. The leading bytes are copied as they pass, so
+ * nothing is read twice or past the ceiling.
+ */
+const readCappedDocumentBody = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<CappedBody> => {
+  const prefix = new Uint8Array(OVERSIZED_PREFIX_BYTES);
+  let prefixBytes = 0;
+  const bytes = await readCappedBytes(body, MAX_DOCUMENT_PDF_BYTES, (chunk) => {
+    if (prefixBytes >= OVERSIZED_PREFIX_BYTES) {
+      return;
+    }
+    const part = chunk.subarray(0, OVERSIZED_PREFIX_BYTES - prefixBytes);
+    prefix.set(part, prefixBytes);
+    prefixBytes += part.byteLength;
+  });
+  return bytes === null
+    ? { type: "over", prefix: prefix.subarray(0, prefixBytes) }
+    : { type: "complete", bytes };
+};
+
 /**
  * Download one decision's document.
  *
@@ -263,31 +320,87 @@ export const fetchPdfBytes = async ({
     return { type: "absent" };
   }
 
-  const response = await fetchDocument(target, { signal });
-  if (response === undefined) {
-    return { type: "absent" };
+  const read = await fetchDocument(target, { signal });
+  switch (read.type) {
+    case "refused-target":
+    case "absent":
+      return { type: "absent" };
+    case "present":
+      return await servedPdfBytes(read.value);
+    case "refused":
+      return publisherStatusPdf(read.status);
+    case "unavailable":
+      return unavailablePdf(read.cause);
+    default:
+      read satisfies never;
+      return panic(`Unhandled document read: ${String(read)}`);
   }
-  const { ok, status } = response;
-  if (ok) {
-    const body = await Result.tryPromise({
-      try: async () => await response.arrayBuffer(),
-      catch: (error) => error,
-    });
-    if (Result.isOk(body)) {
-      return { type: "document", bytes: new Uint8Array(body.value) };
-    }
-    await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
-    const detail = brokenBodyDetail(body.error);
-    if (detail === undefined) {
-      throw body.error;
-    }
-    return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
+};
+
+/** The body of a served download, capped, or the failure of reading it. */
+const servedPdfBytes = async (response: Response): Promise<PdfFetchResult> => {
+  const body = await Result.tryPromise({
+    try: async (): Promise<CappedBody> =>
+      response.body === null
+        ? { type: "complete", bytes: new Uint8Array() }
+        : await readCappedDocumentBody(response.body),
+    catch: (error) => error,
+  });
+  if (Result.isOk(body)) {
+    return body.value.type === "complete"
+      ? { type: "document", bytes: body.value.bytes }
+      : {
+          type: "too-large",
+          limitBytes: MAX_DOCUMENT_PDF_BYTES,
+          prefix: body.value.prefix,
+        };
   }
-  // Only a response that says the document does not exist proves
-  // unavailability.
-  if (status === 404 || status === 410) {
-    return { type: "absent" };
+  await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
+  const detail = brokenBodyDetail(body.error);
+  if (detail === undefined) {
+    throw body.error;
   }
+  return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
+};
+
+/**
+ * A download that served no document. Only a 404 or 410 proves there is
+ * none, and those arrive as `absent`; an empty 204 is this document's own
+ * failure, and a request that threw is rethrown as it was.
+ */
+const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
+  switch (cause.kind) {
+    case "thrown":
+      throw cause.error instanceof Error
+        ? cause.error
+        : new AdapterFetchError({
+            message: "Document fetch failed",
+            adapterKey: ADAPTER_KEYS.SK_COURTS,
+            cursor: null,
+            cause: cause.error,
+          });
+    case "no-content":
+      return {
+        type: "failed",
+        failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+        detail: `http-${cause.status}`,
+      };
+    case "too-large":
+      return { type: "too-large", limitBytes: cause.maxBytes, prefix: null };
+    case "status":
+    case "empty-body":
+      return publisherStatusPdf(cause.status);
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read cause: ${String(cause)}`);
+  }
+};
+
+/**
+ * A status about this one document is its own failure; any other ends the
+ * walk's batch with the status.
+ */
+const publisherStatusPdf = (status: number): PdfFetchResult => {
   if (isDocumentOwnStatus(status)) {
     return {
       type: "failed",
@@ -1473,6 +1586,26 @@ type ParseFetchedDocumentOptions = {
   scopedDb: ScopedDb;
 };
 
+/**
+ * Throw for a body that is not a PDF: a publisher serving an error page serves
+ * it for every download, so the walk backs off rather than parking each one.
+ */
+const assertPdfBody = (bytes: Uint8Array): void => {
+  if (declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
+    return;
+  }
+  const error = new SkDocumentNonPdfError({
+    message: "Document fetch returned a body that is not a PDF",
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+  });
+  logger.warn(
+    "case_law.ingestion.sk_document_parse_failed",
+    skDocumentErrorDiagnostics(error),
+  );
+  throw error;
+};
+
 type ParseFetchedDocumentResult =
   | { type: "parsed"; document: BackfilledDocument | undefined }
   | { type: "parked"; detail: string }
@@ -1493,18 +1626,7 @@ const parseFetchedDocument = async ({
   decision,
   scopedDb,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
-  if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, bytes)) {
-    const error = new SkDocumentNonPdfError({
-      message: "Document fetch returned a body that is not a PDF",
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: null,
-    });
-    logger.warn(
-      "case_law.ingestion.sk_document_parse_failed",
-      skDocumentErrorDiagnostics(error),
-    );
-    throw error;
-  }
+  assertPdfBody(bytes);
   const parsed = await Result.tryPromise({
     try: async () => await parsePendingDocument(decision, bytes),
     catch: (error) => error,
@@ -1543,6 +1665,71 @@ const runDecisionDocumentFetch = async ({
   });
 };
 
+type SettleFetchedDocumentOptions = {
+  attempts: number;
+  decision: ClaimedPendingDocument;
+  fetched: PdfFetchResult;
+  scopedDb: ScopedDb;
+};
+
+type SettledFetchedDocument =
+  | ParseFetchedDocumentResult
+  /** The download ended the attempt without bytes to parse. */
+  | { type: "settled"; outcome: DecisionDocumentOutcome };
+
+/**
+ * What a download leaves to parse. A PDF over the ceiling parks the decision
+ * at once: asking again returns the same body, and nothing of it is stored.
+ * An oversized body that is not a PDF throws as any non-PDF body does.
+ */
+const settleFetchedDocument = async ({
+  attempts,
+  decision,
+  fetched,
+  scopedDb,
+}: SettleFetchedDocumentOptions): Promise<SettledFetchedDocument> => {
+  switch (fetched.type) {
+    case "document":
+      return await parseFetchedDocument({
+        bytes: fetched.bytes,
+        decision,
+        scopedDb,
+      });
+    case "absent":
+      return { type: "parsed", document: undefined };
+    case "failed": {
+      const { failure, detail } = fetched;
+      return {
+        type: "settled",
+        outcome:
+          attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
+            ? { status: "parked", failure, detail }
+            : { status: "deferred", failure, detail },
+      };
+    }
+    case "too-large": {
+      if (fetched.prefix !== null) {
+        assertPdfBody(fetched.prefix);
+      }
+      const parked = await parkDocumentFetch({ decision, scopedDb });
+      return {
+        type: "settled",
+        outcome:
+          parked === "parked"
+            ? {
+                status: "parked",
+                failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+                detail: `over-${fetched.limitBytes}-bytes`,
+              }
+            : { status: "superseded" },
+      };
+    }
+    default:
+      fetched satisfies never;
+      return panic(`Unhandled document download: ${String(fetched)}`);
+  }
+};
+
 type ProcessClaimedDocumentOptions = {
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
@@ -1565,21 +1752,12 @@ const processClaimedDocument = async ({
       })
     : { type: "absent" };
 
-  if (fetched.type === "failed") {
-    const { failure, detail } = fetched;
-    return claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
-      ? { status: "parked", failure, detail }
-      : { status: "deferred", failure, detail };
-  }
-
-  const parsed: ParseFetchedDocumentResult =
-    fetched.type === "document"
-      ? await parseFetchedDocument({
-          bytes: fetched.bytes,
-          decision,
-          scopedDb,
-        })
-      : { type: "parsed", document: undefined };
+  const parsed = await settleFetchedDocument({
+    attempts: claim.attempts,
+    decision,
+    fetched,
+    scopedDb,
+  });
   switch (parsed.type) {
     case "parsed":
       break;
@@ -1591,6 +1769,8 @@ const processClaimedDocument = async ({
       };
     case "superseded":
       return { status: "superseded" };
+    case "settled":
+      return parsed.outcome;
     default:
       parsed satisfies never;
       return panic(`Unhandled parse result: ${String(parsed)}`);
@@ -1655,6 +1835,8 @@ export const fetchDecisionDocument = async (
               DOCUMENT_FETCH_OUTCOME.http4xx,
             [DOCUMENT_FETCH_FAILURE.NETWORK]: DOCUMENT_FETCH_OUTCOME.connection,
             [DOCUMENT_FETCH_FAILURE.UNPARSEABLE]:
+              DOCUMENT_FETCH_OUTCOME.bodyShape,
+            [DOCUMENT_FETCH_FAILURE.TOO_LARGE]:
               DOCUMENT_FETCH_OUTCOME.bodyShape,
           } as const satisfies Record<
             DocumentFetchFailure,

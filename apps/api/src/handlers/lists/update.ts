@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { LEGAL_LIST_STATUSES, legalLists } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +26,8 @@ const config = {
     "is refused, and a call that changes nothing is a no-op rather than an " +
     "error.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

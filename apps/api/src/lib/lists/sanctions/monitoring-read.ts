@@ -56,6 +56,20 @@ const loadMonitoringClassifier = async (
   };
 };
 
+const invalidCursor = (
+  capability:
+    | "contacts.sanctions.get"
+    | "contacts.sanctions.matches.list"
+    | "contacts.sanctions.events.list",
+) =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      code: "invalid_cursor",
+      message: `Invalid sanctions cursor; call ${capability} without cursor to restart`,
+    }),
+  );
+
 export const readContactSanctions = async (
   tx: Transaction,
   {
@@ -67,7 +81,7 @@ export const readContactSanctions = async (
   }: {
     organizationId: SafeId<"organization">;
     contactId: SafeId<"contact">;
-    cursor?: string;
+    cursor?: string | undefined;
     limit?: number;
     now?: Date;
   },
@@ -228,25 +242,12 @@ export const readContactSanctions = async (
 
 type MonitoringPageOptions = {
   organizationId: SafeId<"organization">;
-  cursor?: string;
+  cursor?: string | undefined;
   limit?: number;
   now?: Date;
 };
 
-const invalidCursor = (
-  capability:
-    | "contacts.sanctions.get"
-    | "contacts.sanctions.matches.list"
-    | "contacts.sanctions.events.list",
-) =>
-  Result.err(
-    new HandlerError({
-      status: 400,
-      code: "invalid_cursor",
-      message: `Invalid sanctions cursor; call ${capability} without cursor to restart`,
-    }),
-  );
-
+// Durable awareness feed only. Delivery and recipient selection are separate.
 export const listOpenSanctionsMatches = async (
   tx: Transaction,
   {
@@ -386,7 +387,6 @@ export const listOpenSanctionsMatches = async (
   );
 };
 
-// Durable awareness feed only. Delivery and recipient selection are separate.
 export const listSanctionsMonitoringEvents = async (
   tx: Transaction,
   {

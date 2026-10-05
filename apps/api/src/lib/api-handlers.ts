@@ -20,12 +20,20 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/auth/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -43,7 +51,14 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
+  getContentDeliveryReceiptError,
+  markContentDeliveryIntent,
+  runWithContentDeliveryScope,
+} from "@/api/lib/files/content-delivery";
+import type { ContentDelivery } from "@/api/lib/files/content-delivery";
+import {
   causeChainAttributes,
+  failureSink,
   identityFields,
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
@@ -55,6 +70,7 @@ import {
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
@@ -65,6 +81,13 @@ import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
+import {
+  announceResourceSetUpdates,
+  isSuccessfulHandlerResult,
+  type NoResourceSetUpdates,
+  type OrganizationResourceSetUpdates,
+  type ResourceSetRealtime,
+} from "@/api/lib/resource-set-realtime";
 import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
@@ -91,8 +114,6 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
-
-export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
@@ -147,7 +168,7 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
  */
-export type McpCapabilityReason =
+type McpCapabilityReason =
   | "template_authoring_ui"
   | "workspace_schema"
   | "knowledge_library_admin"
@@ -213,7 +234,7 @@ export type McpCapabilityReason =
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
  */
-export type McpInternalReason =
+type McpInternalReason =
   | "auth_plumbing"
   | "upload_mechanics"
   | "realtime_stream"
@@ -371,17 +392,29 @@ type CapabilityTransportDisposition = {
   transport?: CapabilityTransport;
 };
 
+type ContentDeliveryDisposition = {
+  contentDelivery?: ContentDelivery;
+};
+
 export type HandlerConfig = InputSchema &
   CapabilityDescription &
+  ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
-    accountAccess?: "standard";
+    accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
+    /**
+     * Resource sets a successful call announces to open tabs. The wrapper
+     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * see `lib/resource-set-realtime.ts`.
+     */
+    realtime?: ResourceSetRealtime;
     mcp: McpExposure;
   };
 
@@ -398,19 +431,58 @@ type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
 
 export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
+/**
+ * Factories without an organization-scoped caller run no account check, so
+ * their handlers admit the demo account and can only declare `sandbox`.
+ */
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
+
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;
+
+type SandboxAccountAccess = {
+  accountAccess: typeof ACCOUNT_ACCESS.sandbox;
+};
+
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
+  ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    accountAccess: AccountAccess;
     mcp: McpExposure;
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp" | "description" | "access" | "transport">
+  Omit<
+    TConfig,
+    | "permissions"
+    | "mcp"
+    | "description"
+    | "access"
+    | "contentDelivery"
+    | "transport"
+    | "realtime"
+  >
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access" | "transport">>;
+  UnwrapRoute<
+    Omit<
+      TConfig,
+      "mcp" | "description" | "access" | "contentDelivery" | "transport"
+    >
+  >;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
@@ -430,6 +502,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     session: {
       activeOrganizationId: SafeId<"organization">;
     };
+    featureAccessSnapshot?: FeatureAccessSnapshot;
+    featureAccessProof?: FeatureAccessProof;
     scopedDb: ScopedDb;
     safeDb: SafeDb;
     /** Resolve non-deleting workspace IDs only when an operation spans matters. */
@@ -553,7 +627,7 @@ type SafeErrorBody = {
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
-export const safeHandlerErrorResponseSchema = t.Object(
+const safeHandlerErrorResponseSchema = t.Object(
   {
     message: t.String(),
     code: t.Optional(t.String()),
@@ -749,7 +823,7 @@ type RunSafeHandlerWithOptions<
   toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
 };
 
-const runSafeHandlerWith = async <
+const runSafeHandlerInDeliveryScope = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
   TErrorStatus,
@@ -764,6 +838,36 @@ const runSafeHandlerWith = async <
     const result = await Result.gen(() => handler(ctx));
 
     if (Result.isOk(result)) {
+      const response = result.value;
+      const responseSet: unknown = Reflect.get(ctx, "set");
+      const headers: unknown =
+        typeof responseSet === "object" && responseSet !== null
+          ? Reflect.get(responseSet, "headers")
+          : undefined;
+      let disposition: unknown;
+      if (headers instanceof Headers) {
+        disposition = headers.get("Content-Disposition");
+      } else if (typeof headers === "object" && headers !== null) {
+        disposition = Object.entries(headers)
+          .find(([key]) => key.toLowerCase() === "content-disposition")
+          ?.at(1);
+      }
+      if (
+        (response instanceof Response &&
+          response.ok &&
+          response.body !== null) ||
+        response instanceof ArrayBuffer ||
+        ArrayBuffer.isView(response) ||
+        response instanceof Blob ||
+        response instanceof ReadableStream ||
+        (disposition !== undefined && disposition !== null)
+      ) {
+        markContentDeliveryIntent();
+      }
+      const deliveryError = getContentDeliveryReceiptError();
+      if (deliveryError) {
+        throw deliveryError;
+      }
       return result.value;
     }
 
@@ -870,16 +974,44 @@ const runSafeHandlerWith = async <
   }
 };
 
+const runSafeHandlerWith = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+  TErrorStatus,
+>({
+  contentDelivery,
+  ...options
+}: RunSafeHandlerWithOptions<TContext, TResult, TErrorStatus> & {
+  contentDelivery: ContentDelivery | undefined;
+}): Promise<TResult | TErrorStatus> =>
+  await runWithContentDeliveryScope(
+    contentDelivery,
+    async () => await runSafeHandlerInDeliveryScope(options),
+  );
+
+type RunSafeHandlerOptions<
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+> = {
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  contentDelivery: ContentDelivery | undefined;
+};
+
 const runSafeHandler = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
->(
-  ctx: TContext,
-  handler: SafeHandlerFn<TContext, TResult>,
-): Promise<SafeHandlerResult<TResult>> =>
+>({
+  ctx,
+  handler,
+  contentDelivery,
+}: RunSafeHandlerOptions<TContext, TResult>): Promise<
+  SafeHandlerResult<TResult>
+> =>
   await runSafeHandlerWith({
     ctx,
     handler,
+    contentDelivery,
     toErrorStatus: toSafeStatusResponse,
   });
 
@@ -996,12 +1128,6 @@ export const admitFiniteAction = async function* <
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-    !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")
-  ) {
-    return yield* handler(ctx);
-  }
   return yield* runAdmittedFiniteHandler({
     actionKind,
     ctx,
@@ -1013,7 +1139,13 @@ export const admitFiniteAction = async function* <
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkDemoAccountOperation;
+  announce?: typeof announceResourceSetUpdates;
 };
+
+const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
+  event: "resource-set-realtime.announce",
+  expected: [],
+});
 
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
@@ -1025,6 +1157,7 @@ const createSafeScopedHandler = <
   {
     admit = withActionAdmission,
     checkAccountOperation = checkDemoAccountOperation,
+    announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
@@ -1037,7 +1170,85 @@ const createSafeScopedHandler = <
       });
     }
 
-    if (requiresStandardAccount(config.permissions, config.accountAccess)) {
+    const featureAccess = config.featureAccess;
+    if (featureAccess !== undefined) {
+      const principal = {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      };
+      const snapshot =
+        ctx.featureAccessSnapshot === undefined ||
+        !isFeatureAccessSnapshotForPrincipal(
+          ctx.featureAccessSnapshot,
+          principal,
+        )
+          ? await ctx.safeDb(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                }),
+            )
+          : Result.ok(ctx.featureAccessSnapshot);
+      if (Result.isError(snapshot)) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler() {
+            return yield* Result.await(
+              Promise.resolve(Result.err(snapshot.error)),
+            );
+          },
+        });
+      }
+      ctx.featureAccessSnapshot = snapshot.value;
+      delete ctx.featureAccessProof;
+      const enabled = isFeatureEnabled(
+        snapshot.value,
+        featureAccess.featureId,
+        principal,
+      );
+      const decision = snapshot.value.decisions.get(featureAccess.featureId);
+      if (enabled && decision?.status === "enabled") {
+        ctx.featureAccessProof = decision.proof;
+      }
+      if (!enabled) {
+        const usage =
+          featureAccess.type === "required"
+            ? Result.ok(true)
+            : await Result.tryPromise(
+                async () =>
+                  await featureAccess.usesFeature({
+                    body: ctx.body,
+                    params: ctx.params,
+                    query: ctx.query,
+                    organizationId: ctx.session.activeOrganizationId,
+                    scopedDb: ctx.scopedDb,
+                    safeDb: ctx.safeDb,
+                    ...(hasWorkspaceId(ctx)
+                      ? { workspaceId: ctx.workspaceId }
+                      : {}),
+                  }),
+              );
+        if (Result.isError(usage)) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(usage.error)),
+              );
+            },
+          });
+        }
+        if (usage.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+      }
+    }
+
+    if (requiresStandardAccount(config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {
@@ -1082,22 +1293,41 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
+    const result = await runSafeHandler({
+      ctx,
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (input) =>
+              runAdmittedFiniteHandler({
+                ctx: input,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+    // The transaction has settled; realtime delivery cannot change its result.
     if (
-      admission === undefined ||
-      (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS"))
+      config.realtime !== undefined &&
+      config.realtime.scope !== "none" &&
+      isSuccessfulHandlerResult(result)
     ) {
-      return await runSafeHandler(ctx, handler);
+      const announcement = Result.try(() =>
+        announce({
+          realtime: config.realtime,
+          result,
+          organizationId: ctx.session.activeOrganizationId,
+          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+        }),
+      );
+      if (Result.isError(announcement)) {
+        observeFailure(announcement.error, {
+          sink: REALTIME_ANNOUNCEMENT_FAILURE,
+        });
+      }
     }
-
-    return await runSafeHandler(ctx, (input) =>
-      runAdmittedFiniteHandler({
-        ctx: input,
-        handler,
-        admit,
-        actionKind: admission.actionKind,
-      }),
-    );
+    return result;
   },
 });
 
@@ -1346,7 +1576,7 @@ export const assertUsageAvailableForHandler = async ({
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
  */
-export const RUN_CONFIRMATION_UNITS = 50;
+const RUN_CONFIRMATION_UNITS = 50;
 
 type RunSizePreflightInput = UsagePreflightInput & {
   /** Units the initiator expects the whole run to consume. */
@@ -1441,7 +1671,7 @@ export const assertRunSizeConfirmedForHandler = async ({
 };
 
 const createSafeDirectHandler = <
-  TConfig extends InputSchema,
+  TConfig extends InputSchema & ContentDeliveryDisposition,
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
 >(
@@ -1450,7 +1680,11 @@ const createSafeDirectHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
-    await runSafeHandler(ctx, handler),
+    await runSafeHandler({
+      ctx,
+      handler,
+      contentDelivery: config.contentDelivery,
+    }),
 });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
@@ -1477,8 +1711,16 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.requiredFields ? { requiredFields: error.requiredFields } : {}),
 });
 
+/**
+ * A root handler has no validated matter, so it can only announce
+ * organization-wide resource sets.
+ */
+type RootHandlerConfig = HandlerConfig & {
+  realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
+};
+
 export const createSafeRootHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
@@ -1495,26 +1737,35 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, (ctx) => {
-    // Elysia may expand validateAuth again after validateWorkspaceAccess when a
-    // route also declares permissions. That later resolve carries the root
-    // recorder and can overwrite the recorder bound by the workspace macro.
-    // Rebind here, where the context type proves workspaceId was validated, so
-    // workspace mutations cannot emit organization-only audit rows regardless
-    // of macro composition order.
-    // Direct unit tests below the Elysia boundary may intentionally use a
-    // minimal raw context. Real WorkspaceHandlerContext values always carry
-    // this factory; keep those fixture-only omissions from changing handler
-    // behavior while still rebinding every framework-produced request.
-    const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
-    if (typeof recorderFactory === "function") {
-      ctx.recordAuditEvent = ctx.createAuditRecorder({
-        workspaceId: ctx.workspaceId,
-      });
-    }
-    return handler(ctx);
-  });
+  createSafeScopedHandler(
+    config,
+    (ctx) => {
+      // Elysia may expand validateAuth again after validateWorkspaceAccess when a
+      // route also declares permissions. That later resolve carries the root
+      // recorder and can overwrite the recorder bound by the workspace macro.
+      // Rebind here, where the context type proves workspaceId was validated, so
+      // workspace mutations cannot emit organization-only audit rows regardless
+      // of macro composition order.
+      // Direct unit tests below the Elysia boundary may intentionally use a
+      // minimal raw context. Real WorkspaceHandlerContext values always carry
+      // this factory; keep those fixture-only omissions from changing handler
+      // behavior while still rebinding every framework-produced request.
+      const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
+      if (typeof recorderFactory === "function") {
+        ctx.recordAuditEvent = ctx.createAuditRecorder({
+          workspaceId: ctx.workspaceId,
+        });
+      }
+      return handler(ctx);
+    },
+    dependencies,
+  );
+
+type SessionHandlerDependencies = {
+  checkAccountOperation?: typeof checkDemoAccountOperation;
+};
 
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,
@@ -1522,8 +1773,28 @@ export const createSafeSessionHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+  {
+    checkAccountOperation = checkDemoAccountOperation,
+  }: SessionHandlerDependencies = {},
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
+    if (requiresStandardAccount(config.accountAccess)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
+    return await runSafeHandler({
+      ctx,
+      handler,
+      contentDelivery: config.contentDelivery,
+    });
+  },
+});
 
 /**
  * Config for self-authorizing (token) routes. The `body`, `query`, and
@@ -1539,7 +1810,9 @@ export type TokenHandlerConfig = Omit<
   "body" | "query" | "params"
 > &
   CapabilityDescription &
-  CapabilityAccess & {
+  ContentDeliveryDisposition &
+  CapabilityAccess &
+  SandboxAccountAccess & {
     body?: AnyPermissiveRouteSchema;
     query?: AnyPermissiveRouteSchema;
     params?: AnyPermissiveRouteSchema;
@@ -1548,7 +1821,11 @@ export type TokenHandlerConfig = Omit<
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
+> = Context<
+  UnwrapRoute<
+    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+  >
+>;
 
 /**
  * Like `createSafeSessionHandler`, but the framework does not
@@ -1569,14 +1846,20 @@ export const createSafeTokenHandler = <
 
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  ContentDeliveryDisposition &
+  CapabilityAccess &
+  SandboxAccountAccess & {
     cache: CachePolicy;
     mcp: McpExposure;
   };
 
 export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
+> = Context<
+  UnwrapRoute<
+    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+  >
+>;
 
 /**
  * Handlers this factory produced. A public route census asserts that every
@@ -1628,7 +1911,11 @@ export const createSafePublicHandler = <
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const response = await runSafeHandler(ctx, handler);
+      const response = await runSafeHandler({
+        ctx,
+        handler,
+        contentDelivery: config.contentDelivery,
+      });
       applyResponseCachePolicy({
         cache: config.cache,
         response,
@@ -1708,6 +1995,7 @@ export const createSafeUncheckedBoundedPublicHandler = <
       const result = await runSafeHandlerWith({
         ctx,
         handler,
+        contentDelivery: config.contentDelivery,
         toErrorStatus: toBoundedPublicErrorStatus,
       });
       const response =

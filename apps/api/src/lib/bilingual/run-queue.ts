@@ -53,6 +53,7 @@ import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buff
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -124,7 +125,7 @@ export const enqueueBilingualRun = async (
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
-export const reconcileStuckBilingualRuns = async (
+const reconcileStuckBilingualRuns = async (
   db: Pick<typeof rootDb, "update">,
 ): Promise<number> => {
   const runningCutoff = new Date(
@@ -306,7 +307,7 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 // Execution
 // ----------------------------------------------------------------------------
 
-export type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
+type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
 const brandActor = (data: BilingualRunJobData): RunActor =>
@@ -637,6 +638,7 @@ const executeRun = async (
     buffer: applied.value.buffer,
     fileName: loaded.value.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: serverBuiltFileEncryption(),
     source: null,
     writePolicy: {
       type: "automatic-docx-edit",

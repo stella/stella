@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
+import { abortTransaction, abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondence,
@@ -17,17 +18,18 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
@@ -40,8 +42,11 @@ const config = {
     "matter's last member, when a timer of theirs is still running, or when " +
     "they own more work obligations than one call may unassign at once.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "covered", by: "manage_organization" },
   params: workspaceParams({ userId: tUserId }),
+  body: t.Optional(t.Object({ reassign_to: t.Optional(tUserId) })),
 } satisfies WorkspaceHandlerConfig;
 
 export type RemoveWorkspaceMemberProps = {
@@ -49,6 +54,7 @@ export type RemoveWorkspaceMemberProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
+  reassignTo?: SafeId<"user"> | undefined;
   recordAuditEvent: AuditRecorder;
   dependencies?: RemoveWorkspaceMemberDependencies | undefined;
 };
@@ -97,6 +103,115 @@ const readMemberWorkToUnassign = ({
     .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
     .for("update");
 
+type RemovedMemberAuditEventsOptions = {
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  deletedId: SafeId<"workspaceMember">;
+  closedSessionCount: number;
+  leadWasCleared: boolean;
+  ownedWork: Awaited<ReturnType<typeof readMemberWorkToUnassign>>;
+  nextOwnerUserId: SafeId<"user"> | null;
+  nextWorkStatus:
+    | typeof WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+    | typeof WORK_OBLIGATION_STATUS.UNASSIGNED;
+};
+
+const removedMemberAuditEvents = ({
+  workspaceId,
+  userId,
+  deletedId,
+  closedSessionCount,
+  leadWasCleared,
+  ownedWork,
+  nextOwnerUserId,
+  nextWorkStatus,
+}: RemovedMemberAuditEventsOptions) => {
+  const auditEvents: AuditEvent[] = [
+    {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+      resourceId: deletedId,
+      changes: {
+        deleted: {
+          old: { userId, workspaceId },
+          new: null,
+        },
+      },
+      metadata: {
+        closedDesktopEditSessions: closedSessionCount,
+        unassignedWorkObligations: ownedWork.length,
+        correspondenceAssignmentDisposition: "cleared",
+      },
+    },
+  ];
+
+  for (const work of ownedWork) {
+    auditEvents.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+      resourceId: work.entityId,
+      changes: {
+        ownerUserId: { old: userId, new: nextOwnerUserId },
+        status: {
+          old: work.status,
+          new: nextWorkStatus,
+        },
+      },
+      metadata: { cause: "owner_removed_from_workspace" },
+    });
+  }
+
+  if (leadWasCleared) {
+    auditEvents.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+      resourceId: workspaceId,
+      changes: {
+        leadUserId: {
+          old: userId,
+          new: null,
+        },
+      },
+    });
+  }
+  return auditEvents;
+};
+
+type RemovedMemberWorkEventsOptions = {
+  ownedWork: Awaited<ReturnType<typeof readMemberWorkToUnassign>>;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
+  nextOwnerUserId: SafeId<"user"> | null;
+  now: Date;
+};
+
+const removedMemberWorkEvents = ({
+  ownedWork,
+  workspaceId,
+  userId,
+  actorUserId,
+  nextOwnerUserId,
+  now,
+}: RemovedMemberWorkEventsOptions) =>
+  ownedWork.map(
+    ({ entityId }) =>
+      ({
+        id: createSafeId<"workObligationEvent">(),
+        workspaceId,
+        obligationEntityId: entityId,
+        actorUserId,
+        type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+        details: {
+          type: "ownership_changed",
+          previousOwnerUserId: userId,
+          nextOwnerUserId,
+          cause: "owner_removed_from_workspace",
+        },
+        occurredAt: now,
+      }) as const satisfies typeof workObligationEvents.$inferInsert,
+  );
+
 // Shared remove-member logic reused by the HTTP handler and the
 // `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
 // clear, desktop-edit session cancel, audit events) and the in-process SSE
@@ -107,6 +222,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   workspaceId,
   userId,
   actorUserId,
+  reassignTo,
   recordAuditEvent,
   dependencies = defaultRemoveWorkspaceMemberDependencies,
 }: RemoveWorkspaceMemberProps) {
@@ -155,6 +271,19 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
+      if (
+        reassignTo &&
+        (reassignTo === userId ||
+          !lockedRows.some((row) => row.userId === reassignTo))
+      ) {
+        abortTransaction(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this workspace",
+          }),
+        );
+      }
+
       const activeTimers = await tx
         .select({ id: timeEntries.id })
         .from(timeEntries)
@@ -189,6 +318,15 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
+      await clearMemberAssignments({
+        tx,
+        scope: { type: "workspace", workspaceId },
+        userId,
+        actorUserId,
+        reassignTo,
+        recordAuditEvent,
+      });
+
       const deleteResult = await tx
         .delete(workspaceMembers)
         .where(
@@ -214,6 +352,10 @@ export const removeWorkspaceMemberHandler = async function* ({
           ),
         );
 
+      const nextOwnerUserId = reassignTo ?? null;
+      const nextWorkStatus = reassignTo
+        ? WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+        : WORK_OBLIGATION_STATUS.UNASSIGNED;
       if (ownedWork.length > 0) {
         const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
         const now = new Date();
@@ -221,8 +363,8 @@ export const removeWorkspaceMemberHandler = async function* ({
         await tx
           .update(workObligations)
           .set({
-            ownerUserId: null,
-            status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            ownerUserId: nextOwnerUserId,
+            status: nextWorkStatus,
             acknowledgedAt: null,
             acknowledgedByUserId: null,
             updatedAt: now,
@@ -239,25 +381,16 @@ export const removeWorkspaceMemberHandler = async function* ({
             ),
           );
 
-        const unassignmentEvents: (typeof workObligationEvents.$inferInsert)[] =
-          [];
-        for (const { entityId } of ownedWork) {
-          unassignmentEvents.push({
-            id: createSafeId<"workObligationEvent">(),
+        await tx.insert(workObligationEvents).values(
+          removedMemberWorkEvents({
+            ownedWork,
             workspaceId,
-            obligationEntityId: entityId,
+            userId,
             actorUserId,
-            type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
-            details: {
-              type: "ownership_changed",
-              previousOwnerUserId: userId,
-              nextOwnerUserId: null,
-              cause: "owner_removed_from_workspace",
-            },
-            occurredAt: now,
-          });
-        }
-        await tx.insert(workObligationEvents).values(unassignmentEvents);
+            nextOwnerUserId,
+            now,
+          }),
+        );
       }
 
       const leadWasCleared = workspace.leadUserId === userId;
@@ -280,55 +413,19 @@ export const removeWorkspaceMemberHandler = async function* ({
         )
         .returning({ id: desktopEditSessions.id });
 
-      const auditEvents: AuditEvent[] = [
-        {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-          resourceId: deleted.id,
-          changes: {
-            deleted: {
-              old: { userId, workspaceId },
-              new: null,
-            },
-          },
-          metadata: {
-            closedDesktopEditSessions: closedSessions.length,
-            unassignedWorkObligations: ownedWork.length,
-            correspondenceAssignmentDisposition: "cleared",
-          },
-        },
-      ];
-
-      for (const work of ownedWork) {
-        auditEvents.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          resourceId: work.entityId,
-          changes: {
-            ownerUserId: { old: userId, new: null },
-            status: {
-              old: work.status,
-              new: WORK_OBLIGATION_STATUS.UNASSIGNED,
-            },
-          },
-          metadata: { cause: "owner_removed_from_workspace" },
-        });
-      }
-      await recordAuditEvent(tx, auditEvents);
-
-      if (leadWasCleared) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            leadUserId: {
-              old: userId,
-              new: null,
-            },
-          },
-        });
-      }
+      await recordAuditEvent(
+        tx,
+        removedMemberAuditEvents({
+          workspaceId,
+          userId,
+          deletedId: deleted.id,
+          closedSessionCount: closedSessions.length,
+          leadWasCleared,
+          ownedWork,
+          nextOwnerUserId,
+          nextWorkStatus,
+        }),
+      );
 
       return {
         id: deleted.id,
@@ -366,15 +463,19 @@ export const createRemoveWorkspaceMember = (
       safeDb,
       workspaceId,
       params: { userId },
+      body,
       user,
       recordAuditEvent,
     }) {
-      yield* checkDemoAccountOperation(user.email);
       return yield* removeWorkspaceMemberHandler({
         safeDb,
         workspaceId,
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,
+        reassignTo:
+          body?.reassign_to === undefined
+            ? undefined
+            : brandPersistedUserId(body.reassign_to),
         recordAuditEvent,
         dependencies,
       });

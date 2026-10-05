@@ -1,11 +1,14 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { playbookRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
+import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -25,9 +28,12 @@ const config = {
     "present among the matter's classified documents. Each playbook pins its " +
     "own latest approved version and opens its own per-document runs; a " +
     "playbook that hits a limit is skipped while the rest continue. Returns " +
+    "typed per-playbook refusals (code, status, message, hint, retryable), " +
     "how many playbooks ran, how many columns were materialized, and how " +
     "many document runs opened. Use playbooks.run for a single playbook.",
   permissions: { playbook: ["apply"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: playbookRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",
@@ -47,8 +53,8 @@ const config = {
 // The table is the point here, so every playbook runs projected onto it. Each
 // stays gated to its own subset via `openPlaybookRun`, which pins the same
 // approved snapshot a single run pins and opens the same durable per-document
-// runs; a per-playbook failure (e.g. the properties cap) skips that one and the
-// batch continues.
+// runs; limits skip that playbook, while policy and configuration refusals
+// remain visible in the batch response.
 type AutoRunDependencies = {
   loadLatestApprovedVersions: typeof loadLatestApprovedVersions;
   openPlaybookRun: typeof openPlaybookRun;
@@ -61,6 +67,14 @@ const DEFAULT_AUTO_RUN_DEPENDENCIES: AutoRunDependencies = {
   openPlaybookRun,
   resolveApplicablePlaybooks,
   startWorkflow,
+};
+
+type AutoRunPlaybookRefusal = Exclude<
+  Extract<OpenPlaybookRunResult, { ok: false }>,
+  { code: typeof PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT }
+> & {
+  playbookId: SafeId<"playbookDefinition">;
+  playbookName: string;
 };
 
 export const createAutoRunPlaybooks = (
@@ -108,6 +122,7 @@ export const createAutoRunPlaybooks = (
             });
 
           const materializedPropertyIds: SafeId<"property">[] = [];
+          const refusals: AutoRunPlaybookRefusal[] = [];
           let playbooksRun = 0;
           let documentRunCount = 0;
 
@@ -124,9 +139,25 @@ export const createAutoRunPlaybooks = (
               projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
               recordAuditEvent,
             });
-            // Skip a playbook that hit a per-run limit; the rest of the batch
-            // still materializes rather than failing the whole auto-run.
-            if (!opened.ok || opened.materializedPropertyIds.length === 0) {
+            if (!opened.ok) {
+              switch (opened.code) {
+                case PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT:
+                  continue;
+                case PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED:
+                case PLAYBOOK_RUN_FAILURE_CODE.FILE_PROPERTY_TYPE_IMMUTABLE:
+                  refusals.push({
+                    ...opened,
+                    playbookId: definition.id,
+                    playbookName: definition.name,
+                  });
+                  continue;
+                default: {
+                  opened satisfies never;
+                  panic("Unhandled playbook run refusal", opened);
+                }
+              }
+            }
+            if (opened.materializedPropertyIds.length === 0) {
               continue;
             }
             materializedPropertyIds.push(...opened.materializedPropertyIds);
@@ -134,7 +165,12 @@ export const createAutoRunPlaybooks = (
             playbooksRun += 1;
           }
 
-          return { playbooksRun, materializedPropertyIds, documentRunCount };
+          return {
+            playbooksRun,
+            materializedPropertyIds,
+            documentRunCount,
+            refusals,
+          };
         }),
       );
 
@@ -143,6 +179,7 @@ export const createAutoRunPlaybooks = (
           playbooksRun: 0,
           runPropertyCount: 0,
           documentRunCount: 0,
+          refusals: txResult.refusals,
         });
       }
 
@@ -185,6 +222,7 @@ export const createAutoRunPlaybooks = (
         playbooksRun: txResult.playbooksRun,
         runPropertyCount: txResult.materializedPropertyIds.length,
         documentRunCount: txResult.documentRunCount,
+        refusals: txResult.refusals,
       });
     },
   );

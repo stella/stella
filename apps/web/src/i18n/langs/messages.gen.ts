@@ -548,6 +548,7 @@ type Messages = {
     "numberSeries": {
       "add": "Add number series";
       "advance": "Advance";
+      "allSellers": "All sellers";
       "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
       "creditNote": "Credit note";
       "default": "Default series";
@@ -565,6 +566,9 @@ type Messages = {
       "preview": "Next number";
       "previewAllocated": "This number is already allocated.";
       "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "sellerProfile": "Seller profile";
+      "sellerUnavailable": "Seller archived or unavailable";
+      "sellerUnavailableHelp": "This seller is archived or unavailable. Keep the assignment or select another seller.";
       "setDefault": "Make default series";
       "title": "Number series";
     };
@@ -979,7 +983,6 @@ type Messages = {
     "packPartial": "Installed {installed}, {failed} failed";
     "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
-    "sectionRecommended": "Recommended";
     "settings": {
       "packTitle": "Recommended pack";
     };
@@ -1168,6 +1171,7 @@ type Messages = {
       "noSkills": "No skills yet";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
+      "skillEditedBy": "Edited by {name} · {time}";
       "skills": "Skills";
     };
     "loadEarlierMessages": "Load earlier messages";
@@ -1186,8 +1190,10 @@ type Messages = {
       "label": "Mock AI";
     };
     "modelSelector": {
+      "allModels": "All models ({count, number})";
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";
+      "belowFrontier": "Below the best trade-offs";
       "effortHelpDescription": "Controls how much reasoning the model uses before answering. Higher levels can help with complex work but usually take longer. The dot marks the provider's default for this model.";
       "effortHelpLabel": "About reasoning effort";
       "effortLabel": "Reasoning effort";
@@ -1201,6 +1207,10 @@ type Messages = {
         "providerDefault": "Default";
         "xhigh": "Extra high";
       };
+      "newModel": "New";
+      "premiumCost": "Unusually high cost";
+      "recommendedHelpDescription": "No other model you can use is both cheaper and rated higher. Models too new to be rated are marked New. Quality: <link>{benchmark} by LMArena</link> ({licence}); cost: list prices.";
+      "recommendedHelpLabel": "About recommended models";
       "selectionLabel": "{model} | {effort}";
       "title": "Select chat model";
       "viaProvider": "via {provider}";
@@ -1299,6 +1309,9 @@ type Messages = {
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
+    "threadFiles": {
+      "title": "Files in this chat";
+    };
     "tool": {
       "add_comment": "Adding comment";
       "apply-active-docx-edits": "Preparing document edits";
@@ -1485,6 +1498,7 @@ type Messages = {
     "noResults": "No clauses yet";
     "noVariants": "No variants";
     "outdatedVersion": "Update available";
+    "overrideNotRenderedWarning": "The override for clause {clauseName} was not used: its slot does not appear in this document.";
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
@@ -1611,6 +1625,16 @@ type Messages = {
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
+    "datePicker": {
+      "label": "Date picker";
+      "nextDecade": "Next decade";
+      "nextMonth": "Next month";
+      "nextYear": "Next year";
+      "previousDecade": "Previous decade";
+      "previousMonth": "Previous month";
+      "previousYear": "Previous year";
+      "time": "Time";
+    };
     "decisions": "Decisions";
     "decline": "Decline";
     "delete": "Delete";
@@ -1771,6 +1795,7 @@ type Messages = {
     "properties": "Properties";
     "queued": "Queued";
     "reason": "Reason";
+    "recommended": "Recommended";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1896,6 +1921,7 @@ type Messages = {
       "addBankAccount": "Add bank account";
       "noBillingData": "No billing details set.";
       "removeBankAccount": "Remove bank account";
+      "selectCurrencyForRate": "Select a currency to set an hourly rate.";
       "title": "Billing details";
     };
     "columns": {
@@ -2135,6 +2161,7 @@ type Messages = {
     "markHandled": "Mark handled";
     "markNew": "Mark new";
     "noAddress": "No email address is active.";
+    "openSourceFile": "Open email file";
     "originalSender": "Original sender";
     "originalSenderUnverified": "Original sender (as stated, not verified)";
     "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
@@ -2143,11 +2170,14 @@ type Messages = {
     "rotateAddress": "Rotate address";
     "sentAt": "Sent on";
     "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "statedInFile": "Headers (as stated in the file)";
     "states": {
       "handled": "Handled";
     };
     "title": "Correspondence";
     "unknownApprover": "Unknown approver";
+    "uploadedBy": "Uploaded by {name}";
+    "uploadedFile": "Uploaded email file";
   };
   "docxReview": {
     "acceptAll": "Accept all";
@@ -2265,10 +2295,14 @@ type Messages = {
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
+      "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
+      "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.";
+      "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.";
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
@@ -3451,6 +3485,7 @@ type Messages = {
         "approvedOn": "Approved {date}";
         "approvedToast": "Playbook approved";
         "saveBeforeApprove": "Save changes before approving this playbook.";
+        "sourcesNotice": "Before approving, check that no position names a document, a matter, or a counterparty: the whole organization can read this playbook.";
         "statusApproved": "Approved";
         "statusDraft": "Draft";
       };
@@ -3549,6 +3584,7 @@ type Messages = {
       "referenceStandard": "From the reference";
       "removeCheck": "Remove check";
       "removeIdeal": "Remove ideal language";
+      "removeSource": "Remove source {documentName}";
       "reorderPosition": "Reorder position";
       "review": {
         "changePlaybook": "Choose another playbook";
@@ -3580,6 +3616,10 @@ type Messages = {
         "blocker": "Blocker";
       };
       "severityLabel": "Severity";
+      "staleCopy": {
+        "loaded": "A newer version of this playbook has loaded. Reload before editing.";
+        "unavailable": "The latest version of this playbook could not be loaded. This is the last loaded copy and may be out of date.";
+      };
       "starters": {
         "addedToast": "Playbook added";
         "browseButton": "Browse starter playbooks";
@@ -4280,6 +4320,7 @@ type Messages = {
       "deleteAccountTaskReassignPlaceholder": "Select a member...";
       "deleteAccountTasksDescription": "You have active tasks assigned to you. Transfer them to other workspace members to keep work moving.";
       "deleteAccountTasksTitle": "Transfer active tasks";
+      "deleteAccountTasksUnassignedNotice": "Tasks without a selected member will stay in their workspace with no assignee.";
       "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.";
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
@@ -4829,6 +4870,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiConditionsUndecided": "AI could not decide these conditions, so their sections were filled as if they do not apply: {list}";
     "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
@@ -4920,6 +4962,7 @@ type Messages = {
     "directiveFor": "Loop: {expression}";
     "directiveIf": "If: {expression}";
     "discoveryFailed": "Failed to analyze template";
+    "documentCreatedIncomplete": "Document created, but the fill is incomplete";
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
@@ -5015,6 +5058,7 @@ type Messages = {
     "saveFailed": "Failed to save template";
     "savedLookupFormats": "Saved output formats";
     "searchTemplates": "Search templates…";
+    "structureErrorsInDocument": "Template directives that could not be applied: {count}. Check the document.";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {

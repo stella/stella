@@ -69,8 +69,11 @@ import {
   type NamedCondition,
   resolvePath,
   scanMarkers,
+  clauseSlotKey,
 } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
+
+import { isRecord } from "@/api/lib/type-guards";
 
 import {
   collectNumKeysInText,
@@ -78,6 +81,7 @@ import {
   type DirectiveProcessingContext,
   eachKey,
   registerLoopItemPatchValues,
+  loopContext,
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
 } from "./block-directives";
@@ -378,6 +382,7 @@ export const processInlineConditions = (
             expansionId: processingContext.nextEachExpansionId(),
             group,
             paragraph,
+            processingContext,
           });
           continue;
         }
@@ -444,6 +449,7 @@ type ApplyInlineEachOptions = {
   expansionId: number;
   group: InlineEachGroup;
   paragraph: slimdom.Element;
+  processingContext: DirectiveProcessingContext;
 };
 
 const applyInlineEach = ({
@@ -451,6 +457,7 @@ const applyInlineEach = ({
   expansionId,
   group,
   paragraph,
+  processingContext,
 }: ApplyInlineEachOptions): void => {
   const arrayData = resolvePath(group.arrayPath, data);
   const items: unknown[] = Array.isArray(arrayData) ? arrayData : [];
@@ -487,8 +494,47 @@ const applyInlineEach = ({
     const itemValues: Record<string, RichPatchValue> = {};
     registerLoopItemPatchValues(itemValues, item, group.arrayPath, itemIdx);
 
+    // Give each clause copy its own marker identity. Nested expansions inherit
+    // the outer marker's bindings before adding the innermost item.
+    let scopedText = text;
+    if (processingContext.clauseScopeMode === "collect") {
+      for (const { meta, start, end } of scanMarkers(text).toReversed()) {
+        if (meta.kind !== "clause") {
+          continue;
+        }
+        const originalKey = clauseSlotKey(meta.name, meta.version);
+        const inherited = processingContext.inlineClauseScopes.get(originalKey);
+        const row = isRecord(item) ? item : { value: item };
+        const values = {
+          ...data,
+          ...inherited?.values,
+          ...row,
+          [group.alias]: row,
+          [group.arrayPath]: row,
+          loop: loopContext(itemIdx, items.length),
+        };
+        const name = `__inline_clause_${expansionId}_${itemIdx}_${fragmentIndex}_${start}`;
+        processingContext.inlineClauseScopes.set(`@clause:${name}`, {
+          patchKey: inherited?.patchKey ?? originalKey,
+          values,
+        });
+        scopedText = `${scopedText.slice(
+          0,
+          start,
+        )}{{ clause("${name}") }}${scopedText.slice(end)}`;
+      }
+    }
+    scopedText =
+      processingContext.scopeInlineText?.({
+        text: scopedText,
+        values: data,
+        row: isRecord(item) ? item : { value: item },
+        alias: group.alias,
+        arrayPath: group.arrayPath,
+        loop: loopContext(itemIdx, items.length),
+      }) ?? scopedText;
     let iteration = rewriteEachPlaceholdersInText(
-      text,
+      scopedText,
       group.arrayPath,
       itemIdx,
       group.alias,

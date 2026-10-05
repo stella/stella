@@ -39,12 +39,12 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { DocxEditorAiOverlay } from "@/components/docx/docx-editor-ai-overlay";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { DocxSuggestionsStatus } from "@/components/docx/docx-suggestions-status";
 import {
   EvidenceReferencesButton,
   EvidenceReferencesDialog,
 } from "@/components/docx/evidence-references";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
-import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
@@ -288,11 +288,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
-  // Hydrate persisted AI suggestions into the review store on reload.
-  // Lives here (not on the route) because rebuilding each suggestion's
-  // preview needs this editor's live snapshot; the review panel/bar
-  // then render exactly as they did before the reload.
-  useSyncDocxSuggestions({ workspaceId, entityId, editorRef });
 
   const evidence = useEvidenceReferenceInsertion({
     canUnlock,
@@ -439,6 +434,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           onReopen={opening.reopenReleasedSession}
         />
       )}
+      <DocxSuggestionsStatus document={props} editorRef={editorRef} />
       {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div

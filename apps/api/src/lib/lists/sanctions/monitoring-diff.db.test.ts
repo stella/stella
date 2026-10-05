@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
@@ -26,7 +25,7 @@ import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
-import type { AuditEvent } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
@@ -39,7 +38,7 @@ import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-serv
 import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { drainSanctionsContactMarks } from "./monitoring-drain";
@@ -54,11 +53,13 @@ import {
   listOpenSanctionsMatches,
   listSanctionsMonitoringEvents,
 } from "./monitoring-read";
-import { requestSanctionsMonitoringRefresh } from "./monitoring-refresh";
+import { prepareSanctionsMonitoringRefresh } from "./monitoring-refresh";
 import { reviewSanctionsMatch } from "./monitoring-review";
 import { SANCTIONS_SOURCE_CONFIG, sanctionsSourceIds } from "./source-config";
 
 const TIMEOUT = 120_000;
+type ScreeningEventType = typeof sanctionsScreeningEvents.$inferSelect.type;
+const sortedEventTypes = (...types: ScreeningEventType[]) => types.toSorted();
 const now = new Date("2026-09-29T12:00:00Z");
 const orgId = toSafeId<"organization">("monitoring-org");
 const otherOrg = toSafeId<"organization">("monitoring-other");
@@ -70,16 +71,17 @@ let db: ReturnType<typeof openDb>;
 let scopedDb: ScopedDb;
 const indexCache = createSanctionsIndexCache();
 
-const scopedFor =
-  (organizationId: typeof orgId): ScopedDb =>
-  async (run) =>
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL ROLE stella`);
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
-      );
-      return await run(asTestRaw<Transaction>(tx));
-    });
+const scopedFor = (organizationId: typeof orgId): ScopedDb =>
+  executeRowsScopedDb(
+    async (run) =>
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella`);
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+        );
+        return await run(tx);
+      }),
+  );
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -291,7 +293,7 @@ test(
     if (outcome.status !== "possible-match") {
       panic("Expected matching fixture");
     }
-    const hit = outcome.possibleMatches[0];
+    const hit = outcome.possibleMatches.at(0) ?? panic("Expected matching hit");
     const outcomeWithHits = (
       possibleMatches: [SanctionsPossibleMatch, ...SanctionsPossibleMatch[]],
       truncated = false,
@@ -400,7 +402,7 @@ test(
     await commit(initial);
     expect(
       (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
-    ).toEqual(["new"].toSorted());
+    ).toEqual(sortedEventTypes("new"));
     await db
       .update(sanctionsContactMatches)
       .set({ disposition: "dismissed", reviewReason: "Reviewed" })
@@ -417,7 +419,7 @@ test(
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
     expect(
       (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
-    ).toEqual(["new", "reopened"].toSorted());
+    ).toEqual(sortedEventTypes("new", "reopened"));
     const emptyEdition = await activate("c", 0);
     const empty = await prepare(contact);
     await commit(empty);
@@ -432,7 +434,7 @@ test(
     await commit(await prepare(contact));
     expect(
       (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
-    ).toEqual(["new", "reopened", "lapsed", "reopened"].toSorted());
+    ).toEqual(sortedEventTypes("new", "reopened", "lapsed", "reopened"));
     expect(
       (
         await db
@@ -470,7 +472,7 @@ test(
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
     expect(
       (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
-    ).toEqual(["new", "reopened"].toSorted());
+    ).toEqual(sortedEventTypes("new", "reopened"));
   },
   TIMEOUT,
 );
@@ -654,10 +656,7 @@ test(
 );
 
 const audited: string[] = [];
-const recordAuditEvent = async (
-  _tx: Transaction,
-  event: AuditEvent | AuditEvent[],
-) => {
+const recordAuditEvent = async (...[, event]: Parameters<AuditRecorder>) => {
   audited.push(
     ...(Array.isArray(event) ? event : [event]).map((row) => row.resourceId),
   );
@@ -708,7 +707,7 @@ test.each(["dismissed", "confirmed"] as const)(
     await scopedDb(async (tx) => await reviewSanctionsMatch(tx, options));
     expect(
       (await eventsFor(contact.id)).map((row) => row.type).toSorted(),
-    ).toEqual(["new", disposition].toSorted());
+    ).toEqual(sortedEventTypes("new", disposition));
     expect(await matchFor(contact.id)).toMatchObject({
       disposition,
       reviewedContactFingerprint: initial.contactFingerprint,
@@ -912,7 +911,7 @@ test(
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
     expect(
       (await eventsFor(contact.id)).map((row) => row.type).toSorted(),
-    ).toEqual(["new"].toSorted());
+    ).toEqual(sortedEventTypes("new"));
   },
   TIMEOUT,
 );
@@ -1291,7 +1290,7 @@ test.each(
     expect(await matchFor(contact.id)).toEqual(match);
     expect(
       (await eventsFor(contact.id)).map((event) => event.type).toSorted(),
-    ).toEqual(["new"].toSorted());
+    ).toEqual(sortedEventTypes("new"));
     expect(audits).toBe(0);
   },
   TIMEOUT,
@@ -1907,10 +1906,7 @@ test(
     await commit(await prepare(contact), organizationId);
     const initial = await matchFor(contact.id);
     const audits: AuditEvent[] = [];
-    const record = async (
-      _tx: Transaction,
-      event: AuditEvent | AuditEvent[],
-    ) => {
+    const record: AuditRecorder = async (...[, event]) => {
       audits.push(...(Array.isArray(event) ? event : [event]));
     };
     const options = {
@@ -1951,9 +1947,11 @@ test(
     expect(audits).toEqual([audit]);
     const firstEvents = await eventsFor(contact.id);
     expect(firstEvents).toHaveLength(2);
-    const decision = firstEvents.find(({ type }) => type === "dismissed");
+    const decision =
+      firstEvents.find(({ type }) => type === "dismissed") ??
+      panic("Dismissal event missing");
     expect(decision).toEqual({
-      id: decision?.id,
+      id: decision.id,
       organizationId,
       contactId: contact.id,
       sourceId: "eu",
@@ -2085,25 +2083,8 @@ test(
   TIMEOUT,
 );
 
-const scopedDrainFor =
-  (organizationId: typeof orgId): ScopedDb =>
-  async (run) =>
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL ROLE stella`);
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
-      );
-      // PGlite returns { rows }; the production driver's execute returns the row array.
-      const transaction = asTestRaw<Transaction>({
-        select: tx.select.bind(tx),
-        insert: tx.insert.bind(tx),
-        update: tx.update.bind(tx),
-        delete: tx.delete.bind(tx),
-        rollback: tx.rollback.bind(tx),
-        execute: async (query: SQL) => (await tx.execute(query)).rows,
-      });
-      return await run(transaction);
-    });
+const scopedDrainFor = (organizationId: typeof orgId): ScopedDb =>
+  scopedFor(organizationId);
 
 test.each([
   "edited identity",
@@ -2142,13 +2123,19 @@ test.each([
         .set({ dateOfBirthYear: 1981 })
         .where(eq(contacts.id, contact.id));
     } else {
-      await tenantDb(
-        async (tx) =>
-          await requestSanctionsMonitoringRefresh(tx, {
-            organizationId,
-            contactIds: [contact.id],
-          }),
-      );
+      await tenantDb(async (tx) => {
+        const request = prepareSanctionsMonitoringRefresh({
+          organizationId,
+          contactIds: [contact.id],
+        });
+        if (request.type !== "contacts") {
+          panic("Contact fixture requires contact refresh marks");
+        }
+        await tx
+          .insert(sanctionsContactMarks)
+          .values(request.rows)
+          .onConflictDoNothing();
+      });
     }
     if (cause === "expired lease") {
       await db
@@ -2201,16 +2188,17 @@ test.each([
     expect((await screeningFor(contact.id)).contactFingerprint).toBe(
       currentMatch.contactFingerprint,
     );
-    const activeEdition = (
-      await db
-        .select()
-        .from(sanctionsSources)
-        .where(eq(sanctionsSources.id, "eu"))
-    ).at(0)?.activeEditionId;
+    const activeEdition =
+      (
+        await db
+          .select()
+          .from(sanctionsSources)
+          .where(eq(sanctionsSources.id, "eu"))
+      ).at(0)?.activeEditionId ?? panic("EU active edition missing");
     expect(currentMatch.editionId).toBe(activeEdition);
     const freshOpen = await open(drainNow);
     expect(freshOpen.items).toHaveLength(1);
-    expect(freshOpen.items.at(0)).toMatchObject({
+    expect(freshOpen.items.at(0) ?? panic("Open match missing")).toMatchObject({
       contactId: contact.id,
       evidence: currentMatch.match,
     });
@@ -2300,10 +2288,7 @@ test.each(["contact", "firm"] as const)(
     );
     expect(await snapshot()).toEqual(before);
     const audits: AuditEvent[] = [];
-    const record = async (
-      _tx: Transaction,
-      event: AuditEvent | AuditEvent[],
-    ) => {
+    const record: AuditRecorder = async (...[, event]) => {
       audits.push(...(Array.isArray(event) ? event : [event]));
     };
     const run = async () =>

@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   isServiceClassification,
   type ServiceClassification,
@@ -305,8 +307,8 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
     });
   }
 
-  endpoints.sort((a, b) => a.id.localeCompare(b.id));
-  files.sort((a, b) => a.id.localeCompare(b.id));
-  routeFiles.sort((a, b) => a.id.localeCompare(b.id));
+  endpoints.sort((a, b) => compareCodeUnit(a.id, b.id));
+  files.sort((a, b) => compareCodeUnit(a.id, b.id));
+  routeFiles.sort((a, b) => compareCodeUnit(a.id, b.id));
   return { endpoints, files, routeFiles, importErrors };
 };

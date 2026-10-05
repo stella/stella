@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Añadir serie de numeración",
       "advance": "Anticipo",
+      "allSellers": "Todos los vendedores",
       "archiveConfirm": "¿Archivar esta serie de numeración? Ya no estará disponible para nuevos documentos.",
       "creditNote": "Nota de crédito",
       "default": "Serie predeterminada",
@@ -562,6 +563,9 @@
       "preview": "Siguiente número",
       "previewAllocated": "Este número ya está asignado.",
       "previewHelp": "La vista previa utiliza la plantilla guardada y no reserva ningún número.",
+      "sellerProfile": "Perfil de vendedor",
+      "sellerUnavailable": "Vendedor archivado o no disponible",
+      "sellerUnavailableHelp": "Este vendedor está archivado o no disponible. Mantén la asignación o selecciona otro vendedor.",
       "setDefault": "Establecer como serie predeterminada",
       "title": "Series de numeración"
     },
@@ -976,7 +980,6 @@
     "packPartial": "{installed} instaladas, {failed} con error",
     "removed": "Esta herramienta ya no está disponible.",
     "sectionOthers": "Otros",
-    "sectionRecommended": "Recomendados",
     "settings": {
       "packTitle": "Paquete recomendado"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Aún no hay habilidades",
       "pinnedMatters": "Asuntos fijados",
       "recentChats": "Chats recientes",
+      "skillEditedBy": "Editado por {name} · {time}",
       "skills": "Habilidades"
     },
     "loadEarlierMessages": "Cargar mensajes anteriores",
@@ -1183,8 +1187,10 @@
       "label": "IA simulada"
     },
     "modelSelector": {
+      "allModels": "Todos los modelos ({count, number})",
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
+      "belowFrontier": "Por debajo de los mejores equilibrios",
       "effortHelpDescription": "Controla cuánto razonamiento utiliza el modelo antes de responder. Los niveles más altos pueden ayudar con tareas complejas, pero suelen tardar más. El punto marca el nivel predeterminado del proveedor para este modelo.",
       "effortHelpLabel": "Acerca del nivel de razonamiento",
       "effortLabel": "Nivel de razonamiento",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Predeterminado",
         "xhigh": "Muy alto"
       },
+      "newModel": "Nuevo",
+      "premiumCost": "Coste inusualmente alto",
+      "recommendedHelpDescription": "Ningún otro modelo disponible es a la vez más barato y mejor valorado. Los modelos demasiado nuevos para tener valoración se marcan como nuevos. Calidad: <link>{benchmark} de LMArena</link> ({licence}); coste: precios de lista.",
+      "recommendedHelpLabel": "Acerca de los modelos recomendados",
       "selectionLabel": "{model} | {effort}",
       "title": "Seleccionar modelo de chat",
       "viaProvider": "mediante {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "thinking": "Trabajando con contexto",
+    "threadFiles": {
+      "title": "Archivos de este chat"
+    },
     "tool": {
       "add_comment": "Añadiendo comentario",
       "apply-active-docx-edits": "Preparando cambios del documento",
@@ -1482,6 +1495,7 @@
     "noResults": "Aún no hay cláusulas",
     "noVariants": "Sin variantes",
     "outdatedVersion": "Actualización disponible",
+    "overrideNotRenderedWarning": "No se usó la sustitución de la cláusula {clauseName}: su espacio no aparece en este documento.",
     "renameSlot": "Cambiar nombre del espacio",
     "renameSlotInvalid": "Los nombres de los espacios deben ser únicos y no pueden contener espacios en blanco, dos puntos ni llaves.",
     "restoreVersion": "Restaurar esta versión",
@@ -1608,6 +1622,16 @@
     "currency": "Moneda",
     "currentPage": "Página actual",
     "date": "Fecha",
+    "datePicker": {
+      "label": "Selector de fecha",
+      "nextDecade": "Década siguiente",
+      "nextMonth": "Mes siguiente",
+      "nextYear": "Año siguiente",
+      "previousDecade": "Década anterior",
+      "previousMonth": "Mes anterior",
+      "previousYear": "Año anterior",
+      "time": "Hora"
+    },
     "decisions": "Resoluciones",
     "decline": "Rechazar",
     "delete": "Eliminar",
@@ -1768,6 +1792,7 @@
     "properties": "Propiedades",
     "queued": "En cola",
     "reason": "Motivo",
+    "recommended": "Recomendados",
     "reconnecting": "Reconectando…",
     "reference": "Referencia",
     "refresh": "Actualizar",
@@ -1893,6 +1918,7 @@
       "addBankAccount": "Añadir cuenta bancaria",
       "noBillingData": "Sin datos de facturación.",
       "removeBankAccount": "Eliminar cuenta bancaria",
+      "selectCurrencyForRate": "Seleccione una moneda para establecer la tarifa por hora.",
       "title": "Datos de facturación"
     },
     "columns": {
@@ -2132,6 +2158,7 @@
     "markHandled": "Marcar como tramitado",
     "markNew": "Marcar como nuevo",
     "noAddress": "No hay ninguna dirección de correo activa.",
+    "openSourceFile": "Abrir archivo de correo",
     "originalSender": "Remitente original",
     "originalSenderUnverified": "Remitente original (según lo indicado, sin verificar)",
     "originalSignatureVerified": "Firma original verificada (<identifier>d={domain}</identifier>)",
@@ -2140,11 +2167,14 @@
     "rotateAddress": "Cambiar dirección",
     "sentAt": "Enviado el",
     "sharedMailboxFiler": "Buzón compartido {address}, aprobado por {approver}",
+    "statedInFile": "Cabeceras (según el archivo)",
     "states": {
       "handled": "Tramitado"
     },
     "title": "Correspondencia",
-    "unknownApprover": "Aprobador desconocido"
+    "unknownApprover": "Aprobador desconocido",
+    "uploadedBy": "Subido por {name}",
+    "uploadedFile": "Archivo de correo subido"
   },
   "docxReview": {
     "acceptAll": "Aceptar todo",
@@ -2262,10 +2292,14 @@
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
+      "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
+      "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
+      "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
+      "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
@@ -3448,6 +3482,7 @@
         "approvedOn": "Aprobado el {date}",
         "approvedToast": "Playbook aprobado",
         "saveBeforeApprove": "Guarda los cambios antes de aprobar este playbook.",
+        "sourcesNotice": "Antes de aprobar, comprueba que ninguna posición mencione un documento, un asunto o una contraparte: toda la organización puede leer este playbook.",
         "statusApproved": "Aprobado",
         "statusDraft": "Borrador"
       },
@@ -3546,6 +3581,7 @@
       "referenceStandard": "De la referencia",
       "removeCheck": "Eliminar verificación",
       "removeIdeal": "Eliminar la redacción ideal",
+      "removeSource": "Quitar la fuente {documentName}",
       "reorderPosition": "Reordenar posición",
       "review": {
         "changePlaybook": "Elegir otro playbook",
@@ -3577,6 +3613,10 @@
         "blocker": "Bloqueante"
       },
       "severityLabel": "Gravedad",
+      "staleCopy": {
+        "loaded": "Se ha cargado una versión más reciente de este playbook. Recárguelo antes de editarlo.",
+        "unavailable": "No se pudo cargar la última versión de este playbook. Esta es la última copia cargada y puede estar desactualizada."
+      },
       "starters": {
         "addedToast": "Playbook añadido",
         "browseButton": "Explorar playbooks de inicio",
@@ -4277,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
       "deleteAccountTasksDescription": "Tiene tareas activas asignadas. Transfiéralas a otros miembros del espacio de trabajo para que el trabajo continúe.",
       "deleteAccountTasksTitle": "Transferir tareas activas",
+      "deleteAccountTasksUnassignedNotice": "Las tareas sin un miembro seleccionado permanecerán en su espacio de trabajo sin persona asignada.",
       "deleteAccountWarning": "La eliminación es irreversible. Se eliminarán sus datos de inicio de sesión y los datos privados de la cuenta.",
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",
@@ -4826,6 +4867,7 @@
     "addPart": "Añadir parte",
     "addTag": "Añadir etiqueta",
     "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
+    "aiConditionsUndecided": "La IA no pudo decidir estas condiciones; sus secciones se rellenaron como si no se aplicaran: {list}",
     "aiDecidedConditions": "Decidido por la IA",
     "aiFieldsNotDrafted": "La IA no pudo redactar estos campos: {list}",
     "allTemplates": "Todas las plantillas",
@@ -4917,6 +4959,7 @@
     "directiveFor": "Bucle: {expression}",
     "directiveIf": "Si: {expression}",
     "discoveryFailed": "No se pudo analizar la plantilla",
+    "documentCreatedIncomplete": "Documento creado, pero el rellenado está incompleto",
     "downloadAnyway": "Descargar de todos modos",
     "downloadDocx": "Descargar DOCX",
     "downloadPdf": "Descargar PDF",
@@ -5012,6 +5055,7 @@
     "saveFailed": "No se pudo guardar la plantilla",
     "savedLookupFormats": "Formatos de salida guardados",
     "searchTemplates": "Buscar plantillas…",
+    "structureErrorsInDocument": "Directivas de la plantilla que no se pudieron aplicar: {count}. Revise el documento.",
     "structureWarningParagraph": "Párrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",
     "studio": {

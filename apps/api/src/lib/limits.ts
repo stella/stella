@@ -15,6 +15,7 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -364,10 +365,12 @@ export const LIMITS = {
   workspaceMemberPreviewMembersMax: 4,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,
+  /** Rows read and audited per iteration of atomic member cleanup. */
+  memberRemovalCleanupBatchSize: 500,
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
-  searchQueryMaxLength: 500,
+  searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -837,6 +840,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Anonymous sanctions searches: 20 req/min per IP. Each search matches
+   *  across the shared sanctions indexes, so it has a separate CPU budget. */
+  publicSanctionsSearch: { duration: 60_000, max: 20, maxConcurrent: 2 },
   /** Skill URL discovery/import: 10 req/min per IP. Each request performs
    *  bounded outbound source fetches, so this separate cap prevents the
    *  general API budget from amplifying third-party traffic. */

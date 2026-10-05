@@ -196,7 +196,9 @@ const firmState = async (
 });
 
 test("firm monitoring changes require the firm-settings grant in HTTP and MCP", async () => {
-  expect(roleNames.toSorted()).toEqual(Object.keys(roles).toSorted());
+  expect(roleNames.toSorted().join(",")).toBe(
+    Object.keys(roles).toSorted().join(","),
+  );
   expect(roles.member.authorize({ contact: ["update"] }).success).toBe(true);
   expect(
     roles.member.authorize({ organizationSettings: ["update"] }).success,

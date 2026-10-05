@@ -50,6 +50,9 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -61,8 +64,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -95,6 +100,7 @@ import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
+import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
 import type {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -120,7 +126,10 @@ export type McpOperationDatabaseScope = {
 
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+    featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */
     loadOrgSettingsForAuth?: (
       reader: OrgAIConfigReader,
@@ -143,6 +152,7 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
+    caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
@@ -461,6 +471,17 @@ export const resolveMcpSessionContext = async (
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
+  const featureAccessSnapshot =
+    Object.keys(FEATURE_REGISTRY).length === 0
+      ? createFeatureAccessSnapshot({
+          organizationId,
+          userId,
+          decisions: new Map(),
+        })
+      : await requestDatabaseScope.scopedDb(
+          async (tx) =>
+            await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
+        );
 
   // Resolve the org's reachable registries once, so the tools/list projection
   // can narrow the `lookup_business_registry` enum synchronously. On a read
@@ -497,6 +518,7 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
     createOperationDatabaseScope,
+    featureAccessSnapshot,
     ...(session.credential?.type === "machine_api_key"
       ? { credentialPermissions: session.credential.permissions }
       : {}),

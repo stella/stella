@@ -1,8 +1,11 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { currencyMinorUnitDigits } from "@stll/money";
+
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import {
@@ -17,16 +20,16 @@ import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthFromColumns,
   dateOfBirthToColumns,
-  nationalityCodesSchema,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -34,7 +37,7 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
+import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(contactTypeSchema),
@@ -83,6 +86,72 @@ export type UpdateContactHandlerProps = {
   body: Static<typeof updateContactBodySchema>;
 };
 
+type ContactRateUpdatesOptions = {
+  tx: Transaction;
+  contactId: SafeId<"contact">;
+  organizationId: SafeId<"organization">;
+  sourceCurrency: string | null;
+  storedRate: number | null;
+  currency: string | null | undefined;
+  defaultHourlyRate: number | null | undefined;
+};
+
+const contactRateUpdates = async ({
+  tx,
+  contactId,
+  organizationId,
+  sourceCurrency,
+  storedRate,
+  currency,
+  defaultHourlyRate,
+}: ContactRateUpdatesOptions) => {
+  if (defaultHourlyRate !== undefined) {
+    return Result.ok({
+      defaultHourlyRate:
+        defaultHourlyRate === null ? null : cents(defaultHourlyRate),
+    });
+  }
+  const exponentShift =
+    storedRate !== null &&
+    sourceCurrency &&
+    currency &&
+    currency !== sourceCurrency
+      ? currencyMinorUnitDigits(currency) -
+        currencyMinorUnitDigits(sourceCurrency)
+      : 0;
+
+  // Numeric arithmetic preserves integer precision before the API's safe
+  // number boundary; refuse the entire update before any field is written.
+  if (exponentShift > 0) {
+    const beyondRange = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.id, contactId),
+          eq(contacts.organizationId, organizationId),
+          sql`ABS(ROUND(${contacts.defaultHourlyRate} * power(10::numeric, ${exponentShift}))) > ${Number.MAX_SAFE_INTEGER}`,
+        ),
+      )
+      .limit(1);
+    if (beyondRange.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Currency change would put the contact rate out of range",
+        }),
+      );
+    }
+  }
+
+  if (exponentShift === 0) {
+    return Result.ok({ defaultHourlyRate: undefined });
+  }
+  return Result.ok({
+    defaultHourlyRate: sql`ROUND(${contacts.defaultHourlyRate} * power(10::numeric, ${exponentShift}))::bigint`,
+  });
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -93,35 +162,9 @@ export const updateContactHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdateContactHandlerProps) {
-  const attorneyIds: string[] = [];
-  if (body.originatingAttorneyId) {
-    attorneyIds.push(body.originatingAttorneyId);
-  }
-  if (body.responsibleAttorneyId) {
-    attorneyIds.push(body.responsibleAttorneyId);
-  }
-
-  if (attorneyIds.length > 0) {
-    const validAttorneyIds = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await validateOrgUserIds(
-            tx,
-            attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
-            organizationId,
-          ),
-      ),
-    );
-
-    if (!validAttorneyIds) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this organization",
-        }),
-      );
-    }
-  }
+  const attorneyIds = [body.originatingAttorneyId, body.responsibleAttorneyId]
+    .filter((id) => id !== undefined && id !== null)
+    .filter((id) => id.length > 0);
 
   const {
     defaultHourlyRate,
@@ -133,11 +176,27 @@ export const updateContactHandler = async function* ({
 
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const validAttorneyIds = await lockOrgUserIdsForAssignment({
+        tx,
+        userIds: attorneyIds.map(brandPersistedUserId),
+        organizationId,
+      });
+      if (!validAttorneyIds) {
+        return {
+          kind: "invalid" as const,
+          error: new HandlerError({
+            status: 400,
+            message: "User is not a member of this organization",
+          }),
+        };
+      }
       const existingRows = await tx
         .select({
           id: contacts.id,
           type: contacts.type,
           metadata: contacts.metadata,
+          currency: contacts.currency,
+          defaultHourlyRate: contacts.defaultHourlyRate,
           dateOfBirthYear: contacts.dateOfBirthYear,
           dateOfBirthMonth: contacts.dateOfBirthMonth,
           dateOfBirthDay: contacts.dateOfBirthDay,
@@ -170,6 +229,19 @@ export const updateContactHandler = async function* ({
       });
       if (error) {
         return { kind: "invalid" as const, error };
+      }
+
+      const rateUpdates = await contactRateUpdates({
+        tx,
+        contactId,
+        organizationId,
+        sourceCurrency: existing.currency,
+        storedRate: existing.defaultHourlyRate,
+        currency: body.currency,
+        defaultHourlyRate,
+      });
+      if (rateUpdates.isErr()) {
+        return { kind: "invalid" as const, error: rateUpdates.error };
       }
 
       const updates = {
@@ -208,12 +280,7 @@ export const updateContactHandler = async function* ({
                 ? nationalityCodes
                 : [],
             }),
-        ...(defaultHourlyRate === undefined
-          ? {}
-          : {
-              defaultHourlyRate:
-                defaultHourlyRate === null ? null : cents(defaultHourlyRate),
-            }),
+        ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
       };
       if (Object.keys(updates).length === 0) {
         return {
@@ -225,7 +292,36 @@ export const updateContactHandler = async function* ({
 
       const rows = await tx
         .update(contacts)
-        .set(updates)
+        .set({
+          type: updates.type,
+          prefix: updates.prefix,
+          firstName: updates.firstName,
+          middleName: updates.middleName,
+          lastName: updates.lastName,
+          suffix: updates.suffix,
+          organizationName: updates.organizationName,
+          displayName: updates.displayName,
+          notes: updates.notes,
+          emails: updates.emails,
+          phones: updates.phones,
+          addresses: updates.addresses,
+          color: updates.color,
+          tags: updates.tags,
+          registrationNumber: updates.registrationNumber,
+          taxId: updates.taxId,
+          bankAccounts: updates.bankAccounts,
+          billingAddress: updates.billingAddress,
+          currency: updates.currency,
+          paymentTermDays: updates.paymentTermDays,
+          originatingAttorneyId: updates.originatingAttorneyId,
+          responsibleAttorneyId: updates.responsibleAttorneyId,
+          metadata: updates.metadata,
+          dateOfBirthYear: updates.dateOfBirthYear,
+          dateOfBirthMonth: updates.dateOfBirthMonth,
+          dateOfBirthDay: updates.dateOfBirthDay,
+          nationalityCodes: updates.nationalityCodes,
+          defaultHourlyRate: updates.defaultHourlyRate,
+        })
         .where(
           and(
             eq(contacts.id, contactId),
@@ -276,6 +372,7 @@ const updateContactById = createSafeRootHandler(
       "An attorney id that is not a member of the organization is refused, " +
       "and an unknown contact is a 404.",
     permissions: { contact: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "save_contact" },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,

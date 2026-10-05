@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { sanctionsMonitoringBackfills } from "@/api/db/schema";
 import { advanceSanctionsMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_SANCTIONS_MONITORING_TASK =
@@ -11,15 +11,18 @@ export const BACKFILL_SANCTIONS_MONITORING_TASK =
 
 export const backfillSanctionsMonitoringTask: SchedulerTask = async ({
   db,
+  runId,
   signal,
+  dueAt,
   logger,
   scheduleContinuation,
 }) => {
   signal.throwIfAborted();
-  const now = new Date();
+  const now = dueAt.claimedAtDate();
   const { requested, fanned } = await queueSanctionsMonitoringBackfills({
     db,
     now,
+    runId,
   });
   signal.throwIfAborted();
   const pending = (
@@ -31,7 +34,7 @@ export const backfillSanctionsMonitoringTask: SchedulerTask = async ({
       .from(sanctionsMonitoringBackfills)
       .where(
         and(
-          eq(sanctionsMonitoringBackfills.state, "pending"),
+          eq(sanctionsMonitoringBackfills.status, "pending"),
           sql`${sanctionsMonitoringBackfills.scheduledAt} <= ${now}::timestamptz`,
         ),
       )
@@ -46,11 +49,7 @@ export const backfillSanctionsMonitoringTask: SchedulerTask = async ({
     pending === undefined
       ? "idle"
       : await advanceSanctionsMonitoringBackfill({
-          db: createRootScopedDb({
-            organizationId: pending.organizationId,
-            userId: null,
-            workspaceIds: [],
-          }),
+          db: createRootOrganizationBackgroundDb(pending.organizationId),
           organizationId: pending.organizationId,
           sourceId: pending.sourceId,
           now,

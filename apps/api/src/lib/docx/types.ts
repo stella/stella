@@ -9,6 +9,7 @@ import {
   type BlockDirectiveKind,
   type ConditionNode,
   type FilterCall,
+  type RowScope,
   DATE_FORMAT_STYLES,
   type DateFormatStyle,
   type FieldDateFormat,
@@ -191,8 +192,18 @@ export type DiscoveredField = {
   count: number;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. Absent when
-   *  the field is always visible. */
+   *  the field is always visible. On an item field it is
+   *  evaluated per item, with `itemAliases` bound to it. */
   visibleWhen?: string;
+  /** On an array field: the names a loop body gives its item. */
+  itemAliases?: string[];
+};
+
+/** The loops and branch content renders inside: none for a template's own
+ *  parts, the slot's for a clause body. */
+export type EnclosingScope = {
+  rowScopes: readonly RowScope[];
+  condition: string | undefined;
 };
 
 export type ClauseProvenance = {
@@ -221,6 +232,19 @@ export type TemplateStructureError = {
 export type DiscoveredTemplate = {
   clauseSlots?: ClauseSlot[] | undefined;
   clauseFieldPaths?: string[] | undefined;
+  /** Per clause slot key, the loops and branch its marker sits in, which its
+   *  clause body is read through; `null` when the slot's markers disagree. */
+  clauseSlotScopes?: Record<string, EnclosingScope | null> | undefined;
+  /** How value markers render. `scoped` fields are required exactly where
+   *  they render (per loop iteration, never in a pruned branch or slot);
+   *  `unconditional` ones have a marker that renders whatever the values. */
+  renderedFieldPaths?:
+    | { scoped: string[]; unconditional: string[] }
+    | undefined;
+  /** Per clause slot key, the field paths only that slot's clause body
+   *  renders (the template's own content never does). Their requiredness
+   *  holds where the slot renders, once per loop iteration it renders in. */
+  clauseScopedFieldPaths?: Record<string, string[]> | undefined;
   placeholders: DiscoveredPlaceholder[];
   fields: DiscoveredField[];
   structureErrors: TemplateStructureError[];
@@ -795,7 +819,10 @@ export type ResolvedField = {
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;
   itemFields?: ResolvedField[] | undefined;
+  /** Mirrors {@link DiscoveredField.itemAliases}: the names under which an
+   *  item field's `visibleWhen` reads its own item. */
+  itemAliases?: string[] | undefined;
   /** Condition expression that must be true for this
-   *  field to be visible in the fill form. */
+   *  field to be visible in the fill form; per item on an item field. */
   visibleWhen?: string | undefined;
 };

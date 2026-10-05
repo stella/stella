@@ -618,6 +618,124 @@ describe("install-free invocation classification", () => {
     ]);
   });
 
+  test.each([
+    { guard: "steps.install.outcome == 'success'", covered: true },
+    {
+      guard: "!cancelled() && (steps.install.outcome == 'success')",
+      covered: true,
+    },
+    { guard: "steps.install.outcome == 'failure'", covered: false },
+    { guard: "steps.install.outcome == 'skipped'", covered: false },
+    { guard: "steps.install.conclusion == 'success'", covered: false },
+    { guard: "steps.other.outcome == 'success'", covered: false },
+    { guard: "steps.install.outcome == 'success' || always()", covered: false },
+    {
+      guard:
+        "(steps.install.outcome == 'success' && matrix.a) || (steps.install.outcome == 'success' && matrix.b)",
+      covered: true,
+    },
+  ])(
+    "successful install outcomes establish coverage: $guard",
+    ({ guard, covered }) => {
+      for (const continuation of ["false", "true", `\${{ inputs.optional }}`]) {
+        for (const directive of [
+          "run: bun ci",
+          "uses: ./.github/actions/install",
+        ]) {
+          const root = repository(
+            [
+              "jobs:",
+              "  job:",
+              "    steps:",
+              `      - ${directive}`,
+              "        id: install",
+              `        if: \${{ !cancelled() && steps.checkout.outcome == 'success' && inputs.checks }}`,
+              `        continue-on-error: ${continuation}`,
+              "      - run: bun scripts/check.ts",
+              `        if: \${{ ${guard} }}`,
+            ].join("\n"),
+            {
+              ".github/actions/install/action.yml":
+                "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun ci\n",
+            },
+          );
+          expect(
+            installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+              ({ classification }) => classification.type,
+            ),
+            `${directive}; continue-on-error: ${continuation}`,
+          ).toEqual(covered ? ["install"] : ["install", "files"]);
+        }
+      }
+    },
+  );
+
+  test.each([
+    "if false; then bun ci; fi",
+    "bun ci || true",
+    "bun install -g turbo",
+  ])(
+    "a successful step cannot prove a conditional or global install: %s",
+    (run) => {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: ${run}`,
+          "        id: install",
+          "        continue-on-error: true",
+          "      - run: bun scripts/check.ts",
+          "        if: steps.install.outcome == 'success'",
+        ].join("\n"),
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install", "files"]);
+    },
+  );
+
+  test("successful outcome coverage stays in the installed directory and composite scope", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - uses: ./.github/actions/install",
+        "        id: setup",
+        "      - run: bun packages/tool/gen.ts",
+        "        working-directory: packages/tool",
+        "        if: steps.setup.outcome == 'success'",
+        "      - run: bun scripts/check.ts",
+        "        if: steps.setup.outcome == 'success'",
+        "      - run: bun packages/tool/gen.ts",
+        "        if: steps.install.outcome == 'success'",
+      ].join("\n"),
+      {
+        ".github/actions/install/action.yml": [
+          "runs:",
+          "  using: composite",
+          "  steps:",
+          "    - run: bun ci",
+          "      shell: bash",
+          "      id: install",
+          "      working-directory: packages/tool",
+          "    - run: bun gen.ts",
+          "      shell: bash",
+          "      working-directory: packages/tool",
+          "      if: steps.install.outcome == 'success'",
+        ].join("\n"),
+      },
+    );
+    expect(
+      installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+        ({ classification }) => classification.type,
+      ),
+    ).toEqual(["install", "files", "files"]);
+  });
+
   test("reports every installed package a file or inline code imports", () => {
     const root = repository("jobs: {}\n");
 

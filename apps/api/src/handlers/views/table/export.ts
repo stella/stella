@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
@@ -34,7 +34,8 @@ import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 const JUSTIFICATION_FIELD_ID_BATCH = 1000;
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
     "columns, filters, and ordering the view defines. Returns the file " +

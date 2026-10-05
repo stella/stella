@@ -47,6 +47,10 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261003122400_public_sanctions_reader/migration.sql:6cc0fbb1310629fc3b2e4e6ac47e0cdb64c91fed912aada50d7c9e4631dd3c05",
+  // Validates matter memberships with a bounded existence read and a typed
+  // constraint error. The static block changes no rows or timeout settings.
+  "20261004001100_validate_matter_membership_organization_membership/migration.sql:b63282f9fdb50853ecdb93950ebd13f424a8a3ea142755f27ab5e8fbe60df69c",
   "20260429220500_global-search-unaccent/migration.sql:6eab967f03d9401b8f0791d81603f9540ac19fb872df5404f9b66ffff431d589",
   "20260429220500_global-search-unaccent/migration.sql:fe14433fc2fcc398e1d4efcd301f325a8f6e76705c158cd829b17fb9bb7f8797",
   "20260429220500_global-search-unaccent/migration.sql:2d8e7507916a4d6160ec2edebc72136c1b814cd55e2d766021ed5bbc25b5fd10",
@@ -737,11 +741,21 @@ const collectUnsafeConcurrentTimeouts = (
   return violations;
 };
 
+const canonicalIdentifier = (identifier: string): string =>
+  identifier.startsWith('"')
+    ? identifier.slice(1, -1).replaceAll('""', '"')
+    : identifier.toLowerCase();
+
+/** A relation without its schema: migrations here address `public` alone. */
+const canonicalRelation = (relation: string): string => {
+  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
+  return canonicalIdentifier(parts.at(-1) ?? relation);
+};
+
 const matchedIndexName = (match: RegExpMatchArray): string | undefined => {
   const name = match.groups?.["name"];
   return name === undefined ? undefined : canonicalRelation(name);
 };
-
 type ConcurrentIndexMigrationOptions = {
   relativePath: string;
   source: string;
@@ -1837,16 +1851,6 @@ const DROP_NAMED_ON_TABLE = new RegExp(
 );
 
 /** An identifier as PostgreSQL resolves it: unquoted folds to lower case. */
-const canonicalIdentifier = (identifier: string): string =>
-  identifier.startsWith('"')
-    ? identifier.slice(1, -1).replaceAll('""', '"')
-    : identifier.toLowerCase();
-
-/** A relation without its schema: migrations here address `public` alone. */
-const canonicalRelation = (relation: string): string => {
-  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
-  return canonicalIdentifier(parts.at(-1) ?? relation);
-};
 
 /** Split on the commas that separate actions, not the ones inside parentheses. */
 const splitTableActions = (actions: string): string[] => {

@@ -1,8 +1,8 @@
-import { asc, lte } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 
 import { sanctionsContactMarks } from "@/api/db/schema";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const DRAIN_SANCTIONS_MONITORING_TASK =
@@ -11,17 +11,18 @@ export const DRAIN_SANCTIONS_MONITORING_TASK =
 export const drainSanctionsMonitoringTask: SchedulerTask = async ({
   db,
   signal,
+  dueAt,
   logger,
   scheduleContinuation,
 }) => {
   signal.throwIfAborted();
-  const now = new Date();
+  const now = dueAt.claimedAtDate();
   // The system connection discovers only the next queued tenant; contact data stays on stella/RLS.
   const pending = (
     await db
       .select({ organizationId: sanctionsContactMarks.organizationId })
       .from(sanctionsContactMarks)
-      .where(lte(sanctionsContactMarks.scheduledAt, now))
+      .where(sql`${sanctionsContactMarks.scheduledAt} <= ${now}::timestamptz`)
       .orderBy(
         asc(sanctionsContactMarks.scheduledAt),
         asc(sanctionsContactMarks.organizationId),
@@ -32,11 +33,7 @@ export const drainSanctionsMonitoringTask: SchedulerTask = async ({
     return;
   }
   const outcome = await drainSanctionsContactMarks({
-    db: createRootScopedDb({
-      organizationId: pending.organizationId,
-      userId: null,
-      workspaceIds: [],
-    }),
+    db: createRootOrganizationBackgroundDb(pending.organizationId),
     organizationId: pending.organizationId,
     now,
     signal,

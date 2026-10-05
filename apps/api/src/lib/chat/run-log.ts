@@ -38,7 +38,7 @@ type ChatRunLogExecution = {
   id: SafeId<"chatTurn">;
 };
 
-export class ChatRunLogError extends TaggedError("ChatRunLogError")<{
+class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
 }> {}
 

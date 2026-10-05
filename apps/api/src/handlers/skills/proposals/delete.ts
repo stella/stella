@@ -4,11 +4,12 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   canManageSkill,
   loadVisibleSkill,
 } from "@/api/lib/agent-skills/access";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +26,8 @@ const config = {
     "anchored to it. The skill and its revisions are untouched. Only the " +
     "author or someone who may edit the skill can.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

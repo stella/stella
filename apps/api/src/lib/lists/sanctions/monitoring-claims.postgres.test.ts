@@ -7,10 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { contacts, sanctionsContactMarks } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  drainSanctionsContactMarks,
-  SANCTIONS_MARK_LEASE_MS,
-} from "@/api/lib/lists/sanctions/monitoring-drain";
+import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -26,7 +23,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
 } else {
-  test("contact claims skip a locked earlier mark and lease only available work", async () => {
+  test("contact drains skip a locked earlier mark and roll available work back before commit", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db: lockerDb } = openClient({
         connection: { statement_timeout: 10_000 },
@@ -39,7 +36,6 @@ if (!databaseUrl || !runPostgresTests) {
       const availableContactId = createSafeId<"contact">();
       const lockedAt = new Date(now.getTime() - 1000);
       const availableAt = new Date(now.getTime() - 500);
-      const leaseExpiresAt = new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS);
       const locked = Promise.withResolvers<undefined>();
       const observe = Promise.withResolvers<undefined>();
       const observed = Promise.withResolvers<undefined>();
@@ -121,33 +117,46 @@ if (!databaseUrl || !runPostgresTests) {
           observed.reject(error);
         });
         await locked.promise;
-        const scopedDb: ScopedDb = async (run) => {
-          const claimed = await workerDb.transaction(async (tx) => {
+        const scopedDb: ScopedDb = async (run) =>
+          await workerDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL ROLE stella`);
             await tx.execute(
               sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
             );
-            return await run(asTestRaw<Transaction>(tx));
+            const drained = await run(asTestRaw<Transaction>(tx));
+            if (
+              typeof drained !== "object" ||
+              drained === null ||
+              !("claimed" in drained) ||
+              !("terminal" in drained)
+            ) {
+              panic("Contact drain result missing");
+            }
+            expect(drained.claimed).toBe(1);
+            expect(drained.terminal).toBe(1);
+            claimFinished = true;
+            // Inspect a completed run while its transaction can still roll back.
+            controller.abort(new DOMException(CLAIM_INSPECTED, "AbortError"));
+            controller.signal.throwIfAborted();
+            return drained;
           });
-          claimFinished = true;
-          // Inspect the durable lease before preparation, without screening or completing it.
-          controller.abort(new DOMException(CLAIM_INSPECTED, "AbortError"));
-          return claimed;
-        };
-        const draining = Result.tryPromise(() =>
-          drainSanctionsContactMarks({
-            db: scopedDb,
-            organizationId,
-            now,
-            signal: controller.signal,
-          }),
+        const draining = Result.tryPromise(
+          async () =>
+            await drainSanctionsContactMarks({
+              db: scopedDb,
+              organizationId,
+              now,
+              signal: controller.signal,
+            }),
         );
         running.push(draining);
         observe.resolve(undefined);
         await observed.promise;
         const result = await draining;
         if (result.isOk()) {
-          panic("Expected contact drain to stop after the claim checkpoint");
+          panic(
+            "Expected contact drain to stop before its transaction commits",
+          );
         }
         expect(result.error.cause).toBeInstanceOf(DOMException);
         expect(result.error.cause).toMatchObject({
@@ -164,7 +173,7 @@ if (!databaseUrl || !runPostgresTests) {
         ).toMatchObject({ generation: 1n, scheduledAt: lockedAt });
         expect(
           marks.find(({ contactId }) => contactId === availableContactId),
-        ).toMatchObject({ generation: 1n, scheduledAt: leaseExpiresAt });
+        ).toMatchObject({ generation: 1n, scheduledAt: availableAt });
         release.resolve(undefined);
         await locking;
       } finally {

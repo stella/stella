@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   listSanctionsMonitoringEvents,
@@ -10,6 +10,7 @@ import {
 
 export default createSafeRootHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     description:
       "Read durable new and reopened sanctions events in bounded cursor pages. Changed evidence and review decisions do not notify. Excluded contacts and disabled firms are omitted. This feed does not deliver notifications or select recipients.",
     permissions: { workspace: ["read"] },

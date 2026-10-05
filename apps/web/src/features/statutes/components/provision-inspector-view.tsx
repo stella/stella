@@ -28,6 +28,7 @@ import {
 } from "@/features/statutes/components/provision-citing-decisions";
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
+import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
 import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
@@ -39,6 +40,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import { optionalArray } from "@/lib/arrays";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -90,15 +92,17 @@ export const ProvisionInspectorView = ({
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
-  const { data: leading } = useQuery(
-    topCitingDecisionsOptions({
-      anchor: payload.anchorId,
-      eli: payload.eli,
-      jurisdiction: payload.jurisdiction,
-    }),
+  const leadingView = useQueryView(
+    useQuery(
+      topCitingDecisionsOptions({
+        anchor: payload.anchorId,
+        eli: payload.eli,
+        jurisdiction: payload.jurisdiction,
+      }),
+    ),
   );
   const leadingDecisions =
-    leading === undefined ? [] : uniqueByDecision(leading);
+    leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
@@ -190,8 +194,8 @@ export const ProvisionInspectorView = ({
                 highlightAnchorId={payload.highlightAnchorId}
               />
 
-              {leadingDecisions.length > 0 && (
-                <ProvisionSection title={t("statutes.leadingDecisions")}>
+              <ProvisionSection title={t("statutes.leadingDecisions")}>
+                <ProvisionLeadingDecisions view={leadingView}>
                   <ul className="m-0 flex list-none flex-col p-0">
                     {leadingDecisions.map((decision) => (
                       <li key={decision.decisionId}>
@@ -199,8 +203,8 @@ export const ProvisionInspectorView = ({
                       </li>
                     ))}
                   </ul>
-                </ProvisionSection>
-              )}
+                </ProvisionLeadingDecisions>
+              </ProvisionSection>
 
               <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
                 <ProvisionCitingDecisions

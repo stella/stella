@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { diffDesignBacklog } from "./design-lint-baseline.ts";
+import { diffDesignBacklog, emptyBacklog } from "./design-lint-baseline.ts";
 import {
   DESIGN_LINT_BACKLOG_RULES,
   DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE,
@@ -15,16 +15,11 @@ const backlog = (
   overflow: Record<string, number> = {},
   imported: Record<string, number> = {},
 ): DesignLintBacklog => ({
+  ...emptyBacklog(),
   "shadcn/no-restyle": restyle,
   "shadcn/no-arbitrary-values": arbitrary,
   "no-raw-overflow-scroll/no-raw-overflow-scroll": overflow,
   "no-imported-class-constant/no-imported-class-constant": imported,
-  "require-bounded-request-schema/require-bounded-request-schema": {},
-  "no-unbounded-response-body/no-unbounded-response-body": {},
-  "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
-  "eslint/complexity": {},
-  "eslint/max-lines-per-function": {},
-  "eslint/max-params": {},
 });
 
 test("a count above its baseline regresses, a clean file goes stale, a fall improves", () => {
@@ -108,9 +103,16 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-computed-key-record-assignment(no-computed-key-record-assignment)",
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
     ],
+    [
+      "no-direct-status-set(no-direct-status-set)",
+      "no-direct-status-set/no-direct-status-set",
+    ],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
+    ["react(no-children-prop)", "react/no-children-prop"],
+    ["eslint(no-unexpected-multiline)", "eslint/no-unexpected-multiline"],
+    ["eslint(no-use-before-define)", "eslint/no-use-before-define"],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
@@ -119,7 +121,9 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "no-direct-status-set",
     "eslint",
+    "react",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
     DESIGN_LINT_BACKLOG_RULES.length,

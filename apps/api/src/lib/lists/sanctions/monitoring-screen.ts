@@ -6,6 +6,7 @@ import {
   monitoringFingerprint,
   monitoringSubject,
 } from "@/api/lib/lists/sanctions/monitoring-input";
+import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import {
   screenSanctionsSubjects,
   unavailableSanctionsScreening,
@@ -15,12 +16,14 @@ type PrepareMonitoringContactsOptions = {
   db: ScopedDb;
   contactRows: readonly (typeof contacts.$inferSelect)[];
   now: Date;
+  indexCache?: SanctionsIndexCache;
 };
 
 export const prepareMonitoringContacts = async ({
   db,
   contactRows,
   now,
+  indexCache,
 }: PrepareMonitoringContactsOptions) => {
   const results = await screenSanctionsSubjects({
     db,
@@ -28,6 +31,7 @@ export const prepareMonitoringContacts = async ({
     practiceJurisdictions: [],
     now,
     resultMode: "complete",
+    indexCache,
   });
   return contactRows.map((contact, index) => {
     const result =
