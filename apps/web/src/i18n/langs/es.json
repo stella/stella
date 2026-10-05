@@ -1495,6 +1495,7 @@
     "noResults": "Aún no hay cláusulas",
     "noVariants": "Sin variantes",
     "outdatedVersion": "Actualización disponible",
+    "overrideNotRenderedWarning": "No se usó la sustitución de la cláusula {clauseName}: su espacio no aparece en este documento.",
     "renameSlot": "Cambiar nombre del espacio",
     "renameSlotInvalid": "Los nombres de los espacios deben ser únicos y no pueden contener espacios en blanco, dos puntos ni llaves.",
     "restoreVersion": "Restaurar esta versión",

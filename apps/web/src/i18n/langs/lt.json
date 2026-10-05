@@ -1495,6 +1495,7 @@
     "noResults": "Sąlygų dar nėra",
     "noVariants": "Nėra variantų",
     "outdatedVersion": "Galimas atnaujinimas",
+    "overrideNotRenderedWarning": "Sąlygos {clauseName} pakeitimas nepanaudotas: jos vieta šiame dokumente nerodoma.",
     "renameSlot": "Pervadinti nišą",
     "renameSlotInvalid": "Nišų pavadinimai turi būti unikalūs ir negali turėti tarpų, dvitaškių ar riestinių skliaustų.",
     "restoreVersion": "Atkurti šią versiją",

@@ -1495,6 +1495,7 @@
     "noResults": "Aucune clause",
     "noVariants": "Aucune variante",
     "outdatedVersion": "Mise à jour disponible",
+    "overrideNotRenderedWarning": "Le remplacement de la clause {clauseName} n’a pas été utilisé : son emplacement n’apparaît pas dans ce document.",
     "renameSlot": "Renommer l'emplacement",
     "renameSlotInvalid": "Les noms d'emplacement doivent être uniques et ne peuvent pas contenir d'espaces, de deux-points ni d'accolades.",
     "restoreVersion": "Restaurer cette version",

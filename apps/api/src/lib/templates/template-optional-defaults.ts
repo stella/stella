@@ -129,15 +129,18 @@ export const isMissingRequiredFieldValue = ({
 };
 
 /**
- * Fields that render only where a scope renders them (a clause slot's own
- * fields): each is checked against every scope that renders it, with that
- * scope's values, and never globally. A scope the template prunes is absent,
- * so its fields gate nothing; a loop renders one scope per iteration.
+ * Fields required exactly where the document renders them. A field in `paths`
+ * is missing when one of its `occurrences` (a marker the fill renders, with
+ * the values in scope there: a loop iteration's bindings, or the document's)
+ * resolves its authored `expr` to nothing; a marker in a pruned branch or
+ * clause slot is not an occurrence, so it requires nothing. Fields outside
+ * `paths` are checked against the whole document.
  */
-export type ScopedRequiredFields = {
+export type RenderedRequiredFields = {
   paths: ReadonlySet<string>;
-  scopes: readonly {
-    paths: ReadonlySet<string>;
+  occurrences: readonly {
+    path: string;
+    expr: string;
     values: Record<string, unknown>;
   }[];
 };
@@ -155,23 +158,26 @@ export const collectMissingRequiredFields = ({
   fields,
   policy,
   values,
-  scoped,
+  rendered,
 }: {
   fields: readonly TemplateFieldDescriptor[];
   policy: RequiredFieldsPolicy;
   values: Record<string, unknown>;
-  scoped?: ScopedRequiredFields | undefined;
+  rendered?: RenderedRequiredFields | undefined;
 }): MissingRequiredField[] => {
   if (policy === "allow-partial") {
     return [];
   }
   return fields
     .filter((field) =>
-      scoped?.paths.has(field.path)
-        ? scoped.scopes.some(
-            (scope) =>
-              scope.paths.has(field.path) &&
-              isMissingRequiredFieldValue({ field, values: scope.values }),
+      rendered?.paths.has(field.path)
+        ? rendered.occurrences.some(
+            (occurrence) =>
+              occurrence.path === field.path &&
+              isMissingRequiredFieldValue({
+                field: { ...field, path: occurrence.expr },
+                values: occurrence.values,
+              }),
           )
         : isMissingRequiredFieldValue({ field, values }),
     )
