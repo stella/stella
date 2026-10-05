@@ -10,47 +10,59 @@ import type { PersonalApiKeyScope } from "@/api/lib/machine-api-key-config";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
-const PERSONAL_PERMISSION_POLICY = {
-  organization: "deny",
-  member: "deny",
-  invitation: "deny",
-  team: "deny",
-  ac: "deny",
-  workspace: "allow",
-  contact: "allow",
-  invoice: "deny",
-  template: "allow",
-  styleSet: "allow",
-  clause: "allow",
-  entity: "allow",
-  timeEntry: "deny",
-  expense: "deny",
-  view: "allow",
-  property: "allow",
-  playbook: "allow",
-  flow: "allow",
-  signal: "allow",
-  billingCode: "deny",
-  rate: "deny",
-  chat: "allow",
-  organizationSettings: "deny",
-  auditLog: "deny",
-  agentSkill: "allow",
-  firmMemory: "deny",
-  caseLawResearch: "allow",
-  legalReaderAnnotation: "allow",
-  savedSearch: "allow",
-  integration: "deny",
-} as const satisfies Record<keyof typeof statements, "allow" | "deny">;
+// Shared entity writes span document and matter tools. Transport scope checks
+// still gate each tool; unrelated resources retain their own consent boundary.
+const PERSONAL_WRITE_SCOPES = {
+  organization: null,
+  member: null,
+  invitation: null,
+  team: null,
+  ac: null,
+  workspace: ["stella:matters_write"],
+  contact: ["stella:contacts_write"],
+  invoice: null,
+  template: null,
+  styleSet: null,
+  clause: ["stella:knowledge_write"],
+  entity: ["stella:documents_write", "stella:matters_write"],
+  timeEntry: null,
+  expense: null,
+  view: ["stella:matters_write"],
+  property: ["stella:matters_write"],
+  playbook: ["stella:knowledge_write"],
+  flow: ["stella:matters_write"],
+  signal: ["stella:matters_write"],
+  billingCode: null,
+  rate: null,
+  chat: null,
+  organizationSettings: null,
+  auditLog: null,
+  agentSkill: null,
+  firmMemory: null,
+  caseLawResearch: null,
+  legalReaderAnnotation: ["stella:knowledge_write"],
+  savedSearch: null,
+  integration: null,
+} as const satisfies Record<
+  keyof typeof statements,
+  readonly PersonalApiKeyScope[] | null
+>;
 
-const permissionPolicy: Record<string, "allow" | "deny" | undefined> =
-  PERSONAL_PERMISSION_POLICY;
+const writeScopes = new Map(Object.entries(PERSONAL_WRITE_SCOPES));
+const permissionScopeAllows = (
+  resource: string,
+  action: string,
+  scopes: readonly PersonalApiKeyScope[],
+) =>
+  (resource === "workspace" && action === "read") ||
+  (writeScopes.get(resource)?.some((scope) => scopes.includes(scope)) ?? false);
 
 export const personalApiKeyPermissionsAllowed = (
   permissions: Record<string, string[]>,
+  scopes: readonly PersonalApiKeyScope[],
 ) =>
-  Object.keys(permissions).every(
-    (resource) => permissionPolicy[resource] === "allow",
+  Object.entries(permissions).every(([resource, actions]) =>
+    actions.every((action) => permissionScopeAllows(resource, action, scopes)),
   );
 
 /** Build the credential's ceiling from live membership, excluding administrative resources. */
@@ -58,16 +70,10 @@ export const personalApiKeyPermissions = (
   memberRole: AuthorizedMemberRole,
   scopes: readonly PersonalApiKeyScope[] = PERSONAL_API_KEY_DEFAULT_SCOPES,
 ) => {
-  const writes = scopes.some(
-    (scope) => scope !== "stella:search" && scope !== "stella:read",
-  );
   const permissions = new Map<string, string[]>();
   for (const [resource, actions] of Object.entries(statements)) {
-    if (permissionPolicy[resource] !== "allow") {
-      continue;
-    }
     for (const action of actions) {
-      if (!writes && (resource !== "workspace" || action !== "read")) {
+      if (!permissionScopeAllows(resource, action, scopes)) {
         continue;
       }
       const parsed = parseMachineApiKeyPermissions({ [resource]: [action] });

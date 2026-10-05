@@ -173,9 +173,27 @@ export const ROOT_CONNECTION_DOORS = [
           reason: "Owns the session-authorized personal key operation.",
         },
         {
+          path: "apps/api/src/lib/machine-api-keys/personal-policy-reader.ts",
+          reason: "Exposes only the read-only organization policy operation.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "personal-api-key-policy-reader",
+    capability:
+      "Reading personal API key policy during credential verification",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-policy-reader.ts"],
+    summary:
+      "The MCP authentication boundary can read policy without importing lifecycle mutations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-policy-reader"],
+      allowed: [
+        {
           path: "apps/api/src/mcp/api-key-auth.ts",
-          reason:
-            "Checks organization policy before accepting a personal credential.",
+          reason: "Checks policy before accepting a personal credential.",
         },
       ],
     },

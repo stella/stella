@@ -12,8 +12,8 @@ import {
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
-import { readPersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { personalApiKeyPermissionsAllowed } from "@/api/lib/machine-api-keys/personal-policy";
+import { readPersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-policy-reader";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
@@ -134,7 +134,10 @@ export const resolveMachineApiKeySession = async (
   const identity = brandActorSessionIdentity({ organizationId, userId });
   const personalPolicy =
     metadata.output.kind === API_KEY_KIND.personal &&
-    (!personalApiKeyPermissionsAllowed(storedPermissions.output) ||
+    (!personalApiKeyPermissionsAllowed(
+      storedPermissions.output,
+      metadata.output.scopes,
+    ) ||
       key.expiresAt === null ||
       key.expiresAt.getTime() - key.createdAt.getTime() >
         API_KEY_POLICY.personal.maxDays * DAY_IN_MS ||
@@ -175,7 +178,10 @@ export const resolveMachineApiKeySession = async (
 
   return {
     credential: {
-      type: "machine_api_key",
+      type:
+        metadata.output.kind === API_KEY_KIND.personal
+          ? "personal_api_key"
+          : "machine_api_key",
       id: key.id,
       name: key.name ?? "Machine API key",
       // The set the check above proved the owner's role can grant. It travels

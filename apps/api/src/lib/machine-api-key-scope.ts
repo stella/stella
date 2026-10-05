@@ -42,12 +42,15 @@ export const machineApiKeyOrganizationScope = (
 
 /** Legacy persisted machine keys omit kind; personal keys always name it. */
 export const apiKeyKindScope = (kind: ApiKeyKind) => {
-  const metadataKind = sql`(${apikey.metadata}::text::jsonb ->> 'kind')`;
+  const metadataKind = sql`(${apikey.metadata}::jsonb ->> 'kind')`;
   switch (kind) {
     case API_KEY_KIND.machine:
       return or(isNull(metadataKind), sql`${metadataKind} = ${kind}`);
     case API_KEY_KIND.personal:
-      return sql`${metadataKind} = ${kind}`;
+      return and(
+        sql`${apikey.metadata} IS NOT NULL`,
+        sql`${metadataKind} = 'personal'`,
+      );
     default:
       kind satisfies never;
       return panic(`Unhandled API key kind: ${String(kind)}`);

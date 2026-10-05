@@ -3,8 +3,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { and, eq, inArray } from "drizzle-orm";
+import Elysia from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -22,8 +23,10 @@ import { auditLogs, organizationSettings } from "@/api/db/schema";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import {
   createBackgroundAuditRecorder,
+  AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log";
+import { createAuthMacro } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   PERSONAL_API_KEY_AUDIENCES,
@@ -38,6 +41,7 @@ import {
   updatePersonalApiKeyPolicy,
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { logger } from "@/api/lib/observability/logger";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import {
@@ -116,7 +120,7 @@ const withFixture = async (
       other: principal(otherId),
     });
   } finally {
-    await db.delete(apikey).where(eq(apikey.referenceId, ownerId));
+    await db.delete(apikey).where(inArray(apikey.referenceId, ids));
     await db.delete(organization).where(eq(organization.id, organizationId));
     for (const id of ids) {
       await db.delete(user).where(eq(user.id, id));
@@ -135,6 +139,194 @@ const requireKey = (
 };
 
 describe("personal key persistence and receipts", () => {
+  test("turning policy off disables every organization personal key with owner receipts, and turning it on never revives them", async () => {
+    await withFixture(async ({ own, other, admin }) => {
+      const owned = requireKey(await createPersonalApiKey(own));
+      const otherKey = requireKey(await createPersonalApiKey(other));
+      const ids = [owned.id, otherKey.id];
+      await withFixture(async ({ own: foreign }) => {
+        const foreignKey = requireKey(await createPersonalApiKey(foreign));
+        expect(
+          (
+            await updatePersonalApiKeyPolicy({ ...admin, policy: "disabled" })
+          ).isOk(),
+        ).toBe(true);
+        const rows = await db
+          .select()
+          .from(apikey)
+          .where(inArray(apikey.id, ids));
+        expect(rows).toHaveLength(ids.length);
+        expect(rows.every((key) => key.enabled === false)).toBe(true);
+        const [unaffected] = await db
+          .select()
+          .from(apikey)
+          .where(eq(apikey.id, foreignKey.id));
+        expect(unaffected?.enabled).toBe(true);
+        const receipts = await db
+          .select()
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.organizationId, own.organizationId),
+              eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY),
+              eq(auditLogs.action, AUDIT_ACTION.DELETE),
+            ),
+          );
+        expect(receipts).toHaveLength(ids.length);
+        for (const [keyId, ownerUserId] of [
+          [owned.id, own.userId],
+          [otherKey.id, other.userId],
+        ]) {
+          const receipt = receipts.find((event) => event.resourceId === keyId);
+          expect(receipt?.userId).toBe(admin.userId);
+          expect(receipt?.metadata).toMatchObject({ ownerUserId });
+        }
+        expect(
+          (
+            await updatePersonalApiKeyPolicy({ ...admin, policy: "enabled" })
+          ).isOk(),
+        ).toBe(true);
+        const after = await db
+          .select()
+          .from(apikey)
+          .where(inArray(apikey.id, ids));
+        expect(after.every((key) => key.enabled === false)).toBe(true);
+        requireKey(await createPersonalApiKey(own));
+      });
+    });
+  });
+
+  test("failed policy revocation receipts roll back the setting and every affected key", async () => {
+    await withFixture(async ({ own, other, admin }) => {
+      const first = requireKey(await createPersonalApiKey(own));
+      const second = requireKey(await createPersonalApiKey(other));
+      const eventsBefore = await db
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.organizationId, own.organizationId));
+      const failed = await updatePersonalApiKeyPolicy({
+        ...admin,
+        policy: "disabled",
+        recordAuditEvent: async (tx, event) => {
+          expect(event).toMatchObject({
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+          });
+          await admin.recordAuditEvent(tx, event);
+          throw new HandlerError({
+            status: 500,
+            message: "fixture policy revocation receipt failure",
+          });
+        },
+      });
+      expect(failed.isErr()).toBe(true);
+      if (failed.isErr()) {
+        expect(failed.error.message).toBe(
+          "fixture policy revocation receipt failure",
+        );
+      }
+      expect(await readPersonalApiKeyPolicy(own.organizationId, database)).toBe(
+        "enabled",
+      );
+      const rows = await db
+        .select()
+        .from(apikey)
+        .where(inArray(apikey.id, [first.id, second.id]));
+      expect(rows).toHaveLength(2);
+      expect(rows.every((key) => key.enabled)).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, own.organizationId)),
+      ).toEqual(eventsBefore);
+    });
+  });
+
+  test("expired keys cannot be rotated into fresh credentials", async () => {
+    await withFixture(async ({ own }) => {
+      const key = requireKey(await createPersonalApiKey(own));
+      await db
+        .update(apikey)
+        .set({ expiresAt: new Date("2000-01-01T00:00:00Z") })
+        .where(eq(apikey.id, key.id));
+      const eventsBefore = await db
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.organizationId, own.organizationId));
+      const rotated = await rotatePersonalApiKey({ ...own, keyId: key.id });
+      expect(rotated.isErr()).toBe(true);
+      if (rotated.isErr()) {
+        expect(rotated.error.status).toBe(409);
+      }
+      const page = await listPersonalApiKeys(
+        { ...own, access: "own", limit: 20 },
+        database,
+      );
+      expect(page.items.map((item) => item.id)).toEqual([key.id]);
+      expect(
+        await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, own.organizationId)),
+      ).toEqual(eventsBefore);
+    });
+  });
+
+  test("invalid personal key metadata is reported and skipped while its owner can still revoke the raw row", async () => {
+    await withFixture(async ({ own, other }) => {
+      const healthy = requireKey(await createPersonalApiKey(own));
+      const malformed = requireKey(await createPersonalApiKey(own));
+      await db
+        .update(apikey)
+        .set({
+          metadata: JSON.stringify({
+            kind: "personal",
+            organizationId: own.organizationId,
+            audience: "invalid-audience",
+            scopes: [...PERSONAL_API_KEY_SCOPES],
+          }),
+        })
+        .where(eq(apikey.id, malformed.id));
+      const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+      try {
+        const page = await listPersonalApiKeys(
+          { ...own, access: "own", limit: 20 },
+          database,
+        );
+        expect(page.items.map((item) => item.id)).toEqual([healthy.id]);
+        expect(warn).toHaveBeenCalledWith(
+          "api_keys.stored_key_unreadable",
+          expect.objectContaining({ keyId: malformed.id, column: "metadata" }),
+        );
+        const unauthorized = await revokePersonalApiKey({
+          ...other,
+          access: "own",
+          keyId: malformed.id,
+        });
+        expect(unauthorized.isErr()).toBe(true);
+        if (unauthorized.isErr()) {
+          expect(unauthorized.error.status).toBe(404);
+        }
+        expect(
+          (
+            await revokePersonalApiKey({
+              ...own,
+              access: "own",
+              keyId: malformed.id,
+            })
+          ).isOk(),
+        ).toBe(true);
+        const [row] = await db
+          .select()
+          .from(apikey)
+          .where(eq(apikey.id, malformed.id));
+        expect(row?.enabled).toBe(false);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
   test.each(PERSONAL_API_KEY_AUDIENCES)(
     "%s credentials stop authenticating immediately after owner or administrator revocation",
     async (audience) => {
@@ -148,6 +340,25 @@ describe("personal key persistence and receipts", () => {
           }),
           plugins: [apiKey([...API_KEY_PLUGIN_CONFIGS])],
         });
+        const sessionReads = { count: 0 };
+        const rest = new Elysia()
+          .use(
+            createAuthMacro({
+              getSession: async ({ headers }) => {
+                const resolved = await auth.api.getSession({
+                  headers: new Headers(headers),
+                  returnHeaders: true,
+                });
+                expect(resolved.response).toBeNull();
+                if (resolved.response !== null) {
+                  panic("A personal key must never create a REST session");
+                }
+                sessionReads.count += 1;
+                return { headers: resolved.headers, response: null };
+              },
+            }),
+          )
+          .get("/protected", () => "authenticated", { validateAuth: true });
         const resolveAuthorization: NonNullable<
           Parameters<typeof resolveMachineApiKeySession>[1]
         >["resolveAuthorization"] = async ({ organizationId, userId }) => {
@@ -199,13 +410,19 @@ describe("personal key persistence and receipts", () => {
               );
               expect(response.status).toBe(200);
               expect(await response.json()).toBeNull();
+              const readsBefore = sessionReads.count;
+              const protectedResponse = await rest.handle(
+                new Request("http://localhost:3001/protected", { headers }),
+              );
+              expect(protectedResponse.status).toBe(401);
+              expect(sessionReads.count).toBe(readsBefore + 1);
             }
           };
           const authenticated = await resolve();
           expect(authenticated.userId).toBe(own.userId);
           expect(authenticated.organizationId).toBe(own.organizationId);
           expect(authenticated.credential).toMatchObject({
-            type: "machine_api_key",
+            type: "personal_api_key",
             id: key.id,
           });
           await assertNoRestSession();
@@ -688,6 +905,12 @@ describe("personal key persistence and receipts", () => {
         .select()
         .from(auditLogs)
         .where(eq(auditLogs.organizationId, own.organizationId));
+      const revocation = before.find(
+        (event) =>
+          event.resourceId === key.id && event.action === AUDIT_ACTION.DELETE,
+      );
+      expect(revocation?.userId).toBe(admin.userId);
+      expect(revocation?.metadata).toMatchObject({ ownerUserId: own.userId });
       expect(
         (
           await revokePersonalApiKey({

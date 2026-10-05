@@ -1,17 +1,22 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { roles, statements } from "@stll/permissions";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   API_KEY_KIND,
-  PERSONAL_API_KEY_DEFAULT_SCOPES,
   PERSONAL_API_KEY_SCOPES,
   machineApiKeyMetadataSchema,
+  machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
+} from "@/api/lib/machine-api-key-config";
+import type {
+  PersonalApiKeyScope,
+  PERSONAL_API_KEY_DEFAULT_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 import {
   personalApiKeyPermissions,
@@ -30,6 +35,28 @@ const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);
 const createdAt = new Date();
 const expiresAt = new Date(createdAt.getTime() + 30 * 86_400_000);
+const capabilityCatalog = v.parse(
+  v.array(
+    v.object({
+      id: v.string(),
+      scope: v.string(),
+      permissions: v.optional(v.nullable(machineApiKeyPermissionsSchema)),
+    }),
+  ),
+  readCapabilityCatalog(),
+);
+const positiveWriteCapabilities = {
+  "stella:documents_write": "entities.blank-document.create",
+  "stella:matters_write": "matters.create",
+  "stella:contacts_write": "contacts.create",
+  "stella:knowledge_write": "clauses.create",
+} as const satisfies Record<
+  Exclude<
+    PersonalApiKeyScope,
+    (typeof PERSONAL_API_KEY_DEFAULT_SCOPES)[number]
+  >,
+  string
+>;
 const verifiedKey = (permissions: Record<string, string[]>) => ({
   id: "personal-fixture",
   configId: "machine",
@@ -75,10 +102,8 @@ const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
 describe("personal API key authority", () => {
   test.each(
     PERSONAL_API_KEY_SCOPES.filter(
-      (scope) =>
-        !PERSONAL_API_KEY_DEFAULT_SCOPES.some(
-          (defaultScope) => defaultScope === scope,
-        ),
+      (scope): scope is keyof typeof positiveWriteCapabilities =>
+        Object.hasOwn(positiveWriteCapabilities, scope),
     ),
   )("explicit scope %s retains positive write authority", async (scope) => {
     const permissions = personalApiKeyPermissions(sessionMemberRole("member"), [
@@ -94,6 +119,44 @@ describe("personal API key authority", () => {
         .flat()
         .some((action) => action !== "read"),
     ).toBe(true);
+    const capabilityId = positiveWriteCapabilities[scope];
+    const capability = capabilityCatalog.find(
+      (entry) => entry.id === capabilityId,
+    );
+    expect(capability?.scope).toBe(scope);
+    if (!capability?.permissions) {
+      return panic(
+        "Each positive scope fixture must name actual capability permissions",
+      );
+    }
+    const required = parseMachineApiKeyPermissions(capability.permissions);
+    expect(required.type).toBe("valid");
+    if (required.type !== "valid") {
+      return;
+    }
+    expect(
+      hasMemberPermission(
+        mcpMemberAuthority({
+          memberRole: "member",
+          credentialPermissions: parsed.permissions,
+        }),
+        required.permissions,
+      ),
+    ).toBe(true);
+    const permittedResources = new Set(
+      capabilityCatalog
+        .filter((entry) => entry.scope === scope)
+        .flatMap((entry) => Object.keys(entry.permissions ?? {})),
+    );
+    for (const [resource, actions] of Object.entries(permissions)) {
+      if (
+        resource === "workspace" &&
+        actions.every((action) => action === "read")
+      ) {
+        continue;
+      }
+      expect(permittedResources.has(resource)).toBe(true);
+    }
     const session = await resolveMachineApiKeySession("stella_mk_fixture", {
       verifyApiKey: async () => {
         const verified = verification(permissions);
@@ -103,8 +166,8 @@ describe("personal API key authority", () => {
       resolveAuthorization: authorizeAs("member"),
       resolvePersonalPolicy: async () => "enabled",
     });
-    expect(session.credential?.type).toBe("machine_api_key");
-    if (session.credential?.type !== "machine_api_key") {
+    expect(session.credential?.type).toBe("personal_api_key");
+    if (session.credential?.type !== "personal_api_key") {
       return;
     }
     expect(session.credential.permissions).toEqual(parsed.permissions);
@@ -161,8 +224,8 @@ describe("personal API key authority", () => {
               return;
             }
             const credential = outcome.value.credential;
-            expect(credential?.type).toBe("machine_api_key");
-            if (credential?.type !== "machine_api_key") {
+            expect(credential?.type).toBe("personal_api_key");
+            if (credential?.type !== "personal_api_key") {
               return;
             }
             expect(credential.permissions).toEqual(parsed.permissions);
@@ -196,7 +259,9 @@ describe("personal API key authority", () => {
                 }
               }
             }
-            expect(personalApiKeyPermissionsAllowed(permissions)).toBe(true);
+            expect(personalApiKeyPermissionsAllowed(permissions, scopes)).toBe(
+              true,
+            );
           },
         ),
       );

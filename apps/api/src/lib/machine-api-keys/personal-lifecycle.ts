@@ -1,6 +1,6 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { generateRandomString } from "better-auth/crypto";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, desc, eq, gt } from "drizzle-orm";
 
 import { apikey, member, organization, user } from "@/api/db/auth-schema";
@@ -23,6 +23,7 @@ import {
   PERSONAL_API_KEY_SCOPES,
   PERSONAL_API_KEY_AUDIENCES,
   MACHINE_API_KEY_LENGTH,
+  MACHINE_API_KEY_NAME_MAX_LENGTH,
   MACHINE_API_KEY_PREFIX,
   MACHINE_API_KEY_RATE_LIMIT,
   MACHINE_API_KEY_START_LENGTH,
@@ -85,7 +86,7 @@ const mutatePersonalKeys = async <T>(
           .select({ id: organization.id })
           .from(organization)
           .where(eq(organization.id, options.organizationId))
-          .for("update");
+          .for("no key update");
         if (!org) {
           return abortTransaction(keyNotFound());
         }
@@ -250,8 +251,8 @@ const mintPersonalKey = async (
     name: summary.name,
     start: summary.start,
     key: summary.key,
-    scopes: summary.scopes,
-    audience: summary.audience,
+    scopes: options.scopes ?? [...PERSONAL_API_KEY_DEFAULT_SCOPES],
+    audience: options.audience ?? PERSONAL_API_KEY_AUDIENCES[0],
     expiresAt: summary.expiresAt,
   };
 };
@@ -262,7 +263,7 @@ export const createPersonalApiKey = async (options: MintPersonalKeyOptions) =>
   );
 
 type KeyOptions = MutationOptions & { keyId: string };
-const loadPersonalKey = async (
+const loadPersonalKeyRow = async (
   tx: Transaction,
   options: KeyOptions & { access: "own" | "organization" },
 ) => {
@@ -282,11 +283,19 @@ const loadPersonalKey = async (
   if (!row) {
     return abortTransaction(keyNotFound());
   }
+  return row;
+};
+
+const loadPersonalKey = async (
+  tx: Transaction,
+  options: KeyOptions & { access: "own" | "organization" },
+) => {
+  const row = await loadPersonalKeyRow(tx, options);
   const key = toMachineApiKeySummary(row);
   if (!key || key.kind !== API_KEY_KIND.personal) {
     return abortTransaction(keyNotFound());
   }
-  return key;
+  return { ...key, expiresAt: row.expiresAt };
 };
 
 export const revokePersonalApiKey = async (
@@ -304,7 +313,7 @@ export const revokePersonalApiKey = async (
         }),
       );
     }
-    const key = await loadPersonalKey(tx, options);
+    const key = await loadPersonalKeyRow(tx, options);
     if (key.enabled) {
       await tx
         .update(apikey)
@@ -316,7 +325,11 @@ export const revokePersonalApiKey = async (
         action: AUDIT_ACTION.DELETE,
         resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
         resourceId: key.id,
-        metadata: { name: key.name, reason: "revoked" },
+        metadata: {
+          name: key.name,
+          reason: "revoked",
+          ownerUserId: key.referenceId,
+        },
       });
     }
     return { id: key.id, revoked: true };
@@ -327,11 +340,11 @@ export const rotatePersonalApiKey = async (
 ) =>
   mutatePersonalKeys(options, async ({ tx, memberRole }) => {
     const key = await loadPersonalKey(tx, { ...options, access: "own" });
-    if (!key.enabled) {
+    if (!key.enabled || key.expiresAt === null || key.expiresAt <= new Date()) {
       return abortTransaction(
         new HandlerError({
           status: 409,
-          message: "API key is already revoked",
+          message: "API key is revoked or expired",
         }),
       );
     }
@@ -375,6 +388,23 @@ export const updatePersonalApiKeyPolicy = async (
           message: "Organization administrator access required",
         }),
       );
+    }
+    if (options.policy === "disabled") {
+      const revoked = await tx
+        .update(apikey)
+        .set({ enabled: false, updatedAt: new Date() })
+        .where(
+          and(personalScope(options.organizationId), eq(apikey.enabled, true)),
+        )
+        .returning({ id: apikey.id, ownerUserId: apikey.referenceId });
+      for (const key of revoked) {
+        await options.recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+          resourceId: key.id,
+          metadata: { reason: "policy_disabled", ownerUserId: key.ownerUserId },
+        });
+      }
     }
     await tx
       .insert(organizationSettings)
@@ -468,26 +498,29 @@ export const listPersonalApiKeys = async (
       defaultAudience: "default" as const,
       expiry: API_KEY_POLICY.personal,
       activeLimit: PERSONAL_API_KEY_ACTIVE_LIMIT,
+      nameMaxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
     },
-    items: page.items.map((row) => {
+    items: page.items.flatMap((row) => {
       const summary = toMachineApiKeySummary(row);
       if (!summary || summary.kind !== API_KEY_KIND.personal) {
-        panic("Personal key metadata must parse through the owning schema");
+        return [];
       }
-      return {
-        id: summary.id,
-        name: summary.name,
-        kind: summary.kind,
-        ownerUserId: summary.ownerUserId,
-        ownerName: row.ownerName,
-        scopes: summary.scopes,
-        audience: summary.audience,
-        enabled: summary.enabled,
-        start: row.start,
-        expiresAt: row.expiresAt,
-        createdAt: row.createdAt,
-        lastRequest: row.lastRequest,
-      };
+      return [
+        {
+          id: summary.id,
+          name: summary.name,
+          kind: summary.kind,
+          ownerUserId: summary.ownerUserId,
+          ownerName: row.ownerName,
+          scopes: summary.scopes,
+          audience: summary.audience,
+          enabled: summary.enabled,
+          start: row.start,
+          expiresAt: row.expiresAt,
+          createdAt: row.createdAt,
+          lastRequest: row.lastRequest,
+        },
+      ];
     }),
   };
 };
