@@ -59,7 +59,7 @@ const textPathProblem = (schema: unknown, path: string): string | null => {
 
 const windowedLeaves = Object.entries(DEFAULT_MCP_CLI_ANNOTATIONS).flatMap(
   ([name, annotation]) =>
-    "windowedText" in annotation && annotation.windowedText !== undefined
+    "windowedText" in annotation
       ? [[name, annotation.windowedText.textPath] as const]
       : [],
 );

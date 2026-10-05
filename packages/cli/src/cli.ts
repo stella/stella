@@ -7,7 +7,9 @@
 
 import { missingDependencyMessage } from "./missing-dependency.js";
 
-import("./cli-main.js").catch((error: unknown) => {
+try {
+  await import("./cli-main.js");
+} catch (error) {
   const message = missingDependencyMessage(error);
   if (message === null) {
     throw error;
@@ -15,4 +17,4 @@ import("./cli-main.js").catch((error: unknown) => {
   process.stderr.write(`stella: ${message}\n`);
   // EXIT_CODES.unexpected; the constants module is not loaded on this path.
   process.exitCode = 1;
-});
+}

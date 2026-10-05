@@ -84,7 +84,7 @@ export const TEXT_UNAVAILABLE_REASONS = {
   notInResponse: "not_in_response",
 } as const;
 
-export type TextUnavailableReason =
+type TextUnavailableReason =
   (typeof TEXT_UNAVAILABLE_REASONS)[keyof typeof TEXT_UNAVAILABLE_REASONS];
 
 /**
