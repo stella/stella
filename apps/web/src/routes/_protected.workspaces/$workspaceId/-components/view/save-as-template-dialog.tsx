@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -75,6 +76,12 @@ export const SaveAsTemplateDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup className="sm:max-w-sm">
+        <DialogFormState
+          dirty={name !== defaultName}
+          onDiscard={() => {
+            setName(defaultName);
+          }}
+        />
         <Form
           onSubmit={(e) => {
             e.preventDefault();
