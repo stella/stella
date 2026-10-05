@@ -296,7 +296,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(identity.existing).toBeUndefined();
         expect(identity.ecliIdentity).toEqual({
           type: "ambiguous",
-          candidateDecisionIds: twins.map(({ id }) => id).toSorted(),
+          sourceDocumentId: "doc-c",
         });
 
         await store(

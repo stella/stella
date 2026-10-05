@@ -96,8 +96,11 @@ export const DECISION_REKEYED_BY_ECLI = "case_law.ingestion.decision_rekeyed";
 export const DECISION_ECLI_IDENTITY_AMBIGUOUS =
   "case_law.ingestion.decision_ecli_identity_ambiguous";
 
-/** Rows the ECLI lookup reads: one is an answer, two are a conflict. */
-export const MAX_ECLI_IDENTITY_CANDIDATES = 2;
+/**
+ * Stored rows an ECLI can name and still be adopted: one. The lookup reads one
+ * more as a sentinel, since a second row is a conflict, not an answer.
+ */
+export const ECLI_IDENTITY_ADOPTABLE_ROWS = 1;
 
 export const DECISION_REFRESH = {
   /**

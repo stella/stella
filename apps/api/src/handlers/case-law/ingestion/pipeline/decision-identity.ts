@@ -15,7 +15,7 @@ import {
   DECISION_DOCKET_NOT_CANONICAL,
   DECISION_ECLI_IDENTITY_AMBIGUOUS,
   DECISION_REKEYED_BY_ECLI,
-  MAX_ECLI_IDENTITY_CANDIDATES,
+  ECLI_IDENTITY_ADOPTABLE_ROWS,
   MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LEGACY_DOCKET_CANDIDATES,
   MAX_LOGGED_DOCKET_LENGTH,
@@ -226,11 +226,17 @@ const IDENTITY_EXTRAS = {
 export type EcliIdentityMatch =
   | { type: "not-applicable" }
   | { type: "unmatched" }
-  | { type: "adopted"; previousSourceDocumentId: string }
   | {
-      type: "ambiguous";
-      candidateDecisionIds: SafeId<"caseLawDecision">[];
-    };
+      type: "adopted";
+      sourceDocumentId: string;
+      previousSourceDocumentId: string;
+    }
+  | { type: "ambiguous"; sourceDocumentId: string };
+
+type EcliIdentityCandidates =
+  | { type: "none" }
+  | { type: "one"; decisionId: SafeId<"caseLawDecision"> }
+  | { type: "several" };
 
 type FindEcliIdentityCandidatesOptions = Pick<
   ObservedDecision,
@@ -238,9 +244,10 @@ type FindEcliIdentityCandidatesOptions = Pick<
 > & { sourceId: SafeId<"caseLawSource"> };
 
 /**
- * The keyed rows of this source that state the observation's ECLI, docket,
- * date and language under another publisher id: at most two, locked, so a
- * concurrent re-key of the same row waits and reads it again.
+ * The keyed row of this source that states the observation's ECLI, docket,
+ * date and language under another publisher id, locked, so a concurrent
+ * re-key of the same row waits and reads it again. A second such row is read
+ * only to tell that the ECLI does not settle the observation.
  *
  * The ECLI is compared as stored: the row's value and the observation's both
  * come out of the same sanitization, so one decision spells it alike, and the
@@ -253,9 +260,9 @@ const findEcliIdentityCandidatesTx = async (
     observed: { caseNumber, decisionDate, ecli, language },
     sourceId,
   }: FindEcliIdentityCandidatesOptions,
-): Promise<SafeId<"caseLawDecision">[]> => {
+): Promise<EcliIdentityCandidates> => {
   if (ecli === undefined || decisionDate === undefined) {
-    return [];
+    return { type: "none" };
   }
   const rows = await tx
     .select({ id: caseLawDecisions.id })
@@ -276,8 +283,14 @@ const findEcliIdentityCandidatesTx = async (
     )
     .orderBy(caseLawDecisions.id)
     .for("update")
-    .limit(MAX_ECLI_IDENTITY_CANDIDATES);
-  return rows.map(({ id }) => id);
+    .limit(ECLI_IDENTITY_ADOPTABLE_ROWS + 1);
+  if (rows.length > ECLI_IDENTITY_ADOPTABLE_ROWS) {
+    return { type: "several" };
+  }
+  const row = rows.at(0);
+  return row === undefined
+    ? { type: "none" }
+    : { type: "one", decisionId: row.id };
 };
 
 const findIdentityRowTx = async (
@@ -317,10 +330,11 @@ const settleEcliIdentityTx = async (
     ...candidateOptions
   }: SettleEcliIdentityOptions,
 ) => {
+  const { sourceDocumentId } = candidateOptions.observed;
   if (
     resolved !== undefined ||
     claimedDecisionId !== undefined ||
-    !candidateOptions.observed.sourceDocumentId ||
+    !sourceDocumentId ||
     statedEcliIdentity !== STATED_ECLI_IDENTITY.DECISION
   ) {
     return {
@@ -328,27 +342,28 @@ const settleEcliIdentityTx = async (
       ecliIdentity: { type: "not-applicable" } satisfies EcliIdentityMatch,
     };
   }
-  const candidateDecisionIds = await findEcliIdentityCandidatesTx(
-    tx,
-    candidateOptions,
-  );
-  const candidateDecisionId = candidateDecisionIds.at(0);
-  if (candidateDecisionId === undefined) {
-    return {
-      existing: undefined,
-      ecliIdentity: { type: "unmatched" } satisfies EcliIdentityMatch,
-    };
+  const candidates = await findEcliIdentityCandidatesTx(tx, candidateOptions);
+  switch (candidates.type) {
+    case "none":
+      return {
+        existing: undefined,
+        ecliIdentity: { type: "unmatched" } satisfies EcliIdentityMatch,
+      };
+    case "several":
+      return {
+        existing: undefined,
+        ecliIdentity: {
+          type: "ambiguous",
+          sourceDocumentId,
+        } satisfies EcliIdentityMatch,
+      };
+    case "one":
+      break;
+    default:
+      candidates satisfies never;
+      return panic(`Unhandled ECLI candidates: ${String(candidates)}`);
   }
-  if (candidateDecisionIds.length > 1) {
-    return {
-      existing: undefined,
-      ecliIdentity: {
-        type: "ambiguous",
-        candidateDecisionIds,
-      } satisfies EcliIdentityMatch,
-    };
-  }
-  const adopted = await findIdentityRowTx(tx, candidateDecisionId);
+  const adopted = await findIdentityRowTx(tx, candidates.decisionId);
   if (adopted === undefined || adopted.sourceDocumentId === null) {
     // The candidate read above is locked and keyed; losing either is not a
     // state this transaction can reach.
@@ -358,6 +373,7 @@ const settleEcliIdentityTx = async (
     existing: adopted,
     ecliIdentity: {
       type: "adopted",
+      sourceDocumentId,
       previousSourceDocumentId: adopted.sourceDocumentId,
     } satisfies EcliIdentityMatch,
   };
@@ -726,14 +742,13 @@ export const resolveDecisionIdentityTx = async (
         sourceId,
         decisionId,
         previousSourceDocumentId: ecliIdentity.previousSourceDocumentId,
-        sourceDocumentId: observed.sourceDocumentId,
+        sourceDocumentId: ecliIdentity.sourceDocumentId,
       });
       break;
     case "ambiguous":
       logger.warn(DECISION_ECLI_IDENTITY_AMBIGUOUS, {
         sourceId,
-        sourceDocumentId: observed.sourceDocumentId,
-        candidateDecisionIds: ecliIdentity.candidateDecisionIds.join(","),
+        sourceDocumentId: ecliIdentity.sourceDocumentId,
       });
       break;
     case "not-applicable":
