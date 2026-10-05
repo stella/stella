@@ -94,6 +94,7 @@ import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/stella-tools";
 import {
   findUndeclaredArguments,
@@ -127,6 +128,13 @@ import {
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
+
+import {
+  buildRenderPlan as buildCliRenderPlan,
+  renderPlanExitCode as cliRenderPlanExitCode,
+  renderResult as renderCliResult,
+} from "../../../../packages/cli/src/output.ts";
+import { parsePayload as parseCliPayload } from "../../../../packages/cli/src/run-leaf-command.ts";
 
 const wireSchemaValidator = createWireSchemaValidator();
 
@@ -5245,6 +5253,121 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         },
       ],
+    });
+  });
+
+  describe("the CLI prints what read_case_law_decision returns", () => {
+    // `stella case-law read` calls this same tool, so the two surfaces share
+    // one read. What can still differ is the CLI's rendering of the payload:
+    // these run the tool's real output through the CLI's own parse and render
+    // steps under the annotation the CLI is generated from.
+    const annotation = DEFAULT_MCP_CLI_ANNOTATIONS.read_case_law_decision;
+
+    const renderThroughCli = (
+      result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+      textPath: string | undefined,
+    ) => {
+      const content = result.content.at(0);
+      if (content?.type !== "text") {
+        return panic("Expected a text MCP response");
+      }
+      const out: string[] = [];
+      const err: string[] = [];
+      const plan = buildCliRenderPlan({
+        payload: parseCliPayload({ content: [content] }),
+        itemsKey: "itemsKey" in annotation ? annotation.itemsKey : undefined,
+        textPath,
+        singleReadActive: false,
+        columns: undefined,
+      });
+      renderCliResult({
+        plan,
+        format: "json",
+        writers: {
+          stdout: (text) => {
+            out.push(text);
+          },
+          stderr: (text) => {
+            err.push(text);
+          },
+        },
+        allActive: false,
+      });
+      return {
+        printed: JSON.parse(out.join("")) as unknown,
+        stderr: err.join(""),
+        exitCode: cliRenderPlanExitCode(plan) ?? 0,
+      };
+    };
+
+    const callRead = async () =>
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID] },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      });
+
+    test("a decision whose text is not in the row's text column prints the same text on both surfaces", async () => {
+      // No AST and no column text: what the read returns once the text came
+      // from the corpus store rather than from `fulltext`.
+      const storedText = "I. Facts.\n\nII. The court dismissed the appeal.";
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        documentAst: null,
+        fulltext: storedText,
+      });
+      const result = await callRead();
+      const mcp = parseToolPayload(result);
+      const cli = renderThroughCli(result, undefined);
+
+      expect(mcp).toMatchObject({
+        items: [{ decision: { text: storedText } }],
+      });
+      expect(cli.printed).toEqual(mcp);
+      expect(cli.exitCode).toBe(0);
+    });
+
+    test("a decision without readable text is typed on both surfaces, never an empty string", async () => {
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        source: {
+          ...createReadDecisionResult().source,
+          allowsDerivedAi: false,
+        },
+      });
+      const result = await callRead();
+      const mcp = parseToolPayload(result);
+      const cli = renderThroughCli(result, undefined);
+
+      expect(mcp).toMatchObject({
+        items: [
+          {
+            decision: {
+              text: null,
+              textWithheldReason: expect.any(String),
+            },
+          },
+        ],
+      });
+      expect(cli.printed).toEqual(mcp);
+    });
+
+    test("a CLI built for a single-text response does not print this batch as empty text", async () => {
+      // An older CLI rendered this tool as one text at `decision.text`; the
+      // batch payload has none there. It must say so, not print "".
+      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const result = await callRead();
+      const cli = renderThroughCli(result, "decision.text");
+
+      expect(cli.printed).toMatchObject({
+        text: null,
+        textUnavailable: {
+          reason: "not_in_response",
+          textPath: "decision.text",
+        },
+        response: parseToolPayload(result),
+      });
+      expect(cli.exitCode).not.toBe(0);
     });
   });
 
