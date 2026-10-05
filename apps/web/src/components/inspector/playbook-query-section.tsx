@@ -10,8 +10,8 @@ import type { QueryView } from "@/lib/query-view.logic";
 
 type PlaybookQuerySectionProps<TData, TError> = {
   view: QueryView<TData, TError>;
-  pending: ReactNode;
-  empty: ReactNode;
+  pending: Exclude<ReactNode, Promise<unknown>>;
+  empty: Exclude<ReactNode, Promise<unknown>>;
   children: (items: TData) => ReactNode;
 };
 

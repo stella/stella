@@ -252,6 +252,57 @@ import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions"
 
 import { PlaybookQuerySection } from "./playbook-query-section";
 
+/**
+ * The wait for a run whose findings have not arrived yet. Its shape is the
+ * results view's, row for row — the summary sentence, the queue row, the two
+ * filter tabs, the clause band, then the cards — so nothing jumps when the run
+ * lands. `cardCount` is what the history row said the run was planned against,
+ * which is why the column does not resize under the reader.
+ */
+const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-busy="true"
+      aria-label={t("common.loading")}
+      className="bg-background flex h-full flex-col"
+    >
+      <header className="space-y-2 border-b px-3 py-2.5">
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+        {/* The document's queue row: pending count, hide-accepted, accept-all. */}
+        <div className="flex items-center gap-1">
+          <Skeleton className="me-auto h-3 w-20" />
+          <Skeleton className="size-6 rounded-md" />
+          <Skeleton className="h-6 w-24 rounded-md" />
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden px-2 py-2">
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <Skeleton className="h-3 w-16" />
+          <div className="bg-muted flex gap-0.5 rounded-lg p-0.5">
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </div>
+        <ul className="space-y-1.5">
+          {Array.from({ length: cardCount }, (_unused, index) => (
+            <li className="bg-card rounded-lg border" key={index}>
+              <span className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="ms-auto h-3 w-16 shrink-0" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
 type PlaybookFacetProps = {
   entityId: string;
   fileFieldId: string;
@@ -867,9 +918,7 @@ export const PlaybookFacet = ({
 // fresh array on every call and re-render forever.
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
-/** The sides are absent while the detection query is pending or has failed —
- *  which is not the same as a document with no parties, but reads the same
- *  here: the picker offers what it was given. */
+/** A successful detection with no sides still offers the neutral perspective. */
 const EMPTY_PARTIES: readonly ReviewParty[] = [];
 /** A finding graded against an authored standard has no reference document
  *  behind it to quote, so the groups are absent rather than empty. */
@@ -2555,57 +2604,6 @@ const ReviewLauncherSkeleton = () => {
       <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-20 w-full rounded-lg" />
       <Skeleton className="h-20 w-full rounded-lg" />
-    </div>
-  );
-};
-
-/**
- * The wait for a run whose findings have not arrived yet. Its shape is the
- * results view's, row for row — the summary sentence, the queue row, the two
- * filter tabs, the clause band, then the cards — so nothing jumps when the run
- * lands. `cardCount` is what the history row said the run was planned against,
- * which is why the column does not resize under the reader.
- */
-const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
-  const t = useTranslations();
-  return (
-    <div
-      aria-busy="true"
-      aria-label={t("common.loading")}
-      className="bg-background flex h-full flex-col"
-    >
-      <header className="space-y-2 border-b px-3 py-2.5">
-        <div className="min-w-0 space-y-1.5">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-3/4" />
-          <Skeleton className="h-3 w-40" />
-        </div>
-        {/* The document's queue row: pending count, hide-accepted, accept-all. */}
-        <div className="flex items-center gap-1">
-          <Skeleton className="me-auto h-3 w-20" />
-          <Skeleton className="size-6 rounded-md" />
-          <Skeleton className="h-6 w-24 rounded-md" />
-        </div>
-      </header>
-      <div className="flex-1 overflow-hidden px-2 py-2">
-        <div className="mb-2 flex items-center justify-between gap-2 px-1">
-          <Skeleton className="h-3 w-16" />
-          <div className="bg-muted flex gap-0.5 rounded-lg p-0.5">
-            <Skeleton className="h-8 w-20 rounded-md" />
-            <Skeleton className="h-8 w-20 rounded-md" />
-          </div>
-        </div>
-        <ul className="space-y-1.5">
-          {Array.from({ length: cardCount }, (_unused, index) => (
-            <li className="bg-card rounded-lg border" key={index}>
-              <span className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="ms-auto h-3 w-16 shrink-0" />
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
     </div>
   );
 };

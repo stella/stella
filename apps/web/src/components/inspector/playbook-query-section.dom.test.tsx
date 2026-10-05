@@ -1,9 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { documentReviewPartiesOptions } from "@/components/ai-suggestions/document-review-queries";
+import { documentReviewPartiesKeys } from "@/components/ai-suggestions/document-review-queries";
 import messages from "@/i18n/langs/en.json";
-import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -25,11 +25,11 @@ const target = {
   entityId: "document",
   fileFieldId: "file",
 };
-for (const { queryKey } of [
-  documentReviewPartiesOptions(target),
-  entityVersionsOptions(target),
+for (const queryKey of [
+  documentReviewPartiesKeys.target(target),
+  entityVersionsKeys.all(target),
 ]) {
-  describe(`${queryKey.join(":")} query region`, () => {
+  describe(`${JSON.stringify(queryKey)} query region`, () => {
     const mount = () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
@@ -40,7 +40,7 @@ for (const { queryKey } of [
       const Region = () => {
         const query = useQuery({
           queryKey,
-          queryFn: () => {
+          queryFn: async () => {
             const request = Promise.withResolvers<readonly string[]>();
             requests.push(request);
             return request.promise;
