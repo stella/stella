@@ -295,33 +295,38 @@ export const ChatThreadMessages = ({
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />
-            <SourceChips
-              activeOrganizationId={activeOrganizationId}
-              messageId={message.id}
-              parts={message.parts}
-              sourceDocuments={message.metadata?.sourceDocuments}
-              workspaceId={workspaceId}
-            />
-            <AssistantMessageActions
-              exportArtifact={findCreateDocumentArtifactForMessage(
-                messages,
-                index,
-              )}
-              canFork={canForkAssistantMessage({
-                isGenerating: generationActive,
-                messageId: message.id,
-                messages,
-              })}
-              canRetry={canRetryAssistantMessage({
-                isGenerating: generationActive,
-                messageId: message.id,
-                messages,
-              })}
-              contextMatterIds={branchSource?.contextMatterIds}
-              message={message}
-              onResend={onResend}
-              threadRef={threadRef}
-            />
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+              data-chat-answer-footer
+            >
+              <AssistantMessageActions
+                exportArtifact={findCreateDocumentArtifactForMessage(
+                  messages,
+                  index,
+                )}
+                canFork={canForkAssistantMessage({
+                  isGenerating: generationActive,
+                  messageId: message.id,
+                  messages,
+                })}
+                canRetry={canRetryAssistantMessage({
+                  isGenerating: generationActive,
+                  messageId: message.id,
+                  messages,
+                })}
+                contextMatterIds={branchSource?.contextMatterIds}
+                message={message}
+                onResend={onResend}
+                threadRef={threadRef}
+              />
+              <SourceChips
+                activeOrganizationId={activeOrganizationId}
+                messageId={message.id}
+                parts={message.parts}
+                sourceDocuments={message.metadata?.sourceDocuments}
+                workspaceId={workspaceId}
+              />
+            </div>
           </>
         ) : (
           <>
@@ -1112,7 +1117,7 @@ const AssistantMessageActions = ({
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"

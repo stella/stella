@@ -244,6 +244,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
   // adapters convert its typed failures to Result at their ingestion boundary.
   "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+  // The CLI entry point catches the dynamic load of the application shell so
+  // a checkout without installed packages gets one actionable line; it cannot
+  // import the Result library, which is one of the packages that may be missing.
+  "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

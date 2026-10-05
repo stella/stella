@@ -207,6 +207,10 @@ import {
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  hasRenewingHostedSubscription,
+  ORGANIZATION_DELETION_REFUSAL_CODE,
+} from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1185,25 +1189,40 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         const organizationId = brandPersistedOrganizationId(org.id);
         const teardown = await Result.tryPromise({
           try: async () =>
-            await rootDb.transaction(
-              async (tx) =>
-                await completeOrganizationDeletion({
+            await rootDb.transaction(async (tx) => {
+              // The provider bills a renewing subscription after the
+              // organization is gone, so its owner cancels it first. The
+              // check holds the entitlement row until the deletion commits.
+              if (await hasRenewingHostedSubscription(tx, organizationId)) {
+                return { type: "subscription_renews" } as const;
+              }
+              return {
+                type: "deleted",
+                teardown: await completeOrganizationDeletion({
                   organizationId,
                   tx,
                 }),
-            ),
+              } as const;
+            }),
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
           captureError(teardown.error, { organizationId });
-          if (teardown.error instanceof OrganizationStorageTeardownBoundError) {
-            throw new APIError("BAD_REQUEST", {
-              error: "organization_storage_too_large",
-              message: teardown.error.message,
-            });
-          }
-          throw new APIError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to delete the organization's stored files",
+          throw teardown.error instanceof OrganizationStorageTeardownBoundError
+            ? new APIError("BAD_REQUEST", {
+                error: "organization_storage_too_large",
+                message: teardown.error.message,
+              })
+            : new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to delete the organization's stored files",
+              });
+        }
+
+        if (teardown.value.type === "subscription_renews") {
+          throw new APIError("CONFLICT", {
+            error: ORGANIZATION_DELETION_REFUSAL_CODE.subscriptionRenews,
+            message:
+              "Cancel the organization's subscription before deleting the organization.",
           });
         }
 
@@ -1215,7 +1234,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.requestIds,
+          requestIds: teardown.value.teardown.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
