@@ -122,7 +122,7 @@ export const PublicStatuteViewer = ({
   });
   useExternalSyncEffect(() => {
     const citation = splitStatuteTitleCitation(header.title).citation;
-    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(work.eli ?? "");
+    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(work.eli);
     const year = eliCitation?.at(1);
     const number = eliCitation?.at(2);
     const title =
@@ -131,11 +131,11 @@ export const PublicStatuteViewer = ({
         : `${number}/${year} · ${header.title}`;
     recordLawOpen({
       kind: "statute",
-      id: work.eli ?? work.id,
+      id: work.eli,
       title,
       path: openedPath,
     });
-  }, [header.title, work.id, work.eli, openedPath]);
+  }, [header.title, work.eli, openedPath]);
   // Picking a day means going to that day's consolidation, and only the
   // readable segment can address one. A document the corpus holds no segment
   // for keeps the version menu, which switches by id.

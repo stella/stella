@@ -36,7 +36,11 @@ const mount = () => {
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <LawRecent onSearch={(query) => searches.push(query)} />
+        <LawRecent
+          onSearch={(query) => {
+            searches.push(query);
+          }}
+        />
       </FormattingProvider>
     </IntlProvider>,
   );
