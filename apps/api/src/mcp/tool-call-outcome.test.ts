@@ -377,8 +377,9 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     test(`skill ${valid ? "success" : "output-contract failure"} is observed once`, async () => {
       const gatewayResult = {
         type: "internal",
-        // The failure case sends a shape the skill output does not declare,
-        // which the checked constructor refuses at compile time.
+        // The failure case stands in for a gateway that breaks its declared
+        // output at runtime; the checked constructor refuses that shape at
+        // compile time, so only this test asserts it into the declared type.
         result: valid
           ? toolDataResult({
               type: "skill",
@@ -392,7 +393,10 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
               resources: [],
               version: null,
             })
-          : untypedToolDataResult({ body: PRIVATE_TEXT }),
+          : (untypedToolDataResult({ body: PRIVATE_TEXT }) as Extract<
+              GatewayDispatchResult,
+              { type: "internal" }
+            >["result"]),
       } satisfies GatewayDispatchResult;
       const result = await handleMcpToolCall({
         toolName: `skill__${PRIVATE_TEXT}`,
