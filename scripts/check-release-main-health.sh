@@ -9,7 +9,7 @@ sha="${2:?commit SHA is required}"
 refuse() { echo "::error::$1" >&2; exit 1; }
 statuses=$(gh api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")
 status=$(jq -ce '[.[][] | select(.context == "main/heavy")][0] // error("missing main/heavy")' <<< "$statuses") \
-  || refuse 'RELEASE_HEAVY_NOT_GREEN: missing heavy status'
+  || refuse "RELEASE_HEAVY_NOT_GREEN: main/heavy is missing on $sha"
 jq -e '.state == "success" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null \
   || refuse 'RELEASE_HEAVY_NOT_GREEN: trusted main/heavy success is required'
 url=$(jq -r '.target_url' <<< "$status")

@@ -13,6 +13,7 @@ set -euo pipefail
 case "$*" in
   *"/commits/$TEST_CANDIDATE/statuses?per_page=100"*)
     jq --argjson heavy "$TEST_HEAVY_STATUS" '.[0] += [$heavy]' <<< "$TEST_STATUSES" ;;
+  *"/commits/${TEST_LATER:-none}/statuses?per_page=100"*) printf '%s\n' "$TEST_LATER_STATUSES" ;;
   *"/statuses?per_page=100"*) echo '[[]]' ;;
   *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
   *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
@@ -62,8 +63,21 @@ done
 export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}],[{"context":"staging/verified","state":"success"}]]'
 expect_failure 'new failure invalidates old success' 'staging/verified = failure' "$TEST_CANDIDATE"
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+# The tag needs success on both statuses on the exact commit, and the refusal
+# names each status that is not green.
+for state in failure pending; do
+  reset_health
+  export TEST_HEAVY_STATUS=$(jq --arg state "$state" '.state=$state' <<< "$TEST_HEAVY_STATUS")
+  expect_failure "heavy status $state" "RELEASE_STATUS_NOT_GREEN: .* main/heavy = $state" "$TEST_CANDIDATE"
+done
+reset_health
+export TEST_HEAVY_STATUS=$(jq '.context="other"' <<< "$TEST_HEAVY_STATUS")
+expect_failure 'heavy status missing' 'RELEASE_STATUS_NOT_GREEN: .* main/heavy = missing' "$TEST_CANDIDATE"
+export TEST_STATUSES='[[]]'
+expect_failure 'both statuses missing' 'staging/verified = missing, main/heavy = missing' "$TEST_CANDIDATE"
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 # Each metadata dimension independently invalidates otherwise green evidence.
-for expression in '.state="failure"' '.state="pending"' '.creator.login="other"' '.creator.type="User"' '.context="other"' '.target_url="https://github.com/other/repo/actions/runs/7"'; do
+for expression in '.creator.login="other"' '.creator.type="User"' '.target_url="https://github.com/other/repo/actions/runs/7"'; do
   reset_health
   export TEST_HEAVY_STATUS=$(jq "$expression" <<< "$TEST_HEAVY_STATUS")
   expect_failure "heavy status $expression" 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
@@ -86,7 +100,7 @@ for endpoint in "--paginate --slurp repos/stella/stella/commits/$TEST_CANDIDATE/
 done
 reset_health
 export TEST_STATUSES=$(jq --argjson old "$TEST_HEAVY_STATUS" '.[0] += [($old | .state="failure"), $old]' <<< "$TEST_STATUSES")
-expect_failure 'new heavy failure invalidates old success' 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
+expect_failure 'new heavy failure invalidates old success' 'main/heavy = failure' "$TEST_CANDIDATE"
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 reset_health
 # Dispatch may test an older main SHA; the title binds the tested SHA.
@@ -108,6 +122,13 @@ output=$(bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE")
 [[ "$output" == "$(printf 'sha=%s\nvalue=1.2.3\ntag=v1.2.3' "$TEST_CANDIDATE")" ]]
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
 echo 'ok   explicit candidate and newest verified default'
+# A newer commit verified on staging but not heavy-green is passed over.
+export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
+export TEST_LATER_STATUSES='[[{"context":"main/heavy","state":"success"}]]'
+[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
+unset TEST_LATER TEST_LATER_STATUSES
+echo 'ok   default skips a newer commit missing either status'
 # Execute the real workflow tag block against a local remote; HEAD is newer.
 git init --bare -q "$fixture/remote"
 export TEST_REMOTE="$fixture/remote"

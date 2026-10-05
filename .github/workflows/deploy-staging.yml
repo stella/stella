@@ -1,7 +1,10 @@
 name: Deploy main to staging
 
-# Deploys the tip of main into staging on demand. The tagged release
-# workflow remains the production path and does not depend on this one.
+# Deploys a commit on main into staging on demand: the tip by default, or a
+# pinned `sha` that main already contains, so a release candidate can be
+# verified while main keeps moving. A pinned SHA that is not on main fails
+# the run. The tagged release workflow remains the production path and does
+# not depend on this one.
 #
 # Staging is off unless someone starts it, so this runs only when
 # dispatched. A dispatch while staging is not answering deploys nothing and
@@ -12,6 +15,10 @@ name: Deploy main to staging
 on:
   workflow_dispatch:
     inputs:
+      sha:
+        description: "Commit SHA on main to deploy (blank deploys the main tip)"
+        required: false
+        type: string
       deploy_when_unreachable:
         description: "Deploy even when staging does not answer its health probe"
         required: false
@@ -24,10 +31,37 @@ env:
   WEB_IMAGE_NAME: ${{ github.repository_owner }}/stella-web
 
 jobs:
+  # The one commit every later job builds, promotes and verifies. Refusing
+  # here fails the run before anything is built.
+  resolve:
+    name: Resolve the commit to deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      tip: ${{ steps.resolve.outputs.tip }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the commit to deploy
+        id: resolve
+        env:
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: bash scripts/resolve-staging-deploy-sha.sh --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
   # Tie promotion and its dependent smoke job to the current health of the
   # staging environment.
   staging-health:
     name: Check staging health
+    needs: resolve
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -115,6 +149,7 @@ jobs:
       - name: Decide deploy or skip
         id: decide
         env:
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           DEPLOY_WHEN_UNREACHABLE: ${{ inputs.deploy_when_unreachable }}
           STATUS: ${{ steps.probe.outputs.status }}
         run: |
@@ -134,14 +169,14 @@ jobs:
           echo "deploy=false" >> "$GITHUB_OUTPUT"
           {
             echo "### Staging is off"
-            echo "Staging is not answering its health probe, so \`${GITHUB_SHA}\` was not deployed."
+            echo "Staging is not answering its health probe, so \`${DEPLOY_SHA}\` was not deployed."
             echo "Start staging, then dispatch this workflow again."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::Staging is not answering; nothing was deployed. Start staging, then dispatch again."
 
   build-api:
     name: Build staging API image
-    needs: staging-health
+    needs: [resolve, staging-health]
     if: >-
       github.ref == 'refs/heads/main' &&
       needs.staging-health.outputs.deploy == 'true'
@@ -154,7 +189,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     concurrency:
-      group: staging-api-build
+      group: staging-api-build-${{ needs.resolve.outputs.sha }}
       cancel-in-progress: true
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -164,7 +199,7 @@ jobs:
       - name: Resolve synthetic ref
         id: ref
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           short="${SHA:0:7}"
           echo "release_ref=main-${short}" >> "$GITHUB_OUTPUT"
@@ -173,7 +208,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
           # The API image ships the bundled template-pack content.
           submodules: true
@@ -201,12 +236,12 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ref.outputs.release_ref }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-latest
+            ${{ needs.resolve.outputs.tip == 'true' && format('{0}/{1}:main-latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging,mode=max
           build-args: |
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
-            STELLA_COMMIT_SHA=${{ github.sha }}
+            STELLA_COMMIT_SHA=${{ needs.resolve.outputs.sha }}
 
       - name: Attest image provenance
         uses: ./.github/actions/provenance
@@ -216,7 +251,7 @@ jobs:
 
   build-web:
     name: Build staging web image
-    needs: staging-health
+    needs: [resolve, staging-health]
     if: >-
       github.ref == 'refs/heads/main' &&
       needs.staging-health.outputs.deploy == 'true'
@@ -229,7 +264,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     concurrency:
-      group: staging-web-build
+      group: staging-web-build-${{ needs.resolve.outputs.sha }}
       cancel-in-progress: true
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -238,13 +273,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - name: Resolve synthetic ref
         id: ref
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           echo "release-ref=main-${SHA:0:7}" >>"$GITHUB_OUTPUT"
 
@@ -253,7 +288,7 @@ jobs:
         uses: ./.github/actions/build-web-image
         with:
           release-ref: ${{ steps.ref.outputs.release-ref }}
-          release-sha: ${{ github.sha }}
+          release-sha: ${{ needs.resolve.outputs.sha }}
           target-environment: staging
           posthog-key: ${{ secrets.VITE_POSTHOG_KEY }}
           posthog-cli-api-key: ${{ secrets.POSTHOG_CLI_API_KEY }}
@@ -267,7 +302,7 @@ jobs:
 
   promote-staging:
     name: Promote staging images
-    needs: [build-api, build-web]
+    needs: [resolve, build-api, build-web]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -290,25 +325,7 @@ jobs:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
-      # Builds are intentionally free to finish. Only the newest main SHA may
-      # cross the private-compute boundary; an obsolete queued build is a
-      # successful no-op, and the newer workflow converges staging afterward.
-      - name: Confirm this SHA is still main
-        id: current
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
-          if [[ "$current_sha" != "$GITHUB_SHA" ]]; then
-            echo "promoted=false" >>"$GITHUB_OUTPUT"
-            echo "Skipping private promotion of obsolete commit \`${GITHUB_SHA}\`; main is \`${current_sha}\`." >>"$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          echo "promoted=true" >>"$GITHUB_OUTPUT"
-
       - name: Check staging deployment target is configured
-        if: steps.current.outputs.promoted == 'true'
         env:
           DEPLOY_REPOSITORY: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           DEPLOY_WORKFLOW: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
@@ -323,7 +340,6 @@ jobs:
       # skipped by `needs` instead of blocking on a commit that will never
       # be served.
       - name: Deploy to staging
-        if: steps.current.outputs.promoted == 'true'
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -334,21 +350,21 @@ jobs:
           target-environment: staging
           image-digest: ${{ needs.build-api.outputs.digest }}
           web-image-digest: ${{ needs.build-web.outputs.digest }}
-          git-sha: ${{ github.sha }}
+          git-sha: ${{ needs.resolve.outputs.sha }}
 
       # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
         id: deployment
-        if: steps.current.outputs.promoted == 'true'
         env:
           DEPLOY_ENVIRONMENT: staging
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
           deployment_id="$(
             jq -n \
-              --arg ref "$GITHUB_SHA" \
+              --arg ref "$DEPLOY_SHA" \
               --arg environment "$DEPLOY_ENVIRONMENT" \
               '{
                 ref: $ref,
@@ -356,7 +372,7 @@ jobs:
                 auto_merge: false,
                 required_contexts: [],
                 production_environment: false,
-                description: "Continuous deploy of main to staging"
+                description: "Deploy of main to staging"
               }' |
               gh api "repos/${GITHUB_REPOSITORY}/deployments" \
                 --method POST --input - --jq '.id'
@@ -370,37 +386,32 @@ jobs:
 
           jq -n --arg run "$GITHUB_RUN_ID" \
             '{state: "pending", context: "staging/verified", description: ("Staging smoke pending: run " + $run)}' |
-            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
 
       # Post-deploy verification stays in the serialized promotion job. If it
       # were a separate job, a newer promotion could start while this smoke
       # still measures the previous commit.
       - name: Checkout deployed source
-        if: steps.current.outputs.promoted == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Bun
-        if: steps.current.outputs.promoted == 'true'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
 
       - name: Install dependencies
         id: smoke-deps
-        if: steps.current.outputs.promoted == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Verify image-provided Chromium
-        if: steps.current.outputs.promoted == 'true'
         uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke
         id: web-smoke
-        if: steps.current.outputs.promoted == 'true'
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
           STAGING_STATE: ${{ vars.STAGING_STATE }}
@@ -411,13 +422,13 @@ jobs:
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
           # Block the smoke until staging actually serves this commit,
           # so it doesn't race the ECS task rollover.
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
 
       # The declared cache and robots headers of Knowledge responses. Also
       # runs on its own through staging-response-policy.yml. Report-only
       # until it has a record of green runs.
       - name: Run staging response policy checks
-        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-response-policy.ts; then
@@ -439,14 +450,14 @@ jobs:
       # installed and died with `bun: command not found`.
       - name: Run staging API chat smoke
         id: api-smoke
-        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
           E2E_EDGE_HEADER_NAME: x-stella-edge-token
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
           # The real model turn runs in the next step.
           SMOKE_AI_JOURNEY: skip
 
@@ -454,7 +465,7 @@ jobs:
       # summarized but does not fail the promotion. To make it blocking,
       # delete the `continue-on-error: true` line below.
       - name: Run staging API model-turn smoke
-        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"; then
@@ -469,7 +480,7 @@ jobs:
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
           E2E_EDGE_HEADER_NAME: x-stella-edge-token
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
           SMOKE_AI_JOURNEY: only
           SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
 
@@ -486,6 +497,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           WEB_SMOKE: ${{ steps.web-smoke.outcome }}
           API_SMOKE: ${{ steps.api-smoke.outcome }}
           JOB_STATUS: ${{ job.status }}
@@ -498,7 +510,7 @@ jobs:
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg state "$state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
             '{state: $state, context: "staging/verified", description: ("Staging smoke " + $state + ": run " + $run), target_url: $url}' |
-            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
               --method POST --input - >/dev/null
           jq -n --arg state "$state" --arg url "$run_url" \
             '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
