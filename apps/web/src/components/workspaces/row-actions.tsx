@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -69,7 +69,6 @@ import {
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
-import { canTranslateDocument } from "@/components/translate-document-dialog.logic";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -110,7 +109,6 @@ import { externalApiOrigin } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
-import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import {
   DesktopBridgeIncompatibleError,
   openFileInDesktop,
@@ -245,29 +243,6 @@ const getPDFPageEditorTarget = (
   return target?.mimeType === PDF_MIME_TYPE ? target : null;
 };
 
-const useAvailableTranslationTarget = (
-  target: TranslationTarget | null,
-): TranslationTarget | null => {
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (context) => context.user.activeOrganizationId,
-  });
-  const { data: deepLAvailability } = useQuery({
-    ...deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
-    enabled: target !== null && target.mimeType !== DOCX_MIME,
-  });
-  if (
-    target === null ||
-    !canTranslateDocument({
-      canUseDeepL: deepLAvailability?.configured === true,
-      isDocx: target.mimeType === DOCX_MIME,
-    })
-  ) {
-    return null;
-  }
-  return target;
-};
-
 type UseOpenPDFPageEditorOptions = {
   entityId: string;
   target: TranslationTarget | null;
@@ -376,13 +351,12 @@ export const RowActions = ({
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
-  const rawTranslationTarget = getTranslationTarget({
+  const translationTarget = getTranslationTarget({
     cellMetadataTarget,
     entity,
     file,
     isBulk,
   });
-  const translationTarget = useAvailableTranslationTarget(rawTranslationTarget);
   const pdfPageEditorTarget = getPDFPageEditorTarget({
     cellMetadataTarget,
     entity,
