@@ -69,7 +69,7 @@ test("generated joined dockets retain every exact spelling and fit their citatio
           const row = citationRowOf(citingDecisionId, {
             reference,
             verdict: null,
-          });
+          }).unwrap();
           expect(row.citationText).toBe(reference.printed);
           expect(row.citationKey).toBe(bareCitationKey(reference.printed));
           expect(row.normalizedIdentifierValue).toBe(

@@ -1826,6 +1826,43 @@ const mergeCollectionCitations = ({
   }
 };
 
+type StorageBoundedCitationMatchOptions = {
+  pattern: RegExp;
+  match: RegExpExecArray;
+  kioRunEnd: number;
+};
+
+const storageBoundedCitationMatch = ({
+  pattern,
+  match,
+  kioRunEnd,
+}: StorageBoundedCitationMatchOptions) => {
+  // Preserve the printed passage for exact anchoring; only keys normalize it.
+  const citationText = match[0].trim();
+  const caseNumber = match.groups?.["caseNumber"]?.trim();
+  const matchEnd = match.index + match[0].length;
+  if (
+    pattern !== PL_KIO_PATTERN ||
+    (match.index >= kioRunEnd &&
+      fitsCitationStorageField("key", bareCitationKey(citationText)) &&
+      fitsCitationStorageField("text", citationText))
+  ) {
+    return { citationText, caseNumber, matchEnd, kioRunEnd };
+  }
+  // An oversized joined run is read docket by docket. A single KIO docket
+  // has no comma, and subsequent regex matches stay inside this run's end.
+  const [first = citationText] = citationText.split(",");
+  const firstDocket = first.trim();
+  const firstEnd = match.index + firstDocket.length;
+  pattern.lastIndex = firstEnd;
+  return {
+    citationText: firstDocket,
+    caseNumber: firstDocket,
+    matchEnd: firstEnd,
+    kioRunEnd: Math.max(kioRunEnd, matchEnd),
+  };
+};
+
 /**
  * Extract citation references from decision text.
  *
@@ -1861,28 +1898,13 @@ export const extractCitations = (
         match !== null;
         match = pattern.exec(section.text)
       ) {
-        // citationText is stored verbatim (only edge-trimmed), never
-        // whitespace-normalized: exact-passage anchoring must be able to
-        // find this exact string in the source document, including an
-        // embedded line-wrap newline. Only the dedup key below is
-        // canonicalized.
-        let citationText = match[0].trim();
-        let caseNumber = match.groups?.["caseNumber"]?.trim();
-        let matchEnd = match.index + match[0].length;
-        if (
-          pattern === PL_KIO_PATTERN &&
-          (match.index < kioRunEnd ||
-            !fitsCitationStorageField("key", bareCitationKey(citationText)) ||
-            !fitsCitationStorageField("text", citationText))
-        ) {
-          kioRunEnd = Math.max(kioRunEnd, matchEnd);
-          // A single KIO docket holds no comma.
-          const [first = citationText] = citationText.split(",");
-          citationText = first.trim();
-          caseNumber = citationText;
-          matchEnd = match.index + citationText.length;
-          pattern.lastIndex = matchEnd;
-        }
+        const projected = storageBoundedCitationMatch({
+          pattern,
+          match,
+          kioRunEnd,
+        });
+        const { citationText, caseNumber, matchEnd } = projected;
+        kioRunEnd = projected.kioRunEnd;
         // A bare letter run under a court's label is also how a ministry
         // writes a file number, so the docket grammar decides whether this
         // capture is a case number at all.

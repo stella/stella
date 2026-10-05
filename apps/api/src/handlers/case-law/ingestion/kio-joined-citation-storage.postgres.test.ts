@@ -77,7 +77,10 @@ if (!databaseUrl || !enabled) {
               .insert(caseLawCitations)
               .values(
                 references.map((reference) =>
-                  citationRowOf(citingDecisionId, { reference, verdict: null }),
+                  citationRowOf(citingDecisionId, {
+                    reference,
+                    verdict: null,
+                  }).unwrap(),
                 ),
               )
               .returning();
