@@ -290,7 +290,7 @@ test("CourtListener source types and text never infer a decision type", () => {
         expect(sanitized.metadata["decisionType"]).toEqual(
           result.metadata["decisionType"],
         );
-        expect(result.documentAst?.metadata.decisionType).toBeNull();
+        expect(result.documentAst.metadata.decisionType).toBeNull();
         expect(result.metadata["decisionType"]).toEqual(
           toPlainTextMetadata({
             status: "not-stated",

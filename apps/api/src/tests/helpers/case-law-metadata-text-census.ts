@@ -105,7 +105,6 @@ export const METADATA_TEXT_DISPOSITIONS = {
   citedDecisions: INSPECTED,
   citedProvisions: INSPECTED,
   clarificationOfLegalRegulation: INSPECTED,
-  classification: INSPECTED,
   collection: INSPECTED,
   collectionEntry: INSPECTED,
   collectionNumber: INSPECTED,
