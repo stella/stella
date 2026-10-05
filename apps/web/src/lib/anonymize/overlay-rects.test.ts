@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  clampSliceToText,
   getOverlayRectKey,
   mapEntityToSpanSlices,
   mergeAdjacentRects,
@@ -233,5 +234,44 @@ describe("mergeAdjacentRects", () => {
     ];
     const merged = mergeAdjacentRects(rects);
     expect(merged).toHaveLength(2);
+  });
+});
+
+describe("clampSliceToText", () => {
+  // Range.setStart throws IndexSizeError for an offset past the node's end,
+  // so every returned offset must lie inside the rendered text.
+  it("always returns offsets a Range accepts, or null when nothing overlaps", () => {
+    for (let textLength = 0; textLength <= 6; textLength++) {
+      for (let localStart = -1; localStart <= 8; localStart++) {
+        for (let localEnd = localStart; localEnd <= 9; localEnd++) {
+          const offsets = clampSliceToText(
+            { localStart, localEnd },
+            textLength,
+          );
+          const overlaps =
+            Math.min(localEnd, textLength) > Math.max(localStart, 0);
+          expect({
+            localStart,
+            localEnd,
+            textLength,
+            overlaps: offsets !== null,
+          }).toEqual({ localStart, localEnd, textLength, overlaps });
+          if (offsets === null) {
+            continue;
+          }
+          expect(offsets.start).toBeGreaterThanOrEqual(0);
+          expect(offsets.end).toBeLessThanOrEqual(textLength);
+          expect(offsets.start).toBeLessThan(offsets.end);
+        }
+      }
+    }
+  });
+
+  it("keeps the on-screen part of a slice that runs past the rendered text", () => {
+    expect(clampSliceToText({ localStart: 3, localEnd: 12 }, 5)).toEqual({
+      start: 3,
+      end: 5,
+    });
+    expect(clampSliceToText({ localStart: 7, localEnd: 12 }, 5)).toBeNull();
   });
 });

@@ -415,8 +415,8 @@ export const DESIGN_LINT_MEASURED_RULES = {
 /**
  * One override per backlog rule switching it off in the files the baseline
  * still lists; a size limit drops to its ceiling there instead. `scripts/
- * design-lint-baseline.ts --check` holds each file's count at or below the
- * baseline and prunes files that reach zero, so this list only shrinks; a file
+ * design-lint-baseline.ts --check` holds each file's count at the baseline and
+ * prunes files that reach zero, so this list only shrinks; a file
  * outside it is linted in full. It is spread last in `oxlint.config.ts`:
  * oxlint resolves overrides by replacement, so a later scope that enables a
  * tracked rule would hand it back to a backlog file.

@@ -29,14 +29,17 @@ const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// First scopedDb call returns the time-entry rows; the second returns the
-// timekeeper name join. The SQL WHERE is not executed by the mock, which is
-// exactly why the handler also carries a defensive in-loop billing guard.
+// First scopedDb call returns the time-entry rows and the organization's
+// zone; the second returns the timekeeper name join. The SQL WHERE is not
+// executed by the mock, which is exactly why the handler also carries a
+// defensive in-loop billing guard.
 const scopedDbReturning = (rows: unknown[]): ScopedDb => {
   let call = 0;
   return asTestRaw<ScopedDb>(async () => {
     call += 1;
-    return call === 1 ? rows : [{ id: "user_1", name: "Alice" }];
+    return call === 1
+      ? { rows, timeZone: "UTC" }
+      : [{ id: "user_1", name: "Alice" }];
   });
 };
 
@@ -211,12 +214,15 @@ describe("exportLedesHandler billing integrity", () => {
     const scopedDb = asTestRaw<ScopedDb>(async () => {
       call += 1;
       return call === 1
-        ? [
-            timeEntryRow({
-              narrative: "first line\nspurious|F|999",
-              userId: "user_1",
-            }),
-          ]
+        ? {
+            rows: [
+              timeEntryRow({
+                narrative: "first line\nspurious|F|999",
+                userId: "user_1",
+              }),
+            ],
+            timeZone: "UTC",
+          }
         : [{ id: "user_1", name: "Eve|Hacker" }];
     });
 

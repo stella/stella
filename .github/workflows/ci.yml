@@ -1845,6 +1845,10 @@ jobs:
         # allowlists kept equal to their source lists.
         run: bun test scripts/ownership.test.ts
 
+      - name: Schema introspection invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/schema-introspection.test.ts
+
       - name: Queue authority
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every BullMQ queue declares whose authority its jobs run under
@@ -1924,6 +1928,12 @@ jobs:
         run: |
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
+
+      - name: Transfer timeout and fixed read guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
+          bun scripts/transfer-read-guard.ts
 
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}

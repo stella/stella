@@ -270,7 +270,6 @@ function SettingsLayout() {
                   return (
                     <MenuItem
                       key={item.to}
-                      className="min-h-11 sm:min-h-11"
                       render={
                         <Link
                           from={Route.fullPath}
@@ -287,10 +286,7 @@ function SettingsLayout() {
                   );
                 })}
                 {section.id === "account" && (
-                  <MenuItem
-                    className="min-h-11 sm:min-h-11"
-                    onClick={openShortcuts}
-                  >
+                  <MenuItem onClick={openShortcuts}>
                     <KeyboardIcon className="size-4" />
                     {t("navigation.shortcutsDialog.title")}
                   </MenuItem>

@@ -12,6 +12,7 @@ import { KrsValidationError } from "@stll/business-registries/krs";
 import type { OrsrCompany } from "@stll/business-registries/orsr";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -43,6 +44,8 @@ import { patchXmlPart } from "./rich-patch";
 import { mergeManifestWithDiscovery } from "./template-manifest";
 import type { FieldMeta, TemplateData, TemplateManifest } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
+
+const permit = grantThirdPartyOutboundPermit();
 
 /**
  * The document with each field's configuration authored into the marker that
@@ -1130,6 +1133,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   test("returns the hit from the registry handler's lookup", async () => {
     const resolver = createDispatchLookupResolver({
       observer: "unobserved",
+      permit,
       dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
     });
     const outcome = await resolver({ registry: "krs", query: "0000123456" });
@@ -1139,6 +1143,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   test("maps a null hit to not-found", async () => {
     const resolver = createDispatchLookupResolver({
       observer: "unobserved",
+      permit,
       dispatch: stubDispatch({ lookup: async () => null }),
     });
     const outcome = await resolver({ registry: "krs", query: "0000123456" });
@@ -1148,6 +1153,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   test("maps adapter validation errors to an error outcome", async () => {
     const resolver = createDispatchLookupResolver({
       observer: "unobserved",
+      permit,
       dispatch: stubDispatch({
         lookup: () => {
           throw new KrsValidationError("KRS number must be 10 digits");
@@ -1165,6 +1171,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     let lookupCalls = 0;
     const resolver = createDispatchLookupResolver({
       observer: "unobserved",
+      permit,
       dispatch: stubDispatch({
         isDeployAvailable: () => false,
         lookup: async () => {
@@ -1188,6 +1195,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
       const hit = { ...KRS_HIT, registry };
       const resolver = createDispatchLookupResolver({
         observer: "unobserved",
+        permit,
         dispatch: {
           ...BUSINESS_REGISTRY_DISPATCH,
           [registry]: {
@@ -1217,6 +1225,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       {
         resolve: createDispatchLookupResolver({
           observer: "unobserved",
+          permit,
           dispatch: {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {
@@ -1241,6 +1250,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       {
         resolve: createDispatchLookupResolver({
           observer: "unobserved",
+          permit,
           dispatch: {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {
@@ -1275,6 +1285,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       {
         resolve: createDispatchLookupResolver({
           observer: "unobserved",
+          permit,
           dispatch: {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {
@@ -1305,6 +1316,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       {
         resolve: createDispatchLookupResolver({
           observer: "unobserved",
+          permit,
           dispatch: {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {

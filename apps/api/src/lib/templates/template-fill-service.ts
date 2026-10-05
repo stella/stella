@@ -17,6 +17,7 @@ import { replaceOutputMarkers } from "@stll/template-conditions";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryAvailability,
@@ -47,6 +48,7 @@ import {
 } from "@/api/lib/docx/extract-text";
 import {
   createDispatchLookupResolver,
+  type LookupOutcome,
   type LookupResolver,
 } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
@@ -556,6 +558,10 @@ type FillServiceOptions<TRejection = never> = {
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Lookup fields ask a business register, a third-party service. Without a
+   *  permit, a lookup field fails the fill naming the field. Mandatory so each
+   *  boundary names its stance. */
+  thirdPartyOutboundPermit: ThirdPartyOutboundPermit | undefined;
   /** Whether a required, user-entered field left absent or empty rejects the
    *  fill. `"enforce"` is the contract for every real fill; `"allow-partial"`
    *  is the live preview's deliberate exception (see
@@ -671,6 +677,48 @@ export type FilledDocx = {
    *  never carried. */
   conditionDecisions: ResolvedAiCondition[];
   clauseWarnings: ClauseDirectiveWarning[];
+};
+
+/** A fill without a permit cannot ask a register for a lookup field. */
+const LOOKUP_WITHOUT_PERMIT: LookupOutcome = {
+  type: "error",
+  message: "Registry lookups are not available for this fill",
+};
+
+const lookupsWithoutPermit: LookupResolver = async () =>
+  await Promise.resolve(LOOKUP_WITHOUT_PERMIT);
+
+type FillLookupResolverOptions = {
+  permit: ThirdPartyOutboundPermit | undefined;
+  lookupResolver: LookupResolver | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Without a permit no resolver reaches a register, injected or dispatched. */
+const fillLookupResolver = async ({
+  permit,
+  lookupResolver,
+  scopedDb,
+  organizationId,
+}: FillLookupResolverOptions) => {
+  if (permit === undefined) {
+    return lookupsWithoutPermit;
+  }
+  return (
+    lookupResolver ??
+    createDispatchLookupResolver({
+      observer: actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      ),
+      permit,
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    })
+  );
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -1728,6 +1776,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   values,
   scopedDb,
   organizationId,
+  thirdPartyOutboundPermit,
   requiredFields,
   clauseOverrides,
   aiCollaborators,
@@ -1781,18 +1830,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   } = input;
 
   let record: FillValues = { ...values };
-  const resolveLookup =
-    lookupResolver ??
-    createDispatchLookupResolver({
-      observer: actionRequestObserver(
-        organizationId,
-        ACTION_COST_CALL_KIND.registryRequest,
-      ),
-      dispatch: await getOrganizationRegistryDispatch({
-        scopedDb,
-        organizationId,
-      }),
-    });
+  const resolveLookup = await fillLookupResolver({
+    permit: thirdPartyOutboundPermit,
+    lookupResolver,
+    scopedDb,
+    organizationId,
+  });
 
   const drafting = await draftDocumentValues({
     file: source.file,

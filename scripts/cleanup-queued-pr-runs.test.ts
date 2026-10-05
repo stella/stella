@@ -44,13 +44,21 @@ const queued = (event = "pull_request_target"): Run => ({
   pull_requests: [{ number: 12, head: { sha: "current" } }],
 });
 
+type ApiFailure = { status: number; message: string };
+const notQueued = {
+  status: 409,
+  message: "Cannot cancel a workflow run that has not been queued yet.",
+};
+
 type CleanupOptions = {
   run: Run;
   current?: Run;
   retry?: Run;
   head?: string;
   metadataStatus?: number;
-  cancelRefused?: boolean;
+  cancelFailure?: ApiFailure;
+  forceFailure?: ApiFailure;
+  followingRun?: Run;
 };
 const cleanup = async ({
   run,
@@ -58,35 +66,45 @@ const cleanup = async ({
   retry = current,
   head = "current",
   metadataStatus = 0,
-  cancelRefused = false,
+  cancelFailure,
+  forceFailure,
+  followingRun,
 }: CleanupOptions) => {
   const cancelled: number[] = [];
   const forced: number[] = [];
   const readPulls: number[] = [];
+  const infos: string[] = [];
+  const errors: string[] = [];
+  const failures: string[] = [];
   let reads = 0;
   const listWorkflowRunsForRepo = () => {};
   await script.runInNewContext({
     context: { repo: { owner: "test", repo: "test" }, payload: {} },
     core: {
-      info: () => {},
+      info: (message: string) => infos.push(message),
       warning: () => {},
-      error: () => {},
+      error: (message: string) => errors.push(message),
       setFailed: (message: string) => {
-        throw new Error(message);
+        failures.push(message);
       },
     },
     github: {
-      paginate: async () => [run],
+      paginate: async () => (followingRun ? [run, followingRun] : [run]),
       rest: {
         actions: {
           listWorkflowRunsForRepo,
-          getWorkflowRun: async () => ({
-            data: reads++ === 0 ? current : retry,
-          }),
+          getWorkflowRun: async ({ run_id }: { run_id: number }) => {
+            if (run_id !== run.id) {
+              return { data: followingRun };
+            }
+            return { data: reads++ === 0 ? current : retry };
+          },
           cancelWorkflowRun: async ({ run_id }: { run_id: number }) => {
             cancelled.push(run_id);
-            if (cancelRefused) {
-              throw new Error("Already started");
+            if (run_id === run.id && cancelFailure) {
+              throw Object.assign(new Error(cancelFailure.message), {
+                status: cancelFailure.status,
+              });
             }
           },
         },
@@ -104,10 +122,15 @@ const cleanup = async ({
       },
       request: async (_route: string, { run_id }: { run_id: number }) => {
         forced.push(run_id);
+        if (forceFailure) {
+          throw Object.assign(new Error(forceFailure.message), {
+            status: forceFailure.status,
+          });
+        }
       },
     },
   });
-  return { cancelled, forced, readPulls, reads };
+  return { cancelled, forced, readPulls, reads, infos, errors, failures };
 };
 
 test.each(["pull_request", "pull_request_target"])(
@@ -210,15 +233,112 @@ test("force-cancellation rechecks eligibility after a refused cancellation", asy
     (
       await cleanup({
         run,
-        cancelRefused: true,
+        cancelFailure: notQueued,
         retry: { ...run, status: "in_progress" },
       })
     ).forced,
   ).toEqual([]);
   expect(
-    (await cleanup({ run, cancelRefused: true, retry: queued() })).forced,
+    (await cleanup({ run, cancelFailure: notQueued, retry: queued() })).forced,
   ).toEqual([]);
-  const result = await cleanup({ run, cancelRefused: true });
+  const result = await cleanup({ run, cancelFailure: notQueued });
   expect(result.forced).toEqual([1]);
   expect(result.readPulls).toEqual([12, 12]);
+});
+
+const stale = () => ({ ...queued(), created_at: "2020-01-01T00:00:00Z" });
+
+test.each([
+  notQueued.message,
+  `${notQueued.message} - https://docs.github.com/rest/actions/workflow-runs#cancel-a-workflow-run`,
+])(
+  "matching GitHub state refusals skip the run and continue: %s",
+  async (message) => {
+    const result = await cleanup({
+      run: stale(),
+      cancelFailure: { ...notQueued, message },
+      forceFailure: {
+        ...notQueued,
+        message: `${notQueued.message} - https://docs.github.com/rest/actions/workflow-runs#force-cancel-a-workflow-run`,
+      },
+      followingRun: { ...stale(), id: 2 },
+    });
+    expect(result.forced).toEqual([1]);
+    expect(result.cancelled).toEqual([1, 2]);
+    expect(result.infos).toContain(
+      "Run 1 (status: queued) skipped: not cancellable (GitHub state)",
+    );
+    expect(result.infos).toContain(
+      "Cancellation requested for 2: queued over six hours",
+    );
+    expect(result.failures).toEqual([]);
+    expect(result.errors).toEqual([]);
+  },
+);
+
+test.each([400, 401, 403, 404, 409, 422, 429, 500, 503])(
+  "other API errors (%s) fail in either cancellation endpoint",
+  async (status) => {
+    const other = { status, message: "Cancellation unavailable" };
+    for (const options of [
+      { cancelFailure: other, forceFailure: notQueued },
+      { cancelFailure: notQueued, forceFailure: other },
+      { cancelFailure: other },
+    ]) {
+      const result = await cleanup({ run: stale(), ...options });
+      expect(result.failures).toEqual([
+        "1 queued PR run(s) could not be cancelled",
+      ]);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(
+        result.infos.some((info) => info.includes("skipped: not cancellable")),
+      ).toBe(false);
+    }
+  },
+);
+
+test("the GitHub state message with another status still fails", async () => {
+  for (const status of [403, 500]) {
+    for (const options of [
+      { cancelFailure: { ...notQueued, status }, forceFailure: notQueued },
+      { cancelFailure: notQueued, forceFailure: { ...notQueued, status } },
+    ]) {
+      const result = await cleanup({ run: stale(), ...options });
+      expect(result.failures).toEqual([
+        "1 queued PR run(s) could not be cancelled",
+      ]);
+    }
+  }
+});
+
+test("accepted cancellations report success for either endpoint", async () => {
+  const normal = await cleanup({ run: stale() });
+  expect(normal.infos).toContain(
+    "Cancellation requested for 1: queued over six hours",
+  );
+  expect(normal.forced).toEqual([]);
+  expect(normal.failures).toEqual([]);
+  const force = await cleanup({ run: stale(), cancelFailure: notQueued });
+  expect(force.infos).toContain(
+    "Force-cancellation requested for 1: queued over six hours",
+  );
+  expect(force.failures).toEqual([]);
+});
+
+test("another refusal containing the state message still fails", async () => {
+  const result = await cleanup({
+    run: stale(),
+    cancelFailure: notQueued,
+    forceFailure: {
+      ...notQueued,
+      message: `Other refusal: ${notQueued.message}`,
+    },
+    followingRun: { ...stale(), id: 2 },
+  });
+  expect(result.failures).toEqual([
+    "1 queued PR run(s) could not be cancelled",
+  ]);
+  expect(result.infos).toContain(
+    "Cancellation requested for 2: queued over six hours",
+  );
 });
