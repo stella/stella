@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   decodeSourceRawEnvelope,
   type IngestionResult,
@@ -277,6 +278,11 @@ test("CourtListener source types and text never infer a decision type", () => {
         });
         const result = mapCourtListenerRecord(record).unwrap();
         expect(result.decisionType).toBeNull();
+        const sanitized = sanitizeResult(result);
+        expect(sanitized.decisionType).toBeNull();
+        expect(sanitized.metadata["decisionType"]).toEqual(
+          result.metadata["decisionType"],
+        );
         expect(result.documentAst?.metadata.decisionType).toBeNull();
         expect(result.metadata["decisionType"]).toEqual({
           status: "not-stated",
@@ -327,7 +333,7 @@ test("recorded CourtListener fixtures preserve unstated types and deterministic 
       (record, reverse) => {
         const input = {
           ...record,
-          opinions: reverse ? [...record.opinions].reverse() : record.opinions,
+          opinions: reverse ? record.opinions.toReversed() : record.opinions,
         };
         const result = mapCourtListenerRecord(input);
         if (Result.isError(result)) {

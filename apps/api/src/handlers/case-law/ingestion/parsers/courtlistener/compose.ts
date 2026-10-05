@@ -435,7 +435,7 @@ export const composeCourtListenerText = (
     .flatMap((unit) => unit.blocks)
     .filter(isPrincipalBody);
   const body = bodyBlocks.map(({ plainText }) => plainText).join("\n");
-  const budget = { limit: US_CITATION_WORK_LIMIT, spent: 0 };
+  const citationBudget = { limit: US_CITATION_WORK_LIMIT, spent: 0 };
   const citationCount = Result.gen(function* () {
     let count = 0;
     for (const block of bodyBlocks) {
@@ -443,7 +443,7 @@ export const composeCourtListenerText = (
         continue;
       }
       const scanned = yield* scanRun(block.inlines, {
-        budget,
+        budget: citationBudget,
         identityKey: ({ value }) => value,
       });
       for (const event of scanned.events) {
