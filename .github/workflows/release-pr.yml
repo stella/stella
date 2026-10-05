@@ -33,10 +33,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: |
-            scripts/release-pull-requests.sh
-            scripts/release-pending.sh
-          sparse-checkout-cone-mode: false
 
       - name: Check pending tags and open release pull requests
         # The title alone is contributor-controlled text, which would make this

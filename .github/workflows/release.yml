@@ -151,8 +151,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       # Smoke the artifact that was actually pushed (with its release build
       # args baked in), not a local rebuild that could drift from it.
@@ -239,10 +237,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull API base images
         env:

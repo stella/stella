@@ -234,11 +234,8 @@ describe("changed-file autofix boundary", () => {
     expect(fetchStep).toBeGreaterThanOrEqual(0);
     expect(checkoutStep).toBeGreaterThan(fetchStep);
     expect(planStep).toBeGreaterThan(checkoutStep);
-    expect(job.slice(checkoutStep, planStep)).toContain(
-      "sparse-checkout-cone-mode: false",
-    );
-    expect(job.slice(checkoutStep, planStep)).toContain("/scripts/");
-    expect(job.slice(checkoutStep, planStep)).toContain("/package.json");
+    expect(job.slice(checkoutStep, planStep)).not.toContain("sparse-checkout:");
+    expect(job.slice(checkoutStep, planStep)).not.toContain("filter:");
     expect(runStep).toBeGreaterThan(planStep);
     expect(restrictionStep).toBeGreaterThan(runStep);
     expect(job.slice(fetchStep, planStep)).toContain("GH_TOKEN:");

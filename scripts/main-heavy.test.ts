@@ -312,8 +312,8 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     const tooling = step.with?.["path"] === ".workflow-tooling";
     if (tooling) {
       expect(step.with?.["persist-credentials"], job).toBe(false);
-      expect(step.with?.["sparse-checkout"], job).toContain("scripts/retry.sh");
-      expect(step.with?.["sparse-checkout-cone-mode"], job).toBe(false);
+      expect(step.with?.["sparse-checkout"], job).toBeUndefined();
+      expect(step.with?.["filter"], job).toBeUndefined();
     }
     expect(expressionValue(reference, context), job).toBe(
       tooling ? context.github.workflow_sha : context.inputs.sha,

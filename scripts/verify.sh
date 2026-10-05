@@ -507,4 +507,7 @@ run_step "Published package lists" bun run check:published-package-lists
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 run_step "Remaining repository script tests" bun scripts/run-unlisted-script-tests.ts
 
+run_step "Checkout materialization" bun scripts/check-checkout-materialization.ts
+run_step "Checkout materialization self-tests" bun test scripts/check-checkout-materialization.test.ts
+
 finish_verification

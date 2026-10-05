@@ -29,10 +29,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The pushed range can span several commits; blobless keeps the
-          # history cheap and fetches only the files the check reads.
+          # The pushed range can span several commits; materialize its history.
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -82,7 +80,6 @@ jobs:
           # emits none on a shallow checkout. Blobless keeps the full
           # history cheap: only the checked-out tree's blobs are fetched.
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -134,7 +131,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun

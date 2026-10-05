@@ -230,14 +230,11 @@ jobs:
         if: >-
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
-        # Full history for merge-base diffs, but blobless: commits and trees
-        # are enough to list changed paths, and git fetches any other blob a
-        # step reads (a `git show <base>:<file>`, say) on first access. Jobs
-        # that never look past HEAD keep the default shallow checkout.
+        # Full history and objects for offline merge-base and historical reads.
+        # Jobs that never look past HEAD keep the default shallow checkout.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
@@ -814,10 +811,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull sandbox base images
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -979,7 +972,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -1023,7 +1015,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -1172,7 +1163,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -1382,7 +1372,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2165,6 +2154,13 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-route-smoke-changes.test.ts
 
+      - name: Validate checkout materialization
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: |
+          set -euo pipefail
+          bun test scripts/check-checkout-materialization.test.ts
+          bun scripts/check-checkout-materialization.ts
+
       - name: Test CI workflow invariants
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: >-
@@ -2331,7 +2327,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2488,7 +2483,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
@@ -2649,7 +2643,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2721,7 +2714,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2796,7 +2788,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -3130,8 +3121,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -3221,7 +3210,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
@@ -3284,7 +3272,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -3553,10 +3540,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull web base images
         run: |
@@ -4363,10 +4346,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull API base images
         run: |
@@ -4469,10 +4448,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull legal-atlas-runner base images
         run: |
@@ -5054,10 +5029,6 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
-          sparse-checkout: |
-            scripts/check-main-merge-hold.sh
-            scripts/release-pull-requests.sh
-          sparse-checkout-cone-mode: false
 
       - name: Main merge hold
         if: github.event_name == 'merge_group' && vars.STELLA_MERGE_HOLD != ''

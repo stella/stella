@@ -94,10 +94,6 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: |
-            scripts/pull-base-images.sh
-            scripts/retry.sh
-          sparse-checkout-cone-mode: false
 
       - name: Pull API base images
         run: |
