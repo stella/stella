@@ -12,6 +12,7 @@ const workflow = v.parse(
     concurrency: v.optional(v.unknown()),
     jobs: v.object({
       disarm: v.looseObject({
+        permissions: v.record(v.string(), v.string()),
         if: v.string(),
         concurrency: v.optional(v.unknown()),
         steps: v.array(
@@ -255,7 +256,16 @@ for (const failure of ["read", "disable"] as const) {
 
 test("workflow limits its trigger, token and executable code", () => {
   expect(workflow.on).toEqual({ pull_request: { types: ["synchronize"] } });
-  expect(workflow.permissions).toEqual({ "pull-requests": "write" });
+  expect(workflow.permissions).toEqual({});
+  expect(workflow.jobs.disarm.permissions).toEqual({
+    contents: "write",
+    "pull-requests": "write",
+  });
+  expect(
+    workflow.jobs.disarm.steps.some(({ uses }) =>
+      uses.startsWith("actions/checkout@"),
+    ),
+  ).toBe(false);
   expect(workflow.concurrency).toEqual({
     group: `\${{ github.workflow }}-\${{ github.run_id }}`,
     "cancel-in-progress": false,

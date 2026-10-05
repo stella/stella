@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "createTaskEntityHandler, addAssigneeHandler, moveAssigneeHandler and removeAssigneeHandler record task events in the mutation transaction. removeWorkspaceMemberHandler and removeOrganizationMemberInTransaction record lifecycle events in that transaction; verifyAndDeleteUser writes recordAccountDeletionRequest in the same transaction as exchange cleanup. Helper-level rows would duplicate the owning lifecycle event."
+}

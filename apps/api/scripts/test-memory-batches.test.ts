@@ -13,7 +13,9 @@ import {
   readTestRssTable,
   SOLO_TEST_RSS_RATIO,
   splitMemoryBoundedBatches,
+  staleTestRssTableAnnotation,
   TEST_BATCH_RSS_HEADROOM_RATIO,
+  TEST_RSS_TABLE_MAX_AGE_DAYS,
   testRssArtifact,
   unmeasuredTestPeakRss,
   type TestRssTable,
@@ -28,11 +30,13 @@ const ENVIRONMENT = {
   runnerImage: "fixture",
 };
 const SOURCE = { runId: "1", job: "measure-1" };
+const MEASURED_AT = "2026-10-04T03:10:00.000Z";
 const calibrated = (
   baselineMb: number,
   files: Readonly<Record<string, number>>,
 ): TestRssTable => ({
   environment: ENVIRONMENT,
+  measuredAt: MEASURED_AT,
   baselineMb,
   files: Object.fromEntries(
     Object.entries(files).map(([file, peakMb]) => [
@@ -84,6 +88,7 @@ test("per-file increments retain their own shard baseline", () => {
   const rssTable = {
     baselineMb: 1000,
     environment: ENVIRONMENT,
+    measuredAt: MEASURED_AT,
     files: {
       a: { peakMb: 1100, baselineMb: 1000, source: SOURCE },
       b: { peakMb: 1100, baselineMb: 500, source: SOURCE },
@@ -99,6 +104,7 @@ test("solo isolation uses the planned singleton peak, not the shard's raw peak",
   const rssTable = {
     baselineMb: 1000,
     environment: ENVIRONMENT,
+    measuredAt: MEASURED_AT,
     files: {
       a: { peakMb: 1100, baselineMb: 400, source: SOURCE },
       b: { peakMb: 1050, baselineMb: 1000, source: SOURCE },
@@ -241,9 +247,20 @@ test("invalid observations and budgets fail before composition", () => {
     readTestRssTable({
       baselineMb: 100,
       environment: ENVIRONMENT,
+      measuredAt: MEASURED_AT,
       files: { bad: { peakMb: 100, baselineMb: 200, source: SOURCE } },
     }),
   ).toThrow("Table baseline is below the measured baseline for bad");
+  for (const measuredAt of [undefined, "2026-10-04", "not a date"]) {
+    expect(() =>
+      readTestRssTable({
+        baselineMb: 100,
+        environment: ENVIRONMENT,
+        measuredAt,
+        files: {},
+      }),
+    ).toThrow("Invalid RSS measurement time");
+  }
 });
 test("measurement mode composes fresh children without consulting normal estimates", async () => {
   const testPaths = [
@@ -301,6 +318,7 @@ test("receipts preserve singleton peaks and baseline metadata", () => {
     testRssArtifact({
       environment: ENVIRONMENT,
       source: SOURCE,
+      measuredAt: MEASURED_AT,
       baselineMb: 100,
       measurements: [{ file: "scripts/one.test.ts", peakMb: 700, exitCode: 0 }],
       shard: { index: 2, count: 4 },
@@ -308,14 +326,32 @@ test("receipts preserve singleton peaks and baseline metadata", () => {
     }),
   );
   expect(receipt).toEqual({
-    version: 2,
+    version: 3,
     environment: ENVIRONMENT,
     source: SOURCE,
+    measuredAt: MEASURED_AT,
     shard: { index: 2, count: 4 },
     plannedFiles: 1,
     baselineMb: 100,
     measurements: [{ file: "scripts/one.test.ts", peakMb: 700, exitCode: 0 }],
   });
+});
+test("the memory profile warns only once it is more than the maximum age old", () => {
+  const DAY_MS = 86_400_000;
+  const measured = Date.parse(MEASURED_AT);
+  const at = (offsetMs: number) => new Date(measured + offsetMs);
+  const limitMs = TEST_RSS_TABLE_MAX_AGE_DAYS * DAY_MS;
+  for (const offsetMs of [-DAY_MS, 0, DAY_MS, limitMs, limitMs + DAY_MS - 1]) {
+    expect(staleTestRssTableAnnotation(MEASURED_AT, at(offsetMs))).toBe(
+      undefined,
+    );
+  }
+  expect(staleTestRssTableAnnotation(MEASURED_AT, at(limitMs + DAY_MS))).toBe(
+    "::warning title=API test memory profile is stale::" +
+      "apps/api/scripts/test-peak-rss.json was measured 15 days ago " +
+      `(${MEASURED_AT}), more than 14; merge the open refresh pull request ` +
+      "or rerun the API test memory workflow (docs/test-memory.md)",
+  );
 });
 test("every production batch fits its cap, and every shared batch its measured headroom", async () => {
   const apiRoot = path.resolve(import.meta.dir, "..");

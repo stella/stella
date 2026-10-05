@@ -38,7 +38,7 @@ type ReadableDecision = Extract<
 
 // Varchar bounds reserve four UTF-8 bytes per stored Unicode character.
 // Unbounded publisher prose receives a display budget; storage stays whole.
-export const DECISION_READER_TEXT_BYTES = {
+const DECISION_READER_TEXT_BYTES = {
   caseNumber: 256 * 4,
   slug: 256 * 4,
   ecli: 256 * 4,

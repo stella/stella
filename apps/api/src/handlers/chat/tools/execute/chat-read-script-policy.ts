@@ -8,7 +8,7 @@ type ChatProjectableReadToolName = ChatProjectableToolName<
   typeof READ_TOOL_REF_FIELD_MAP
 >;
 
-export const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
+const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
 
 export type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
 

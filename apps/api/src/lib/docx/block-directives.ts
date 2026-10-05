@@ -686,6 +686,11 @@ type ProcessResult = {
 
 export type DirectiveProcessingContext = {
   inlineDataByParagraph: Map<slimdom.Element, Record<string, unknown>>;
+  inlineClauseScopes: Map<
+    string,
+    { patchKey: string; values: Record<string, unknown> }
+  >;
+  clauseScopeMode: "collect" | "ignore";
   nextEachExpansionId: () => number;
 };
 
@@ -694,6 +699,8 @@ export const createDirectiveProcessingContext =
     let eachExpansionId = 0;
     return {
       inlineDataByParagraph: new Map(),
+      inlineClauseScopes: new Map(),
+      clauseScopeMode: "ignore",
       nextEachExpansionId: () => {
         const current = eachExpansionId;
         eachExpansionId += 1;
@@ -1484,7 +1491,7 @@ export const processBlockDirectives = (
 
 /** The `loop` object one iteration exposes to conditions, mirroring the
  *  `{{ loop.* }}` output markers. */
-const loopContext = (
+export const loopContext = (
   index: number,
   count: number,
 ): Record<LoopProperty, number | boolean> => ({

@@ -40,8 +40,6 @@ export const MEMBER_RUN_QUEUES = [
   },
 ] as const satisfies readonly { queue: BullMqQueueName; module: string }[];
 
-export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
-
 /**
  * Scheduler tasks that act for one member per item they process, through a
  * `createRootRunActor` built for that member each time. `scripts/ownership.ts`

@@ -1,5 +1,4 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
 
 import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -28,5 +27,3 @@ export const createMemoryBodySchema = t.Union([
     { additionalProperties: false },
   ),
 ]);
-
-export type CreateMemoryBody = Static<typeof createMemoryBodySchema>;

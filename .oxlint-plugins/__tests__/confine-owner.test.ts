@@ -149,6 +149,27 @@ describe.serial("legislation revision corpus ownership", () => {
   });
 });
 
+describe.serial("task assignment ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "task-assignment-membership");
+  test("confines direct and aliased assignment primitives to their owners", async () => {
+    expect(entry).toBeDefined();
+    const source =
+      'import { taskAssignees as assignments } from "@/api/db/schema";\nawait tx.insert(assignments).values({});\n';
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/handlers/tasks/new-writer.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/lib/tasks/assignment-membership.ts",
+      }),
+    ).toEqual([]);
+  });
+});
+
 const storedContentEntries = OWNERSHIP.filter(({ id }) =>
   [
     "stored-file-read",

@@ -22,7 +22,7 @@ const shortText = nullableBoundedString(1024);
 const cursor = nullableBoundedString(4096);
 export const PROVISION_PREVIEW_BLOCKS_MAX = 32;
 export const PROVISION_PREVIEW_HEADINGS_MAX = 32;
-export const PROVISION_PREVIEW_TEXT_BYTES = 4096;
+const PROVISION_PREVIEW_TEXT_BYTES = 4096;
 
 type ProvisionItem = Extract<
   Awaited<ReturnType<typeof listDecisionProvisionsHandler>>,

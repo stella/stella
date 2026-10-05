@@ -71,6 +71,8 @@ export type TestRssFile = {
 };
 export type TestRssTable = {
   environment: TestRssEnvironment;
+  /** When the run's last shard finished measuring, as an ISO 8601 instant. */
+  measuredAt: string;
   baselineMb: number;
   files: Readonly<Record<string, TestRssFile>>;
 };
@@ -89,6 +91,16 @@ const rssPositive = (value: unknown, label: string) => {
 };
 const rssString = (value: unknown, label: string) => {
   if (typeof value !== "string" || value.trim().length === 0) {
+    return panic(`Invalid ${label}`);
+  }
+  return value;
+};
+export const readTestRssInstant = (value: unknown, label: string) => {
+  if (
+    typeof value !== "string" ||
+    Number.isNaN(Date.parse(value)) ||
+    new Date(value).toISOString() !== value
+  ) {
     return panic(`Invalid ${label}`);
   }
   return value;
@@ -136,6 +148,7 @@ export const readTestRssTable = (value: unknown): TestRssTable => {
   );
   return {
     environment: readTestRssEnvironment(raw["environment"]),
+    measuredAt: readTestRssInstant(raw["measuredAt"], "RSS measurement time"),
     baselineMb,
     files: measured,
   };
@@ -143,6 +156,29 @@ export const readTestRssTable = (value: unknown): TestRssTable => {
 
 /** The committed table is consumed only through this planner boundary. */
 export const measuredTestRssTable = () => readTestRssTable(rssData);
+export const TEST_RSS_TABLE_MAX_AGE_DAYS = 14;
+const DAY_MS = 86_400_000;
+
+/**
+ * The weekly measurement opens a refresh pull request; an annotation in every
+ * API test run keeps an unmerged or failed refresh from going unnoticed. It
+ * never fails the run: stale weights only cost batch packing, and the runtime
+ * memory caps stay authoritative.
+ */
+export const staleTestRssTableAnnotation = (measuredAt: string, now: Date) => {
+  const ageDays = Math.floor((now.getTime() - Date.parse(measuredAt)) / DAY_MS);
+  if (ageDays <= TEST_RSS_TABLE_MAX_AGE_DAYS) {
+    return undefined;
+  }
+  return (
+    "::warning title=API test memory profile is stale::" +
+    `apps/api/scripts/test-peak-rss.json was measured ${ageDays} days ago ` +
+    `(${measuredAt}), more than ${TEST_RSS_TABLE_MAX_AGE_DAYS}; merge the open ` +
+    "refresh pull request or rerun the API test memory workflow " +
+    "(docs/test-memory.md)"
+  );
+};
+
 export const unmeasuredTestPeakRss = (budgetMb: number) =>
   Math.ceil(
     budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO * UNMEASURED_TEST_RSS_RATIO,
@@ -263,9 +299,11 @@ export type TestRssMeasurement = {
   exitCode: number;
 };
 export type TestRssShard = { index: number; count: number };
-export const TEST_RSS_RECEIPT_VERSION = 2;
+export const TEST_RSS_RECEIPT_VERSION = 3;
 type TestRssArtifactOptions = {
   measurements: readonly TestRssMeasurement[];
+  /** When the shard finished measuring; the refreshed table keeps the latest. */
+  measuredAt: string;
   baselineMb: number;
   environment: TestRssEnvironment;
   source: TestRssSource;
@@ -275,13 +313,14 @@ type TestRssArtifactOptions = {
 };
 export const testRssArtifact = ({
   measurements,
+  measuredAt,
   baselineMb,
   environment,
   source,
   shard,
   plannedFiles,
 }: TestRssArtifactOptions) =>
-  `${JSON.stringify({ version: TEST_RSS_RECEIPT_VERSION, environment, source, shard, plannedFiles, baselineMb, measurements }, null, 2)}\n`;
+  `${JSON.stringify({ version: TEST_RSS_RECEIPT_VERSION, environment, source, measuredAt, shard, plannedFiles, baselineMb, measurements }, null, 2)}\n`;
 
 export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
   const index = arguments_.indexOf("--measure-rss");
