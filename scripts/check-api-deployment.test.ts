@@ -161,6 +161,7 @@ describe("API deployment health receipt", () => {
             GITHUB_RUN_ID: "1",
             GITHUB_SERVER_URL: "https://github.com",
             GITHUB_SHA: "a".repeat(40),
+            DEPLOY_SHA: "a".repeat(40),
             DEPLOYMENT_ID: "1",
           },
         },
