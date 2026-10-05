@@ -90,6 +90,7 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
         court: "Ústavní soud",
         courtAbbreviation: null,
         courtTier: "constitutional",
