@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
@@ -30,7 +31,9 @@ test("removing any live weight prevents every shard from starting", () => {
       }),
       fc.nat(),
       (files, offset) => {
-        const missing = files.at(offset % files.length);
+        const missing =
+          files.at(offset % files.length) ??
+          panic("Nonempty file generator must select an existing file");
         const durations = Object.fromEntries(
           files
             .filter((file) => file !== missing)
