@@ -12,8 +12,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { isRequiredViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/views/avt-layout";
 
 const config = {
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Delete one view (a shared tab) from a matter, removing it for everyone " +
     "with access. Refused when it is the matter's last view, or the last view " +
@@ -36,6 +42,9 @@ const deleteView = createSafeHandler(
     workspaceId,
     params: { viewId },
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
     const allViews = yield* Result.await(
       safeDb((tx) =>
@@ -51,19 +60,33 @@ const deleteView = createSafeHandler(
       ),
     );
 
+    const target = allViews.find((v) => v.id === viewId);
+    if (!target) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (
+      !isAvtLayoutVisible(
+        target.layoutType,
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     if (allViews.length <= 1) {
       return Result.err(
         new HandlerError({
           status: 400,
           message: "Cannot delete the last view",
         }),
-      );
-    }
-
-    const target = allViews.find((v) => v.id === viewId);
-    if (!target) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "View not found" }),
       );
     }
 

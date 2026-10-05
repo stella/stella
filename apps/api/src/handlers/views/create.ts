@@ -28,6 +28,8 @@ import {
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
 import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
   avtLayoutErrorDetail,
   rejectAvtLayout,
 } from "@/api/lib/views/avt-layout";
@@ -46,6 +48,7 @@ const config = {
     "columns that do not exist are dropped. A matter may hold only one " +
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -70,8 +73,22 @@ const createView = createSafeHandler(
     memberRole,
     body,
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const layout = parseViewLayout(body.layout);
+
+    if (layout.type === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(
@@ -113,6 +130,7 @@ const createView = createSafeHandler(
         workspaceId,
         layout,
         legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+        accessStatus: avtAccessStatus,
       });
       if (avtRejection !== null) {
         // Nothing is written yet, so returning commits no partial view.

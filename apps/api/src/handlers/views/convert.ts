@@ -20,6 +20,9 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
   avtLayoutErrorDetail,
   rejectAvtLayout,
 } from "@/api/lib/views/avt-layout";
@@ -33,6 +36,7 @@ const config = {
     "target layout supports. Converting to overview or correspondence, or to " +
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -54,7 +58,21 @@ const convertView = createSafeHandler(
     params: { viewId },
     body: { targetType },
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    if (targetType === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
+
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -69,6 +87,12 @@ const convertView = createSafeHandler(
     if (!existing) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (!isAvtLayoutVisible(existing.layout, avtAccessStatus)) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
       );
     }
 
@@ -94,6 +118,7 @@ const convertView = createSafeHandler(
           workspaceId,
           layout: newLayout,
           legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+          accessStatus: avtAccessStatus,
         });
         if (rejection !== null) {
           return rejection;

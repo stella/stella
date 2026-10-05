@@ -12,6 +12,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  avtLayoutVisibilityCondition,
+} from "@/api/lib/views/avt-layout";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",
@@ -26,6 +31,7 @@ export const workspaceNavigationCursor = createTimestampIdCursorCodec({
 });
 
 const config = {
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   permissions: {
     workspace: ["read"],
   },
@@ -51,7 +57,13 @@ const config = {
 
 const readWorkspaceNavigation = createSafeRootHandler(
   config,
-  async function* ({ query, safeDb, session }) {
+  async function* ({ query, safeDb, session, user, featureAccessSnapshot }) {
+    const avtAvailable =
+      avtViewAccessStatus({
+        snapshot: featureAccessSnapshot,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }) === "available";
     const statusScope =
       query.statusScope ?? WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE;
     const limit = normalizeTenantPageLimit(
@@ -93,6 +105,7 @@ const readWorkspaceNavigation = createSafeRootHandler(
               select ${workspaceViews.id}
               from ${workspaceViews}
               where ${workspaceViews.workspaceId} = ${workspaces.id}
+              and ${avtLayoutVisibilityCondition(workspaceViews.layout, avtAvailable ? "available" : "unavailable")}
               order by ${workspaceViews.position}, ${workspaceViews.id}
               limit 1
             )`.as("default_view_id"),

@@ -40,6 +40,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/views/avt-layout";
 
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal
@@ -61,6 +62,7 @@ const createWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
     "contact). Returns the matter ID.",

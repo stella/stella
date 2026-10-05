@@ -271,6 +271,74 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       }),
     ).toHaveLength(1);
   });
+  test("conditional table consumers require the shared policy helper", () => {
+    const conditionalRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/layout.ts": ["layouts"],
+          },
+        },
+      },
+    } as const;
+    const file = "apps/api/src/routes/ordinary.ts";
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/layout.ts",
+        'export const layouts = p.pgTable("fixture_layouts", {});',
+      ],
+    ]);
+    sources.set(file, 'import { other } from "../db/schema/layout";');
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      }),
+    ).toEqual([]);
+    sources.set(
+      file,
+      'import * as tables from "../db/schema/layout"; const rows = tables.other;',
+    );
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: conditionalRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      }),
+    ).toEqual([]);
+    for (const read of [
+      'import { layouts } from "../db/schema/layout";',
+      'import * as tables from "../db/schema/layout"; const rows = tables.layouts;',
+      "const rows = sql`select * from fixture_layouts`;",
+    ]) {
+      sources.set(file, read);
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: conditionalRegistry,
+          endpoints: [{ file, config: conditional }],
+          sources,
+        }),
+      ).toEqual([
+        {
+          file,
+          message:
+            "featureAccess fixture conditional tables require the shared policy module",
+        },
+      ]);
+      sources.set(file, `${read} import { layout } from "../feature/layout";`);
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: conditionalRegistry,
+          endpoints: [{ file, config: conditional }],
+          sources,
+        }),
+      ).toEqual([]);
+    }
+  });
   test("unknown declarations, missing sources and empty ownership refuse the build", () => {
     expect(
       check("", { featureAccess: { type: "required", featureId: "unknown" } }),

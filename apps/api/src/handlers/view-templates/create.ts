@@ -15,6 +15,10 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+} from "@/api/lib/views/avt-layout";
 import { collectTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -39,6 +43,7 @@ const config = {
     "dropped, and the columns the layout needs are captured so they can be " +
     "recreated wherever the template is applied. Names are unique per user, " +
     "so a repeat name is a 409, and the per-user template limit applies.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -58,8 +63,20 @@ const createViewTemplate = createSafeHandler(
     user,
     body,
     recordAuditEvent,
+    featureAccessSnapshot,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const layout = portableLayout(parseViewLayout(body.layout));
+
+    if (layout.type === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(

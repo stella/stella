@@ -71,6 +71,11 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({
       select: () => {
         identityQueries += 1;
+        return {
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+          }),
+        };
       },
     });
     const result = await endpoint.handler(
@@ -84,7 +89,7 @@ describe("feature access safe-handler admission", () => {
       response: { message: "Not found" },
     });
     expect(executions).toBe(0);
-    expect(identityQueries).toBe(0);
+    expect(identityQueries).toBe(1);
     expect(database.getCallCount()).toBe(1);
   });
 
@@ -107,7 +112,13 @@ describe("feature access safe-handler admission", () => {
           return Result.ok({ ok: true });
         },
       );
-      const database = createScopedDbMock({});
+      const database = createScopedDbMock({
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+          }),
+        }),
+      });
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
           safeDb: database.safeDb,

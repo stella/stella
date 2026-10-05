@@ -2006,6 +2006,7 @@ const executeInvoke = async ({
       params: handlerParams,
       query: validatedQuery,
       organizationId: context.organizationId,
+      userId: context.userId,
       safeDb: scope.safeDb,
       scopedDb: scope.scopedDb,
       ...(workspaceId === undefined ? {} : { workspaceId }),

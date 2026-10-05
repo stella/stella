@@ -76,6 +76,11 @@ import {
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/views/avt-layout";
 import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -87,6 +92,7 @@ const config = {
     reason:
       "Copies stored content and returns operation metadata rather than file bytes.",
   },
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
@@ -447,8 +453,15 @@ export const createDuplicateWorkspace = (
       workspaceId: sourceWorkspaceId,
       body: { includeContent },
       recordAuditEvent,
+      featureAccessSnapshot,
     }) {
       const organizationId = session.activeOrganizationId;
+      const avtAvailable =
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }) === "available";
       const targetWorkspaceId = createSafeId<"workspace">();
 
       const snapshot = yield* Result.await(
@@ -539,7 +552,12 @@ export const createDuplicateWorkspace = (
             workspace,
             properties: workspaceProperties,
             dependencies: propertyDependencyRows,
-            views,
+            views: views.filter((view) =>
+              isAvtLayoutVisible(
+                view.layout,
+                avtAvailable ? "available" : "unavailable",
+              ),
+            ),
             members,
             contacts,
             entities: sourceEntities,

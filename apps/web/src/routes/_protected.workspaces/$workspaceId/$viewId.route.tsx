@@ -56,6 +56,7 @@ import {
   timeEntryTeamSummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -333,7 +334,7 @@ function RouteComponent() {
   const viewsQueryOptions = viewsOptions(workspaceId);
   const { data: activeView } = useSuspenseQuery({
     ...viewsQueryOptions,
-    select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
+    select: (data) => selectAvailableWorkspaceView(data, viewId),
   });
 
   if (!activeView) {
@@ -595,7 +596,9 @@ function ViewPendingComponent() {
   const viewsQueryOptions = viewsOptions(workspaceId);
   const cachedViews = queryClient.getQueryData(viewsQueryOptions.queryKey);
   const pendingView =
-    cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0);
+    cachedViews === undefined
+      ? undefined
+      : selectAvailableWorkspaceView(cachedViews, viewId);
   const layoutType = pendingView?.layout.type;
   const toolbarSkeleton = (
     <div className={cn("flex items-center gap-1.5 px-3", TOOLBAR_ROW_HEIGHT)}>

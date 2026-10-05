@@ -19,6 +19,11 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/views/avt-layout";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
 import {
   buildCsvExport,
@@ -40,6 +45,7 @@ const config = {
     "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
     "columns, filters, and ordering the view defines. Returns the file " +
     "bytes; views.list describes a view but never its rows.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
@@ -74,9 +80,15 @@ const exportTableView = createSafeHandler(
     session,
     request,
     recordAuditEvent,
+    featureAccessSnapshot,
     params: { viewId },
     query,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const view = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -96,6 +108,12 @@ const exportTableView = createSafeHandler(
     if (!view) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (!isAvtLayoutVisible(view.layout, avtAccessStatus)) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
       );
     }
 
