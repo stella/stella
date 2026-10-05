@@ -48,6 +48,7 @@ import {
   CASE_LAW_JUDGE_DEPENDENCIES,
   type CaseLawCorpusDependencies,
 } from "./pipeline/dependencies";
+import { sourceContractForAdapter } from "./pipeline/source-contract";
 import { DECISION_REFRESH, DECISION_ROW_WRITE_STATUS } from "./pipeline/types";
 import type { DecisionRowWriteStatus } from "./pipeline/types";
 import { absorbStandaloneSupplementRow } from "./supplement-absorption";
@@ -253,6 +254,8 @@ if (!databaseUrl || !enabled) {
               await resolveDecisionIdentityTx(tx, {
                 ...observed,
                 sourceId,
+                statedEcliIdentity:
+                  sourceContractForAdapter("cz-ns").statedEcliIdentity,
                 proposedDecisionId: createSafeId<"caseLawDecision">(),
               }),
           );
