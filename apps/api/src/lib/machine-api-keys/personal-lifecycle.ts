@@ -398,13 +398,19 @@ export const updatePersonalApiKeyPolicy = async (
           and(personalScope(options.organizationId), eq(apikey.enabled, true)),
         )
         .returning({ id: apikey.id, ownerUserId: apikey.referenceId });
-      for (const key of revoked) {
-        await options.recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
-          resourceId: key.id,
-          metadata: { reason: "policy_disabled", ownerUserId: key.ownerUserId },
-        });
+      if (revoked.length > 0) {
+        await options.recordAuditEvent(
+          tx,
+          revoked.map((key) => ({
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+            resourceId: key.id,
+            metadata: {
+              reason: "policy_disabled",
+              ownerUserId: key.ownerUserId,
+            },
+          })),
+        );
       }
     }
     await tx
