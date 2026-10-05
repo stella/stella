@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-const runSeed = async (seeds: string, extraArgs: string[] = []) => {
+const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-cli-"));
   const resultsPath = nodePath.join(dir, "results.jsonl");
   const child = Bun.spawn(
