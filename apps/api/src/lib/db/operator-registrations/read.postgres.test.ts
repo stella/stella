@@ -4,8 +4,12 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { systemAuditRuns } from "@/api/db/schema";
+import type { TransactionOf } from "@/api/db/scoped";
 import { createOperatorRoute } from "@/api/handlers/operator/routes";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  type GatedTestDb,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 
 import { parseRegistrationQuery } from "./input";
@@ -15,6 +19,22 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const SINCE = "2026-10-04T08:00:00Z";
 const NOW = Date.parse("2026-10-05T08:00:00Z");
+
+type AuditReader = Pick<TransactionOf<GatedTestDb>, "select">;
+
+/**
+ * Reads operator audits written after this call. A shared DATABASE_URL may
+ * already hold operator audits from earlier runs.
+ */
+const auditsAfterNow = async (tx: AuditReader) => {
+  const read = async () =>
+    await tx
+      .select()
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.actor, "system:operator-registrations"));
+  const before = new Set((await read()).map(({ id }) => id));
+  return async () => (await read()).filter(({ id }) => !before.has(id));
+};
 
 describe.skipIf(!enabled)("operator registration database pages", () => {
   test("pages equal and submillisecond timestamps without gaps, projects fields, and records one audit per page", async () => {
@@ -27,6 +47,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
       const outcome = await Result.tryPromise({
         try: async () =>
           await db.transaction(async (tx) => {
+            const newAudits = await auditsAfterNow(tx);
             const ids = Array.from({ length: 5 }, () =>
               mintAuthProviderIdValue(),
             ).toSorted();
@@ -120,12 +141,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 .filter(({ email }) => expected.includes(email))
                 .map(({ email }) => email),
             ).toEqual(expected.slice(3));
-            const audits = await tx
-              .select()
-              .from(systemAuditRuns)
-              .where(
-                eq(systemAuditRuns.actor, "system:operator-registrations"),
-              );
+            const audits = await newAudits();
             expect(audits).toHaveLength(pageCount + 1);
             for (const audit of audits.filter(
               ({ counts }) => counts["pageSize"] === 2,
@@ -148,14 +164,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               cursor: null,
             });
             expect(empty.items).toEqual([]);
-            expect(
-              await tx
-                .select()
-                .from(systemAuditRuns)
-                .where(
-                  eq(systemAuditRuns.actor, "system:operator-registrations"),
-                ),
-            ).toHaveLength(pageCount + 2);
+            expect(await newAudits()).toHaveLength(pageCount + 2);
             tx.rollback();
           }),
         catch: (cause) => cause,
@@ -183,6 +192,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
         const outcome = await Result.tryPromise({
           try: async () =>
             await db.transaction(async (tx) => {
+              const newAudits = await auditsAfterNow(tx);
               await tx.insert(user).values({
                 id,
                 name: "Test User",
@@ -224,14 +234,7 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
               );
               expect(response.status).toBe(500);
               expect(await response.text()).not.toContain(`${id}@example.test`);
-              expect(
-                await tx
-                  .select()
-                  .from(systemAuditRuns)
-                  .where(
-                    eq(systemAuditRuns.actor, "system:operator-registrations"),
-                  ),
-              ).toEqual([]);
+              expect(await newAudits()).toEqual([]);
               tx.rollback();
             }),
           catch: (cause) => cause,
