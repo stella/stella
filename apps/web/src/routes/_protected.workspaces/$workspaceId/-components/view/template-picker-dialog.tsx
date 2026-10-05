@@ -407,6 +407,7 @@ const DeleteTemplateConfirm = ({
   return (
     <AlertDialog onOpenChange={setOpen} open={open}>
       <AlertDialogTrigger
+        nativeButton
         render={
           <Button
             aria-label={t("workspaces.views.templates.delete")}

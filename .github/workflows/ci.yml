@@ -27,6 +27,10 @@ on:
         required: false
   workflow_dispatch:
     inputs:
+      allow_full:
+        description: Explicitly permit a full suite on a feature branch
+        type: boolean
+        default: false
       depth:
         description: >-
           Suite depth. `fast` runs the guards, lint, typecheck, unit tests
@@ -125,7 +129,13 @@ jobs:
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_REF: ${{ github.ref }}
+          ALLOW_FULL: ${{ inputs.allow_full }}
         run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_DEPTH" == full && "$DISPATCH_REF" != refs/heads/main && "${ALLOW_FULL:-false}" != true ]]; then
+            echo "::error::Full dispatch on a feature branch requires allow_full=true."
+            exit 1
+          fi
           case "${MERGE_QUEUE_DEPTH:-}" in
             ""|full|thin) ;;
             *)
@@ -2409,7 +2419,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2487,6 +2496,7 @@ jobs:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -2509,7 +2519,7 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Test web
@@ -2534,8 +2544,20 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-diagnostics-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/api-test-${{ matrix.shard }}/
+            ${{ runner.temp }}/test-plan-*.json
+            ${{ runner.temp }}/test-output-*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
@@ -3477,38 +3499,15 @@ jobs:
           bun run generate
           bun run typegen
 
-      - name: Measure merge base
-        run: |
-          base_dir="$RUNNER_TEMP/typecheck-base"
-          git worktree add --detach "$base_dir" "$(git merge-base origin/main HEAD)"
-          git -C "$base_dir" submodule update --init --recursive
-          (
-            cd "$base_dir"
-            bash scripts/retry.sh bun ci --ignore-scripts
-            # Older merge bases still commit the runtime aggregates.
-            if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
-              bun --filter @stll/api generate:capability-runtime
-            fi
-            # Older bases commit the snapshot. Generate only when the base
-            # owns an untracked output, using its cached producer if present.
-            if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
-              if bun -e 'process.exit("generate" in require("./package.json").scripts ? 0 : 1)'; then
-                bun run generate
-              else
-                bun --filter @stll/api gen:web-api-types
-              fi
-            fi
-            if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
-              bun --filter @stll/web generate:route-tree
-            fi
-            bun run typegen
-          )
-          bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
+      - name: Load merge base measurement
+        run: bash scripts/prepare-typecheck-base.sh
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           NPM_TOKEN: ""
 
       - name: Generated API type review diff
-        # Reuse the measured base checkout and its installed dependencies.
+        # The main recording includes the generated base files.
         # Both files were generated from their own revision above.
         run: |
           patch="$RUNNER_TEMP/web-api-types.patch"
@@ -4993,7 +4992,7 @@ jobs:
 
       - name: Install cargo-deny
         if: matrix.os == 'macos'
-        run: cargo install cargo-deny --version 0.19.0 --locked
+        uses: ./.github/actions/cargo-deny
 
       - name: License audit
         if: matrix.os == 'macos'

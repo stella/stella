@@ -241,6 +241,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
             "pointer-events-auto relative z-50 flex flex-col",
             DOCKED_COMPOSER_WIDTH_CLASS,
           )}
+          data-slot="docked-chat-composer"
         >
           {bar}
           {/* No extra top margin: `ComposerStatusRow` owns the single

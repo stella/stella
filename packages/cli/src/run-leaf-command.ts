@@ -47,11 +47,13 @@ import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
   type OutputFormat,
+  type RenderPlan,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -122,6 +124,14 @@ export const writersFor = (context: Context): Writers => ({
 
 export const setExit = (context: Context, code: ExitCode): void => {
   context.process.exitCode = code;
+};
+
+/** Apply the exit class a rendered plan decides, if it decides one. */
+const setPlanExit = (context: Context, plan: RenderPlan): void => {
+  const code = renderPlanExitCode(plan);
+  if (code !== undefined) {
+    setExit(context, code);
+  }
 };
 
 // Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
@@ -838,6 +848,12 @@ type AllFailure =
 
 type AllOutcome = {
   payload: unknown;
+  /**
+   * Where `payload` holds its text on a windowed-text walk: the merged
+   * `MERGED_TEXT_PATH`, or the leaf's own path when the first window carried
+   * no text and is rendered as it came. Undefined for an items walk.
+   */
+  textPath: string | undefined;
   /** Where a ceiling stopped the walk short of the last page; null when complete. */
   resumeCursor: string | null;
   count: number;
@@ -908,6 +924,16 @@ const followAll = async ({
     }
     pages += 1;
 
+    // A first window without text has nothing to concatenate: render it as
+    // it came, so the plan types the absence instead of merging it into "".
+    if (
+      textPath !== undefined &&
+      pages === 1 &&
+      typeof valueAtPath(payload, textPath) !== "string"
+    ) {
+      return Result.ok({ payload, textPath, resumeCursor: null, count: 0 });
+    }
+
     if (textPath !== undefined) {
       const chunk = asStringAtPath(payload, textPath);
       bytes += Buffer.byteLength(chunk);
@@ -948,6 +974,7 @@ const followAll = async ({
   const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
   return Result.ok({
     payload: mergedPayload,
+    textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
     resumeCursor: cursor,
     count,
   });
@@ -1035,7 +1062,7 @@ export const streamOrRenderAllPages = async ({
     const plan = buildRenderPlan({
       payload: outcome.value.payload,
       itemsKey,
-      textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
+      textPath: outcome.value.textPath,
       singleReadActive: false,
       columns: undefined,
     });
@@ -1046,6 +1073,7 @@ export const streamOrRenderAllPages = async ({
       allActive: true,
       width: terminalWidth(context),
     });
+    setPlanExit(context, plan);
   }
   const { count, resumeCursor } = outcome.value;
   if (resumeCursor !== null) {
@@ -1215,6 +1243,7 @@ export const renderCommandResult = ({
     allActive: false,
     width: terminalWidth(context),
   });
+  setPlanExit(context, plan);
 
   // Generic two-phase handshake affordance (driven by the response fields, not
   // any tool name): a phase-1 `approval_required` response carries a
