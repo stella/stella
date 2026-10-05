@@ -48,8 +48,14 @@ type RootScopedDbOptions = {
   | { workspaceScope: CurrentMembershipScope; userId: SafeId<"user"> }
 );
 
+type OrganizationBackgroundScopeOptions = {
+  organizationId: SafeId<"organization">;
+  userId: null;
+  workspaceScope: typeof NO_STORED_WORKSPACES;
+};
+
 export const createRootScopedDb = (
-  options: RootScopedDbOptions,
+  options: RootScopedDbOptions | OrganizationBackgroundScopeOptions,
   database: RlsDatabase<Transaction> = rlsDb,
 ) => {
   // This helper exists only because some modules are not allowed
@@ -89,16 +95,16 @@ const NO_STORED_WORKSPACES = {
 /** Background organization work has no user or matter authority. */
 export const createRootOrganizationBackgroundDb = (
   organizationId: SafeId<"organization">,
-  database: RlsDatabase<Transaction> = rlsDb,
-) => {
-  const validatedOrganizationId = brandPersistedOrganizationId(organizationId);
-  return createScopedDb(
+  database?: RlsDatabase<Transaction>,
+) =>
+  createRootScopedDb(
+    {
+      organizationId: brandPersistedOrganizationId(organizationId),
+      userId: null,
+      workspaceScope: NO_STORED_WORKSPACES,
+    },
     database,
-    NO_STORED_WORKSPACES,
-    validatedOrganizationId,
-    null,
   );
-};
 
 export const createRootSafeDb = (
   options: RootScopedDbOptions,
