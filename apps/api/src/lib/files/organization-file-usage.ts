@@ -71,6 +71,20 @@ export const organizationFileUsageHandlerError = (
     cause: error,
   });
 
+const storageCapacityRow = (row: unknown): [string, bigint | null] => {
+  if (
+    !isRecord(row) ||
+    typeof row["organizationId"] !== "string" ||
+    (row["capacity"] !== null && typeof row["capacity"] !== "string")
+  ) {
+    return panic("Organization storage capacity row is malformed");
+  }
+  return [
+    row["organizationId"],
+    row["capacity"] === null ? null : BigInt(row["capacity"]),
+  ];
+};
+
 /**
  * The organization's storage capacity in bytes, or null when nothing bounds
  * it: the `organization_storage_capacity` database function, which reads the
@@ -89,20 +103,6 @@ const readOrganizationStorageCapacity = async (
     rows.at(0) ?? panic("Organization storage capacity row is missing"),
   );
   return capacity;
-};
-
-const storageCapacityRow = (row: unknown): [string, bigint | null] => {
-  if (
-    !isRecord(row) ||
-    typeof row["organizationId"] !== "string" ||
-    (row["capacity"] !== null && typeof row["capacity"] !== "string")
-  ) {
-    return panic("Organization storage capacity row is malformed");
-  }
-  return [
-    row["organizationId"],
-    row["capacity"] === null ? null : BigInt(row["capacity"]),
-  ];
 };
 
 const positiveDifference = (next: bigint, current: bigint): bigint =>
