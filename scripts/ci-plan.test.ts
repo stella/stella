@@ -1545,6 +1545,16 @@ test("path-scoped platform checks run on the pull requests that touch them", () 
   }
 });
 
+test("every bounded-install implementation and fixture selects Windows", () => {
+  const files = [...new Bun.Glob("scripts/ci-install*.ts").scanSync()];
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    expect(runSelector([file], ["windows_scripts_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];

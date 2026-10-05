@@ -254,10 +254,20 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install heavy planner dependencies
+        timeout-minutes: 3
         if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
-        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Read the gate from the workflow revision, even when dispatch checks an
       # older main commit that predates this planner.
@@ -612,7 +622,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
+              packages/scripts/*|scripts/ci-install*.ts|package.json|bun.lock|.github/workflows/ci.yml)
                 windows_scripts_required=true
                 ;;
             esac
@@ -920,7 +930,7 @@ jobs:
           set -euo pipefail
           echo "::group::Install turbo"
           (
-            bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
+            bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/turbo.log" -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
           )
           echo ::endgroup::
           echo "::group::Prepare Docker install inputs"
@@ -943,7 +953,7 @@ jobs:
             rm -rf api-install
             cp -a install-json api-install
             cd api-install
-            bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
+            bun ../scripts/ci-install.ts "$RUNNER_TEMP/bun-install/api-image.log" --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
           )
           echo ::endgroup::
           echo "::group::Prod-deps legal atlas runner smoke"
@@ -954,7 +964,7 @@ jobs:
             rm -rf runner-install
             cp -a install-json runner-install
             cd runner-install
-            bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts
+            bun ../scripts/ci-install.ts "$RUNNER_TEMP/bun-install/legal-atlas.log" --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts
             cp -a ../out-runner/full/. .
             bun --filter @stll/legal-atlas-runner build
             bun apps/legal-atlas-runner/dist/index.js smoke
@@ -973,6 +983,15 @@ jobs:
             fi
           )
           echo ::endgroup::
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -3657,6 +3676,7 @@ jobs:
           bun scripts/bundle-baseline.ts --check
 
       - name: Prod-deps web boot smoke
+        timeout-minutes: 3
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot dist/runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
@@ -3676,7 +3696,7 @@ jobs:
           # and could mask a package the web runtime reaches but @stll/web never
           # declared. dist/ and .env are untouched.
           rm -rf node_modules
-          bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts
+          bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/web-production.log" --filter @stll/web --production --frozen-lockfile --ignore-scripts
           cd apps/web
           PORT=3199 HOST=127.0.0.1 bun dist/runtime.js &
           server_pid=$!
@@ -3694,6 +3714,14 @@ jobs:
             exit 1
           fi
 
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -4839,15 +4867,26 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install scripts workspace dependencies
-        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        timeout-minutes: 3
+        shell: bash
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           # Restored Windows global-store links can omit transitive dependency
           # links. Rebuild the isolated graph locally from cached package files.
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Test dev runner
-        run: bun test packages/scripts/src/dev-runner.test.ts
+        run: bun test packages/scripts/src/dev-runner.test.ts scripts/ci-install.test.ts
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
