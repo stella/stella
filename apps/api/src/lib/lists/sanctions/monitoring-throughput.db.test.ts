@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
-import type { SanctionsEntry } from "@stll/sanctions";
+import type { ScreeningIndex, SanctionsEntry } from "@stll/sanctions";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -23,12 +23,13 @@ import {
   SANCTIONS_MONITORING_BATCH_SIZE,
 } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
+import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const CONTACT_COUNT = 10_000;
 const ENTRY_COUNT = 20_000;
-const SEED_BATCH_SIZE = 1000;
+const SEED_BATCH_SIZE = 100;
 const syntheticName = (index: number) =>
   createHash("sha256")
     .update(`synthetic-person-${index}`)
@@ -63,35 +64,38 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
     state: "ready",
     entryCount: ENTRY_COUNT,
   });
-  const payloads = Array.from({ length: ENTRY_COUNT }, (_, index) => {
-    const payload = {
-      source: "eu",
-      issuer: "EU",
-      sourceId: String(index),
-      referenceNumber: null,
-      entityType: "person",
-      names: [{ name: syntheticName(index), quality: "strong" }],
-      birthDates: [],
-      nationalities: [],
-      identifiers: [],
-      addresses: [],
-      programme: null,
-      legalBasis: null,
-      listedOn: null,
-      sourceUrl: "https://example.test/entry",
-    } satisfies SanctionsEntry;
-    return {
-      contentHash: createHash("sha256")
-        .update(JSON.stringify(payload))
-        .digest("hex"),
-      payload,
-    };
-  });
   const seedAt = async (offset: number): Promise<void> => {
-    const batch = payloads.slice(offset, offset + SEED_BATCH_SIZE);
-    if (batch.length === 0) {
+    if (offset >= ENTRY_COUNT) {
       return;
     }
+    const batch = Array.from(
+      { length: Math.min(SEED_BATCH_SIZE, ENTRY_COUNT - offset) },
+      (_, batchIndex) => {
+        const index = offset + batchIndex;
+        const payload = {
+          source: "eu",
+          issuer: "EU",
+          sourceId: String(index),
+          referenceNumber: null,
+          entityType: "person",
+          names: [{ name: syntheticName(index), quality: "strong" }],
+          birthDates: [],
+          nationalities: [],
+          identifiers: [],
+          addresses: [],
+          programme: null,
+          legalBasis: null,
+          listedOn: null,
+          sourceUrl: "https://example.test/entry",
+        } satisfies SanctionsEntry;
+        return {
+          contentHash: createHash("sha256")
+            .update(JSON.stringify(payload))
+            .digest("hex"),
+          payload,
+        };
+      },
+    );
     await db.insert(sanctionsEntryPayloads).values(batch);
     await db.insert(sanctionsEditionEntries).values(
       batch.map(({ contentHash, payload }) => ({
@@ -146,12 +150,24 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
         .orderBy(contacts.id)
         .limit(CONTACT_COUNT),
   );
-  const index = buildScreeningIndex([
-    {
-      version: { source: "eu", publishedAt: "2026-09-30", fileId: null },
-      entries: payloads.map(({ payload }) => payload),
+  // Load through the real scoped service once; both timing phases use its compiled edition.
+  const captured: { index: ScreeningIndex | null } = { index: null };
+  const indexCache = createSanctionsIndexCache({
+    build: (lists) => {
+      expect(lists).toHaveLength(1);
+      expect(lists.at(0)?.entries).toHaveLength(ENTRY_COUNT);
+      const index = buildScreeningIndex(lists);
+      captured.index = index;
+      return index;
     },
-  ]);
+  });
+  await prepareMonitoringContacts({
+    db: scopedDb,
+    contactRows: contactRows.slice(0, 1),
+    now,
+    indexCache,
+  });
+  const index = captured.index ?? panic("Benchmark index missing");
   const screenStarted = performance.now();
   let hits = 0;
   for (const contact of contactRows) {
@@ -166,12 +182,6 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
     hits += result.value.totalMatches;
   }
   const screeningMs = performance.now() - screenStarted;
-  // Warm the shared service's edition index; report steady-state batch cost separately from construction.
-  await prepareMonitoringContacts({
-    db: scopedDb,
-    contactRows: contactRows.slice(0, 1),
-    now,
-  });
   const combinedStarted = performance.now();
   const commitAt = async (offset: number): Promise<void> => {
     const batch = contactRows.slice(
@@ -185,6 +195,7 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
       db: scopedDb,
       contactRows: batch,
       now,
+      indexCache,
     });
     const results = prepared.map(
       ({ contactId, contactFingerprint, lists }) => ({
