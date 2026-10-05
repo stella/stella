@@ -46,6 +46,7 @@ import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
@@ -489,6 +490,9 @@ export const serializeToolResult = (
   return {
     content: [{ type: "text", text: JSON.stringify({ error }) }],
     isError: true,
+    ...(error.code === "internal_error"
+      ? { [MCP_INTERNAL_TOOL_FAILURE]: true }
+      : {}),
   };
 };
 
