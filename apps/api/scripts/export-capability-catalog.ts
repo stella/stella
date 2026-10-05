@@ -1241,16 +1241,35 @@ const readFeatureDeclarationSources = async () => {
   return featureSources;
 };
 
+type GeneratedFeatureDeclarationOptions = Parameters<
+  typeof assertFeatureAccessDeclarations
+>[0] & { dispatchRecords: readonly CapabilityDispatchRecord[] };
+
+/** Validate emitted dispatch entries rather than previously generated shards. */
+const validateGeneratedFeatureDeclarations = ({
+  registry,
+  endpoints,
+  sources: sourceModules,
+  dispatchRecords,
+}: GeneratedFeatureDeclarationOptions): void => {
+  const sources = new Map(sourceModules);
+  for (const file of sources.keys()) {
+    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+      sources.delete(file);
+    }
+  }
+  sources.set(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    serializeDispatchModule(dispatchRecords),
+  );
+  assertFeatureAccessDeclarations({ registry, endpoints, sources });
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, routeFiles, importErrors } =
     await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
-  assertFeatureAccessDeclarations({
-    registry: FEATURE_REGISTRY,
-    endpoints,
-    sources: featureSources,
-  });
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1692,6 +1711,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
+      featureAccess: parseFeatureRequirement(endpoint.config["featureAccess"]),
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {
@@ -1702,6 +1722,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const endpoint of endpoints) {
     projectEndpoint(endpoint);
   }
+
+  validateGeneratedFeatureDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+    dispatchRecords,
+  });
 
   // Class guards over the built entries (context-fidelity, file-response,
   // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in

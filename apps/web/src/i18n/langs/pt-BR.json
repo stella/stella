@@ -841,6 +841,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
@@ -2313,6 +2314,8 @@
       "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
       "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
       "forbidden": "Você não tem permissão para fazer isso.",
+      "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
+      "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
@@ -4640,6 +4643,7 @@
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",
+    "currentWording": "Redação atual",
     "description": "Base pública de normas consolidadas, indexáveis por norma e versão.",
     "diffInserted": "Inserido:",
     "diffRemoved": "Suprimido:",
@@ -4689,7 +4693,9 @@
       "unknown": "Situação incerta"
     },
     "title": "Legislação",
-    "validity": "Vigente de {from} a {to}"
+    "validity": "Vigente de {from} a {to}",
+    "wordingValidFrom": "Redação em vigor desde {date}",
+    "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
     "create": "Criar",
@@ -5458,8 +5464,7 @@
         "signCurrent": "Assinar com o stella desktop",
         "signNone": "Baixe o stella desktop para assinar este PDF",
         "signOutdated": "Atualize o stella desktop para assinar",
-        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop.",
-        "signShort": "Assinar"
+        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop."
       },
       "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",

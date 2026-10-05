@@ -844,6 +844,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
     };
@@ -2316,6 +2317,8 @@ type Messages = {
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
+      "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
+      "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
@@ -4643,6 +4646,7 @@ type Messages = {
     "compareVersionMissing": "The version to compare with is not in this act's history.";
     "compareWholeAct": "Compare the whole act";
     "compareWithVersion": "Compare with {version}";
+    "currentWording": "Current wording";
     "description": "Public database of consolidated statutes, indexable by act and version.";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
@@ -4693,6 +4697,8 @@ type Messages = {
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
+    "wordingValidFrom": "Wording in force since {date}";
+    "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
     "create": "Create";
@@ -5462,7 +5468,6 @@ type Messages = {
         "signNone": "Download stella desktop to sign this PDF";
         "signOutdated": "Update stella desktop to sign";
         "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.";
-        "signShort": "Sign";
       };
       "downloadAs": "Download as…";
       "downloadAsZip": "Download as ZIP";

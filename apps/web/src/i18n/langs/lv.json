@@ -841,6 +841,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
     },
@@ -2313,6 +2314,8 @@
       "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
       "filePropertyTypeImmutable": "Faila īpašības tipu nevar mainīt. Saglabājiet pašreizējo tipu; citām vērtībām izveidojiet pielāgotu īpašību.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
+      "hostedCheckoutOpen": "Šai organizācijai jau ir atvērta apmaksa. Pabeidziet to vai sāciet jaunu pēc tās derīguma beigām.",
+      "hostedSubscriptionLive": "Šai organizācijai jau ir abonements. Mainiet to sadaļā “Pārvaldīt mitināto lietojumu”.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
@@ -4640,6 +4643,7 @@
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "currentWording": "Pašreizējā redakcija",
     "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
@@ -4689,7 +4693,9 @@
       "unknown": "Statuss neskaidrs"
     },
     "title": "Tiesību akti",
-    "validity": "Spēkā no {from} līdz {to}"
+    "validity": "Spēkā no {from} līdz {to}",
+    "wordingValidFrom": "Redakcija ir spēkā kopš {date}",
+    "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {
     "create": "Izveidot",
@@ -5458,8 +5464,7 @@
         "signCurrent": "Parakstīt ar stella desktop",
         "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
         "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
-        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
-        "signShort": "Parakstīt"
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop."
       },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",

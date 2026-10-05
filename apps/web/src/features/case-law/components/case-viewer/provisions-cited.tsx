@@ -54,13 +54,17 @@ export const ProvisionsCited = ({
   decisionDate,
   decisionId,
   isHydrated,
+  expanded,
 }: {
   decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   isHydrated?: boolean;
+  /** The compact inspector owns the one disclosure around all citation lists. */
+  expanded?: boolean;
 }) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = expanded ?? localOpen;
   const renderPart = useProvisionPartRenderer();
 
   const {
@@ -111,12 +115,85 @@ export const ProvisionsCited = ({
     return null;
   }
 
+  const content = open ? (
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        expanded === undefined && "px-3 pb-3",
+      )}
+    >
+      {isError && (
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "case-law.provisions-retry");
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {groups.map((group) => {
+        const citedWork = citedWorkByGroup.get(group.key);
+        return (
+          <WorkReferences
+            decisionAsOf={decisionAsOf}
+            group={group}
+            key={group.key}
+            publisherInconsistent={
+              citedWork !== undefined &&
+              inconsistentWorks.has(citedWorkAtDateKey(citedWork))
+            }
+            renderPart={renderPart}
+            statute={
+              citedWork === undefined
+                ? undefined
+                : statuteByWork.get(citedWorkAtDateKey(citedWork))
+            }
+          />
+        );
+      })}
+      {hasNextPage && (
+        <Button
+          className="w-fit"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "case-law.provisions-more");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.loadMore")}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
+  if (expanded !== undefined) {
+    if (!open) {
+      return null;
+    }
+    return (
+      <section className="flex flex-col gap-2">
+        <h3 className="text-foreground-strong-muted text-xs font-medium">
+          {t("caseLaw.viewer.provisionsCited")}
+        </h3>
+        {content}
+      </section>
+    );
+  }
+
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
       <button
         aria-expanded={open}
         className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
-        onClick={() => setOpen(!open)}
+        onClick={() => setLocalOpen(!open)}
         type="button"
       >
         <ChevronRightIcon
@@ -124,60 +201,7 @@ export const ProvisionsCited = ({
         />
         {t("caseLaw.viewer.provisionsCited")}
       </button>
-      {open && (
-        <div className="flex flex-col gap-3 px-3 pb-3">
-          {isError && (
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "case-law.provisions-retry");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {groups.map((group) => {
-            const citedWork = citedWorkByGroup.get(group.key);
-
-            return (
-              <WorkReferences
-                decisionAsOf={decisionAsOf}
-                group={group}
-                key={group.key}
-                publisherInconsistent={
-                  citedWork !== undefined &&
-                  inconsistentWorks.has(citedWorkAtDateKey(citedWork))
-                }
-                renderPart={renderPart}
-                statute={
-                  citedWork === undefined
-                    ? undefined
-                    : statuteByWork.get(citedWorkAtDateKey(citedWork))
-                }
-              />
-            );
-          })}
-          {hasNextPage && (
-            <Button
-              className="w-fit"
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "case-law.provisions-more");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.loadMore")}
-            </Button>
-          )}
-        </div>
-      )}
+      {content}
     </section>
   );
 };
