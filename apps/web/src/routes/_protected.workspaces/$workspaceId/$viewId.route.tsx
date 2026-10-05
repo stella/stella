@@ -118,7 +118,7 @@ export const Route = createFileRoute(
 
       await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
 
-      if (!isTimeBillingRouteEnabled()) {
+      if (!(await isTimeBillingRouteEnabled(queryClient))) {
         return;
       }
 

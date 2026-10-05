@@ -7,8 +7,13 @@ import {
   UNDECIDED_CONDITIONS_HEADER,
   undecidedConditionsHeaderSchema,
 } from "@stll/api-contract/template-fill-headers";
+import { evaluateCondition } from "@stll/template-conditions";
 
-import type { ResolvedField } from "@/components/templates/template-discover-types";
+import type {
+  NamedCondition,
+  ResolvedField,
+} from "@/components/templates/template-discover-types";
+import { optionalArray } from "@/lib/arrays";
 
 const aiFieldErrorPathsSchema = v.array(
   v.object({ fieldPath: v.pipe(v.string(), v.nonEmpty()) }),
@@ -226,4 +231,64 @@ export const readClauseWarnings = (headers: Headers) =>
       clauseWarningCountHeaderSchema,
       headers.get(CLAUSE_WARNINGS_HEADER) ?? "0",
     ),
+  );
+
+/**
+ * The values an item field's `visibleWhen` reads for one item, as the fill
+ * evaluates a condition inside that loop iteration: the item's fields under
+ * the array path and every loop alias, its non-empty fields under their bare
+ * names (an iteration reads its own item first), and the loop counters.
+ */
+const itemConditionValues = (
+  field: ResolvedField,
+  index: number,
+  itemCount: number,
+  values: Readonly<Record<string, unknown>>,
+): Record<string, unknown> => {
+  const scoped = new Map<string, unknown>(
+    Object.entries({
+      ...values,
+      "loop.index": index + 1,
+      "loop.index0": index,
+      "loop.first": index === 0,
+      "loop.last": index === itemCount - 1,
+      "loop.length": itemCount,
+    }),
+  );
+  for (const sub of optionalArray(field.itemFields)) {
+    const value = values[`${field.path}[${String(index)}].${sub.path}`];
+    for (const head of [field.path, ...optionalArray(field.itemAliases)]) {
+      scoped.set(`${head}.${sub.path}`, value);
+    }
+    if (value !== undefined && value !== "") {
+      scoped.set(sub.path, value);
+    }
+  }
+  return Object.fromEntries(scoped);
+};
+
+/** The item fields the form asks for on item `index`: those whose
+ *  `visibleWhen` holds for that item. A field the item's branch prunes is
+ *  never rendered for it, so it is neither shown nor required. */
+export const visibleItemFields = ({
+  field,
+  index,
+  itemCount,
+  values,
+  conditions,
+}: {
+  field: ResolvedField;
+  index: number;
+  itemCount: number;
+  values: Readonly<Record<string, unknown>>;
+  conditions: readonly NamedCondition[];
+}): ResolvedField[] =>
+  optionalArray(field.itemFields).filter(
+    (sub) =>
+      sub.visibleWhen === undefined ||
+      evaluateCondition(
+        sub.visibleWhen,
+        itemConditionValues(field, index, itemCount, values),
+        conditions,
+      ),
   );

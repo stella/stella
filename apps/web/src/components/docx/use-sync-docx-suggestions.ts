@@ -30,6 +30,7 @@ import { parsePersistedDocxOperation } from "@/components/docx/operation-payload
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import { useQueryView } from "@/lib/use-query-view";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 type UseSyncDocxSuggestionsInput = {
@@ -49,7 +50,11 @@ export const useSyncDocxSuggestions = ({
   entityId,
   editorRef,
 }: UseSyncDocxSuggestionsInput) => {
-  const { data } = useQuery(docxSuggestionsOptions({ workspaceId, entityId }));
+  const view = useQueryView(
+    useQuery(docxSuggestionsOptions({ workspaceId, entityId })),
+    { isEmpty: ({ items }) => items.length === 0 },
+  );
+  const data = view.type === "items" ? view.items : undefined;
 
   // Bumped once the editor snapshot becomes available, to re-run hydration
   // against a ready editor (see the poll effect below).
@@ -162,4 +167,6 @@ export const useSyncDocxSuggestions = ({
 
     useReviewStore.getState().hydrateSuggestions(entityId, items);
   }, [data, editorRef, entityId, snapshotReadyTick]);
+
+  return view;
 };

@@ -134,6 +134,7 @@
     "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
     "@stll/sanctions": "workspace:*",
+    "@stll/scripts": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/stable-stringify": "workspace:*",
     "@stll/template-conditions": "workspace:*",

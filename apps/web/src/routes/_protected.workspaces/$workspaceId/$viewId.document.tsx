@@ -253,26 +253,6 @@ export const Route = createFileRoute(
         "document.prefetch",
       );
 
-      // The review facet opens on this document's run history, and that answer
-      // carries the latest run in full — so one loader-started read leaves both
-      // the facet's decision and the run panel warm. Without it the first click
-      // on the review tab waits through two dependent rounds behind a skeleton.
-      // DOCX only: the facet does not mount for any other field type.
-      detached(
-        prefetchRouteQuery(
-          context.queryClient,
-          documentReviewRunsOptions({
-            workspaceId: params.workspaceId,
-            entityId: deps.entity,
-            fileFieldId: deps.field,
-          }),
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        ),
-        "document.prefetch",
-      );
-
       // "We act for" is the first thing the review launcher asks, and the
       // answer is a detection over the document itself — cached per version
       // server-side, so on every open but the first it costs a round trip and
@@ -352,6 +332,20 @@ export const Route = createFileRoute(
           },
         ),
         "document.prefetch",
+      );
+    }
+
+    if (isDocxField) {
+      // Resolve history before route commit: it seeds the latest run detail
+      // and decides which review to restore. Noncritical reads above start
+      // before this gate; only DOCX fields mount the review facet.
+      await ensureRouteQueryData(
+        context.queryClient,
+        documentReviewRunsOptions({
+          workspaceId: params.workspaceId,
+          entityId: deps.entity,
+          fileFieldId: deps.field,
+        }),
       );
     }
   },

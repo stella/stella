@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
@@ -672,10 +674,11 @@ if (!databaseUrl || !runPostgresTests) {
       for (const raw of [direct, forwarded, direct, forwarded]) {
         expect((await deliver(raw)).isOk()).toBe(true);
       }
-      expect((await records()).map(({ intake }) => intake).toSorted()).toEqual([
-        "direct",
-        "forwarded_attachment",
-      ]);
+      expect(
+        (await records())
+          .map(({ intake }) => intake)
+          .toSorted((left, right) => compareCodeUnit(left ?? "", right ?? "")),
+      ).toEqual(["direct", "forwarded_attachment"]);
       expect(await filers()).toHaveLength(2);
     });
 

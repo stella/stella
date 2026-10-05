@@ -1,5 +1,23 @@
 # @stll/cli
 
+## 3.8.4
+
+### Patch Changes
+
+- [#4801](https://github.com/stella/stella/pull/4801) [`109ded9`](https://github.com/stella/stella/commit/109ded9c27d08373eaf1fad184dd360a3cb840c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe uploaded email files in matter correspondence list and get.
+
+## 3.8.3
+
+### Patch Changes
+
+- [#4740](https://github.com/stella/stella/pull/4740) [`9e0a30e`](https://github.com/stella/stella/commit/9e0a30e18c91fcae5d6f13695a312c2cb54d09e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Seller profile, number series and VAT rate capabilities follow the time billing feature flag.
+
+## 3.8.2
+
+### Patch Changes
+
+- [#4737](https://github.com/stella/stella/pull/4737) [`0dff393`](https://github.com/stella/stella/commit/0dff393483053ad01e658230d3435be0be46ad10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update member removal options and task filters.
+
 ## 3.8.1
 
 ### Patch Changes

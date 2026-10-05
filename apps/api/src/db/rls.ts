@@ -23,6 +23,11 @@ export const stellaPublicLawReader = p
   .pgRole("stella_public_law_reader")
   .existing();
 
+// Anonymous sanctions screening may read only the global reference lists.
+export const stellaPublicSanctionsReader = p
+  .pgRole("stella_public_sanctions_reader")
+  .existing();
+
 // Operator login that pre-computes decision analyses. It reads a narrow column
 // set of the two case-law relations the computation needs and may write exactly
 // one column, case_law_decisions.analysis.
@@ -136,6 +141,15 @@ export const organizationCheck = sql`organization_id =
   (SELECT current_setting(
     '${sql.raw(SETTING_ORGANIZATION_ID)}', true
   ))`;
+
+export const workspaceInsertCheck = sql`${organizationCheck} AND (
+  NULLIF((SELECT pg_catalog.current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  )), '') IS NOT NULL
+  OR (SELECT pg_catalog.current_setting(
+    '${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', true
+  )) = '${sql.raw(WORKSPACE_ACCESS_MODE.explicit)}'
+)`;
 
 const userCheck = sql`user_id =
   (SELECT current_setting(
@@ -767,6 +781,14 @@ export const globalCaseLawPolicies = () => [
     to: stellaIngestion,
     using: allowAllRows,
     withCheck: allowAllRows,
+  }),
+];
+
+export const publicSanctionsReaderPolicies = () => [
+  p.pgPolicy("public_sanctions_reader_access", {
+    for: "select",
+    to: stellaPublicSanctionsReader,
+    using: allowAllRows,
   }),
 ];
 

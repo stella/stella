@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
 type DeclarationOptions = {
@@ -604,7 +606,8 @@ export const validateFeatureAccessDeclarations = ({
     );
   }
   return violations.toSorted((left, right) =>
-    `${left.file}:${left.message}`.localeCompare(
+    compareCodeUnit(
+      `${left.file}:${left.message}`,
       `${right.file}:${right.message}`,
     ),
   );

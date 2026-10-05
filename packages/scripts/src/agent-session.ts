@@ -44,6 +44,7 @@ import {
   parseSealStatus,
   verifyAttachment,
 } from "./agent-evidence";
+import { childExitStatus } from "./child-exit-status";
 import {
   DEV_SESSION_ID_ENV,
   type DevProcessGroupError,
@@ -699,7 +700,8 @@ const drive = async (root: string, args: readonly string[]) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  const exitCode = await child.exited;
+  await child.exited;
+  const exitCode = childExitStatus(child);
   const after = checkSeal(root, runtime);
 
   const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
@@ -780,7 +782,7 @@ const attach = (root: string, args: readonly string[]) => {
     ],
     { stderr: "inherit", stdout: "inherit" },
   );
-  return process.exit(result.exitCode);
+  return process.exit(childExitStatus(result));
 };
 
 // Worktree stacks only: the root checkout's database may hold the person's
@@ -823,7 +825,8 @@ const passThrough = async ({ args, env, script }: PassThroughOptions) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  return child.exited;
+  await child.exited;
+  return childExitStatus(child);
 };
 
 const main = async () => {

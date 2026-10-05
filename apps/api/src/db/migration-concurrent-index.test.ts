@@ -36,6 +36,7 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261003122400_public_sanctions_reader/migration.sql:6cc0fbb1310629fc3b2e4e6ac47e0cdb64c91fed912aada50d7c9e4631dd3c05",
   // Validates matter memberships with a bounded existence read and a typed
   // constraint error. The static block changes no rows or timeout settings.
   "20261004001100_validate_matter_membership_organization_membership/migration.sql:b63282f9fdb50853ecdb93950ebd13f424a8a3ea142755f27ab5e8fbe60df69c",

@@ -92,6 +92,7 @@ const CLAUSE_WARNING_SEVERITY = {
   // publication validates directives. The warning is still reported on every
   // surface and recorded in the diagnostics.
   CLAUSE_LEGACY_DIRECTIVES: "informational",
+  CLAUSE_OVERRIDE_NOT_RENDERED: "informational",
 } as const satisfies Record<
   ClauseDirectiveWarning["code"],
   FillDiagnosticSeverity
