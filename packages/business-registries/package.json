@@ -107,7 +107,7 @@
     "@stll/country-codes": "workspace:*",
     "@stll/stdnum": "^2.3.2",
     "better-result": "catalog:",
-    "fast-xml-parser": "^5.11.2",
+    "fast-xml-parser": "^5.11.1",
     "saxes": "catalog:",
     "temporal-polyfill": "catalog:"
   },

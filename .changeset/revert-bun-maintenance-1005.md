@@ -3,4 +3,4 @@
 "@stll/workspace-ui": patch
 ---
 
-Update compatible runtime dependency versions.
+Restore the previous runtime dependency versions.
