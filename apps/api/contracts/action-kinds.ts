@@ -8,14 +8,25 @@ import type {
 ({
   consumesServices: true,
   admission: "period",
+  serviceCredentials: "organization_model",
 }) satisfies ActionKindDefinition;
 ({
   consumesServices: false,
   admission: "period",
+  serviceCredentials: "managed_service",
 }) satisfies ActionKindDefinition;
 
 // @ts-expect-error every admission kind must declare whether it consumes services
-({ admission: "period" }) satisfies ActionKindDefinition;
+({
+  admission: "period",
+  serviceCredentials: "organization_model",
+}) satisfies ActionKindDefinition;
+
+// @ts-expect-error every admission kind must declare whose credentials serve it
+({
+  consumesServices: true,
+  admission: "period",
+}) satisfies ActionKindDefinition;
 
 ({
   actionKind: "chat.improve-prompt",
