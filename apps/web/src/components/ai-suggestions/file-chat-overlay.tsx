@@ -22,11 +22,7 @@ import {
  */
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -80,6 +76,7 @@ import {
   FileChatEmptyPlaceholder,
   useFileChatPlaceholder,
 } from "@/components/ai-suggestions/file-chat-placeholder";
+import { FileChatTitleSlot } from "@/components/ai-suggestions/file-chat-title-slot";
 import {
   PENDING_REVIEW_CHOICE,
   resolveFileReviewSessionId,
@@ -157,7 +154,6 @@ import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.l
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -170,7 +166,6 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   applyChatModelChange,
   chatThreadOptions,
-  chatThreadTitleOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
 } from "@/features/chat/queries";
@@ -200,7 +195,6 @@ import {
   type ChatThreadId,
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
-import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
@@ -2733,53 +2727,5 @@ const FileChatOverlayInner = ({
         />
       </ChatApprovalContext>
     </ChatMattersContext>
-  );
-};
-
-type FileChatTitleSlotProps = {
-  activeOrganizationId: string;
-  hasMessages: boolean;
-  threadRef: ChatThreadRef;
-  usedAnonymization: boolean;
-};
-
-// Title area of the floating thread card: resolves the persisted title with
-// the bounded by-id read (file threads are not guaranteed to be in the
-// grouped-threads window) and mounts the shared rename affordance on it.
-const FileChatTitleSlot = ({
-  activeOrganizationId,
-  hasMessages,
-  threadRef,
-  usedAnonymization,
-}: FileChatTitleSlotProps) => {
-  const { data: byIdTitle } = useQuery(
-    chatThreadTitleOptions({
-      activeOrganizationId,
-      // A message-less thread has no server row yet; issuing GET /title for
-      // it would produce an expected but noisy 404.
-      enabled: hasMessages,
-      key: {
-        threadId: threadRef.threadId,
-        workspaceId:
-          threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
-      },
-    }),
-  );
-  const title =
-    byIdTitle !== undefined && !isPlaceholderThreadTitle(byIdTitle)
-      ? byIdTitle
-      : "";
-
-  return (
-    <span className="flex min-w-0 items-center text-xs font-medium">
-      <ChatTitleRename
-        hasMessages={hasMessages}
-        inputClassName="w-44 text-xs"
-        ownsRenameCommand
-        threadRef={threadRef}
-        title={title}
-        usedAnonymization={usedAnonymization}
-      />
-    </span>
   );
 };

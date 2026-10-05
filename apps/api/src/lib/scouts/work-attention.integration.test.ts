@@ -11,11 +11,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { SCOUT_KEY, SIGNAL_KIND } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, parseTimeZoneId } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
+  organizationSettings,
   scoutRuns,
   signals,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -441,5 +442,112 @@ describe("work attention scout", () => {
     expect(await signalsFor(label)).toEqual([]);
     // The sweep still ran: only the stale observation was dropped.
     expect(await scoutRunsFor(ids.orgA)).toHaveLength(runsBefore + 1);
+  });
+
+  test("judges a hard deadline on each organization's own day", async () => {
+    // 23:30 UTC on 1 March is 00:30 on 2 March in Prague: a deadline on
+    // 5 March is three days out there (at risk) and four in UTC (not yet).
+    const lateEvening = new Date("2026-03-01T23:30:00.000Z");
+    const zones = [
+      { organizationId: ids.orgA, timeZone: parseTimeZoneId("Europe/Prague") },
+      { organizationId: ids.orgB, timeZone: parseTimeZoneId("UTC") },
+    ];
+    for (const { organizationId, timeZone } of zones) {
+      await testDb
+        .insert(organizationSettings)
+        .values({
+          id: createSafeId<"organizationSettings">(),
+          organizationId,
+          timeZone,
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: { timeZone },
+        });
+    }
+    for (const tenant of ["A", "B"] as const) {
+      await seedWork({
+        label: `active, deadline on 5 March, tenant ${tenant}`,
+        tenant,
+        status: WORK_OBLIGATION_STATUS.ACTIVE,
+        hardDeadlineDate: "2026-03-05",
+        createdDaysAgo: 1,
+        assignedDaysAgo: null,
+      });
+    }
+
+    try {
+      await runWorkAttentionScout({
+        cursor: null,
+        now: lateEvening,
+        dependencies: dependencies(),
+      });
+
+      expect(
+        (await signalsFor("active, deadline on 5 March, tenant A")).map(
+          ({ kind, evidence }) => ({ kind, evidence }),
+        ),
+      ).toEqual([
+        {
+          kind: SIGNAL_KIND.WORK_DEADLINE_AT_RISK,
+          evidence: expect.objectContaining({ daysUntilDeadline: 3 }),
+        },
+      ]);
+      expect(await signalsFor("active, deadline on 5 March, tenant B")).toEqual(
+        [],
+      );
+    } finally {
+      await testDb
+        .update(organizationSettings)
+        .set({ timeZone: null })
+        .where(
+          inArray(organizationSettings.organizationId, [ids.orgA, ids.orgB]),
+        );
+    }
+  });
+  test("judges the emit on the zone the organization has when it emits", async () => {
+    // At 23:30 UTC on 1 March a deadline on 5 March is at risk on the Prague
+    // day the page reads, and not yet on the UTC day chosen before the emit.
+    const lateEvening = new Date("2026-03-01T23:30:00.000Z");
+    const label = "active, deadline on 5 March, zone changed before the emit";
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        id: createSafeId<"organizationSettings">(),
+        organizationId: ids.orgA,
+        timeZone: parseTimeZoneId("Europe/Prague"),
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { timeZone: parseTimeZoneId("Europe/Prague") },
+      });
+    await seedWork({
+      label,
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+      hardDeadlineDate: "2026-03-05",
+      createdDaysAgo: 1,
+      assignedDaysAgo: null,
+    });
+
+    try {
+      await runWorkAttentionScout({
+        cursor: null,
+        now: lateEvening,
+        dependencies: dependenciesMutatingBeforeEmit(async () => {
+          await testDb
+            .update(organizationSettings)
+            .set({ timeZone: parseTimeZoneId("UTC") })
+            .where(eq(organizationSettings.organizationId, ids.orgA));
+        }),
+      });
+
+      expect(await signalsFor(label)).toEqual([]);
+    } finally {
+      await testDb
+        .update(organizationSettings)
+        .set({ timeZone: null })
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+    }
   });
 });

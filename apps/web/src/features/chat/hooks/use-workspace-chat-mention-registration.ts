@@ -4,7 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
-import { useChatEditorExtensions } from "@/components/chat-editor-provider";
+import {
+  CHAT_MENTION_SOURCE_LABELS,
+  useChatEditorExtensions,
+} from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import {
   buildEntityMentionOption,
@@ -157,6 +160,7 @@ export const useWorkspaceChatMentionRegistration = (
       mentionSources: [
         {
           id: extensionId,
+          labelKey: CHAT_MENTION_SOURCE_LABELS.files,
           getItems: () => [],
           searchItems: searchMentionItems,
         },

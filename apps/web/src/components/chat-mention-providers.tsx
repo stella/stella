@@ -9,9 +9,11 @@ import type {
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
@@ -69,10 +71,14 @@ export const ChatMentionProviders = ({
 }) => {
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: workspacesData } = useChromeQuery(
+  const workspacesQuery = useChromeQuery(
     workspacesNavigationOptions(activeOrganizationId),
   );
-  const workspaces = workspacesData?.workspaces;
+  const workspacesView = useQueryView(workspacesQuery);
+  const workspaces =
+    workspacesView.type === "items"
+      ? workspacesView.items.workspaces
+      : undefined;
 
   const value: MentionProviders = {
     getItems: async (categories) => {
@@ -98,6 +104,13 @@ export const ChatMentionProviders = ({
   };
 
   return (
-    <MentionProvidersContext value={value}>{children}</MentionProvidersContext>
+    <MentionProvidersContext value={value}>
+      {(workspacesView.type === "error" ||
+        (workspacesView.type === "items" &&
+          workspacesView.refetchError !== undefined)) && (
+        <QueryViewFeedback view={workspacesView} />
+      )}
+      {children}
+    </MentionProvidersContext>
   );
 };
