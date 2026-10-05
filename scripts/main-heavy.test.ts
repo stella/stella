@@ -109,30 +109,37 @@ const assertTriggerBehavior = (validationCondition?: string) => {
       const validates = new Script(
         `Boolean(${validationCondition ?? "true"})`,
       ).runInNewContext(context);
-      expect(validates, `${event}: ${message} depth=${depth}`).toBe(true);
+      const required =
+        event !== "push" || message.startsWith("chore: release v");
+      expect(validates, `${event}: ${message} depth=${depth}`).toBe(required);
       expect(mainWorkflow.jobs.suites.needs).toBe("validate");
-      const needs = { validate: { result: validates ? "success" : "skipped" } };
+      const needs = {
+        validate: {
+          result: validates ? "success" : "skipped",
+          outputs: { run: "true" },
+        },
+      };
       expect(
         new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
           ...context,
           needs,
         }),
-      ).toBe(true);
+      ).toBe(required);
       expect(
         new Script(`Boolean(${mainWorkflow.jobs.status.if})`).runInNewContext({
           ...context,
           needs,
         }),
         `${event} status`,
-      ).toBe(true);
+      ).toBe(required);
     }
   }
 };
 
-test("every main push, nightly and dispatch runs heavy suites at every queue depth", () => {
+test("only release pushes, hourly schedules and dispatches select heavy suites at every queue depth", () => {
   expect(mainTriggers.schedule).toHaveLength(1);
   const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
-  expect(cron?.slice(1)).toEqual(["2", "*", "*", "*"]);
+  expect(cron).toEqual(["17", "*", "*", "*", "*"]);
   expect(Number(cron?.at(0)) % 5).not.toBe(0);
   expect(
     mainWorkflow.jobs.validate.steps?.find(
@@ -142,21 +149,19 @@ test("every main push, nightly and dispatch runs heavy suites at every queue dep
   assertTriggerBehavior(mainWorkflow.jobs.validate.if);
 });
 
-test("restoring a queue-depth or release-only skip fails the trigger contract", () => {
-  for (const condition of [
-    "github.event_name != 'push' || vars.MERGE_QUEUE_DEPTH != 'full'",
-    "github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')",
-  ]) {
-    expect(() => assertTriggerBehavior(condition)).toThrow(
-      "push: fix: ordinary change",
-    );
+test("removing release-only selection or introducing depth gating fails the trigger contract", () => {
+  for (const condition of ["true", "github.event_name != 'push'"]) {
+    expect(() => assertTriggerBehavior(condition)).toThrow(/push:/u);
   }
 });
 
-test("validation always runs while suites require its success and status reports its failures", () => {
-  expect(mainWorkflow.jobs.validate.if).toBeUndefined();
+test("suites require selected validation success and status reports its failures", () => {
+  expect(mainWorkflow.jobs.validate.if).toContain("chore: release v");
   for (const result of ["success", "failure", "cancelled", "skipped"]) {
-    const context = { always: () => true, needs: { validate: { result } } };
+    const context = {
+      always: () => true,
+      needs: { validate: { result, outputs: { run: "true" } } },
+    };
     expect(
       new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext(
         context,

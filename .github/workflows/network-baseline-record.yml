@@ -2,16 +2,9 @@ name: Record network baseline
 
 # Main owns recordings. PR checks never write the shared JSON.
 on:
-  push:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] label requests record only trusted main, never PR source
     branches: [main]
-    paths:
-      - apps/web/**
-      - apps/api/**
-      - packages/**
-      - .github/actions/**
-      - .github/workflows/network-baseline-*.yml
-      - scripts/network-baseline-scope.ts
-      - bun.lock
+    types: [labeled]
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
@@ -30,7 +23,7 @@ permissions: {}
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'pull_request_target' || github.event.label.name == 'baseline:record')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

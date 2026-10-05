@@ -65,7 +65,7 @@ const hasMainBranchConcurrency = (workflow: unknown) => {
 
 type ConcurrencyProblemsOptions = {
   supersedingEvents?: readonly string[];
-  mode?: "supersede" | "preserve-events";
+  mode?: "supersede" | "preserve-events" | "serialize-main";
 };
 
 /** Why a pull request workflow's runs would not supersede each other. */
@@ -95,6 +95,17 @@ const concurrencyProblems = (
   const cancel = concurrency["cancel-in-progress"];
   // Disarming consumes individual push events. A later trusted autofix must
   // never supersede an earlier invalidation, including a pending run.
+  // Shared main recordings serialize label requests with scheduled recordings.
+  if (mode === "serialize-main") {
+    return [
+      ...(group === `\${{ github.workflow }}-\${{ github.ref }}`
+        ? []
+        : ["main recording needs a branch group"]),
+      ...(cancel === false
+        ? []
+        : ["main recording must finish before its replacement"]),
+    ];
+  }
   if (mode === "preserve-events") {
     return [
       ...(group === `\${{ github.workflow }}-\${{ github.run_id }}`
@@ -241,6 +252,14 @@ jobs:
   });
 });
 
+const concurrencyModes: Record<
+  string,
+  NonNullable<ConcurrencyProblemsOptions["mode"]>
+> = {
+  "disarm-auto-merge.yml": "preserve-events",
+  "network-baseline-record.yml": "serialize-main",
+};
+
 describe("pull request workflow concurrency", () => {
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
@@ -255,11 +274,41 @@ describe("pull request workflow concurrency", () => {
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
           supersedingEvents: file === "ci.yml" ? ["workflow_dispatch"] : [],
-          mode:
-            file === "disarm-auto-merge.yml" ? "preserve-events" : "supersede",
+          mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
     ).toEqual([]);
+  });
+
+  test("main recording concurrency rejects PR groups and cancellation", () => {
+    const workflow = {
+      on: { pull_request_target: { branches: ["main"], types: ["labeled"] } },
+      concurrency: {
+        group: `\${{ github.workflow }}-\${{ github.ref }}`,
+        "cancel-in-progress": false,
+      },
+    };
+    expect(concurrencyProblems(workflow, { mode: "serialize-main" })).toEqual(
+      [],
+    );
+    expect(
+      concurrencyProblems(
+        {
+          ...workflow,
+          concurrency: { ...workflow.concurrency, "cancel-in-progress": true },
+        },
+        { mode: "serialize-main" },
+      ),
+    ).toEqual(["main recording must finish before its replacement"]);
+    expect(
+      concurrencyProblems(
+        {
+          ...workflow,
+          concurrency: { ...workflow.concurrency, group: "per-pr" },
+        },
+        { mode: "serialize-main" },
+      ),
+    ).toEqual(["main recording needs a branch group"]);
   });
 
   test("event-preserving concurrency rejects shared groups and cancellation", () => {

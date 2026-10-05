@@ -3,9 +3,6 @@ name: Version packages PR
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: "17 * * * *"
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,8 +12,7 @@ permissions: {}
 
 jobs:
   # The current VERSION must be tagged before another versioning pass.
-  # Open release pull requests also own their pending changesets; a manual
-  # dispatch may bypass that ownership check, but never the pending tag.
+  # Open release pull requests also own their pending changesets.
   gate:
     name: Check release versioning state
     if: github.ref == 'refs/heads/main'
@@ -44,7 +40,6 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -58,7 +53,7 @@ jobs:
           fi
           open=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" \
             | sed -n 's/^open_other=//p')
-          if [[ "$MANUAL" == "true" || "$open" == "0" ]]; then
+          if [[ "$open" == "0" ]]; then
             echo "may-version=true" >> "$GITHUB_OUTPUT"
           else
             echo "may-version=false" >> "$GITHUB_OUTPUT"

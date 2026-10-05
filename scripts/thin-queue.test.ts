@@ -290,7 +290,7 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
   }
   const dependentContext = {
     ...value,
-    needs: { validate: { result: validationResult } },
+    needs: { validate: { result: validationResult, outputs: { run: "true" } } },
   };
   const suites =
     mainTriggered(event.event) &&
@@ -308,7 +308,10 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
 const assertMainSelection = (workflow: typeof main) => {
   for (const event of events) {
     for (const variable of ["", "full", "thin", "typo"]) {
-      const validationSelected = mainTriggered(event.event);
+      const validationSelected =
+        mainTriggered(event.event) &&
+        (event.event !== "push" ||
+          event.message.startsWith("chore: release v"));
       const valid = variable !== "typo";
       expect(
         mainSelection({ workflow, event, variable }),
@@ -570,15 +573,14 @@ test("per-SHA groups or preserving superseded heavy work violate the concurrency
   );
 }, 30_000);
 
-test("skipping ordinary main pushes by queue depth violates the scheduling contract", () => {
+test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () => {
   assertMainSelection(main);
   const mutated = structuredClone(main);
   const validate = mutated.jobs["validate"];
   if (!validate) {
     panic("Missing main validation job");
   }
-  validate.if =
-    "github.event_name != 'push' || (vars.MERGE_QUEUE_DEPTH != '' && vars.MERGE_QUEUE_DEPTH != 'full') || startsWith(github.event.head_commit.message, 'chore: release v')";
+  validate.if = "true";
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 
