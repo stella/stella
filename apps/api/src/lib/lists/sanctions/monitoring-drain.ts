@@ -10,6 +10,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   commitSanctionsMonitoringBatch,
   SANCTIONS_MONITORING_BATCH_SIZE,
@@ -40,24 +41,34 @@ const processSanctionsContactMarks = async (
 
     // All monitoring writers take the organization fence, then ordered contacts, then marks.
     await lockSanctionsMonitoring(tx, organizationId);
-    const candidates = await tx
-      .select({ contactId: sanctionsContactMarks.contactId })
-      .from(sanctionsContactMarks)
-      .where(
-        and(
-          eq(sanctionsContactMarks.organizationId, organizationId),
-          sql`${sanctionsContactMarks.scheduledAt} <= ${now}::timestamptz`,
-          sql`${sanctionsContactMarks.nextAttemptAt} <= ${now}::timestamptz`,
+    const page = await readCursorPage(
+      tx
+        .select({ contactId: sanctionsContactMarks.contactId })
+        .from(sanctionsContactMarks)
+        .where(
+          and(
+            eq(sanctionsContactMarks.organizationId, organizationId),
+            sql`${sanctionsContactMarks.scheduledAt} <= ${now}::timestamptz`,
+            sql`${sanctionsContactMarks.nextAttemptAt} <= ${now}::timestamptz`,
+          ),
+        )
+        .orderBy(
+          asc(sanctionsContactMarks.nextAttemptAt),
+          asc(sanctionsContactMarks.scheduledAt),
+          asc(sanctionsContactMarks.contactId),
         ),
-      )
-      .orderBy(
-        asc(sanctionsContactMarks.nextAttemptAt),
-        asc(sanctionsContactMarks.scheduledAt),
-        asc(sanctionsContactMarks.contactId),
-      )
-      .limit(SANCTIONS_MONITORING_BATCH_SIZE);
+      {
+        limit: SANCTIONS_MONITORING_BATCH_SIZE,
+        cursorForItem: ({ contactId }) => contactId,
+      },
+    );
+    const candidates = page.items;
+    // readCursorPage enforces SANCTIONS_MONITORING_BATCH_SIZE before constructing these ID fences.
+    if (candidates.length > SANCTIONS_MONITORING_BATCH_SIZE) {
+      panic("Sanctions drain candidate batch exceeds its bound");
+    }
     if (candidates.length === 0) {
-      return { claimed: 0, terminal: 0 };
+      return { claimed: 0, terminal: 0, hasMore: page.nextCursor !== null };
     }
     const contactRows = await tx
       .select()
@@ -72,10 +83,10 @@ const processSanctionsContactMarks = async (
         ),
       )
       .orderBy(asc(contacts.id))
-      .limit(SANCTIONS_MONITORING_BATCH_SIZE)
+      .limit(candidates.length)
       .for("no key update");
     if (contactRows.length === 0) {
-      return { claimed: 0, terminal: 0 };
+      return { claimed: 0, terminal: 0, hasMore: page.nextCursor !== null };
     }
     const marks = await tx
       .select()
@@ -92,10 +103,10 @@ const processSanctionsContactMarks = async (
         ),
       )
       .orderBy(asc(sanctionsContactMarks.contactId))
-      .limit(SANCTIONS_MONITORING_BATCH_SIZE)
+      .limit(contactRows.length)
       .for("update", { skipLocked: true });
     if (marks.length === 0) {
-      return { claimed: 0, terminal: 0 };
+      return { claimed: 0, terminal: 0, hasMore: page.nextCursor !== null };
     }
     attempted.push(
       ...marks.map(({ contactId, generation }) => ({ contactId, generation })),
@@ -195,7 +206,11 @@ const processSanctionsContactMarks = async (
         terminal: terminal.size,
       },
     });
-    return { claimed: claimed.marks.length, terminal: terminal.size };
+    return {
+      claimed: claimed.marks.length,
+      terminal: terminal.size,
+      hasMore: page.nextCursor !== null,
+    };
   });
 
 export class SanctionsDrainAttemptFailed extends TaggedError(
@@ -224,6 +239,10 @@ const recordFailedDrain = async ({
   await db(async (tx) => {
     await lockSanctionsMonitoring(tx, organizationId);
     const ids = attempted.map(({ contactId }) => contactId);
+    // attempted is constructed only from the SANCTIONS_MONITORING_BATCH_SIZE candidate fence.
+    if (attempted.length > SANCTIONS_MONITORING_BATCH_SIZE) {
+      panic("Sanctions retry batch exceeds its bound");
+    }
     await tx
       .select({ id: contacts.id })
       .from(contacts)
@@ -234,7 +253,7 @@ const recordFailedDrain = async ({
         ),
       )
       .orderBy(asc(contacts.id))
-      .limit(SANCTIONS_MONITORING_BATCH_SIZE)
+      .limit(ids.length)
       .for("no key update");
     const changed = await tx.execute(sql`
       UPDATE sanctions_contact_marks AS mark

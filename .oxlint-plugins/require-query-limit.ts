@@ -177,7 +177,8 @@ const isBoundedConsumer = (context: ScopeContext, node: AstNode): boolean => {
   const imported = resolveImport(context, call.callee);
   return (
     imported?.moduleId === "apps/api/src/lib/db/read-bounded" &&
-    imported.imported === "readBounded"
+    (imported.imported === "readBounded" ||
+      imported.imported === "readCursorPage")
   );
 };
 

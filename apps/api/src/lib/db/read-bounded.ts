@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { createCursorPage } from "@/api/lib/pagination";
+
 type BoundedReadQuery<TRow> = {
   limit: (limit: number) => PromiseLike<TRow[]>;
 };
@@ -26,4 +28,31 @@ export const readBounded = async <TRow>(
   }
 
   return { type: "complete", rows };
+};
+
+type CursorReadOptions<TRow> = {
+  limit: number;
+  cursorForItem: (row: TRow) => string;
+};
+
+/** A sentinel preserves continuation when a worker fills its current page. */
+export const readCursorPage = async <TRow>(
+  query: BoundedReadQuery<TRow>,
+  { limit, cursorForItem }: CursorReadOptions<TRow>,
+) => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit <= 0 ||
+    limit >= Number.MAX_SAFE_INTEGER
+  ) {
+    panic(
+      "Cursor reads require a positive safe limit with room for a sentinel",
+      { limit },
+    );
+  }
+  return createCursorPage({
+    rows: await query.limit(limit + 1),
+    limit,
+    cursorForItem,
+  });
 };

@@ -16,6 +16,7 @@ import {
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { SANCTIONS_MONITORING_BACKFILL_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineScopedTransitions,
@@ -204,20 +205,25 @@ export const advanceSanctionsMonitoringBackfill = async ({
       to: "pending",
       set: { scheduledAt: leaseExpiresAt },
     });
-    const contactRows = await tx
-      .select()
-      .from(contacts)
-      .where(
-        and(
-          eq(contacts.organizationId, organizationId),
-          job.cursorContactId === null
-            ? undefined
-            : gt(contacts.id, job.cursorContactId),
-        ),
-      )
-      .orderBy(asc(contacts.id))
-      .limit(SANCTIONS_MONITORING_BATCH_SIZE);
-    return { job, contactRows };
+    const page = await readCursorPage(
+      tx
+        .select()
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.organizationId, organizationId),
+            job.cursorContactId === null
+              ? undefined
+              : gt(contacts.id, job.cursorContactId),
+          ),
+        )
+        .orderBy(asc(contacts.id)),
+      {
+        limit: SANCTIONS_MONITORING_BATCH_SIZE,
+        cursorForItem: ({ id }) => id,
+      },
+    );
+    return { job, contactRows: page.items, hasMore: page.nextCursor !== null };
   });
   if (claim === null) {
     return "idle" as const;
@@ -301,7 +307,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
     },
     persistCheckpoint: async (
       tx,
-      { claim: { job, contactRows }, transition },
+      { claim: { job, contactRows, hasMore }, transition },
     ) => {
       if (transition === "hold") {
         return;
@@ -310,10 +316,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
       await transitionMonitoringBackfill({
         tx,
         job,
-        to:
-          contactRows.length < SANCTIONS_MONITORING_BATCH_SIZE
-            ? "complete"
-            : "pending",
+        to: hasMore ? "pending" : "complete",
         set: {
           cursorContactId: contactRows.at(-1)?.id ?? job.cursorContactId,
           scheduledAt: now,

@@ -9,6 +9,7 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
@@ -60,16 +61,22 @@ const fanOutEditionPage = async ({
     // Keep the ingestion row fence while the scheduler owner enqueues tenant jobs.
     // Ingestion has no tenant privileges; role changes share this atomic transaction.
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
-    const orgs = await tx
-      .select({ id: organization.id })
-      .from(organization)
-      .where(
-        fanout.cursorOrganizationId === null
-          ? undefined
-          : gt(organization.id, fanout.cursorOrganizationId),
-      )
-      .orderBy(asc(organization.id))
-      .limit(ORGANIZATION_FANOUT_BATCH_SIZE);
+    const page = await readCursorPage(
+      tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(
+          fanout.cursorOrganizationId === null
+            ? undefined
+            : gt(organization.id, fanout.cursorOrganizationId),
+        )
+        .orderBy(asc(organization.id)),
+      {
+        limit: ORGANIZATION_FANOUT_BATCH_SIZE,
+        cursorForItem: ({ id }) => id,
+      },
+    );
+    const orgs = page.items;
     const organizations = orgs.map(({ id }) => ({
       id: brandPersistedOrganizationId(id),
     }));
@@ -105,8 +112,7 @@ const fanOutEditionPage = async ({
       ids: [fanout.sourceId],
       options: {
         from: ["pending"],
-        to:
-          orgs.length < ORGANIZATION_FANOUT_BATCH_SIZE ? "complete" : "pending",
+        to: page.nextCursor !== null ? "pending" : "complete",
         set: {
           cursorOrganizationId:
             organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
