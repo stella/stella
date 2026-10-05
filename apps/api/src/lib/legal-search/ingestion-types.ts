@@ -199,7 +199,7 @@ export type RawIngestionResult = {
   country: string;
   language: string;
   decisionDate?: string | undefined;
-  decisionType?: string | undefined;
+  decisionType?: string | null | undefined;
   /** Declared publisher enum only; omission means unknown, never ruling. */
   documentRole?: DecisionDocumentRole | undefined;
   fulltext?: string | undefined;
@@ -274,7 +274,7 @@ type PlainTextResultFields = {
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
   court: PlainText;
-  decisionType?: PlainText | undefined;
+  decisionType?: PlainText | null | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
     | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
@@ -414,7 +414,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
-      decisionType: yield* optionalPlainText(raw.decisionType),
+      decisionType: raw.decisionType === null ? null : yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,

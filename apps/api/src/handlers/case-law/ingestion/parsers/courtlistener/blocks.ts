@@ -147,9 +147,6 @@ type Frame = {
   readonly position: UnitPosition;
 };
 
-/** A root title that makes the document an order, as printed alone. */
-const ORDER_TITLE = /^ORDER\.?$/u;
-
 type UnitBuilder = ReturnType<typeof createUnitBuilder>;
 
 const outsideFrame = (id: number): Frame => ({
@@ -158,22 +155,6 @@ const outsideFrame = (id: number): Frame => ({
   domType: null,
   position: "row",
 });
-
-/** The first block, when it is `ORDER` alone. */
-const orderTitleOf = (blocks: readonly Block[]): string | null => {
-  const first = blocks.find(
-    (block) =>
-      block.type !== "paragraph" ||
-      !["front-matter", "parties", "case-number", "panel", "counsel"].includes(
-        block.role ?? "",
-      ),
-  );
-  return first !== undefined &&
-    "inlines" in first &&
-    ORDER_TITLE.test(plainTextOf(first.inlines).trim())
-    ? first.id
-    : null;
-};
 
 const tableBlock = ({
   rows,
@@ -217,17 +198,12 @@ const buildTextUnits = (
   units: { frame: Frame; blocks: Block[] }[],
   boundaries: TextUnit["boundaries"],
 ): TextUnit[] => {
-  const root = units.find(({ frame }) => frame.kind === "opinion");
   return units.map(({ blocks, frame }) => ({
     kind: frame.kind,
     domType: frame.domType,
     position: frame.position,
     boundaries,
     blocks,
-    orderTitleBlockId:
-      root?.frame.id === frame.id && frame.position === "row"
-        ? orderTitleOf(blocks)
-        : null,
   }));
 };
 
