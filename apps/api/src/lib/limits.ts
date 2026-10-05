@@ -501,6 +501,13 @@ export const LIMITS = {
   caseLawSearchQueriesMax: 5,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
+  /** The page a decision read starts on; pages count from one. */
+  caseLawDecisionFirstPage: 1,
+  /**
+   * Characters a caller may pass back as a decision's text version. The
+   * token itself is shorter; the bound leaves room to change it.
+   */
+  caseLawDecisionTextVersionMaxLength: 24,
   /**
    * References one identifier lookup may resolve. A brief cites dozens of
    * cases, and resolving them is what the tool is for; each one is an indexed
