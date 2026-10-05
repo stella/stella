@@ -26,6 +26,7 @@ export const desktopPresence = p.pgTable(
   },
   (table) => [
     p.primaryKey({
+      name: "desktop_presence_pkey",
       columns: [table.userId, table.organizationId, table.desktopId],
     }),
     p
