@@ -190,18 +190,18 @@ describe("chat execution admission owns settlement independently of transport re
       userConcurrency: 2,
       periodPolicy: { periodMs: 86_400_000, limit: 11 },
     });
-    let stateReads = 0;
+    // One organization state read is one scoped transaction, however many
+    // selects it issues.
     const db = createScopedDbMock({
-      select: () => {
-        stateReads += 1;
-        return createSelectQueryMock([
+      select: () =>
+        createSelectQueryMock([
           {
             state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
             evaluationEndsAt: null,
           },
-        ]);
-      },
+        ]),
     });
+    const stateReads = () => db.getCallCount();
     const admit: typeof withActionAdmission = async (options) =>
       await store.admit({
         ...options,
@@ -223,7 +223,7 @@ describe("chat execution admission owns settlement independently of transport re
       }),
     );
     try {
-      expect(stateReads).toBe(0);
+      expect(stateReads()).toBe(0);
       expect(store.periodCount()).toBe(0);
       const identity = {
         actionKind: "chat.send",
@@ -232,13 +232,13 @@ describe("chat execution admission owns settlement independently of transport re
       expect(
         Result.isOk(await execution.reservePeriod(identity, db.scopedDb)),
       ).toBe(true);
-      expect(stateReads).toBe(1);
+      expect(stateReads()).toBe(1);
       expect(store.periodLimits()).toEqual([7]);
       expect(store.periodCount()).toBe(1);
       expect(
         Result.isOk(await execution.reservePeriod(identity, db.scopedDb)),
       ).toBe(true);
-      expect(stateReads).toBe(1);
+      expect(stateReads()).toBe(1);
       const title = await executionOf(
         startChatExecutionAdmission({
           organizationId,
@@ -250,7 +250,7 @@ describe("chat execution admission owns settlement independently of transport re
         }),
       );
       try {
-        expect(stateReads).toBe(1);
+        expect(stateReads()).toBe(1);
         expect(store.periodCount()).toBe(1);
       } finally {
         await title.release();
