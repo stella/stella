@@ -174,7 +174,7 @@ class ViewerErrorBoundary extends Component<
       }
       default: {
         recovery satisfies never;
-        return panic(`Unhandled viewer recovery: ${String(recovery)}`);
+        panic(`Unhandled viewer recovery: ${String(recovery)}`);
       }
     }
   }

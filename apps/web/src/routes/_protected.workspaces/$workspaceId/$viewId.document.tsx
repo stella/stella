@@ -1113,8 +1113,11 @@ function RouteComponentInner({
                     onDownload={downloadActiveFile}
                     fallback={{
                       suspense: <PDFSuspenseFallback />,
+                      // A 400 is the server's authoritative "no full-screen
+                      // rendition"; every other failure takes the boundary's
+                      // own recovery.
                       error: (error) =>
-                        isMissingDisplayRendition(error) ? (
+                        APIError.is(error) && error.status === 400 ? (
                           <DocumentDisplayUnavailable entityId={entityId} />
                         ) : undefined,
                     }}
@@ -1167,14 +1170,6 @@ function RouteComponentInner({
 }
 
 // -- Fullscreen DOCX viewer (read-only Folio) --
-
-/**
- * A 400 from the display-URL endpoint is the server's authoritative "this
- * format has no full-screen rendition". Every other failure takes the
- * viewer boundary's own recovery (retry, try again, download).
- */
-const isMissingDisplayRendition = (error: Error): boolean =>
-  APIError.is(error) && error.status === 400;
 
 /** Recovers by opening the file where every format renders, the side panel. */
 const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {

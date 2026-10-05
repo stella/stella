@@ -4,6 +4,7 @@ import { Result } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
@@ -156,10 +157,10 @@ export const usePDFDocument = ({ key, context }: PDFDocumentOptionsInput) => {
         password: context.password,
       });
       // Only a password answer is cached as data (the viewer prompts for
-      // it). Any other failure is thrown, so the query holds an error that a
-      // boundary reset clears, never an infinitely fresh failed document.
+      // it). Any other failure rejects the query, so it holds an error that
+      // a boundary reset clears, never an infinitely fresh failed document.
       if (Result.isError(result) && !isPasswordError(result.error)) {
-        throw result.error;
+        return readQueryResult(Result.err(result.error));
       }
       return result;
     },

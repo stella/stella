@@ -105,7 +105,9 @@ describe("RecoverableViewerBoundary", () => {
     const errors: Error[] = [];
     mount({
       source: flakySource(2, expiredUrl),
-      onError: (error) => errors.push(error),
+      onError: (error) => {
+        errors.push(error);
+      },
     });
 
     expect(await screen.findByText(RENDERED)).toBeDefined();
@@ -119,8 +121,12 @@ describe("RecoverableViewerBoundary", () => {
     // One first failure plus both automatic attempts.
     mount({
       source: flakySource(NO_BACKOFF.length + 1, transient),
-      onDownload: () => downloads.push("original"),
-      onError: (error) => errors.push(error),
+      onDownload: () => {
+        downloads.push("original");
+      },
+      onError: (error) => {
+        errors.push(error);
+      },
     });
 
     const alert = await screen.findByRole("alert");

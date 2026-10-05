@@ -619,28 +619,6 @@ type PDFProviderProps = PropsWithChildren<{
   onError?: ((error: Error) => void) | undefined;
 }>;
 
-/**
- * The recoverable boundary sits outside the store, so every retry starts a
- * fresh store and loads the document on a fresh PDF.js worker.
- */
-export const PDFProvider = ({
-  fallback,
-  onDownload,
-  onError,
-  surface,
-  ...props
-}: PDFProviderProps) => (
-  <RecoverableViewerBoundary
-    finalFallback={fallback?.error}
-    onDownload={onDownload}
-    onError={onError}
-    pending={fallback?.suspense}
-    surface={surface}
-  >
-    <PDFStoreProvider {...props} suspense={fallback?.suspense} />
-  </RecoverableViewerBoundary>
-);
-
 type PDFStoreProviderProps = PropsWithChildren<{
   fieldId: string;
   startPage: number;
@@ -685,3 +663,25 @@ const PDFStoreProvider = ({
     </PDFStoreContext>
   );
 };
+
+/**
+ * The recoverable boundary sits outside the store, so every retry starts a
+ * fresh store and loads the document on a fresh PDF.js worker.
+ */
+export const PDFProvider = ({
+  fallback,
+  onDownload,
+  onError,
+  surface,
+  ...props
+}: PDFProviderProps) => (
+  <RecoverableViewerBoundary
+    finalFallback={fallback?.error}
+    onDownload={onDownload}
+    onError={onError}
+    pending={fallback?.suspense}
+    surface={surface}
+  >
+    <PDFStoreProvider {...props} suspense={fallback?.suspense} />
+  </RecoverableViewerBoundary>
+);
