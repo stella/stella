@@ -44,6 +44,7 @@
         "@aws-sdk/client-cloudwatch": "^3.1138.0",
         "@aws-sdk/client-s3": "^3.1138.0",
         "@aws-sdk/client-sesv2": "^3.1138.0",
+        "@aws-sdk/client-sqs": "^3.1138.0",
         "@aws-sdk/client-sts": "^3.1138.0",
         "@aws-sdk/s3-request-presigner": "^3.1138.0",
         "@better-auth/api-key": "catalog:",
@@ -545,7 +546,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -692,7 +693,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.8.0",
+      "version": "3.8.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1328,9 +1329,9 @@
     "@oxlint/plugins": "1.83.0",
     "@shadcn/lint": "0.1.0",
     "@silurus/ooxml": "0.87.0",
-    "@stll/anonymize": "3.0.4",
+    "@stll/anonymize": "3.0.6",
     "@stll/anonymize-data": "0.0.10",
-    "@stll/anonymize-wasm": "3.0.4",
+    "@stll/anonymize-wasm": "3.0.6",
     "@stll/docx-core": "0.29.0",
     "@stll/folio-agents": "0.15.1",
     "@stll/folio-core": "0.55.0",
@@ -1477,6 +1478,8 @@
 
     "@aws-sdk/client-sesv2": ["@aws-sdk/client-sesv2@3.1138.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/signature-v4-multi-region": "^3.996.47", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-26JZ2Cwtml45+GnF/u1m0humPG/5ZUiGdUsz5A4beqUs2RT9grN4a7qNnPSdtPFqob+xLN/LZOYP5HC7AF2olg=="],
 
+    "@aws-sdk/client-sqs": ["@aws-sdk/client-sqs@3.1142.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/middleware-sdk-sqs": "^3.972.43", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-NPuhwE5gd9I7DhK0TXxsakWwBBgzYxcB3XJ7ZopXunT2FaI5njCg/viydDsWwlZxhdsCCYZJbFpHHZqMDWksZQ=="],
+
     "@aws-sdk/client-sts": ["@aws-sdk/client-sts@3.1138.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/signature-v4-multi-region": "^3.996.47", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-bgLbxtF/GBSTDJtl+WweClwoQkNd9TxmoGikHCs+c16rvvCs0sFOsmEZ0AT5DLIxGvRZOO/NT9d3FBQNsIs9cg=="],
 
     "@aws-sdk/core": ["@aws-sdk/core@3.978.1", "", { "dependencies": { "@aws-sdk/types": "^3.974.6", "@aws-sdk/xml-builder": "^3.972.41", "@aws/lambda-invoke-store": "^0.3.0", "@smithy/core": "^3.35.0", "@smithy/signature-v4": "^5.7.3", "@smithy/types": "^4.19.0", "bowser": "^2.11.0", "tslib": "^2.6.2" } }, "sha512-LbY9aGsEiznDWmUc30Nwv3aIX/+dbwTx8KfS0yOC3NPYMO+O91e6jkT1azf34FwjOndq8/Q+RcVVZz5xnerwdg=="],
@@ -1506,6 +1509,8 @@
     "@aws-sdk/middleware-eventstream": ["@aws-sdk/middleware-eventstream@3.972.30", "", { "dependencies": { "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-B6gvZlcnRBNWraKgyEjKsbhv+VjtbyHmpU7hmtTHzXpDSxHPpCJnYLpglEOOsF+SFne20DbZC5IVC1aNr2Pb4A=="],
 
     "@aws-sdk/middleware-sdk-s3": ["@aws-sdk/middleware-sdk-s3@3.972.77", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/signature-v4-multi-region": "^3.996.47", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-E7W2UOeUoc+lg3uIfR/dM7ZwusHwhBQrKMnlkRv4EXRR+C0YtV1pg25xC7GdZIhXH+NAMgZPCbE7o5to2cjFiw=="],
+
+    "@aws-sdk/middleware-sdk-sqs": ["@aws-sdk/middleware-sdk-sqs@3.972.43", "", { "dependencies": { "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-0V1bKYPfAnhA6fW9r04uZfXB7DkwT149wKL14BKCC7zUryxIBecgDyvxKIUsZApmvSXpEzPL66uzO/Yc55s74g=="],
 
     "@aws-sdk/middleware-websocket": ["@aws-sdk/middleware-websocket@3.972.54", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/signature-v4": "^5.7.3", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-bhESdru8u8KosziH8jcVta/NM/dNreeRz2+2aU86si5bfBYOiJ6IiqD+9U4URUcU5WJO3Yw+jO3GLDIHlscXMQ=="],
 
@@ -2799,23 +2804,23 @@
 
     "@stll/analytics-config": ["@stll/analytics-config@workspace:packages/analytics-config"],
 
-    "@stll/anonymize": ["@stll/anonymize@3.0.4", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.4", "@stll/anonymize-darwin-x64": "3.0.4", "@stll/anonymize-linux-arm64-gnu": "3.0.4", "@stll/anonymize-linux-x64-gnu": "3.0.4", "@stll/anonymize-win32-x64-msvc": "3.0.4" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-89uY3r0sMb1bfksvBCwi1gKcYsso/up3XMbKLGq6vCHumevNNOP6w7eXXZKpMA6x8/CnvIkjwQ3iNEwypyfFBA=="],
+    "@stll/anonymize": ["@stll/anonymize@3.0.6", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.6", "@stll/anonymize-darwin-x64": "3.0.6", "@stll/anonymize-linux-arm64-gnu": "3.0.6", "@stll/anonymize-linux-x64-gnu": "3.0.6", "@stll/anonymize-win32-x64-msvc": "3.0.6" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-x4rU4gj8ybA8Z4X1Pp1kOGktRfmBwKL9QV9uldGVsBsdF88DXNzhz4Kc2RFhcsIyQptdP+7Gexheda6B2tgZXg=="],
 
     "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
-    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-+4SYvp+0OEe+a/J/CYPyJ2xkDj8Pz6dRqUgzBoyde0xeXlkv0CD58qalPVYlphObzKAmIpoLZk7nDR1rpdzjKQ=="],
+    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.6", "", { "os": "darwin", "cpu": "arm64" }, "sha512-UL70U1lRhCQKgBVhHcSCv5nK7W9OLqtrhTpbO9SDPHCQRW+/iHYwV4w81uQGCb8JfWyUwcUfvA1LaA0t0dAsYQ=="],
 
-    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-MIXzLfOSfDbiDmxZ+gabgYeimC8Y2KS0RKKQUope0nrunyBek/6w4oNI5PUCCWqNGTNbHxoek1rVP6yc8/7s1g=="],
+    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.6", "", { "os": "darwin", "cpu": "x64" }, "sha512-FAyCBruQ6+PSB3eDwaAywd8J9lzNjAzdDTf1kPGikQ1pPgzzKLhujbElgdwaoHfrwX1Dbf0tvbSEiizzeJW8og=="],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.10", "", {}, "sha512-Z6wxTw0dxpSV3htzWu2ROpy5mqdCBVMyyqVm07myA37w+KTk3AVfGaBlfwDDxj0DpSDyqukFxbc5psgroxZm+Q=="],
 
-    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-b9U8Q/nMGBZZJvTxJQYpm3I1iMhzc10OdTqBnC4v0pzuqJi97B7l+vjKC4np/XALbDlwGdasuVhT+jCcS8GDOQ=="],
+    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.6", "", { "os": "linux", "cpu": "arm64" }, "sha512-pnT7HkJH+fuaOWCfk3j1avP7G9hrbO99AMYNwVGVUb0pxESQ9SpVSSSNsvdTgDNOfIiRLskHoTRlG2pVWCe/zA=="],
 
-    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.4", "", { "os": "linux", "cpu": "x64" }, "sha512-vFLSDzvd/YMzhLHREeo+Z8Xr/On39Wk/s226snRL99CXP+umX9WcidnlkK3gpGJgy8qjlf26OMu535bljhu9vQ=="],
+    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.6", "", { "os": "linux", "cpu": "x64" }, "sha512-m08WO6D8QvgevvosA7wpxUam9uZVKo5iz8mYscAVXWr4rE4+EKbos44ZNhiE6IYy0N2iQf4nYFFtHKeuUWsheQ=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.4", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-oCI6kyi3TPAfrkU8AbjNliem3PZIg0v3OBW33MhZjTCIcGAT1AHNwHRKWdnjx8M8hckw3/lWAwCMy+PCYUKrGg=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.6", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-VIx+JVXYvgilQXpUY7xVHarS5plC7m29mz69+ABT5oAud2b8T54WKX5KgRnuiyeDZdtzHYqNu5KTfhE2ZSxREw=="],
 
-    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.4", "", { "os": "win32", "cpu": "x64" }, "sha512-xKaoJdZiSS7pZQNz4ymW42ZaUl2+I5LnLjo+mKVpxMnOZMiVHAGPuOdEy3p7FI/gIC+UKKMT9VCZ+TKQqgXvQg=="],
+    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.6", "", { "os": "win32", "cpu": "x64" }, "sha512-+W64qSHzSKM4ApqV/x5PJQ6PURxOZTkq9UHYU1b5BfusE4ICeCSsStQP0G09TR1OE5toZSkdd1jLu6ePlt35tg=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 

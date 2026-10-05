@@ -117,7 +117,7 @@ export const referencesForReader = (
 
 type BasisPosition = PlaybookPositions["items"][number];
 
-export type ReaderPosition = BasisPosition & {
+type ReaderPosition = BasisPosition & {
   /** Set when the reference-derived fields were left out for this reader. */
   referenceDetail?: "withheld";
 };

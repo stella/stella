@@ -6,6 +6,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
   createAuditRecorder,
+  recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -13,6 +14,81 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const safeId = <T extends SafeIdType>(value: string) =>
   asTestRaw<SafeId<T>>(value);
+
+test("background audit groups batch tenant rows and preserve each group's provenance", async () => {
+  const inserts: Record<string, unknown>[][] = [];
+  const tx = asTestRaw<Transaction>({
+    insert: () => ({
+      values: async (rows: Record<string, unknown>[]) => {
+        inserts.push(rows);
+      },
+    }),
+  });
+  const groups = ["org-1", "org-2"].map((organizationId) => ({
+    bindings: {
+      organizationId: safeId<"organization">(organizationId),
+      workspaceId: null,
+      userId: "user-1",
+      execution: {
+        performer: { type: "user" as const, id: safeId<"user">("user-1") },
+        trigger: { type: "system" as const, source: "membership_removal" },
+      },
+    },
+    events: ["task-1", "task-2"].map((resourceId) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: `${organizationId}-${resourceId}`,
+      workspaceId: safeId<"workspace">(`${organizationId}-matter`),
+      changes: { assigneeUserId: { old: "user-1", new: null } },
+      metadata: { kind: "task" },
+    })),
+  }));
+
+  await recordAuditGroups({ tx, groups });
+
+  expect(inserts).toHaveLength(1);
+  const rows = inserts.flat();
+  expect(rows).toHaveLength(4);
+  for (const [index, group] of groups.entries()) {
+    const groupRows = rows.slice(index * 2, index * 2 + 2);
+    expect(new Set(groupRows.map((row) => row["groupId"])).size).toBe(1);
+    for (const row of groupRows) {
+      expect(row).toMatchObject({
+        organizationId: group.bindings.organizationId,
+        workspaceId: `${group.bindings.organizationId}-matter`,
+        performerId: "user-1",
+        triggerSource: "membership_removal",
+        activityCategory: "tasks",
+        changes: { assigneeUserId: { old: "user-1", new: null } },
+      });
+    }
+  }
+  expect(new Set(rows.map((row) => row["groupId"])).size).toBe(groups.length);
+  await recordAuditGroups({ tx, groups: [] });
+  expect(inserts).toHaveLength(1);
+  await recordAuditGroups({
+    tx,
+    groups: groups.slice(0, 1),
+    recordAuditEvent: createAuditRecorder({
+      organizationId: safeId<"organization">("org-1"),
+      workspaceId: null,
+      userId: safeId<"user">("user-1"),
+      request: new Request("https://example.test/", {
+        headers: { "user-agent": "audit-group-test" },
+      }),
+      server: null,
+    }),
+  });
+  expect(inserts).toHaveLength(2);
+  expect(inserts.at(1)).toHaveLength(2);
+  for (const row of inserts.at(1) ?? []) {
+    expect(row).toMatchObject({
+      organizationId: "org-1",
+      workspaceId: "org-1-matter",
+      metadata: { userAgent: "audit-group-test" },
+    });
+  }
+});
 
 describe("createBackgroundAuditRecorder", () => {
   test("stores bot provenance and keeps every event in one run group", async () => {

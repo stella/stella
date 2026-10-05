@@ -40,9 +40,10 @@ export type ProviderEventReplayRow = {
     }
 );
 
-export class ProviderEventReplayError extends TaggedError(
-  "ProviderEventReplayError",
-)<{ message: string; cause?: unknown }> {}
+class ProviderEventReplayError extends TaggedError("ProviderEventReplayError")<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 const replayFailure = failureSink({
   event: "usage_provider.replay.failed",

@@ -204,7 +204,7 @@ export const enqueueDocumentReviewRuns = async (
  * claim that set `started_at`, a `queued` row from its creation, because a
  * queued job survives a restart and may simply be backlogged.
  */
-export const reconcileStuckDocumentReviewRuns = async (
+const reconcileStuckDocumentReviewRuns = async (
   db: Pick<typeof rootDb, "update">,
 ): Promise<number> => {
   // Both cutoffs read the clock directly rather than deriving from an injected
@@ -412,7 +412,7 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
-export type DocumentReviewRunActor = RootRunActor<"documentReviewRun">;
+type DocumentReviewRunActor = RootRunActor<"documentReviewRun">;
 type RunActor = DocumentReviewRunActor;
 
 const brandActor = (data: DocumentReviewRunJobDataV1): RunActor =>

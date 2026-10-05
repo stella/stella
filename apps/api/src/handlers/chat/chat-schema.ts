@@ -436,7 +436,6 @@ export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
 export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
-export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
 export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
 
 /**

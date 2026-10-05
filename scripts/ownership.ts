@@ -357,9 +357,6 @@ export const STATUS_TRANSITION_OWNERSHIP = {
 const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
   "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
-  "handlers/case-law/ingestion/adapters/cz-ns.ts",
-  "handlers/case-law/ingestion/adapters/cz-nss.ts",
-  "handlers/case-law/ingestion/adapters/cz-regional.ts",
   "handlers/case-law/ingestion/adapters/eu-ecj.ts",
   "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
   "handlers/case-law/ingestion/adapters/pagination.ts",
@@ -377,6 +374,57 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 export const OWNERSHIP = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "task-assignment-membership",
+    capability: "Writing task assignments for current matter members",
+    owner: [
+      "apps/api/src/lib/tasks/assignment-membership.ts",
+      "apps/api/src/lib/member-assignment-offboarding.ts",
+      "apps/api/src/lib/account-deletion-steps.ts",
+    ],
+    summary:
+      "Assignment writes validate held memberships in their write transaction. Removal clears assignments with former-assignee audit, preserving the task. Matter locks precede workflow run, step, obligation and entity locks; organization offboarding takes its organization membership before the matter prefix.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/db/schema",
+        "@/api/db/schema/entities",
+        "apps/api/src/db/schema/entities.ts",
+      ],
+      names: ["taskAssignees"],
+      allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
+        },
+        {
+          path: "apps/api/src/db/",
+          reason: "Schema and relation declarations.",
+        },
+        {
+          path: "apps/api/src/lib/entities/query-entities.ts",
+          reason: "Read assignment projection.",
+        },
+        {
+          path: "apps/api/src/lib/tasks/assigned.ts",
+          reason: "Read assignment filters.",
+        },
+        {
+          path: "apps/api/src/lib/work-obligations/legacy-work-obligation.ts",
+          reason: "Read legacy ownership projection.",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+          reason: "Read assignment source for obligation backfill.",
+        },
+        {
+          path: "apps/api/src/mcp/matter-tools.ts",
+          reason: "Read task detail projection.",
+        },
+      ],
+    },
+  },
   {
     id: "feature-access",
     capability: "Deciding caller feature admission and discovery",
@@ -2037,6 +2085,36 @@ export const OWNERSHIP = [
       "`legislation-canonical-source.test.ts` fails when a new file reads a " +
       "version's AST columns directly.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "public-country-unavailable-answer",
+    capability:
+      "Answering an advertised public-law country that holds no public corpus",
+    owner: ["apps/api/src/lib/legal-search/public-law-country.ts"],
+    summary:
+      "The refusal is an answered client outcome at the contract's " +
+      "`PUBLIC_COUNTRY_UNAVAILABLE_STATUS`, never a server fault. HTTP handlers " +
+      "receive it only as the owner's built answer (`readPublicLawCountry`, " +
+      "`publicLawCountryUnavailable`) and declare it with " +
+      "`withPublicCountryUnavailable`, so no handler holds a bare body to send " +
+      "under another status.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/api-contract/public-country-capability"],
+      names: ["publicCountryUnavailable"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/stella-tools.ts",
+          reason:
+            "MCP tools return the typed body as tool data; no HTTP status is involved.",
+        },
+        {
+          path: "apps/api/src/mcp/legislation-tools.ts",
+          reason:
+            "MCP tools return the typed body as tool data; no HTTP status is involved.",
+        },
+      ],
+    },
   },
   {
     id: "legislation-publication",

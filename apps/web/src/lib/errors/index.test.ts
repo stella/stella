@@ -51,6 +51,20 @@ describe("API request retries", () => {
 });
 
 describe("toAPIError", () => {
+  test("member cleanup contention uses the shared localized retry message", () => {
+    const error = toAPIError({
+      status: 409,
+      value: {
+        code: "member_removal_busy",
+        retryable: true,
+        message: "Private transport detail",
+      },
+    });
+    expect(error.message).toBe(
+      "Other work is in progress. Please try again shortly.",
+    );
+  });
+
   test("explains how to preserve a file property's type", () => {
     const error = toAPIError({
       status: 422,

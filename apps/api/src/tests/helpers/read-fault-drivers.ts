@@ -101,7 +101,7 @@ const fetchStageOf = (input: FetchInput, init?: RequestInit): string => {
 };
 
 /** The answer a faulted request receives in place of the served one. */
-const faultedResponse = async (
+export const faultedResponse = async (
   fault: ReadFault | ReadRefusalFault,
   served: Delegate,
 ): Promise<Response> => {

@@ -314,6 +314,22 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261004003000_tree_parent_cycle_guard",
+  "migration.sql",
+);
+
+/** Install the self-referencing tree triggers omitted by declarative schema push. */
+export const installPgliteTreeParentGuards = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH,
+  });
+};
+
 /** Install the scheduler pause audit trigger omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,
@@ -607,7 +623,10 @@ const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE TRIGGER",
 ] as const;
 
-/** Install membership capacity and ownership guards omitted by schema push. */
+/**
+ * Install membership capacity, ownership and matter-membership reference
+ * guards omitted by schema push.
+ */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -617,6 +636,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261004001000_matter_membership_organization_membership",
         "migration.sql",
       ),
     ),

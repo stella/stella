@@ -19,6 +19,11 @@ import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import {
+  type DevProcessGroupError,
+  spawnDevProcess,
+  stopDevProcessGroups,
+} from "./dev-process-groups";
+import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
   MAX_PORT_OFFSET,
@@ -48,9 +53,6 @@ const PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0"] as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
 const DEFAULT_HTTP_READY_TIMEOUT_MS = 120_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
-const CHILD_SHUTDOWN_GRACE_PERIOD_MS = 12_000;
-const CHILD_FORCE_EXIT_TIMEOUT_MS = 2000;
-const FORCE_KILL_SIGNAL = "SIGKILL";
 const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
 const SHARED_DOCKER_HEALTHY_SERVICES = [
   "postgres",
@@ -117,18 +119,6 @@ type Step = {
 
 type RunningStep = Step & {
   child: Bun.Subprocess;
-};
-
-type StoppableChild = Pick<Bun.Subprocess, "exited" | "kill">;
-
-type StoppableStep = {
-  child: StoppableChild;
-  label: string;
-};
-
-type StopChildrenOptions = {
-  children: readonly StoppableStep[];
-  wait?: (durationMs: number) => Promise<void>;
 };
 
 type HttpReadinessCheck = {
@@ -1251,6 +1241,9 @@ export const createApiEnv = ({
   ...baseEnv,
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
   BETTER_AUTH_URL: publicApiUrlForPort(ports.api),
+  // The local stack's Postgres is never RDS, so maintenance has no EBS
+  // balance to read; an older apps/api/.env must not block migrations.
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
   // Local development capabilities require an explicit runtime opt-in.
@@ -1555,42 +1548,6 @@ const isDevRunnerShutdownSignal = (
 ): error is DevRunnerShutdownSignalError =>
   error instanceof DevRunnerShutdownSignalError;
 
-export const stopChildren = async ({
-  children,
-  wait = async (durationMs) => await Bun.sleep(durationMs),
-}: StopChildrenOptions): Promise<readonly string[]> => {
-  const pending = new Set(children);
-  const allExited = Promise.all(
-    children.map(async (runningStep) => {
-      // `Bun.Subprocess.exited` resolves with the exit status, including for a
-      // process terminated by a signal.
-      await runningStep.child.exited;
-      pending.delete(runningStep);
-    }),
-  );
-
-  for (const runningStep of children) {
-    runningStep.child.kill();
-  }
-
-  const gracefulOutcome = await Promise.race([
-    allExited.then(() => "exited" as const),
-    wait(CHILD_SHUTDOWN_GRACE_PERIOD_MS).then(() => "timed-out" as const),
-  ]);
-  if (gracefulOutcome === "exited") {
-    return [];
-  }
-
-  const forcedSteps = [...pending];
-  for (const runningStep of forcedSteps) {
-    runningStep.child.kill(FORCE_KILL_SIGNAL);
-  }
-
-  // Never let an uncooperative or already-detached child keep the runner open.
-  await Promise.race([allExited, wait(CHILD_FORCE_EXIT_TIMEOUT_MS)]);
-  return forcedSteps.map(({ label }) => label);
-};
-
 const waitForHttpReadiness = async ({
   child,
   label,
@@ -1684,36 +1641,46 @@ const waitForReadinessChecks = async (
   }
 };
 
-const spawnPersistentStep = (step: Step): RunningStep => {
+const spawnPersistentStep = (step: Step, rootDir: string) => {
   console.log(`==> Starting ${step.label}...`);
+  const env = resolveEnv(step.env);
 
-  return {
-    ...step,
-    child: Bun.spawn(step.cmd, {
-      cwd: step.cwd,
-      env: resolveEnv(step.env),
-      stderr: "inherit",
-      stdin: "inherit",
-      stdout: "inherit",
-    }),
-  };
+  return spawnDevProcess({
+    rootDir,
+    cmd: step.cmd,
+    label: step.label,
+    cwd: step.cwd,
+    env,
+    stdin: "inherit",
+  }).map((child) => ({
+    cmd: step.cmd,
+    cwd: step.cwd,
+    env,
+    label: step.label,
+    child,
+  }));
 };
 
 type BackgroundStep = RunningStep & { startedAt: number };
 
-const startBackgroundStep = (step: Step): BackgroundStep => {
+const startBackgroundStep = (step: Step, rootDir: string) => {
   console.log(`==> ${step.label}...`);
-  return {
-    ...step,
-    child: Bun.spawn(step.cmd, {
-      cwd: step.cwd,
-      env: resolveEnv(step.env),
-      stderr: "inherit",
-      stdin: "ignore",
-      stdout: "inherit",
-    }),
+  const env = resolveEnv(step.env);
+  return spawnDevProcess({
+    rootDir,
+    cmd: step.cmd,
+    label: step.label,
+    cwd: step.cwd,
+    env,
+    stdin: "ignore",
+  }).map((child) => ({
+    cmd: step.cmd,
+    cwd: step.cwd,
+    env,
+    label: step.label,
+    child,
     startedAt: Temporal.Now.instant().epochMilliseconds,
-  };
+  }));
 };
 
 const finishBackgroundStep = async (step: BackgroundStep) => {
@@ -2325,24 +2292,35 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
+  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
+    result.match({
+      ok: (value) => value,
+      err: (error) => {
+        throw error;
+      },
+    });
+
   const cleanup = async () => {
     if (cleanupPromise) {
       return cleanupPromise;
     }
 
     isShuttingDown = true;
-    removeDevRuntime(gitContext.currentRoot, process.pid);
     cleanupPromise = (async () => {
-      const forcedChildren = await stopChildren({
-        children: [...children, ...backgroundSteps],
+      const groupStop = await stopDevProcessGroups({
+        rootDir: gitContext.currentRoot,
       });
-      if (forcedChildren.length > 0) {
+      if (groupStop.isOk()) {
+        removeDevRuntime(gitContext.currentRoot, process.pid);
+      }
+      if (groupStop.isOk() && groupStop.value.length > 0) {
         console.warn(
-          `Forced ${forcedChildren.join(", ")} to exit after the graceful shutdown deadline.`,
+          `Forced ${groupStop.value.join(", ")} to exit after the graceful shutdown deadline.`,
         );
       }
 
       if (!ownsDockerProject) {
+        processGroupValue(groupStop);
         return true;
       }
 
@@ -2361,6 +2339,7 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
+      processGroupValue(groupStop);
       return stopped.isOk();
     })();
 
@@ -2431,7 +2410,9 @@ const main = async () => {
 
     // Register each child immediately so cleanup covers partial startup.
     return steps.map((step) => {
-      const runningStep = spawnPersistentStep(step);
+      const runningStep = processGroupValue(
+        spawnPersistentStep(step, gitContext.currentRoot),
+      );
       children.push(runningStep);
       return runningStep;
     });
@@ -2523,13 +2504,16 @@ const main = async () => {
       );
     if (seeds) {
       backgroundSteps.push(
-        startBackgroundStep(
-          buildSeedStep({
-            infraOffset,
-            infraPorts,
-            ports,
-            rootDir: gitContext.currentRoot,
-          }),
+        processGroupValue(
+          startBackgroundStep(
+            buildSeedStep({
+              infraOffset,
+              infraPorts,
+              ports,
+              rootDir: gitContext.currentRoot,
+            }),
+            gitContext.currentRoot,
+          ),
         ),
       );
     }

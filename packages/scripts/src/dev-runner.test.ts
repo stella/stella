@@ -42,7 +42,6 @@ import {
   resolveMainRootFromCommonDir,
   resolveOffset,
   shouldAutoOpenBrowser,
-  stopChildren,
 } from "./dev-runner";
 import {
   DEFAULT_INFRA_PORTS,
@@ -68,61 +67,6 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }
-});
-
-describe("stopChildren", () => {
-  test("returns after every child exits from the graceful signal", async () => {
-    const exited = Promise.withResolvers<number>();
-    const signals: Parameters<Bun.Subprocess["kill"]>[0][] = [];
-    const waitForever = Promise.withResolvers<undefined>().promise;
-
-    const forcedChildren = await stopChildren({
-      children: [
-        {
-          child: {
-            exited: exited.promise,
-            kill: (signal) => {
-              signals.push(signal);
-              exited.resolve(0);
-            },
-          },
-          label: "API server",
-        },
-      ],
-      wait: async () => {
-        await waitForever;
-      },
-    });
-
-    expect(forcedChildren).toEqual([]);
-    expect(signals).toEqual([undefined]);
-  });
-
-  test("force-kills a child that exceeds the graceful deadline", async () => {
-    const exited = Promise.withResolvers<number>();
-    const signals: Parameters<Bun.Subprocess["kill"]>[0][] = [];
-
-    const forcedChildren = await stopChildren({
-      children: [
-        {
-          child: {
-            exited: exited.promise,
-            kill: (signal) => {
-              signals.push(signal);
-              if (signal === "SIGKILL") {
-                exited.resolve(137);
-              }
-            },
-          },
-          label: "API server",
-        },
-      ],
-      wait: async () => undefined,
-    });
-
-    expect(forcedChildren).toEqual(["API server"]);
-    expect(signals).toEqual([undefined, "SIGKILL"]);
-  });
 });
 
 describe("parseDevRunnerConfig", () => {
@@ -1372,6 +1316,7 @@ describe("dev env factories", () => {
     expect(result).toMatchObject({
       BETTER_AUTH_COOKIE_PREFIX: "stella-dev-3101",
       BETTER_AUTH_URL: "http://localhost:3101",
+      DB_LOAD_GATE_EBS_SIGNAL: "disabled",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
       NODE_ENV: "development",

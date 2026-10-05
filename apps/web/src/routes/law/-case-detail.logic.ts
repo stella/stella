@@ -33,8 +33,8 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
+import { isPublicLawMissError } from "@/lib/public-law-api";
 import {
   createCaseLawDecisionJsonLd,
   createPublicLawCanonicalUrl,
@@ -193,7 +193,7 @@ const ensurePublicDecision = async <T>(load: () => Promise<T>): Promise<T> => {
   try {
     return await load();
   } catch (error) {
-    if (error instanceof APIError && error.status === 404) {
+    if (isPublicLawMissError(error)) {
       // The entry screen, not the results screen: a dead decision link leaves
       // the reader with nothing to show results for, so they land where a new
       // entry starts and the miss is named there.

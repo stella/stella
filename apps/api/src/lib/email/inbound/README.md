@@ -74,6 +74,32 @@ Oversized provider objects stop streaming at the limit and become terminal
 because a complete content digest cannot be read within the limit. A failed drop
 write remains retryable; it never acknowledges an unrecorded rejection.
 
+## Queue transport
+
+An SES receipt rule stores each message in S3 and publishes its notification
+to SNS, which delivers to an SQS queue with a dead-letter redrive policy. The
+scheduler job `inboundMail.receive.minutely` drains that queue; operator
+pauses apply to it like any other job. It runs only when
+`INBOUND_MAIL_QUEUE_URL`, `INBOUND_MAIL_TOPIC_ARN`, `INBOUND_MAIL_BUCKET` and
+`INBOUND_MAIL_KEY_PREFIX` are all set with `INBOUND_MAIL_DOMAIN`; a partial
+set fails boot. The queue and bucket are reached in `S3_REGION`.
+
+The trust boundary is IAM: the queue policy must admit only the configured
+topic, and the topic only the receipt rule. SNS signatures are not fetched.
+Subscribe the queue without raw message delivery; the receiver reads the SNS
+envelope and requires its `TopicArn` to equal the configured topic.
+
+Each run leases bounded batches with a visibility timeout covering a batch and
+files messages one at a time. A message is deleted after a terminal result:
+filed, duplicate, dropped, or the provider's setup notification. A malformed
+envelope, another topic or an unsupported notification type is logged as
+poison and left; so is a retryable error. Both return when their visibility
+timeout ends and reach the dead-letter queue after the redrive limit, where
+they remain for operator repair. A failed or cancelled delete leaves a filed
+message on the queue; its redelivery converges as a duplicate. Logs carry the
+queue message id, receive count and outcome, never subjects, bodies, addresses
+or tokens.
+
 ## Local development
 
 With the development database, object storage and processing services configured:
