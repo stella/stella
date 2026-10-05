@@ -32,7 +32,7 @@ relevant() {
       ;;
     migrations)
       case "$file" in
-        apps/api/drizzle/*|apps/api/src/db/*|apps/api/drizzle.config.ts)
+        apps/api/drizzle/*|apps/api/src/db/*schema.ts|apps/api/src/db/schema/*|apps/api/src/db/rls.ts|apps/api/drizzle.config.ts)
           return 0 ;;
       esac
       ;;
