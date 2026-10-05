@@ -104,6 +104,7 @@ describe("createHostedSetupSession", () => {
     if (Result.isOk(result)) {
       expect(result.value.id).toBe("provider_setup_abc");
       expect(result.value.url).toBe("https://setup.provider.test/abc");
+      expect(result.value.expiresAt).toBeNull();
     }
     expect(callCount).toBe(1);
     expect(urlToString(calledUrl)).toBe(
@@ -254,6 +255,36 @@ describe("createHostedManagementSession", () => {
 });
 
 describe("createPolarSetupSession", () => {
+  test.each([{ expires_at: "not a timestamp" }, { expires_at: 1_780_000_000 }])(
+    "refuses a session with an unreadable expiry ($expires_at)",
+    async ({ expires_at }) => {
+      installFetch(async () =>
+        okResponse({
+          id: "checkout_bad_expiry",
+          url: "https://buy.polar.test/bad",
+          expires_at,
+        }),
+      );
+
+      const result = await createPolarSetupSession({
+        credentials,
+        policyRef: "prod_pro",
+        externalAccountRef: "stella_org_org_test_001",
+        successUrl: "https://app.stella.test/settings",
+        metadata: {
+          organization_id: "org_test_001",
+          usage_policy_id: "plan_test_001",
+        },
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(HostedUsageProviderApiError.is(result.error)).toBe(true);
+        expect(result.error.message).toBe("Hosted setup session failed");
+      }
+    },
+  );
+
   test("POSTs to /v1/checkouts/ with products array and external_customer_id", async () => {
     let calledUrl: string | URL | Request | undefined;
     let calledInit: RequestInit | undefined;
@@ -264,6 +295,7 @@ describe("createPolarSetupSession", () => {
         id: "checkout_abc",
         url: "https://buy.polar.test/abc",
         client_secret: "cs_x",
+        expires_at: "2026-06-01T01:00:00Z",
       });
     });
 
@@ -283,6 +315,7 @@ describe("createPolarSetupSession", () => {
     if (Result.isOk(result)) {
       expect(result.value.id).toBe("checkout_abc");
       expect(result.value.url).toBe("https://buy.polar.test/abc");
+      expect(result.value.expiresAt).toEqual(new Date("2026-06-01T01:00:00Z"));
     }
     expect(urlToString(calledUrl)).toBe(
       "https://sandbox.provider.test/v1/checkouts/",

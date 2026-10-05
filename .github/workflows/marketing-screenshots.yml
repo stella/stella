@@ -126,7 +126,7 @@ jobs:
           fi
 
           # The release App key must only ever run workflow code from main
-          # (the posture of tag-on-version-bump.yml): dispatching this on a
+          # (the posture of release-tag.yml): dispatching this on a
           # branch would hand the key that branch's job body. Update mode is
           # therefore dispatched on main and told which branch to regenerate,
           # so only the app and spec code checked out below is branch-owned.
