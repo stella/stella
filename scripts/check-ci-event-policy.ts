@@ -31,7 +31,7 @@ const policySchema = v.object({
     v.object({ owner: v.string(), reason: v.string() }),
   ),
 });
-const workflowSchema = v.looseObject({
+export const workflowSchema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   permissions: v.optional(v.unknown()),
   concurrency: v.optional(
@@ -124,16 +124,22 @@ const checkMainConcurrency = ({
     if (
       workflow.concurrency.group.replaceAll(
         /\$\{\{(.*?)\}\}/gu,
-        (_, expression: string) =>
-          String(
-            evaluate(expression, {
-              values: {
-                "github.event_name": "push",
-                "github.ref": "refs/heads/main",
-                "github.workflow": "Workflow",
-              },
-            }),
-          ),
+        (_, expression: string) => {
+          const fragment = evaluate(expression, {
+            values: {
+              "github.event_name": "push",
+              "github.ref": "refs/heads/main",
+              "github.workflow": "Workflow",
+            },
+          });
+          if (typeof fragment !== "string") {
+            problems.push(
+              `${file}: main push group expression must resolve to a string`,
+            );
+            return "";
+          }
+          return fragment;
+        },
       ) !==
       (file === "ci.yml"
         ? "Workflow-ci-refs/heads/main"
@@ -296,8 +302,8 @@ const checkCodeqlWorkflow = (
       "codeql.yml: triggers must be nightly, manual and pull_request only",
     );
   }
-  const scope = workflow.jobs.scope;
-  const analyze = workflow.jobs.analyze;
+  const scope = workflow.jobs["scope"];
+  const analyze = workflow.jobs["analyze"];
   problems.push(
     ...checkCodeqlEventPolicy(
       typeof scope?.if === "string" ? scope.if : "true",

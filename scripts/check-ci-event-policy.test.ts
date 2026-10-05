@@ -1,7 +1,9 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
+import * as v from "valibot";
 
-import { checkCiEventPolicies } from "./check-ci-event-policy";
+import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
 
 const directory = new URL("../.github/workflows/", import.meta.url);
 const workflows = Object.fromEntries(
@@ -127,6 +129,17 @@ test("main-push workflows require a group and publishing never cancels a running
       policy: declared,
     }),
   ).toEqual([]);
+  for (const expression of ["false", "github.event", "github.unknown"]) {
+    concurrency.group = `\${{ github.workflow }}-\${{ github.ref }}\${{ ${expression} }}`;
+    expect(
+      checkCiEventPolicies({
+        workflows: { "fixture.yml": { ...workflow, concurrency } },
+        policy: declared,
+      }),
+    ).toContain(
+      "fixture.yml: main push group expression must resolve to a string",
+    );
+  }
 });
 
 test("analysis cancellation is pinned to main and tag-only workflows do not consume its policy", () => {
@@ -261,7 +274,14 @@ test("CodeQL accepts the main release policy and rejects ordinary PR scans", () 
       policy: declared,
     }),
   ).toEqual([]);
-  workflow.jobs.scope.if = "true";
+  if (!v.is(workflowSchema, workflow)) {
+    panic("CodeQL workflow does not match its owner schema");
+  }
+  const scope = workflow.jobs["scope"];
+  if (scope === undefined) {
+    panic("CodeQL scope job is missing");
+  }
+  scope.if = "true";
   expect(
     checkCiEventPolicies({
       workflows: { "codeql.yml": workflow },
