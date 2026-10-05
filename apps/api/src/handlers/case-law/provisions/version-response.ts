@@ -7,6 +7,10 @@ import type {
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 /** Shared by both citation reads, so their temporal projections stay identical. */
 export const PROVISION_VERSION_COLUMNS = {
@@ -118,3 +122,31 @@ export const projectProvisionVersion = <TRow extends VersionRow>(row: TRow) => {
     } as const satisfies InferredProvisionVersionCandidate,
   };
 };
+
+type ProvisionCitationRow = typeof caseLawProvisionCitations.$inferSelect;
+type ProvisionVersionProjection = ReturnType<
+  typeof projectProvisionVersion<ProvisionCitationRow>
+>;
+
+type ProvisionVersionProjectionRow = ProvisionCitationRow &
+  Pick<ProvisionVersionProjection, "versionBasis" | "inferredVersionCandidate">;
+// The raw temporal inputs selected in PROVISION_VERSION_COLUMNS are folded
+// into `versionBasis` and its evidence instead of reaching the client as
+// independent fields.
+type MissingProvisionCitationProjectionColumn = UnprojectedColumns<
+  ProvisionVersionProjectionRow,
+  ProvisionVersionProjection,
+  keyof typeof PROVISION_VERSION_COLUMNS
+>;
+type UnexpectedProvisionCitationProjectionColumn = UnbackedProjectionKeys<
+  ProvisionVersionProjectionRow,
+  ProvisionVersionProjection,
+  keyof typeof PROVISION_VERSION_COLUMNS
+>;
+
+true satisfies MissingProvisionCitationProjectionColumn extends never
+  ? true
+  : never;
+true satisfies UnexpectedProvisionCitationProjectionColumn extends never
+  ? true
+  : never;

@@ -1,7 +1,10 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
-import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import {
+  DECISION_DATE_VERSION_BASIS,
+  provisionVersionAsOf,
+} from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
@@ -81,7 +84,9 @@ type WorkKey = { asOf: string; eli: string; jurisdiction: string };
  * one the grouping accumulates into, so references seen after the work was
  * collected are in it too.
  */
-type LinkedWork = WorkKey & { rows: { versionValidFrom: string | null }[] };
+type LinkedWork = WorkKey & {
+  rows: Parameters<typeof provisionVersionAsOf>[0][];
+};
 
 const workKeyOf = ({
   eli,
@@ -157,7 +162,10 @@ export const useDecisionProvisionAnchors = ({
     });
     const existing = works.find((work) => workKeyOf(work) === key);
     if (existing !== undefined) {
-      existing.rows.push({ versionValidFrom: decisionAsOf });
+      existing.rows.push({
+        versionBasis: DECISION_DATE_VERSION_BASIS,
+        versionValidFrom: decisionAsOf,
+      });
       continue;
     }
     seen.add(key);
@@ -165,7 +173,12 @@ export const useDecisionProvisionAnchors = ({
       asOf: decisionAsOf,
       eli: reference.abbreviation.eli,
       jurisdiction: reference.jurisdiction,
-      rows: [{ versionValidFrom: decisionAsOf }],
+      rows: [
+        {
+          versionBasis: DECISION_DATE_VERSION_BASIS,
+          versionValidFrom: decisionAsOf,
+        },
+      ],
     });
   }
 
