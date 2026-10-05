@@ -179,7 +179,9 @@ const git = (...args: string[]) => {
     { cwd: fixtureRepo },
   );
   if (result.exitCode !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr.toString()}`,
+    );
   }
   return result.stdout.toString().trim();
 };
