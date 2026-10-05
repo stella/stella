@@ -14,6 +14,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -239,6 +240,8 @@ const STEPS: readonly Step[] = [
       timezone_id: "UTC",
       duration_minutes: 30,
       narrative: "Reviewed the lease",
+      // A billable entry needs a configured rate, which a new matter lacks.
+      billable: false,
     }),
     capture: (payload, seeded) => {
       seeded.timeEntryId = idAt(payload, "timeEntryId");
@@ -446,12 +449,12 @@ describe("every MCP tool's real output passes its output contract", () => {
       .filter(([, coverage]) => coverage.type === COVERAGE.run)
       .map(([name]) => name)
       .toSorted();
-    expect(STEPS.map((step) => step.tool).toSorted()).toEqual(run);
+    expect(STEPS.map((step): string => step.tool).toSorted()).toEqual(run);
   });
 
   test("every registered tool has a coverage decision", () => {
     expect(
-      DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name).toSorted(),
+      DEFAULT_MCP_TOOL_DEFINITIONS.map((tool): string => tool.name).toSorted(),
     ).toEqual(Object.keys(TOOL_COVERAGE).toSorted());
   });
 
@@ -470,12 +473,10 @@ describe("every MCP tool's real output passes its output contract", () => {
         isError: false,
         ...(result.isError === true ? { response: textOf(result) } : {}),
       });
-      expect(result.structuredContent).toBeDefined();
-      if (
-        step.capture !== undefined &&
-        result.structuredContent !== undefined
-      ) {
-        step.capture(result.structuredContent, seeded);
+      const { structuredContent } = result;
+      expect(isRecord(structuredContent)).toBe(true);
+      if (step.capture !== undefined && isRecord(structuredContent)) {
+        step.capture(structuredContent, seeded);
       }
     }
   });
