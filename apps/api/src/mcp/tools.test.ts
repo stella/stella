@@ -95,6 +95,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/stella-tools";
+import { MCP_CONTENT_MAX_CHARS } from "@/api/mcp/tool-utils";
 import {
   findUndeclaredArguments,
   getMcpToolDefinition,
@@ -6062,6 +6063,160 @@ describe("OpenAI-compatible MCP tools", () => {
       "Pass one decision id with a cursor to continue its text.",
     );
     expect(readGatedDecisionMock).not.toHaveBeenCalled();
+  });
+
+  // --- max_chars across a batch --------------------------------------------
+
+  const THIRD_DECISION_ID = "00000000-0000-4000-8000-0000000d0004";
+
+  type WindowedDecisionPage = {
+    items: {
+      decision: {
+        charCount: number | null;
+        text: string | null;
+        truncated: boolean;
+      };
+      decisionId: string;
+      nextCursor: string | null;
+      status: string;
+    }[];
+  };
+
+  // Distinct, position-revealing text per decision, so a window taken from
+  // the wrong decision or at the wrong offset cannot pass for the right one.
+  const decisionText = (label: string, length: number): string =>
+    Array.from({ length }, (_, index) =>
+      index % 50 === 0 ? label : String(index % 10),
+    ).join("");
+
+  const readWindows = async (args: {
+    cursor?: string;
+    decision_ids: string[];
+    max_chars?: number;
+  }) =>
+    asTestRaw<WindowedDecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args,
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
+
+  const serveTexts = (texts: ReadonlyMap<string, string>) => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        fulltext: texts.get(locator.id) ?? panic(`No text for ${locator.id}`),
+        id: locator.id,
+      }),
+    );
+  };
+
+  test("read_case_law_decision applies max_chars to each decision of a batch on its own", async () => {
+    const texts = new Map([
+      [DECISION_ID, decisionText("A", 5000)],
+      [SECOND_DECISION_ID, decisionText("B", 40)],
+      [THIRD_DECISION_ID, decisionText("C", 6000)],
+    ]);
+    serveTexts(texts);
+    const maxChars = 4000;
+
+    const payload = await readWindows({
+      decision_ids: [DECISION_ID, SECOND_DECISION_ID, THIRD_DECISION_ID],
+      max_chars: maxChars,
+    });
+
+    // Each long decision fills its own max_chars window rather than a third
+    // of it, and continues from its own cursor; the short one is whole.
+    expect(
+      payload.items.map(({ decision, decisionId, nextCursor, status }) => ({
+        charCount: decision.charCount,
+        decisionId,
+        nextCursor,
+        status,
+        text: decision.text,
+        truncated: decision.truncated,
+      })),
+    ).toEqual([
+      {
+        charCount: 5000,
+        decisionId: DECISION_ID,
+        nextCursor: encodePaginationCursor([maxChars, null]),
+        status: "found",
+        text: texts.get(DECISION_ID)?.slice(0, maxChars),
+        truncated: true,
+      },
+      {
+        charCount: 40,
+        decisionId: SECOND_DECISION_ID,
+        nextCursor: null,
+        status: "found",
+        text: texts.get(SECOND_DECISION_ID),
+        truncated: false,
+      },
+      {
+        charCount: 6000,
+        decisionId: THIRD_DECISION_ID,
+        nextCursor: encodePaginationCursor([maxChars, null]),
+        status: "found",
+        text: texts.get(THIRD_DECISION_ID)?.slice(0, maxChars),
+        truncated: true,
+      },
+    ]);
+
+    // A batch entry's cursor continues that decision alone, where it stopped.
+    const third = payload.items.at(2) ?? panic("Missing third entry");
+    const resumed = await readWindows({
+      cursor: third.nextCursor ?? panic("Missing third cursor"),
+      decision_ids: [THIRD_DECISION_ID],
+      max_chars: maxChars,
+    });
+    expect(resumed.items.at(0)?.decision).toMatchObject({
+      text: texts.get(THIRD_DECISION_ID)?.slice(maxChars),
+      truncated: false,
+    });
+    expect(resumed.items.at(0)?.nextCursor).toBeNull();
+  });
+
+  test("read_case_law_decision keeps a single id's max_chars window", async () => {
+    const text = decisionText("A", 5000);
+    serveTexts(new Map([[DECISION_ID, text]]));
+
+    const payload = await readWindows({
+      decision_ids: [DECISION_ID],
+      max_chars: 1200,
+    });
+
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items.at(0)).toMatchObject({
+      decision: { charCount: 5000, text: text.slice(0, 1200), truncated: true },
+      nextCursor: encodePaginationCursor([1200, null]),
+      status: "found",
+    });
+  });
+
+  test("read_case_law_decision shares the default text budget across a batch without max_chars", async () => {
+    const texts = new Map([
+      [DECISION_ID, decisionText("A", MCP_CONTENT_MAX_CHARS)],
+      [SECOND_DECISION_ID, decisionText("B", 40)],
+    ]);
+    serveTexts(texts);
+    const share = MCP_CONTENT_MAX_CHARS / 2;
+
+    const payload = await readWindows({
+      decision_ids: [DECISION_ID, SECOND_DECISION_ID],
+    });
+
+    expect(payload.items.map(({ decision }) => decision)).toMatchObject([
+      { text: texts.get(DECISION_ID)?.slice(0, share), truncated: true },
+      { text: texts.get(SECOND_DECISION_ID), truncated: false },
+    ]);
+    expect(payload.items.at(0)?.nextCursor).toBe(
+      encodePaginationCursor([share, null]),
+    );
   });
 
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {
