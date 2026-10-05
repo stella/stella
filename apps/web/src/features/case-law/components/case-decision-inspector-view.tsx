@@ -29,8 +29,13 @@ import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-cha
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
+import {
+  DecisionInspectorOutline,
+  scrollDecisionInspectorToAnchor,
+} from "@/features/case-law/components/case-viewer/analysis/decision-inspector-outline";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import {
@@ -48,6 +53,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
@@ -63,6 +69,33 @@ const HEADER_DECISION_FACTS = [
   "keywords",
   "judges",
 ] as const satisfies readonly DecisionFactKind[];
+
+type DecisionInspectorOutlineControlProps = {
+  decision: PublicCaseLawDecision;
+  documentReady: boolean;
+  onAnchorClick: (anchorId: string) => void;
+};
+
+const DecisionInspectorOutlineControl = ({
+  decision,
+  documentReady,
+  onAnchorClick,
+}: DecisionInspectorOutlineControlProps) => {
+  const analysis = useLazyDecisionAnalysis({
+    decisionId: decision.id,
+    decisionUpdatedAt: decision.updatedAt,
+    documentReady,
+    sourceAllowsDerivedAi: decision.source?.allowsDerivedAi === true,
+    mode: "enabled",
+  });
+  return (
+    <DecisionInspectorOutline
+      available={analysis.available}
+      onAnchorClick={onAnchorClick}
+      state={analysis.state}
+    />
+  );
+};
 
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
@@ -97,6 +130,7 @@ export const CaseDecisionInspectorView = ({
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   // Cmd/Ctrl+F belongs to the decision in front of the reader rather than to
   // the results table behind it, for as long as there is text to search.
   const find = useInspectorFind({
@@ -184,9 +218,9 @@ export const CaseDecisionInspectorView = ({
         {/* The pane's width is the reader's to drag; nothing the court's file
             contains may take it. A table that needs the axis scrolls inside
             its own box. */}
-        <ScrollArea axis="vertical" className="h-full">
+        <ScrollArea axis="vertical" className="h-full" viewportRef={scrollRef}>
           <main
-            className="reader-paper min-h-full px-4 py-6"
+            className="reader-paper min-h-full px-4 pt-10 pb-6"
             ref={contentRef}
             {...textScale.rootProps}
           >
@@ -251,6 +285,20 @@ export const CaseDecisionInspectorView = ({
         </ScrollArea>
         {/* The same bar the PDF floats over its page, over the text. */}
         <ViewerOverlayBar>
+          {decision !== undefined && (
+            <DecisionInspectorOutlineControl
+              decision={decision}
+              documentReady={ast !== null}
+              key={decisionId}
+              onAnchorClick={(anchorId) => {
+                scrollDecisionInspectorToAnchor({
+                  anchorId,
+                  content: contentRef.current,
+                  viewport: scrollRef.current,
+                });
+              }}
+            />
+          )}
           <ZoomControls
             atMax={textScale.atMax}
             atMin={textScale.atMin}
