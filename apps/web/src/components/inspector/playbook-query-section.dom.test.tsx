@@ -101,7 +101,9 @@ for (const queryKey of [
           for (const request of requests) {
             request.resolve([]);
           }
-          await Promise.allSettled(requests.map(({ promise }) => promise));
+          await Promise.allSettled(
+            requests.map(async ({ promise }) => promise),
+          );
           client.clear();
         });
       };
