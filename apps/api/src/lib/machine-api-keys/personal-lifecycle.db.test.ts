@@ -808,12 +808,14 @@ describe("personal key persistence and receipts", () => {
     });
   });
 
-  test("five active keys allow a rotation but refuse a sixth; revoke frees a slot", async () => {
+  test("four active keys allow a fifth; five refuse a sixth but allow rotation", async () => {
     await withFixture(async ({ own }) => {
       const keys = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 4; i++) {
         keys.push(requireKey(await createPersonalApiKey(own)));
       }
+      expect(keys).toHaveLength(4);
+      keys.push(requireKey(await createPersonalApiKey(own)));
       const first = keys.at(0);
       if (!first) {
         panic("The active limit fixture requires a key");

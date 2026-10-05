@@ -165,8 +165,9 @@ const mintPersonalKey = async (
         gt(apikey.expiresAt, now),
       ),
     )
-    .limit(PERSONAL_API_KEY_ACTIVE_LIMIT);
-  if (active.length >= PERSONAL_API_KEY_ACTIVE_LIMIT) {
+    .offset(PERSONAL_API_KEY_ACTIVE_LIMIT - 1)
+    .limit(1);
+  if (active.length > 0) {
     return abortTransaction(
       new HandlerError({
         status: 409,
