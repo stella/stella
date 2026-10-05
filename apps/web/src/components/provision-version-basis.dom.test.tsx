@@ -15,7 +15,8 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { ProvisionsCited } = await import("./case-viewer/provisions-cited");
+const { ProvisionsCited } =
+  await import("@/features/case-law/components/case-viewer/provisions-cited");
 const { CitingDecisionItem } =
   await import("@/features/statutes/components/provision-citing-decisions");
 const { decisionProvisionsInfiniteOptions } =

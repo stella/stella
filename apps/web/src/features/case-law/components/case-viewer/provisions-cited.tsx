@@ -9,12 +9,12 @@ import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import {
   groupProvisionsByWork,
   type ProvisionGroup,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
-import { ProvisionVersionBasisLabel } from "@/features/case-law/components/provision-version-basis";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {

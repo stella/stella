@@ -9,7 +9,7 @@ import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import { ProvisionVersionBasisLabel } from "@/features/case-law/components/provision-version-basis";
+import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
