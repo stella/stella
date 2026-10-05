@@ -21,7 +21,7 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { contacts } from "@/api/db/schema";
+import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -1362,6 +1362,7 @@ const CONTRACT_CORPUS = {
                   vatAmount: 21,
                   grossAmount: 121,
                   source: "time_entry",
+                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
                   timeEntryId: uid(47),
                   expenseId: null,
                   releasedAt: null,
