@@ -1860,6 +1860,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
     "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",

@@ -1860,6 +1860,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
     "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",

@@ -1860,6 +1860,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
     "unverifiedCitationHint": "Cette citation n'a pas pu être associée au document source.",

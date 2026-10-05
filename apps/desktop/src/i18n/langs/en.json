@@ -132,7 +132,8 @@
     "takeoverSubtitle": "They'll continue from your latest saved checkpoint.",
     "takeoverTitle": "{requester} wants to take over editing",
     "takeoverWindowTitle": "Takeover request",
-    "webOrigin": "Web origin"
+    "webOrigin": "Web origin",
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard"
   },
   "settings": {
     "about": "About",

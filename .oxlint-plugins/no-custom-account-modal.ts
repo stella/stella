@@ -74,6 +74,22 @@ const MODAL_MODULES = new Set([
   "@stll/ui/sheet",
 ]);
 
+// Only a root or popup creates a modal; form-state reporters and providers
+// belong to ordinary forms too, including the canonical account panels.
+const MODAL_SURFACES = new Set([
+  "Root",
+  "Popup",
+  "Dialog",
+  "DialogPopup",
+  "DialogContent",
+  "AlertDialog",
+  "AlertDialogPopup",
+  "AlertDialogContent",
+  "Sheet",
+  "SheetPopup",
+  "SheetContent",
+]);
+
 const SIGN_IN_HANDOFFS = new Set([
   "PublicSignInRequestContext",
   "usePublicSignInRequest",
@@ -238,10 +254,13 @@ export default eslintCompatPlugin({
               if (local === null) {
                 continue;
               }
-              if (isModalModule) {
+              const imported = getImportedName(specifier);
+              if (
+                isModalModule &&
+                (imported === null || MODAL_SURFACES.has(imported))
+              ) {
                 modalLocals.add(local);
               }
-              const imported = getImportedName(specifier);
               if (imported !== null && SIGN_IN_HANDOFFS.has(imported)) {
                 handoffLocals.set(local, imported);
               }
