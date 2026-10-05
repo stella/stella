@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import type { contactsOptions } from "@/lib/contacts/queries";
+import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 const originalFetch = globalThis.fetch;
@@ -14,7 +15,7 @@ type ContactListResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof contactsOptions>["queryFn"]>>
 >;
 const match = {
-  id: "00000000-0000-4000-8000-000000000001",
+  id: toSafeId<"contact">("00000000-0000-4000-8000-000000000001"),
   type: "person",
   displayName: "Eva Novak",
   color: null,
@@ -60,6 +61,13 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ContactPicker } = await import("@/components/contact-picker");
 const { Route } = await import("@/routes/_protected.contacts/index");
+const ContactsPage = () => {
+  const Component = Route.options.component;
+  if (!Component) {
+    throw new TypeError("Contacts route must declare a component");
+  }
+  return <Component />;
+};
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { rootKeys } = await import("@/lib/auth-queries");
@@ -121,7 +129,7 @@ const mount = async (picker = false, locale: "en" | "ar" = "en") => {
             onSelect={() => undefined}
           />
         )
-      : Route.options.component,
+      : ContactsPage,
   });
   const appRouter = router.createRouter({
     routeTree: root.addChildren([protectedRoute.addChildren([page])]),
@@ -178,8 +186,10 @@ const typeSearch = async (input: HTMLElement) => {
   await testing.act(async () => {
     jest.advanceTimersByTime(301);
   });
-  testing.act(() => jest.runOnlyPendingTimers());
-  jest.useRealTimers();
+  await testing.act(async () => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
 };
 
 test("contacts filtered search offers recovery and authoritative empty results", async () => {
@@ -304,8 +314,10 @@ test("picker pending read hides creation and only successful absence is empty", 
   await testing.act(async () => {
     jest.advanceTimersByTime(201);
   });
-  testing.act(() => jest.runOnlyPendingTimers());
-  jest.useRealTimers();
+  await testing.act(async () => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
   await testing.waitFor(() =>
     expect(reads.some((url) => url.searchParams.get("q") === "Eva")).toBe(true),
   );

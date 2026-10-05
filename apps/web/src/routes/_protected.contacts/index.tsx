@@ -110,6 +110,8 @@ const ARES_NATIVE_TOOL_SLUG = "ares";
 
 type ContactFilter = "all" | ContactType;
 
+const EMPTY_CONTACTS: ContactItem[] = [];
+
 export const Route = createFileRoute("/_protected/contacts/")({
   loader: async ({ context }) => {
     await ensureRouteInfiniteQueryData(
@@ -647,8 +649,6 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
   );
 };
 
-const EMPTY_CONTACTS: ContactItem[] = [];
-
 type ContactsTableProps = {
   table: ReactTable<ContactTableFeatures, ContactItem>;
   state: QueryView<unknown, unknown>["type"];
@@ -657,7 +657,7 @@ type ContactsTableProps = {
 
 // Shared table render for both the live page and the route pending shell:
 // header, rows, and skeleton all come off the same TanStack column model.
-const ContactsTable = ({ table, state, notice }: ContactsTableProps) => {
+function ContactsTable({ table, state, notice }: ContactsTableProps) {
   const t = useTranslations();
   const rows = table.getRowModel().rows;
 
@@ -678,7 +678,7 @@ const ContactsTable = ({ table, state, notice }: ContactsTableProps) => {
         ))}
       </TableHeader>
       <TableBody>
-        {notice && (
+        {notice !== undefined && (
           <TableRow>
             <TableCell colSpan={table.getAllLeafColumns().length}>
               {notice}
@@ -707,7 +707,7 @@ const ContactsTable = ({ table, state, notice }: ContactsTableProps) => {
       </TableBody>
     </Table>
   );
-};
+}
 
 // Inert toolbar matching the live layout, so the pending shell reserves the
 // same space and the page does not jump when it swaps in.
