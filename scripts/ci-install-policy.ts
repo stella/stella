@@ -3,6 +3,33 @@ import { lexShell } from "./install-free-ci";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+type InstallWorkflowPolicy =
+  | { type: "check"; scope: "windows" | "all" }
+  | { type: "pinned-release"; reason: string };
+
+const WORKFLOW_EXCLUSIONS = {
+  "release-desktop.yml": {
+    type: "pinned-release",
+    reason:
+      "Checks out a pinned release SHA; repository install scripts may not exist there.",
+  },
+} as const satisfies Record<
+  string,
+  Extract<InstallWorkflowPolicy, { type: "pinned-release" }>
+>;
+
+export const installWorkflowPolicy = (file: string): InstallWorkflowPolicy => {
+  const exclusion = Object.entries(WORKFLOW_EXCLUSIONS).find(
+    ([name]) => name === file,
+  );
+  return (
+    exclusion?.[1] ?? {
+      type: "check",
+      scope: file === "ci.yml" ? "all" : "windows",
+    }
+  );
+};
+
 /** Windows workflows and CI's explicit cold installs must share the owner. */
 export const boundedInstallProblems = (
   workflow: unknown,
@@ -40,16 +67,15 @@ export const boundedInstallProblems = (
         if (event.type !== "command" || event.words.at(0) !== "bun") {
           continue;
         }
-        const owner = event.words.find((word) =>
-          word.endsWith("/ci-install.ts"),
-        );
+        const program = event.words.at(1);
+        const owner = program?.endsWith("/ci-install.ts") === true;
         const install = event.words.some((word) =>
           ["install", "i", "ci", "add"].includes(word),
         );
-        if (owner === undefined && install) {
+        if (!owner && install) {
           problems.push(`${name}: install bypasses scripts/ci-install.ts`);
         }
-        if (owner === undefined) {
+        if (!owner) {
           continue;
         }
         const limit = step["timeout-minutes"];

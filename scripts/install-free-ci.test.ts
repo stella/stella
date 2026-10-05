@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { boundedInstallProblems } from "./ci-install-policy";
+import {
+  boundedInstallProblems,
+  installWorkflowPolicy,
+} from "./ci-install-policy";
 import {
   conditionOperands,
   impliesCondition,
@@ -35,9 +38,22 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
     const workflow: unknown = Bun.YAML.parse(
       readFileSync(path.join(REPO_ROOT, ".github/workflows", file), "utf-8"),
     );
-    expect(
-      boundedInstallProblems(workflow, file === "ci.yml" ? "all" : "windows"),
-    ).toEqual([]);
+    const policy = installWorkflowPolicy(file);
+    switch (policy.type) {
+      case "check": {
+        expect(boundedInstallProblems(workflow, policy.scope), file).toEqual(
+          [],
+        );
+        break;
+      }
+      case "pinned-release": {
+        expect(policy.reason).toContain("pinned release SHA");
+        break;
+      }
+      default: {
+        policy satisfies never;
+      }
+    }
   }
 });
 
@@ -74,6 +90,14 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   expect(boundedInstallProblems(workflow([install]), "windows")).toContain(
     "smoke: install needs a retained failure log",
   );
+  const policy = installWorkflowPolicy("new-windows-smoke.yml");
+  expect(policy.type).toBe("check");
+  if (policy.type !== "check") {
+    throw new Error("A new CI workflow must not inherit a release exclusion");
+  }
+  expect(
+    boundedInstallProblems(workflow([{ run: "bun install" }]), policy.scope),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
 });
 
 /** Install-free commands allowed to fetch a package to run it, with why. */
