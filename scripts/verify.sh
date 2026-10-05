@@ -383,7 +383,7 @@ run_step "Marketing recording verification self-test" bun test \
   scripts/check-marketing-recordings.test.ts
 run_step "Environment tooling self-test" bun test scripts/env-tool.test.ts
 run_step "Migration identity self-test" bun test scripts/check-migration-order.test.ts
-run_step "Merge-bar gate self-test" bun test scripts/merge-bar.test.ts
+run_step "Merge-bar gate self-test" bun test scripts/merge-bar.test.ts scripts/merge-bar-freshness.test.ts scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
 run_step "Desktop Rust change detector self-test" bash \
   scripts/detect-tauri-rust-changes.test.sh
 run_step "Self-host production contract self-test" bun test \
