@@ -54,6 +54,17 @@
       "polish": "Vylepšiť znenie"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
+    "rerunAllPage": "Spustiť všetko znova (táto stránka)",
+    "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
+    "runColumnPage": "Spustiť stĺpec (táto stránka)",
+    "runPageRows": "Spustiť pre {count, plural, one {# riadok na tejto stránke} few {# riadky na tejto stránke} many {# riadka na tejto stránke} other {# riadkov na tejto stránke}}",
+    "runRemainingPage": "Spustiť zostávajúce (táto stránka)",
+    "runSelectedRows": "Spustiť pre {count, plural, one {# vybraný riadok} few {# vybrané riadky} many {# vybraného riadka} other {# vybraných riadkov}}",
+    "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
+  },
   "appearance": {
     "calendar": "Kalendár",
     "calendarGregorian": "Gregoriánsky",
@@ -6003,7 +6014,6 @@
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
-      "rerunColumn": "Spustiť stĺpec znovu",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuálny súbor",
