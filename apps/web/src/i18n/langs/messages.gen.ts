@@ -5425,6 +5425,7 @@ type Messages = {
         "unknownLocation": "Template location: an address stella cannot verify";
       };
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account";
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";

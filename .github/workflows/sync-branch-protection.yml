@@ -21,7 +21,7 @@ on:
         default: .github/branch-protection/tags-v.json
 
 concurrency:
-  group: sync-branch-protection
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions: {}

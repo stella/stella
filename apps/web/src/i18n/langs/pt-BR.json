@@ -5422,6 +5422,7 @@
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecte o stella desktop à sua conta",
         "action": "Editar no desktop",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
         "authRequiredTitle": "Sua sessão expirou",
