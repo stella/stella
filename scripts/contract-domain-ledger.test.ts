@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { parseContractDomainLedger } from "./contract-domain-ledger.ts";
+import { renameEntries } from "./git-renames.ts";
 import { addedEntries } from "./ledger-membership.ts";
 
 const site = (id: string) => ({
@@ -47,4 +48,13 @@ test("ledger rejects unreasoned, malformed, duplicate and unsorted entries", () 
       "ledger",
     ),
   ).toThrow("sorted and duplicate-free");
+});
+
+test("ledger membership follows a moved file", () => {
+  const moved = "apps/web/src/moved/form.tsx::form::maxLength:200::1";
+  const renames = new Map([
+    ["apps/web/src/form.tsx", "apps/web/src/moved/form.tsx"],
+  ]);
+  expect(addedEntries([moved], renameEntries([first], renames))).toEqual([]);
+  expect(addedEntries([first], renameEntries([first], new Map()))).toEqual([]);
 });
