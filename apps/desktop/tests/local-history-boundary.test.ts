@@ -45,10 +45,11 @@ const capabilities = async () => {
 
 const tauriConfig = async () => {
   const config = parseJson(await readNative("tauri.conf.json"));
-  if (!isRecord(config) || !isRecord(config.app)) {
+  const app = isRecord(config) ? config["app"] : undefined;
+  if (!isRecord(config) || !isRecord(app)) {
     throw new TypeError("Invalid tauri.conf.json");
   }
-  return { app: config.app, plugins: config.plugins };
+  return { app, plugins: config["plugins"] };
 };
 
 const cspDirectives = (csp: string) =>
@@ -77,7 +78,9 @@ describe("clipboard history stays in the app's own windows", () => {
   test("no capability is granted to a remote origin", async () => {
     for (const { capability, file } of await capabilities()) {
       expect(capability, file).not.toHaveProperty("remote");
-      expect(stringArray(capability.windows, file).length).toBeGreaterThan(0);
+      expect(stringArray(capability["windows"], file).length).toBeGreaterThan(
+        0,
+      );
       expect(capability, file).not.toHaveProperty("webviews");
     }
   });
@@ -85,7 +88,7 @@ describe("clipboard history stays in the app's own windows", () => {
   test("clipboard commands are granted only to the clipboard windows", async () => {
     let grants = 0;
     for (const { capability, file } of await capabilities()) {
-      const permissions = stringArray(capability.permissions, file);
+      const permissions = stringArray(capability["permissions"], file);
       const history = permissions.filter((permission) =>
         permission.startsWith(HISTORY_COMMAND_PREFIX),
       );
@@ -93,7 +96,7 @@ describe("clipboard history stays in the app's own windows", () => {
         continue;
       }
       grants += history.length;
-      for (const window of stringArray(capability.windows, file)) {
+      for (const window of stringArray(capability["windows"], file)) {
         expect(HISTORY_WINDOWS, file).toContain(window);
       }
     }
@@ -104,7 +107,7 @@ describe("clipboard history stays in the app's own windows", () => {
     const manifest = await readNative("src/command_manifest.rs");
     const manifestCommands = [
       ...manifest.matchAll(/clipboard_commands::(\w+) =>/gu),
-    ].map((match) => match[1]);
+    ].flatMap((match) => (match[1] ? [match[1]] : []));
     const commands = commandFunctions(
       await readNative("src/clipboard_commands.rs"),
     );
@@ -171,17 +174,19 @@ describe("clipboard history stays in the app's own windows", () => {
 
   test("the app config declares no window, global API or CSP relaxation", async () => {
     const { app } = await tauriConfig();
-    expect(app.windows).toEqual([]);
-    expect(app.withGlobalTauri).toBe(false);
-    if (!isRecord(app.security)) {
+    expect(app["windows"]).toEqual([]);
+    expect(app["withGlobalTauri"]).toBe(false);
+    const security = app["security"];
+    if (!isRecord(security)) {
       throw new TypeError("app.security is required");
     }
-    expect(Object.keys(app.security).toSorted()).toEqual(["csp"]);
-    if (typeof app.security.csp !== "string") {
+    expect(Object.keys(security).toSorted()).toEqual(["csp"]);
+    const csp = security["csp"];
+    if (typeof csp !== "string") {
       throw new TypeError("app.security.csp must be a string");
     }
 
-    const directives = cspDirectives(app.security.csp);
+    const directives = cspDirectives(csp);
     expect(effectiveSources(directives, "script-src")).toEqual(["'self'"]);
     for (const directive of [
       "connect-src",
@@ -211,16 +216,14 @@ describe("clipboard history stays in the app's own windows", () => {
 
   test("updates install only when signed by the pinned key over https", async () => {
     const { plugins } = await tauriConfig();
-    if (!isRecord(plugins) || !isRecord(plugins.updater)) {
+    const updater = isRecord(plugins) ? plugins["updater"] : undefined;
+    if (!isRecord(updater)) {
       throw new TypeError("plugins.updater is required");
     }
-    expect(Object.keys(plugins.updater).toSorted()).toEqual([
-      "endpoints",
-      "pubkey",
-    ]);
-    expect(typeof plugins.updater.pubkey).toBe("string");
-    expect(String(plugins.updater.pubkey).length).toBeGreaterThan(0);
-    const endpoints = stringArray(plugins.updater.endpoints, "endpoints");
+    expect(Object.keys(updater).toSorted()).toEqual(["endpoints", "pubkey"]);
+    expect(typeof updater["pubkey"]).toBe("string");
+    expect(String(updater["pubkey"]).length).toBeGreaterThan(0);
+    const endpoints = stringArray(updater["endpoints"], "endpoints");
     expect(endpoints.length).toBeGreaterThan(0);
     for (const endpoint of endpoints) {
       expect(new URL(endpoint).protocol).toBe("https:");
