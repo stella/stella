@@ -28,6 +28,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
   DESIGN_LINT_BACKLOG_RULES,
@@ -110,7 +112,7 @@ export const emptyBacklog = (): DesignLintBacklog => ({
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>
   Object.fromEntries(
     Object.entries(counts).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareCodeUnit(left, right),
     ),
   );
 

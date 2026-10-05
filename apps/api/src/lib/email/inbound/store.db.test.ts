@@ -92,6 +92,7 @@ const candidate = (sender: string): Candidate => {
       references: [],
       bodyText: "Test body",
       bodyHtml: null,
+      source: "delivery",
       intake: "direct",
       originalSignature: null,
       authenticatedSender: {

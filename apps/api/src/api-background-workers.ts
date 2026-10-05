@@ -6,6 +6,7 @@ import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
+import { initUploadedMailCorrespondenceWorker } from "@/api/lib/email/inbound/upload-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
@@ -33,5 +34,6 @@ export const initApiBackgroundWorkers = () =>
     initListVerificationRunWorker,
     initReportExportWorker,
     initStyleSetPackageCleanupWorker,
+    initUploadedMailCorrespondenceWorker,
     initWorkflowWorkers,
   ]);

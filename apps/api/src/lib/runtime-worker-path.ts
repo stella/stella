@@ -16,6 +16,7 @@ export const RUNTIME_WORKER_FILES = {
   ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
   pdf: "pdf-worker.js",
+  sanctionsMatcher: "sanctions-matcher-worker.js",
 } as const;
 
 export type RuntimeWorkerFile =
