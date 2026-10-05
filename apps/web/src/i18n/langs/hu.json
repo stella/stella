@@ -5459,8 +5459,7 @@
         "signCurrent": "Aláírás a stella desktoppal",
         "signNone": "Töltse le a stella desktopot a PDF aláírásához",
         "signOutdated": "Frissítse a stella desktopot az aláíráshoz",
-        "signReason": "Az aláírás a számítógépén lévő tanúsítványt használja, ezért a stella desktopban történik.",
-        "signShort": "Aláírás"
+        "signReason": "Az aláírás a számítógépén lévő tanúsítványt használja, ezért a stella desktopban történik."
       },
       "downloadAs": "Letöltés másként…",
       "downloadAsZip": ".zip fájl letöltése",

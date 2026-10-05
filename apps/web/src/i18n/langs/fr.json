@@ -5459,8 +5459,7 @@
         "signCurrent": "Signer avec stella desktop",
         "signNone": "Téléchargez stella desktop pour signer ce PDF",
         "signOutdated": "Mettez à jour stella desktop pour signer",
-        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
-        "signShort": "Signer"
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop."
       },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",

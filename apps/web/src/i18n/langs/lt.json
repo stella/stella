@@ -5459,8 +5459,7 @@
         "signCurrent": "Pasirašyti su stella desktop",
         "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
         "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
-        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
-        "signShort": "Pasirašyti"
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop."
       },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",

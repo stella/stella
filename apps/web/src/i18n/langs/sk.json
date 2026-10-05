@@ -5459,8 +5459,7 @@
         "signCurrent": "Podpísať v stella desktop",
         "signNone": "Stiahnite si stella desktop a podpíšte toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podpisujte",
-        "signReason": "Podpis používa certifikát vo vašom počítači, preto prebieha v stella desktop.",
-        "signShort": "Podpísať"
+        "signReason": "Podpis používa certifikát vo vašom počítači, preto prebieha v stella desktop."
       },
       "downloadAs": "Stiahnuť ako…",
       "downloadAsZip": "Stiahnuť .zip súbor",

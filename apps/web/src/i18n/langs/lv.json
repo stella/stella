@@ -5459,8 +5459,7 @@
         "signCurrent": "Parakstīt ar stella desktop",
         "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
         "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
-        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
-        "signShort": "Parakstīt"
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop."
       },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",
