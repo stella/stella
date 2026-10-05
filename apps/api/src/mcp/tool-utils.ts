@@ -603,6 +603,7 @@ export const structuredErrorResult = ({
   message,
   retryable,
   contactUrl,
+  upgradeUrl,
 }: {
   code: McpErrorCode;
   hint?: string | undefined;
@@ -610,6 +611,7 @@ export const structuredErrorResult = ({
   message: string;
   retryable?: boolean | undefined;
   contactUrl?: string | undefined;
+  upgradeUrl?: string | undefined;
 }): InternalToolErrorResult => {
   const error: {
     type: "structured";
@@ -619,6 +621,7 @@ export const structuredErrorResult = ({
     issues?: readonly McpValidationIssue[];
     retryable?: boolean;
     contactUrl?: string;
+    upgradeUrl?: string;
     requestId?: string;
   } = { type: "structured", code, message };
   if (hint !== undefined) {
@@ -632,6 +635,9 @@ export const structuredErrorResult = ({
   }
   if (contactUrl !== undefined) {
     error.contactUrl = contactUrl;
+  }
+  if (upgradeUrl !== undefined) {
+    error.upgradeUrl = upgradeUrl;
   }
   const requestId = getCurrentRequestId();
   if (requestId !== undefined) {

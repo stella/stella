@@ -585,6 +585,7 @@ type SafeErrorBody = {
   hint?: string;
   clause?: HandlerError["clause"];
   contactUrl?: string;
+  upgradeUrl?: string;
   retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
@@ -1693,6 +1694,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.hint ? { hint: error.hint } : {}),
   ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
+  ...(error.upgradeUrl ? { upgradeUrl: error.upgradeUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the

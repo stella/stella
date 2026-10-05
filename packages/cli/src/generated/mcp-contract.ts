@@ -46,6 +46,8 @@ export const MCP_ERROR_CODES = [
   "action_concurrency_busy",
   "action_not_enabled",
   "action_admission_unavailable",
+  "organization_member_capacity_reached",
+  "organization_storage_capacity_reached",
   "validation_error",
   "result_too_large",
   "missing_scope",

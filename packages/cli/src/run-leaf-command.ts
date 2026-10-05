@@ -587,6 +587,7 @@ type ErrorEnvelope = {
   issues: readonly ErrorIssue[];
   retryable?: boolean;
   contactUrl?: string;
+  upgradeUrl?: string;
   requestId: string | undefined;
 };
 
@@ -645,6 +646,9 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     requestId: parseRequestId(error["requestId"]),
     ...(typeof error["retryable"] === "boolean"
       ? { retryable: error["retryable"] }
+      : {}),
+    ...(typeof error["upgradeUrl"] === "string"
+      ? { upgradeUrl: error["upgradeUrl"] }
       : {}),
     ...(typeof error["contactUrl"] === "string"
       ? { contactUrl: error["contactUrl"] }
@@ -1081,6 +1085,7 @@ export const toolErrorLines = (
     code?: string;
     retryable?: boolean;
     contactUrl?: string;
+    upgradeUrl?: string;
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
   },

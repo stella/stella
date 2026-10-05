@@ -210,7 +210,9 @@ export const ChatThreadPage = ({
   });
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:
-      usageEntitlementData?.entitlement?.source === "hosted",
+      usageEntitlementData !== undefined &&
+      "entitlement" in usageEntitlementData &&
+      usageEntitlementData.entitlement?.source === "hosted",
   });
 
   const {

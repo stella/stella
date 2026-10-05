@@ -10,11 +10,16 @@ import {
 import { assertProperty } from "@stll/property-testing";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   reportExportBodySchema,
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  actionAdmissionRefusal,
+  ActionAdmissionError,
+} from "@/api/lib/errors/action-admission-error";
 import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
 import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
 import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
@@ -728,6 +733,48 @@ describe("the free floor's service budget", () => {
       run: async () => "completed",
     });
 
+  test("free exhaustion exposes an upgrade next step only with the flag on", async () => {
+    const previous = env.FEATURE_FREE_TIER;
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_FREE_TIER = enabled;
+        const redis = countingRedis();
+        for (let call = 0; call < FREE_ACTIONS; call += 1) {
+          await admitOnFree({
+            actionKind: "mcp.services/call",
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+            redis,
+          });
+        }
+        const result = await admitOnFree({
+          actionKind: "mcp.services/call",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis,
+        });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(ActionAdmissionError.is(result.error)).toBe(true);
+          if (ActionAdmissionError.is(result.error)) {
+            const refusal = actionAdmissionRefusal(result.error);
+            if (enabled) {
+              expect(refusal.upgradeUrl).toBe(
+                new URL("/settings/organization/billing", env.FRONTEND_URL)
+                  .href,
+              );
+              expect(refusal.hint).toBe(
+                "Upgrade the organization's plan, then retry",
+              );
+            } else {
+              expect(refusal).not.toHaveProperty("upgradeUrl");
+            }
+          }
+        }
+      }
+    } finally {
+      env.FEATURE_FREE_TIER = previous;
+    }
+  });
+
   test("a chat send on the organization's own key is admitted past the free budget", async () => {
     const redis = countingRedis();
     for (let send = 0; send < FREE_ACTIONS + 5; send += 1) {
@@ -766,7 +813,9 @@ describe("the free floor's service budget", () => {
       redis.commands
         .filter((args) => args.at(1) === "3")
         .map((args) => args.at(11)),
-    ).toEqual(Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)));
+    ).toEqual(
+      Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)),
+    );
   });
 
   test("managed services stay counted on the organization's own key", async () => {

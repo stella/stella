@@ -19,6 +19,8 @@
 import { Result } from "better-result";
 import { and, count, eq, gt, ne, sql } from "drizzle-orm";
 
+import { ORGANIZATION_CAPACITY_CODES } from "@stll/api-contract/organization-capacity";
+
 import { invitation, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -32,7 +34,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const MEMBER_CAPACITY_REACHED_ERROR_CODE =
-  "organization_member_capacity_reached";
+  ORGANIZATION_CAPACITY_CODES.memberCapacityReached;
 
 const memberCapacityReachedError = () =>
   new HandlerError({

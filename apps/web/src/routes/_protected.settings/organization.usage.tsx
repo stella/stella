@@ -19,7 +19,10 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import type { UsageEntitlement } from "@/lib/usage-queries";
+import type {
+  UsageEntitlement,
+  UsageEntitlementResponse,
+} from "@/lib/usage-queries";
 import { UsagePlansCard } from "@/routes/_protected.settings/-components/organization/usage-plans-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
@@ -52,7 +55,8 @@ function UsageSettingsPage() {
   const { data, isLoading } = useQuery(
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
-  const entitlement = data?.entitlement;
+  const entitlement =
+    data !== undefined && "entitlement" in data ? data.entitlement : undefined;
   const packsPurchasable =
     entitlement?.source === "hosted" &&
     (entitlement.status === "active" || entitlement.status === "trialing");
@@ -63,7 +67,7 @@ function UsageSettingsPage() {
         description={t("settings.organization.usageDescription")}
         title={t("settings.organization.usage")}
       />
-      <UsageBody data={data?.entitlement ? data : null} isLoading={isLoading} />
+      <UsageBody data={data} isLoading={isLoading} />
       {env.VITE_FEATURE_USAGE && (
         <div className="mt-6 space-y-6">
           <UsagePlansCard packsPurchasable={packsPurchasable} />
@@ -77,16 +81,48 @@ function UsageBody({
   data,
   isLoading,
 }: {
-  data: UsageEntitlement | null;
+  data: UsageEntitlementResponse | undefined;
   isLoading: boolean;
 }) {
   if (isLoading) {
     return <EntitlementCardSkeleton />;
   }
-  if (data) {
+  if (data && "plan" in data) {
+    return <PlanCard plan={data.plan} />;
+  }
+  if (data?.entitlement) {
     return <ActiveEntitlementCard data={data} />;
   }
   return <EmptyStateCard />;
+}
+
+const PLAN_LABEL_KEYS = {
+  paid: "settings.organization.usagePlanPaid",
+  evaluation: "settings.organization.usagePlanEvaluation",
+  free: "settings.organization.usagePlanFree",
+  self_managed_keys: "settings.organization.usagePlanSelfManaged",
+} as const satisfies Record<
+  Extract<UsageEntitlementResponse, { plan: unknown }>["plan"]["type"],
+  TranslationKey
+>;
+
+function PlanCard({
+  plan,
+}: {
+  plan: Extract<UsageEntitlementResponse, { plan: unknown }>["plan"];
+}) {
+  const t = useTranslations();
+  return (
+    <Frame>
+      <FramePanel>
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-lg font-medium">
+            {t(PLAN_LABEL_KEYS[plan.type])}
+          </h2>
+        </div>
+      </FramePanel>
+    </Frame>
+  );
 }
 
 // Mirrors ActiveEntitlementCard: title + meta row with a trailing action,

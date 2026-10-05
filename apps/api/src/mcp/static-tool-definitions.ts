@@ -1,7 +1,10 @@
 import type { McpDefaultResourceScope } from "@stll/api-contract";
 
 import { unreachable } from "@/api/lib/errors/tagged-errors";
-import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
+import {
+  BILLING_TOOL_SET,
+  getUsageOutputContract,
+} from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
@@ -422,8 +425,11 @@ export const getStaticMcpToolOutputContract = (
   toolName: string,
   mode: McpMode = "default",
 ) =>
-  (mode === "law" ? MCP_TOOL_OUTPUT_CONTRACTS.law.get(toolName) : undefined) ??
-  MCP_TOOL_OUTPUT_CONTRACTS.default.get(toolName);
+  toolName === "get_usage"
+    ? getUsageOutputContract()
+    : ((mode === "law"
+        ? MCP_TOOL_OUTPUT_CONTRACTS.law.get(toolName)
+        : undefined) ?? MCP_TOOL_OUTPUT_CONTRACTS.default.get(toolName));
 
 export const getStaticMcpToolHandler = (
   toolName: string,

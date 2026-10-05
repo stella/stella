@@ -15,6 +15,7 @@ export type CliActionAdmissionRefusal = {
   hint: string;
   retryable: boolean;
   contactUrl?: string;
+  upgradeUrl?: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -44,6 +45,9 @@ export const readCliActionAdmissionRefusal = (
       typeof body["retryable"] === "boolean"
         ? body["retryable"]
         : metadata.retryable,
+    ...(typeof body["upgradeUrl"] === "string"
+      ? { upgradeUrl: body["upgradeUrl"] }
+      : {}),
     ...(typeof body["contactUrl"] === "string"
       ? { contactUrl: body["contactUrl"] }
       : {}),
@@ -68,6 +72,9 @@ export const actionAdmissionRefusalLines = (
   `code: ${refusal.code}`,
   `retryable: ${refusal.retryable}`,
   `hint: ${refusal.hint}`,
+  ...(refusal.upgradeUrl === undefined
+    ? []
+    : [`upgrade: ${refusal.upgradeUrl}`]),
   ...(refusal.contactUrl === undefined
     ? []
     : [`contact: ${refusal.contactUrl}`]),

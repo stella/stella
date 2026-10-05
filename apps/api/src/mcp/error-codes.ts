@@ -1,4 +1,5 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { ORGANIZATION_CAPACITY_CODES } from "@stll/api-contract/organization-capacity";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -12,6 +13,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
+  ...Object.values(ORGANIZATION_CAPACITY_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -114,6 +116,7 @@ type McpRefusalOptions = {
   issues?: unknown;
   hint?: string | undefined;
   retryable?: boolean | undefined;
+  upgradeUrl?: string | undefined;
 };
 
 /** A refusal ready for the structured envelope; absent fields are omitted. */
@@ -123,6 +126,7 @@ export type McpRefusal = {
   issues: McpValidationIssue[];
   hint?: string;
   retryable?: boolean;
+  upgradeUrl?: string;
 };
 
 /** Transport classifications stay closed; handler domain codes identify issues. */
@@ -133,6 +137,7 @@ export const projectMcpRefusal = ({
   issues,
   hint,
   retryable,
+  upgradeUrl,
 }: McpRefusalOptions): McpRefusal => {
   const detailedIssues = isUnknownArray(issues)
     ? issues.flatMap((issue) => {
@@ -163,5 +168,6 @@ export const projectMcpRefusal = ({
         : detailedIssues,
     ...(hint === undefined ? {} : { hint }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(upgradeUrl === undefined ? {} : { upgradeUrl }),
   };
 };

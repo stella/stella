@@ -31,6 +31,7 @@ import {
   LEGISLATION_SEARCH_MATCH_TYPES,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
+import { usagePlanSchema } from "@stll/api-contract/usage-plan";
 import {
   CZ_INSOLVENCY_MATCH_BASES,
   CZ_INSOLVENCY_PHASES,
@@ -1426,9 +1427,18 @@ export const GET_USAGE_ENTITLED_PROJECTION = v.strictObject({
   remainingUsageUnits: v.number(),
 });
 
-export const GET_USAGE_PROJECTION = v.union([
+export const GET_USAGE_ENTITLEMENT_PROJECTION = v.union([
   projectionBranch(GET_USAGE_NO_PLAN_PROJECTION),
   projectionBranch(GET_USAGE_ENTITLED_PROJECTION),
+]);
+
+export const GET_USAGE_PLAN_PROJECTION = v.strictObject({
+  plan: v.variant("type", usagePlanSchema.options.map(projectionBranch)),
+});
+
+export const GET_USAGE_PROJECTION = v.union([
+  projectionBranch(GET_USAGE_ENTITLEMENT_PROJECTION),
+  projectionBranch(GET_USAGE_PLAN_PROJECTION),
 ]);
 
 /**

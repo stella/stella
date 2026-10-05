@@ -23,6 +23,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
   GET_USAGE_PROJECTION,
+  GET_USAGE_ENTITLEMENT_PROJECTION,
+  GET_USAGE_PLAN_PROJECTION,
   type LIST_INVOICES_DETAIL_PROJECTION,
   type LIST_INVOICES_LIST_PROJECTION,
   LIST_INVOICES_PROJECTION,
@@ -33,6 +35,7 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -1489,11 +1492,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
     return internalFailureResult(entitlement.error);
   }
 
-  // Passthrough: plan/seat/period/remaining-units are organization billing
-  // data, not tenant-authored text.
-  // The two payload branches are tied to GET_USAGE_NO_PLAN_PROJECTION /
-  // GET_USAGE_ENTITLED_PROJECTION where they are built
-  // (`readOrgEntitlementHandler`, handlers/usage/entitlement/get.ts).
+  // The shared response contains organization billing data.
   return toolDataResult(entitlement.value);
 };
 
@@ -1674,9 +1673,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read the organization's current usage entitlement: plan, seats, billing " +
-      "period, and how many usage units (AI credits) remain this period. " +
-      "Returns { entitlement: null } when the organization has no active plan. " +
+      "Read the organization's current plan and usage information. " +
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
@@ -1717,3 +1714,13 @@ export const BILLING_TOOL_SET = defineMcpToolSet(
     ),
   },
 );
+
+const USAGE_OUTPUT_CONTRACTS = {
+  legacy: defineChatProjectionMcpToolOutput(GET_USAGE_ENTITLEMENT_PROJECTION),
+  plan: defineChatProjectionMcpToolOutput(GET_USAGE_PLAN_PROJECTION),
+};
+
+export const getUsageOutputContract = () =>
+  isDeploymentFeatureEnabled("FEATURE_FREE_TIER")
+    ? USAGE_OUTPUT_CONTRACTS.plan
+    : USAGE_OUTPUT_CONTRACTS.legacy;

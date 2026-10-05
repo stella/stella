@@ -1,6 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 import { asc, eq, sql } from "drizzle-orm";
 
+import { ORGANIZATION_CAPACITY_CODES } from "@stll/api-contract/organization-capacity";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -29,14 +30,17 @@ type OrganizationFileUsageErrorProps = {
   cause?: unknown;
 };
 
-export class OrganizationFileUsageError extends HandlerError<409 | 503> {
+export class OrganizationFileUsageError extends HandlerError<409 | 413 | 503> {
   readonly reason: OrganizationFileUsageErrorProps["reason"];
 
   constructor({ message, reason, cause }: OrganizationFileUsageErrorProps) {
     super({
       message,
-      status: reason === "storage_unavailable" ? 503 : 409,
-      code: `FILE_USAGE_${reason.toUpperCase()}`,
+      status: organizationFileUsageResponseStatus(reason),
+      code:
+        reason === "capacity_exceeded"
+          ? ORGANIZATION_CAPACITY_CODES.storageFull
+          : `FILE_USAGE_${reason.toUpperCase()}`,
       cause,
     });
     this.name = "OrganizationFileUsageError";
@@ -67,6 +71,7 @@ export const organizationFileUsageHandlerError = (
 ): HandlerError<409 | 413 | 503> =>
   new HandlerError({
     status: organizationFileUsageResponseStatus(error.reason),
+    code: error.code,
     message: error.message,
     cause: error,
   });

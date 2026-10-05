@@ -8,7 +8,7 @@ import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-er
 
 import {
   actionAdmissionRefusal,
-  type ActionAdmissionError,
+  ActionAdmissionError,
 } from "./action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
@@ -129,4 +129,18 @@ test("unavailable wrapper causes leave the generic boundary outcome intact", () 
     },
   });
   expect(resolveHandlerError(error)).toBeNull();
+});
+
+test("upgrade recovery survives handler wrappers", () => {
+  const error = new ActionAdmissionError({
+    reason: "period_exhausted",
+    message: "Action paused",
+    upgradeUrl: "https://example.test/settings/organization/billing",
+  });
+  const refusal = resolveHandlerError(error);
+  expect(refusal).toMatchObject({
+    status: 403,
+    upgradeUrl: error.upgradeUrl,
+    hint: "Upgrade the organization's plan, then retry",
+  });
 });

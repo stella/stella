@@ -5,6 +5,8 @@ import type { BYOKProvider } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import type { OrganizationAccess } from "@/api/lib/usage/organization-access";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -462,5 +464,90 @@ describe("resolveEffectiveChatModelSelection", () => {
       modelId: "openai::gpt-5.4",
       reasoningEffort: undefined,
     });
+  });
+});
+
+const ACCESS_CASES = {
+  paid: { type: "paid", deadline: new Date(), serviceActionsPerPeriod: 3 },
+  evaluation: { type: "evaluation", endsAt: new Date() },
+  free: { type: "free", serviceActionsPerPeriod: 3 },
+  self_managed_keys: { type: "self_managed_keys" },
+  ended: { type: "ended" },
+  unavailable: { type: "unavailable" },
+} as const satisfies Record<OrganizationAccess["type"], OrganizationAccess>;
+
+describe("model discovery follows the organization's resolved access", () => {
+  test("every standing exposes executable managed selections and defaults", () => {
+    const previous = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
+    };
+    Object.assign(env, {
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_API_KEY: "test-openrouter-instance-key",
+      USE_MOCK_AI: false,
+      REQUIRE_PERSONAL_AI_KEY: false,
+    });
+    try {
+      const all = getConfiguredChatModelOptions(null);
+      const fast = getTanStackTextModelInfoForRole("fast", null, {
+        dataClass: "customer",
+        organizationId: null,
+      });
+      const fastValue = encodeChatModelSelection(fast);
+      for (const access of Object.values(ACCESS_CASES)) {
+        const options = getConfiguredChatModelOptions(null, access);
+        const benchmarks = getChatModelBenchmarkOptions(null, access);
+        const defaultValue = getDefaultChatModelValue({
+          orgAIConfig: null,
+          organizationId: null,
+          access,
+        });
+        switch (access.type) {
+          case "paid":
+          case "evaluation":
+            expect(options).toEqual(all);
+            expect(defaultValue).toBe(
+              getDefaultChatModelValue({
+                orgAIConfig: null,
+                organizationId: null,
+              }),
+            );
+            break;
+          case "free":
+            expect(options.map(({ value }) => value)).toEqual([fastValue]);
+            expect(defaultValue).toBe(fastValue);
+            expect(benchmarks.map(({ value }) => value)).toEqual([fastValue]);
+            break;
+          case "self_managed_keys":
+          case "ended":
+          case "unavailable":
+            expect(options).toEqual([]);
+            expect(benchmarks).toEqual([]);
+            expect(defaultValue).toBeNull();
+            break;
+          default:
+            access satisfies never;
+        }
+      }
+    } finally {
+      Object.assign(env, previous);
+    }
+  });
+
+  test("own-key selections stay available for every standing", () => {
+    const orgAIConfig = orgConfigForProviders(["openai", "anthropic"]);
+    const all = getConfiguredChatModelOptions(orgAIConfig);
+    for (const access of Object.values(ACCESS_CASES)) {
+      expect(getConfiguredChatModelOptions(orgAIConfig, access)).toEqual(all);
+      expect(getChatModelBenchmarkOptions(orgAIConfig, access)).toEqual(
+        getChatModelBenchmarkOptions(orgAIConfig),
+      );
+      expect(
+        getDefaultChatModelValue({ orgAIConfig, organizationId: null, access }),
+      ).toBe(getDefaultChatModelValue({ orgAIConfig, organizationId: null }));
+    }
   });
 });

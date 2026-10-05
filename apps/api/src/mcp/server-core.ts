@@ -732,6 +732,7 @@ const boundMcpToolResult = async ({
       message: refusal.message,
       hint: refusal.hint,
       contactUrl: refusal.contactUrl,
+      upgradeUrl: refusal.upgradeUrl,
       retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
     });
   }
@@ -993,6 +994,7 @@ export const createMcpHttpRequestHandler = ({
           message: refusal.message,
           hint: refusal.hint,
           contactUrl: refusal.contactUrl,
+          upgradeUrl: refusal.upgradeUrl,
           retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
         });
       }

@@ -51,4 +51,8 @@ export type ActionAdmissionRefusal = {
   hint: string;
   retryable: boolean;
   contactUrl?: string;
+  upgradeUrl?: string;
 };
+
+export const ORGANIZATION_UPGRADE_HINT =
+  "Upgrade the organization's plan, then retry";

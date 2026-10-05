@@ -16,6 +16,12 @@ import {
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
 } from "@/api/lib/chat-model-selection";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  readFreeTier,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
+import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
 const config = {
   // Any org member picking a chat model needs to see the catalog; the
@@ -28,15 +34,31 @@ const config = {
 
 const getModelOptions = createSafeRootHandler(
   config,
-  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
-  async function* ({ orgAIConfig, session }) {
+  async function* ({ orgAIConfig, session, safeDb }) {
+    const access = isDeploymentFeatureEnabled("FEATURE_FREE_TIER")
+      ? yield* Result.await(
+          safeDb(async (tx) => {
+            const snapshot = await readOrganizationAccessSnapshot(
+              tx,
+              session.activeOrganizationId,
+            );
+            const freeTier = await readFreeTier(tx);
+            return resolveOrganizationAccess({
+              snapshot,
+              freeTier,
+              now: new Date(),
+            });
+          }),
+        )
+      : undefined;
     return Result.ok({
-      options: getConfiguredChatModelOptions(orgAIConfig),
+      options: getConfiguredChatModelOptions(orgAIConfig, access),
       defaultValue: getDefaultChatModelValue({
         orgAIConfig,
+        access,
         organizationId: session.activeOrganizationId,
       }),
-      benchmarkOptions: getChatModelBenchmarkOptions(orgAIConfig),
+      benchmarkOptions: getChatModelBenchmarkOptions(orgAIConfig, access),
       benchmarkMetadata: {
         benchmarkName: MODEL_BENCHMARK_NAME,
         licence: MODEL_BENCHMARK_LICENCE,

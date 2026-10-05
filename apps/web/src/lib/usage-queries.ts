@@ -20,13 +20,13 @@ const usageEntitlementKeys = {
 type UsageEntitlementOptionsInput = QueryOptionsInput<UsageEntitlementKey>;
 
 /** The org's usage entitlement state; `{ entitlement: null }` when absent. */
-type UsageEntitlementResponse = NonNullable<
+export type UsageEntitlementResponse = NonNullable<
   Awaited<ReturnType<typeof api.usage.entitlement.get>>["data"]
 >;
 
-export type UsageEntitlement = Exclude<
+export type UsageEntitlement = Extract<
   UsageEntitlementResponse,
-  { entitlement: null }
+  { entitlement: { id: string } }
 >;
 
 const fetchUsageEntitlement = async ({

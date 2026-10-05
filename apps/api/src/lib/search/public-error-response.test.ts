@@ -37,6 +37,7 @@ const unboundedError = (value: string) => ({
   code: value,
   hint: value,
   contactUrl: value,
+  upgradeUrl: value,
   retryable: true,
   country: value,
   status: value,

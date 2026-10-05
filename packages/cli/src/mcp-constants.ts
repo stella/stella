@@ -92,6 +92,8 @@ export const exitCodeEntries = (): readonly ExitCodeEntry[] => {
  * protocol revision guarantees an exact error-code set.
  */
 const MCP_ERROR_CODE_EXIT_MAP = {
+  organization_member_capacity_reached: EXIT_CODES.conflict,
+  organization_storage_capacity_reached: EXIT_CODES.usageLimited,
   action_period_exhausted: EXIT_CODES.usageLimited,
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,

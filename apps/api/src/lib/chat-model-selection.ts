@@ -50,6 +50,7 @@ import {
   hasTanStackInstanceProvider,
   isAllowedBYOKModelForRole,
 } from "@/api/lib/tanstack-ai-models";
+import type { OrganizationAccess } from "@/api/lib/usage/organization-access";
 
 const CHAT_MODEL_ROLE: ModelRole = "chat";
 
@@ -229,8 +230,48 @@ const hasResolvableModelForRole = ({
  */
 export const getConfiguredChatModelOptions = (
   orgAIConfig: OrgAIConfig | null,
-): BYOKChatModelOption[] =>
-  configuredChatProviders(orgAIConfig).flatMap(chatModelOptionsForProvider);
+  access?: OrganizationAccess,
+): BYOKChatModelOption[] => {
+  const options = configuredChatProviders(orgAIConfig).flatMap(
+    chatModelOptionsForProvider,
+  );
+  const allowed = managedChatModelValues(orgAIConfig, access);
+  return allowed === undefined
+    ? options
+    : options.filter(({ value }) => allowed.has(value));
+};
+
+/** Managed discovery uses the same fast-role resolution as dispatch. */
+const managedChatModelValues = (
+  orgAIConfig: OrgAIConfig | null,
+  access: OrganizationAccess | undefined,
+): ReadonlySet<string> | undefined => {
+  if (orgAIConfig !== null || access === undefined) {
+    return undefined;
+  }
+  switch (access.type) {
+    case "paid":
+    case "evaluation":
+      return undefined;
+    case "free": {
+      if (!hasTanStackInstanceProvider()) {
+        return new Set<string>();
+      }
+      const info = getTanStackTextModelInfoForRole("fast", null, {
+        dataClass: "customer",
+        organizationId: null,
+      });
+      return new Set([encodeChatModelSelection(info)]);
+    }
+    case "self_managed_keys":
+    case "ended":
+    case "unavailable":
+      return new Set<string>();
+    default:
+      access satisfies never;
+      return panic("Unhandled organization access");
+  }
+};
 
 type BenchmarkRouteOption = BYOKChatModelOption & {
   availability: ModelBenchmarkAvailability;
@@ -253,6 +294,7 @@ export type ChatModelBenchmarkOption =
  */
 export const getChatModelBenchmarkOptions = (
   orgAIConfig: OrgAIConfig | null,
+  access?: OrganizationAccess,
 ): ChatModelBenchmarkOption[] => {
   const configuredProviders = new Set(configuredChatProviders(orgAIConfig));
   const routes: BenchmarkRouteOption[] = [];
@@ -275,7 +317,12 @@ export const getChatModelBenchmarkOptions = (
       routes.push({ ...option, ...benchmark });
     }
   }
-  return classifyBenchmarkModelOptions(routes);
+  const allowed = managedChatModelValues(orgAIConfig, access);
+  return classifyBenchmarkModelOptions(
+    allowed === undefined
+      ? routes
+      : routes.filter(({ value }) => allowed.has(value)),
+  );
 };
 
 /**
@@ -283,18 +330,28 @@ export const getChatModelBenchmarkOptions = (
  * `null` when the chat role has no usable configured provider or model.
  * Unexpected resolver failures propagate to the handler boundary.
  */
+type DefaultChatModelValueOptions = {
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization"> | null;
+  access?: OrganizationAccess;
+};
+
 export const getDefaultChatModelValue = ({
   orgAIConfig,
   organizationId,
-}: {
-  orgAIConfig: OrgAIConfig | null;
-  organizationId: SafeId<"organization"> | null;
-}): string | null => {
+  access,
+}: DefaultChatModelValueOptions): string | null => {
   if (!hasResolvableModelForRole({ orgAIConfig, role: CHAT_MODEL_ROLE })) {
     return null;
   }
 
-  const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
+  const allowed = managedChatModelValues(orgAIConfig, access);
+  if (allowed !== undefined && allowed.size === 0) {
+    return null;
+  }
+  const role =
+    orgAIConfig === null && access?.type === "free" ? "fast" : CHAT_MODEL_ROLE;
+  const info = getTanStackTextModelInfoForRole(role, orgAIConfig, {
     dataClass: "customer",
     organizationId,
   });

@@ -59,6 +59,7 @@ import {
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
 } from "@/api/lib/usage/organization-action-budget";
+import { organizationUpgradeUrl } from "@/api/lib/usage/upgrade-url";
 
 type RedisCommands = AdmissionRedisClient;
 
@@ -507,6 +508,7 @@ const resolveAdmissionBudget = async ({
   budgetNow,
 }: ResolveAdmissionBudgetOptions) => {
   let serviceDeadlineMs: number | null = null;
+  let upgradeUrl: string | undefined;
   let nowMs = budgetNow();
   let resolvedPeriodPolicy = periodPolicy;
   let periodScope: ActionPeriodScope = PER_KIND_PERIOD_SCOPE;
@@ -557,6 +559,9 @@ const resolveAdmissionBudget = async ({
         now: new Date(nowMs),
         freeTier: state.value.freeTier,
       });
+      if (access.type === "free") {
+        upgradeUrl = organizationUpgradeUrl();
+      }
       consumesServices = actionDrawsServiceBudget({
         access,
         serviceCredentials:
@@ -613,7 +618,7 @@ const resolveAdmissionBudget = async ({
           cause: error,
         }),
     ),
-    (budget) => ({ budget, serviceDeadlineMs }),
+    (budget) => ({ budget, serviceDeadlineMs, upgradeUrl }),
   );
 };
 
@@ -623,7 +628,10 @@ const configuredServiceBudgets = () => ({
   selfManagedActions: env.SERVICE_ACTIONS_SELF_MANAGED_ACTIONS,
 });
 
-const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
+const acquisitionRefusal = (
+  reply: unknown,
+  upgradeUrl?: string,
+): ActionAdmissionError | null => {
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
@@ -637,6 +645,7 @@ const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
           ? "Action period limit reached"
           : "Concurrent action limit reached",
       reason: reply === -1 ? "period_exhausted" : "busy",
+      ...(reply === -1 && upgradeUrl !== undefined ? { upgradeUrl } : {}),
     });
   }
   if (reply !== 1) {
@@ -779,7 +788,7 @@ const createPeriodReservationScope = ({
     if (Result.isError(reply)) {
       return reply;
     }
-    const refusal = acquisitionRefusal(reply.value);
+    const refusal = acquisitionRefusal(reply.value, resolved.value.upgradeUrl);
     return refusal === null ? Result.ok(undefined) : Result.err(refusal);
   };
   let reservation:
@@ -944,7 +953,11 @@ const resolveExecutionBudget = async ({
   organizationBudgetOptions,
 }: ResolveExecutionBudgetOptions) => {
   if (mode === "concurrency-only" || execution === "background-job") {
-    return Result.ok({ budget: null, serviceDeadlineMs: null });
+    return Result.ok({
+      budget: null,
+      serviceDeadlineMs: null,
+      upgradeUrl: undefined,
+    });
   }
   if (execution === "queued-kickoff") {
     return await resolveQueuedBudget(organizationBudgetOptions);
@@ -1063,7 +1076,10 @@ const withEnabledActionAdmission = async <T>({
   if (Result.isError(admitted)) {
     return admitted;
   }
-  const refusal = acquisitionRefusal(admitted.value);
+  const refusal = acquisitionRefusal(
+    admitted.value,
+    resolvedBudget.value.upgradeUrl,
+  );
   if (refusal !== null) {
     return Result.err(refusal);
   }

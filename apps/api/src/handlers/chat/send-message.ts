@@ -858,6 +858,9 @@ export class ChatSendLifecycle {
               ...ACTION_ADMISSION_REFUSALS[error.code],
               code: error.code,
               ...(error.hint === undefined ? {} : { hint: error.hint }),
+              ...(error.upgradeUrl === undefined
+                ? {}
+                : { upgradeUrl: error.upgradeUrl }),
               ...(error.contactUrl === undefined
                 ? {}
                 : { contactUrl: error.contactUrl }),

@@ -665,3 +665,23 @@ describe("resolveWindowBounds", () => {
     });
   });
 });
+
+test("MCP keeps the upgrade link in its structured refusal", () => {
+  const upgradeUrl = "https://example.test/settings/organization/billing";
+  const result = serializeToolResult(
+    structuredErrorResult({
+      code: "action_period_exhausted",
+      message: "Action paused",
+      hint: "Upgrade the organization's plan, then retry",
+      upgradeUrl,
+      retryable: false,
+    }),
+  );
+  const content = result.content.at(0);
+  expect(content?.type).toBe("text");
+  if (content?.type === "text") {
+    expect(JSON.parse(content.text)).toMatchObject({
+      error: { upgradeUrl, retryable: false },
+    });
+  }
+});

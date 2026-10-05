@@ -711,6 +711,10 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      upgradeUrl:
+        typeof responseBody["upgradeUrl"] === "string"
+          ? responseBody["upgradeUrl"]
+          : undefined,
       contactUrl:
         typeof responseBody["contactUrl"] === "string"
           ? responseBody["contactUrl"]
@@ -735,6 +739,10 @@ const mapStatusResponse = (
           : undefined,
       message,
       issues: isRecord(responseBody) ? responseBody["issues"] : undefined,
+      upgradeUrl:
+        isRecord(responseBody) && typeof responseBody["upgradeUrl"] === "string"
+          ? responseBody["upgradeUrl"]
+          : undefined,
       hint:
         isRecord(responseBody) && typeof responseBody["hint"] === "string"
           ? responseBody["hint"]

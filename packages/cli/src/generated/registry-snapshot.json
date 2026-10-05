@@ -4817,7 +4817,7 @@
       "scope": "read"
     },
     "name": "get_usage",
-    "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
+    "description": "Read the organization's current plan and usage information. Requires organization-settings management access.",
     "inputSchema": {
       "type": "object",
       "required": [],

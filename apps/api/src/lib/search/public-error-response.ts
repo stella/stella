@@ -16,6 +16,7 @@ export const PUBLIC_ERROR_TEXT_BYTES = {
   code: 128,
   hint: 2048,
   contactUrl: 2048,
+  upgradeUrl: 2048,
   country: 3,
   status: 32,
   reason: 128,
@@ -54,6 +55,7 @@ export const safePublicHandlerErrorResponseSchema = t.Object(
     code: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.code)),
     hint: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.hint)),
     contactUrl: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.contactUrl)),
+    upgradeUrl: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.upgradeUrl)),
     retryable: t.Optional(t.Boolean()),
     type: t.Optional(t.Literal("conflict")),
     versions: t.Optional(publicInconsistentVersionsSchema),
@@ -146,6 +148,10 @@ export const projectPublicErrorBody = (
     value["contactUrl"],
     PUBLIC_ERROR_TEXT_BYTES.contactUrl,
   );
+  const upgradeUrl = optionalText(
+    value["upgradeUrl"],
+    PUBLIC_ERROR_TEXT_BYTES.upgradeUrl,
+  );
   const country = optionalText(
     value["country"],
     PUBLIC_ERROR_TEXT_BYTES.country,
@@ -161,6 +167,7 @@ export const projectPublicErrorBody = (
     ...(code === undefined ? {} : { code }),
     ...(hint === undefined ? {} : { hint }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(upgradeUrl === undefined ? {} : { upgradeUrl }),
     ...(country === undefined ? {} : { country }),
     ...(status === undefined ? {} : { status }),
     ...(reason === undefined ? {} : { reason }),
@@ -186,6 +193,7 @@ export const PUBLIC_ERROR_RESPONSE_MAX_BYTES =
       PUBLIC_ERROR_TEXT_BYTES.code +
       PUBLIC_ERROR_TEXT_BYTES.hint +
       PUBLIC_ERROR_TEXT_BYTES.contactUrl +
+      PUBLIC_ERROR_TEXT_BYTES.upgradeUrl +
       PUBLIC_ERROR_TEXT_BYTES.country +
       PUBLIC_ERROR_TEXT_BYTES.status +
       PUBLIC_ERROR_TEXT_BYTES.reason +

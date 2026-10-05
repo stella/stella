@@ -4549,12 +4549,16 @@ type Messages = {
       "usagePacksTitle": "Unit packs";
       "usagePlanCheckout": "Continue to checkout";
       "usagePlanCheckoutError": "Could not start checkout";
+      "usagePlanEvaluation": "Evaluation";
+      "usagePlanFree": "Free plan";
+      "usagePlanPaid": "Paid plan";
       "usagePlanPriceMonthTemplate": "{price} / month";
       "usagePlanPriceOneTimeTemplate": "{price}";
       "usagePlanPriceSeatMonthTemplate": "{price} / seat / month";
       "usagePlanPriceSeatYearTemplate": "{price} / seat / year";
       "usagePlanPriceYearTemplate": "{price} / year";
       "usagePlanSeats": "Seats";
+      "usagePlanSelfManaged": "Own AI keys";
       "usagePlansDescription": "Choose a plan for your organization.";
       "usagePlansTitle": "Plans";
       "usageSeats": "{count, plural, one {# seat} other {# seats}}";

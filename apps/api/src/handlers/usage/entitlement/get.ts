@@ -11,16 +11,29 @@ import type {
   GET_USAGE_ENTITLED_PROJECTION,
   GET_USAGE_NO_PLAN_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  readFreeTier,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
+import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
+
+import { projectUsagePlan } from "./usage-plan";
+
+const USAGE_PLAN_UNAVAILABLE = failureSink({
+  event: "usage.plan_unavailable",
+  expected: [],
+});
 
 /** Read the caller organisation's usage entitlement and current state. */
 
 const config = {
   description:
-    "Read the organization's current usage entitlement: plan, seats, " +
-    "billing period, and how many usage units (AI credits) remain this " +
-    "period. Returns { entitlement: null } when the organization has no " +
-    "active plan. Requires organization-settings management access.",
+    "Read the organization's current plan and usage information. " +
+    "Requires organization-settings management access.",
   // Entitlement state (plan, seats, period, remaining units) is
   // organization billing data, so it is gated to managers — matching the
   // hosted setup/management endpoints and the other organization-settings
@@ -31,8 +44,7 @@ const config = {
   mcp: { type: "tool", name: "get_usage" },
 } satisfies HandlerConfig;
 
-// Shared entitlement read reused by the HTTP handler and the `get_usage` MCP
-// tool, so both return the same plan/seat/period/remaining-units shape.
+// HTTP and MCP (including the CLI) share this deployment-gated response.
 export const readOrgEntitlementHandler = async function* ({
   safeDb,
   organizationId,
@@ -40,6 +52,28 @@ export const readOrgEntitlementHandler = async function* ({
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
 }) {
+  if (isDeploymentFeatureEnabled("FEATURE_FREE_TIER")) {
+    const access = yield* Result.await(
+      safeDb(async (tx) => {
+        const snapshot = await readOrganizationAccessSnapshot(
+          tx,
+          organizationId,
+        );
+        const freeTier = await readFreeTier(tx);
+        return resolveOrganizationAccess({
+          snapshot,
+          freeTier,
+          now: new Date(),
+        });
+      }),
+    );
+    const plan = projectUsagePlan(access);
+    if (plan.isErr()) {
+      observeFailure(plan.error, { sink: USAGE_PLAN_UNAVAILABLE });
+    }
+    return plan;
+  }
+
   const result = yield* Result.await(
     safeDb(async (tx) => {
       const rows = await tx

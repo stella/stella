@@ -128,6 +128,7 @@ export type HandlerErrorProps<
     | { slotKey: string; id?: string | undefined; name?: string | undefined }
     | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
+  upgradeUrl?: ActionAdmissionRefusal["upgradeUrl"];
   retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
@@ -164,6 +165,7 @@ export class HandlerError<
   declare hint?: string | undefined;
   declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
+  declare upgradeUrl?: string | undefined;
   declare retryable?: boolean | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
@@ -180,6 +182,7 @@ export class HandlerError<
     this.hint = props.hint;
     this.clause = props.clause;
     this.contactUrl = props.contactUrl;
+    this.upgradeUrl = props.upgradeUrl;
     this.retryable = props.retryable;
     this.usage = props.usage;
     this.confirmation = props.confirmation;

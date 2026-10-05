@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import {
   actionAdmissionRefusalLines,
+  actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
@@ -253,4 +254,26 @@ test("admission parity leaves unrelated and malformed HTTP errors unchanged", as
   expect(
     await readHttpActionAdmissionRefusal(new Response("invalid JSON")),
   ).toBeUndefined();
+});
+
+test("upgrade refusals round-trip through HTTP and MCP with the same recovery link", () => {
+  const refusal = {
+    code: "action_period_exhausted",
+    message: "This action is paused for your organization.",
+    hint: "Upgrade the organization's plan, then retry",
+    retryable: false,
+    upgradeUrl: "https://example.invalid/settings/organization/billing",
+  } as const;
+  for (const payload of [refusal, { error: refusal }]) {
+    const parsed = readCliActionAdmissionRefusal(payload);
+    expect(parsed).toEqual(refusal);
+    if (parsed !== undefined) {
+      expect(
+        actionAdmissionRefusalOutput({ refusal: parsed, format: "json" }),
+      ).toContain(refusal.upgradeUrl);
+      expect(actionAdmissionRefusalOutput({ refusal: parsed })).toContain(
+        `upgrade: ${refusal.upgradeUrl}`,
+      );
+    }
+  }
 });

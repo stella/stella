@@ -9,6 +9,8 @@
     ".": "./src/index.ts",
     "./currency-code": "./src/currency-code.ts",
     "./limits": "./src/limits.ts",
+    "./organization-capacity": "./src/organization-capacity.ts",
+    "./usage-plan": "./src/usage-plan.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",

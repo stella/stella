@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 
 import {
   ACTION_ADMISSION_CODES,
+  ORGANIZATION_UPGRADE_HINT,
   ACTION_ADMISSION_REFUSALS,
   type ActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
@@ -14,7 +15,11 @@ type ActionAdmissionReason =
   | "unavailable";
 
 // A daily refusal knows when its budget resets; no other refusal may claim one.
-type ActionAdmissionErrorProps = { message: string; cause?: unknown } & (
+type ActionAdmissionErrorProps = {
+  message: string;
+  cause?: unknown;
+  upgradeUrl?: string;
+} & (
   | { reason: "daily_exhausted"; retryAtMs: number }
   | {
       reason: Exclude<ActionAdmissionReason, "daily_exhausted">;
@@ -28,6 +33,7 @@ export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
   reason: ActionAdmissionReason;
   cause?: unknown;
+  upgradeUrl?: string;
 }> {
   /** Epoch milliseconds at which a `daily_exhausted` budget resets. */
   readonly retryAtMs: number | undefined;
@@ -58,18 +64,24 @@ export const actionAdmissionRefusal = (
   configuredContactUrl?: string,
 ) => {
   const refusal = ACTION_ADMISSION_REFUSALS[error.code];
+  const upgradeUrl =
+    error.reason === "period_exhausted" ? error.upgradeUrl : undefined;
   const contactUrl =
     error.code === ACTION_ADMISSION_CODES.periodExhausted ||
     error.code === ACTION_ADMISSION_CODES.notEnabled
       ? configuredContactUrl
       : undefined;
+  const contactHint =
+    contactUrl === undefined
+      ? refusal.hint
+      : `${refusal.hint} Contact: ${contactUrl}`;
+  const hint =
+    upgradeUrl === undefined ? contactHint : ORGANIZATION_UPGRADE_HINT;
   return {
     ...refusal,
     code: error.code,
-    hint:
-      contactUrl === undefined
-        ? refusal.hint
-        : `${refusal.hint} Contact: ${contactUrl}`,
+    hint,
     ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(upgradeUrl === undefined ? {} : { upgradeUrl }),
   };
 };
