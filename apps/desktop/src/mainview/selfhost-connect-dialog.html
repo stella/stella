@@ -205,7 +205,8 @@
         document.getElementById("subtitle").textContent = params.get("detail");
         document.querySelector(".details").hidden = true;
         document.getElementById("cancelBtn").textContent = strings.close;
-        document.getElementById("connectBtn").textContent = params.get("action");
+        document.getElementById("connectBtn").textContent =
+          params.get("action");
       }
 
       function respond(approved) {
