@@ -1087,6 +1087,7 @@ export default defineConfig({
     // stays flagged.
     "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "no-hand-rolled-sql-case/no-hand-rolled-sql-case": "error",
+    "no-hand-rolled-role-set/no-hand-rolled-role-set": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
@@ -1509,6 +1510,7 @@ export default defineConfig({
     "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
+    "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
