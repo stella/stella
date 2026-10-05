@@ -26,7 +26,8 @@ import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import {
   createSesS3ObjectReader,
-  receiveSesInboundMail,
+  createSesS3ObjectDeleter,
+  receiveAndDeleteSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
@@ -115,13 +116,16 @@ const drops = async () =>
 
 const drainHarness = () => {
   const queue = createFakeSqsQueue();
-  const objects = createSesS3ObjectReader({
-    client: new S3Client({
-      region: "eu-west-1",
-      endpoint: s3.endpoint,
-      forcePathStyle: true,
-      credentials: { accessKeyId: "AKIDFAKES3", secretAccessKey: "fake-s3" },
-    }),
+  const objectClient = new S3Client({
+    region: "eu-west-1",
+    endpoint: s3.endpoint,
+    forcePathStyle: true,
+    credentials: { accessKeyId: "AKIDFAKES3", secretAccessKey: "fake-s3" },
+    maxAttempts: 1,
+  });
+  const objects = createSesS3ObjectReader({ client: objectClient, bucket });
+  const deleteObject = createSesS3ObjectDeleter({
+    client: objectClient,
     bucket,
   });
   const persist = createInboundMailPersistence({
@@ -142,7 +146,7 @@ const drainHarness = () => {
       signal: new AbortController().signal,
       logger,
       receive: async (event) =>
-        await receiveSesInboundMail({
+        await receiveAndDeleteSesInboundMail({
           event,
           bucket,
           keyPrefix,
@@ -159,6 +163,7 @@ const drainHarness = () => {
                 )
               : await objects(options),
           persist,
+          deleteObject,
         }),
     });
   return { queue, drain };
@@ -255,13 +260,15 @@ if (!databaseUrl || !runPostgresTests) {
       const drained = await drain();
       expect(drained.isOk() && drained.value).toMatchObject({
         filed: 1,
-        duplicate: 1,
+        alreadyCompleted: 1,
         dropped: 2,
         retry: 0,
         poison: 0,
         stoppedBecause: "drained",
       });
       expect(queue.remaining()).toEqual([]);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}filed`)).toBe(false);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}outsider`)).toBe(false);
       expect(await records()).toMatchObject([
         { workspaceId, authenticatedSenderAddress: "member@example.test" },
       ]);
@@ -280,7 +287,18 @@ if (!databaseUrl || !runPostgresTests) {
         `${keyPrefix}dns-unavailable`,
         message("Member <member@example.test>", "dns-unavailable"),
       );
-      queue.enqueue(notification({ deliveryId: "object-missing" }));
+      s3.put(
+        bucket,
+        `${keyPrefix}temporarily-unreadable`,
+        message("Member <member@example.test>", "temporarily-unreadable"),
+      );
+      s3.failNext({
+        method: "GET",
+        key: `${keyPrefix}temporarily-unreadable`,
+        code: "AccessDenied",
+        status: 403,
+      });
+      queue.enqueue(notification({ deliveryId: "temporarily-unreadable" }));
       queue.enqueue(
         notification({
           deliveryId: "dns-unavailable",
@@ -295,14 +313,17 @@ if (!databaseUrl || !runPostgresTests) {
         dropped: 0,
       });
       expect(queue.remaining()).toHaveLength(2);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}dns-unavailable`)).toBe(
+        true,
+      );
       expect(await records()).toHaveLength(0);
       expect(await drops()).toHaveLength(0);
 
-      // Once the object lands, the redelivered notification files normally.
+      // Once object access recovers, the redelivered notification files normally.
       s3.put(
         bucket,
-        `${keyPrefix}object-missing`,
-        message("Member <member@example.test>", "object-missing"),
+        `${keyPrefix}temporarily-unreadable`,
+        message("Member <member@example.test>", "temporarily-unreadable"),
       );
       queue.expireLeases();
       const retried = await drain();
@@ -313,6 +334,33 @@ if (!databaseUrl || !runPostgresTests) {
       expect(queue.remaining()).toEqual([
         expect.objectContaining({ receiveCount: 2 }),
       ]);
+      expect(await records()).toHaveLength(1);
+    });
+
+    test("a failed raw deletion preserves the queue delivery and retries without refiling", async () => {
+      const { queue, drain } = drainHarness();
+      s3.put(
+        bucket,
+        `${keyPrefix}delete-failed`,
+        message("Member <member@example.test>", "delete-failed"),
+      );
+      queue.enqueue(notification({ deliveryId: "delete-failed" }));
+      s3.failNext({
+        method: "DELETE",
+        key: `${keyPrefix}delete-failed`,
+        code: "AccessDenied",
+        status: 403,
+      });
+      const first = await drain();
+      expect(first.isOk() && first.value).toMatchObject({ retry: 1 });
+      expect(queue.remaining()).toHaveLength(1);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}delete-failed`)).toBe(true);
+      expect(await records()).toHaveLength(1);
+      queue.expireLeases();
+      const second = await drain();
+      expect(second.isOk() && second.value).toMatchObject({ retry: 0 });
+      expect(queue.remaining()).toEqual([]);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}delete-failed`)).toBe(false);
       expect(await records()).toHaveLength(1);
     });
 
@@ -332,10 +380,13 @@ if (!databaseUrl || !runPostgresTests) {
         deleteFailed: 1,
       });
       expect(queue.remaining()).toHaveLength(1);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}unacknowledged`)).toBe(
+        false,
+      );
       queue.expireLeases();
       const second = await drain();
       expect(second.isOk() && second.value).toMatchObject({
-        duplicate: 1,
+        alreadyCompleted: 1,
         deleteFailed: 0,
       });
       expect(queue.remaining()).toEqual([]);
