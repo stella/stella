@@ -21,6 +21,7 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { extractPlanSelector } from "./ci-plan-selector";
 import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
@@ -589,6 +590,9 @@ const workflowJobs = (source: string) =>
     Bun.YAML.parse(source),
   ).jobs;
 
+const jobIf = (job: unknown) =>
+  v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
+
 const ciJobs = workflowJobs(workflow);
 const releaseJobs = workflowJobs(
   readFileSync(
@@ -604,15 +608,6 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
-const CANONICAL_CANCEL_STEP = {
-  name: "Cancel failed merge-group run",
-  uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
-  with: {
-    retries: 0,
-    script:
-      "await github.rest.actions.cancelWorkflowRun({\n  ...context.repo,\n  run_id: context.runId,\n});\n",
-  },
-} as const;
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const CANCELLATION_EXCEPTIONS = new Set([
   "ci-tests",
@@ -1055,9 +1050,6 @@ const expectResultGates = (gates: readonly ExpectedResultGate[]) => {
     expect(exitCode, item.label).toBe(item.exitCode);
   }
 };
-
-const jobIf = (job: unknown) =>
-  v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
 
 const FULL_DEPTH_PREDICATE = "needs.ci-plan.outputs.suite_depth == 'full'";
 const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
