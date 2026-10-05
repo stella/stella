@@ -20,6 +20,7 @@ const row = (overrides: Partial<ProvisionRow> = {}): ProvisionRow => ({
   subsection: null,
   unit: "section",
   versionValidFrom: null,
+  versionBasis: { type: "inferred", kind: "decision_date" },
   workCollection: "Sb.",
   workEli: "/eli/cz/sb/1998/82",
   workIdentifier: "82/1998",

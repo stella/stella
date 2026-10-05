@@ -974,7 +974,8 @@
       "textNotYetAvailable": "A bíróság nem tette közzé a határozat szövegét, vagy az itt még nem érhető el.",
       "textPending": "A határozat szövege még betöltés alatt áll",
       "textReadFailed": "A határozat szövegét nem sikerült betölteni",
-      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg"
+      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+      "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)"
     }
   },
   "catalogue": {
@@ -1884,6 +1885,7 @@
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
+    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",
     "unverifiedCitationHint": "Ezt az idézetet nem sikerült a forrásdokumentumhoz párosítani.",
@@ -5449,6 +5451,7 @@
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Csatlakoztassa a stella desktop alkalmazást a fiókjához",
         "action": "Szerkesztés az asztali alkalmazásban",
         "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
         "authRequiredTitle": "A munkamenet lejárt",

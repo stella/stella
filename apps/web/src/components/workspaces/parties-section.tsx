@@ -10,6 +10,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -437,6 +438,12 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         {t("workspaces.parties.promoteCta")}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.promoteCta")}</DialogTitle>
           <DialogDescription>
@@ -715,6 +722,13 @@ const AddPartyDialog = ({
         {showTriggerLabel ? t("workspaces.parties.addParty") : null}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null || selectedRole !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+            setSelectedRole(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.addParty")}</DialogTitle>
           <DialogDescription />

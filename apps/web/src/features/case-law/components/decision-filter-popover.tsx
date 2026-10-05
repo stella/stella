@@ -86,13 +86,9 @@ export const DecisionFilterPopover = ({
           </div>
         </section>
       )}
-      <FacetSection
-        buckets={facets.source}
-        heading={t("common.source")}
-        name="source"
-        onSelect={(value) => onSelect("sourceId", value)}
-        selectedValue={selection.sourceId}
-      />
+      {/* No source (publisher) section: the court filter already says where
+          a decision comes from, and the publisher is internal. A link that
+          still carries a source keeps working as a removable chip. */}
       <DateSection
         buckets={facets.year}
         dateRange={dateRange}

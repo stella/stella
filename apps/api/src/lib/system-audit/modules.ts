@@ -39,6 +39,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-background-replay",
   "apps/api/src/lib/legal-search/case-law-replay-audit.ts":
     "system:case-law-background-replay",
+  "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts":
+    "system:eu-corpus-completion",
 } as const satisfies Record<string, SystemRunActor>;
 
 export type SystemAuditModule = keyof typeof SYSTEM_AUDIT_MODULES;

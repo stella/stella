@@ -132,7 +132,8 @@
     "takeoverSubtitle": "A edição continuará a partir do seu último ponto de controle salvo.",
     "takeoverTitle": "{requester} quer assumir a edição",
     "takeoverWindowTitle": "Solicitação de transferência",
-    "webOrigin": "Origem web"
+    "webOrigin": "Origem web",
+    "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las"
   },
   "settings": {
     "about": "Sobre",

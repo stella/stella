@@ -329,6 +329,17 @@ export const findCatalogInputs = ({
   });
 };
 
+/**
+ * A release in the same range already ships the new catalog version: the
+ * version PR consumed the changeset and bumped the package, so a branch whose
+ * merge base predates that release needs no second changeset.
+ */
+export const withoutReleasedPackages = (
+  catalogInputs: readonly CatalogInput[],
+  releasedPackages: ReadonlySet<string>,
+): CatalogInput[] =>
+  catalogInputs.filter(({ packageName }) => !releasedPackages.has(packageName));
+
 const preview = (files: readonly string[]): string => {
   const shown = files.slice(0, PREVIEW_LIMIT).join(", ");
   const remaining = files.length - PREVIEW_LIMIT;
@@ -582,6 +593,24 @@ const readAt = (ref: string, file: string): string | null => {
   return result.ok ? result.stdout : null;
 };
 
+const manifestVersion = (text: string | null, file: string): unknown =>
+  text === null ? undefined : parseJsonObject(text, file)["version"];
+
+/** Packages whose own version changed between the ref and HEAD. */
+const releasedSince = (
+  policy: ChangesetPolicy,
+  ref: string,
+): ReadonlySet<string> =>
+  new Set(
+    [...packageDirectories(policy)].flatMap(([name, directory]) => {
+      const file = `${directory}package.json`;
+      return manifestVersion(readAt(ref, file), file) ===
+        manifestVersion(readAt("HEAD", file), file)
+        ? []
+        : [name];
+    }),
+  );
+
 /** Release-gated manifests at HEAD, keyed by path. */
 const readManifests = (policy: ChangesetPolicy): ReadonlyMap<string, string> =>
   new Map(
@@ -781,12 +810,15 @@ const main = (args: readonly string[]): number => {
   // A tree without a root manifest has no catalogs to compare.
   const headRoot = readAt("HEAD", ROOT_MANIFEST) ?? NO_CATALOGS;
   const catalogInputs = diff.changedFiles.includes(ROOT_MANIFEST)
-    ? findCatalogInputs({
-        policy,
-        manifests,
-        before: readAt(mergeBase, ROOT_MANIFEST) ?? NO_CATALOGS,
-        after: headRoot,
-      })
+    ? withoutReleasedPackages(
+        findCatalogInputs({
+          policy,
+          manifests,
+          before: readAt(mergeBase, ROOT_MANIFEST) ?? NO_CATALOGS,
+          after: headRoot,
+        }),
+        releasedSince(policy, mergeBase),
+      )
     : [];
   const notes = checkChangesetPackages({
     changedFiles: diff.changedFiles,

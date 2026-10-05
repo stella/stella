@@ -974,7 +974,8 @@
       "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
-      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
     }
   },
   "catalogue": {
@@ -1884,6 +1885,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
     "unverifiedCitationHint": "Túto citáciu sa nepodarilo priradiť k zdrojovému dokumentu.",
@@ -5449,6 +5451,7 @@
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",

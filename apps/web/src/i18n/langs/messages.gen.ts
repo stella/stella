@@ -978,6 +978,7 @@ type Messages = {
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)";
     };
   };
   "catalogue": {
@@ -1887,6 +1888,7 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unknownUser": "Unknown user";
     "unpin": "Unpin";
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unverified": "Unverified";
     "unverifiedCitationHint": "This quote could not be matched to the source document.";
@@ -5452,6 +5454,7 @@ type Messages = {
         "unknownLocation": "Template location: an address stella cannot verify";
       };
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account";
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
