@@ -159,7 +159,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
         );
         await client.unsafe(`SET ROLE ${ownerRole}`);
         expect(
-          await client`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`,
+          await client.unsafe<{ rolsuper: boolean; rolbypassrls: boolean }[]>(
+            "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",
+          ),
         ).toEqual([{ rolsuper: false, rolbypassrls: false }]);
         expect(await db.select().from(legalListVerificationRuns)).toHaveLength(
           1,

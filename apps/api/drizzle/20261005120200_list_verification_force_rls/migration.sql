@@ -10,6 +10,12 @@ ALTER TABLE "legal_list_claim_review_events" ENABLE ROW LEVEL SECURITY;--> state
 ALTER TABLE "legal_list_claim_review_events" FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 
+-- Reaffirm the request role's existing privileges alongside the RLS changes.
+-- Review history retains its restrictive update/delete policies.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  "legal_list_verification_runs", "legal_list_claims", "legal_list_claim_review_events"
+  TO stella;--> statement-breakpoint
+
 -- Root maintenance scans queued runs and closes stale runs across matters.
 CREATE POLICY "legal_list_verification_runs_owner_access"
   ON "legal_list_verification_runs" AS PERMISSIVE FOR ALL TO public
