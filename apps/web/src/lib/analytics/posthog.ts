@@ -687,11 +687,31 @@ export const createPostHogAnalytics = ({
   });
 
   // Attach build metadata as super-properties so every captured
-  // event carries the exact deployed build.
-  posthog.register({
-    app_commit: __APP_COMMIT_SHA__,
-    app_version: __APP_VERSION__,
-  });
+  // event carries the exact deployed build. `reset` clears super-properties,
+  // so every identity change goes through `resetIdentity`, which registers
+  // them again.
+  const registerBuildProperties = () => {
+    posthog.register({
+      app_commit: __APP_COMMIT_SHA__,
+      app_version: __APP_VERSION__,
+    });
+  };
+  registerBuildProperties();
+
+  // Persistence is off, so every page load starts with a fresh anonymous
+  // distinct id. `identify()` would merge that id into the person on every
+  // load until the person hits PostHog's distinct-id limit; bootstrapping the
+  // known user id switches identity without a merge. Anonymous activity before
+  // sign-in stays unlinked, which `person_profiles: "identified_only"` already
+  // implies.
+  const resetIdentity = (userId: string | null) => {
+    posthog.reset(
+      userId === null
+        ? undefined
+        : { bootstrap: { distinctID: userId, isIdentifiedID: true } },
+    );
+    registerBuildProperties();
+  };
 
   const analytics: Analytics = {
     captureError: (error, context) => {
@@ -774,15 +794,11 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      if (posthog._isIdentified() && distinctId !== user.id) {
-        posthog.reset();
-      }
-
-      // Identify by the stable user id only. Profile attributes such as
+      // The stable user id is the whole identity. Profile attributes such as
       // name and email already live server-side keyed by this id, so
       // duplicating them into PostHog person properties adds no analytical
       // value and only widens the person-property surface.
-      posthog.identify(user.id);
+      resetIdentity(user.id);
       // Group properties (name, practice jurisdictions) are set server-side
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
@@ -792,7 +808,7 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      posthog.reset();
+      resetIdentity(null);
     },
   };
 
