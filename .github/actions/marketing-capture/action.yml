@@ -52,7 +52,7 @@ runs:
         esac
 
     - name: Setup Bun
-      uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+      uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
 
     - name: Install dependencies
       shell: bash
