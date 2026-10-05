@@ -65,6 +65,22 @@ export const mapEntityToSpanSlices = ({
 };
 
 /**
+ * Fit a slice to the text the browser actually rendered. Slices come from the
+ * extracted character spans, and pdf.js can render a span's text shorter than
+ * it was extracted (normalisation, a span the layer split or dropped), so an
+ * offset past the node's end would make `Range.setStart` throw. Returns the
+ * clamped offsets, or `null` when nothing of the slice is on screen.
+ */
+export const clampSliceToText = (
+  slice: Pick<SpanSlice, "localEnd" | "localStart">,
+  textLength: number,
+): { start: number; end: number } | null => {
+  const start = Math.min(Math.max(0, slice.localStart), textLength);
+  const end = Math.min(Math.max(0, slice.localEnd), textLength);
+  return end > start ? { start, end } : null;
+};
+
+/**
  * Merge rects on the same visual line into single
  * rectangles. Two rects are on the same line if their
  * `top` values are within half the rect height.

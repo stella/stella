@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -22,6 +22,7 @@ import {
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
+import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -418,6 +419,22 @@ export const toolDataResult = <TData>(
 // a string, but the runtime returns undefined for unsupported root values.
 const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
 
+/**
+ * A tool succeeded but its output failed the output schema it advertises.
+ * The cause of the panic `serializeToolResult` raises; observed as a defect:
+ * the handler and its contract disagree, so every call on that path fails
+ * until the code changes.
+ */
+export class McpOutputContractError extends TaggedError(
+  "McpOutputContractError",
+)<{
+  message: string;
+}> {
+  static {
+    declareFailureClass(this, "response_invalid");
+  }
+}
+
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -442,9 +459,15 @@ const successStructuredContent = (
   const projected = outputContract.project(result.data);
   const parsed = v.safeParse(outputContract.outputSchemaSource, projected);
   if (!parsed.success) {
-    return panic("MCP tool output violated its advertised contract", {
-      issues: parsed.issues,
-    });
+    // Paths only: an issue's `input` is the tool's output, which carries
+    // matter content.
+    const paths = parsed.issues.map((issue) => v.getDotPath(issue) ?? "(root)");
+    return panic(
+      "MCP tool output violated its advertised contract",
+      new McpOutputContractError({
+        message: `MCP tool output violated its advertised contract at ${paths.join(", ")}`,
+      }),
+    );
   }
   if (!isJsonObject(parsed.output)) {
     return panic("MCP tool output contract produced a non-object root");
