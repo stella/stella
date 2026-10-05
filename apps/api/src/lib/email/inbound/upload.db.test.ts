@@ -8,6 +8,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -430,8 +431,10 @@ if (!databaseUrl || !runPostgresTests) {
       }
       const stored = await records();
       expect(
-        stored.map(({ sourceEntityId }) => sourceEntityId).toSorted(),
-      ).toEqual([first, second].toSorted());
+        stored
+          .map(({ sourceEntityId }) => sourceEntityId)
+          .toSorted((left, right) => compareCodeUnit(left ?? "", right ?? "")),
+      ).toEqual([first, second].toSorted(compareCodeUnit));
       expect(new Set(stored.map(({ dedupKey }) => dedupKey)).size).toBe(2);
     });
 
