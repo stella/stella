@@ -208,10 +208,15 @@ describe("personal key persistence and receipts", () => {
         ...admin,
         policy: "disabled",
         recordAuditEvent: async (tx, event) => {
-          expect(event).toMatchObject({
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
-          });
+          // Every revoked key's receipt is written in one batch.
+          const events = Array.isArray(event) ? event : [event];
+          expect(events).toHaveLength(2);
+          for (const receipt of events) {
+            expect(receipt).toMatchObject({
+              action: AUDIT_ACTION.DELETE,
+              resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+            });
+          }
           await admin.recordAuditEvent(tx, event);
           throw new HandlerError({
             status: 500,
