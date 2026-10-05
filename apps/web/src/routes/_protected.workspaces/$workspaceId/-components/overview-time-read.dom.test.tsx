@@ -11,14 +11,17 @@ const { IntlProvider } = await import("use-intl");
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { useQueryView } = await import("@/lib/use-query-view");
-const { OverviewTimeRead } = await import("./overview-time-read");
+const { OverviewTimeRead, OverviewTimeTrend } =
+  await import("./overview-time-read");
 
 const TEST_UNIT_LABEL = "hours";
 
-afterEach(async () => {
-  await cleanup();
+afterEach(() => {
+  cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 for (const site of ["current-week", "previous-week", "team-week"]) {
   test(`${site}: a failed read exposes retry rather than zero hours`, async () => {
@@ -151,4 +154,56 @@ test("pending and successful empty summaries expose distinct states", () => {
   );
   expect(empty.getByText(englishMessages.common.noResults)).toBeDefined();
   expect(empty.queryByRole("status")).toBeNull();
+});
+
+for (const view of [
+  { type: "pending" },
+  { type: "empty" },
+  {
+    type: "error",
+    error: new Error("Summary unavailable"),
+    retry: async () => undefined,
+  },
+  {
+    type: "items",
+    items: { totalMinutes: 60 },
+    refetchError: new Error("Summary unavailable"),
+    retry: async () => undefined,
+  },
+] satisfies Parameters<typeof OverviewTimeTrend>[0]["view"][]) {
+  test(`the optional ${view.type} trend leaves the personal read's single error state`, () => {
+    const screen = render(
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <OverviewTimeRead
+          view={{
+            type: "error",
+            error: new Error("Summary unavailable"),
+            retry: async () => undefined,
+          }}
+        >
+          {() => "Current hours"}
+        </OverviewTimeRead>
+        <OverviewTimeTrend currentHours={null} view={view} />
+      </IntlProvider>,
+    );
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.queryByText(englishMessages.common.noResults)).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+}
+
+test("the optional trend displays the change between available weekly summaries", () => {
+  const screen = render(
+    <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+      <OverviewTimeTrend
+        currentHours={2}
+        view={{
+          type: "items",
+          items: { totalMinutes: 60 },
+          retry: async () => undefined,
+        }}
+      />
+    </IntlProvider>,
+  );
+  expect(screen.getByText("▲ 100%")).toBeDefined();
 });

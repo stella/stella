@@ -12,10 +12,12 @@ const { DocxSuggestionsQueryStatus } =
 const { queryView } = await import("@/lib/query-view.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(async () => {
-  await cleanup();
+afterEach(() => {
+  cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 const renderStatus = (
   view: Parameters<typeof DocxSuggestionsQueryStatus>[0]["view"],

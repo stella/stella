@@ -1,7 +1,25 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+// Happy DOM omits the legacy editing API that the EditContext polyfill wraps.
+Object.defineProperties(document, {
+  execCommand: { value: () => false, configurable: true, writable: true },
+  queryCommandEnabled: {
+    value: () => false,
+    configurable: true,
+    writable: true,
+  },
+  queryCommandSupported: {
+    value: () => false,
+    configurable: true,
+    writable: true,
+  },
+  queryCommandState: { value: () => false, configurable: true, writable: true },
+  queryCommandValue: { value: () => "", configurable: true, writable: true },
+});
 
 const { render, cleanup, fireEvent, waitFor } =
   await import("@testing-library/react");
@@ -59,4 +77,66 @@ test("clicking retry recovers a selected read and replaces the error with conten
   expect(screen.getByText("Recovered revision")).toBeTruthy();
   cleanup();
   client.clear();
+});
+
+test("revision transitions retain the live editor and its local source", async () => {
+  const { createRef } = await import("react");
+  const { MarkdownHybridEditor } =
+    await import("@/components/markdown/markdown-hybrid-editor");
+  const editor = createRef<MarkdownHybridEditorHandle>();
+  const persisted: string[] = [];
+  const renderEditor = (
+    view: Parameters<typeof SkillRevisionComparison>[0]["view"],
+  ) => (
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <SkillRevisionComparison view={view}>
+        {(baseline) => (
+          <MarkdownHybridEditor
+            ref={editor}
+            imagePolicy="data-only"
+            markdown="Stored source"
+            baseline={baseline}
+            onMarkdownChange={(text) => persisted.push(text)}
+          />
+        )}
+      </SkillRevisionComparison>
+    </IntlProvider>
+  );
+  const screen = render(
+    renderEditor({
+      type: "items",
+      items: { body: "Initial revision" },
+      retry: async () => undefined,
+    }),
+  );
+  await waitFor(() => expect(editor.current).not.toBeNull());
+  const original = screen.getByRole("region");
+  editor.current?.resetMarkdown("Local draft");
+  for (const view of [
+    { type: "pending" },
+    { type: "empty" },
+    {
+      type: "error",
+      error: new Error("Read unavailable"),
+      retry: async () => undefined,
+    },
+    {
+      type: "items",
+      items: { body: "Revision source" },
+      retry: async () => undefined,
+    },
+    {
+      type: "items",
+      items: { body: "Refetched source" },
+      retry: async () => undefined,
+    },
+    null,
+    { type: "pending" },
+  ] satisfies Parameters<typeof SkillRevisionComparison>[0]["view"][]) {
+    screen.rerender(renderEditor(view));
+    expect(screen.getByRole("region")).toBe(original);
+    expect(editor.current?.captureForSave()).toBe("Local draft");
+  }
+  expect(persisted).not.toContain("Stored source");
+  cleanup();
 });

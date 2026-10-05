@@ -243,14 +243,13 @@ export const SkillBodyWorkspace = ({
     />
   );
 
-  const liveBody =
-    compareRevisionId === null ? (
-      renderLiveEditor(undefined)
-    ) : (
-      <SkillRevisionComparison view={comparedRevisionView}>
-        {renderLiveEditor}
-      </SkillRevisionComparison>
-    );
+  const liveBody = (
+    <SkillRevisionComparison
+      view={compareRevisionId === null ? null : comparedRevisionView}
+    >
+      {renderLiveEditor}
+    </SkillRevisionComparison>
+  );
 
   return (
     <>

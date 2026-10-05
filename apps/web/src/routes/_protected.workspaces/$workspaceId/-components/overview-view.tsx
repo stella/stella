@@ -92,7 +92,7 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
-import { OverviewTimeRead } from "./overview-time-read";
+import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
   workspaceId: string;
@@ -967,38 +967,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     </OverviewTimeRead>
                   </div>
                 </div>
-                <OverviewTimeRead view={previousTimeSummaryView}>
-                  {(summary) => {
-                    const prevWeekHours = summary.totalMinutes / 60;
-                    if (
-                      totalHoursThisWeek === null ||
-                      prevWeekHours <= 0 ||
-                      totalHoursThisWeek === prevWeekHours
-                    ) {
-                      return null;
-                    }
-                    return (
-                      <span
-                        className={cn(
-                          "text-xs font-medium",
-                          totalHoursThisWeek > prevWeekHours
-                            ? "text-success"
-                            : "text-destructive",
-                        )}
-                      >
-                        {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
-                        {Math.round(
-                          Math.abs(
-                            ((totalHoursThisWeek - prevWeekHours) /
-                              prevWeekHours) *
-                              100,
-                          ),
-                        )}
-                        %
-                      </span>
-                    );
-                  }}
-                </OverviewTimeRead>
+                <OverviewTimeTrend
+                  currentHours={totalHoursThisWeek}
+                  view={previousTimeSummaryView}
+                />
               </div>
             </section>
           )

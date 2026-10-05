@@ -38,7 +38,7 @@ test("a failed selected revision read renders an error and retry instead of an e
   expect(html).toContain('role="alert"');
   expect(html).toContain(messages.common.retry);
   expect(html).not.toContain(messages.common.noResults);
-  expect(html).not.toContain("Live editor");
+  expect(html).toContain("Live editor");
   observer.destroy();
   client.clear();
 });
@@ -74,7 +74,7 @@ test("a pending selected read has a loading status instead of empty content", ()
   const html = renderRead(queryView(observer.getCurrentResult()));
   expect(html).toContain('role="status"');
   expect(html).not.toContain(messages.common.noResults);
-  expect(html).not.toContain("Live editor");
+  expect(html).toContain("Live editor");
   observer.destroy();
   client.clear();
 });

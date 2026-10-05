@@ -179,7 +179,10 @@ export const useQuestionColumns = ({
   });
   const columns = reads.type === "ready" ? reads.columns : NO_QUESTION_COLUMNS;
   const answers = reads.type === "ready" ? reads.answers : NO_QUESTION_ANSWERS;
-  const canRun = reads.type === "ready" && reads.notice === undefined;
+  const canRun =
+    reads.type === "ready" &&
+    reads.answersStatus === "ready" &&
+    reads.notice === undefined;
 
   // Only what this search shows is drawn, run and searched; the rest of the
   // organization's questions are offered for adding.

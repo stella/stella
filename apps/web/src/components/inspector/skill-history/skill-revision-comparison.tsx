@@ -11,7 +11,7 @@ import { detached } from "@/lib/detached";
 import type { QueryView } from "@/lib/query-view.logic";
 
 type SkillRevisionComparisonProps = {
-  view: QueryView<{ body: string }, unknown>;
+  view: QueryView<{ body: string }, unknown> | null;
   children: (baseline: string | undefined) => ReactNode;
 };
 
@@ -34,28 +34,39 @@ export const SkillRevisionComparison = ({
       </Button>
     </div>
   );
-  switch (view.type) {
-    case "pending":
-      return (
-        <div aria-label={t("common.loading")} role="status">
-          <Skeleton className="h-16 w-full" />
-        </div>
-      );
-    case "error":
-      return readError(view.retry);
-    case "empty":
-      return (
-        <p className="text-muted-foreground text-sm">{t("common.noResults")}</p>
-      );
-    case "items":
-      return (
-        <>
-          {view.refetchError !== undefined && readError(view.retry)}
-          {children(toEditorMarkdown(view.items.body))}
-        </>
-      );
-    default:
-      view satisfies never;
-      return panic("Unhandled SkillRevisionComparison query state");
-  }
+  const renderStatus = () => {
+    if (view === null) {
+      return null;
+    }
+    switch (view.type) {
+      case "pending":
+        return (
+          <div aria-label={t("common.loading")} role="status">
+            <Skeleton className="h-16 w-full" />
+          </div>
+        );
+      case "error":
+        return readError(view.retry);
+      case "empty":
+        return (
+          <p className="text-muted-foreground text-sm">
+            {t("common.noResults")}
+          </p>
+        );
+      case "items":
+        return view.refetchError !== undefined ? readError(view.retry) : null;
+      default:
+        view satisfies never;
+        return panic("Unhandled SkillRevisionComparison query state");
+    }
+  };
+  // Query notices occupy their own slot; the live editor keeps its model.
+  return (
+    <>
+      {renderStatus()}
+      {children(
+        view?.type === "items" ? toEditorMarkdown(view.items.body) : undefined,
+      )}
+    </>
+  );
 };

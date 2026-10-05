@@ -504,6 +504,7 @@ type QuestionReads =
       type: "ready";
       columns: readonly QuestionColumn[];
       answers: readonly QuestionAnswer[];
+      answersStatus: "pending" | "ready";
       notice?: QuestionReadNotice;
     };
 
@@ -532,7 +533,7 @@ export const questionReads = ({
         return panic("Unhandled question read state");
     }
   }
-  if (columns.type === "pending" || answers?.type === "pending") {
+  if (columns.type === "pending") {
     return { type: "pending" };
   }
   const failedRefetch = [columns, answers].find(
@@ -542,6 +543,7 @@ export const questionReads = ({
     type: "ready",
     columns: columns.type === "items" ? columns.items : NO_QUESTION_COLUMNS,
     answers: answers?.type === "items" ? answers.items : NO_QUESTION_ANSWERS,
+    answersStatus: answers?.type === "pending" ? "pending" : "ready",
     ...(failedRefetch?.type === "items"
       ? {
           notice: {

@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -67,4 +68,40 @@ export const OverviewTimeRead = <TData,>({
       view satisfies never;
       return panic("Unhandled overview time summary state");
   }
+};
+
+type OverviewTimeTrendProps = {
+  currentHours: number | null;
+  view: QueryView<{ totalMinutes: number }, unknown>;
+};
+
+export const OverviewTimeTrend = ({
+  currentHours,
+  view,
+}: OverviewTimeTrendProps) => {
+  if (view.type !== "items" || view.refetchError !== undefined) {
+    return null;
+  }
+  const previousHours = view.items.totalMinutes / 60;
+  if (
+    currentHours === null ||
+    previousHours <= 0 ||
+    currentHours === previousHours
+  ) {
+    return null;
+  }
+  return (
+    <span
+      className={cn(
+        "text-xs font-medium",
+        currentHours > previousHours ? "text-success" : "text-destructive",
+      )}
+    >
+      {currentHours > previousHours ? "▲" : "▼"}{" "}
+      {Math.round(
+        Math.abs(((currentHours - previousHours) / previousHours) * 100),
+      )}
+      %
+    </span>
+  );
 };

@@ -73,11 +73,17 @@ test("pending reads are distinct from successful empty and disabled answers", ()
   ).toEqual({ type: "pending" });
   expect(
     questionReads({ columns: { type: "empty" }, answers: { type: "pending" } }),
-  ).toEqual({ type: "pending" });
+  ).toEqual({
+    type: "ready",
+    columns: [],
+    answers: [],
+    answersStatus: "pending",
+  });
   expect(questionReads({ columns: { type: "empty" }, answers: null })).toEqual({
     type: "ready",
     columns: [],
     answers: [],
+    answersStatus: "ready",
   });
 });
 
@@ -145,4 +151,24 @@ test("cached question columns and answers remain visible until their retry succe
   columnsObserver.destroy();
   answersObserver.destroy();
   client.clear();
+});
+
+test("loaded columns remain visible while page answers load and runs wait", () => {
+  const columns = [
+    {
+      id: "notice-question",
+      question: "Was notice served?",
+      content: { version: 1, type: "text" },
+    },
+  ] as const satisfies readonly QuestionColumn[];
+  const view = questionReads({
+    columns: { type: "items", items: columns, retry: async () => undefined },
+    answers: { type: "pending" },
+  });
+  expect(view.type).toBe("ready");
+  if (view.type === "ready") {
+    expect(view.columns).toBe(columns);
+    expect(view.answers).toEqual([]);
+    expect(view.answersStatus).toBe("pending");
+  }
 });
