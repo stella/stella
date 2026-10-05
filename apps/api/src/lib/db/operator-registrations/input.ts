@@ -61,7 +61,7 @@ export const parseRegistrationQuery = ({
       return invalidQuery("Invalid cursor; restart without cursor");
     }
     const parts = decodePaginationCursor(query.cursor);
-    if (parts === null || parts.length !== 3) {
+    if (parts?.length !== 3) {
       return invalidQuery("Invalid cursor; restart without cursor");
     }
     const [cursorSince, createdAt, id] = parts;
