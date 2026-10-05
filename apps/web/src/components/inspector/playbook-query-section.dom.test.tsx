@@ -117,7 +117,9 @@ for (const queryKey of [
       for (const answer of [[], ["Cached answer"]]) {
         const { client, requests, settle, ui } = mount();
         await settle(answer);
-        await waitFor(() => expect(ui.queryByText("Loading")).toBeNull());
+        await waitFor(() => {
+          expect(ui.queryByText("Loading") === null).toBe(true);
+        });
         let refresh: Promise<void> | undefined;
         await act(async () => {
           refresh = client.refetchQueries();
@@ -134,7 +136,9 @@ for (const queryKey of [
         );
         await waitFor(() => expect(requests.length).toBe(3));
         await settle(["Updated answer"]);
-        await waitFor(() => expect(ui.queryByRole("alert")).toBeNull());
+        await waitFor(() => {
+          expect(ui.queryByRole("alert") === null).toBe(true);
+        });
         expect(ui.getByTestId("answer").textContent).toContain(
           "Updated answer",
         );
