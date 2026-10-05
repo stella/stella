@@ -2158,6 +2158,7 @@
     "markHandled": "Oznacz jako obsłużone",
     "markNew": "Oznacz jako nowe",
     "noAddress": "Brak aktywnego adresu e-mail.",
+    "openSourceFile": "Otwórz plik wiadomości",
     "originalSender": "Pierwotny nadawca",
     "originalSenderUnverified": "Pierwotny nadawca (podany, niezweryfikowany)",
     "originalSignatureVerified": "Pierwotny podpis zweryfikowany (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Zmień adres",
     "sentAt": "Wysłano",
     "sharedMailboxFiler": "Wspólna skrzynka {address}, zatwierdzona przez {approver}",
+    "statedInFile": "Nagłówki (według pliku)",
     "states": {
       "handled": "Obsłużone"
     },
     "title": "Korespondencja",
-    "unknownApprover": "Nieznany zatwierdzający"
+    "unknownApprover": "Nieznany zatwierdzający",
+    "uploadedBy": "Przesłane przez {name}",
+    "uploadedFile": "Przesłany plik wiadomości e-mail"
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",

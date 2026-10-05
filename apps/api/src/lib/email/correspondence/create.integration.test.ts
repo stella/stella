@@ -5,7 +5,7 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { readFileSync } from "node:fs";
 
 import type {
-  CorrespondenceProvenance,
+  CorrespondenceDeliveryProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import { compareCodeUnit } from "@stll/collation";
@@ -103,6 +103,7 @@ const expectSuccess = <T>(response: T | HandlerFailure): T => {
 };
 
 const directProvenance = {
+  source: "delivery",
   intake: "direct",
   originalSignature: null,
   authenticatedSender: {
@@ -112,9 +113,10 @@ const directProvenance = {
     dmarc: "pass",
     alignedIdentifier: "example.test",
   },
-} satisfies CorrespondenceProvenance;
+} satisfies CorrespondenceDeliveryProvenance;
 
-const parsedMessage = (provenance: CorrespondenceProvenance) =>
+// Every message filed here is delivered mail; uploads have their own suite.
+const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",
@@ -485,6 +487,7 @@ describe("matter correspondence", () => {
       address: "forwarder@example.test",
     };
     const inline = parsedMessage({
+      source: "delivery",
       intake: "forwarded_inline",
       authenticatedSender,
       originalSignature: { status: "unverified" },
@@ -522,6 +525,7 @@ describe("matter correspondence", () => {
     ]) {
       const attachment = await fileMessage(
         parsedMessage({
+          source: "delivery",
           intake: "forwarded_attachment",
           authenticatedSender,
           originalSignature,

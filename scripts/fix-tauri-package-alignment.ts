@@ -42,6 +42,9 @@ export class TauriAutofixError extends Error {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+// Release lines are "major.minor"; numeric collation orders 2.10 after 2.9.
+const RELEASE_LINE_ORDER = new Intl.Collator("en", { numeric: true });
+
 type TauriRepair = { crate: string; line: string; npm: string[] };
 type PlanTauriRepairsOptions = {
   base: ReturnType<typeof readTauriPairs>;
@@ -54,9 +57,7 @@ const lines = (versions: readonly string[]) =>
       versions.map(tauriVersionLine).filter((line) => line !== undefined),
     ),
   ]
-    .toSorted((left, right) =>
-      left.localeCompare(right, "en", { numeric: true }),
-    )
+    .toSorted((left, right) => RELEASE_LINE_ORDER.compare(left, right))
     .join(",");
 
 export const planTauriRepairs = ({ base, head }: PlanTauriRepairsOptions) => {
@@ -114,8 +115,7 @@ export const planTauriRepairs = ({ base, head }: PlanTauriRepairsOptions) => {
       [...crateVersions, ...npmVersions].some((version) => {
         const line = tauriVersionLine(version);
         return (
-          line !== undefined &&
-          line.localeCompare(target, "en", { numeric: true }) > 0
+          line !== undefined && RELEASE_LINE_ORDER.compare(line, target) > 0
         );
       })
     ) {

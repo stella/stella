@@ -6,6 +6,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { exactSetDifference, ruleCensusDiagnostics } from "./rule-census.ts";
 
@@ -57,7 +59,7 @@ export const queryStateCensus = () => {
           panic("Query state diagnostic has no source location"),
       };
     })
-    .toSorted((left, right) => left.key.localeCompare(right.key));
+    .toSorted((left, right) => compareCodeUnit(left.key, right.key));
 };
 
 if (import.meta.main) {

@@ -192,6 +192,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+  "apps/api/src/lib/email/inbound/upload-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
