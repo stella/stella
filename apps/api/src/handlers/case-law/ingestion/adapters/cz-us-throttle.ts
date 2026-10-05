@@ -1,4 +1,4 @@
-// parser-output-unchanged: document-fetch observation preserves the response returned to the parser.
+// parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
@@ -17,10 +17,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
+import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+
+import { unreadPublisherError } from "./publisher-read";
 
 /**
  * What one NALUS request costs the crawl in waiting, read off the policy map
@@ -45,7 +48,6 @@ const NALUS_PATH_PREFIXES = [NALUS_SEARCH_PATH] as const;
  * the limit; the redirect to it is what the crawl sees first.
  */
 const LIMIT_EXCEEDED_PAGE = "limit-exceeded.html";
-const PUBLISHER_AUTH_REFUSAL_STATUSES = [401, 403] as const;
 
 /**
  * NALUS refused the request because the publisher's own rate limit is spent.
@@ -152,17 +154,18 @@ export const createNalusFetch = (
                   }
                 : documentFetchResponseOutcome(ADAPTER_KEYS.CZ_US, candidate),
           });
-    if (
-      PUBLISHER_AUTH_REFUSAL_STATUSES.some(
-        (status) => status === response.status,
-      )
-    ) {
+    const outcome = readOutcomeOfStatus(
+      response.status,
+      "source",
+      response.headers.get("Retry-After"),
+    );
+    if (outcome.type === "refused") {
       return Result.err(
-        new AdapterFetchError({
+        unreadPublisherError({
+          outcome,
           message: "Publisher request refused",
           adapterKey: ADAPTER_KEYS.CZ_US,
           cursor: null,
-          httpStatus: response.status,
         }),
       );
     }

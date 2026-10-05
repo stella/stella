@@ -1,4 +1,4 @@
-// parser-output-unchanged: stage labels route identical byte ranges through telemetry only.
+// parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.
 /**
  * The Hugging Face dataset `JuDDGES/pl-nsa`, pinned to one revision, and the
  * reader that walks it.

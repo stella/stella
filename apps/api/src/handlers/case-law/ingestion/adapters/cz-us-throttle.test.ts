@@ -15,6 +15,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -53,7 +54,7 @@ describe("the NALUS publisher budget", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test.each([401, 403])(
+  test.each([401, 403, 451])(
     "HTTP %i returns a typed refusal result",
     async (status) => {
       globalThis.fetch = asFetchMock(
@@ -67,6 +68,12 @@ describe("the NALUS publisher budget", () => {
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(result.error).toBeInstanceOf(AdapterFetchError);
+        expect(isReadRefusal(result.error.cause)).toBe(true);
+        expect(result.error.cause).toMatchObject({
+          type: "refused",
+          scope: "source",
+          status,
+        });
         if (result.error instanceof AdapterFetchError) {
           expect(result.error.stopKind).toBe(
             INGESTION_STOP_KIND.PUBLISHER_REFUSAL,

@@ -1,5 +1,4 @@
-// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
-// parser-output-unchanged: unread items pass through for adapters that report them; parsed pages and decisions are unchanged.
+// parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
  *
