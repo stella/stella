@@ -6,7 +6,7 @@
  * so the public repo does not encode an operator policy.
  */
 
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import {
   and,
   eq,
@@ -26,8 +26,11 @@ import {
   USAGE_POLICY_PRICE_BASES,
   USAGE_POLICY_VISIBILITIES,
   usagePolicies,
+  type UsagePolicyKind,
 } from "@/api/db/schema";
 import { MAX_CATALOG_ROWS } from "@/api/lib/usage/policy-catalog";
+
+const FREE_POLICY_KIND = "free" as const satisfies UsagePolicyKind;
 
 // PostgreSQL int4 ceiling: values beyond it would fail at write time
 // with an opaque driver error instead of a seed validation message.
@@ -103,6 +106,18 @@ const usagePolicySeedSchema = v.pipe(
       (seed.priceAmountCents === null) === (seed.billingInterval === null),
     "price fields must be set together (amount + currency + interval)",
   ),
+  // Mirrors the `usage_policies_free_shape` check: the free floor is never
+  // checkout-able, costs nothing, and bounds every limit it applies.
+  v.check(
+    (seed) =>
+      seed.kind !== FREE_POLICY_KIND ||
+      (seed.hostedPolicyRef === null &&
+        (seed.priceAmountCents ?? 0) === 0 &&
+        seed.maxMembers !== null &&
+        seed.storageBytesPerAssignment !== null &&
+        seed.serviceActionsPerPeriod !== null),
+    "a free policy has no hosted reference, a zero price, and sets maxMembers, storageBytesPerAssignment and serviceActionsPerPeriod",
+  ),
 );
 
 // Bounded to the catalog read ceiling (MAX_CATALOG_ROWS): an oversized
@@ -111,13 +126,40 @@ const usagePolicySeedSchema = v.pipe(
 const usagePolicySeedsSchema = v.pipe(
   v.array(usagePolicySeedSchema),
   v.maxLength(MAX_CATALOG_ROWS),
+  v.check(
+    (seeds) =>
+      seeds.filter((seed) => seed.kind === FREE_POLICY_KIND).length <= 1,
+    "at most one free policy may be seeded",
+  ),
 );
 
 type UsagePolicySeed = v.InferOutput<typeof usagePolicySeedSchema>;
 
-export const parseSeeds = (input: string) => {
+/** Whether the deployment serves the free floor (`FEATURE_FREE_TIER`). */
+export type FreeTierSeeding = "on" | "off";
+
+class FreePolicySeedRefusedError extends TaggedError(
+  "FreePolicySeedRefusedError",
+)<{ message: string }> {}
+
+/**
+ * Parses operator seeds. A free policy is accepted only while the deployment
+ * serves the free floor: the database applies an active free policy's limits
+ * on its own, so seeding one with the flag off would bound organizations the
+ * rest of the deployment still treats as ended.
+ */
+export const parseSeeds = (input: string, freeTier: FreeTierSeeding) => {
   const parsed = JSON.parse(input);
-  return v.parse(usagePolicySeedsSchema, parsed);
+  const seeds = v.parse(usagePolicySeedsSchema, parsed);
+  if (
+    freeTier === "off" &&
+    seeds.some((seed) => seed.kind === FREE_POLICY_KIND)
+  ) {
+    throw new FreePolicySeedRefusedError({
+      message: "A free policy requires FEATURE_FREE_TIER",
+    });
+  }
+  return seeds;
 };
 
 export const USAGE_POLICY_SEED_MODES = {
@@ -128,7 +170,9 @@ export type UsagePolicySeedMode =
   (typeof USAGE_POLICY_SEED_MODES)[keyof typeof USAGE_POLICY_SEED_MODES];
 
 type SeedRowResult = { policyKey: string; mode: UsagePolicySeedMode } & (
-  | { outcome: "inserted" | "updated" | "unchanged" | "hidden" }
+  | {
+      outcome: "inserted" | "updated" | "unchanged" | "hidden" | "deactivated";
+    }
   | { outcome: "failed"; reason: string }
 );
 
@@ -202,11 +246,25 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
     if (seeds.length === 0) {
       return;
     }
+    const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
+    // A free policy absent from the seeds stops applying: the database
+    // reads only an active one.
+    const retiredFree = await tx
+      .update(usagePolicies)
+      .set({ active: false })
+      .where(
+        and(
+          notInArray(usagePolicies.policyKey, seededKeys),
+          eq(usagePolicies.kind, FREE_POLICY_KIND),
+          eq(usagePolicies.active, true),
+        ),
+      )
+      .returning({ policyKey: usagePolicies.policyKey });
+    for (const row of retiredFree) {
+      rows.push({ policyKey: row.policyKey, mode, outcome: "deactivated" });
+    }
     const retiring = and(
-      notInArray(
-        usagePolicies.policyKey,
-        seeds.map((seedPolicy) => seedPolicy.key),
-      ),
+      notInArray(usagePolicies.policyKey, seededKeys),
       eq(usagePolicies.visibility, "public"),
     );
     // Lock retirement candidates so failure evidence includes every attempted
@@ -279,6 +337,7 @@ const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
 
 type SeedReportOptions = {
   input: string;
+  freeTier: FreeTierSeeding;
   resultsPath: string;
   mode: UsagePolicySeedMode;
   openDb: () => SeedPoliciesOptions["db"] | Promise<SeedPoliciesOptions["db"]>;
@@ -286,6 +345,7 @@ type SeedReportOptions = {
 
 export const runSeedReport = async ({
   input,
+  freeTier,
   resultsPath,
   mode,
   openDb,
@@ -294,7 +354,7 @@ export const runSeedReport = async ({
   const fd = openSync(resultsPath, "wx", 0o600);
   let seeds: UsagePolicySeed[] = [];
   const result = await Result.tryPromise(async () => {
-    seeds = parseSeeds(input);
+    seeds = parseSeeds(input, freeTier);
     if (seeds.length === 0) {
       return { status: "complete", rows: [] } as const;
     }

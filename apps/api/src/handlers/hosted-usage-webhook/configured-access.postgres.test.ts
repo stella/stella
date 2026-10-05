@@ -33,6 +33,10 @@ import {
   configuredPaymentRetry,
 } from "@/api/lib/usage/configured-access";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
   allowsInstanceModels,
@@ -341,15 +345,19 @@ const readLaneBudgets = async ({
   return enabled;
 };
 
+const accessOf = (
+  snapshot: Awaited<ReturnType<typeof readOrganizationAccessSnapshot>>,
+  now: Date,
+) => resolveOrganizationAccess({ snapshot, now, freeTier: FREE_TIER_OFF });
+
 const expectEnabled = (
   snapshot: Awaited<ReturnType<typeof readAccess>>["snapshot"],
   now: Date,
   enabled: boolean,
 ) => {
-  expect(allowsInstanceModels(snapshot, now)).toBe(enabled);
+  expect(allowsInstanceModels(accessOf(snapshot, now))).toBe(enabled);
   const resolved = resolveOrganizationActionBudget({
-    state: snapshot,
-    now,
+    access: accessOf(snapshot, now),
     periodMs: 23_000,
     evaluationActions: 7,
     selfManagedActions: 19,
@@ -716,9 +724,7 @@ describe.skipIf(!runPostgresTests)(
             fixture.organizationId,
           );
           expect(snapshot?.state).toBe(CONFIGURED_ACCESS_STATE);
-          expect(snapshot && allowsInstanceModels(snapshot, at(999))).toBe(
-            true,
-          );
+          expect(allowsInstanceModels(accessOf(snapshot, at(999)))).toBe(true);
           for (const configuredAccess of [false, true]) {
             env.FEATURE_CONFIGURED_ACCESS = configuredAccess;
             for (const asOf of [at(999), currentPeriodStart]) {
@@ -1026,8 +1032,7 @@ describe.skipIf(!runPostgresTests)(
               fixture.organizationId,
             );
             const budgetBefore = resolveOrganizationActionBudget({
-              state: before.snapshot,
-              now: START,
+              access: accessOf(before.snapshot, START),
               periodMs: 23_000,
               evaluationActions: 7,
               selfManagedActions: 19,
@@ -1059,8 +1064,7 @@ describe.skipIf(!runPostgresTests)(
             );
             expect(
               resolveOrganizationActionBudget({
-                state: off.snapshot,
-                now: START,
+                access: accessOf(off.snapshot, START),
                 periodMs: 23_000,
                 evaluationActions: 7,
                 selfManagedActions: 19,

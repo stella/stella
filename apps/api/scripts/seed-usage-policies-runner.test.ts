@@ -53,6 +53,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
   await withDatabase(async (db, dir) => {
     const seeds = [policy("retained"), policy("retired")];
     const first = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "first.jsonl"),
@@ -67,6 +68,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       })),
     );
     const replay = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "replay.jsonl"),
@@ -91,12 +93,13 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
           billingInterval: "month",
           priceBasis: "per_seat",
           storageBytesPerAssignment: 100,
-          serviceActionsPerPeriod: 10,
+          serviceActionsPerPeriod: 3,
           maxMembers: 2,
           visibility: "hidden",
           sortOrder: 1,
         },
       ]),
+      "off",
     ).at(0);
     expect(changes).toBeDefined();
     for (const [field, value] of Object.entries(changes ?? {})) {
@@ -116,6 +119,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       };
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([changed]),
         resultsPath: path,
@@ -128,6 +132,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
         outcome: "updated",
       });
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([policy("retained")]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
@@ -141,6 +146,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       billingInterval: "month",
     };
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([priced]),
       resultsPath: nodePath.join(dir, "priced.jsonl"),
@@ -152,6 +158,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
     })) {
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([{ ...priced, [field]: value }]),
         resultsPath: path,
@@ -161,6 +168,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
         { policyKey: "retained", mode: "apply", outcome: "updated" },
       ]);
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([priced]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
@@ -168,6 +176,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       });
     }
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "unpriced.jsonl"),
@@ -187,6 +196,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       .from(usagePolicies);
     expect(rows).toContainEqual({ key: "retired", visibility: "hidden" });
     const final = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "final.jsonl"),
@@ -209,6 +219,7 @@ test("writes attempted rows and the failing row after rollback, without private 
   await withDatabase(async (db, dir) => {
     const path = nodePath.join(dir, "failed.jsonl");
     const report = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([
         policy("first"),
@@ -244,6 +255,7 @@ test("empty and invalid configurations produce empty files without opening the d
     for (const [index, input] of ["[]", "invalid JSON"].entries()) {
       const path = nodePath.join(dir, `${index}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input,
         resultsPath: path,
@@ -256,6 +268,7 @@ test("empty and invalid configurations produce empty files without opening the d
     }
     let opened = false;
     const rejection = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: "[]",
       resultsPath: nodePath.join(dir, "0.jsonl"),
@@ -279,6 +292,7 @@ test("empty and invalid configurations produce empty files without opening the d
 test("retirement failure rolls back seeded rows and reports failure", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retired")]),
       resultsPath: nodePath.join(dir, "before.jsonl"),
@@ -292,6 +306,7 @@ test("retirement failure rolls back seeded rows and reports failure", async () =
     );
     const path = nodePath.join(dir, "failure.jsonl");
     const report = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("added")]),
       resultsPath: path,
@@ -328,6 +343,7 @@ test.each(["apply", "dry_run"] as const)(
   async (mode) => {
     await withDatabase(async (db, dir) => {
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([policy("retired")]),
         resultsPath: nodePath.join(dir, "before.jsonl"),
@@ -341,6 +357,7 @@ test.each(["apply", "dry_run"] as const)(
       );
       const path = nodePath.join(dir, "commit-failure.jsonl");
       const report = await runSeedReport({
+        freeTier: "off",
         mode,
         input: JSON.stringify([
           policy("first"),
@@ -373,6 +390,7 @@ test.each(["apply", "dry_run"] as const)(
 test("dry run writes nothing and reports the outcomes the following real run produces", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(
         ["retained", "retired", "stable"].map((key) => policy(key)),
@@ -390,6 +408,7 @@ test("dry run writes nothing and reports the outcomes the following real run pro
     const before = await snapshot();
     const dryRunPath = nodePath.join(dir, "dry-run.jsonl");
     const dryRun = await runSeedReport({
+      freeTier: "off",
       mode: "dry_run",
       input,
       resultsPath: dryRunPath,
@@ -406,6 +425,7 @@ test("dry run writes nothing and reports the outcomes the following real run pro
     );
 
     const apply = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input,
       resultsPath: nodePath.join(dir, "apply.jsonl"),
@@ -429,6 +449,7 @@ test("dry run reports a failing write with the real run's outcomes and rolls bac
     for (const mode of ["dry_run", "apply"] as const) {
       const path = nodePath.join(dir, `${mode}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode,
         input,
         resultsPath: path,
@@ -441,4 +462,110 @@ test("dry run reports a failing write with the real run's outcomes and rolls bac
     expect(reports.at(0)).toEqual(reports.at(1));
     expect(await db.select().from(usagePolicies)).toEqual([]);
   });
+});
+
+const freePolicy = (key: string) => ({
+  key,
+  displayName: "Free",
+  kind: "free",
+  monthlyUsageUnits: 0,
+  priceAmountCents: 0,
+  priceCurrency: "EUR",
+  billingInterval: "month",
+  maxMembers: 1,
+  storageBytesPerAssignment: 1_073_741_824,
+  serviceActionsPerPeriod: 3,
+  visibility: "public",
+});
+
+const readPolicyRows = async (db: ReturnType<typeof drizzle>) =>
+  await db
+    .select({
+      policyKey: usagePolicies.policyKey,
+      kind: usagePolicies.kind,
+      active: usagePolicies.active,
+    })
+    .from(usagePolicies)
+    .orderBy(usagePolicies.policyKey);
+
+test("a free policy is seeded only while the deployment serves the free floor", async () => {
+  await withDatabase(async (db, dir) => {
+    const refused = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: JSON.stringify([freePolicy("free")]),
+      resultsPath: nodePath.join(dir, "refused.jsonl"),
+      openDb: () => db,
+    });
+    expect(refused.status).toBe("failed");
+    expect(await readPolicyRows(db)).toEqual([]);
+
+    const seeded = await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "seeded.jsonl"),
+      openDb: () => db,
+    });
+    expect(seeded.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: true },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("a free policy absent from the seeds stops applying", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: JSON.stringify([policy("team")]),
+      resultsPath: nodePath.join(dir, "second.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.status).toBe("complete");
+    expect(report.rows).toContainEqual({
+      policyKey: "free",
+      mode: "apply",
+      outcome: "deactivated",
+    });
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: false },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("seeds reject a second free policy and every incomplete or priced free shape", () => {
+  expect(() =>
+    parseSeeds(JSON.stringify([freePolicy("free")]), "on"),
+  ).not.toThrow();
+  expect(() =>
+    parseSeeds(
+      JSON.stringify([freePolicy("free"), freePolicy("free-two")]),
+      "on",
+    ),
+  ).toThrow("at most one free policy may be seeded");
+  for (const invalid of [
+    { hostedPolicyRef: "free-ref" },
+    { priceAmountCents: 100 },
+    { maxMembers: null },
+    { storageBytesPerAssignment: null },
+    { serviceActionsPerPeriod: null },
+  ]) {
+    expect(() =>
+      parseSeeds(JSON.stringify([{ ...freePolicy("free"), ...invalid }]), "on"),
+    ).toThrow("a free policy has no hosted reference");
+  }
+  expect(() => parseSeeds(JSON.stringify([freePolicy("free")]), "off")).toThrow(
+    "A free policy requires FEATURE_FREE_TIER",
+  );
 });

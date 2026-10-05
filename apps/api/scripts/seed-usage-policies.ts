@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { parseArgs } from "node:util";
 
 import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 
 import {
   runSeedReport,
@@ -22,6 +23,7 @@ const run = async () => {
     `/tmp/usage-policy-results-${Date.now()}-${process.pid}.jsonl`;
   const report = await runSeedReport({
     input: env.STELLA_USAGE_POLICY_SEEDS,
+    freeTier: isDeploymentFeatureEnabled("FEATURE_FREE_TIER") ? "on" : "off",
     resultsPath,
     mode: values["dry-run"]
       ? USAGE_POLICY_SEED_MODES.dryRun

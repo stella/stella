@@ -40,6 +40,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
       try {
         const inserted = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "insert.jsonl"),
           openDb: () => db,
@@ -50,6 +51,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         ]);
         const replay = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "replay.jsonl"),
           openDb: () => db,
@@ -60,6 +62,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         ]);
         const updated = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, storageBytesPerAssignment: 100 },
           ]),
@@ -79,6 +82,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         const restore = JSON.stringify([policy, retired]);
         const dryRun = await runSeedReport({
           mode: "dry_run",
+          freeTier: "off",
           input: restore,
           resultsPath: nodePath.join(dir, "dry-run.jsonl"),
           openDb: () => db,
@@ -90,6 +94,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         expect(await snapshot()).toEqual(beforeDryRun);
         const restored = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: restore,
           resultsPath: nodePath.join(dir, "restored.jsonl"),
           openDb: () => db,
@@ -100,6 +105,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         const path = nodePath.join(dir, "failed.jsonl");
         const failed = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, monthlyUsageUnits: 20 },
             { ...policy, key: "collision" },

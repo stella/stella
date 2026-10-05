@@ -50,7 +50,9 @@ import {
   getActionCostRecorder,
   reportMissingActionCostIdentity,
 } from "@/api/lib/usage/action-costs/recorder";
+import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
+  actionDrawsServiceBudget,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -546,12 +548,23 @@ const resolveAdmissionBudget = async ({
         return state;
       }
       nowMs = budgetNow();
-      const organizationBudget = resolveOrganizationActionBudget({
-        state: state.value,
+      const access = resolveOrganizationAccess({
+        snapshot: state.value.snapshot,
         now: new Date(nowMs),
-        ...serviceBudgetConfig,
+        freeTier: state.value.freeTier,
       });
+      consumesServices = actionDrawsServiceBudget({
+        access,
+        serviceCredentials:
+          ACTION_KINDS[periodIdentity.actionKind].serviceCredentials,
+        modelCredentials: state.value.modelCredentials,
+      });
+      const organizationBudget = consumesServices
+        ? resolveOrganizationActionBudget({ access, ...serviceBudgetConfig })
+        : ({ status: "uncounted" } as const);
       switch (organizationBudget.status) {
+        case "uncounted":
+          break;
         case "not_enabled":
           return Result.err(
             new ActionAdmissionError({

@@ -780,3 +780,137 @@ describe("AI access for members", () => {
     });
   });
 });
+
+describe("the free floor", () => {
+  const insertFreePolicy = async (db: Pick<Transaction, "insert">) => {
+    await db.insert(usagePolicies).values({
+      id: createSafeId<"usagePolicy">(),
+      policyKey: `free_${Bun.randomUUIDv7()}`,
+      displayName: "Free fixture",
+      kind: "free",
+      monthlyUsageUnits: 0,
+      maxMembers: 1,
+      storageBytesPerAssignment: 1_073_741_824n,
+      serviceActionsPerPeriod: 3,
+    });
+  };
+
+  const insertEndedEvaluation = async (
+    db: Pick<Transaction, "insert">,
+    organizationId: SafeId<"organization">,
+  ) => {
+    const now = Date.now();
+    await db.insert(organizationAccessStates).values({
+      organizationId,
+      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      evaluationStartedAt: new Date(now - 30 * DAY_IN_MS),
+      evaluationEndsAt: new Date(now - DAY_IN_MS),
+      evaluationEndedAt: new Date(now - DAY_IN_MS),
+    });
+  };
+
+  test("a downgraded organization keeps every member, admits nobody new, and keeps AI for all", async () => {
+    enforce();
+    await withRolledBackTx(async (tx) => {
+      await insertFreePolicy(tx);
+      const organizationId = await insertOrganization(tx, {
+        state: null,
+        entitlement: null,
+      });
+      const members = [await insertUser(tx), await insertUser(tx)];
+      for (const userId of members) {
+        await insertMember(tx, organizationId, userId);
+      }
+      await insertEndedEvaluation(tx, organizationId);
+
+      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(1);
+      const admission = await checkMemberAdmission(tx, {
+        organizationId,
+        kind: "invitation",
+      });
+      expect(Result.isError(admission)).toBe(true);
+      const refused = await tx
+        .transaction(
+          async (savepoint) =>
+            await insertMember(savepoint, organizationId, await insertUser(tx)),
+        )
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(refused).toBeInstanceOf(Error);
+      expect(
+        (
+          await tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(eq(member.organizationId, organizationId))
+        ).map((row) => row.userId),
+      ).toHaveLength(2);
+      // Seats bound paid plans only: no member needs one on the free floor.
+      for (const userId of members) {
+        expect(await memberMayUseAI(tx, organizationId, userId)).toBe(true);
+      }
+    });
+  });
+
+  test("a scheduled cancellation keeps paid limits until the period end, then falls to the free floor", async () => {
+    await withRolledBackTx(async (tx) => {
+      await insertFreePolicy(tx);
+      const organizationId = await insertOrganization(tx, {
+        state: null,
+        entitlement: { priceBasis: "flat", maxMembers: 5, seats: 5 },
+      });
+      await insertEndedEvaluation(tx, organizationId);
+      await tx
+        .update(usageEntitlements)
+        .set({ status: "cancelled", cancelAtPeriodEnd: true })
+        .where(eq(usageEntitlements.organizationId, organizationId));
+      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(5);
+
+      await tx
+        .update(usageEntitlements)
+        .set({ currentPeriodEnd: new Date(Date.now() - DAY_IN_MS) })
+        .where(eq(usageEntitlements.organizationId, organizationId));
+      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(1);
+    });
+  });
+
+  test("past-due and paused entitlements keep paid limits", async () => {
+    await withRolledBackTx(async (tx) => {
+      await insertFreePolicy(tx);
+      for (const status of ["past_due", "paused"] as const) {
+        const organizationId = await insertOrganization(tx, {
+          state: null,
+          entitlement: { priceBasis: "flat", maxMembers: 5, seats: 5 },
+        });
+        await insertEndedEvaluation(tx, organizationId);
+        await tx
+          .update(usageEntitlements)
+          .set({ status, currentPeriodEnd: new Date(Date.now() - DAY_IN_MS) })
+          .where(eq(usageEntitlements.organizationId, organizationId));
+        expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
+          5,
+        );
+      }
+    });
+  });
+
+  test("self-managed keys and running evaluations never fall to the free floor", async () => {
+    await withRolledBackTx(async (tx) => {
+      await insertFreePolicy(tx);
+      for (const state of [
+        ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+        ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      ]) {
+        const organizationId = await insertOrganization(tx, {
+          state,
+          entitlement: null,
+        });
+        expect(
+          await readOrganizationMemberCapacity(tx, organizationId),
+        ).toBeNull();
+      }
+    });
+  });
+});
