@@ -58,14 +58,12 @@ const createContext = ({
   );
 
 const baseBody = (currency: string, ids: string[]): CreateInvoiceCtx["body"] =>
-  withTimeBillingEnrolment(
-    asTestRaw<CreateInvoiceCtx["body"]>({
-      invoiceNumber: "INV-001",
-      invoiceDate: "2026-06-14",
-      currency,
-      timeEntryIds: ids.map((id) => toSafeId<"timeEntry">(id)),
-    }),
-  );
+  asTestRaw<CreateInvoiceCtx["body"]>({
+    invoiceNumber: "INV-001",
+    invoiceDate: "2026-06-14",
+    currency,
+    timeEntryIds: ids.map((id) => toSafeId<"timeEntry">(id)),
+  });
 
 describe("createInvoice", () => {
   test("rejects entries whose currency differs from the invoice currency", async () => {
@@ -95,14 +93,12 @@ describe("createInvoice", () => {
   test("returns 409 when the invoice number already exists", async () => {
     const { scopedDb } = createScopedDbMock({});
     // The guarded creation now validates and inserts in one transaction.
-    const safeDb = withTimeBillingEnrolment(
-      asTestRaw<CreateInvoiceCtx["safeDb"]>(async () =>
-        Result.err(
-          new DatabaseError({
-            code: PG_ERROR.UNIQUE_VIOLATION,
-            message: "duplicate key",
-          }),
-        ),
+    const safeDb = asTestRaw<CreateInvoiceCtx["safeDb"]>(async () =>
+      Result.err(
+        new DatabaseError({
+          code: PG_ERROR.UNIQUE_VIOLATION,
+          message: "duplicate key",
+        }),
       ),
     );
 

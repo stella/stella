@@ -9,6 +9,35 @@ import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type FeatureEnrolmentRow = typeof featureEnrolments.$inferSelect;
+
+const UNPROJECTED_FEATURE_ENROLMENT_COLUMNS = [
+  // Scope comes from the session; the response carries only offered features and their state.
+  "userId",
+  "organizationId",
+  "createdAt",
+] as const satisfies readonly (keyof FeatureEnrolmentRow)[];
+
+const FEATURE_ENROLMENT_COLUMNS = { featureId: true } as const;
+
+type MissingFeatureEnrolmentColumn = UnprojectedColumns<
+  FeatureEnrolmentRow,
+  typeof FEATURE_ENROLMENT_COLUMNS,
+  (typeof UNPROJECTED_FEATURE_ENROLMENT_COLUMNS)[number]
+>;
+type UnexpectedFeatureEnrolmentColumn = UnbackedProjectionKeys<
+  FeatureEnrolmentRow,
+  typeof FEATURE_ENROLMENT_COLUMNS,
+  (typeof UNPROJECTED_FEATURE_ENROLMENT_COLUMNS)[number]
+>;
+
+true satisfies MissingFeatureEnrolmentColumn extends never ? true : never;
+true satisfies UnexpectedFeatureEnrolmentColumn extends never ? true : never;
 
 const config = {
   description:

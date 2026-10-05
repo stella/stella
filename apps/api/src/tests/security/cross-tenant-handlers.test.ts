@@ -1853,6 +1853,11 @@ beforeAll(async () => {
         userId: ids.userB1,
         featureId: "time-billing",
       },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
     ])
     .onConflictDoNothing();
   await testDb.insert(billingArrangements).values({

@@ -9,7 +9,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -33,6 +33,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createTestIds,
   setupRlsTestData,
@@ -640,6 +641,11 @@ test("concurrent invoice creation respects the final available matter slot", asy
               currency: "USD",
               timeEntryIds: [entryId],
             },
+          }),
+          // Admission is resolved up front so only the guarded creation reaches safeDb.
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            userId: ids.userAdmin,
+            organizationId: ids.orgA,
           }),
           safeDb,
         }),

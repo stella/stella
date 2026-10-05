@@ -1369,11 +1369,8 @@ const mcpContextFor = async (name: ActorName): Promise<McpRequestContext> => {
     id,
     status: "active" as const,
   }));
-  const safeDb = createSafeDb(
-    testDb,
-    workspaceIds,
-    organizationId,
-    actor.userId,
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
   );
   const snapshot = await loadFeatureAccessSnapshot({
     safeDb,

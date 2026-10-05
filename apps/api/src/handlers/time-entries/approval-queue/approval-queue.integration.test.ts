@@ -39,6 +39,7 @@ import {
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -514,7 +515,15 @@ describe("approval policy serialization", () => {
         expect(heldPolicyLocks).toHaveLength(1);
         return result;
       }, retry);
-    return { ...ctx, safeDb };
+    return {
+      ...ctx,
+      // Admission is resolved up front so every safeDb run is the policy-locked mutation.
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        userId: ctx.user.id,
+        organizationId: ctx.session.activeOrganizationId,
+      }),
+      safeDb,
+    };
   };
 
   test("approval and return retain the month policy lock until the mutation commits", async () => {

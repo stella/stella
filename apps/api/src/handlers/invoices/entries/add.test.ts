@@ -46,8 +46,8 @@ const createContext = (
 describe("addEntries currency enforcement", () => {
   test("rejects a time entry whose currency differs from the invoice", async () => {
     let call = 0;
-    const safeDb: AddEntriesCtx["safeDb"] = withTimeBillingEnrolment(
-      asTestRaw<AddEntriesCtx["safeDb"]>(async () => {
+    const safeDb: AddEntriesCtx["safeDb"] = asTestRaw<AddEntriesCtx["safeDb"]>(
+      async () => {
         call += 1;
         if (call === 1) {
           return Result.ok({
@@ -65,16 +65,14 @@ describe("addEntries currency enforcement", () => {
             currency: "EUR",
           },
         ]);
-      }),
+      },
     );
 
     const result = await addEntries.handler(
       createContext(
-        withTimeBillingEnrolment(
-          asTestRaw<AddEntriesCtx["body"]>({
-            timeEntryIds: [toSafeId<"timeEntry">("te_1")],
-          }),
-        ),
+        asTestRaw<AddEntriesCtx["body"]>({
+          timeEntryIds: [toSafeId<"timeEntry">("te_1")],
+        }),
         safeDb,
       ),
     );

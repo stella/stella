@@ -2678,7 +2678,11 @@ export const resolveRequestAuth = ({
   request,
   server,
   set,
-}: Pick<Context, "params" | "query" | "request" | "server" | "set">) =>
+}: Pick<Context, "request" | "server" | "set"> & {
+  // Read only as workspace-id sources, so a pre-validation transform context fits too.
+  params: unknown;
+  query: unknown;
+}) =>
   memoizePerRequest(
     validateAuthResolutionCache,
     request,

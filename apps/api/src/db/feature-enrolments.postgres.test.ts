@@ -131,10 +131,10 @@ describe.skipIf(!runPostgresTests)(
                 }
                 expect(
                   await tx`UPDATE feature_enrolments SET created_at = now() WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`,
-                ).toEqual([]);
+                ).toHaveLength(0);
                 expect(
                   await tx`DELETE FROM feature_enrolments WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`,
-                ).toEqual([]);
+                ).toHaveLength(0);
               });
               if (owns) {
                 continue;
