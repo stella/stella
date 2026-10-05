@@ -78,7 +78,7 @@ type OutlookMessageFixture = {
   text?: string;
   html?: string;
   recipients?: OutlookRecipientFixture[];
-  attachments?: OutlookAttachmentFixture[];
+  attachments?: readonly OutlookAttachmentFixture[];
 };
 
 const RECIPIENT_TYPE_VALUE = { to: 1, cc: 2 } as const;

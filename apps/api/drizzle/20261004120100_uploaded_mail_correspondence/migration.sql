@@ -8,13 +8,16 @@ ALTER TABLE "correspondence"
   ADD COLUMN IF NOT EXISTS "source_entity_id" uuid;--> statement-breakpoint
 -- The previous release writes every one of these columns on each delivery,
 -- and the provenance check below keeps them required for delivery rows.
--- squawk-ignore ban-drop-not-null
-ALTER TABLE "correspondence"
-  ALTER COLUMN "intake" DROP NOT NULL,
-  ALTER COLUMN "authenticated_sender_address" DROP NOT NULL,
-  ALTER COLUMN "spf" DROP NOT NULL,
-  ALTER COLUMN "dkim" DROP NOT NULL,
-  ALTER COLUMN "dmarc" DROP NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-not-null -- delivery writers still set it; the provenance check keeps it required for deliveries
+ALTER TABLE "correspondence" ALTER COLUMN "intake" DROP NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-not-null -- delivery writers still set it; the provenance check keeps it required for deliveries
+ALTER TABLE "correspondence" ALTER COLUMN "authenticated_sender_address" DROP NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-not-null -- delivery writers still set it; the provenance check keeps it required for deliveries
+ALTER TABLE "correspondence" ALTER COLUMN "spf" DROP NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-not-null -- delivery writers still set it; the provenance check keeps it required for deliveries
+ALTER TABLE "correspondence" ALTER COLUMN "dkim" DROP NOT NULL;--> statement-breakpoint
+-- squawk-ignore ban-drop-not-null -- delivery writers still set it; the provenance check keeps it required for deliveries
+ALTER TABLE "correspondence" ALTER COLUMN "dmarc" DROP NOT NULL;--> statement-breakpoint
 
 -- Build the indexes without holding the DDL transaction's locks through the
 -- scans.

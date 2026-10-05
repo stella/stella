@@ -39,11 +39,11 @@ const unavailable = () =>
   Result.err(
     new UploadedMailUnavailableError({ message: "database unavailable" }),
   );
-const filed = () =>
-  Result.ok({
-    status: "filed" as const,
-    correspondenceId: toSafeId<"correspondence">("record_1"),
-  });
+const FILED = {
+  status: "filed",
+  correspondenceId: toSafeId<"correspondence">("record_1"),
+} as const;
+const filed = () => Result.ok(FILED);
 
 type QueuedJob = { name: string; data: unknown; jobId: string };
 
@@ -120,7 +120,7 @@ describe("uploaded mail filing job", () => {
     const fileMail = mock<typeof fileUploadedMail>(async () => filed());
     expect(
       await processUploadedMailJob({ data, database, readFile, fileMail }),
-    ).toEqual({ status: "filed", correspondenceId: "record_1" });
+    ).toEqual(FILED);
     expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
       mimeType: EML_MIME_TYPE,
       scope,

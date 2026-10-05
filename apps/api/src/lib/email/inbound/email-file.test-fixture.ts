@@ -18,7 +18,11 @@ export type StatedMessage = {
   messageId: string;
   inReplyTo?: string | undefined;
   text: string;
-  attachments: { fileName: string; mimeType: string; bytes: Uint8Array }[];
+  attachments: readonly {
+    fileName: string;
+    mimeType: string;
+    bytes: Uint8Array;
+  }[];
 };
 
 const BOUNDARY = "stella-boundary";
