@@ -5,6 +5,6 @@
     "types": ["node", "vite/client"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json"
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "unit"]
 }
