@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
@@ -93,7 +93,9 @@ type RelatedDecision = {
  * needs none of it, and the reader surfaces that only address one would have
  * to invent a number.
  */
-type RankedRelatedDecision = RelatedDecision & { citationAuthority: number };
+export type RankedRelatedDecision = RelatedDecision & {
+  citationAuthority: number;
+};
 
 /** The far decision as a graph query selects it, before its versions are read. */
 type RankedRelatedDecisionRow = Omit<
@@ -593,6 +595,87 @@ export const decisionCitationSummaryQuery = ({
   // the polarity check constraint already cap it, this states the cap.
   return unionAll(incoming, outgoing).limit(
     (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+  );
+};
+
+type TopCitingDecisionsOptions = {
+  subject: RedistributableDecisionSubject;
+  /** Distinct citing decisions to return. */
+  limit: number;
+};
+
+/**
+ * The few decisions citing this one that a reader should see first, one row
+ * per decision however often it cites the case: the most authoritative by
+ * the materialized citation authority search ranks by, the most recent among
+ * equals. Unlike `listLeadingCitationsHandler` it is not split by treatment,
+ * so a decision cited mostly one way still names `limit` citing decisions.
+ */
+export const listTopCitingDecisionsHandler = async ({
+  subject: { id: decisionId, tx },
+  limit,
+}: TopCitingDecisionsOptions): Promise<RankedRelatedDecision[]> => {
+  const rows = await topCitingDecisionsQuery({ decisionId, limit, tx });
+  const toRelatedDecision = await withLanguageAlternates(tx, rows);
+  return rows.map((row) => toRelatedDecision(row));
+};
+
+type TopCitingDecisionsQueryOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  limit: number;
+  tx: CaseLawPublicReadTransaction;
+};
+
+/**
+ * Bounded the way the summary is: the scan reads at most
+ * `CITATION_SUMMARY_SCAN_LIMIT` indexed citations of this decision, so a
+ * decision cited thousands of times costs the same as the summary beside it,
+ * and the ranking runs over what was scanned.
+ */
+export const topCitingDecisionsQuery = ({
+  decisionId,
+  limit,
+  tx,
+}: TopCitingDecisionsQueryOptions) => {
+  const spec = DIRECTION_SPECS.incoming;
+  const candidates = tx
+    .select({ id: caseLawCitations.id, relatedId: spec.related })
+    .from(caseLawCitations)
+    .where(and(eq(spec.anchor, decisionId), precedentOnly))
+    .orderBy(asc(caseLawCitations.id))
+    .limit(CITATION_SUMMARY_SCAN_LIMIT)
+    .as("top_citing_candidates");
+  return (
+    tx
+      .select({
+        id: relatedDecision.id,
+        caseNumber: relatedDecision.caseNumber,
+        caseNumberType: relatedDecision.caseNumberType,
+        country: relatedDecision.country,
+        court: relatedDecision.court,
+        decisionDate: relatedDecision.decisionDate,
+        decisionType: relatedDecision.decisionType,
+        ecli: relatedDecision.ecli,
+        language: relatedDecision.language,
+        languageGroupKey: relatedDecision.languageGroupKey,
+        slug: relatedDecision.slug,
+        citationAuthority: relatedDecision.citationAuthority,
+      })
+      .from(candidates)
+      .innerJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
+      .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
+      .where(
+        visibleFor({ keepsUnresolved: false, related: candidates.relatedId }),
+      )
+      // Grouped by the far decision's key, so its other columns are
+      // functionally dependent and one decision is one row.
+      .groupBy(relatedDecision.id)
+      .orderBy(
+        desc(relatedDecision.citationAuthority),
+        sql`${relatedDecision.decisionDate} DESC NULLS LAST`,
+        asc(relatedDecision.id),
+      )
+      .limit(limit)
   );
 };
 
