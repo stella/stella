@@ -102,10 +102,7 @@ export const DecisionCitationBox = ({
           0,
         );
   const lastProvisionPage = provisions?.pages.at(-1);
-  const provisionCapped =
-    lastProvisionPage !== undefined &&
-    lastProvisionPage.nextCursor !== null &&
-    lastProvisionPage.nextCursor !== undefined;
+  const provisionCapped = typeof lastProvisionPage?.nextCursor === "string";
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">

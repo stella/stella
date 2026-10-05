@@ -215,7 +215,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       decisionId,
       decisionUpdatedAt: decision.updatedAt,
       documentReady: ast !== null,
-      sourceAllowsDerivedAi: decision.source?.allowsDerivedAi === true,
+      sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
       mode: props.aiMode,
     });
   const generate = useCallback(async () => {

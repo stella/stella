@@ -18,7 +18,7 @@ const importedCalls = (source: ts.SourceFile, exportedName: string) => {
   for (const statement of source.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
-      statement.importClause?.isTypeOnly
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       continue;
     }

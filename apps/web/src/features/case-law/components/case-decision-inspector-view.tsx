@@ -85,7 +85,7 @@ const DecisionInspectorOutlineControl = ({
     decisionId: decision.id,
     decisionUpdatedAt: decision.updatedAt,
     documentReady,
-    sourceAllowsDerivedAi: decision.source?.allowsDerivedAi === true,
+    sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
     mode: "enabled",
   });
   return (
