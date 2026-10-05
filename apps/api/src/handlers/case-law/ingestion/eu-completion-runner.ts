@@ -31,6 +31,7 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   readCorpusText,
@@ -140,28 +141,30 @@ const loadDecisionTx = async (tx: Transaction, receipt: EuCompletionReceipt) =>
     const judges = yield* Result.await(
       legacyOperation(
         async () =>
-          await tx
-            .select({
-              role: caseLawDecisionJudges.role,
-              nameAsPrinted: caseLawDecisionJudges.nameAsPrinted,
-            })
-            .from(caseLawDecisionJudges)
-            .where(eq(caseLawDecisionJudges.decisionId, row.id))
-            .orderBy(
-              asc(caseLawDecisionJudges.role),
-              asc(caseLawDecisionJudges.position),
-            )
-            .limit(MAX_COMPLETION_JUDGES + 1),
+          await readBounded(
+            tx
+              .select({
+                role: caseLawDecisionJudges.role,
+                nameAsPrinted: caseLawDecisionJudges.nameAsPrinted,
+              })
+              .from(caseLawDecisionJudges)
+              .where(eq(caseLawDecisionJudges.decisionId, row.id))
+              .orderBy(
+                asc(caseLawDecisionJudges.role),
+                asc(caseLawDecisionJudges.position),
+              ),
+            MAX_COMPLETION_JUDGES,
+          ),
       ),
     );
-    if (judges.length > MAX_COMPLETION_JUDGES) {
+    if (judges.type === "overflow") {
       return Result.err(
         new CompletionReviewRequired({
           message: "Stored bench exceeds the completion comparison budget",
         }),
       );
     }
-    return Result.ok({ row, judges });
+    return Result.ok({ row, judges: judges.rows });
   });
 
 type DecisionSnapshot = InferOk<Awaited<ReturnType<typeof loadDecisionTx>>>;

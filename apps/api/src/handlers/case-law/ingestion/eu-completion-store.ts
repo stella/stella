@@ -282,18 +282,17 @@ const controlsTx = async (
   tx: Transaction,
   sourceId: EuCompletionReceipt["sourceId"],
 ) => {
+  const keys = [GLOBAL_CONTROL, sourceControl(sourceId)];
   const rows = await tx
     .select()
     .from(euCompletionControls)
-    .where(
-      inArray(euCompletionControls.key, [
-        GLOBAL_CONTROL,
-        sourceControl(sourceId),
-      ]),
-    )
+    .where(inArray(euCompletionControls.key, keys))
     .orderBy(asc(euCompletionControls.key))
     .for("share")
-    .limit(2);
+    .limit(keys.length + 1);
+  if (rows.length > keys.length) {
+    panic("Completion controls matched more rows than primary keys");
+  }
   return {
     global: rows.find((row) => row.key === GLOBAL_CONTROL)?.state ?? "off",
     source:
@@ -487,9 +486,7 @@ const retireCompletedReceiptsTx = async (
           ? undefined
           : sql`${euCompletionReceipts.status} <> 'applied'`,
       ),
-    )
-    .orderBy(asc(euCompletionReceipts.createdAt), asc(euCompletionReceipts.id))
-    .limit(EU_COMPLETION_STORE_LIMITS.maxRows);
+    );
   await tx
     .update(euCompletionReceipts)
     .set({
