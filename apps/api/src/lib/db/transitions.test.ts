@@ -74,6 +74,45 @@ const assertTransitionRejected = async (
 };
 
 describe("conditional status transitions", () => {
+  test.each(["array", "rows"] as const)(
+    "%s driver results preserve single, batch and stale transitions",
+    async (shape) => {
+      for (const rows of [[], [{ id: "job", status: "failed" }]]) {
+        const tx = {
+          execute: async () => (shape === "array" ? rows : { rows }),
+          rollback,
+        };
+        const audits: unknown[] = [];
+        const single = await transition({
+          tx,
+          spec,
+          id: "job",
+          options: { from: ["running"], to: "failed" },
+          recordTransitionAuditEvent: async (auditTx, row) => {
+            expect(auditTx).toBe(tx);
+            audits.push(row);
+          },
+        });
+        expect(single).toEqual(
+          rows.length === 0
+            ? { type: "stale" }
+            : { type: "transitioned", row: rows.at(0) },
+        );
+        const batch = await transitionBatch({
+          tx,
+          spec,
+          ids: ["job"],
+          options: { from: ["running"], to: "failed" },
+          recordTransitionAuditEvent: async (auditTx, changed) => {
+            expect(auditTx).toBe(tx);
+            audits.push(changed);
+          },
+        });
+        expect(batch).toEqual(rows);
+        expect(audits).toEqual(rows.length === 0 ? [] : [rows.at(0), rows]);
+      }
+    },
+  );
   test("status transition graph pairs", () => {
     assertProperty(
       "status transition graph pairs",

@@ -8,6 +8,9 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
+
 type StatusTable = PgTable & { status: AnyPgColumn };
 type LifecycleTable = StatusTable & { id: AnyPgColumn };
 type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
@@ -210,7 +213,7 @@ export type TransitionResult<TId, TStatus> =
   | { type: "stale" };
 
 type TransitionTransaction = {
-  execute: (query: SQL) => PromiseLike<Record<string, unknown>[]>;
+  execute: (query: SQL) => PromiseLike<Record<string, unknown>[] | { rows: Record<string, unknown>[] }>;
   rollback: () => never;
 };
 
@@ -338,7 +341,7 @@ const lifecycleUpdate = async ({
   const returned = moves.map(
     ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
   );
-  const rows = await tx.execute(sql`
+  const executed = await tx.execute(sql`
     UPDATE ${table}
     SET ${sql.join(assignments, sql`, `)}
     WHERE ${identityMatch}
@@ -346,6 +349,12 @@ const lifecycleUpdate = async ({
       ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
     RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
   `);
+  const rows = executedRows(executed).map((row) => {
+    if (!isRecord(row)) {
+      return panic("Transition requires a returned row object");
+    }
+    return row;
+  });
   // Stale updates change nothing and record nothing.
   if (rows.length > 0) {
     await recordTransitionAuditEvent(rows);
