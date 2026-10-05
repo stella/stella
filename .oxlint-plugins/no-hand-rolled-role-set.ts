@@ -38,6 +38,7 @@ import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import { ORGANIZATION_ROLE_NAMES } from "../packages/auth-model/src/contract.ts";
 import {
+  type AstNode,
   filenameForContext,
   isAstNode,
   isStringLiteral,
@@ -76,7 +77,7 @@ type RoleComparison = { operand: string; role: string };
 const roleComparison = (
   node: unknown,
   operator: "===" | "!==",
-  textOf: (node: Node) => string,
+  textOf: (node: AstNode) => string,
 ): RoleComparison | null => {
   if (
     !isAstNode(node) ||
@@ -117,19 +118,20 @@ const logicalLeaves = (node: unknown, operator: string): unknown[] => {
 
 /** Whether `||` of `===` (or `&&` of `!==`) tests one operand for 2+ roles. */
 const comparesOperandWithRoleSet = (
-  node: Node,
-  textOf: (node: Node) => string,
+  node: unknown,
+  textOf: (node: AstNode) => string,
 ): boolean => {
-  if (node.type !== "LogicalExpression") {
+  if (!isAstNode(node) || node.type !== "LogicalExpression") {
     return false;
   }
-  const comparison =
-    node.operator === "||" ? "===" : node.operator === "&&" ? "!==" : null;
-  if (comparison === null) {
+  const operator =
+    node.operator === "||" ? "||" : node.operator === "&&" ? "&&" : null;
+  if (operator === null) {
     return false;
   }
+  const comparison = operator === "||" ? "===" : "!==";
   const rolesByOperand = new Map<string, Set<string>>();
-  for (const leaf of logicalLeaves(node, node.operator)) {
+  for (const leaf of logicalLeaves(node, operator)) {
     const match = roleComparison(leaf, comparison, textOf);
     if (match === null) {
       continue;
@@ -142,8 +144,12 @@ const comparesOperandWithRoleSet = (
 };
 
 /** An array literal of two or more elements, every one a role name. */
-const isRoleArray = (node: Node): boolean => {
-  if (node.type !== "ArrayExpression" || !Array.isArray(node.elements)) {
+const isRoleArray = (node: unknown): boolean => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "ArrayExpression" ||
+    !Array.isArray(node.elements)
+  ) {
     return false;
   }
   const { elements } = node;
@@ -170,7 +176,10 @@ const rawTextOf = (quasi: unknown): string => {
  * The parent `LogicalExpression` of the same operator, so a chain is reported
  * once at its root rather than at every nested pair.
  */
-const continuesChain = (node: Node): boolean => {
+const continuesChain = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
   const { parent } = node;
   return (
     isAstNode(parent) &&
@@ -194,7 +203,8 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const textOf = (node: Node): string => context.sourceCode.getText(node);
+        const textOf = ({ range: [start, end] }: AstNode): string =>
+          context.sourceCode.text.slice(start, end);
         const report = (node: Node) =>
           context.report({ node, messageId: "handRolledRoleSet" });
 

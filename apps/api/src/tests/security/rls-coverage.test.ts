@@ -39,7 +39,7 @@ let testDb: TestDatabase;
 const roleListsIn = (definition: string): Set<string>[] =>
   [...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu)].map(
     ([, list = ""]) =>
-      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
+      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role = ""]) => role)),
   );
 
 const isSameSet = (
