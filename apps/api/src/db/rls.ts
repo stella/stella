@@ -142,6 +142,15 @@ export const organizationCheck = sql`organization_id =
     '${sql.raw(SETTING_ORGANIZATION_ID)}', true
   ))`;
 
+export const workspaceInsertCheck = sql`${organizationCheck} AND (
+  NULLIF((SELECT pg_catalog.current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  )), '') IS NOT NULL
+  OR (SELECT pg_catalog.current_setting(
+    '${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', true
+  )) = '${sql.raw(WORKSPACE_ACCESS_MODE.explicit)}'
+)`;
+
 const userCheck = sql`user_id =
   (SELECT current_setting(
     '${sql.raw(SETTING_USER_ID)}', true
