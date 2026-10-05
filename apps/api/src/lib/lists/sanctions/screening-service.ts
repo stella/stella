@@ -19,6 +19,7 @@ import type {
   SanctionsSource,
   ScreeningQuery,
   ScreeningQueryError,
+  ScreeningResult,
 } from "@stll/sanctions";
 
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
@@ -26,7 +27,10 @@ import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import type {
+  SanctionsActiveEdition,
+  SanctionsIndexCache,
+} from "@/api/lib/lists/sanctions/screening-index";
 import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
@@ -292,12 +296,21 @@ const toPossibleMatch = (
   },
 });
 
+type SanctionsListMatcher = (props: {
+  db: SanctionsReadDb;
+  source: SanctionsSource;
+  edition: SanctionsActiveEdition;
+  query: ScreeningQuery;
+  limit: number;
+}) => Promise<ScreeningResult | null>;
+
 type ScreenListProps = {
   db: SanctionsReadDb;
   freshness: SanctionsSourceFreshness;
   query: ScreeningQuery;
   base: ListOutcomeBase;
   indexCache: SanctionsIndexCache;
+  matcher: SanctionsListMatcher | undefined;
   resultMode: "bounded" | "complete";
 };
 
@@ -307,6 +320,7 @@ const screenList = async ({
   query,
   base,
   indexCache,
+  matcher,
   resultMode,
 }: ScreenListProps): Promise<SanctionsListOutcome> => {
   const { edition, lastSuccessfulVerifiedAt } = freshness;
@@ -318,42 +332,62 @@ const screenList = async ({
   ) {
     return unavailableList(base, freshness.reason ?? "not-loaded", freshness);
   }
-  // Each list degrades on its own: a cache that rejects instead of answering
-  // `load-failed` still leaves the other lists screening.
-  const index = await Result.tryPromise(
-    async () => await indexCache.get({ db, source: freshness.source, edition }),
-  );
-  if (index.isErr()) {
+  const limit =
+    resultMode === "complete"
+      ? Math.max(1, edition.entryCount)
+      : SANCTIONS_MATCH_LIMIT;
+  const matched = await Result.tryPromise(async () => {
+    if (matcher !== undefined) {
+      return Result.ok(
+        await matcher({
+          db,
+          source: freshness.source,
+          edition,
+          query,
+          limit,
+        }),
+      );
+    }
+    const index = await indexCache.get({
+      db,
+      source: freshness.source,
+      edition,
+    });
+    if (index.isErr()) {
+      return Result.err(index.error);
+    }
+    const screened = screen(index.value, query, {
+      cutoff: DEFAULT_CUTOFF,
+      limit,
+    });
+    if (screened.isErr()) {
+      if (screened.error.code === "work-limit") {
+        return Result.err({ code: "load-failed" as const });
+      }
+      return panic("A validated sanctions query was rejected");
+    }
+    return Result.ok(screened.value);
+  });
+  if (matched.isErr()) {
     return unavailableList(base, "load-failed", freshness);
   }
-  if (index.value.isErr()) {
-    return unavailableList(base, index.value.error.code, freshness);
+  if (matched.value.isErr()) {
+    return unavailableList(base, matched.value.error.code, freshness);
   }
-  const screened = screen(index.value.value, query, {
-    cutoff: DEFAULT_CUTOFF,
-    limit:
-      resultMode === "complete"
-        ? Math.max(1, edition.entryCount)
-        : SANCTIONS_MATCH_LIMIT,
-  });
-  if (screened.isErr()) {
-    if (screened.error.code === "work-limit") {
-      return unavailableList(base, "load-failed", freshness);
-    }
-    // The query was validated against an empty index first, and these
-    // errors depend on the query alone.
-    return panic("A validated sanctions query was rejected");
+  if (matched.value.value === null) {
+    return unavailableList(base, "load-failed", freshness);
   }
+  const screened = matched.value.value;
   const screenedEdition: ScreenedEdition = {
     editionId: edition.id,
     publishedAt: edition.publishedAt,
     verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
   };
-  const [first, ...rest] = screened.value.possibleMatches.map((match) =>
+  const [first, ...rest] = screened.possibleMatches.map((match) =>
     toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
-    if (screened.value.truncated) {
+    if (screened.truncated) {
       return unavailableList(base, "load-failed", freshness);
     }
     return {
@@ -371,8 +405,8 @@ const screenList = async ({
     ...screenedEdition,
     status: "possible-match",
     reason: null,
-    totalMatches: screened.value.totalMatches,
-    truncated: screened.value.truncated,
+    totalMatches: screened.totalMatches,
+    truncated: screened.truncated,
     possibleMatches: [first, ...rest],
   };
 };
@@ -388,6 +422,7 @@ type ScreenSanctionsSubjectProps = {
   resultMode?: "bounded" | "complete";
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
+  matcher?: SanctionsListMatcher;
 };
 
 /**
@@ -403,6 +438,7 @@ export const screenSanctionsSubject = async ({
   now = new Date(),
   resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
+  matcher,
 }: ScreenSanctionsSubjectProps): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>
 > => {
@@ -455,6 +491,7 @@ export const screenSanctionsSubject = async ({
           heldUpdate: sourceFreshness.heldUpdate,
         }),
         indexCache,
+        matcher,
         resultMode,
       }),
     );

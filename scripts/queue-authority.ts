@@ -48,6 +48,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   MEMBER_RUN_QUEUES,
   MEMBER_RUN_REVOCATION_CASES,
@@ -495,7 +497,7 @@ const auditQueueAuthority = (input: AuditInput): Audit => {
       members.push({ key: `${queue}::revocation-test`, reason: gap });
     }
   }
-  members.sort((left, right) => left.key.localeCompare(right.key));
+  members.sort((left, right) => compareCodeUnit(left.key, right.key));
   return { errors, members };
 };
 
@@ -960,7 +962,7 @@ const treeLedgers = (): Ledger[] => {
       audit: {
         errors: [...registry.errors, ...tasks.errors],
         members: tasks.members.toSorted((left, right) =>
-          left.key.localeCompare(right.key),
+          compareCodeUnit(left.key, right.key),
         ),
       },
     },

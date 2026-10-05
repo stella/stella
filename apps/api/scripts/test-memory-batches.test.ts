@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { listApiTestPaths, planApiTestBatches } from "./api-test-plan";
@@ -277,7 +278,7 @@ test("measurement mode composes fresh children without consulting normal estimat
     groups
       .flatMap(({ testBatches }) => testBatches)
       .toSorted((left, right) =>
-        left.join("\0").localeCompare(right.join("\0")),
+        compareCodeUnit(left.join("\0"), right.join("\0")),
       ),
   ).toEqual(testPaths.toSorted().map((file) => [file]));
 });
