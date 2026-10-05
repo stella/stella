@@ -144,3 +144,5 @@ export type {
 } from "./schema/common";
 
 export * from "./schema/soft-law";
+
+export * from "./schema/desktop-presence";

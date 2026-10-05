@@ -24,6 +24,7 @@ mod keychain;
 mod logging;
 mod marker_file;
 mod pdf_signing;
+mod presence;
 mod registry;
 mod relaunch;
 mod session_manager;

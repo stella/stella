@@ -44,11 +44,6 @@ pub enum CheckOutcome {
 }
 
 pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManager>>) {
-  if cfg!(debug_assertions) {
-    tracing::debug!("background updater skipped in debug build");
-    return;
-  }
-
   if let Some(path) = last_check_path() {
     match std::fs::read_to_string(path) {
       Ok(value) => match value.trim().parse() {
@@ -60,12 +55,19 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
     }
   }
   async_runtime::spawn(async move {
+    let mut presence_schedule = crate::presence::Schedule::default();
+    if presence_schedule.take_due(unix_seconds(SystemTime::now()), WAKE_CHECK_TICK) {
+      crate::presence::report(&handle).await;
+    }
     tokio::time::sleep(STARTUP_CHECK_DELAY).await;
 
     loop {
       let now = unix_seconds(SystemTime::now());
+      if presence_schedule.take_due(now, WAKE_CHECK_TICK) {
+        crate::presence::report(&handle).await;
+      }
       let last_check = LAST_CHECK.load(Ordering::Relaxed);
-      if !check_due(last_check, now) {
+      if cfg!(debug_assertions) || !check_due(last_check, now) {
         tokio::time::sleep(WAKE_CHECK_TICK).await;
         continue;
       }

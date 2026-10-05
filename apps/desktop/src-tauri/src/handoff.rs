@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
 const PROTOCOL_HEADER: &str = "X-Stella-Desktop-Protocol";
-const PROTOCOL_VERSION: u32 = 1;
+pub(crate) const PROTOCOL_VERSION: u32 = 1;
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -200,6 +200,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
 
+  "desktop_presence.user_id":
+    "Technical liveness observation; account deletion cascades, and current organization membership gates reporting and reads.",
   "account_deletion_requests.user_id":
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":

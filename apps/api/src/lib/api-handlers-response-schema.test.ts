@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Elysia, status, t } from "elysia";
+import * as v from "valibot";
 
 import {
   safeHandlerResponseSchemas,
@@ -50,4 +51,29 @@ describe("safe handler response schemas", () => {
     expect(result.status).toBe(401);
     expect(await result.text()).toBe("Unauthorized");
   });
+});
+
+test("standard success schemas share the same typed error responses", async () => {
+  const success = v.strictObject({ reported: v.literal(true) });
+  const standardResponses = safeHandlerResponseSchemas(success);
+  expectTypeOf<(typeof standardResponses)[200]>().toEqualTypeOf<
+    typeof success
+  >();
+  const standardApp = new Elysia()
+    .get("/success", () => ({ reported: true as const }), {
+      response: standardResponses,
+    })
+    .get("/refused", () => status(401, { message: "Connect account" }), {
+      response: standardResponses,
+    });
+  const accepted = await standardApp.handle(
+    new Request("https://example.test/success"),
+  );
+  expect(accepted.status).toBe(200);
+  expect(await accepted.json()).toEqual({ reported: true });
+  const refused = await standardApp.handle(
+    new Request("https://example.test/refused"),
+  );
+  expect(refused.status).toBe(401);
+  expect(await refused.json()).toEqual({ message: "Connect account" });
 });
