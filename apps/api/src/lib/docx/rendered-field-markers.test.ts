@@ -1,7 +1,15 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
+import { assertProperty } from "@stll/property-testing";
 import { resolvePath } from "@stll/template-conditions";
+
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import {
   createDirectiveProcessingContext,
@@ -9,7 +17,8 @@ import {
 } from "./block-directives";
 import { locateFieldMarkers } from "./discover-template";
 import { processInlineConditions } from "./inline-conditions";
-import { W_NS } from "./ooxml";
+import { paragraphOwnText, paragraphText, W_NS } from "./ooxml";
+import { fillTemplate, renderedTemplateMarkers } from "./patch-template";
 import {
   collectRenderedFieldTokens,
   createFieldMarkerTable,
@@ -31,7 +40,12 @@ const renderedInspection = (text: string, values: TemplateData) => {
   const table = createFieldMarkerTable([text]);
   const context = createDirectiveProcessingContext();
   context.scopeInlineText = (options) => scopeInlineFieldTokens(table, options);
-  swapFieldMarkersForTokens(locateFieldMarkers(body).fieldMarkers, table);
+  expect(
+    swapFieldMarkersForTokens(
+      locateFieldMarkers(body).fieldMarkers,
+      table,
+    ).isOk(),
+  ).toBe(true);
   expect(
     processBlockDirectives(body, values, { processingContext: context }).errors,
   ).toEqual([]);
@@ -108,4 +122,136 @@ test("authored private-use text remains literal beside field markers", () => {
   });
   expect(result.text).toContain(authored);
   expect(result.fields).toEqual([{ path: "name", value: "Ann" }]);
+});
+
+for (const part of ["document", "header1", "footer1"]) {
+  for (const inTable of [false, true]) {
+    for (const standalone of [false, true]) {
+      test(`each paragraph owns its text-box markers in ${part}, table=${String(inTable)}, standalone=${String(standalone)}`, async () => {
+        const inner =
+          "<w:p><w:r><w:t>{{ na</w:t></w:r><w:r><w:t>me | required }}</w:t></w:r></w:p>";
+        const nested = inTable
+          ? `<w:tbl><w:tr><w:tc>${inner}</w:tc></w:tr></w:tbl>`
+          : inner;
+        const paragraph = `<w:p><w:r><w:t>${standalone ? "{{ outer }}" : "Outer {{ outer }} "}</w:t></w:r><w:r><w:pict><w:txbxContent>${nested}</w:txbxContent></w:pict></w:r><w:r><w:t>${standalone ? "" : " tail"}</w:t></w:r></w:p>`;
+        const wrap = (content: string) =>
+          part === "document"
+            ? `<w:document xmlns:w="${W_NS}"><w:body>${content}</w:body></w:document>`
+            : `<w:${part === "header1" ? "hdr" : "ftr"} xmlns:w="${W_NS}">${content}</w:${part === "header1" ? "hdr" : "ftr"}>`;
+        const zip = new JSZip();
+        zip.file(
+          "word/document.xml",
+          `<w:document xmlns:w="${W_NS}"><w:body/></w:document>`,
+        );
+        zip.file(`word/${part}.xml`, wrap(paragraph));
+        const file = testDocxFile(
+          await zip.generateAsync({ type: "uint8array" }),
+        );
+        const markers = await renderedTemplateMarkers(
+          file,
+          { outer: "A", name: "Ann" },
+          [],
+        );
+        if (Result.isError(markers)) {
+          throw markers.error;
+        }
+        expect(markers.value.fields.map(({ path }) => path)).toEqual([
+          "outer",
+          "name",
+        ]);
+        const filled = await fillTemplate(file, { outer: "A", name: "Ann" });
+        expect(filled.structureErrors).toEqual([]);
+        expect(filled.unmatchedPlaceholders).toEqual([]);
+        const output = await JSZip.loadAsync(filled.file.bytes);
+        const xml = await output.file(`word/${part}.xml`)?.async("string");
+        expect(xml).toBeDefined();
+        const doc = slimdom.parseXmlDocument(xml ?? "");
+        const text = [...doc.getElementsByTagNameNS(W_NS, "t")]
+          .map((node) => node.textContent)
+          .join("");
+        expect(text).toBe(standalone ? "AAnn" : "Outer A Ann tail");
+        expect(doc.getElementsByTagNameNS(W_NS, "txbxContent")).toHaveLength(1);
+      });
+    }
+  }
+}
+
+test("inconsistent marker counts produce a typed template refusal", () => {
+  const doc = slimdom.parseXmlDocument(
+    `<w:body xmlns:w="${W_NS}"><w:p><w:r><w:t>{{ name }}</w:t></w:r></w:p></w:body>`,
+  );
+  const paragraph = doc.getElementsByTagNameNS(W_NS, "p").at(0);
+  if (paragraph === undefined) {
+    throw new TypeError("Expected a paragraph");
+  }
+  const markers = new Map([[paragraph, []]]);
+  const result = swapFieldMarkersForTokens(markers, createFieldMarkerTable([]));
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    throw new TypeError("Expected a typed marker refusal");
+  }
+  expect(result.error).toBeInstanceOf(HandlerError);
+  expect(result.error.status).toBe(422);
+  expect(result.error.code).toBe(API_VALIDATION_ERROR_CODE);
+  expect(result.error.retryable).toBe(false);
+});
+
+test("paragraph marker ownership is independent of text-box nesting depth", () => {
+  assertProperty(
+    "paragraph marker ownership is independent of text-box nesting depth",
+    fc.property(fc.integer({ min: 1, max: 6 }), (depth) => {
+      let xml = "";
+      for (let index = depth; index >= 0; index--) {
+        xml = `<w:p><w:r><w:t>{{ field_${String(index)} }}</w:t></w:r>${xml === "" ? "" : `<w:r><w:pict><w:txbxContent>${xml}</w:txbxContent></w:pict></w:r>`}</w:p>`;
+      }
+      const doc = slimdom.parseXmlDocument(
+        `<w:body xmlns:w="${W_NS}">${xml}</w:body>`,
+      );
+      const root = doc.documentElement;
+      if (root === null) {
+        throw new TypeError("Expected a document root");
+      }
+      const outer = root.getElementsByTagNameNS(W_NS, "p").at(0);
+      if (outer === undefined) {
+        throw new TypeError("Expected an outer paragraph");
+      }
+      expect(paragraphOwnText(outer)).toBe("{{ field_0 }}");
+      expect(paragraphSpanText(outer)).toBe(paragraphOwnText(outer));
+      expect(paragraphText(outer)).toContain(`{{ field_${String(depth)} }}`);
+      const table = createFieldMarkerTable([paragraphText(outer)]);
+      expect(
+        swapFieldMarkersForTokens(
+          locateFieldMarkers(root).fieldMarkers,
+          table,
+        ).isOk(),
+      ).toBe(true);
+      const occurrences: RenderedFieldOccurrence[] = [];
+      collectRenderedFieldTokens(root, new Map(), table, occurrences);
+      expect(occurrences.map(({ path }) => path)).toEqual(
+        Array.from(
+          { length: depth + 1 },
+          (_, index) => `field_${String(index)}`,
+        ),
+      );
+      expect(table.markers.size).toBe(depth + 1);
+    }),
+  );
+});
+
+test("authored text outside a run produces a typed template refusal", async () => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<w:document xmlns:w="${W_NS}"><w:body><w:p><w:t>{{ name }}</w:t></w:p></w:body></w:document>`,
+  );
+  const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const result = await renderedTemplateMarkers(file, { name: "Ann" }, []);
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    throw new TypeError("Expected a typed marker refusal");
+  }
+  expect(result.error).toBeInstanceOf(HandlerError);
+  expect(result.error.status).toBe(422);
+  expect(result.error.code).toBe(API_VALIDATION_ERROR_CODE);
+  expect(result.error.retryable).toBe(false);
 });

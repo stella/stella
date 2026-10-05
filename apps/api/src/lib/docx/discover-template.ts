@@ -46,7 +46,7 @@ import { parseInlineConditions } from "./inline-conditions";
 import type { InlineGroup } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
-  paragraphText,
+  paragraphOwnText,
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
@@ -663,7 +663,7 @@ const collectContainerStructure = ({
         ...collectParagraphWarnings({
           loops: activeArrays,
           paragraphIndex: authoredIndices[i] ?? i,
-          text: paragraphText(paragraph),
+          text: paragraphOwnText(paragraph),
         }),
       );
     }
@@ -719,7 +719,7 @@ const collectLoopItemFields = ({
       const prefixes = [...new Set([block.alias, block.arrayPath])].map(
         (head) => `${head}.`,
       );
-      for (const { name } of scanPlaceholders(paragraphText(para))) {
+      for (const { name } of scanPlaceholders(paragraphOwnText(para))) {
         const prefix = prefixes.find((candidate) => name.startsWith(candidate));
         if (prefix !== undefined) {
           entry?.itemPaths.add(name.slice(prefix.length));
@@ -755,7 +755,7 @@ const collectParagraphPlaceholders = ({
     if (!para) {
       continue;
     }
-    const text = paragraphText(para);
+    const text = paragraphOwnText(para);
     const paraCondition = combineConditions(
       enclosing.condition,
       conditionMap.get(i),

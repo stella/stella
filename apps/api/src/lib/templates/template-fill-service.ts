@@ -860,9 +860,12 @@ const renderedFill = async ({
   bodies,
   namedConditions,
   occurrenceValues,
-}: RenderedFillOptions): Promise<RenderedFill> => {
+}: RenderedFillOptions): Promise<Result<RenderedFill, HandlerError<422>>> => {
   const rendered = await renderedTemplateMarkers(file, values, namedConditions);
-  const occurrences = rendered.fields.map(({ path, expr, scope }) => ({
+  if (Result.isError(rendered)) {
+    return rendered;
+  }
+  const occurrences = rendered.value.fields.map(({ path, expr, scope }) => ({
     path,
     expr,
     values: scope ?? values,
@@ -870,7 +873,7 @@ const renderedFill = async ({
   for (const [
     index,
     { patchKey, loopScope },
-  ] of rendered.clauseSlots.entries()) {
+  ] of rendered.value.clauseSlots.entries()) {
     const body = bodies[patchKey];
     if (body === undefined) {
       continue;
@@ -880,21 +883,25 @@ const renderedFill = async ({
     if (!isTemplateData(slotValues)) {
       return panic("Loop scope holds values outside the template data model");
     }
-    for (const { path, expr, scope } of renderedClauseFieldMarkers(body, {
+    const clauseFields = renderedClauseFieldMarkers(body, {
       values: slotValues,
       namedConditions,
       slotScope: discovered.clauseSlotScopes?.[patchKey],
-    })) {
+    });
+    if (Result.isError(clauseFields)) {
+      return clauseFields;
+    }
+    for (const { path, expr, scope } of clauseFields.value) {
       occurrences.push({ path, expr, values: scope ?? slotValues });
     }
   }
-  return {
-    slots: new Set(rendered.clauseSlots.map(({ patchKey }) => patchKey)),
+  return Result.ok({
+    slots: new Set(rendered.value.clauseSlots.map(({ patchKey }) => patchKey)),
     required: {
       paths: new Set(discovered.renderedFieldPaths?.scoped),
       occurrences,
     },
-  };
+  });
 };
 
 const overlapsPath = (left: string, right: string) =>
@@ -1114,11 +1121,20 @@ const prepareClauseOccurrences = async ({
     record,
     namedConditions,
   );
+  if (Result.isError(occurrences)) {
+    return {
+      type: "refused" as const,
+      rejection: {
+        error: occurrences.error.message,
+        storedTemplateError: occurrences.error,
+      },
+    };
+  }
   const aiFieldErrors: AiFieldError[] = [];
   const conditionDecisions: ResolvedAiCondition[] = [];
   const occurrenceValues: PreparedClauseOccurrence[] = [];
   const preparedDocumentPaths = new Set<string>();
-  for (const { patchKey, loopScope } of occurrences) {
+  for (const { patchKey, loopScope } of occurrences.value) {
     const paths = new Set(
       arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
     );
@@ -1169,7 +1185,7 @@ const prepareClauseOccurrences = async ({
       bindingContext,
     });
     if (scopeError !== null) {
-      return { type: "refused" as const, error: scopeError };
+      return { type: "refused" as const, rejection: { error: scopeError } };
     }
     const scopedDrafted = await resolveAiFields({
       values,
@@ -1555,7 +1571,7 @@ const prepareFillAdmission = async <TRejection>({
   // When the submitted values already decide what renders, read it once, so
   // required fields and authored overrides are judged before quota checks,
   // lookups or AI work; otherwise both wait for the values the fill renders.
-  const earlyRendering =
+  const earlyResult =
     renderingSettledBeforeFillSteps(manifest, discovered) &&
     isTemplateData(values) &&
     (requiredGate.readsRendering || invalidOverrides.length > 0)
@@ -1567,6 +1583,16 @@ const prepareFillAdmission = async <TRejection>({
           namedConditions,
         })
       : null;
+  if (earlyResult !== null && Result.isError(earlyResult)) {
+    return {
+      type: "refused" as const,
+      rejection: {
+        error: earlyResult.error.message,
+        storedTemplateError: earlyResult.error,
+      },
+    };
+  }
+  const earlyRendering = earlyResult?.value ?? null;
   if (earlyRendering !== null) {
     const overrides = settleInvalidOverrides(
       invalidOverrides,
@@ -1650,7 +1676,17 @@ const settleRenderedFill = async ({
   invalidOverrides,
   ...options
 }: SettleRenderedFillOptions) => {
-  const finalRendering = await renderedFill(options);
+  const finalResult = await renderedFill(options);
+  if (Result.isError(finalResult)) {
+    return {
+      type: "refused" as const,
+      rejection: {
+        error: finalResult.error.message,
+        storedTemplateError: finalResult.error,
+      },
+    };
+  }
+  const finalRendering = finalResult.value;
   if (earlyRendering === null && requiredGate.readsRendering) {
     const missing = requiredGate.late(options.values, finalRendering);
     if (missing.length > 0) {
@@ -1821,7 +1857,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     documentText: drafting.grounding,
   });
   if (prepared.type === "refused") {
-    return { error: prepared.error };
+    return prepared.rejection;
   }
   aiFieldErrors.push(...prepared.aiFieldErrors);
   conditionDecisions.push(...prepared.conditionDecisions);

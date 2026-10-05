@@ -8,7 +8,7 @@
  * DOM before value replacement runs.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
@@ -16,6 +16,7 @@ import type { NamedCondition } from "@stll/template-conditions";
 import { scanMarkers, substitutionKey } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -187,7 +188,7 @@ const visitClauseSlots = (
  * every paragraph a loop iteration produced.
  */
 type DirectivePassInspection = {
-  prepare: (container: slimdom.Element) => void;
+  prepare: (container: slimdom.Element) => Result<void, HandlerError<422>>;
   scopeInlineText: ReturnType<
     typeof createDirectiveProcessingContext
   >["scopeInlineText"];
@@ -263,7 +264,10 @@ const preProcessTemplateDirectives = async (
     const paragraphCount = container.getElementsByTagNameNS(W_NS, "p").length;
     const paragraphOffset = paragraphOffsets[source];
     paragraphOffsets[source] += paragraphCount;
-    inspection?.prepare(container);
+    const prepared = inspection?.prepare(container);
+    if (prepared !== undefined && Result.isError(prepared)) {
+      return null;
+    }
     if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
       if (visitClauseSlot) {
         visitClauseSlots(container, processingContext, visitClauseSlot);
@@ -341,7 +345,7 @@ export const renderedTemplateMarkers = async (
   template: ScannedFile,
   values: TemplateData,
   namedConditions: NamedCondition[],
-): Promise<RenderedTemplateMarkers> => {
+): Promise<Result<RenderedTemplateMarkers, HandlerError<422>>> => {
   const rendered: RenderedTemplateMarkers = { clauseSlots: [], fields: [] };
   const collect: ClauseSlotVisitor = (occurrence) => {
     rendered.clauseSlots.push(occurrence);
@@ -361,16 +365,28 @@ export const renderedTemplateMarkers = async (
     }),
   );
   const table = createFieldMarkerTable(authoredTexts);
+  let markerError: HandlerError<422> | undefined;
   const inspection: DirectivePassInspection = {
     scopeInlineText: (options) => scopeInlineFieldTokens(table, options),
     prepare: (container) => {
-      swapFieldMarkersForTokens(
+      const swapped = swapFieldMarkersForTokens(
         locateFieldMarkers(container).fieldMarkers,
         table,
       );
+      if (Result.isError(swapped)) {
+        markerError = swapped.error;
+      }
+      return swapped;
     },
     inspect: (container, loopScopes) => {
-      collectRenderedFieldTokens(container, loopScopes, table, rendered.fields);
+      if (markerError === undefined) {
+        collectRenderedFieldTokens(
+          container,
+          loopScopes,
+          table,
+          rendered.fields,
+        );
+      }
     },
   };
   const evaluated = await preProcessTemplateDirectives(zip, values, {
@@ -379,8 +395,11 @@ export const renderedTemplateMarkers = async (
     inspection,
     visitClauseSlot: collect,
   });
+  if (markerError !== undefined) {
+    return Result.err(markerError);
+  }
   if (evaluated !== null) {
-    return rendered;
+    return Result.ok(rendered);
   }
   // No part carries a directive: every marker renders at document scope.
   for (const path of templateContentPartPaths(Object.keys(zip.files))) {
@@ -393,12 +412,15 @@ export const renderedTemplateMarkers = async (
             templatePartSource(path),
           );
     if (container) {
-      inspection.prepare(container);
+      const prepared = inspection.prepare(container);
+      if (Result.isError(prepared)) {
+        return prepared;
+      }
       inspection.inspect(container, new Map());
       visitClauseSlots(container, createDirectiveProcessingContext(), collect);
     }
   }
-  return rendered;
+  return Result.ok(rendered);
 };
 
 /** Clause occurrence preparation uses the same rendering inspection as the
@@ -407,9 +429,10 @@ export const renderedClauseSlotOccurrences = async (
   template: ScannedFile,
   values: TemplateData,
   namedConditions: NamedCondition[],
-): Promise<ClauseSlotOccurrence[]> =>
-  (await renderedTemplateMarkers(template, values, namedConditions))
-    .clauseSlots;
+): Promise<Result<ClauseSlotOccurrence[], HandlerError<422>>> =>
+  (await renderedTemplateMarkers(template, values, namedConditions)).map(
+    ({ clauseSlots }) => clauseSlots,
+  );
 
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */

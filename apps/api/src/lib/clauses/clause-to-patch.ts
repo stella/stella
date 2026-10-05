@@ -200,7 +200,9 @@ type ClauseEvaluationOptions = Pick<
   "values" | "namedConditions"
 > & {
   /** Sees the body's container before its directives are evaluated. */
-  prepare?: ((container: slimdom.Element) => void) | undefined;
+  prepare?:
+    | ((container: slimdom.Element) => Result<void, HandlerError<422>>)
+    | undefined;
   scopeInlineText?: ReturnType<
     typeof createDirectiveProcessingContext
   >["scopeInlineText"];
@@ -218,7 +220,10 @@ const evaluateClauseDirectives = (
   }: ClauseEvaluationOptions,
 ) => {
   const container = clauseDirectiveContainer(body);
-  prepare?.(container);
+  const prepared = prepare?.(container);
+  if (prepared !== undefined && Result.isError(prepared)) {
+    return Result.err(prepared.error);
+  }
   const conditionValues = readConditionRawValues(values);
   const processingContext = createDirectiveProcessingContext();
   processingContext.scopeInlineText = scopeInlineText;
@@ -233,12 +238,12 @@ const evaluateClauseDirectives = (
     namedConditions,
     { processingContext },
   );
-  return {
+  return Result.ok({
     container,
     patchValues,
     errors: [...errors, ...inlineErrors],
     loopScopes: processingContext.inlineDataByParagraph,
-  };
+  });
 };
 
 type RenderedClauseFieldOptions = Pick<
@@ -258,12 +263,12 @@ type RenderedClauseFieldOptions = Pick<
 export const renderedClauseFieldMarkers = (
   body: ClauseBody,
   { values, namedConditions, slotScope }: RenderedClauseFieldOptions,
-): RenderedFieldOccurrence[] => {
+): Result<RenderedFieldOccurrence[], HandlerError<422>> => {
   if (
     Result.isError(validateClauseBodyDirectives(body)) ||
     !hasTemplateMarkers(body)
   ) {
-    return [];
+    return Result.ok([]);
   }
   const table = createFieldMarkerTable(
     body.map((paragraph) =>
@@ -274,26 +279,29 @@ export const renderedClauseFieldMarkers = (
             .join(""),
     ),
   );
-  const { container, errors, loopScopes } = evaluateClauseDirectives(body, {
+  const evaluated = evaluateClauseDirectives(body, {
     values,
     namedConditions,
     scopeInlineText: (options) => scopeInlineFieldTokens(table, options),
-    prepare: (prepared) => {
+    prepare: (prepared) =>
       swapFieldMarkersForTokens(
         locateFieldMarkers(prepared, { scope: slotScope }).fieldMarkers,
         table,
-      );
-    },
+      ),
   });
+  if (Result.isError(evaluated)) {
+    return evaluated;
+  }
+  const { container, errors, loopScopes } = evaluated.value;
   if (errors.length > 0) {
-    return [];
+    return Result.ok([]);
   }
   const rendered: RenderedFieldOccurrence[] = [];
   collectRenderedFieldTokens(container, loopScopes, table, rendered);
   for (const occurrence of rendered) {
     occurrence.scope ??= values;
   }
-  return rendered;
+  return Result.ok(rendered);
 };
 
 /** Resolve the stored body with the template engine before list labels or rich
@@ -334,10 +342,14 @@ export const clauseBodyToRichPatch = (
     return Result.ok(resolvedBodyToRichPatch(body));
   }
 
-  const { container, patchValues, errors } = evaluateClauseDirectives(body, {
+  const evaluated = evaluateClauseDirectives(body, {
     values,
     namedConditions,
   });
+  if (Result.isError(evaluated)) {
+    return evaluated;
+  }
+  const { container, patchValues, errors } = evaluated.value;
   if (errors.length > 0) {
     return structureError(errors);
   }

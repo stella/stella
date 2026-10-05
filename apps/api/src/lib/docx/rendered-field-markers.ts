@@ -9,13 +9,17 @@
  * resolves (a loop iteration's bindings, or the document's).
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type * as slimdom from "slimdom";
+
+import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
+
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import type { InlineIterationTextOptions } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
 import type { LocatedFieldMarker } from "./discover-template";
-import { paragraphText, W_NS } from "./ooxml";
+import { paragraphOwnText, W_NS } from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 
 /** One value marker the pass kept, with the values in scope where it sits. */
@@ -38,7 +42,7 @@ type FieldMarkerEntry = LocatedFieldMarker & {
 
 /** Entries and the namespace their swapped tokens use. */
 export type FieldMarkerTable = {
-  markers: FieldMarkerEntry[];
+  markers: Map<string, FieldMarkerEntry>;
   prefix: string;
   pattern: RegExp;
 };
@@ -53,7 +57,7 @@ export const createFieldMarkerTable = (
   }
   const prefix = `${delimiter}:`;
   return {
-    markers: [],
+    markers: new Map(),
     prefix,
     pattern: new RegExp(`${prefix}(?<id>\\d+)${TOKEN_CLOSE}`, "gu"),
   };
@@ -67,7 +71,7 @@ export const scopeInlineFieldTokens = (
 ): string =>
   text.replace(table.pattern, (_token, id: string) => {
     const marker =
-      table.markers[Number(id)] ??
+      table.markers.get(id) ??
       panic("An inline field token points outside its table");
     const scope = {
       ...values,
@@ -77,8 +81,8 @@ export const scopeInlineFieldTokens = (
       [arrayPath]: row,
       loop,
     };
-    const token = `${table.prefix}${String(table.markers.length)}${TOKEN_CLOSE}`;
-    table.markers.push({ ...marker, scope });
+    const token = `${table.prefix}${String(table.markers.size)}${TOKEN_CLOSE}`;
+    table.markers.set(String(table.markers.size), { ...marker, scope });
     return token;
   });
 
@@ -89,24 +93,41 @@ export const scopeInlineFieldTokens = (
 export const swapFieldMarkersForTokens = (
   fieldMarkers: ReadonlyMap<slimdom.Element, readonly LocatedFieldMarker[]>,
   table: FieldMarkerTable,
-): void => {
+): Result<void, HandlerError<422>> => {
   for (const [paragraph, markers] of fieldMarkers) {
     const placeholders = scanPlaceholders(paragraphSpanText(paragraph));
     if (placeholders.length !== markers.length) {
-      panic("Located field markers differ from paragraph placeholders");
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: API_VALIDATION_ERROR_CODE,
+          retryable: false,
+          message: "Template field markers differ from paragraph placeholders",
+        }),
+      );
     }
-    const ranges = placeholders.map(({ name, start, end }, index) => {
+    const ranges: { start: number; end: number; value: string }[] = [];
+    for (const [index, { name, start, end }] of placeholders.entries()) {
       const marker =
         markers[index] ?? panic("A field occurrence has no located marker");
       if (marker.expr !== name) {
-        panic("A field occurrence disagrees with its located expression");
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            code: API_VALIDATION_ERROR_CODE,
+            retryable: false,
+            message:
+              "Template field marker expression differs from its placeholder",
+          }),
+        );
       }
-      const value = `${table.prefix}${String(table.markers.length)}${TOKEN_CLOSE}`;
-      table.markers.push(marker);
-      return { start, end, value };
-    });
+      const id = String(table.markers.size);
+      table.markers.set(id, marker);
+      ranges.push({ start, end, value: `${table.prefix}${id}${TOKEN_CLOSE}` });
+    }
     replaceParagraphTextRanges(paragraph, ranges);
   }
+  return Result.ok(undefined);
 };
 
 /** Every token the pass kept in `container`, with its paragraph's scope. */
@@ -117,14 +138,14 @@ export const collectRenderedFieldTokens = (
   into: RenderedFieldOccurrence[],
 ): void => {
   for (const paragraph of container.getElementsByTagNameNS(W_NS, "p")) {
-    const text = paragraphText(paragraph);
+    const text = paragraphOwnText(paragraph);
     if (!text.includes(table.prefix)) {
       continue;
     }
     const scope = loopScopes.get(paragraph);
     for (const match of text.matchAll(table.pattern)) {
       const marker =
-        table.markers[Number(match.groups?.["id"])] ??
+        table.markers.get(match.groups?.["id"] ?? "") ??
         panic("A rendered field token points outside its table");
       into.push({
         path: marker.path,

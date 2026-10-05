@@ -3616,3 +3616,23 @@ describe("discovery exposes where each field renders", () => {
     });
   });
 });
+
+test("template fills surface malformed paragraph markers as a typed refusal", async () => {
+  const file = await makeDocx(
+    WRAP("<w:p><w:t>{{ name | required }}</w:t></w:p>"),
+  );
+  const result = await fillTemplateDocx({
+    source: { name: "Paragraph", fileName: "paragraph.docx", file },
+    values: { name: "Ann" },
+    scopedDb: stubScopedDb(),
+    organizationId,
+    requiredFields: "enforce",
+  });
+  expect("storedTemplateError" in result).toBe(true);
+  if (!("storedTemplateError" in result)) {
+    throw new TypeError("Expected a typed template refusal");
+  }
+  expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
+  expect(result.storedTemplateError.status).toBe(422);
+  expect(result.storedTemplateError.retryable).toBe(false);
+});
