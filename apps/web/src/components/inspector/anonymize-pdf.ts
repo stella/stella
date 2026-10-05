@@ -15,6 +15,7 @@ import {
 import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
@@ -39,7 +40,7 @@ const anonymizePdf = async ({
   fieldId: string;
   entityId: string | null;
   queryClient: QueryClient;
-}): Promise<void> => {
+}) => {
   const run = pipelineRuns.start(fieldId);
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
@@ -70,9 +71,7 @@ const anonymizePdf = async ({
   // Release ownership before propagating an error. A cancelled run cannot
   // overwrite a successor's status, and no failure can leave this field locked.
   pipelineRuns.finish(fieldId, run);
-  if (Result.isError(result)) {
-    await Promise.reject(result.error);
-  }
+  return result;
 };
 
 export const useFileAnonymizationPipeline = ({
@@ -110,18 +109,16 @@ export const useFileAnonymizationPipeline = ({
       !vocabularyQuery.isPending &&
       !allowlistQuery.isPending,
     queryFn: async ({ client: queryClient }) => {
-      const result = await Result.tryPromise(async () => {
-        await anonymizePdf({
-          workspaceId,
-          fieldId,
-          entityId,
-          queryClient,
-        });
+      const result = await anonymizePdf({
+        workspaceId,
+        fieldId,
+        entityId,
+        queryClient,
       });
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error);
-        await Promise.reject(result.error);
       }
+      readQueryResult(result);
       return "complete" as const;
     },
     queryKey: [
