@@ -7,8 +7,15 @@ import getSellerProfile from "@/api/handlers/seller-profiles/get";
 import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import updateSellerProfile from "@/api/handlers/seller-profiles/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const sellerProfilesRoute = new Elysia({ prefix: "/seller-profiles" })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

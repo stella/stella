@@ -1161,6 +1161,23 @@ export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
+export type WebEnvironmentName = keyof typeof WEB_ENV_SCHEMA;
+
+type DeploymentFlagPair = {
+  web: WebEnvironmentName;
+  api: ApiEnvironmentName;
+};
+
+/**
+ * Web build flags that offer a feature only the paired API flag serves. A
+ * deployment that turns the web flag on without the API flag shows pages
+ * whose requests the API answers as absent routes, so the deployment
+ * environment check refuses that combination.
+ */
+export const DEPLOYMENT_FLAG_PAIRS = [
+  { web: "VITE_FEATURE_TIME_BILLING", api: "FEATURE_TIME_BILLING" },
+] as const satisfies readonly DeploymentFlagPair[];
+
 export const isActiveExampleEntry = (name: string) =>
   ACTIVE_EXAMPLE_KEYS.has(name);
 
