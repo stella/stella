@@ -946,7 +946,8 @@
       "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
-      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
+      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)"
     }
   },
   "catalogue": {
