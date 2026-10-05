@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
