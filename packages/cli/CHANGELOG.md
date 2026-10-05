@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.8.4
+
+### Patch Changes
+
+- [#4801](https://github.com/stella/stella/pull/4801) [`109ded9`](https://github.com/stella/stella/commit/109ded9c27d08373eaf1fad184dd360a3cb840c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe uploaded email files in matter correspondence list and get.
+
 ## 3.8.3
 
 ### Patch Changes
