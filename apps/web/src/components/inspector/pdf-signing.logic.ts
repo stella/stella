@@ -6,6 +6,8 @@
 
 import { panic } from "better-result";
 
+import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
+
 import { PDF_MIME } from "@/lib/consts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
@@ -67,6 +69,7 @@ export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
 const PDF_SIGNING_FALLBACK_WATCH_MS = 2 * 60 * 1000;
 
 export type PdfSigningCloseReason =
+  | DesktopHandoffFailureReason
   | "base_version_diverged"
   | "certificate_rejected"
   | "certificate_revoked"

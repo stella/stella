@@ -5422,6 +5422,7 @@
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Połącz stella desktop ze swoim kontem",
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
