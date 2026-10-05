@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -187,6 +188,11 @@ export const applyChatApprovalConfirmation = ({
  * fail-closed UUID backstop still runs so no raw tenant id can reach the model
  * through a write result either.
  */
+const CHAT_RESOURCE_ADMISSION_FAILURE = failureSink({
+  event: "chat.resource_admission_failed",
+  expected: [],
+});
+
 export const runRegistryWriteTool = async (
   { toolName, args, context, refRegistry }: RunRegistryWriteToolProps,
   dependencies: RunRegistryWriteToolDependencies = defaultRunRegistryWriteToolDependencies,
@@ -330,11 +336,15 @@ export const runRegistryWriteTool = async (
       }),
   );
   if (visible.isErr()) {
-    captureError(visible.error, { source: "chat", toolName });
+    observeFailure(visible.error, {
+      sink: CHAT_RESOURCE_ADMISSION_FAILURE,
+      ctx: { source: "chat", tool: toolName },
+    });
     return Result.err(
       new ChatToolError({
         kind: "server-defect",
         message: "Tool execution failed",
+        cause: visible.error,
       }),
     );
   }
