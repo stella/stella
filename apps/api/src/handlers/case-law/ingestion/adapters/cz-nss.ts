@@ -1490,6 +1490,30 @@ const fetchDetailMetadata = async (
   return { type: "fetched", detail: parsed.value, html };
 };
 
+/**
+ * The listing row as stored, with its fields in one fixed order. A row the
+ * reconciliation parked comes back from JSONB with its keys reordered, and the
+ * same row must store the same bytes whichever path built it.
+ */
+const storedListingRow = ({
+  caseNumber,
+  publishedCaseNumber,
+  decisionDate,
+  decisionType,
+  outcome,
+  documentUrl,
+  documentId,
+}: ParsedRow): string =>
+  JSON.stringify({
+    caseNumber,
+    publishedCaseNumber,
+    decisionDate,
+    decisionType,
+    outcome,
+    documentUrl,
+    documentId,
+  } satisfies Record<keyof ParsedRow, unknown>);
+
 type RowToResultOptions = {
   row: ParsedRow;
   content: DecisionContent;
@@ -1628,30 +1652,6 @@ const rowToResult = ({
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 };
-
-/**
- * The listing row as stored, with its fields in one fixed order. A row the
- * reconciliation parked comes back from JSONB with its keys reordered, and the
- * same row must store the same bytes whichever path built it.
- */
-const storedListingRow = ({
-  caseNumber,
-  publishedCaseNumber,
-  decisionDate,
-  decisionType,
-  outcome,
-  documentUrl,
-  documentId,
-}: ParsedRow): string =>
-  JSON.stringify({
-    caseNumber,
-    publishedCaseNumber,
-    decisionDate,
-    decisionType,
-    outcome,
-    documentUrl,
-    documentId,
-  } satisfies Record<keyof ParsedRow, unknown>);
 
 /**
  * The reference as published for a stored row, read back from the row itself.
