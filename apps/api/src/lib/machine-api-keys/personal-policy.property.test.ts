@@ -125,7 +125,7 @@ describe("personal API key authority", () => {
     );
     expect(capability?.scope).toBe(scope);
     if (!capability?.permissions) {
-      return panic(
+      panic(
         "Each positive scope fixture must name actual capability permissions",
       );
     }
@@ -200,16 +200,17 @@ describe("personal API key authority", () => {
             if (parsed.type !== "valid") {
               return;
             }
-            const outcome = await Result.tryPromise(() =>
-              resolveMachineApiKeySession("stella_mk_fixture", {
-                verifyApiKey: async () => {
-                  const verified = verification(permissions);
-                  verified.key.metadata.scopes = scopes;
-                  return verified;
-                },
-                resolveAuthorization: authorizeAs(currentRole),
-                resolvePersonalPolicy: async () => "enabled",
-              }),
+            const outcome = await Result.tryPromise(
+              async () =>
+                await resolveMachineApiKeySession("stella_mk_fixture", {
+                  verifyApiKey: async () => {
+                    const verified = verification(permissions);
+                    verified.key.metadata.scopes = scopes;
+                    return verified;
+                  },
+                  resolveAuthorization: authorizeAs(currentRole),
+                  resolvePersonalPolicy: async () => "enabled",
+                }),
             );
             expect(outcome.isOk()).toBe(
               hasMemberPermission(
@@ -278,7 +279,7 @@ describe("personal API key authority", () => {
   });
 
   test("removing the owner refuses the key", async () => {
-    const outcome = await Result.tryPromise(() =>
+    const outcome = await Result.tryPromise(async () =>
       resolveMachineApiKeySession("stella_mk_fixture", {
         verifyApiKey: async () => verification({ workspace: ["read"] }),
         resolveAuthorization: async () => null,
@@ -292,7 +293,7 @@ describe("personal API key authority", () => {
   });
 
   test("a disabled organization policy kills an otherwise valid key", async () => {
-    const outcome = await Result.tryPromise(() =>
+    const outcome = await Result.tryPromise(async () =>
       resolveMachineApiKeySession("stella_mk_fixture", {
         verifyApiKey: async () => verification({ workspace: ["read"] }),
         resolveAuthorization: authorizeAs("member"),
@@ -307,13 +308,14 @@ describe("personal API key authority", () => {
 
   test("a personal key is bound to exactly one audience", async () => {
     for (const mode of ["law", "documents", "anonymized"] as const) {
-      const outcome = await Result.tryPromise(() =>
-        resolveMachineApiKeySession("stella_mk_fixture", {
-          mode,
-          verifyApiKey: async () => verification({ workspace: ["read"] }),
-          resolveAuthorization: authorizeAs("owner"),
-          resolvePersonalPolicy: async () => "enabled",
-        }),
+      const outcome = await Result.tryPromise(
+        async () =>
+          await resolveMachineApiKeySession("stella_mk_fixture", {
+            mode,
+            verifyApiKey: async () => verification({ workspace: ["read"] }),
+            resolveAuthorization: authorizeAs("owner"),
+            resolvePersonalPolicy: async () => "enabled",
+          }),
       );
       expect(outcome.isErr()).toBe(true);
       if (outcome.isErr()) {
@@ -338,7 +340,7 @@ describe("personal API key authority", () => {
   });
 
   test("personal credentials cannot carry administrative permissions", async () => {
-    const outcome = await Result.tryPromise(() =>
+    const outcome = await Result.tryPromise(async () =>
       resolveMachineApiKeySession("stella_mk_fixture", {
         verifyApiKey: async () =>
           verification({ organizationSettings: ["update"] }),

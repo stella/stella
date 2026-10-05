@@ -64,8 +64,8 @@ if (!databaseUrl || !runPostgres) {
           createdAt: new Date(),
         });
         try {
-          const create = (database: typeof firstDb) =>
-            createPersonalApiKey({
+          const create = async (database: typeof firstDb) =>
+            await createPersonalApiKey({
               name: "Parallel key",
               organizationId,
               userId,

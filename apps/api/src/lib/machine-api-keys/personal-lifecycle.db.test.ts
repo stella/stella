@@ -156,7 +156,7 @@ describe("personal key persistence and receipts", () => {
           .from(apikey)
           .where(inArray(apikey.id, ids));
         expect(rows).toHaveLength(ids.length);
-        expect(rows.every((key) => key.enabled === false)).toBe(true);
+        expect(rows.every((key) => !key.enabled)).toBe(true);
         const [unaffected] = await db
           .select()
           .from(apikey)
@@ -190,7 +190,7 @@ describe("personal key persistence and receipts", () => {
           .select()
           .from(apikey)
           .where(inArray(apikey.id, ids));
-        expect(after.every((key) => key.enabled === false)).toBe(true);
+        expect(after.every((key) => !key.enabled)).toBe(true);
         requireKey(await createPersonalApiKey(own));
       });
     });
@@ -390,8 +390,8 @@ describe("personal key persistence and receipts", () => {
           const key = requireKey(
             await createPersonalApiKey({ ...own, audience }),
           );
-          const resolve = () =>
-            resolveMachineApiKeySession(key.key, {
+          const resolve = async () =>
+            await resolveMachineApiKeySession(key.key, {
               mode: audience,
               verifyApiKey: auth.api.verifyApiKey,
               resolveAuthorization,

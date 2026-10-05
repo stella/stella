@@ -445,7 +445,7 @@ export const listPersonalApiKeys = async (
       : machineApiKeyCursor.decode(options.cursor);
   if (
     options.cursor !== undefined &&
-    (cursor === null || cursor.timestamp.precision !== "microseconds")
+    cursor?.timestamp.precision !== "microseconds"
   ) {
     return abortTransaction(
       new HandlerError({ status: 400, message: "Invalid API key cursor" }),

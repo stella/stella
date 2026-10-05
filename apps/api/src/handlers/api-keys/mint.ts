@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
@@ -499,6 +499,9 @@ export const toMachineApiKeySummary = (
         scopes: metadata.output.scopes,
         audience: metadata.output.audience,
       };
+    default:
+      metadata.output satisfies never;
+      return panic("Unexpected parsed API key kind");
   }
 };
 

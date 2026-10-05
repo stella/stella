@@ -2053,8 +2053,8 @@ type AuthSessionReadOptions = {
   headers: Headers | Record<string, string>;
   returnHeaders: true;
 };
-const readAuthSession = (options: AuthSessionReadOptions) =>
-  getAuth().api.getSession(options);
+const readAuthSession = async (options: AuthSessionReadOptions) =>
+  await getAuth().api.getSession(options);
 type AuthSessionReader = typeof readAuthSession;
 
 type GetSessionAndMemberAuthorizationOptions = {
