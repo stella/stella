@@ -599,7 +599,8 @@ test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () =>
   if (!validate) {
     panic("Missing main validation job");
   }
-  validate.if = "true";
+  validate.if =
+    "github.event_name != 'push' || (vars.MERGE_QUEUE_DEPTH != '' && vars.MERGE_QUEUE_DEPTH != 'full') || startsWith(github.event.head_commit.message, 'chore: release v')";
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 

@@ -946,7 +946,8 @@
       "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
-      "textUnavailable": "Selle lahendi teksti ei ole saadaval"
+      "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)"
     }
   },
   "catalogue": {
@@ -5421,6 +5422,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",

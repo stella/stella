@@ -950,6 +950,7 @@ type Messages = {
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)";
     };
   };
   "catalogue": {
@@ -5424,6 +5425,7 @@ type Messages = {
         "unknownLocation": "Template location: an address stella cannot verify";
       };
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account";
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
