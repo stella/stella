@@ -736,7 +736,7 @@ export const LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES = [
   // Owns the entity row handles; no other registration owner touches those elements.
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
   // Owns the position rows; no other registration owner touches those elements.
-  "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+  "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx",
   // Owns the document type cards; no other registration owner touches those elements.
   "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
   // Owns the page tiles; no other registration owner touches those elements.

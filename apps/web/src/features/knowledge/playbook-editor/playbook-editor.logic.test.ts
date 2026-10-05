@@ -6,6 +6,23 @@ import {
 } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
+import type {
+  DetailSeedGate,
+  PlaybookDraft,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import {
+  buildPlaybookSavePayload,
+  createPlaybookBaseline,
+  hasPlaybookDraftChanges,
+  hasResolvedPositionSources,
+  detailSeedGate,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
+  resolvePlaybookScrollTop,
+  resolvePositionSources,
+  toPositionSourceLookup,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
   duplicatePosition,
   extractToGraded,
@@ -21,23 +38,6 @@ import type {
   Position,
 } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
-import type {
-  DetailSeedGate,
-  PlaybookDraft,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
-import {
-  buildPlaybookSavePayload,
-  createPlaybookBaseline,
-  hasPlaybookDraftChanges,
-  hasResolvedPositionSources,
-  detailSeedGate,
-  latchedSeedGate,
-  refetchSupersededDetail,
-  resolveDetailSeed,
-  resolvePlaybookScrollTop,
-  resolvePositionSources,
-  toPositionSourceLookup,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
 
 describe("Playbook outline navigation", () => {
   test("calculates a pane-local target without moving ancestor scroll containers", () => {

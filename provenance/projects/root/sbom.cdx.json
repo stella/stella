@@ -2573,13 +2573,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -3580,7 +3580,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#8"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#8"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#15"
@@ -3619,7 +3619,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#6"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#16"
@@ -3646,7 +3646,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#7"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#7"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#14"
@@ -3664,7 +3664,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#9"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
@@ -6782,13 +6782,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -13033,7 +13033,7 @@
             "location": "apps/web/src/routes/knowledge/-components/catalogue/use-uninstall-entry.ts#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.logic.ts#8"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.ts#8"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/use-clause-body-save.ts#3"
@@ -13852,16 +13852,16 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#3"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#3"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/playbook-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#3"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#10"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#10"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#3"
@@ -14761,7 +14761,7 @@
             "location": "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#4"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#4"
           },
           {
             "location": "apps/web/src/routes/knowledge/-knowledge-member-only.tsx#3"
@@ -17993,13 +17993,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -21979,13 +21979,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -29896,7 +29896,7 @@
             "location": "apps/web/src/routes/knowledge/-components/clause-import-dialog.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.logic.ts#9"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.ts#9"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-studio-model.ts#1"
@@ -31444,7 +31444,7 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#5"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#5"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx#4"
@@ -44060,13 +44060,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#1"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
@@ -46170,7 +46170,7 @@
             "location": "apps/web/src/routes/knowledge/-components/clause-list.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#11"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#11"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx#6"
@@ -48137,22 +48137,22 @@
             "location": "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/leave-confirm-dialog.tsx#1"
+            "location": "apps/web/src/features/knowledge/leave-confirm-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-editor.tsx#6"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx#6"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/playbook-list.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/playbook-version-history-sheet.tsx#4"
+            "location": "apps/web/src/features/knowledge/playbook-editor/playbook-version-history-sheet.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/position-editor.tsx#12"
+            "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#12"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#4"

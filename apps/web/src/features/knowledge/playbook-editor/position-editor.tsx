@@ -78,6 +78,7 @@ import {
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { Switch } from "@/components/switch";
+import type { ResolvedPositionSource } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
@@ -109,7 +110,6 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
-import type { ResolvedPositionSource } from "@/routes/knowledge/-components/playbook-editor.logic";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".

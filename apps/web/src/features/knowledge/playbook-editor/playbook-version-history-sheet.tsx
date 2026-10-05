@@ -27,7 +27,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookVersionItem } from "@/lib/knowledge/playbook-types";
@@ -78,10 +78,7 @@ const PlaybookVersionHistorySheetBody = ({
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .versions({ version })
         .restore.post();
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      unwrapEden(response);
     },
     onSuccess: async () => {
       // The definition (detail), its version list, and the playbook list

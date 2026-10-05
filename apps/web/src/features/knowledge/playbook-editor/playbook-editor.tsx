@@ -50,6 +50,27 @@ import {
   guideReverseBlocked,
 } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
+import type {
+  FresherDetail,
+  PlaybookDraft,
+  PositionSourceLookup,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import {
+  buildPlaybookSavePayload,
+  createPlaybookBaseline,
+  hasPlaybookDraftChanges,
+  hasResolvedPositionSources,
+  detailSeedGate,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
+  resolvePlaybookScrollTop,
+  resolvePositionSources,
+  toPositionSourceLookup,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
+import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -86,27 +107,6 @@ import {
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
-import type {
-  FresherDetail,
-  PlaybookDraft,
-  PositionSourceLookup,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
-import {
-  buildPlaybookSavePayload,
-  createPlaybookBaseline,
-  hasPlaybookDraftChanges,
-  hasResolvedPositionSources,
-  detailSeedGate,
-  latchedSeedGate,
-  refetchSupersededDetail,
-  resolveDetailSeed,
-  resolvePlaybookScrollTop,
-  resolvePositionSources,
-  toPositionSourceLookup,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
-import { PlaybookVersionHistorySheet } from "@/routes/knowledge/-components/playbook-version-history-sheet";
-import { PositionEditor } from "@/routes/knowledge/-components/position-editor";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
