@@ -156,10 +156,6 @@
       "role": "analysis",
       "cancelInProgress": true
     },
-    "codeql.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
     "network-baseline-record.yml": {
       "role": "analysis",
       "cancelInProgress": true

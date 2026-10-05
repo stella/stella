@@ -347,12 +347,10 @@ test("both workflows gate every expensive job and run on detector failure", () =
   expect(migrations.on.pull_request?.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
-      push: v.object({ branches: v.array(v.string()) }),
       schedule: v.array(v.object({ cron: v.string() })),
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toContain("main");
   expect(triggers.schedule).toHaveLength(1);
   expect(triggers.schedule.at(0)?.cron.split(" ").slice(2)).toEqual([
     "*",
@@ -361,23 +359,16 @@ test("both workflows gate every expensive job and run on detector failure", () =
   ]);
 });
 
-test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
+test("CodeQL certifies merge groups and scans the default branch nightly without push scans", () => {
   const triggers = v.parse(
     v.looseObject({
-      push: v.looseObject({
-        branches: v.array(v.string()),
-        paths: v.optional(v.array(v.string())),
-        "paths-ignore": v.optional(v.array(v.string())),
-      }),
       merge_group: v.object({ types: v.array(v.string()) }),
       schedule: v.array(v.object({ cron: v.string() })),
       workflow_dispatch: v.null_(),
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toEqual(["main"]);
-  expect(triggers.push.paths).toBeUndefined();
-  expect(triggers.push["paths-ignore"]).toBeUndefined();
+  expect(Object.hasOwn(codeql.on, "push")).toBe(false);
   expect(triggers.merge_group.types).toEqual(["checks_requested"]);
   expect(Object.hasOwn(codeql.on, "pull_request")).toBe(false);
   expect(triggers.schedule).toHaveLength(1);
