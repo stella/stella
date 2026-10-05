@@ -944,7 +944,8 @@
       "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
-      "textUnavailable": "Šiam sprendimui teksto nėra"
+      "textUnavailable": "Šiam sprendimui teksto nėra",
+      "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)"
     }
   },
   "catalogue": {

@@ -944,7 +944,8 @@
       "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
-      "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
+      "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
     }
   },
   "catalogue": {

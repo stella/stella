@@ -14,6 +14,7 @@ import {
   type ProvisionGroup,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
+import { ProvisionVersionBasisLabel } from "@/features/case-law/components/provision-version-basis";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
@@ -74,8 +75,8 @@ export const ProvisionsCited = ({
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
 
-  // Each work is read at the version its references state, and at the
-  // decision's date otherwise; every work on the panel resolves in one read.
+  // Existing links select an inferred version at the decision date;
+  // every work on the panel resolves in one read.
   const decisionAsOf = decisionDateToIso(decisionDate);
   const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
   for (const group of groups) {
@@ -206,7 +207,7 @@ const WorkReferences = ({
    * The consolidation a reference was made against, or null while it is not
    * known to be held.
    *
-   * A reference that states a version has to reach that version: the current
+   * A reference that selects a version has to reach that version: the current
    * wording is a different text, and may not even carry the anchor. Until the
    * matching consolidation resolves — the read is in flight, it failed, or
    * the corpus does not hold that version — the reference reads as text
@@ -221,7 +222,7 @@ const WorkReferences = ({
       return statute;
     }
 
-    // The wording in force is itself the cited version for most references,
+    // The wording in force is the inferred version for most references,
     // which is why the versions read is not started for them.
     if (versionCoversDate(statute, provision.versionValidFrom)) {
       return statute;
@@ -314,6 +315,7 @@ const ProvisionRowItem = ({
             {label}
           </Link>
         )}
+        <ProvisionVersionBasisLabel basis={provision.versionBasis} />
         {count > 1 && (
           <button
             aria-expanded={showPassages}

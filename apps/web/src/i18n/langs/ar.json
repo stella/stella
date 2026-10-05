@@ -944,7 +944,8 @@
       "textNotYetAvailable": "لم تنشر المحكمة نص القرار، أو أنه غير متاح هنا بعد.",
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
-      "textUnavailable": "لا يتوفر نص لهذا الحكم"
+      "textUnavailable": "لا يتوفر نص لهذا الحكم",
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
     }
   },
   "catalogue": {

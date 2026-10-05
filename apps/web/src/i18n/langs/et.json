@@ -944,7 +944,8 @@
       "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
-      "textUnavailable": "Selle lahendi teksti ei ole saadaval"
+      "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)"
     }
   },
   "catalogue": {

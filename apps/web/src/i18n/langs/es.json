@@ -944,7 +944,8 @@
       "textNotYetAvailable": "El tribunal no ha publicado el texto de la resolución o aún no está disponible aquí.",
       "textPending": "El texto de la resolución aún se está obteniendo",
       "textReadFailed": "No se ha podido cargar el texto de la resolución",
-      "textUnavailable": "No hay texto disponible para esta resolución"
+      "textUnavailable": "No hay texto disponible para esta resolución",
+      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)"
     }
   },
   "catalogue": {

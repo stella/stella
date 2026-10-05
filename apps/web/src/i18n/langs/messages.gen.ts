@@ -948,6 +948,7 @@ type Messages = {
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)";
     };
   };
   "catalogue": {
