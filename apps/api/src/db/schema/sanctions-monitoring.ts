@@ -61,6 +61,14 @@ export const sanctionsContactMarks = p.pgTable(
         table.organizationId,
         table.contactId,
       ),
+    p
+      .index("sanctions_contact_marks_organization_retry_idx")
+      .on(
+        table.organizationId,
+        table.nextAttemptAt,
+        table.scheduledAt,
+        table.contactId,
+      ),
     p.check(
       "sanctions_contact_marks_attempt_count_check",
       sql`${table.attemptCount} >= 0`,
