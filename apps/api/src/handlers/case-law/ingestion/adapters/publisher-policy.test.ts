@@ -4,6 +4,7 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherSlot,
+  createPublisherGateSlot,
   deferPublisherGate,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
@@ -388,11 +389,11 @@ describe("a run-scoped publisher rate limit", () => {
     const reservations = clock.reservations;
     expect(reservations).toHaveLength(5);
     expect(reservations.map((args) => args.at(-1))).toEqual([
-      "500",
-      "500",
-      "500",
-      "500",
-      "500",
+      "1000",
+      "1000",
+      "1000",
+      "1000",
+      "1000",
     ]);
     expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
       "/listing",
@@ -402,14 +403,14 @@ describe("a run-scoped publisher rate limit", () => {
       "/formex",
     ]);
     expect(requests.map(({ time }) => time)).toEqual([
-      0, 500, 1000, 1500, 2000,
+      0, 1000, 2000, 3000, 4000,
     ]);
     for (const { time } of requests) {
       expect(
         requests.filter(
           (request) => request.time >= time && request.time < time + 1000,
         ).length,
-      ).toBeLessThanOrEqual(2);
+      ).toBeLessThanOrEqual(1);
     }
   });
 
@@ -477,4 +478,44 @@ describe("a run-scoped publisher rate limit", () => {
     );
     expect(refusal).toContain("at most 2");
   });
+});
+
+test("crawl and completion share one EU request per second", async () => {
+  let now = 0;
+  const nextByKey = new Map<string, number>();
+  const keys: string[] = [];
+  const dependencies = {
+    redis: () => ({
+      send: (_command: string, args: string[]) => {
+        if (args.length === 3) {
+          return 0;
+        }
+        const key = args.at(2);
+        if (key === undefined) {
+          return expect.unreachable();
+        }
+        keys.push(key);
+        const slot = Math.max(now, nextByKey.get(key) ?? 0);
+        nextByKey.set(key, slot + Number(args.at(-1)));
+        return slot - now;
+      },
+    }),
+    sleep: async (durationMs: number) => {
+      now += durationMs;
+    },
+  };
+  const crawl = createPublisherSlot(ADAPTER_KEYS.EU_ECJ, dependencies);
+  const completion = createPublisherGateSlot("cellar-eu", dependencies);
+  const starts: number[] = [];
+  for (const slot of [crawl, completion, crawl, completion]) {
+    await slot();
+    starts.push(now);
+  }
+  expect(starts).toEqual([0, 1000, 2000, 3000]);
+  expect(new Set(keys).size).toBe(1);
+  for (const start of starts) {
+    expect(
+      starts.filter((time) => time >= start && time < start + 1000),
+    ).toHaveLength(1);
+  }
 });
