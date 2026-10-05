@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { MATCHER_WORKLOAD_REPORT_COUNT } from "./test-fixtures/matcher-memory-child";
+import { MATCHER_WORKLOAD_REPORT_COUNT } from "./test-fixtures/monitoring-corpus";
 
 // Five database-free child lifetimes peaked at 500.9 MiB; 575 MiB leaves 74.1 MiB headroom.
 const MATCHER_MEMORY_BUDGET_BYTES = 575 * 1024 * 1024;
@@ -28,12 +28,12 @@ test(
     let reportedPeakBytes = 0;
     let reports = 0;
     const recordReport = (line: string) => {
-      const peakKiB = Number(line);
-      if (!Number.isSafeInteger(peakKiB) || peakKiB <= 0) {
+      const peakBytes = Number(line);
+      if (!Number.isSafeInteger(peakBytes) || peakBytes <= 0) {
         panic("Matcher child emitted an invalid RSS report");
       }
       reports += 1;
-      reportedPeakBytes = Math.max(reportedPeakBytes, peakKiB * 1024);
+      reportedPeakBytes = Math.max(reportedPeakBytes, peakBytes);
       if (reportedPeakBytes > MATCHER_MEMORY_BUDGET_BYTES) {
         child.kill();
       }
@@ -56,8 +56,9 @@ test(
       const errors = await stderr;
       const usage =
         child.resourceUsage() ?? panic("Matcher child resource usage missing");
-      // Subprocess maxRSS is bytes; the child's Node-compatible report is KiB.
-      const peakBytes = Math.max(reportedPeakBytes, usage.maxRSS);
+      // Linux wait4 usage can retain the launcher's pre-exec high-water mark.
+      // The executed child's own address-space reports define the guard.
+      const peakBytes = reportedPeakBytes;
       console.log(
         JSON.stringify({
           benchmark: "sanctions-matcher-memory",
