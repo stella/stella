@@ -5,12 +5,14 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 
 import { panic } from "better-result";
 import type { Result } from "better-result";
 import { createStore, useStore } from "zustand";
 
+import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
+import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   allocateEntityOverlayId,
@@ -31,7 +33,6 @@ import {
   DEFAULT_PAGE_BUFFER_SIZE,
   SCROLL_AREA_VIEWPORT_SELECTOR,
 } from "@/lib/pdf/consts";
-import { PDFErrorBoundary } from "@/lib/pdf/pdf-error-boundary";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -608,21 +609,54 @@ const returnUndefined = (): undefined => undefined;
 type PDFProviderProps = PropsWithChildren<{
   fieldId: string;
   startPage: number;
+  /** Names the viewer in telemetry; see {@link RecoverableViewerBoundary}. */
+  surface: ViewerSurface;
   initialScaleOffset?: number | undefined;
   fitToWidth?: number | undefined;
+  /** `error` replaces the generic failed state for a final failure only. */
   fallback?: PDFPageFallback | undefined;
+  onDownload?: (() => void) | undefined;
   onError?: ((error: Error) => void) | undefined;
 }>;
 
+/**
+ * The recoverable boundary sits outside the store, so every retry starts a
+ * fresh store and loads the document on a fresh PDF.js worker.
+ */
 export const PDFProvider = ({
+  fallback,
+  onDownload,
+  onError,
+  surface,
+  ...props
+}: PDFProviderProps) => (
+  <RecoverableViewerBoundary
+    finalFallback={fallback?.error}
+    onDownload={onDownload}
+    onError={onError}
+    pending={fallback?.suspense}
+    surface={surface}
+  >
+    <PDFStoreProvider {...props} suspense={fallback?.suspense} />
+  </RecoverableViewerBoundary>
+);
+
+type PDFStoreProviderProps = PropsWithChildren<{
+  fieldId: string;
+  startPage: number;
+  initialScaleOffset?: number | undefined;
+  fitToWidth?: number | undefined;
+  suspense: ReactNode;
+}>;
+
+const PDFStoreProvider = ({
   fieldId,
   startPage,
   initialScaleOffset = 0,
   fitToWidth,
   children,
-  fallback,
-  onError,
-}: PDFProviderProps) => {
+  suspense,
+}: PDFStoreProviderProps) => {
   const [{ store, destroy }] = useState(() =>
     createPDFStore({
       fieldId,
@@ -647,9 +681,7 @@ export const PDFProvider = ({
 
   return (
     <PDFStoreContext value={store}>
-      <PDFErrorBoundary fallback={fallback?.error} onError={onError}>
-        <Suspense fallback={fallback?.suspense}>{children}</Suspense>
-      </PDFErrorBoundary>
+      <Suspense fallback={suspense}>{children}</Suspense>
     </PDFStoreContext>
   );
 };
