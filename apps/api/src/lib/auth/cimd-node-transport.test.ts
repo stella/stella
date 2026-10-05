@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 
+const PROBE_RESULT_PREFIX = "CIMD_PROBE:";
 const IPV6 = "2606:4700:4700::1111";
 const IPV4 = "1.1.1.1";
 const ipv6Address = { address: IPV6, family: 6 };
@@ -114,7 +115,7 @@ const probe = async (options: ProbeOptions) => {
     } finally {
       clearTimeout(timer);
     }
-    console.log(JSON.stringify({ ...result, attempts, authorities, resolutions, elapsedMs: performance.now() - started }));
+    console.log(${JSON.stringify(PROBE_RESULT_PREFIX)} + JSON.stringify({ ...result, attempts, authorities, resolutions, elapsedMs: performance.now() - started }));
     });
   `;
   const cwd = new URL("../../../../..", import.meta.url).pathname;
@@ -134,7 +135,11 @@ const probe = async (options: ProbeOptions) => {
       child.exited,
     ]);
     expect(exitCode, stderr).toBe(0);
-    return JSON.parse(stdout);
+    const results = stdout
+      .split("\n")
+      .filter((line) => line.startsWith(PROBE_RESULT_PREFIX));
+    expect(results, stdout).toHaveLength(1);
+    return JSON.parse(results.join("").slice(PROBE_RESULT_PREFIX.length));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
