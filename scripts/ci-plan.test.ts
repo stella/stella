@@ -612,7 +612,6 @@ const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const CANCELLATION_EXCEPTIONS = new Set([
   "ci-tests",
   "fix-tests-on-base",
-  "route-smoke",
   "heavy-web-build",
   "marketing-screenshots",
   CANCEL_REUSABLE_JOB,
@@ -679,13 +678,17 @@ test("every eligible CI job cancels a failed merge group in its final step with 
     "github.event_name == 'pull_request'",
   );
   expect(jobIf(ciJobs["route-smoke"])).toContain(
-    "github.event_name == 'pull_request'",
+    "github.event_name != 'pull_request'",
   );
   expect(jobIf(ciJobs["heavy-web-build"])).toContain(
     "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
   );
   expect(resultJob.needs).not.toContain(CANCEL_REUSABLE_JOB);
-  for (const id of ["e2e-production-shard", "marketing-screenshots"]) {
+  for (const id of [
+    "route-smoke",
+    "e2e-production-shard",
+    "marketing-screenshots",
+  ]) {
     expect(jobIf(ciJobs[id]), id).toContain(
       "(github.event_name != 'merge_group' || !cancelled())",
     );

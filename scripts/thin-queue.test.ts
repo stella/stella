@@ -165,6 +165,7 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   }
   return (
     value.github.event_name !== "pull_request" &&
+    (value.github.event_name !== "merge_group" || !value.cancelled()) &&
     planner.outputs["queue_depth"] !== "thin" &&
     planner.outputs["trusted"] === "true" &&
     planner.outputs["route_smoke_required"] === "true" &&
@@ -179,6 +180,9 @@ const expectedPrSelection = (
   proveFix = false,
 ) => {
   const disposition = eventPolicy[`ci.yml/${job}`];
+  if (disposition === undefined) {
+    panic(`Missing CI event disposition: ${job}`);
+  }
   switch (disposition) {
     case "queue":
     case "main":
@@ -396,6 +400,9 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
     .flatMap((value) => [false, true].map((planned) => ({ ...value, planned })))
     .flatMap((value) => [false, true].map((trusted) => ({ ...value, trusted })))
     .flatMap((value) =>
+      [false, true].map((cancelled) => ({ ...value, cancelled })),
+    )
+    .flatMap((value) =>
       [false, true].map((heavyOnly) => ({ ...value, heavyOnly })),
     )
     .flatMap((value) =>
@@ -425,6 +432,7 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
     planner.outputs["route_smoke_required"] = String(scenario.planned);
     planner.outputs["trusted"] = String(scenario.trusted);
     value.inputs.heavy_only = scenario.heavyOnly;
+    value.cancelled = () => scenario.cancelled;
     web.result = scenario.webResult;
     heavyWeb.result = scenario.heavyResult;
     expect(

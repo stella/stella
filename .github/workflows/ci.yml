@@ -3966,6 +3966,7 @@ jobs:
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.route_smoke_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
@@ -3976,7 +3977,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
-      actions: read
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -4049,6 +4050,17 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
+
+      - name: Cancel failed merge-group run
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
