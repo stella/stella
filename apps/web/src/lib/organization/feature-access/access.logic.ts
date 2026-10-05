@@ -13,7 +13,9 @@ type CallerCapabilities = Readonly<
 export const callerFeatureEnabled = (
   capabilities: CallerCapabilities | undefined,
   feature: CallerFeature,
-): boolean => capabilities?.[feature.id]?.status === "enabled";
+): boolean =>
+  capabilities?.[feature.id]?.status === "enabled" &&
+  feature.requires.every((id) => capabilities[id]?.status === "enabled");
 
 type RunForCallerFeatureOptions = {
   capabilities: CallerCapabilities;

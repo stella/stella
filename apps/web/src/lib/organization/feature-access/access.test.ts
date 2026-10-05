@@ -34,7 +34,12 @@ describe.serial("caller feature admission", () => {
     test(`${feature.id} refreshes the caller decision before feature reads`, async () => {
       const queryClient = new QueryClient();
       const read = spyOn(queryClient, "query").mockResolvedValue({
-        capabilities: { [feature.id]: { status: "enabled" } },
+        capabilities: Object.fromEntries(
+          [feature.id, ...feature.requires].map((id) => [
+            id,
+            { status: "enabled" as const },
+          ]),
+        ),
       });
       let calls = 0;
       try {

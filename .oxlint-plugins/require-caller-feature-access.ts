@@ -3,6 +3,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { CALLER_FEATURE } from "../apps/web/src/lib/organization/feature-access/surfaces.ts";
 import type { AstNode } from "./utils.ts";
 import {
+  canonicalModuleId,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -12,9 +13,63 @@ import {
 } from "./utils.ts";
 
 const OWNER = "@/lib/organization/feature-access/access";
-const GATED_ROUTE_IMPORTS = Object.values(CALLER_FEATURE).flatMap((feature) => [
-  ...feature.routeImports,
-]);
+const IMPORTER_ROOT = "apps/web/src/route.tsx";
+const GATED_ROUTE_IMPORTS = Object.values(CALLER_FEATURE).flatMap((feature) =>
+  feature.routeImports.map((source) =>
+    canonicalModuleId(source, IMPORTER_ROOT),
+  ),
+);
+const isWithin = (node: AstNode, ancestor: AstNode): boolean => {
+  let current: unknown = node;
+  while (isAstNode(current)) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+const loaderFor = (options: unknown): AstNode | null => {
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return null;
+  }
+  for (const property of options.properties) {
+    if (
+      isAstNode(property) &&
+      property.type === "Property" &&
+      getPropertyName(property.key) === "loader" &&
+      isAstNode(property.value)
+    ) {
+      return property.value;
+    }
+  }
+  return null;
+};
+const withinAdmissionCallback = (
+  call: AstNode,
+  admission: AstNode,
+): boolean => {
+  if (!Array.isArray(admission.arguments)) {
+    return false;
+  }
+  const options = admission.arguments.at(0);
+  let current: unknown = call.parent;
+  while (isAstNode(current)) {
+    if (
+      current.type === "Property" &&
+      getPropertyName(current.key) === "load" &&
+      current.parent === options
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
 
 export default eslintCompatPlugin({
   meta: { name: "require-caller-feature-access" },
@@ -32,22 +87,30 @@ export default eslintCompatPlugin({
       },
       create(context) {
         let enabled = false;
-        let routeDefinition = false;
+        let filename = "";
+        const routes: { node: AstNode; loader: AstNode | null }[] = [];
+        const admissions: AstNode[] = [];
+        const featureCalls: AstNode[] = [];
+        const featureBindings = new Set<string>();
         let gatedImport: AstNode | null = null;
-        let guarded = false;
         const loaders = new Set<string>();
         const routeFactories = new Set<string>();
         return {
           Program() {
-            const filename = repoRelativeFilename(context);
+            const reportedFilename = repoRelativeFilename(context);
+            const webRoot = reportedFilename.indexOf("apps/web/src/");
+            filename =
+              webRoot === -1 ? IMPORTER_ROOT : reportedFilename.slice(webRoot);
             enabled =
-              !isTestFile(filename) &&
-              (filename.includes("apps/web/src/") ||
-                filename.endsWith("require-caller-feature-access.fixture.tsx"));
+              !isTestFile(reportedFilename) &&
+              (reportedFilename.includes("apps/web/src/") ||
+                reportedFilename.endsWith(
+                  "require-caller-feature-access.fixture.tsx",
+                ));
             return enabled;
           },
           ImportDeclaration(node) {
-            if (!enabled || !isAstNode(node)) {
+            if (!enabled || !isAstNode(node) || node.importKind === "type") {
               return;
             }
             const sourceNode = node.source;
@@ -61,27 +124,42 @@ export default eslintCompatPlugin({
             if (source === "@/hooks/use-avt-preview") {
               context.report({ node, messageId: "local" });
             }
-            if (
-              GATED_ROUTE_IMPORTS.some((prefix) => source.startsWith(prefix))
-            ) {
-              gatedImport = node;
-            }
+            const moduleId = canonicalModuleId(source, filename);
+            const gated = GATED_ROUTE_IMPORTS.some(
+              (prefix) =>
+                moduleId === prefix ||
+                moduleId.startsWith(`${prefix}/`) ||
+                (prefix.endsWith("/") && moduleId.startsWith(prefix)),
+            );
             if (!Array.isArray(node.specifiers)) {
               return;
             }
-            for (const specifier of node.specifiers) {
-              if (
-                !isAstNode(specifier) ||
-                specifier.type !== "ImportSpecifier"
-              ) {
+            const runtimeSpecifiers = node.specifiers.filter(
+              (specifier) =>
+                isAstNode(specifier) && specifier.importKind !== "type",
+            );
+            if (
+              gated &&
+              (node.specifiers.length === 0 || runtimeSpecifiers.length > 0)
+            ) {
+              gatedImport = node;
+            }
+            for (const specifier of runtimeSpecifiers) {
+              if (!isAstNode(specifier) || specifier.importKind === "type") {
                 continue;
               }
               const { local: binding } = specifier;
               if (!isIdentifier(binding)) {
                 continue;
               }
+              if (gated) {
+                featureBindings.add(binding.name);
+              }
               const name = getPropertyName(specifier.imported);
-              if (source === OWNER && name === "loadCallerFeature") {
+              if (
+                moduleId === canonicalModuleId(OWNER, IMPORTER_ROOT) &&
+                name === "loadCallerFeature"
+              ) {
                 loaders.add(binding.name);
               }
               if (
@@ -99,36 +177,51 @@ export default eslintCompatPlugin({
             const source = node.source.value;
             if (
               typeof source === "string" &&
-              GATED_ROUTE_IMPORTS.some((prefix) => source.startsWith(prefix))
+              GATED_ROUTE_IMPORTS.some((prefix) => {
+                const moduleId = canonicalModuleId(source, filename);
+                return (
+                  moduleId === prefix ||
+                  moduleId.startsWith(`${prefix}/`) ||
+                  (prefix.endsWith("/") && moduleId.startsWith(prefix))
+                );
+              })
             ) {
               gatedImport = node;
             }
           },
           CallExpression(node) {
-            if (!enabled || !isIdentifier(node.callee)) {
+            if (!enabled || !isAstNode(node)) {
               return;
             }
-            if (routeFactories.has(node.callee.name)) {
-              routeDefinition = true;
+            const callee = node.callee;
+            if (
+              isAstNode(callee) &&
+              callee.type === "CallExpression" &&
+              isIdentifier(callee.callee) &&
+              routeFactories.has(callee.callee.name)
+            ) {
+              const options = Array.isArray(node.arguments)
+                ? node.arguments.at(0)
+                : undefined;
+              routes.push({ node, loader: loaderFor(options) });
             }
             if (
-              !loaders.has(node.callee.name) ||
-              !isAstNode(node.parent) ||
-              (node.parent.type !== "AwaitExpression" &&
-                node.parent.type !== "ReturnStatement")
+              (isIdentifier(callee) && featureBindings.has(callee.name)) ||
+              (isAstNode(callee) &&
+                callee.type === "MemberExpression" &&
+                isIdentifier(callee.object) &&
+                featureBindings.has(callee.object.name))
             ) {
-              return;
+              featureCalls.push(node);
             }
-            let ancestor: unknown = node.parent;
-            while (isAstNode(ancestor)) {
-              if (
-                ancestor.type === "Property" &&
-                getPropertyName(ancestor.key) === "loader"
-              ) {
-                guarded = true;
-                break;
-              }
-              ancestor = ancestor.parent;
+            if (
+              isIdentifier(callee) &&
+              loaders.has(callee.name) &&
+              isAstNode(node.parent) &&
+              (node.parent.type === "AwaitExpression" ||
+                node.parent.type === "ReturnStatement")
+            ) {
+              admissions.push(node);
             }
           },
           MemberExpression(node) {
@@ -163,8 +256,28 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
-            if (enabled && routeDefinition && gatedImport && !guarded) {
-              context.report({ node: gatedImport, messageId: "route" });
+            if (!enabled || gatedImport === null) {
+              return;
+            }
+            for (const route of routes) {
+              const loader = route.loader;
+              const ownedAdmissions =
+                loader === null
+                  ? []
+                  : admissions.filter((call) => isWithin(call, loader));
+              const unadmittedCalls =
+                loader === null
+                  ? []
+                  : featureCalls.filter(
+                      (call) =>
+                        isWithin(call, loader) &&
+                        !ownedAdmissions.some((admission) =>
+                          withinAdmissionCallback(call, admission),
+                        ),
+                    );
+              if (ownedAdmissions.length === 0 || unadmittedCalls.length > 0) {
+                context.report({ node: gatedImport, messageId: "route" });
+              }
             }
           },
         };

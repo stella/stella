@@ -23,7 +23,7 @@ for (const feature of Object.values(CALLER_FEATURE)) {
       ).toBe(false);
       expect(
         callerFeatureEnabled({ [feature.id]: { status: "enabled" } }, feature),
-      ).toBe(true);
+      ).toBe(feature.requires.length === 0);
     });
     test("hidden decisions fail admission before any feature prefetch", async () => {
       for (const capabilities of [
@@ -75,7 +75,12 @@ for (const feature of Object.values(CALLER_FEATURE)) {
     test("enabled routes prefetch once and preserve fetch failures", async () => {
       let calls = 0;
       const options = {
-        capabilities: { [feature.id]: { status: "enabled" as const } },
+        capabilities: Object.fromEntries(
+          [feature.id, ...feature.requires].map((id) => [
+            id,
+            { status: "enabled" as const },
+          ]),
+        ),
         feature,
       };
       await runForCallerFeature({
@@ -99,3 +104,29 @@ for (const feature of Object.values(CALLER_FEATURE)) {
     });
   });
 }
+
+test("verification needs both capabilities for UI and prefetch admission", async () => {
+  const feature = CALLER_FEATURE.verification;
+  for (const verificationEnabled of [false, true]) {
+    for (const legalListsEnabled of [false, true]) {
+      const capabilities = {
+        [feature.id]: { status: verificationEnabled ? "enabled" : "hidden" },
+        [CALLER_FEATURE.legalLists.id]: {
+          status: legalListsEnabled ? "enabled" : "hidden",
+        },
+      } as const;
+      const enabled = verificationEnabled && legalListsEnabled;
+      expect(callerFeatureEnabled(capabilities, feature)).toBe(enabled);
+      let calls = 0;
+      const admission = await runForCallerFeature({
+        capabilities,
+        feature,
+        load: async () => {
+          calls += 1;
+        },
+      });
+      expect(admission.isOk()).toBe(enabled);
+      expect(calls).toBe(enabled ? 1 : 0);
+    }
+  }
+});
