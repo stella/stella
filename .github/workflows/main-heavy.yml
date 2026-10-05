@@ -14,7 +14,9 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Skipped ordinary pushes must not cancel an hourly or release test.
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}
   cancel-in-progress: true
 
 permissions: {}

@@ -45,6 +45,8 @@ const runsOnPullRequests = (workflow: unknown) =>
   isRecord(workflow) &&
   triggers(workflow["on"]).some((event) => PULL_REQUEST_EVENTS.has(event));
 
+const HEAVY_BRANCH_GROUP = `\${{ github.workflow }}-\${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}`;
+
 const hasMainBranchConcurrency = (workflow: unknown) => {
   if (
     !isRecord(workflow) ||
@@ -58,8 +60,10 @@ const hasMainBranchConcurrency = (workflow: unknown) => {
     isRecord(push) &&
     Array.isArray(push["branches"]) &&
     push["branches"].includes("main") &&
-    workflow["concurrency"]["group"] ===
-      `\${{ github.workflow }}-\${{ github.ref }}`
+    (workflow["concurrency"]["group"] ===
+      `\${{ github.workflow }}-\${{ github.ref }}` ||
+      (workflow["name"] === "Main heavy suites" &&
+        workflow["concurrency"]["group"] === HEAVY_BRANCH_GROUP))
   );
 };
 

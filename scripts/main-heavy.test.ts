@@ -186,9 +186,8 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
     type: "string",
   });
 
-  expect(mainWorkflow.concurrency.group).toBe(
-    `\${{ github.workflow }}-\${{ github.ref }}`,
-  );
+  expect(mainWorkflow.concurrency.group).toContain("github.ref");
+  expect(mainWorkflow.concurrency.group).toContain("github.run_id");
   expect(mainWorkflow.concurrency["cancel-in-progress"]).toBe(true);
 
   const suites = mainWorkflow.jobs.suites;
