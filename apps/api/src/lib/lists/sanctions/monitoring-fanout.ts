@@ -8,16 +8,33 @@ import {
   sanctionsOrganizationMarks,
   sanctionsSources,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import { transitionMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 const ORGANIZATION_FANOUT_BATCH_SIZE = 100;
 
 // These system transactions only turn durable activation/organization requests into tenant jobs.
 // They never read contact data. A tenant worker executes the contact page under stella/RLS.
-const fanOutEditionPage = async (db: SchedulerDb) =>
+type FanoutPageOptions = {
+  db: Pick<SchedulerDb, "transaction">;
+  recordTransitionAuditEvent: (
+    tx: Parameters<Parameters<SchedulerDb["transaction"]>[0]>[0],
+    transitions: number,
+    fanned: number,
+  ) => Promise<void>;
+};
+
+const fanOutEditionPage = async ({
+  db,
+  recordTransitionAuditEvent,
+}: FanoutPageOptions) =>
   await db.transaction(async (tx) => {
     const owner = (
       await tx.execute<{ role: string }>(sql`SELECT current_user AS role`)
@@ -30,14 +47,14 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
       await tx
         .select()
         .from(sanctionsEditionFanouts)
-        .where(eq(sanctionsEditionFanouts.state, "pending"))
+        .where(eq(sanctionsEditionFanouts.status, "pending"))
         .orderBy(asc(sanctionsEditionFanouts.sourceId))
         .limit(1)
         .for("no key update", { skipLocked: true })
     ).at(0);
     if (fanout === undefined) {
       await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
-      return 0;
+      return { type: "idle", fanned: 0 } as const;
     }
     // Keep the ingestion row fence while the scheduler owner enqueues tenant jobs.
     // Ingestion has no tenant privileges; role changes share this atomic transaction.
@@ -56,7 +73,7 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
       id: brandPersistedOrganizationId(id),
     }));
     if (orgs.length > 0) {
-      await tx
+      const jobs = await tx
         .insert(sanctionsMonitoringBackfills)
         .values(
           organizations.map(({ id }) => ({
@@ -73,27 +90,45 @@ const fanOutEditionPage = async (db: SchedulerDb) =>
           set: {
             editionId: fanout.editionId,
             cursorContactId: null,
-            state: "pending",
             scheduledAt: sql`now()`,
             generation: sql`${sanctionsMonitoringBackfills.generation} + 1`,
           },
-        });
+        })
+        .returning();
+      await Promise.all(
+        jobs.map((job) =>
+          transitionMonitoringBackfill({ tx, job, to: "pending", set: {} }),
+        ),
+      );
     }
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-    await tx
-      .update(sanctionsEditionFanouts)
-      .set({
-        cursorOrganizationId:
-          organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
-        state:
+    await transitionBatch({
+      tx,
+      spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+      ids: [fanout.sourceId],
+      options: {
+        from: ["pending"],
+        to:
           orgs.length < ORGANIZATION_FANOUT_BATCH_SIZE ? "complete" : "pending",
-      })
-      .where(eq(sanctionsEditionFanouts.sourceId, fanout.sourceId));
+        set: {
+          cursorOrganizationId:
+            organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
+        },
+      },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        await auditTx.execute(
+          sql`SELECT set_config('role', ${owner.role}, true)`,
+        );
+        await recordTransitionAuditEvent(auditTx, rows.length, orgs.length);
+      },
+    });
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
-    return orgs.length;
+    return { type: "transitioned", fanned: orgs.length } as const;
   });
 
-const consumeOrganizationRequest = async (db: SchedulerDb) =>
+const consumeOrganizationRequest = async (
+  db: Pick<SchedulerDb, "transaction">,
+) =>
   await db.transaction(async (tx) => {
     // Read without a lock; lock jobs before the mark so settings-trigger writers cannot form a cycle.
     const mark = (
@@ -122,7 +157,7 @@ const consumeOrganizationRequest = async (db: SchedulerDb) =>
       .limit(sanctionsSourceIds().length);
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
     if (sources.length > 0) {
-      await tx
+      const jobs = await tx
         .insert(sanctionsMonitoringBackfills)
         .values(
           sources.map(({ sourceId, editionId }) => ({
@@ -139,11 +174,16 @@ const consumeOrganizationRequest = async (db: SchedulerDb) =>
           set: {
             editionId: sql`excluded.edition_id`,
             cursorContactId: null,
-            state: "pending",
             scheduledAt: sql`now()`,
             generation: sql`${sanctionsMonitoringBackfills.generation} + 1`,
           },
-        });
+        })
+        .returning();
+      await Promise.all(
+        jobs.map((job) =>
+          transitionMonitoringBackfill({ tx, job, to: "pending", set: {} }),
+        ),
+      );
     }
     await tx
       .delete(sanctionsOrganizationMarks)
@@ -156,7 +196,11 @@ const consumeOrganizationRequest = async (db: SchedulerDb) =>
     return 1;
   });
 
-const queueFreshnessTransitions = async (db: SchedulerDb, now: Date) => {
+const queueFreshnessTransitions = async (
+  db: Pick<SchedulerDb, "transaction">,
+  now: Date,
+  recordTransitionAuditEvent: (count: number) => Promise<void>,
+) =>
   await db.transaction(async (tx) => {
     const owner =
       (await tx.execute<{ role: string }>(sql`SELECT current_user AS role`)).at(
@@ -167,30 +211,100 @@ const queueFreshnessTransitions = async (db: SchedulerDb, now: Date) => {
       now,
       db: async (run) => await run(tx),
     });
-    await tx.execute(sql`
-    INSERT INTO sanctions_edition_fanouts AS fanout (source_id, edition_id, freshness_status)
-    SELECT observed.source, observed."editionId", observed.status
-    FROM jsonb_to_recordset(${JSON.stringify(rows.map(({ source, status, edition }) => ({ source, status, editionId: edition?.id ?? null })))}::text::jsonb)
-      AS observed(source text, status text, "editionId" uuid)
-    ON CONFLICT (source_id) DO UPDATE
-      SET freshness_status = excluded.freshness_status, state = 'pending', cursor_organization_id = NULL
-      WHERE fanout.edition_id IS NOT DISTINCT FROM excluded.edition_id
-        AND fanout.freshness_status IS DISTINCT FROM excluded.freshness_status
-  `);
+    const inserted = await tx
+      .insert(sanctionsEditionFanouts)
+      .values(
+        rows.map(({ source, status, edition }) => ({
+          sourceId: source,
+          freshnessStatus: status,
+          editionId: edition?.id ?? null,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ sourceId: sanctionsEditionFanouts.sourceId });
+    const fanouts = await tx
+      .select()
+      .from(sanctionsEditionFanouts)
+      .where(
+        inArray(
+          sanctionsEditionFanouts.sourceId,
+          rows.map(({ source }) => source),
+        ),
+      )
+      .orderBy(asc(sanctionsEditionFanouts.sourceId))
+      .limit(sanctionsSourceIds().length)
+      .for("no key update");
+    const insertedIds = new Set(inserted.map(({ sourceId }) => sourceId));
+    const currentBySource = new Map(
+      fanouts.map((fanout) => [fanout.sourceId, fanout]),
+    );
+    const changed = rows.filter(({ source, status, edition }) => {
+      const current =
+        currentBySource.get(source) ?? panic("Freshness fanout missing");
+      return (
+        insertedIds.has(source) ||
+        (current.editionId === (edition?.id ?? null) &&
+          current.freshnessStatus !== status)
+      );
+    });
+    await Promise.all(
+      changed.map(({ source, status }) =>
+        transitionBatch({
+          tx,
+          spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+          ids: [source],
+          options: {
+            from: ["pending", "complete"],
+            to: "pending",
+            set: { freshnessStatus: status, cursorOrganizationId: null },
+          },
+          recordTransitionAuditEvent: async (_auditTx, transitioned) =>
+            await recordTransitionAuditEvent(transitioned.length),
+        }),
+      ),
+    );
     // SET LOCAL survives a successful savepoint; nested scheduler calls retain their owner role.
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
+    return changed.length;
   });
-};
 
-type QueueSanctionsMonitoringBackfillsOptions = { db: SchedulerDb; now: Date };
+type QueueSanctionsMonitoringBackfillsOptions = {
+  db: SchedulerDb;
+  now: Date;
+  runId: SafeId<"schedulerJobRun">;
+};
 
 /** Bounded system discovery/queue writes; contact processing uses the scoped tenant worker. */
 export const queueSanctionsMonitoringBackfills = async ({
   db,
   now,
-}: QueueSanctionsMonitoringBackfillsOptions) => {
-  await queueFreshnessTransitions(db, now);
-  const requested = await consumeOrganizationRequest(db);
-  const fanned = await fanOutEditionPage(db);
-  return { requested, fanned };
-};
+  runId,
+}: QueueSanctionsMonitoringBackfillsOptions) =>
+  await db.transaction(async (tx) => {
+    // One outer transaction makes the run's aggregated audit inseparable from every nested transition.
+    let transitions = 0;
+    const recordTransitionAuditEvent = async (count: number) => {
+      transitions += count;
+    };
+    const freshnessQueued = await queueFreshnessTransitions(
+      tx,
+      now,
+      recordTransitionAuditEvent,
+    );
+    const requested = await consumeOrganizationRequest(tx);
+    const outcome = await fanOutEditionPage({
+      db: tx,
+      recordTransitionAuditEvent: async (_auditTx, count) =>
+        await recordTransitionAuditEvent(count),
+    });
+    await recordSystemAudit(tx, "system:sanctions-monitoring-fanout", {
+      subject: runId,
+      counts: {
+        freshnessQueued,
+        requestedOrganizations: requested,
+        fannedOrganizations: outcome.fanned,
+        transitions,
+      },
+    });
+    return { requested, fanned: outcome.fanned };
+  });

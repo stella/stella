@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { getColumns, isSQLWrapper, sql } from "drizzle-orm";
 import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
   PgTable,
@@ -13,7 +14,7 @@ type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
   string;
 type FenceKey<TTable extends StatusTable> = Extract<
   keyof TTable["_"]["columns"],
-  "leaseToken" | "attempt" | "claimedAt"
+  "leaseToken" | "attempt" | "claimedAt" | "generation"
 >;
 
 export type TransitionSpec = {
@@ -21,6 +22,7 @@ export type TransitionSpec = {
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly terminal: readonly string[];
   readonly fence: string | undefined;
+  readonly scope?: readonly string[];
 };
 
 /** Same-state writes preserve metadata without reopening a lifecycle. */
@@ -57,7 +59,14 @@ type DefineKeyedTransitionsArgs<
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
   },
-> = { table: TTable; key: TKey; edges: TEdges; options: TOptions };
+  TScope extends readonly (keyof TTable["_"]["columns"] & string)[] | undefined,
+> = {
+  table: TTable;
+  key: TKey;
+  edges: TEdges;
+  options: TOptions;
+  scope?: TScope;
+};
 
 /** Tables with a domain primary key retain their real column identity. */
 export const defineKeyedTransitions = <
@@ -70,12 +79,16 @@ export const defineKeyedTransitions = <
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
   },
+  const TScope extends
+    | readonly (keyof TTable["_"]["columns"] & string)[]
+    | undefined = undefined,
 >({
   table,
   key,
   edges,
   options,
-}: DefineKeyedTransitionsArgs<TTable, TKey, TEdges, TOptions>) => {
+  scope,
+}: DefineKeyedTransitionsArgs<TTable, TKey, TEdges, TOptions, TScope>) => {
   const idColumn = getColumns(table)[key];
   // Runtime callers can supply keys outside the generic column domain.
   const runtimeColumns: Readonly<Record<string, AnyPgColumn>> =
@@ -109,8 +122,31 @@ export const defineKeyedTransitions = <
   ) {
     panic("The declared transition fence is not a table column");
   }
-  if (runtimeIdColumn === undefined || !runtimeIdColumn.primary) {
-    panic("A transition identity must be a primary-key column");
+  if (runtimeIdColumn === undefined) {
+    panic("A transition identity must be a table column");
+  }
+  if (scope === undefined) {
+    if (!runtimeIdColumn.primary) {
+      panic("A transition identity must be a primary-key column");
+    }
+  } else {
+    const keys = [key, ...scope];
+    const columns = keys.map((name) => runtimeColumns[name]);
+    if (
+      scope.length === 0 ||
+      new Set(keys).size !== keys.length ||
+      !getTableConfig(table).primaryKeys.some(
+        ({ columns: primary }) =>
+          primary.length === columns.length &&
+          primary.every((column) =>
+            columns.some((candidate) => candidate?.name === column.name),
+          ),
+      )
+    ) {
+      panic(
+        "A scoped transition identity must cover exactly one composite primary key",
+      );
+    }
   }
   for (const targets of Object.values<readonly string[]>(edges)) {
     Object.freeze(targets);
@@ -119,6 +155,7 @@ export const defineKeyedTransitions = <
     table,
     key,
     idColumn,
+    scope,
     edges: Object.freeze(edges),
     options: Object.freeze(options),
     terminal: Object.freeze([...options.terminal]),
@@ -158,8 +195,11 @@ type Fence<
   TTable extends StatusTable,
   TOptions extends { fence?: string },
 > = TOptions extends { fence: infer TKey extends keyof TTable["_"]["columns"] }
-  ? { fence: GetColumnData<TTable["_"]["columns"][TKey]> }
-  : { fence?: never };
+  ? {
+      fence: GetColumnData<TTable["_"]["columns"][TKey]>;
+      nextFence?: GetColumnData<TTable["_"]["columns"][TKey]>;
+    }
+  : { fence?: never; nextFence?: never };
 
 type TransitionOwnedKeys<TOptions> =
   | "id"
@@ -213,6 +253,7 @@ type TransitionAssignmentsArgs<TTable extends StatusTable> = {
     to: string;
     set?: Readonly<Record<string, unknown>>;
     fence?: unknown;
+    nextFence?: unknown;
   };
 };
 
@@ -237,6 +278,7 @@ const transitionAssignments = <TTable extends StatusTable>({
     if (
       column === undefined ||
       key === identityKey ||
+      spec.scope?.includes(key) === true ||
       key === "status" ||
       key === spec.fence
     ) {
@@ -251,6 +293,7 @@ const transitionAssignments = <TTable extends StatusTable>({
   for (const [key, column] of Object.entries(columns)) {
     if (
       key === identityKey ||
+      spec.scope?.includes(key) === true ||
       key === "status" ||
       key === spec.fence ||
       Reflect.get(options.set ?? {}, key) !== undefined ||
@@ -265,13 +308,24 @@ const transitionAssignments = <TTable extends StatusTable>({
   }
   const fence = spec.fence === undefined ? undefined : columns[spec.fence];
   // Untyped callers still need fence validation when the generic excludes a fence.
-  const runtimeOptions: { readonly fence?: unknown } = options;
+  const runtimeOptions: {
+    readonly fence?: unknown;
+    readonly nextFence?: unknown;
+  } = options;
   const expectedFence = runtimeOptions.fence;
   if (spec.fence !== undefined && expectedFence === undefined) {
     panic("The transition requires its declared fence");
   }
   if (spec.fence === undefined && expectedFence !== undefined) {
     panic("This transition table has no fence");
+  }
+  if (runtimeOptions.nextFence !== undefined) {
+    if (fence === undefined) {
+      panic("A fence advance requires the table's declared fence");
+    }
+    assignments.push(
+      sql`${sql.identifier(fence.name)} = ${sql.param(runtimeOptions.nextFence, fence)}`,
+    );
   }
   return { assignments, fence };
 };
@@ -329,12 +383,40 @@ export const transition = async <
   return transitioned;
 };
 
+type TransitionScopeOptions = {
+  table: StatusTable;
+  keys: readonly string[];
+  values: Readonly<Record<string, unknown>>;
+};
+
+const transitionScopePredicate = ({
+  table,
+  keys,
+  values,
+}: TransitionScopeOptions) => {
+  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(table);
+  if (keys.length !== Object.keys(values).length) {
+    panic("A transition must bind every declared scope column");
+  }
+  const predicates = keys.map((key) => {
+    const column = columns[key];
+    if (column === undefined || !Object.hasOwn(values, key)) {
+      panic("A transition scope binding is missing");
+    }
+    return sql`${column} = ${sql.param(values[key], column)}`;
+  });
+  return predicates.length === 0
+    ? sql``
+    : sql`AND ${sql.join(predicates, sql` AND `)}`;
+};
+
 type TransitionBatchArgs<
   TTx extends TransitionTransaction,
   TTable extends StatusTable,
   TKey extends keyof TTable["_"]["columns"] & string,
   TEdges extends Readonly<Record<string, readonly string[]>>,
   TOptions extends { terminal: readonly string[]; fence?: string },
+  TScope extends readonly (keyof TTable["_"]["columns"] & string)[] | undefined,
 > = {
   tx: TTx;
   spec: TransitionSpec & {
@@ -343,16 +425,24 @@ type TransitionBatchArgs<
     idColumn: TTable["_"]["columns"][TKey];
     edges: TEdges;
     options: TOptions;
+    scope: TScope;
   };
   ids: readonly GetColumnData<NoInfer<TTable>["_"]["columns"][NoInfer<TKey>]>[];
   options: Move<NoInfer<TEdges>> &
     Fence<NoInfer<TTable>, NoInfer<TOptions>> & {
       set?: Omit<
         PgUpdateSetSource<NoInfer<TTable>>,
-        NoInfer<TKey> | TransitionOwnedKeys<NoInfer<TOptions>>
+        | NoInfer<TKey>
+        | (TScope extends readonly string[] ? TScope[number] : never)
+        | TransitionOwnedKeys<NoInfer<TOptions>>
       > &
         Partial<
-          Record<NoInfer<TKey> | TransitionOwnedKeys<NoInfer<TOptions>>, never>
+          Record<
+            | NoInfer<TKey>
+            | (TScope extends readonly string[] ? TScope[number] : never)
+            | TransitionOwnedKeys<NoInfer<TOptions>>,
+            never
+          >
         >;
     };
   recordTransitionAuditEvent: (
@@ -362,7 +452,13 @@ type TransitionBatchArgs<
       status: Status<TTable>;
     }[],
   ) => Promise<void>;
-};
+} & (TScope extends readonly (keyof TTable["_"]["columns"] & string)[]
+  ? {
+      scope: {
+        [K in TScope[number]]: GetColumnData<TTable["_"]["columns"][K]>;
+      };
+    }
+  : { scope?: never });
 
 /** One conditional update per held batch; only changed rows reach its required audit. */
 export const transitionBatch = async <
@@ -371,13 +467,17 @@ export const transitionBatch = async <
   TKey extends keyof TTable["_"]["columns"] & string,
   const TEdges extends Readonly<Record<string, readonly string[]>>,
   TOptions extends { terminal: readonly string[]; fence?: string },
+  const TScope extends
+    | readonly (keyof TTable["_"]["columns"] & string)[]
+    | undefined,
 >({
   tx,
   spec,
   ids,
   options,
   recordTransitionAuditEvent,
-}: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions>) => {
+  scope,
+}: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions, TScope>) => {
   const { assignments, fence } = transitionAssignments({
     spec,
     key: spec.key,
@@ -386,6 +486,11 @@ export const transitionBatch = async <
   if (ids.length === 0) {
     return [];
   }
+  const scoped = transitionScopePredicate({
+    table: spec.table,
+    keys: spec.scope === undefined ? [] : spec.scope,
+    values: scope ?? {},
+  });
   const rows = await tx.execute(sql`
     UPDATE ${spec.table}
     SET ${sql.join(assignments, sql`, `)}
@@ -393,6 +498,7 @@ export const transitionBatch = async <
       ids.map((id) => sql`${sql.param(id, spec.idColumn)}`),
       sql`, `,
     )})
+      ${scoped}
       AND ${spec.table.status} IN (${sql.join(
         options.from.map((from) => sql`${from}`),
         sql`, `,

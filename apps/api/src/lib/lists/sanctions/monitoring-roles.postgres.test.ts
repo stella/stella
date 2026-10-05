@@ -7,8 +7,10 @@ import {
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { backfillSanctionsMonitoringTask } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import type {
   SchedulerDb,
@@ -62,6 +64,10 @@ if (!databaseUrl || !runPostgresTests) {
           );
           await tx.execute(
             sql`GRANT REFERENCES ON public.organization, public.sanctions_sources, public.sanctions_editions TO monitoring_role_regression`,
+          );
+          // The fixture's scheduler identity owns the global audit trail, as the migration owner does.
+          await tx.execute(
+            sql`ALTER TABLE public.system_audit_runs OWNER TO monitoring_role_regression`,
           );
           await tx.execute(
             sql`SET LOCAL SESSION AUTHORIZATION monitoring_role_regression`,
@@ -120,6 +126,7 @@ if (!databaseUrl || !runPostgresTests) {
             },
             job: asTestRaw<SchedulerTaskContext["job"]>({}),
             payload: null,
+            dueAt: DueSlot.of({ nextRunAt: new Date() }),
             runId: asTestRaw<SchedulerTaskContext["runId"]>(
               "monitoring-role-run",
             ),
@@ -136,10 +143,11 @@ if (!databaseUrl || !runPostgresTests) {
           await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
           await tx
             .update(sanctionsEditionFanouts)
-            .set({ state: "complete" })
-            .where(eq(sanctionsEditionFanouts.state, "pending"));
+            .set({ status: "complete" })
+            .where(eq(sanctionsEditionFanouts.status, "pending"));
           await tx.execute(sql`RESET ROLE`);
           await queueSanctionsMonitoringBackfills({
+            runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
             db: asTestRaw<SchedulerDb>(tx),
             now: new Date(),
           });

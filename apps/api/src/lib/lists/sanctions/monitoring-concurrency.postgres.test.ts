@@ -22,7 +22,7 @@ import {
   sanctionsScreeningEvents,
   sanctionsSources,
 } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
@@ -175,7 +175,7 @@ const pauseEditionFanouts = async (db: GatedTestDb) => {
             editionId: sql`excluded.edition_id`,
             cursorOrganizationId: sql`excluded.cursor_organization_id`,
             freshnessStatus: sql`excluded.freshness_status`,
-            state: sql`excluded.state`,
+            status: sql`excluded.state`,
           },
         });
     });
@@ -199,7 +199,7 @@ if (!databaseUrl || !runPostgresTests) {
       const editionId = createSafeId<"sanctionsEdition">();
       const suffix = editionId.replaceAll("-", "");
       const gate = BigInt(`0x${suffix.slice(-15)}`);
-      const hash = suffix.repeat(2);
+      const hash = new Bun.CryptoHasher("sha256").update(suffix).digest("hex");
       const sourceBefore =
         (
           await controlDb
@@ -269,7 +269,7 @@ if (!databaseUrl || !runPostgresTests) {
         await controlDb.insert(sanctionsEditions).values({
           id: editionId,
           sourceId: "eu",
-          markerKey: suffix,
+          markerKey: hash,
           contentHash: hash,
           publishedAt: "2026-09-29",
           state: "ready",
@@ -437,6 +437,9 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
         });
         await controlDb
+          .delete(sanctionsEditionEntries)
+          .where(eq(sanctionsEditionEntries.editionId, editionId));
+        await controlDb
           .delete(sanctionsEditions)
           .where(eq(sanctionsEditions.id, editionId));
         await controlDb
@@ -501,6 +504,7 @@ if (!databaseUrl || !runPostgresTests) {
           sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
         );
         const consume = queueSanctionsMonitoringBackfills({
+          runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
           db: consumerDb,
           now,
         });
@@ -539,13 +543,18 @@ if (!databaseUrl || !runPostgresTests) {
         ).toEqual([newer]);
         await settingsDb
           .update(sanctionsMonitoringBackfills)
-          .set({ state: "complete", cursorContactId: null })
+          .set({ status: "complete", cursorContactId: null })
           .where(
             eq(sanctionsMonitoringBackfills.organizationId, organizationId),
           );
         expect(
-          (await queueSanctionsMonitoringBackfills({ db: consumerDb, now }))
-            .requested,
+          (
+            await queueSanctionsMonitoringBackfills({
+              runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+              db: consumerDb,
+              now,
+            })
+          ).requested,
         ).toBe(1);
         expect(
           await settingsDb
@@ -566,8 +575,8 @@ if (!databaseUrl || !runPostgresTests) {
         );
         expect(
           jobs.every(
-            ({ state, cursorContactId }) =>
-              state === "pending" && cursorContactId === null,
+            ({ status, cursorContactId }) =>
+              status === "pending" && cursorContactId === null,
           ),
         ).toBe(true);
         expect(
@@ -587,7 +596,7 @@ if (!databaseUrl || !runPostgresTests) {
         const cursor = createSafeId<"contact">();
         await settingsDb
           .update(sanctionsMonitoringBackfills)
-          .set({ state: "complete", cursorContactId: cursor })
+          .set({ status: "complete", cursorContactId: cursor })
           .where(
             eq(sanctionsMonitoringBackfills.organizationId, organizationId),
           );
@@ -622,7 +631,11 @@ if (!databaseUrl || !runPostgresTests) {
           FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(faultName)}()
         `);
         const failed = await Result.tryPromise(() =>
-          queueSanctionsMonitoringBackfills({ db: consumerDb, now }),
+          queueSanctionsMonitoringBackfills({
+            runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+            db: consumerDb,
+            now,
+          }),
         );
         if (failed.isOk()) {
           panic("Expected organization checkpoint failure");
@@ -653,8 +666,13 @@ if (!databaseUrl || !runPostgresTests) {
           sql`DROP FUNCTION ${sql.identifier(faultName)}()`,
         );
         expect(
-          (await queueSanctionsMonitoringBackfills({ db: consumerDb, now }))
-            .requested,
+          (
+            await queueSanctionsMonitoringBackfills({
+              runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+              db: consumerDb,
+              now,
+            })
+          ).requested,
         ).toBe(1);
         expect(
           await settingsDb
@@ -675,8 +693,8 @@ if (!databaseUrl || !runPostgresTests) {
         );
         expect(
           retriedJobs.every(
-            ({ state, cursorContactId }) =>
-              state === "pending" && cursorContactId === null,
+            ({ status, cursorContactId }) =>
+              status === "pending" && cursorContactId === null,
           ),
         ).toBe(true);
       } finally {

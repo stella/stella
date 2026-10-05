@@ -2,6 +2,8 @@ import {
   desktopEditSessions,
   pdfSigningSessions,
   workObligations,
+  sanctionsEditionFanouts,
+  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
@@ -94,6 +96,23 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineKeyedTransitions({
+  table: sanctionsEditionFanouts,
+  key: "sourceId",
+  edges: { pending: ["complete"], complete: ["pending"] },
+  options: { terminal: [] },
+});
+
+export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
+  {
+    table: sanctionsMonitoringBackfills,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: ["pending"] },
+    options: { terminal: [], fence: "generation" },
+  },
+);
+
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
@@ -176,6 +195,8 @@ export const TRANSITIONS = {
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
   sanctionsContactMatches: { unmanaged: UNMANAGED_REASONS.projection },
   sanctionsContactScreenings: { unmanaged: UNMANAGED_REASONS.projection },
+  sanctionsEditionFanouts: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  sanctionsMonitoringBackfills: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { loadavg } from "node:os";
@@ -14,6 +14,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   contacts,
+  auditLogs,
   organizationSettings,
   sanctionsContactMarks,
   sanctionsMonitoringBackfills,
@@ -24,6 +25,7 @@ import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
   sanctionsScreeningEvents,
+  systemAuditRuns,
   sanctionsSources,
   sanctionsEditions,
 } from "@/api/db/schema";
@@ -68,6 +70,10 @@ const productionTransaction = (
     delete: deleteRows.bind(tx),
     execute: async (query: SQL) => (await tx.execute(query)).rows,
     rollback: tx.rollback.bind(tx),
+    transaction: async (run: (nested: Transaction) => Promise<unknown>) =>
+      await tx.transaction(
+        async (nested) => await run(productionTransaction(nested)),
+      ),
   });
 };
 const productionSchedulerDb = () =>
@@ -411,7 +417,7 @@ test(
           set: {
             editionId,
             cursorContactId: null,
-            state: "pending",
+            status: "pending",
             scheduledAt: new Date(),
           },
         });
@@ -461,7 +467,7 @@ test(
       }),
     ).toBe("advanced");
     expect(
-      (await db.select().from(sanctionsMonitoringBackfills)).at(0)?.state,
+      (await db.select().from(sanctionsMonitoringBackfills)).at(0)?.status,
     ).toBe("complete");
     expect(
       await scopedFor(otherOrg)(
@@ -475,7 +481,7 @@ test(
         .set({
           editionId: nextEdition,
           cursorContactId: null,
-          state: "pending",
+          status: "pending",
           scheduledAt: new Date(),
         })
         .where(eq(sanctionsMonitoringBackfills.organizationId, orgId));
@@ -650,7 +656,7 @@ test(
         )
       ).at(0) ?? panic("Job missing");
     const firstPage = await job();
-    expect(firstPage.state).toBe("pending");
+    expect(firstPage.status).toBe("pending");
     expect(firstPage.cursorContactId).not.toBeNull();
     const abort = new AbortController();
     const crashAfterClaim: ScopedDb = async (run) => {
@@ -674,7 +680,7 @@ test(
         new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
       ),
     ).toBe("advanced");
-    expect((await job()).state).toBe("complete");
+    expect((await job()).status).toBe("complete");
     expect(
       await tenant(
         async (tx) => await tx.select().from(sanctionsContactScreenings),
@@ -703,11 +709,13 @@ test(
     const now = futureNow();
     const systemDb = productionSchedulerDb();
     const first = await queueSanctionsMonitoringBackfills({
+      runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
       db: systemDb,
       now,
     });
     expect(first.fanned).toBe(100);
     const second = await queueSanctionsMonitoringBackfills({
+      runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
       db: systemDb,
       now,
     });
@@ -727,6 +735,7 @@ test(
       ).at(0) ?? panic("Fanout missing");
     expect((await eu()).freshnessStatus).toBe("fresh");
     await queueSanctionsMonitoringBackfills({
+      runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
       db: systemDb,
       now: new Date(now.getTime() + 49 * 60 * 60 * 1000),
     });
@@ -738,7 +747,7 @@ test(
           async (tx) =>
             await tx
               .update(sanctionsEditionFanouts)
-              .set({ state: "complete" })
+              .set({ status: "complete" })
               .where(eq(sanctionsEditionFanouts.sourceId, "eu")),
         ),
     );
@@ -1765,7 +1774,7 @@ test(
       expect(jobs).toHaveLength(1);
       expect(jobs.at(0)).toMatchObject({
         cursorContactId: null,
-        state: "pending",
+        status: "pending",
         editionId,
         scheduledAt: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS),
       });
@@ -1791,7 +1800,7 @@ test(
         ).at(0) ?? panic("Completed backfill job missing");
       expect(completed).toMatchObject({
         cursorContactId: contact.id,
-        state: "complete",
+        status: "complete",
         editionId,
       });
       const updated =
@@ -1830,6 +1839,178 @@ test(
         })
         .where(eq(sanctionsSources.id, "eu"));
     }
+  },
+  TIMEOUT,
+);
+
+test(
+  "fanout audits changed runs once, skips idle runs, and rolls back when audit fails",
+  async () => {
+    const now = new Date();
+    const runId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+    await db
+      .update(sanctionsEditionFanouts)
+      .set({ status: "pending", cursorOrganizationId: null })
+      .where(inArray(sanctionsEditionFanouts.sourceId, sanctionsSourceIds()));
+    await queueSanctionsMonitoringBackfills({
+      db: productionSchedulerDb(),
+      now,
+      runId,
+    });
+    const audit = await db
+      .select()
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.subject, runId));
+    expect(audit).toHaveLength(1);
+    expect(audit.at(0)?.actor).toBe("system:sanctions-monitoring-fanout");
+    await db
+      .update(sanctionsEditionFanouts)
+      .set({ status: "complete" })
+      .where(inArray(sanctionsEditionFanouts.sourceId, sanctionsSourceIds()));
+    await db.delete(sanctionsOrganizationMarks).where(sql`true`);
+    const idleRun = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+    await queueSanctionsMonitoringBackfills({
+      db: productionSchedulerDb(),
+      now,
+      runId: idleRun,
+    });
+    expect(
+      await db
+        .select()
+        .from(systemAuditRuns)
+        .where(eq(systemAuditRuns.subject, idleRun)),
+    ).toHaveLength(0);
+
+    await db
+      .update(sanctionsEditionFanouts)
+      .set({ status: "pending", cursorOrganizationId: null })
+      .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
+    const before = await db
+      .select()
+      .from(sanctionsEditionFanouts)
+      .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
+    await client.exec(`CREATE FUNCTION reject_fanout_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic fanout audit failure'; END $$;
+    CREATE TRIGGER reject_fanout_audit BEFORE INSERT ON system_audit_runs FOR EACH ROW EXECUTE FUNCTION reject_fanout_audit();`);
+    try {
+      const rejected = await rejectionOf(
+        queueSanctionsMonitoringBackfills({
+          db: productionSchedulerDb(),
+          now,
+          runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+        }),
+      );
+      expect(errorMessages(rejected)).toContain(
+        "synthetic fanout audit failure",
+      );
+      expect(
+        await db
+          .select()
+          .from(sanctionsEditionFanouts)
+          .where(eq(sanctionsEditionFanouts.sourceId, "eu")),
+      ).toEqual(before);
+    } finally {
+      await client.exec(
+        "DROP TRIGGER reject_fanout_audit ON system_audit_runs; DROP FUNCTION reject_fanout_audit();",
+      );
+    }
+  },
+  TIMEOUT,
+);
+
+test(
+  "tenant backfill audits lifecycle changes but not progress, and audit failure rolls completion back",
+  async () => {
+    const organizationId = toSafeId<"organization">("backfill-audit-org");
+    const now = new Date();
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Backfill audit fixture",
+      slug: organizationId,
+      createdAt: now,
+    });
+    const scoped = scopedFor(organizationId);
+    const editionId =
+      (
+        await db
+          .select()
+          .from(sanctionsSources)
+          .where(eq(sanctionsSources.id, "eu"))
+      ).at(0)?.activeEditionId ?? panic("EU edition missing");
+    await scoped(async (tx) => {
+      await tx.insert(contacts).values(
+        Array.from({ length: 105 }, () => ({
+          organizationId,
+          type: "person" as const,
+          displayName: "Backfill audit subject",
+        })),
+      );
+      await tx.insert(sanctionsMonitoringBackfills).values({
+        organizationId,
+        sourceId: "eu",
+        editionId,
+        scheduledAt: now,
+      });
+    });
+    const advance = async (at: Date) =>
+      await advanceSanctionsMonitoringBackfill({
+        db: scoped,
+        organizationId,
+        sourceId: "eu",
+        now: at,
+        signal: new AbortController().signal,
+      });
+    const audits = async () =>
+      await scoped(
+        async (tx) =>
+          await tx
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
+      );
+    const job = async () =>
+      (
+        await scoped(
+          async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+        )
+      ).at(0) ?? panic("Audit backfill missing");
+    expect(await advance(now)).toBe("advanced");
+    const progress = await job();
+    expect(progress.status).toBe("pending");
+    expect(progress.cursorContactId).not.toBeNull();
+    expect(await audits()).toHaveLength(0);
+    await client.exec(`CREATE FUNCTION reject_backfill_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id = 'system:sanctions-monitoring-backfill' THEN RAISE EXCEPTION 'synthetic backfill audit failure'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER reject_backfill_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION reject_backfill_audit();`);
+    try {
+      expect(
+        errorMessages(await rejectionOf(advance(new Date(now.getTime() + 1)))),
+      ).toContain("synthetic backfill audit failure");
+      expect((await job()).status).toBe("pending");
+      expect((await job()).cursorContactId).toBe(progress.cursorContactId);
+      expect(await audits()).toHaveLength(0);
+      expect(
+        await scoped(
+          async (tx) => await tx.select().from(sanctionsContactScreenings),
+        ),
+      ).toHaveLength(100);
+    } finally {
+      await client.exec(
+        "DROP TRIGGER reject_backfill_audit ON audit_logs; DROP FUNCTION reject_backfill_audit();",
+      );
+    }
+    expect(
+      await advance(new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 2)),
+    ).toBe("advanced");
+    expect((await job()).status).toBe("complete");
+    const events = await audits();
+    expect(events).toHaveLength(1);
+    expect(events.at(0)?.userId).toBe("system:sanctions-monitoring-backfill");
+    expect(events.at(0)?.changes).toEqual({
+      status: { old: "pending", new: "complete" },
+    });
+    expect(
+      await advance(new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 3)),
+    ).toBe("idle");
+    expect(await audits()).toHaveLength(1);
   },
   TIMEOUT,
 );
