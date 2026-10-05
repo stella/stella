@@ -17,7 +17,11 @@ export type RegistrationQuery = {
 };
 
 type ParseRegistrationQueryOptions = {
-  query: { since?: string; limit?: string; cursor?: string };
+  query: {
+    since?: string | undefined;
+    limit?: string | undefined;
+    cursor?: string | undefined;
+  };
   now: number;
 };
 

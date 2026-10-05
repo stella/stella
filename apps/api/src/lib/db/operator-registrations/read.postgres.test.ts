@@ -16,18 +16,17 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const SINCE = "2026-10-04T08:00:00Z";
 const NOW = Date.parse("2026-10-05T08:00:00Z");
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
-  "operator registration database pages",
-  () => {
-    test("pages equal and submillisecond timestamps without gaps, projects fields, and records one audit per page", async () => {
-      if (databaseUrl === undefined) {
-        throw new TypeError("DATABASE_URL required");
-      }
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const db = openClient().db;
-        // All fixture writes, reads and audit rows roll back together.
-        const outcome = await Result.tryPromise(() =>
-          db.transaction(async (tx) => {
+describe.skipIf(!enabled)("operator registration database pages", () => {
+  test("pages equal and submillisecond timestamps without gaps, projects fields, and records one audit per page", async () => {
+    if (databaseUrl === undefined) {
+      throw new TypeError("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const db = openClient().db;
+      // All fixture writes, reads and audit rows roll back together.
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await db.transaction(async (tx) => {
             const ids = Array.from({ length: 5 }, () =>
               mintAuthProviderIdValue(),
             ).toSorted();
@@ -159,26 +158,31 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             ).toHaveLength(pageCount + 2);
             tx.rollback();
           }),
-        );
-        expect(
-          Result.isError(outcome) &&
-            outcome.error instanceof TransactionRollbackError,
-        ).toBe(true);
+        catch: (cause) => cause,
       });
+      if (
+        Result.isError(outcome) &&
+        !(outcome.error instanceof TransactionRollbackError)
+      ) {
+        throw outcome.error;
+      }
+      expect(Result.isError(outcome)).toBe(true);
     });
+  });
 
-    test.each(["audit-insert", "transaction-completion"])(
-      "a %s failure refuses the HTTP response and leaves no audit row",
-      async (fault) => {
-        if (databaseUrl === undefined) {
-          throw new TypeError("DATABASE_URL required");
-        }
-        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-          const db = openClient().db;
-          const id = mintAuthProviderIdValue();
-          const secret = Bun.randomUUIDv7();
-          const outcome = await Result.tryPromise(() =>
-            db.transaction(async (tx) => {
+  test.each(["audit-insert", "transaction-completion"])(
+    "a %s failure refuses the HTTP response and leaves no audit row",
+    async (fault) => {
+      if (databaseUrl === undefined) {
+        throw new TypeError("DATABASE_URL required");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const id = mintAuthProviderIdValue();
+        const secret = Bun.randomUUIDv7();
+        const outcome = await Result.tryPromise({
+          try: async () =>
+            await db.transaction(async (tx) => {
               await tx.insert(user).values({
                 id,
                 name: "Test User",
@@ -230,13 +234,16 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
               ).toEqual([]);
               tx.rollback();
             }),
-          );
-          expect(
-            Result.isError(outcome) &&
-              outcome.error instanceof TransactionRollbackError,
-          ).toBe(true);
+          catch: (cause) => cause,
         });
-      },
-    );
-  },
-);
+        if (
+          Result.isError(outcome) &&
+          !(outcome.error instanceof TransactionRollbackError)
+        ) {
+          throw outcome.error;
+        }
+        expect(Result.isError(outcome)).toBe(true);
+      });
+    },
+  );
+});
