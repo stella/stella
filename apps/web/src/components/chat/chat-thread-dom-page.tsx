@@ -88,8 +88,7 @@ const ChatThreadDomPage = ({
   return (
     <ChatMattersContext
       value={{
-        createDocumentMatters: session.createDocumentMatters,
-        isLoadingCreateDocumentMatters: session.isLoadingCreateDocumentMatters,
+        createDocumentMattersView: session.createDocumentMattersView,
       }}
     >
       <ChatApprovalContext
