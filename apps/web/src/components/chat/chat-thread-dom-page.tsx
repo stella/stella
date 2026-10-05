@@ -119,6 +119,7 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onOpenPlaybook={session.handleOpenPlaybook}
             onResend={session.resendLatestMessage}
             queuedMessageActions={{
               remove: session.removeQueuedMessage,

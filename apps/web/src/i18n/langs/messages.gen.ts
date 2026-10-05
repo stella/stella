@@ -3656,6 +3656,7 @@ type Messages = {
       };
       "noPositions": "No positions yet. Add the first one.";
       "noSettledPosition": "No settled position";
+      "openInPane": "Open playbook";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";

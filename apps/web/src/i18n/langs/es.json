@@ -3653,6 +3653,7 @@
       },
       "noPositions": "Aún no hay posiciones. Añade la primera.",
       "noSettledPosition": "Ninguna posición establecida",
+      "openInPane": "Abrir playbook",
       "optionPlaceholder": "Valor de la opción",
       "optionsLabel": "Opciones",
       "outline": "Esquema",

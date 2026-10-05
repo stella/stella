@@ -3653,6 +3653,7 @@
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",

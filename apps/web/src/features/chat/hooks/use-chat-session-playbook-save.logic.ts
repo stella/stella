@@ -17,6 +17,8 @@ type ReconcilePlaybookSaveToolCallsOptions = {
 };
 
 /**
+ * Resolves to the playbook the latest newly handled save wrote, or null.
+ *
  * A chat save runs outside the playbooks page's own mutations, so every
  * playbook query is refetched: an open list, and a detail the editor or the
  * inspector is watching. The editor keeps its concurrency token with its
@@ -33,9 +35,13 @@ export const reconcilePlaybookSaveToolCalls = async ({
   organizationId,
   playbookKeys,
   queryClient,
-}: ReconcilePlaybookSaveToolCallsOptions): Promise<void> => {
-  if (!consumePlaybookSaveToolCalls({ handledToolCallIds, messages })) {
-    return;
+}: ReconcilePlaybookSaveToolCallsOptions): Promise<string | null> => {
+  const latestPlaybookId = consumePlaybookSaveToolCalls({
+    handledToolCallIds,
+    messages,
+  });
+  if (latestPlaybookId === null) {
+    return null;
   }
   queryClient.removeQueries({
     queryKey: playbookKeys.all(organizationId),
@@ -45,4 +51,5 @@ export const reconcilePlaybookSaveToolCalls = async ({
   await queryClient.invalidateQueries({
     queryKey: playbookKeys.all(organizationId),
   });
+  return latestPlaybookId;
 };

@@ -41,6 +41,7 @@ import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-re
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
+import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
 import { AppSidebar } from "@/components/app-sidebar";

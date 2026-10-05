@@ -3653,6 +3653,7 @@
       },
       "noPositions": "Zatím žádné pozice. Přidejte první.",
       "noSettledPosition": "Bez ustálené pozice",
+      "openInPane": "Otevřít playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",

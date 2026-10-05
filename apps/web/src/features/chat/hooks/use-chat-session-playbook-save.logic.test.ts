@@ -12,15 +12,17 @@ const USER_ID = "user-1";
 const saveMessages = ({
   output,
   state = "complete",
+  callNumber = 1,
 }: {
   output: Record<string, unknown>;
   state?: string;
+  callNumber?: number;
 }): PlaybookSaveMessage[] => [
   {
-    id: "message-1",
+    id: `message-${callNumber}`,
     parts: [
       {
-        id: "tool-call-1",
+        id: `tool-call-${callNumber}`,
         input: { name: "NDA playbook" },
         name: "save_playbook",
         output,
@@ -69,7 +71,7 @@ const reconcile = async ({
   handledToolCallIds?: Set<string>;
   messages: PlaybookSaveMessage[];
   queryClient: QueryClient;
-}) => {
+}) =>
   await reconcilePlaybookSaveToolCalls({
     handledToolCallIds,
     messages,
@@ -77,17 +79,17 @@ const reconcile = async ({
     playbookKeys: knowledgeKeys.playbooks,
     queryClient,
   });
-};
 
 describe("playbook save cache reconciliation", () => {
   test("a completed save invalidates this organization's lists and drops its unwatched details", async () => {
     const queryClient = seededQueryClient();
 
-    await reconcile({
+    const saved = await reconcile({
       messages: saveMessages({ output: { playbookId: PLAYBOOK_ID } }),
       queryClient,
     });
 
+    expect(saved).toBe(PLAYBOOK_ID);
     for (const queryKey of LIST_QUERY_KEYS) {
       expect(isInvalidated(queryClient, queryKey)).toBe(true);
     }
@@ -134,7 +136,7 @@ describe("playbook save cache reconciliation", () => {
     ]) {
       const queryClient = seededQueryClient();
 
-      await reconcile({ messages, queryClient });
+      expect(await reconcile({ messages, queryClient })).toBeNull();
 
       for (const queryKey of PLAYBOOK_QUERY_KEYS) {
         expect(isInvalidated(queryClient, queryKey)).toBe(false);
@@ -152,10 +154,23 @@ describe("playbook save cache reconciliation", () => {
     });
     const queryClient = seededQueryClient();
 
-    await reconcile({ handledToolCallIds, messages, queryClient });
+    expect(
+      await reconcile({ handledToolCallIds, messages, queryClient }),
+    ).toBeNull();
 
     for (const queryKey of PLAYBOOK_QUERY_KEYS) {
       expect(isInvalidated(queryClient, queryKey)).toBe(false);
     }
+  });
+
+  test("the latest of several new saves names the playbook to show", async () => {
+    const messages = [
+      ...saveMessages({ output: { playbookId: "playbook-a" } }),
+      ...saveMessages({ output: { playbookId: "playbook-b" }, callNumber: 2 }),
+    ];
+
+    expect(
+      await reconcile({ messages, queryClient: seededQueryClient() }),
+    ).toBe("playbook-b");
   });
 });

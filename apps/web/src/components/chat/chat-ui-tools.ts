@@ -1199,7 +1199,8 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
- * Consume the successful `save_playbook` calls this session has not handled.
+ * Consume the successful `save_playbook` calls this session has not handled,
+ * returning the playbook the latest of them saved, or null if there was none.
  * A refused save returns an error envelope with no `playbookId`, and wrote
  * nothing, so it is not a reason to refetch.
  */
@@ -1209,8 +1210,8 @@ export const consumePlaybookSaveToolCalls = ({
 }: {
   handledToolCallIds: Set<string>;
   messages: readonly PlaybookSaveMessage[];
-}): boolean => {
-  let hasSave = false;
+}): string | null => {
+  let latestPlaybookId: string | null = null;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -1231,12 +1232,30 @@ export const consumePlaybookSaveToolCalls = ({
       }
 
       handledToolCallIds.add(part["id"]);
-      hasSave = true;
+      latestPlaybookId = part["output"]["playbookId"];
     }
   }
 
-  return hasSave;
+  return latestPlaybookId;
 };
+
+/** The playbook a tool call saved, if it is a completed `save_playbook`
+ *  that succeeded. */
+export const savedPlaybookId = ({
+  name,
+  state,
+  output,
+}: {
+  name: string;
+  state: string;
+  output?: unknown;
+}): string | null =>
+  name === SAVE_PLAYBOOK_TOOL_NAME &&
+  state === "complete" &&
+  isJsonObject(output) &&
+  typeof output["playbookId"] === "string"
+    ? output["playbookId"]
+    : null;
 
 type ReaderAnnotationWriteToolName = Extract<
   BuiltInChatToolName,

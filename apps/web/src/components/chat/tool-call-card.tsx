@@ -354,11 +354,15 @@ const readCachedSkillPages = ({
         ?.pages;
 
 export const ToolCallCard = ({
+  action,
   activeOrganizationId,
   durationMs,
   part,
   showDetails,
 }: {
+  /** A follow-up the row offers once its call completed, such as opening
+   *  what the call saved. */
+  action?: { label: string; onClick: () => void } | undefined;
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
@@ -540,6 +544,17 @@ export const ToolCallCard = ({
             </span>
           )}
         </button>
+        {action !== undefined && (
+          <Button
+            className="me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
+        )}
         {mcpToolInfo !== null && (
           <Popover>
             <PopoverTrigger

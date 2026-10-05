@@ -135,7 +135,15 @@ import {
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
-import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import {
+  PLAYBOOK_DRAFT_VIEW,
+  playbookDraftTabId,
+} from "@/lib/knowledge/playbook-draft-view";
+import {
+  knowledgeKeys,
+  mcpConnectorsOptions,
+  playbookDetailOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { useQueryView } from "@/lib/use-query-view";
@@ -1059,20 +1067,74 @@ export const useChatSession = ({
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
+  const playbookPaneTabId = playbookDraftTabId(threadRef.threadId);
+  /** The tab label for a playbook: its cached name, until the pane reads it. */
+  const playbookPaneLabel = useCallback(
+    (playbookId: string) => {
+      const detail = queryClient.getQueryData(
+        playbookDetailOptions(organizationId, playbookId).queryKey,
+      );
+      return detail !== undefined && "name" in detail && detail.name !== ""
+        ? detail.name
+        : t("knowledge.playbooks.review.playbookLabel");
+    },
+    [organizationId, queryClient, t],
+  );
+
+  /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
+  const handleOpenPlaybook = useCallback(
+    (playbookId: string) => {
+      useInspectorTabsStore.getState().openView({
+        type: PLAYBOOK_DRAFT_VIEW,
+        id: playbookPaneTabId,
+        label: playbookPaneLabel(playbookId),
+        payload: { type: "playbook", playbookId },
+      });
+    },
+    [playbookPaneLabel, playbookPaneTabId],
+  );
+
+  /**
+   * A thread's pane follows the playbook its latest save wrote, without
+   * taking focus: a thread that starts a second playbook moves the pane to it.
+   */
+  const followPlaybookSave = useLatestCallback((playbookId: string) => {
+    const inspector = useInspectorTabsStore.getState();
+    const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
+    if (
+      tab === undefined ||
+      tab.type !== "view" ||
+      tab.viewType !== PLAYBOOK_DRAFT_VIEW
+    ) {
+      return;
+    }
+    inspector.updateView({
+      id: playbookPaneTabId,
+      label: playbookPaneLabel(playbookId),
+      payload: { type: "playbook", playbookId },
+    });
+  });
+
   // A chat `save_playbook` writes an org-level playbook from any surface, so
   // an open playbooks list or editor refetches once per completed save.
   useExternalSyncEffect(() => {
-    detached(
-      reconcilePlaybookSaveToolCalls({
+    const reconcileAndFollow = async () => {
+      const playbookId = await reconcilePlaybookSaveToolCalls({
         handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
         messages,
         organizationId,
         playbookKeys: knowledgeKeys.playbooks,
         queryClient,
-      }),
+      });
+      if (playbookId !== null) {
+        followPlaybookSave(playbookId);
+      }
+    };
+    detached(
+      reconcileAndFollow(),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
-  }, [messages, organizationId, queryClient]);
+  }, [followPlaybookSave, messages, organizationId, queryClient]);
 
   // A chat highlight or comment on the open decision or statute writes outside
   // the reader's own mutations, so its margin refetches once per completed write.
@@ -1557,6 +1619,7 @@ export const useChatSession = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,

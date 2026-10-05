@@ -71,6 +71,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -133,6 +134,7 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -294,6 +296,7 @@ export const ChatThreadMessages = ({
               onCreateDocumentResolve={onCreateDocumentResolve}
               onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
+              onOpenPlaybook={onOpenPlaybook}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
@@ -1233,6 +1236,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1356,6 +1361,7 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
   | "threadRef"
   | "workspaceId"
@@ -1548,10 +1554,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const t = useTranslations();
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1710,8 +1718,17 @@ const AssistantMessageParts = ({
         );
       }
 
+      const playbookId = savedPlaybookId(part);
       return (
         <ToolCallCard
+          action={
+            playbookId !== null && onOpenPlaybook !== undefined
+              ? {
+                  label: t("knowledge.playbooks.openInPane"),
+                  onClick: () => onOpenPlaybook(playbookId),
+                }
+              : undefined
+          }
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
