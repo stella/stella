@@ -16,7 +16,7 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { TranslateDocumentDialog } = await import("./translate-document-dialog");
-const { deepLKeys } = await import("@/lib/deepl/queries");
+const { deepLAvailabilityOptions } = await import("@/lib/deepl/queries");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
@@ -173,7 +173,10 @@ for (const controlled of [true, false]) {
       await waitFor(() => {
         expect(
           client.getQueryData(
-            deepLKeys.availability({ organizationId: "organization-a" }),
+            deepLAvailabilityOptions({
+              organizationId: "organization-a",
+              open: true,
+            }).queryKey,
           ),
         ).toEqual({ configured: true });
       });

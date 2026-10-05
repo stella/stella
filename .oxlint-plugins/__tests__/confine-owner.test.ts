@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
@@ -255,7 +256,7 @@ test("translation availability is consumed by the dialog owner", async () => {
             ({ id }) => id === "deepl-availability",
           ).map((entry) => ({
             ...entry,
-            owner: entry.owner.map((path) => `${root}/${path}`),
+            owner: entry.owner.map((owner) => path.join(root, owner)),
           })),
         }),
         sourcePath,
