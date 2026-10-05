@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vali liige...",
       "deleteAccountTasksDescription": "Teile on määratud aktiivseid ülesandeid. Andke need teistele tööruumi liikmetele üle, et töö jätkuks.",
       "deleteAccountTasksTitle": "Anna aktiivsed ülesanded üle",
+      "deleteAccountTasksUnassignedNotice": "Valitud liikmeta ülesanded jäävad tööruumi ilma vastutajata.",
       "deleteAccountWarning": "Kustutamine on pöördumatu. Teie sisselogimisandmed ja konto privaatsed andmed eemaldatakse.",
       "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Lõpetatud tööruumi ajalugu jääb seotuks teie kustutatud kontoga.",
       "desktop": "Töölaud",

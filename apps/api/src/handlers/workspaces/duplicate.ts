@@ -639,6 +639,10 @@ export const createDuplicateWorkspace = (
                       ),
                     ),
                   )
+                  // Same order as organization removal's membership locks.
+                  .orderBy(member.userId)
+                  .limit(snapshot.members.length)
+                  .for("key share")
               : Promise.resolve([]),
           ]);
 

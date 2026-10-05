@@ -183,7 +183,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
-export type ReportExportActor = RootRunActor<"reportExport"> & {
+type ReportExportActor = RootRunActor<"reportExport"> & {
   exportId: SafeId<"reportExport">;
 };
 type ExportActor = ReportExportActor;

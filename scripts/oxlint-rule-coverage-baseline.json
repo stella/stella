@@ -80,7 +80,6 @@
   "no-raw-stored-json/no-raw-stored-json::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-raw-use-effect/no-raw-use-effect::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
-  "no-raw-user-id-schema/no-raw-user-id-schema::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-raw-zip-load/no-raw-zip-load::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-redacted-log-attribute-key/no-redacted-log-attribute-key::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "no-ref-mirror/no-ref-mirror::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",

@@ -23,7 +23,7 @@ export const TAURI_PAIR_RULES = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const versionLine = (version: string) =>
+export const tauriVersionLine = (version: string) =>
   /^(\d+\.\d+)\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/u.exec(version)?.at(1);
 
 export const requiresTauriAlignment = (files: readonly string[]) =>
@@ -32,22 +32,29 @@ export const requiresTauriAlignment = (files: readonly string[]) =>
       file === BUN_LOCK ||
       file.startsWith("apps/desktop/") ||
       file.startsWith("scripts/check-tauri-package-alignment") ||
+      file.startsWith("scripts/fix-tauri-package-alignment") ||
       file === "scripts/bun-lock-text.ts" ||
       file === ".github/workflows/ci.yml" ||
+      file === ".github/workflows/autofix.yml" ||
       file === "scripts/verify.sh",
   );
 
-export const checkTauriPackageAlignment = (
-  bunLockText: string,
-  cargoLockText: string,
-) => {
+type TauriPair = {
+  npm: string;
+  npmVersion: string;
+  crate: string;
+  crateVersions: string[];
+};
+
+export const readTauriPairs = (bunLockText: string, cargoLockText: string) => {
+  const pairs: TauriPair[] = [];
   const bunLock = parseBunLockText(bunLockText);
   const cargoLock: unknown = Bun.TOML.parse(cargoLockText);
   if (!isRecord(bunLock) || !isRecord(bunLock["packages"])) {
-    return ["bun.lock must contain a packages object"];
+    return { pairs, errors: ["bun.lock must contain a packages object"] };
   }
   if (!isRecord(cargoLock) || !Array.isArray(cargoLock["package"])) {
-    return ["Cargo.lock must contain a package array"];
+    return { pairs, errors: ["Cargo.lock must contain a package array"] };
   }
 
   const errors: string[] = [];
@@ -93,20 +100,42 @@ export const checkTauriPackageAlignment = (
       errors.push(`${resolution}: missing ${crate} in Cargo.lock`);
       continue;
     }
-    const npmLine = versionLine(version);
+    const npmLine = tauriVersionLine(version);
     if (npmLine === undefined) {
       errors.push(`${resolution}: invalid npm version`);
       continue;
     }
     for (const crateVersion of versions) {
-      const crateLine = versionLine(crateVersion);
+      const crateLine = tauriVersionLine(crateVersion);
       if (crateLine === undefined) {
         errors.push(`${crate}@${crateVersion}: invalid crate version`);
         continue;
       }
-      if (npmLine !== crateLine) {
+    }
+    pairs.push({
+      npm: name,
+      npmVersion: version,
+      crate,
+      crateVersions: versions,
+    });
+  }
+  return { pairs, errors };
+};
+
+export const checkTauriPackageAlignment = (
+  bunLockText: string,
+  cargoLockText: string,
+) => {
+  const { pairs, errors } = readTauriPairs(bunLockText, cargoLockText);
+  for (const pair of pairs) {
+    for (const crateVersion of pair.crateVersions) {
+      const crateLine = tauriVersionLine(crateVersion);
+      if (
+        crateLine !== undefined &&
+        tauriVersionLine(pair.npmVersion) !== crateLine
+      ) {
         errors.push(
-          `${resolution} differs from ${crate}@${crateVersion} (major.minor)`,
+          `${pair.npm}@${pair.npmVersion} differs from ${pair.crate}@${crateVersion} (major.minor)`,
         );
       }
     }

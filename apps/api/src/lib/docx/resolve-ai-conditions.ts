@@ -17,10 +17,14 @@
  * leaving an agent to infer it from the rendered text.
  */
 
+import { mapWithConcurrency } from "@stll/concurrency";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
+
+import { isRecord } from "@/api/lib/type-guards";
 
 import type { DecisionUndecidedReason } from "../workflow/decisions/decide";
 import { omitSourceBoundValues } from "./ai-visible-values";
+import { findRepeatableContainer } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
 /**
@@ -82,6 +86,8 @@ export type ResolvedAiConditions = {
   conditions: ResolvedAiCondition[];
 };
 
+const AI_CONDITION_ITEM_CONCURRENCY = 4;
+
 export const resolveAiConditions = async ({
   values,
   fields,
@@ -100,6 +106,48 @@ export const resolveAiConditions = async ({
   const conditions: ResolvedAiCondition[] = [];
   for (const field of aiConditionFields) {
     const label = aiConditionLabel(field);
+    const repeatable = findRepeatableContainer(resolved, field.path);
+    if (repeatable !== null) {
+      const prefix = `${repeatable.containerPath}.`;
+      const rowFields: FieldMeta[] = [];
+      for (const candidate of fields) {
+        if (
+          !candidate.path.startsWith(prefix) ||
+          (candidate.path !== field.path && candidate.source === undefined)
+        ) {
+          continue;
+        }
+        rowFields.push({
+          ...candidate,
+          path: candidate.path.slice(prefix.length),
+          label: candidate.label ?? candidate.path,
+        });
+      }
+      const rowConditions = await mapWithConcurrency({
+        items: [...repeatable.rows.entries()],
+        limit: AI_CONDITION_ITEM_CONCURRENCY,
+        operation: async ([index, row]) => {
+          if (!isRecord(row)) {
+            return [];
+          }
+          const result = await resolveAiConditions({
+            values: row,
+            fields: rowFields,
+            decide,
+          });
+          Object.defineProperties(
+            row,
+            Object.getOwnPropertyDescriptors(result.values),
+          );
+          for (const condition of result.conditions) {
+            condition.path = `${repeatable.containerPath}.${index}.${condition.path}`;
+          }
+          return result.conditions;
+        },
+      });
+      conditions.push(...rowConditions.flat());
+      continue;
+    }
     // The fill form nests dotted paths, so resolve the path rather than reading
     // the flat key — otherwise a nested user value is missed (same reasoning as
     // resolveAiFields).

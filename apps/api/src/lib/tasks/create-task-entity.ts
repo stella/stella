@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -9,8 +9,6 @@ import {
   entities,
   legalListItems,
   LIST_ITEM_TYPES,
-  taskAssignees,
-  workspaceMembers,
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
@@ -30,13 +28,16 @@ import {
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
   agendaFieldsBodySchema,
   validateAgendaFields,
 } from "@/api/lib/tasks/agenda-fields";
+import {
+  lockTaskAssignmentMembers,
+  writeTaskAssignments,
+} from "@/api/lib/tasks/assignment-membership";
 import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
@@ -275,20 +276,11 @@ export const createTaskEntityHandler = async function* ({
       if (!memberIdsToLoad.includes(userId)) {
         memberIdsToLoad.push(userId);
       }
-      const members = await tx
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, workspaceId),
-            inArray(workspaceMembers.userId, memberIdsToLoad),
-          ),
-        )
-        .limit(LIMITS.workspaceMembersCount)
-        .for("update");
-      const workspaceMemberIds = new Set(
-        members.map((member) => brandPersistedUserId(member.userId)),
-      );
+      const workspaceMemberIds = await lockTaskAssignmentMembers({
+        tx,
+        workspaceId,
+        userIds: memberIdsToLoad,
+      });
       if (memberIdsToValidate.some((id) => !workspaceMemberIds.has(id))) {
         return {
           ok: false as const,
@@ -396,14 +388,15 @@ export const createTaskEntityHandler = async function* ({
       }
 
       if (validAssigneeIds.length > 0) {
-        await tx.insert(taskAssignees).values(
-          validAssigneeIds.map((assigneeId) => ({
+        await writeTaskAssignments({
+          tx,
+          workspaceId,
+          assignments: validAssigneeIds.map((assigneeId) => ({
             entityId,
-            workspaceId,
             userId: assigneeId,
-            role: "assignee" as const,
+            role: "assignee",
           })),
-        );
+        });
       }
 
       if (governsWork) {

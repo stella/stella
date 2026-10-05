@@ -30,9 +30,9 @@ export type MembershipSafeDb = SafeDb & { readonly [MEMBERSHIP_SCOPE]: true };
 
 /** A run's handle pinned to the workspace proved when it was queued; the
  *  workspace stays reachable through it without a current membership. */
-export type PinnedScopedDb = ScopedDb & { readonly [EXPLICIT_PIN]: true };
+type PinnedScopedDb = ScopedDb & { readonly [EXPLICIT_PIN]: true };
 /** The `Result` form of `PinnedScopedDb`. */
-export type PinnedSafeDb = SafeDb & { readonly [EXPLICIT_PIN]: true };
+type PinnedSafeDb = SafeDb & { readonly [EXPLICIT_PIN]: true };
 
 /**
  * What a reader of documents, files, or fields takes: any handle except a

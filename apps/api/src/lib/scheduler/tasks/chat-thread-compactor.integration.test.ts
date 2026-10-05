@@ -64,10 +64,10 @@ const originalOrganizationMember = (
     .where(eq(member.id, ids.memberA1org))
     .limit(1)
 ).at(0);
-const originalMatterMember = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA2 } },
+const originalMatterMembers = await testDb.query.workspaceMembers.findMany({
+  where: { userId: { eq: ids.userA1 } },
 });
-if (!originalOrganizationMember || !originalMatterMember) {
+if (!originalOrganizationMember || originalMatterMembers.length === 0) {
   panic("Compactor fixture is incomplete");
 }
 
@@ -137,7 +137,7 @@ afterEach(async () => {
     .onConflictDoNothing();
   await testDb
     .insert(workspaceMembers)
-    .values(originalMatterMember)
+    .values(originalMatterMembers)
     .onConflictDoNothing();
 });
 

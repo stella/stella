@@ -9,7 +9,6 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
   SEARCH_PAGINATION_COMPLETE,
   type SearchPaginationOutcome,
@@ -103,6 +102,7 @@ import type {
 } from "@/api/lib/legal-search/legislation-work-names";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -135,7 +135,7 @@ type SearchLegislationDependencies = {
   provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
   countryAdmission?: {
-    unavailable: typeof publicCountryUnavailable;
+    unavailable: typeof publicLawCountryUnavailable;
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
@@ -1177,10 +1177,11 @@ export const searchLegislationHandler = async (
     body.jurisdiction === undefined
       ? null
       : (
-          dependencies.countryAdmission?.unavailable ?? publicCountryUnavailable
+          dependencies.countryAdmission?.unavailable ??
+          publicLawCountryUnavailable
         )(body.jurisdiction);
   if (unavailable !== null) {
-    return status(503, unavailable);
+    return unavailable;
   }
   // source_id and the cursor id reach Postgres as UUID comparisons in the
   // pg-fts path; reject malformed values at the boundary so a bad filter

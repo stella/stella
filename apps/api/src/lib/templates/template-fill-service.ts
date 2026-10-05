@@ -16,6 +16,7 @@ import { replaceOutputMarkers } from "@stll/template-conditions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -36,20 +37,25 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
+import { loopContext } from "@/api/lib/docx/block-directives";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import {
   documentTextForAiFields,
   extractDocxDocument,
 } from "@/api/lib/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
-import type {
-  LookupOutcome,
-  LookupResolver,
+import {
+  createDispatchLookupResolver,
+  type LookupOutcome,
+  type LookupResolver,
 } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/lib/docx/patch-template";
+import {
+  fillTemplate,
+  renderedClauseSlotOccurrences,
+} from "@/api/lib/docx/patch-template";
+import type { ClauseSlotVisitor } from "@/api/lib/docx/patch-template";
 import {
   type AiConditionDecider,
   isAiConditionField,
@@ -83,12 +89,14 @@ import type {
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -108,6 +116,7 @@ import {
 import type {
   MissingRequiredField,
   RequiredFieldsPolicy,
+  ScopedRequiredFields,
 } from "./template-optional-defaults";
 
 export type { MissingRequiredField } from "./template-optional-defaults";
@@ -558,6 +567,8 @@ type FillServiceOptions<TRejection = never> = {
   /** Deferred builder for the AI collaborators; omitted by a caller that never
    *  drafts (the fill then leaves AI fields unresolved). */
   aiCollaborators?: AiFillCollaboratorProvider | undefined;
+  /** Registry transport seam; ordinary callers use the organization's dispatch. */
+  lookupResolver?: LookupResolver | undefined;
   /** Optional usage preflight run only when the manifest declares AI fields,
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
@@ -669,6 +680,39 @@ const LOOKUP_WITHOUT_PERMIT: LookupOutcome = {
 const lookupsWithoutPermit: LookupResolver = async () =>
   await Promise.resolve(LOOKUP_WITHOUT_PERMIT);
 
+type FillLookupResolverOptions = {
+  permit: ThirdPartyOutboundPermit | undefined;
+  lookupResolver: LookupResolver | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Without a permit no resolver reaches a register, injected or dispatched. */
+const fillLookupResolver = async ({
+  permit,
+  lookupResolver,
+  scopedDb,
+  organizationId,
+}: FillLookupResolverOptions) => {
+  if (permit === undefined) {
+    return lookupsWithoutPermit;
+  }
+  return (
+    lookupResolver ??
+    createDispatchLookupResolver({
+      observer: actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      ),
+      permit,
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    })
+  );
+};
+
 type FillDocxOptions<TRejection = never> = Omit<
   FillServiceOptions<TRejection>,
   "templateId"
@@ -763,6 +807,491 @@ const validateAuthoredClauseOverrides = ({
   return Result.ok(undefined);
 };
 
+type RenderClauseSlotOptions = {
+  slot: ApplyClausePatchesOptions["slots"][number];
+  body: ClauseBody;
+  clause: ClauseProvenance;
+  values: TemplateData;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  enclosingLoop?: ReturnType<typeof loopContext> | undefined;
+};
+
+/** One clause slot rendered against the values in scope where it renders. */
+const renderClauseSlot = ({
+  slot,
+  body,
+  clause,
+  values,
+  namedConditions,
+  enclosingLoop,
+}: RenderClauseSlotOptions) => {
+  const patch = clauseBodyToRichPatch(body, {
+    source: clause.resolution === "override" ? "authored" : "stored",
+    values,
+    slotKey: slot.patchKey,
+    namedConditions,
+    enclosingLoop,
+  });
+  return Result.isError(patch)
+    ? Result.err(clauseDirectiveError({ error: patch.error, clause, slot }))
+    : patch;
+};
+
+type ClauseRequiredScopesOptions = {
+  file: ScannedFile;
+  discovered: DiscoveredTemplate;
+  values: TemplateData;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+};
+
+const clauseScopedPaths = (discovered: DiscoveredTemplate) =>
+  new Set(Object.values(discovered.clauseScopedFieldPaths ?? {}).flat());
+
+/**
+ * Where each clause slot's own fields render, read from the directive pass the
+ * fill renders with: a slot in a pruned branch contributes no scope and a slot
+ * in a loop contributes one per iteration, resolved against its bindings.
+ */
+const clauseRequiredScopes = async ({
+  file,
+  discovered,
+  values,
+  namedConditions,
+}: ClauseRequiredScopesOptions): Promise<ScopedRequiredFields> => {
+  const paths = clauseScopedPaths(discovered);
+  if (paths.size === 0) {
+    return { paths, scopes: [] };
+  }
+  const occurrences = await renderedClauseSlotOccurrences(
+    file,
+    values,
+    namedConditions,
+  );
+  return {
+    paths,
+    scopes: occurrences.flatMap(({ patchKey, loopScope }) => {
+      const slotPaths = discovered.clauseScopedFieldPaths?.[patchKey];
+      return slotPaths === undefined || slotPaths.length === 0
+        ? []
+        : [{ paths: new Set(slotPaths), values: loopScope ?? values }];
+    }),
+  };
+};
+
+const overlapsPath = (left: string, right: string) =>
+  left === right ||
+  left.startsWith(`${right}.`) ||
+  right.startsWith(`${left}.`);
+
+/**
+ * Whether the submitted values already decide where every clause slot renders:
+ * no condition or loop the template evaluates reads a value a later fill step
+ * derives or rewrites (formula, binding, lookup, AI draft or decision, date
+ * normalization). Otherwise the clause fields are gated once those steps ran.
+ */
+const clauseScopesSettledBeforeFillSteps = (
+  manifest: TemplateManifest,
+  discovered: DiscoveredTemplate,
+): boolean => {
+  const derived = manifest.fields
+    .filter(
+      (field) =>
+        field.formula !== undefined ||
+        field.condition !== undefined ||
+        field.conditionAst !== undefined ||
+        field.source !== undefined ||
+        field.lookup !== undefined ||
+        Boolean(field.aiPrompt) ||
+        (field.inputType === "date" && field.dateFormat !== undefined),
+    )
+    .map((field) => field.path);
+  const evaluated = [
+    ...discovered.conditionPaths,
+    ...discovered.fields
+      .filter((field) => field.kind === "array")
+      .map((field) => field.path),
+  ];
+  return !evaluated.some((path) =>
+    derived.some((derivedPath) => overlapsPath(path, derivedPath)),
+  );
+};
+
+type ClauseRequirementGateOptions = {
+  manifest: TemplateManifest;
+  discovered: DiscoveredTemplate;
+  requiredFields: RequiredFieldsPolicy;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+};
+
+/**
+ * A clause slot's own fields are required where the slot renders. `early`
+ * scopes the pre-AI gate when the submitted values already settle every slot;
+ * otherwise the final gate uses the prepared occurrence values.
+ */
+const clauseRequirementGate = ({
+  manifest,
+  discovered,
+  requiredFields,
+  namedConditions,
+}: ClauseRequirementGateOptions) => {
+  const paths = clauseScopedPaths(discovered);
+  const enforced = requiredFields === "enforce" && paths.size > 0;
+  const settled = clauseScopesSettledBeforeFillSteps(manifest, discovered);
+  return {
+    early: async (
+      file: ScannedFile,
+      values: FillValues,
+    ): Promise<ScopedRequiredFields> =>
+      enforced && settled && isTemplateData(values)
+        ? clauseRequiredScopes({ file, discovered, values, namedConditions })
+        : { paths, scopes: [] },
+  };
+};
+
+type PreparedClauseOccurrence = {
+  patchKey: string;
+  values: TemplateData;
+  scope: "document" | "loop";
+};
+
+/** Linked clauses are discovered independently: their own loops use array
+ * paths, while references to a template loop retain its authored alias. */
+const isClauseLoopField = (path: string, discovered: DiscoveredTemplate) =>
+  discovered.loopAliases.some(
+    ({ alias, path: arrayPath }) =>
+      path.startsWith(`${alias}.`) || path.startsWith(`${arrayPath}.`),
+  );
+
+type DraftDocumentValuesOptions = DocumentGroundingOptions & {
+  discovered: DiscoveredTemplate;
+  resolveLookup: LookupResolver;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace"> | undefined;
+  generateAiValue: AiFieldGenerator | undefined;
+  decideAiCondition: AiConditionDecider | undefined;
+};
+
+const draftDocumentValues = async ({
+  file,
+  manifest,
+  bodies,
+  record,
+  discovered,
+  resolveLookup,
+  scopedDb,
+  organizationId,
+  workspaceId,
+  generateAiValue,
+  decideAiCondition,
+}: DraftDocumentValuesOptions) => {
+  // Resolve the data-binding context only when this fill targets a matter and
+  // the manifest actually declares a bound field, so a transient fill or a
+  // template with no bindings fires no extra queries.
+  const bindingContext =
+    workspaceId !== undefined &&
+    manifest.fields.some((field) => field.source !== undefined)
+      ? await buildBindingContext({
+          scopedDb,
+          organizationId,
+          workspaceId,
+          manifest,
+        })
+      : null;
+
+  const scopedPaths = clauseScopedPaths(discovered);
+  const fields = manifest.fields.filter(
+    ({ path }) =>
+      !scopedPaths.has(path) || !isClauseLoopField(path, discovered),
+  );
+  // Resolve registry lookups, evaluate formula (derived) fields, and check
+  // dependent (optionsFrom) selects before any AI step or substitution sees
+  // them; a failing step rejects naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: record,
+    manifest: { fields },
+    resolveLookup,
+    bindingContext,
+  });
+  if (stepError !== null) {
+    return { type: "fields-refused" as const, error: stepError };
+  }
+
+  const grounding = await documentGrounding({ file, manifest, bodies, record });
+  if (Result.isError(grounding)) {
+    return { type: "refused" as const, error: grounding.error };
+  }
+  const drafted = await resolveAiFields({
+    values: record,
+    fields,
+    documentText: grounding.value,
+    generate: generateAiValue,
+  });
+  const decided = await resolveAiConditions({
+    values: drafted.values,
+    fields,
+    decide: decideAiCondition,
+  });
+  return {
+    type: "prepared" as const,
+    values: decided.values,
+    grounding: grounding.value,
+    bindingContext,
+    aiFieldErrors: drafted.errors,
+    conditionDecisions: decided.conditions,
+  };
+};
+
+type PrepareClauseOccurrencesOptions = {
+  file: ScannedFile;
+  record: TemplateData;
+  discovered: DiscoveredTemplate;
+  manifest: TemplateManifest;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  resolveLookup: LookupResolver;
+  bindingContext: BindingContext | null;
+  generateAiValue: AiFieldGenerator | undefined;
+  decideAiCondition: AiConditionDecider | undefined;
+  documentText: string | undefined;
+  policy: RequiredFieldsPolicy;
+};
+
+/** Prepare each surviving occurrence with the same value pipeline as the
+ * document, keeping item derivations local to that occurrence. */
+const prepareClauseOccurrences = async ({
+  file,
+  record,
+  discovered,
+  manifest,
+  namedConditions,
+  resolveLookup,
+  bindingContext,
+  generateAiValue,
+  decideAiCondition,
+  documentText,
+  policy,
+}: PrepareClauseOccurrencesOptions) => {
+  const occurrences = await renderedClauseSlotOccurrences(
+    file,
+    record,
+    namedConditions,
+  );
+  const scopedPaths = clauseScopedPaths(discovered);
+  const aiFieldErrors: AiFieldError[] = [];
+  const conditionDecisions: ResolvedAiCondition[] = [];
+  const occurrenceValues: PreparedClauseOccurrence[] = [];
+  const preparedDocumentPaths = new Set<string>();
+  for (const { patchKey, loopScope } of occurrences) {
+    const paths = new Set(
+      arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
+    );
+    const fields = manifest.fields.filter(
+      (field) =>
+        paths.has(field.path) &&
+        isClauseLoopField(field.path, discovered) &&
+        (loopScope !== undefined || !preparedDocumentPaths.has(field.path)),
+    );
+    // Fill steps mutate declared values; copy only those roots rather than
+    // cloning every document-level array once for every item.
+    const roots = new Set(
+      fields.map(
+        ({ path }) => path.split(".").at(0) ?? panic("Field path has no root"),
+      ),
+    );
+    const values =
+      loopScope === undefined
+        ? record
+        : {
+            ...loopScope,
+            ...Object.fromEntries(
+              [...roots]
+                .filter((root) => Object.hasOwn(loopScope, root))
+                .map((root) => [root, structuredClone(loopScope[root])]),
+            ),
+          };
+    const scopeError = await applyManifestFillSteps({
+      values,
+      manifest: { fields },
+      resolveLookup,
+      bindingContext,
+    });
+    if (scopeError !== null) {
+      return { type: "refused" as const, error: scopeError };
+    }
+    const scopedDrafted = await resolveAiFields({
+      values,
+      fields,
+      documentText,
+      generate: generateAiValue,
+    });
+    aiFieldErrors.push(...scopedDrafted.errors);
+    const scopedDecided = await resolveAiConditions({
+      values: scopedDrafted.values,
+      fields,
+      decide: decideAiCondition,
+    });
+    conditionDecisions.push(...scopedDecided.conditions);
+    if (!isTemplateData(scopedDecided.values)) {
+      return panic(
+        "Prepared clause scope holds values outside the template data model",
+      );
+    }
+    if (loopScope === undefined) {
+      // Preserve the shared occurrence record with own-property copies.
+      Object.defineProperties(
+        record,
+        Object.getOwnPropertyDescriptors(scopedDecided.values),
+      );
+      for (const { path } of fields) {
+        preparedDocumentPaths.add(path);
+      }
+      occurrenceValues.push({ patchKey, values: record, scope: "document" });
+      continue;
+    }
+    occurrenceValues.push({
+      patchKey,
+      values: scopedDecided.values,
+      scope: "loop",
+    });
+  }
+  const missingClauseFields = collectMissingRequiredFields({
+    fields: manifest.fields.filter((field) => scopedPaths.has(field.path)),
+    policy,
+    values: record,
+    scoped: {
+      paths: scopedPaths,
+      scopes: occurrences.map(({ patchKey }, index) => ({
+        paths: new Set(
+          arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
+        ),
+        values:
+          occurrenceValues.at(index)?.values ??
+          panic("Clause occurrence has no prepared values"),
+      })),
+    },
+  });
+  return {
+    type: "prepared" as const,
+    occurrenceValues,
+    missingRequiredFields: missingClauseFields,
+    aiFieldErrors,
+    conditionDecisions,
+  };
+};
+
+/**
+ * Renders a slot inside a loop once per iteration under that iteration's
+ * bindings, exactly as the loop's own markers render. The first refusal is
+ * kept for the caller, which fails the fill with it.
+ */
+const loopClauseSlotRenderer = ({
+  slots,
+  bodies,
+  clauses,
+  namedConditions,
+  occurrenceValues,
+}: Omit<ApplyClausePatchesOptions, "record"> & {
+  occurrenceValues: PreparedClauseOccurrence[];
+}) => {
+  let occurrenceIndex = 0;
+  let renderedLoopOccurrences = 0;
+  let refusal: HandlerError<422> | undefined;
+  const render: ClauseSlotVisitor = ({ patchKey, loopScope }) => {
+    const occurrence =
+      occurrenceValues.at(occurrenceIndex) ??
+      panic("Clause occurrence has no prepared scope");
+    if (occurrence.patchKey !== patchKey) {
+      return panic("Clause occurrence order differs from its prepared scopes");
+    }
+    const { values } = occurrence;
+    occurrenceIndex += 1;
+    if (loopScope !== undefined) {
+      renderedLoopOccurrences += 1;
+    }
+    const body = bodies[patchKey];
+    const slot = slots.find((candidate) => candidate.patchKey === patchKey);
+    if (
+      loopScope === undefined ||
+      body === undefined ||
+      slot === undefined ||
+      refusal !== undefined
+    ) {
+      return undefined;
+    }
+    const loop = loopScope["loop"];
+    if (
+      !isRecord(loop) ||
+      typeof loop["index0"] !== "number" ||
+      typeof loop["length"] !== "number"
+    ) {
+      return panic("Clause loop scope has no iteration counters");
+    }
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause:
+        clauses[patchKey] ?? panic(`Missing clause provenance for ${patchKey}`),
+      values,
+      namedConditions,
+      enclosingLoop: loopContext(loop["index0"], loop["length"]),
+    });
+    if (Result.isError(patch)) {
+      refusal = patch.error;
+      return undefined;
+    }
+    return patch.value;
+  };
+  return {
+    render,
+    error: () => {
+      if (
+        renderedLoopOccurrences !==
+        occurrenceValues.filter(({ scope }) => scope === "loop").length
+      ) {
+        return panic(
+          "Clause rendering did not visit every prepared occurrence",
+        );
+      }
+      return refusal;
+    },
+  };
+};
+
+/**
+ * Patch every clause slot at document scope, then fill the template, letting
+ * the directive pass render each slot it keeps inside a loop per iteration.
+ */
+const fillWithClauseSlots = async ({
+  file,
+  occurrenceValues,
+  ...options
+}: ApplyClausePatchesOptions & {
+  file: ScannedFile;
+  occurrenceValues: PreparedClauseOccurrence[];
+}): Promise<
+  Result<
+    {
+      result: Awaited<ReturnType<typeof fillTemplate>>;
+      clauseWarnings: ClauseDirectiveWarning[];
+    },
+    HandlerError<422>
+  >
+> => {
+  const clauseWarnings = applyClausePatches(options);
+  if (Result.isError(clauseWarnings)) {
+    return clauseWarnings;
+  }
+  const loopClauses = loopClauseSlotRenderer({ ...options, occurrenceValues });
+  const result = await fillTemplate(file, options.record, {
+    namedConditions: options.namedConditions,
+    clauseSlots: loopClauses.render,
+  });
+  const refusal = loopClauses.error();
+  return refusal === undefined
+    ? Result.ok({ result, clauseWarnings: clauseWarnings.value })
+    : Result.err(refusal);
+};
+
 const applyClausePatches = ({
   slots,
   bodies,
@@ -795,16 +1324,15 @@ const applyClausePatches = ({
         clauseWarnings.push(warning);
       }
     }
-    const patch = clauseBodyToRichPatch(body, {
-      source: clause.resolution === "override" ? "authored" : "stored",
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause,
       values: record,
-      slotKey: slot.patchKey,
       namedConditions,
     });
     if (Result.isError(patch)) {
-      return Result.err(
-        clauseDirectiveError({ error: patch.error, clause, slot }),
-      );
+      return Result.err(patch.error);
     }
     record[slot.patchKey] = patch.value;
   }
@@ -967,6 +1495,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   requiredFields,
   clauseOverrides,
   aiCollaborators,
+  lookupResolver,
   assertUsageAvailable,
   useRecording = "after-fill",
   workspaceId,
@@ -974,15 +1503,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 }: FillDocxWithPolicyOptions<TRejection>): Promise<
   FilledDocx | FillRejection<TRejection>
 > => {
-  const observer = actionRequestObserver(
-    organizationId,
-    ACTION_COST_CALL_KIND.registryRequest,
-  );
-  const loaded = source;
   const { templateId } = source;
   const { manifest, discovered, slots, bodies, clauses } =
     await discoverTemplateSource({
-      source: loaded,
+      source,
       scopedDb,
       organizationId,
       clauseOverrides,
@@ -1018,6 +1542,13 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   let record: FillValues = { ...values };
+  const namedConditions = manifestNamedConditions(manifest);
+  const clauseRequirements = clauseRequirementGate({
+    manifest,
+    discovered,
+    requiredFields,
+    namedConditions,
+  });
 
   // Reject missing user-entered fields before AI/lookup work. Every real fill
   // enforces this gate; the live preview explicitly permits partial inputs.
@@ -1025,17 +1556,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     fields: manifest.fields,
     policy: requiredFields,
     values: record,
+    scoped: await clauseRequirements.early(source.file, record),
   });
   if (missingRequiredFields.length > 0) {
     return { requiredFieldsRejection: missingRequiredFields };
   }
 
-  // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
-  // Gate the AI usage preflight and the collaborator build on a model call
-  // actually running: both cost the caller quota or an org AI config read,
-  // and a deterministic fill must spend neither. Runs before the manifest
-  // fill steps so an over-quota fill rejects without first calling out to a
-  // registry for its lookup fields.
+  // Gate AI preflight and collaborators on declared model work: deterministic
+  // fills spend neither quota nor config reads, and refusals precede lookups.
   const hasAiFields = manifest.fields.some(
     (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
   );
@@ -1048,75 +1576,42 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const { generateAiValue, decideAiCondition, adaptAiValue } =
     aiCollaborators && hasAiFields ? await aiCollaborators() : {};
 
-  // Resolve the data-binding context only when this fill targets a matter and
-  // the manifest actually declares a bound field, so a transient fill or a
-  // template with no bindings fires no extra queries.
-  const bindingContext =
-    workspaceId !== undefined &&
-    manifest.fields.some((field) => field.source !== undefined)
-      ? await buildBindingContext({
-          scopedDb,
-          organizationId,
-          workspaceId,
-          manifest,
-        })
-      : null;
-
-  // Resolve registry lookups, evaluate formula (derived) fields, and check
-  // dependent (optionsFrom) selects before any AI step or substitution sees
-  // them; a failing step rejects naming the field.
-  const stepError = await applyManifestFillSteps({
-    values: record,
-    manifest,
-    resolveLookup:
-      thirdPartyOutboundPermit === undefined
-        ? lookupsWithoutPermit
-        : createDispatchLookupResolver({
-            observer,
-            permit: thirdPartyOutboundPermit,
-            dispatch: await getOrganizationRegistryDispatch({
-              scopedDb,
-              organizationId,
-            }),
-          }),
-    bindingContext,
+  const resolveLookup = await fillLookupResolver({
+    permit: thirdPartyOutboundPermit,
+    lookupResolver,
+    scopedDb,
+    organizationId,
   });
-  if (stepError !== null) {
-    return { error: stepError };
-  }
 
-  const grounding = await documentGrounding({
-    file: loaded.file,
+  const drafting = await draftDocumentValues({
+    file: source.file,
     manifest,
     bodies,
     record,
+    discovered,
+    resolveLookup,
+    scopedDb,
+    organizationId,
+    workspaceId,
+    generateAiValue,
+    decideAiCondition,
   });
-  if (Result.isError(grounding)) {
+  if (drafting.type === "fields-refused") {
+    return { error: drafting.error };
+  }
+  if (drafting.type === "refused") {
     return {
-      error: grounding.error.message,
-      storedTemplateError: grounding.error,
+      error: drafting.error.message,
+      storedTemplateError: drafting.error,
     };
   }
-  const drafted = await resolveAiFields({
-    values: record,
-    fields: manifest.fields,
-    documentText: grounding.value,
-    generate: generateAiValue,
-  });
-  record = drafted.values;
-  // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
-  // before substitution so its {% if field_path %} block resolves correctly.
-  const decidedConditions = await resolveAiConditions({
-    values: record,
-    fields: manifest.fields,
-    decide: decideAiCondition,
-  });
-  record = decidedConditions.values;
+  record = drafting.values;
+  const { conditionDecisions } = drafting;
   // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
   // the stub stays in `record` so uncovered occurrences still get the
   // plain global substitution below.
   const adapted = await adaptAiFields({
-    file: loaded.file,
+    file: source.file,
     fields: manifest.fields,
     values: record,
     adapt: adaptAiValue,
@@ -1126,7 +1621,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // A field the model could not adapt still fills with its stub, but nobody
   // asked for that wording: reported like a failed draft, so the fill is
   // partial.
-  const aiFieldErrors = [...drafted.errors, ...adapted.failures];
+  const aiFieldErrors = [...drafting.aiFieldErrors, ...adapted.failures];
 
   const optionalDefaults =
     strictInputPlaceholders === null
@@ -1145,22 +1640,44 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   }
 
-  const namedConditions = manifestNamedConditions(manifest);
-  const patchedClauses = applyClausePatches({
+  const prepared = await prepareClauseOccurrences({
+    file: fillSource,
+    record,
+    discovered,
+    manifest,
+    namedConditions,
+    resolveLookup,
+    bindingContext: drafting.bindingContext,
+    generateAiValue,
+    decideAiCondition,
+    documentText: drafting.grounding,
+    policy: requiredFields,
+  });
+  if (prepared.type === "refused") {
+    return { error: prepared.error };
+  }
+  if (prepared.missingRequiredFields.length > 0) {
+    return { requiredFieldsRejection: prepared.missingRequiredFields };
+  }
+  aiFieldErrors.push(...prepared.aiFieldErrors);
+  conditionDecisions.push(...prepared.conditionDecisions);
+
+  const rendered = await fillWithClauseSlots({
+    file: fillSource,
+    occurrenceValues: prepared.occurrenceValues,
     slots,
     bodies,
     clauses,
     record,
     namedConditions,
   });
-  if (Result.isError(patchedClauses)) {
+  if (Result.isError(rendered)) {
     return {
-      error: patchedClauses.error.message,
-      storedTemplateError: patchedClauses.error,
+      error: rendered.error.message,
+      storedTemplateError: rendered.error,
     };
   }
-
-  const result = await fillTemplate(fillSource, record, { namedConditions });
+  const { result, clauseWarnings } = rendered.value;
 
   if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
@@ -1169,8 +1686,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   return {
-    templateName: loaded.name,
-    fileName: loaded.fileName,
+    templateName: source.name,
+    fileName: source.fileName,
     file: result.file,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     // Adapted stubs no longer match a marker (each occurrence was already
@@ -1185,8 +1702,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     }),
     structureErrors: result.structureErrors,
     aiFieldErrors,
-    conditionDecisions: decidedConditions.conditions,
-    clauseWarnings: patchedClauses.value,
+    conditionDecisions,
+    clauseWarnings,
   };
 };
 

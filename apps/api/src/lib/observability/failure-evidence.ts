@@ -207,7 +207,7 @@ type SqlStateParts = { syscall: unknown; errno: unknown; code: unknown };
  * fall back to `code`, and require the SQLSTATE shape so non-Postgres codes
  * are ignored. The pg predicates read the chain through this same rule.
  */
-export const sqlStateFrom = ({
+const sqlStateFrom = ({
   syscall,
   errno,
   code,

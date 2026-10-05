@@ -9,6 +9,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -353,4 +354,32 @@ describe("manage_organization destructive behavior", () => {
       errorMessage(await runManageOrg({ action: "update_org_settings" })),
     ).toBe("Provide at least one setting to change for update_org_settings");
   });
+});
+
+test("replacement is accepted only by the member removal action", async () => {
+  const wrongAction = await runManageOrg({
+    action: "add_member",
+    matter_id: WORKSPACE_ID,
+    user_id: "user_2",
+    reassign_to: "user_3",
+  });
+  expect(errorMessage(wrongAction)).toContain(
+    "reassign_to is only supported for remove_member",
+  );
+  const removal = await runManageOrg({
+    action: "remove_member",
+    matter_id: WORKSPACE_ID,
+    user_id: "user_2",
+    reassign_to: "user_3",
+    confirm: true,
+  });
+  expect(errorMessage(removal)).not.toContain("reassign_to");
+});
+
+test("the member removal CLI exposes optional replacement", () => {
+  expect(
+    DEFAULT_MCP_CLI_ANNOTATIONS.manage_organization.discriminator?.subcommands[
+      "remove_member"
+    ]?.include,
+  ).toContain("reassign_to");
 });

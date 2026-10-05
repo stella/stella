@@ -10,9 +10,18 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  isTreeParentGuardError,
+  lockTree,
+  treeParentCycleError,
+} from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -34,6 +43,37 @@ type UpdateCategoryBody = Static<typeof updateCategoryBodySchema>;
 
 // ── List ────────────────────────────────────────────
 
+type CategoryRow = typeof clauseCategories.$inferSelect;
+
+const UNPROJECTED_CATEGORY_COLUMNS = [
+  // Tenant scope is fixed by the active organization.
+  "organizationId",
+] as const satisfies readonly (keyof CategoryRow)[];
+
+const CATEGORY_LIST_COLUMNS = {
+  id: true,
+  parentId: true,
+  name: true,
+  description: true,
+  sortOrder: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+type MissingCategoryListColumn = UnprojectedColumns<
+  CategoryRow,
+  typeof CATEGORY_LIST_COLUMNS,
+  (typeof UNPROJECTED_CATEGORY_COLUMNS)[number]
+>;
+type UnexpectedCategoryListColumn = UnbackedProjectionKeys<
+  CategoryRow,
+  typeof CATEGORY_LIST_COLUMNS,
+  (typeof UNPROJECTED_CATEGORY_COLUMNS)[number]
+>;
+
+true satisfies MissingCategoryListColumn extends never ? true : never;
+true satisfies UnexpectedCategoryListColumn extends never ? true : never;
+
 type ListCategoriesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -47,15 +87,7 @@ export const listCategoriesHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseCategories.findMany({
         where: { organizationId: { eq: organizationId } },
-        columns: {
-          id: true,
-          parentId: true,
-          name: true,
-          description: true,
-          sortOrder: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        columns: CATEGORY_LIST_COLUMNS,
         orderBy: { sortOrder: "asc" },
         limit: LIMITS.clauseCategoriesCount,
       }),
@@ -169,6 +201,13 @@ export const createCategoryHandler = async function* ({
 
 // ── Update ──────────────────────────────────────────
 
+const CIRCULAR_CATEGORY_MESSAGE = "Cannot create circular category hierarchy";
+
+type UpdatedCategory = Pick<
+  typeof clauseCategories.$inferSelect,
+  "id" | "parentId" | "name" | "description" | "sortOrder" | "updatedAt"
+>;
+
 type UpdateCategoryProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -184,9 +223,20 @@ export const updateCategoryHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateCategoryProps) {
-  const existing = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.clauseCategories.findFirst({
+  const parentId = body.parentId;
+
+  // The tree lock comes first, so the parent check, the cycle check and the
+  // write see one tree: a concurrent reparent waits here and then reads this
+  // one's result. The `clause_categories_parent_acyclic` trigger holds the
+  // same rule for any writer that skips the lock.
+  const attempt = await safeDb(
+    async (tx): Promise<Result<UpdatedCategory, HandlerError>> => {
+      await lockTree(tx, {
+        tree: "clauseCategories",
+        scopeId: organizationId,
+      });
+
+      const existing = await tx.query.clauseCategories.findFirst({
         where: {
           id: { eq: categoryId },
           organizationId: { eq: organizationId },
@@ -198,50 +248,36 @@ export const updateCategoryHandler = async function* ({
           parentId: true,
           sortOrder: true,
         },
-      }),
-    ),
-  );
+      });
+      if (!existing) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Category not found" }),
+        );
+      }
 
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Category not found" }),
-    );
-  }
+      if (parentId) {
+        if (parentId === categoryId) {
+          return Result.err(
+            treeParentCycleError("Category cannot be its own parent"),
+          );
+        }
 
-  const parentId = body.parentId;
-  if (parentId) {
-    if (parentId === categoryId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Category cannot be its own parent",
-        }),
-      );
-    }
-
-    const parent = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.clauseCategories.findFirst({
+        const parent = await tx.query.clauseCategories.findFirst({
           where: {
             id: { eq: parentId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
-        }),
-      ),
-    );
+        });
+        if (!parent) {
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Parent category not found",
+            }),
+          );
+        }
 
-    if (!parent) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Parent category not found",
-        }),
-      );
-    }
-
-    const createsCycle = yield* Result.await(
-      safeDb(async (tx) => {
         const result = await tx.execute<{ found: boolean }>(sql`
           WITH RECURSIVE ancestors(id, parent_id) AS (
             SELECT category.id, category.parent_id
@@ -259,26 +295,16 @@ export const updateCategoryHandler = async function* ({
             SELECT 1 FROM ancestors WHERE id = ${categoryId}
           ) AS found
         `);
-        return result.at(0)?.found === true;
-      }),
-    );
-    if (createsCycle) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot create circular category hierarchy",
-        }),
-      );
-    }
-  }
+        if (result.at(0)?.found === true) {
+          return Result.err(treeParentCycleError(CIRCULAR_CATEGORY_MESSAGE));
+        }
+      }
 
-  const updates = {
-    ...pickDefined(body, ["name", "description", "parentId", "sortOrder"]),
-    updatedAt: new Date(),
-  };
+      const updates = {
+        ...pickDefined(body, ["name", "description", "parentId", "sortOrder"]),
+        updatedAt: new Date(),
+      };
 
-  const updated = yield* Result.await(
-    safeDb(async (tx) => {
       const [row] = await tx
         .update(clauseCategories)
         .set(updates)
@@ -315,14 +341,21 @@ export const updateCategoryHandler = async function* ({
         changes,
       });
 
-      return row;
-    }),
+      if (!row) {
+        panic("Failed to update clause category");
+      }
+      return Result.ok(row);
+    },
   );
 
-  if (!updated) {
-    panic("Failed to update clause category");
+  if (
+    attempt.isErr() &&
+    isTreeParentGuardError(attempt.error, "clauseCategories")
+  ) {
+    return Result.err(treeParentCycleError(CIRCULAR_CATEGORY_MESSAGE));
   }
-
+  const outcome = yield* attempt;
+  const updated = yield* outcome;
   return Result.ok(updated);
 };
 
@@ -352,31 +385,33 @@ export const deleteCategoryHandler = async function* ({
   categoryId,
   recordAuditEvent,
 }: DeleteCategoryProps) {
-  const existing = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.clauseCategories.findFirst({
+  // Under the tree lock the parent read here is the one the children move to:
+  // a concurrent reparent of this category either committed before (and is
+  // read) or waits until the delete commits.
+  const attempt = await safeDb(
+    async (tx): Promise<Result<undefined, HandlerError>> => {
+      await lockTree(tx, {
+        tree: "clauseCategories",
+        scopeId: organizationId,
+      });
+
+      const existing = await tx.query.clauseCategories.findFirst({
         where: {
           id: { eq: categoryId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true, name: true, parentId: true },
-      }),
-    ),
-  );
+      });
+      if (!existing) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Category not found" }),
+        );
+      }
 
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Category not found" }),
-    );
-  }
-
-  yield* Result.await(
-    safeDb(async (tx) => {
       // Reassign children to this category's parent (or null).
       // This must happen before the delete; otherwise the FK
       // onDelete: "set null" would set children's parentId to
       // null instead of the grandparent.
-
       await tx
         .update(clauseCategories)
         .set({ parentId: existing.parentId ?? null })
@@ -410,8 +445,17 @@ export const deleteCategoryHandler = async function* ({
         },
         metadata: { reparentedChildrenTo: existing.parentId ?? null },
       });
-    }),
+      return Result.ok(undefined);
+    },
   );
 
+  if (
+    attempt.isErr() &&
+    isTreeParentGuardError(attempt.error, "clauseCategories")
+  ) {
+    return Result.err(treeParentCycleError(CIRCULAR_CATEGORY_MESSAGE));
+  }
+  const outcome = yield* attempt;
+  yield* outcome;
   return Result.ok({});
 };

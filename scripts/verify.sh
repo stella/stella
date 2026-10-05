@@ -178,7 +178,7 @@ run_desktop_rust_inputs_guard() {
 }
 
 run_tauri_alignment_guard() {
-  bun test scripts/check-tauri-package-alignment.test.ts || return 1
+  bun test scripts/check-tauri-package-alignment.test.ts scripts/fix-tauri-package-alignment.test.ts || return 1
   bun scripts/check-tauri-package-alignment.ts
 }
 
