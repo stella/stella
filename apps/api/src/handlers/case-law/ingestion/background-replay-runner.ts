@@ -193,6 +193,7 @@ export const createBackgroundReplayRunner = ({
       const guardedLease: CaseLawSourceIngestionLease = {
         source: claimed.source,
         leaseToken: claimed.leaseToken,
+        purpose: claimed.purpose,
         release: claimed.release,
         beforeDatabaseMark: async () => {
           signal?.throwIfAborted();

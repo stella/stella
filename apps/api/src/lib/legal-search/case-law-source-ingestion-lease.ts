@@ -11,10 +11,14 @@ import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 
 const SOURCE_INGESTION_LEASE_MS = 60 * 60 * 1000;
 
+export type CaseLawSourceLeasePurpose =
+  (typeof caseLawSources.$inferSelect)["ingestionLeasePurpose"];
+
 export type CaseLawSourceIngestionLease = {
   beforeDatabaseMark: () => Promise<void>;
   beforeRemoteEffect: <T>(effect: () => Promise<T>) => Promise<T>;
   leaseToken: SafeId<"caseLawSourceIngestionLease">;
+  purpose: CaseLawSourceLeasePurpose;
   release: () => Promise<void>;
   source: typeof caseLawSources.$inferSelect;
 };
@@ -22,6 +26,7 @@ export type CaseLawSourceIngestionLease = {
 type AcquireCaseLawSourceIngestionLeaseOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  purpose?: CaseLawSourceLeasePurpose;
   /** Cleanup may need a fresh bounded schema-lane retry after work stopped. */
   releaseDb?: ScopedDb;
 };
@@ -39,6 +44,7 @@ const nextLeaseExpiry = (): Date =>
 export const acquireCaseLawSourceIngestionLease = async ({
   scopedDb,
   sourceId,
+  purpose = "ingestion",
   releaseDb = scopedDb,
 }: AcquireCaseLawSourceIngestionLeaseOptions): Promise<CaseLawSourceIngestionLease | null> => {
   const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
@@ -50,6 +56,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
         .set({
           ingestionLeaseExpiresAt: nextLeaseExpiry(),
           ingestionLeaseToken: leaseToken,
+          ingestionLeasePurpose: purpose,
           updatedAt: sql`${caseLawSources.updatedAt}`,
         })
         .where(
@@ -91,6 +98,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
           and(
             eq(caseLawSources.id, sourceId),
             eq(caseLawSources.ingestionLeaseToken, leaseToken),
+            eq(caseLawSources.ingestionLeasePurpose, purpose),
             sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
           ),
         )
@@ -115,6 +123,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
       return result;
     },
     leaseToken,
+    purpose,
     release: async () => {
       await releaseDb(async (tx) => {
         // audit: skip — releases only this caller's ephemeral lease
@@ -123,12 +132,14 @@ export const acquireCaseLawSourceIngestionLease = async ({
           .set({
             ingestionLeaseExpiresAt: null,
             ingestionLeaseToken: null,
+            ingestionLeasePurpose: "ingestion",
             updatedAt: sql`${caseLawSources.updatedAt}`,
           })
           .where(
             and(
               eq(caseLawSources.id, sourceId),
               eq(caseLawSources.ingestionLeaseToken, leaseToken),
+              eq(caseLawSources.ingestionLeasePurpose, purpose),
             ),
           );
       });

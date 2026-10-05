@@ -153,7 +153,7 @@ const capabilityProblems = (
       return [];
     }
     const capability = capabilities[manifest.key];
-    return capability?.ownership === "source-ingestion-lease" &&
+    return capability?.ownership === "decision-merge-fence" &&
       capability.writer === "fetchDecisionDocument"
       ? []
       : [`${manifest.key}: deferred document writer ownership is required`];
@@ -172,6 +172,14 @@ describe("deferred document ownership contract", () => {
   test("a new deferred adapter requires an ownership declaration", () => {
     expect(
       capabilityProblems([{ key: "fixture", documentStage: "deferred" }], {}),
+    ).toHaveLength(1);
+    expect(
+      capabilityProblems([{ key: "fixture", documentStage: "deferred" }], {
+        fixture: {
+          ownership: "source-ingestion-lease",
+          writer: "fetchDecisionDocument",
+        },
+      }),
     ).toHaveLength(1);
     expect(
       capabilityProblems([{ key: "fixture", documentStage: "deferred" }], {

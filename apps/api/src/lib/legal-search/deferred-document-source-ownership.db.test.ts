@@ -106,7 +106,7 @@ if (!databaseUrl || !enabled) {
         },
       });
 
-    test("one source owner proceeds and the other document writer returns busy without an attempt", async () => {
+    test("one decision claim proceeds and another writer preserves its claim", async () => {
       const { sourceId, decisionId } = await fixture();
       const started = barrier();
       const finish = barrier();
@@ -134,7 +134,7 @@ if (!databaseUrl || !enabled) {
               return readOfResponse(new Response(null, { status: 404 }));
             },
           }),
-        ).toEqual({ status: "busy" });
+        ).toEqual({ status: "claimed" });
         expect(remoteEffects).toBe(1);
         expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
       } finally {
@@ -144,11 +144,12 @@ if (!databaseUrl || !enabled) {
       expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
     });
 
-    test("a crawler source lease excludes the deferred writer before its claim", async () => {
+    test("a deferred writer settles while an ingestion lease remains held", async () => {
       const { sourceId, decisionId } = await fixture();
       const crawler = await acquireCaseLawSourceIngestionLease({
         sourceId,
         scopedDb,
+        purpose: "ingestion",
       });
       if (crawler === null) {
         panic("crawler fixture ownership missing");
@@ -159,38 +160,64 @@ if (!databaseUrl || !enabled) {
             decisionId,
             scopedDb,
             signal: new AbortController().signal,
-            fetchDocument: async () => panic("busy writer must not fetch"),
+            fetchDocument: async () =>
+              readOfResponse(new Response(null, { status: 404 })),
           }),
-        ).toEqual({ status: "busy" });
-        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(0);
+        ).toEqual({ status: "unavailable" });
+        expect((await readDecision(decisionId))?.fulltext).toBe("");
+        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
+        expect((await readSource(sourceId))?.ingestionLeaseToken).toBe(
+          crawler.leaseToken,
+        );
       } finally {
         await crawler.release();
       }
     });
 
-    for (const transition of ["expire", "replace"] as const) {
-      test(`ownership ${transition} after the remote effect returns lost without settling or parking`, async () => {
+    for (const purpose of ["ingestion", "decision-merge"] as const) {
+      test(`an expired ${purpose} lease permits settlement`, async () => {
         const { sourceId, decisionId } = await fixture();
         await db
-          .update(caseLawDecisions)
-          .set({ documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS - 1 })
-          .where(eq(caseLawDecisions.id, decisionId));
-        const replacement = createSafeId<"caseLawSourceIngestionLease">();
+          .update(caseLawSources)
+          .set({
+            ingestionLeaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+            ingestionLeasePurpose: purpose,
+            ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+          })
+          .where(eq(caseLawSources.id, sourceId));
+        expect(
+          await fetchDecisionDocument({
+            decisionId,
+            scopedDb,
+            signal: new AbortController().signal,
+            fetchDocument: async () =>
+              readOfResponse(new Response(null, { status: 404 })),
+          }),
+        ).toEqual({ status: "unavailable" });
+      });
+    }
+
+    test("a decision merge lease acquired during fetch returns lost without settling or parking", async () => {
+      const { sourceId, decisionId } = await fixture();
+      await db
+        .update(caseLawDecisions)
+        .set({ documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS - 1 })
+        .where(eq(caseLawDecisions.id, decisionId));
+      const mergeOwner: {
+        lease: Awaited<ReturnType<typeof acquireCaseLawSourceIngestionLease>>;
+      } = { lease: null };
+      try {
         const outcome = await fetchDecisionDocument({
           decisionId,
           scopedDb,
           signal: new AbortController().signal,
           fetchDocument: async () => {
-            await db
-              .update(caseLawSources)
-              .set(
-                transition === "expire"
-                  ? {
-                      ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
-                    }
-                  : { ingestionLeaseToken: replacement },
-              )
-              .where(eq(caseLawSources.id, sourceId));
+            mergeOwner.lease = await acquireCaseLawSourceIngestionLease({
+              sourceId,
+              scopedDb,
+              purpose: "decision-merge",
+            });
+            expect(mergeOwner.lease).not.toBeNull();
             return readOfResponse(new Response(null, { status: 404 }));
           },
         });
@@ -202,11 +229,10 @@ if (!databaseUrl || !enabled) {
           sectionsS3Key: null,
           astS3Key: null,
         });
-        expect((await readSource(sourceId))?.ingestionLeaseToken).toBe(
-          transition === "replace" ? replacement : null,
-        );
-      });
-    }
+      } finally {
+        await mergeOwner.lease?.release();
+      }
+    });
 
     test("the source row remains locked throughout the decision write transaction", async () => {
       const { sourceId, decisionId } = await fixture();
@@ -241,7 +267,7 @@ if (!databaseUrl || !enabled) {
       expect((await readDecision(decisionId))?.fulltext).toBe("document");
     });
 
-    test("expiry during a settlement rolls back the entire database callback", async () => {
+    test("a decision merge fence during settlement rolls back the entire database callback", async () => {
       const { sourceId, decisionId } = await fixture();
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
@@ -252,7 +278,10 @@ if (!databaseUrl || !enabled) {
             await tx
               .update(caseLawSources)
               .set({
-                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+                ingestionLeaseToken:
+                  createSafeId<"caseLawSourceIngestionLease">(),
+                ingestionLeasePurpose: "decision-merge",
+                ingestionLeaseExpiresAt: new Date(Date.now() + 60_000),
               })
               .where(eq(caseLawSources.id, sourceId));
             await tx
@@ -266,7 +295,7 @@ if (!databaseUrl || !enabled) {
       expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
     });
 
-    test("every exported document mutation observes another source owner", async () => {
+    test("every exported document mutation observes a decision merge owner", async () => {
       const { sourceId, decisionId } = await fixture();
       const claim = await claimDocumentFetch(decisionId, scopedDb);
       if (claim.status !== "claimed") {
@@ -275,6 +304,7 @@ if (!databaseUrl || !enabled) {
       const owner = await acquireCaseLawSourceIngestionLease({
         sourceId,
         scopedDb,
+        purpose: "decision-merge",
       });
       if (owner === null) {
         panic("source owner fixture missing");
@@ -323,7 +353,7 @@ if (!databaseUrl || !enabled) {
       }
     });
 
-    test("same-source decisions share ownership while another source can proceed", async () => {
+    test("same-source deferred writers and another source can proceed", async () => {
       const first = await fixture();
       const otherSource = await fixture();
       const sameSource =
@@ -351,10 +381,9 @@ if (!databaseUrl || !enabled) {
               decisionId: sameSource.id,
               scopedDb,
               timeoutMs: 1000,
-              operation: async () =>
-                panic("same-source owner must not proceed"),
+              operation: async () => "document",
             }),
-          ).toEqual({ status: "busy" });
+          ).toEqual({ status: "completed", value: "document" });
           expect(
             await withDeferredDocumentSourceOwnership({
               decisionId: otherSource.decisionId,
@@ -375,21 +404,19 @@ if (!databaseUrl || !enabled) {
         if (claim.status !== "claimed") {
           panic("document claim fixture missing");
         }
-        let interrupted = false;
+        let transactions = 0;
+        const mergeOwner: {
+          lease: Awaited<ReturnType<typeof acquireCaseLawSourceIngestionLease>>;
+        } = { lease: null };
         const interruptedDb: ScopedDb = async (run) => {
-          const owner = await readSource(sourceId);
-          if (
-            !interrupted &&
-            owner !== undefined &&
-            owner.ingestionLeaseToken !== null
-          ) {
-            interrupted = true;
-            await db
-              .update(caseLawSources)
-              .set({
-                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
-              })
-              .where(eq(caseLawSources.id, sourceId));
+          transactions += 1;
+          if (transactions === 2) {
+            mergeOwner.lease = await acquireCaseLawSourceIngestionLease({
+              sourceId,
+              scopedDb,
+              purpose: "decision-merge",
+            });
+            expect(mergeOwner.lease).not.toBeNull();
           }
           return await scopedDb(run);
         };
@@ -440,16 +467,24 @@ if (!databaseUrl || !enabled) {
           }
         };
         const outcome = await mutate();
-        expect(interrupted).toBe(true);
+        expect(transactions).toBe(2);
         expect(outcome).toEqual({ status: "lost" });
+        await mergeOwner.lease?.release();
         expect((await readDecision(decisionId))?.fulltext).toBeNull();
         expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
       });
     }
 
     for (const failure of ["throw", "abort", "deadline"] as const) {
-      test(`${failure} releases source ownership and abandoned work cannot settle`, async () => {
+      test(`${failure} preserves ingestion ownership and abandoned work cannot settle`, async () => {
         const { sourceId, decisionId } = await fixture();
+        const crawler = await acquireCaseLawSourceIngestionLease({
+          sourceId,
+          scopedDb,
+        });
+        if (crawler === null) {
+          panic("crawler fixture missing");
+        }
         const controller = new AbortController();
         const started = barrier();
         const continueWork = barrier();
@@ -499,7 +534,10 @@ if (!databaseUrl || !enabled) {
           deadline: "exceeded 50ms",
         };
         expect(String(stopped.error)).toContain(messages[failure]);
-        expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
+        expect((await readSource(sourceId))?.ingestionLeaseToken).toBe(
+          crawler.leaseToken,
+        );
+        await crawler.release();
         if (failure !== "throw") {
           continueWork.resolve();
           await lateFinished.promise;

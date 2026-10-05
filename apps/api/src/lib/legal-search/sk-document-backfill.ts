@@ -1948,6 +1948,7 @@ export const fetchDecisionDocument = async (
     observe: options.onDocumentObservation,
     execute: async () =>
       await ownedDocumentOperation({
+        missingValue: { status: "superseded" } as const,
         decisionId: options.decisionId,
         scopedDb: options.scopedDb,
         signal: options.signal,
@@ -1992,6 +1993,7 @@ export const fetchDecisionDocument = async (
   });
 
 type OwnedDocumentOperationOptions<T> = {
+  missingValue: NoInfer<T>;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   signal?: AbortSignal;
@@ -2005,6 +2007,9 @@ const ownedDocumentOperation = async <T>(
     ...options,
     timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
   });
+  if (result.status === "missing") {
+    return options.missingValue;
+  }
   return result.status === "completed" ? result.value : result;
 };
 
@@ -2013,6 +2018,7 @@ export const claimDocumentFetch = async (
   scopedDb: ScopedDb,
 ): Promise<DocumentFetchClaim | DeferredDocumentOwnershipRefusal> =>
   await ownedDocumentOperation({
+    missingValue: { status: "held" } as const,
     decisionId,
     scopedDb,
     operation: async (fence) =>
@@ -2027,6 +2033,7 @@ export const storeBackfilledDocument = async (
   options: StoreBackfilledDocumentOptions,
 ) =>
   await ownedDocumentOperation({
+    missingValue: "superseded" as const,
     decisionId: options.decision.id,
     scopedDb: options.scopedDb,
     operation: async (fence) =>
@@ -2040,6 +2047,7 @@ export const markDocumentUnavailable = async (
   options: ClaimedFetchWriteOptions,
 ) =>
   await ownedDocumentOperation({
+    missingValue: undefined,
     decisionId: options.decision.id,
     scopedDb: options.scopedDb,
     operation: async (fence) =>
@@ -2051,6 +2059,7 @@ export const markDocumentUnavailable = async (
 
 export const parkDocumentFetch = async (options: ClaimedFetchWriteOptions) =>
   await ownedDocumentOperation({
+    missingValue: "superseded" as const,
     decisionId: options.decision.id,
     scopedDb: options.scopedDb,
     operation: async (fence) =>

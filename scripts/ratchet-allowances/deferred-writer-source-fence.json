@@ -1,5 +1,5 @@
 {
   "metric": "throw-outside-boundary",
-  "delta": 8,
-  "reason": "Source ownership validation aborts settlement transactions on loss; document and corpus operations propagate the typed refusal after releasing ownership."
+  "delta": 9,
+  "reason": "Decision merge fencing aborts settlement transactions; document and corpus operations propagate refusals and cancellation without committing abandoned work."
 }

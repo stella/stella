@@ -31,7 +31,7 @@ import {
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   CorpusPackError,
@@ -725,7 +725,7 @@ if (!databaseUrl || !runPostgresTests) {
       ).toHaveLength(0);
     });
 
-    test("source ownership expires after transfer and leaves the document unsettled", async () => {
+    test("a decision merge fence starts after transfer and leaves the document unsettled", async () => {
       const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
       const id = await insertDecision({
         caseNumber: `ownership-${suffix}`,
@@ -753,13 +753,24 @@ if (!databaseUrl || !runPostgresTests) {
             await db
               .update(caseLawSources)
               .set({
-                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+                ingestionLeaseToken:
+                  createSafeId<"caseLawSourceIngestionLease">(),
+                ingestionLeasePurpose: "decision-merge",
+                ingestionLeaseExpiresAt: new Date(Date.now() + 60_000),
               })
               .where(eq(caseLawSources.id, sourceId));
             return Result.ok(undefined);
           },
         },
       });
+      await db
+        .update(caseLawSources)
+        .set({
+          ingestionLeaseToken: null,
+          ingestionLeaseExpiresAt: null,
+          ingestionLeasePurpose: "ingestion",
+        })
+        .where(eq(caseLawSources.id, sourceId));
       expect(transferred).toBe(1);
       expect(
         await db
