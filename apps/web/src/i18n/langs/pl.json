@@ -841,6 +841,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
@@ -1857,6 +1858,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
     "unverifiedCitationHint": "Nie udało się dopasować tego cytatu do dokumentu źródłowego.",
@@ -4636,6 +4638,7 @@
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
@@ -4685,7 +4688,9 @@
       "unknown": "Status niejasny"
     },
     "title": "Akty prawne",
-    "validity": "Obowiązuje od {from} do {to}"
+    "validity": "Obowiązuje od {from} do {to}",
+    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
+    "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
     "create": "Utwórz",
@@ -5422,6 +5427,7 @@
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Połącz stella desktop ze swoim kontem",
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
