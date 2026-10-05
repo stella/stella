@@ -551,24 +551,36 @@ describe("sk-courts buildDecision", () => {
 });
 
 test("failed detail fetches remain retryable and never assert publisher URL absence", async () => {
-  for (const detail of [
-    { body: "Not found", status: 404 },
-    { body: "Unavailable", status: 503 },
-    { body: "{malformed-json" },
-    { body: JSON.stringify({ ecli: 42 }) },
-  ]) {
+  // A stated absence keeps the listing-only decision; a failed read reports the
+  // item unread. Neither states that the publisher omitted the source URL.
+  for (const { detail, expected } of [
+    {
+      detail: { body: "Not found", status: 404 },
+      expected: "detail-unavailable",
+    },
+    { detail: { body: "Unavailable", status: 503 }, expected: "unread" },
+    { detail: { body: "{malformed-json" }, expected: "unread" },
+    { detail: { body: JSON.stringify({ ecli: 42 }) }, expected: "unread" },
+  ] as const) {
     mockJustice({ detail });
     const built = await buildSkCourtsDecision(GALANTA_ITEM);
-    expect(built.type).toBe("detail-unavailable");
-    if (built.type !== "detail-unavailable") {
-      throw new TypeError("Expected a retryable detail observation");
-    }
-    expect(
-      built.decision.metadata["sourceUrlStatus"] === "detail-unavailable",
-    ).toBe(true);
+    expect(built.type).toBe(expected);
+    const decision = (() => {
+      switch (built.type) {
+        case "detail-unavailable":
+          return built.decision;
+        case "unread":
+          return built.item.listing;
+        default:
+          throw new TypeError("Expected a retryable detail observation");
+      }
+    })();
+    expect(decision.metadata["sourceUrlStatus"] === "detail-unavailable").toBe(
+      true,
+    );
     const stored = storeDecisionTextFields({
-      metadata: built.decision.metadata,
-      textFields: built.decision.textFields,
+      metadata: decision.metadata,
+      textFields: decision.textFields,
     });
     const absence = parseDecisionTextAbsence(
       stored[DECISION_TEXT_ABSENCE_METADATA_KEY],
