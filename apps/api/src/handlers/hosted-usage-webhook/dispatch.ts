@@ -408,6 +408,24 @@ const mapHostedProviderStatus = (
   return null;
 };
 
+/**
+ * Existence read under FOR KEY SHARE, the lock a referencing insert takes on
+ * its parent row: once this returns true, the organization stays in place
+ * until the transaction ends, so rows written for it keep a valid owner.
+ */
+const lockOrganizationIfExists = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<boolean> => {
+  const rows = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+    .for("key share");
+  return rows.length > 0;
+};
+
 type HostedEntitlementReconciliationParams = {
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
@@ -438,18 +456,11 @@ export const handleHostedEntitlementReconciliation = async ({
       reason: "cannot resolve reconciliation audit owner",
     };
   }
-  if (!existing) {
-    const owners = await tx
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.id, organizationId))
-      .limit(1);
-    if (owners.length === 0) {
-      return {
-        kind: "ignored",
-        reason: "reconciliation organization does not exist",
-      };
-    }
+  if (!existing && !(await lockOrganizationIfExists(tx, organizationId))) {
+    return {
+      kind: "ignored",
+      reason: "reconciliation organization does not exist",
+    };
   }
   await recordWebhookAuditEvent({
     tx,
@@ -608,6 +619,9 @@ const createFirstEntitlement = async ({
   );
   if (organizationId === null) {
     return { type: "ignored", reason: "invalid metadata.organization_id" };
+  }
+  if (!(await lockOrganizationIfExists(tx, organizationId))) {
+    return { type: "ignored", reason: "organization does not exist" };
   }
   const inserted = await tx
     .insert(usageEntitlements)
