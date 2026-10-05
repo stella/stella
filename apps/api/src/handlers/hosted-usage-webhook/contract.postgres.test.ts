@@ -1,6 +1,6 @@
 import { panic, TaggedError, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -18,6 +18,7 @@ import {
   HOSTED_USAGE_WEBHOOK_HEADERS,
   receiveHostedUsageWebhook,
 } from "@/api/handlers/hosted-usage-webhook/receive";
+import { replayProviderEventsBatch } from "@/api/handlers/hosted-usage-webhook/replay";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -187,6 +188,36 @@ const readState = async (
     .from(auditLogs)
     .where(eq(auditLogs.organizationId, organizationId)),
 });
+
+type ReplayBatchOptions = {
+  tx: Transaction;
+  eventIds: string[];
+  mode: "dry_run" | "apply";
+};
+const replayBatch = async ({ tx, eventIds, mode }: ReplayBatchOptions) =>
+  (
+    await replayProviderEventsBatch({
+      eventIds,
+      mode,
+      performer: { type: "local", username: "fixture" },
+      requestedBy: "operator:fixture",
+      reason: "contract fixture replay",
+      runTransaction: async (fn) =>
+        await tx.transaction(async (nested) => await fn(nested)),
+    })
+  ).unwrap();
+
+const readReceipts = async (tx: Transaction, eventIds: string[]) =>
+  await tx
+    .select({
+      eventId: hostedUsageWebhookEvents.eventId,
+      result: hostedUsageWebhookEvents.result,
+      errorMessage: hostedUsageWebhookEvents.errorMessage,
+    })
+    .from(hostedUsageWebhookEvents)
+    .where(inArray(hostedUsageWebhookEvents.eventId, eventIds));
+
+const ORGANIZATION_ABSENT_REASON = "organization does not exist";
 
 const statusExpectations = {
   incomplete: "past_due",
@@ -984,4 +1015,155 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
       });
     });
   }
+  const ownerlessEvents = [
+    {
+      type: "subscription.created",
+      status: "active",
+      cancelAtPeriodEnd: false,
+    },
+    {
+      type: "subscription.updated",
+      status: "active",
+      cancelAtPeriodEnd: false,
+    },
+    {
+      type: "subscription.canceled",
+      status: "active",
+      cancelAtPeriodEnd: true,
+    },
+    {
+      type: "subscription.revoked",
+      status: "canceled",
+      cancelAtPeriodEnd: false,
+    },
+  ] as const;
+  for (const { type, status, cancelAtPeriodEnd } of ownerlessEvents) {
+    test(`${type} for an absent organization is an ignored, replayable receipt`, async () => {
+      await withFixture(async (tx, fixture) => {
+        const organizationId = toSafeId<"organization">(
+          `org_${Bun.randomUUIDv7()}`,
+        );
+        const data = {
+          ...fixture.data,
+          status,
+          cancel_at_period_end: cancelAtPeriodEnd,
+          metadata: { organization_id: organizationId },
+        };
+        const eventId = await deliver({ tx, type, data });
+        expect(await readReceipts(tx, [eventId])).toEqual([
+          {
+            eventId,
+            result: "ignored",
+            errorMessage: ORGANIZATION_ABSENT_REASON,
+          },
+        ]);
+        expect(await readState(tx, organizationId)).toEqual({
+          entitlements: [],
+          allocations: [],
+          audits: [],
+        });
+        await deliver({ tx, type, data, eventId });
+        expect(
+          await replayBatch({ tx, eventIds: [eventId], mode: "dry_run" }),
+        ).toMatchObject([
+          { id: eventId, kind: "ignored", reason: ORGANIZATION_ABSENT_REASON },
+        ]);
+
+        await tx.insert(organization).values({
+          id: organizationId,
+          name: "Fixture",
+          slug: organizationId,
+          createdAt: new Date(START),
+        });
+        expect(
+          await replayBatch({ tx, eventIds: [eventId], mode: "apply" }),
+        ).toMatchObject([{ id: eventId, kind: "applied" }]);
+        expect(
+          (await readState(tx, organizationId)).entitlements,
+        ).toMatchObject([
+          {
+            hostedEntitlementExternalId: fixture.data.id,
+            cancelAtPeriodEnd,
+          },
+        ]);
+      });
+    });
+  }
+
+  test("events after the organization is deleted are ignored receipts without state", async () => {
+    await withFixture(async (tx, fixture) => {
+      await deliver({ tx, type: "subscription.created", data: fixture.data });
+      expect(
+        (await readState(tx, fixture.organizationId)).entitlements,
+      ).toHaveLength(1);
+      await tx
+        .delete(organization)
+        .where(eq(organization.id, fixture.organizationId));
+
+      const renewal = await deliver({
+        tx,
+        type: "subscription.updated",
+        data: {
+          ...fixture.data,
+          modified_at: END,
+          current_period_start: END,
+          current_period_end: "2026-08-01T00:00:00Z",
+        },
+      });
+      const cancellation = await deliver({
+        tx,
+        type: "subscription.canceled",
+        data: {
+          ...fixture.data,
+          cancel_at_period_end: true,
+          modified_at: "2026-07-02T00:00:00Z",
+        },
+      });
+      const revocation = await deliver({
+        tx,
+        type: "subscription.revoked",
+        data: {
+          ...fixture.data,
+          status: "canceled",
+          modified_at: "2026-07-03T00:00:00Z",
+        },
+      });
+      const eventIds = [renewal, cancellation, revocation];
+
+      const receipts = await readReceipts(tx, eventIds);
+      expect(
+        eventIds.map((eventId) =>
+          receipts.find((receipt) => receipt.eventId === eventId),
+        ),
+      ).toEqual(
+        eventIds.map((eventId) => ({
+          eventId,
+          result: "ignored",
+          errorMessage: ORGANIZATION_ABSENT_REASON,
+        })),
+      );
+      expect(await readState(tx, fixture.organizationId)).toEqual({
+        entitlements: [],
+        allocations: [],
+        audits: [],
+      });
+      expect(
+        await tx
+          .select({ id: usageEntitlements.id })
+          .from(usageEntitlements)
+          .where(
+            eq(usageEntitlements.hostedEntitlementExternalId, fixture.data.id),
+          ),
+      ).toEqual([]);
+      expect(
+        await replayBatch({ tx, eventIds, mode: "dry_run" }),
+      ).toMatchObject(
+        eventIds.map((id) => ({
+          id,
+          kind: "ignored",
+          reason: ORGANIZATION_ABSENT_REASON,
+        })),
+      );
+    });
+  });
 });
