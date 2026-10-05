@@ -59,6 +59,13 @@ jobs:
           VERSION: ${{ steps.candidate.outputs.value }}
         run: bash scripts/check-release-changelog.sh --version "$VERSION"
 
+      # A release whose npm publish failed or never ran leaves users on an
+      # older CLI and libraries while everything else moves on. The previous
+      # stable tag's packages must be on npm before the next tag is cut; fix
+      # the publish (publish-npm.yml) first. Runs without an install.
+      - name: Refuse a tag while the previous release is missing from npm
+        run: bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD
+
       # The API deploys from this tag; the CLI publishes from the same commit
       # only after production serves it. A stable tag is refused while a
       # pending changeset still names the CLI (its coupled version does not
