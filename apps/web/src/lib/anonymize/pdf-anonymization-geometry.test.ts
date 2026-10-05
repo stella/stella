@@ -46,7 +46,8 @@ const layOut = ({ words, separators, spaceGlyphs }: Layout) => {
     }
     const box = {
       x: column * GLYPH_WIDTH,
-      y: -line * LINE_HEIGHT,
+      // `0 - n`, not `-n`: line 0 must be +0, which toEqual tells from -0.
+      y: 0 - line * LINE_HEIGHT,
       width: GLYPH_WIDTH,
       height: GLYPH_HEIGHT,
     };
@@ -102,7 +103,7 @@ describe("PDF anonymization geometry (properties)", () => {
     "covers exactly the matched characters, in the overlay and the export alike",
     () => {
       assertProperty(
-        "pdf-anonymization-geometry-covers-exactly-the-match",
+        "covers exactly the matched characters, in the overlay and the export alike",
         fc.property(layoutArbitrary, ({ termIndex, ...layout }) => {
           const extraction = layOut(layout);
           const term = layout.words[termIndex] ?? "";
