@@ -2,7 +2,7 @@ import type {
   CallToolResult,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
-import { panic, Result } from "better-result";
+import { Panic, panic, Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
@@ -11,6 +11,8 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -49,6 +51,7 @@ import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
+  McpOutputContractError,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -575,10 +578,17 @@ export const handleMcpToolCall = async ({
   return finished.value;
 };
 
+const MCP_OUTPUT_CONTRACT_SINK = failureSink({
+  event: "mcp.output_contract_violated",
+  expected: [],
+});
+
 /**
  * The one envelope for a handler, egress, or output-contract failure. Generic
  * message: never leak internals to the caller. `captureError` keeps the real
- * exception for observability.
+ * exception for observability. An output-contract violation goes through the
+ * failure owner instead, which grades it a defect and logs it at ERROR: the
+ * caller sees an ordinary tool error, so nothing else would surface it.
  */
 const internalErrorResult = ({
   mode,
@@ -591,7 +601,18 @@ const internalErrorResult = ({
   toolName: string;
   error: unknown;
 }): CallToolResult => {
-  captureError(error, { source: "mcp", toolName });
+  const contractViolation =
+    Panic.is(error) && McpOutputContractError.is(error.cause)
+      ? error.cause
+      : undefined;
+  if (contractViolation !== undefined) {
+    observeFailure(contractViolation, {
+      sink: MCP_OUTPUT_CONTRACT_SINK,
+      ctx: { source: "mcp", tool: toolName },
+    });
+  } else {
+    captureError(error, { source: "mcp", toolName });
+  }
   return serializeToolResult(
     scopeToolResultToSurface(
       structuredErrorResult({
