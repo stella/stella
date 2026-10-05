@@ -1,11 +1,13 @@
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   ACTION_ADMISSION_CODES,
   type ActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { assertProperty } from "@stll/property-testing";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import {
@@ -13,6 +15,7 @@ import {
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
 import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
 import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
@@ -24,6 +27,7 @@ import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import { withActionAdmission } from "./action-admission";
 import {
   ACTION_KINDS,
+  ACTION_SERVICE_CREDENTIALS,
   type AdmittedActionIdentity,
   type PeriodActionKind,
 } from "./action-kinds";
@@ -644,6 +648,46 @@ const countingRedis = () => {
   };
 };
 
+// Mirrors the acquisition script's period branch per KEYS[3]: a replayed
+// phase is admitted again, a new phase is counted up to ARGV[7].
+const periodStore = () => {
+  const hashes = new Map<string, { count: number; phases: Set<string> }>();
+  return {
+    counts: () => [...hashes.values()].map(({ count }) => count),
+    client: {
+      send: async (_command: string, args: string[]) => {
+        const key = args.at(4);
+        if (args.at(1) !== "3" || key === undefined) {
+          return 1;
+        }
+        const limit = Number(args.at(11));
+        const phase = args.at(12) ?? "";
+        const hash = hashes.get(key) ?? { count: 0, phases: new Set() };
+        if (hash.phases.has(phase)) {
+          return 1;
+        }
+        if (hash.count >= limit) {
+          return -1;
+        }
+        hash.phases.add(phase);
+        hash.count += 1;
+        hashes.set(key, hash);
+        return 1;
+      },
+    },
+  };
+};
+
+const SERVICE_PERIOD_KINDS = Object.keys(ACTION_KINDS)
+  .filter((kind): kind is keyof typeof ACTION_KINDS =>
+    Object.hasOwn(ACTION_KINDS, kind),
+  )
+  .filter(
+    (kind): kind is PeriodActionKind =>
+      ACTION_KINDS[kind].admission === "period",
+  )
+  .filter((kind) => ACTION_KINDS[kind].consumesServices);
+
 const FREE_ACTIONS = 3;
 const lapsedEvaluation = {
   state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
@@ -767,5 +811,81 @@ describe("the free floor's service budget", () => {
     });
     expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
     expect(redis.commands).toHaveLength(0);
+  });
+
+  test("the free budget is one count across every kind, per period", async () => {
+    await assertProperty(
+      "the free budget is one count across every kind, per period",
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            actionKind: fc.constantFrom(...SERVICE_PERIOD_KINDS),
+            modelCredentials: fc.constantFrom(
+              ...Object.values(ORGANIZATION_MODEL_CREDENTIALS),
+            ),
+            period: fc.integer({ min: 0, max: 1 }),
+          }),
+          { maxLength: 3 * FREE_ACTIONS },
+        ),
+        async (drawn) => {
+          const steps = drawn.toSorted(
+            (left, right) => left.period - right.period,
+          );
+          const store = periodStore();
+          const records: ActionCostObservation[] = [];
+          const counted = [0, 0];
+          for (const { actionKind, modelCredentials, period } of steps) {
+            const draws = !(
+              ACTION_KINDS[actionKind].serviceCredentials ===
+                ACTION_SERVICE_CREDENTIALS.organizationModel &&
+              modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.organization
+            );
+            const exhausted = draws && (counted[period] ?? 0) >= FREE_ACTIONS;
+            let ran = false;
+            const logicalPhaseId = Bun.randomUUIDv7();
+            const result = await withActionAdmission({
+              organizationId,
+              userId,
+              enabled: true,
+              policy,
+              serviceBudgetsEnabled: true,
+              serviceBudgetConfig,
+              periodIdentity: { actionKind, logicalPhaseId },
+              budgetNow: () => nowMs + period * serviceBudgetConfig.periodMs,
+              readOrganizationState: async () =>
+                freeActionState(modelCredentials),
+              redis: store.client,
+              costRecorder: {
+                enqueue: (observation) => records.push(observation),
+                estimate: () => null,
+                callRate: () => null,
+              },
+              run: async () => {
+                ran = true;
+                return "completed";
+              },
+            });
+            if (exhausted) {
+              expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
+              expect(ran).toBe(false);
+              continue;
+            }
+            expect(result).toEqual(Result.ok("completed"));
+            expect(
+              records.findLast(
+                (observation) =>
+                  observation.type === "action" &&
+                  observation.record.logicalPhaseId === logicalPhaseId,
+              )?.record,
+            ).toMatchObject({ actionKind, logicalPhaseId });
+            if (draws) {
+              counted[period] = (counted[period] ?? 0) + 1;
+            }
+          }
+          // One pooled counter per period, never one per kind.
+          expect(store.counts()).toEqual(counted.filter((count) => count > 0));
+        },
+      ),
+    );
   });
 });

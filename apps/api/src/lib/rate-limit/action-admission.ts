@@ -31,9 +31,11 @@ import {
   ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
+  PER_KIND_PERIOD_SCOPE,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
   type ActionPeriodPolicy,
+  type ActionPeriodScope,
 } from "@/api/lib/rate-limit/action-period-budget";
 import {
   configuredDemoActionBudget,
@@ -386,6 +388,7 @@ const createAdmissionExecutor = ({
             periodMs: budget.endMs - budget.startMs,
             limit: budget.limit,
           },
+          scope: budget.scope,
           nowMs: storeNow,
         });
         if (Result.isError(refreshed)) {
@@ -506,6 +509,7 @@ const resolveAdmissionBudget = async ({
   let serviceDeadlineMs: number | null = null;
   let nowMs = budgetNow();
   let resolvedPeriodPolicy = periodPolicy;
+  let periodScope: ActionPeriodScope = PER_KIND_PERIOD_SCOPE;
   let consumesServices = true;
   if (serviceBudgetsEnabled) {
     if (periodIdentity === undefined) {
@@ -581,6 +585,7 @@ const resolveAdmissionBudget = async ({
           );
         case "resolved":
           resolvedPeriodPolicy = organizationBudget.policy;
+          periodScope = organizationBudget.scope;
           serviceDeadlineMs = organizationBudget.serviceDeadlineMs;
           break;
         default:
@@ -594,6 +599,7 @@ const resolveAdmissionBudget = async ({
         organizationId,
         identity: periodIdentity,
         policy: resolvedPeriodPolicy,
+        scope: periodScope,
         nowMs,
       })
     : Result.ok(null);
@@ -681,6 +687,7 @@ const reuseAdmissionScope = async <T>({
       organizationId,
       identity: periodIdentity,
       policy: periodPolicy,
+      scope: PER_KIND_PERIOD_SCOPE,
       nowMs: budgetNow(),
     });
     if (Result.isError(budget)) {

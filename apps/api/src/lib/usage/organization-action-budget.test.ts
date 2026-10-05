@@ -13,6 +13,7 @@ import {
 } from "./organization-action-budget";
 
 const expiresAtMs = Date.UTC(2026, 9, 1, 12, 30);
+const PER_KIND = { type: "per_kind" } as const;
 type ResolveOverrides = Partial<
   OrganizationActionBudgetConfig & {
     state: OrganizationAccessSnapshot | undefined;
@@ -50,6 +51,7 @@ describe("organization service action budgets", () => {
           expect(resolve(config)).toEqual({
             status: "resolved",
             policy: { periodMs, limit: evaluationActions },
+            scope: PER_KIND,
             serviceDeadlineMs: expiresAtMs,
           });
           expect(
@@ -63,6 +65,7 @@ describe("organization service action budgets", () => {
           ).toEqual({
             status: "resolved",
             policy: { periodMs, limit: selfManagedActions },
+            scope: PER_KIND,
             serviceDeadlineMs: null,
           });
         }
@@ -74,6 +77,7 @@ describe("organization service action budgets", () => {
     expect(resolve({ now: new Date(expiresAtMs - 1) })).toEqual({
       status: "resolved",
       policy: { periodMs: 86_400_000, limit: 7 },
+      scope: PER_KIND,
       serviceDeadlineMs: expiresAtMs,
     });
     for (const nowMs of [expiresAtMs, expiresAtMs + 1]) {
@@ -155,6 +159,7 @@ describe("organization service action budgets", () => {
         ).toEqual({
           status: "resolved",
           policy: { periodMs: 86_400_000, limit: 19 },
+          scope: PER_KIND,
           serviceDeadlineMs: null,
         });
       }
@@ -162,6 +167,7 @@ describe("organization service action budgets", () => {
     expect(resolve({ selfManagedActions: undefined })).toEqual({
       status: "resolved",
       policy: { periodMs: 86_400_000, limit: 7 },
+      scope: PER_KIND,
       serviceDeadlineMs: expiresAtMs,
     });
   });

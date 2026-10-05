@@ -216,6 +216,7 @@ describe("configured access boundaries", () => {
     expect(budget(renewed, END)).toEqual({
       status: "resolved",
       policy: { periodMs: 23_000, limit: renewedProfile },
+      scope: { type: "per_kind" },
       serviceDeadlineMs: renewedEnd.getTime(),
     });
     expectAccess(renewed, renewedEnd, false);

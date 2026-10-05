@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { createHash } from "node:crypto";
 import * as v from "valibot";
 
@@ -17,8 +17,22 @@ export type ActionPeriodPolicy = {
   limit: number;
 };
 
+/**
+ * Which actions share one period count. `per_kind`: every action kind has its
+ * own count. `pooled`: every kind draws one shared count named by `poolKey`;
+ * the kind still identifies each admitted phase and its cost record.
+ */
+export type ActionPeriodScope =
+  | { type: "per_kind" }
+  | { type: "pooled"; poolKey: string };
+
+export const PER_KIND_PERIOD_SCOPE = {
+  type: "per_kind",
+} as const satisfies ActionPeriodScope;
+
 export type ActionPeriodBudget = {
   key: CoordinationKey;
+  scope: ActionPeriodScope;
   startMs: number;
   endMs: number;
   limit: number;
@@ -37,25 +51,53 @@ const digest = (identity: string) =>
 // Flag-on requires a non-evicting admission store; these TTL keys are an operational throttle.
 const periodKey = ({
   organizationId,
-  actionKind,
+  counter,
   startMs,
   endMs,
 }: {
   organizationId: SafeId<"organization">;
-  actionKind: string;
+  counter: string;
   startMs: number;
   endMs: number;
 }) =>
   coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: `period:${digest(actionKind)}:${startMs}:${endMs}`,
+    suffix: `${counter}:${startMs}:${endMs}`,
   });
+
+type PeriodCounter = { counter: string; phase: string };
+
+/**
+ * A pooled count holds phases of every kind, so its phase field names the
+ * kind too. Pool and kind counters use distinct key prefixes.
+ */
+const periodCounter = (
+  identity: ActionPeriodIdentity,
+  scope: ActionPeriodScope,
+): PeriodCounter => {
+  switch (scope.type) {
+    case "per_kind":
+      return {
+        counter: `period:${digest(identity.actionKind)}`,
+        phase: identity.logicalPhaseId,
+      };
+    case "pooled":
+      return {
+        counter: `period-pool:${digest(scope.poolKey)}`,
+        phase: JSON.stringify([identity.actionKind, identity.logicalPhaseId]),
+      };
+    default:
+      scope satisfies never;
+      return panic("Unhandled action period scope");
+  }
+};
 
 type ResolveActionPeriodBudgetOptions = {
   organizationId: SafeId<"organization">;
   identity?: ActionPeriodIdentity | undefined;
   policy?: ActionPeriodPolicy | undefined;
+  scope: ActionPeriodScope;
   nowMs: number;
 };
 
@@ -63,6 +105,7 @@ export const resolveActionPeriodBudget = ({
   organizationId,
   identity,
   policy,
+  scope,
   nowMs,
 }: ResolveActionPeriodBudgetOptions): Result<
   ActionPeriodBudget | null,
@@ -83,7 +126,8 @@ export const resolveActionPeriodBudget = ({
     !Number.isSafeInteger(nowMs) ||
     nowMs < 0 ||
     !identity?.actionKind.trim() ||
-    !identity.logicalPhaseId.trim()
+    !identity.logicalPhaseId.trim() ||
+    (scope.type === "pooled" && !scope.poolKey.trim())
   ) {
     return Result.err(
       new ActionPeriodBudgetError({
@@ -100,17 +144,14 @@ export const resolveActionPeriodBudget = ({
       new ActionPeriodBudgetError({ message: "Action period end is invalid" }),
     );
   }
+  const { counter, phase } = periodCounter(identity, scope);
   return Result.ok({
-    key: periodKey({
-      organizationId,
-      actionKind: identity.actionKind,
-      startMs,
-      endMs,
-    }),
+    key: periodKey({ organizationId, counter, startMs, endMs }),
+    scope,
     startMs,
     endMs,
     limit,
-    phaseField: `phase:${digest(identity.logicalPhaseId)}`,
+    phaseField: `phase:${digest(phase)}`,
   });
 };
 
