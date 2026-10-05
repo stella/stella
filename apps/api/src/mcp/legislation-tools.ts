@@ -60,6 +60,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
   buildLegislationDocumentAppUrl,
+  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
   ELI_NORMALIZATION,
@@ -337,7 +338,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search the stella legislation corpus within one country: consolidated " +
+      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. Search the stella legislation corpus within one country: consolidated " +
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
@@ -374,7 +375,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read one statute by ELI as it stood on a date: `as_of` picks the " +
+      "`url` is the primary reader link; `source_url` is the secondary publisher source. Read one statute by ELI as it stood on a date: `as_of` picks the " +
       "consolidation in force that day, and omitting it reads the text in " +
       "force today. Returns that consolidation's metadata and validity " +
       "window, `versions` (the newest page of the work's consolidations), " +
@@ -401,7 +402,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read named provisions of one or more statutes in one call: each " +
+      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. Read named provisions of one or more statutes in one call: each " +
       "`items[]` entry is { eli, anchor } plus an optional as_of and " +
       "language. An anchor is the publisher's own (par_1729, " +
       "par_1729-odst_1) and read_statute's `outline` lists them. Every entry " +
@@ -437,7 +438,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "How one provision's wording changed: its text in each consolidation " +
+      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. How one provision's wording changed: its text in each consolidation " +
       "of the work, newest validity window first, so two wordings can be " +
       "compared without downloading whole statutes. Takes the work's `eli` and " +
       "an `anchor` from read_statute's outline. A consolidation that does " +
@@ -588,11 +589,14 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     nextCursor: result.nextCursor,
     paginationOutcome: result.paginationOutcome,
     results: result.items.map((hit) => ({
-      appUrl: buildLegislationDocumentAppUrl({
-        country: hit.country,
-        documentId: hit.documentId,
-        eli: hit.eli,
-        slug: hit.slug,
+      ...legalCitationLinkFields({
+        appUrl: buildLegislationDocumentAppUrl({
+          country: hit.country,
+          documentId: hit.documentId,
+          eli: hit.eli,
+          slug: hit.slug,
+        }),
+        sourceUrl: hit.sourceUrl,
       }),
       country: hit.country,
       documentId: hit.documentId,
@@ -724,18 +728,22 @@ const handleReadStatuteTool: TypedMcpToolHandler<
           maxChars: MCP_CONTENT_MAX_CHARS,
           text: plainText,
         });
-  if (window !== null && isToolErrorResult(window)) {
+  if (isToolErrorResult(window)) {
     return window;
   }
 
   return toolDataResult({
     nextCursor: window?.nextCursor ?? null,
     statute: {
-      appUrl: buildLegislationDocumentAppUrl({
-        country: document.country,
-        documentId: document.id,
-        eli: document.eli,
-        slug: document.slug,
+      ...legalCitationLinkFields({
+        appUrl: buildLegislationDocumentAppUrl({
+          country: document.country,
+          documentId: document.id,
+          eli: document.eli,
+          slug: document.slug,
+          version: asOf === undefined ? null : document.versionValidFrom,
+        }),
+        sourceUrl: document.sourceUrl,
       }),
       charCount: window?.charCount ?? null,
       country: document.country,
@@ -833,9 +841,21 @@ const provisionItemResult = ({
       if (version === undefined) {
         return unknownWork;
       }
+      const links = legalCitationLinkFields({
+        appUrl: buildLegislationDocumentAppUrl({
+          country: version.country,
+          documentId: version.id,
+          eli: item.eli,
+          slug: version.slug,
+          version: version.versionValidFrom,
+          anchor: item.anchor,
+        }),
+        sourceUrl: version.sourceUrl,
+      });
       if (!version.allowsDerivedAi) {
         return {
           ...subject,
+          ...links,
           message: WITHHELD_WORDING_MESSAGE,
           status: PROVISION_STATUS.textWithheld,
         };
@@ -857,6 +877,7 @@ const provisionItemResult = ({
 
       return {
         ...subject,
+        ...links,
         ...boundProvisionText(text),
         documentId: version.id,
         resourceName: legislationResourceName(version.id),
@@ -1076,6 +1097,17 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     eli,
     items: page.items.map((item) => {
       const version = {
+        ...legalCitationLinkFields({
+          appUrl: buildLegislationDocumentAppUrl({
+            country: item.country,
+            documentId: item.documentId,
+            eli,
+            slug: item.slug,
+            version: item.versionValidFrom,
+            anchor,
+          }),
+          sourceUrl: item.sourceUrl,
+        }),
         documentId: item.documentId,
         resourceName: legislationResourceName(item.documentId),
         versionValidFrom: item.versionValidFrom,

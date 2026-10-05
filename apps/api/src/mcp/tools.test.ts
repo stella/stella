@@ -618,6 +618,9 @@ const createProvisionVersionRow = ({
   allowsDerivedAi = true,
 }: { allowsDerivedAi?: boolean } = {}) => ({
   allowsDerivedAi,
+  country: "CZE",
+  slug: "89-2012-sb-obcansky-zakonik",
+  sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
   astS3Key: null,
   documentAst: createStatuteAst(),
   id: STATUTE_ID,
@@ -2379,6 +2382,8 @@ describe("OpenAI-compatible MCP tools", () => {
       results: [
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
+          url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
+          source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
           citationAuthority: 1.75,
           citationCount: 7,
@@ -2557,6 +2562,8 @@ describe("OpenAI-compatible MCP tools", () => {
       results: [
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+          url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+          source_url: "https://example.test/decision",
           caseNumber: "29 Cdo 123/2024",
           citationAuthority: 1.75,
           citationCount: 7,
@@ -2622,6 +2629,8 @@ describe("OpenAI-compatible MCP tools", () => {
   type LookupPage = {
     items: {
       appUrl?: string | null;
+      url?: string | null;
+      source_url?: string;
       candidates?: { court: string }[];
       caseNumber?: string;
       court?: string;
@@ -2680,6 +2689,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // An ECLI names its decision outright.
     expect(byEcli).toEqual({
       appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
+      url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
       caseNumber: CZ_DOCKET,
       court: "Nejvyšší soud",
       decisionDate: "2020-05-01",
@@ -3519,6 +3529,7 @@ describe("OpenAI-compatible MCP tools", () => {
           results: [
             {
               appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+              url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
               decisionId: DECISION_ID,
               resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
             },
@@ -3605,6 +3616,7 @@ describe("OpenAI-compatible MCP tools", () => {
           polarity: "negative",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
+            url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             caseNumber: "31 Cdo 900/2025",
             citationAuthority: 2.5,
             court: "Nejvyšší soud",
@@ -3915,6 +3927,8 @@ describe("OpenAI-compatible MCP tools", () => {
         results: [
           {
             appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+            url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+            source_url: "https://example.test/89-2012",
             country: "CZE",
             documentId: STATUTE_ID,
             documentType: "act",
@@ -4058,7 +4072,9 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       nextCursor: encodePaginationCursor([8000]),
       statute: {
-        appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+        appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
+        url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01`,
+        source_url: "https://example.test/89-2012",
         charCount: expectedText.length,
         country: "CZE",
         documentId: STATUTE_ID,
@@ -4348,6 +4364,9 @@ describe("OpenAI-compatible MCP tools", () => {
     readProvisionHistoryHandlerMock.mockResolvedValue({
       items: [
         {
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
@@ -4356,6 +4375,9 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
@@ -4392,6 +4414,9 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
+          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
+          url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
+          source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -4402,6 +4427,9 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
+          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
+          url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
+          source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
@@ -4424,6 +4452,9 @@ describe("OpenAI-compatible MCP tools", () => {
     readProvisionHistoryHandlerMock.mockResolvedValue({
       items: [
         {
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
@@ -4434,6 +4465,9 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           // The Work was re-licensed between consolidations, so the gate is
           // per item: this wording never reaches the model.
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: false,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
@@ -4458,6 +4492,9 @@ describe("OpenAI-compatible MCP tools", () => {
       eli: STATUTE_ELI,
       items: [
         {
+          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
+          url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
+          source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -4468,6 +4505,9 @@ describe("OpenAI-compatible MCP tools", () => {
           ...EFFECTIVE_LABEL,
         },
         {
+          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
+          url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
+          source_url: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: STATUTE_PRIOR_ID,
           message:
             "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
@@ -5190,6 +5230,8 @@ describe("OpenAI-compatible MCP tools", () => {
           status: "found",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+            url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+            source_url: "https://example.test/decision",
             caseNumber: "29 Cdo 123/2024",
             citationsFrom: [
               {
@@ -5400,6 +5442,8 @@ describe("OpenAI-compatible MCP tools", () => {
           status: "found",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+            url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+            source_url: "https://example.test/decision",
             caseNumber: "29 Cdo 123/2024",
             citationsFrom: [
               {

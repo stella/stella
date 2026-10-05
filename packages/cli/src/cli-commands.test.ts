@@ -665,6 +665,58 @@ describe("windowed text (S4)", () => {
     });
   });
 
+  for (const format of ["json", "jsonl"] as const) {
+    for (const held of [true, false]) {
+      test(`--all ${format} preserves ${held ? "held" : "external"} legal citation links from the first window`, async () => {
+        const source = "https://publisher.example/act/89-2012";
+        const links = held
+          ? {
+              url: "https://app.example/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+              source_url: source,
+            }
+          : { url: source };
+        const server = startMockServer((_body, index) => ({
+          toolPayload:
+            index === 0
+              ? {
+                  nextCursor: "w2",
+                  statute: { text: "FIRST ", truncated: true, ...links },
+                }
+              : {
+                  nextCursor: null,
+                  statute: { text: "SECOND", truncated: false },
+                },
+        }));
+        try {
+          const result = await runCli({
+            args: [
+              "legislation",
+              "read",
+              "--eli",
+              "/eli/cz/sb/2012/89",
+              "--all",
+              "--output",
+              format,
+            ],
+            url: server.url,
+            token: READ,
+          });
+          expect(result.exitCode).toBe(0);
+          expect(JSON.parse(result.stdout)).toEqual({
+            text: "FIRST SECOND",
+            ...links,
+          });
+          expect(server.requests).toHaveLength(2);
+          expect(server.requests.at(1)?.params.arguments).toMatchObject({
+            cursor: "w2",
+          });
+        } finally {
+          server.stop();
+        }
+      });
+    }
+  }
+
   test("a case-law decision read renders one entry per requested id", async () => {
     // Not a windowed-text leaf: the read answers per entry, so both the text
     // and its continuation cursor are per entry and there is no one window to

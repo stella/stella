@@ -11,6 +11,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  buildLegislationDocumentAppUrl,
+  legalCitationLinkFields,
   buildCaseLawDecisionUrl,
   closestToolNames,
   didYouMean,
@@ -663,5 +665,47 @@ describe("resolveWindowBounds", () => {
       end: 5,
       nextOffset: null,
     });
+  });
+});
+
+describe("primary legal citation links", () => {
+  for (const path of [
+    "/law/cze/statutes/89-2012-sb",
+    "/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+    "/law/cze/cases/ns/1-24",
+  ]) {
+    test(`held ${path} keeps its publisher as a secondary source`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      const appUrl = `${BASE}${path}`;
+      expect(legalCitationLinkFields({ appUrl, sourceUrl })).toEqual({
+        appUrl,
+        url: appUrl,
+        source_url: sourceUrl,
+      });
+    });
+    test(`unserved ${path} falls back to the publisher`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      expect(legalCitationLinkFields({ appUrl: null, sourceUrl })).toEqual({
+        appUrl: null,
+        url: sourceUrl,
+      });
+    });
+  }
+  test("a held provision links its consolidation and exact anchor", () => {
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
+    try {
+      expect(
+        buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId: DECISION_ID,
+          eli: "/eli/cz/sb/2012/89",
+          slug: "89-2012-sb",
+          version: "2014-01-01",
+          anchor: "par_1729",
+        }),
+      ).toBe(`${BASE}/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729`);
+    } finally {
+      restore();
+    }
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
+import type { CallToolResult } from "./mcp-client.js";
 import {
   buildRenderPlan,
   displayWidth,
@@ -8,6 +9,7 @@ import {
   selectFormat,
   type Writers,
 } from "./output.js";
+import { parsePayload } from "./run-leaf-command.js";
 
 const capture = () => {
   const out: string[] = [];
@@ -551,4 +553,71 @@ describe("composite results", () => {
     expect(table).not.toContain("Lists");
     expect(JSON.parse(render(register, "json"))).toEqual(register);
   });
+});
+
+describe("CLI legal citation projection", () => {
+  for (const format of ["json", "jsonl"] as const) {
+    for (const path of [
+      "/law/cze/statutes/89-2012-sb",
+      "/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+      "/law/cze/cases/ns/1-24",
+    ]) {
+      for (const held of [true, false]) {
+        test(`${format} preserves ${held ? "held" : "external"} citation ${path} through the MCP payload`, () => {
+          const source = "https://publisher.example/legal-source";
+          const links = held
+            ? { url: `https://app.example${path}`, source_url: source }
+            : { url: source };
+          const subject = { text: "Quoted legal text", ...links };
+          const wire = {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ nextCursor: null, statute: subject }),
+              },
+            ],
+          } satisfies CallToolResult;
+          const payload = parsePayload(wire);
+          const plan = buildRenderPlan({
+            payload,
+            textPath: "statute.text",
+            itemsKey: undefined,
+            singleReadActive: false,
+            columns: undefined,
+          });
+          const { out, writers } = capture();
+          renderResult({ plan, format, writers, allActive: false });
+          expect(JSON.parse(out.join(""))).toEqual(subject);
+          const searchPlan = buildRenderPlan({
+            payload: parsePayload({
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    results: [subject],
+                    nextCursor: null,
+                  }),
+                },
+              ],
+            }),
+            textPath: undefined,
+            itemsKey: "results",
+            singleReadActive: false,
+            columns: undefined,
+          });
+          const search = capture();
+          renderResult({
+            plan: searchPlan,
+            format,
+            writers: search.writers,
+            allActive: false,
+          });
+          const result = JSON.parse(search.out.join(""));
+          expect(format === "json" ? result.results.at(0) : result).toEqual(
+            subject,
+          );
+        });
+      }
+    }
+  }
 });

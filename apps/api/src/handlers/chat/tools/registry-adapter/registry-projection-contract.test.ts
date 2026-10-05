@@ -19,9 +19,11 @@ import {
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -35,15 +37,22 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
-import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
+import {
+  deriveRefMediationEntry,
+  projectForChat,
+} from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
+import { isRecord } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
+import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -130,9 +139,6 @@ const EXTRACTED_TEXT = "decrypted text";
 const extractedEnvelope = await encryptContent(ORGANIZATION_ID, EXTRACTED_TEXT);
 
 // --- DB doubles ---------------------------------------------------------------
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type ThenableBuilder = {
   from: () => ThenableBuilder;
@@ -1707,6 +1713,9 @@ const CONTRACT_CORPUS = {
             expressionKind: "consolidation" as const,
             windowDisposition: "effective" as const,
             windowDispositionBasis: null,
+            country: "CZE",
+            slug: "89-2012-sb-obcansky-zakonik",
+            sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
             allowsDerivedAi: true,
           },
         ]);
@@ -1727,6 +1736,9 @@ const CONTRACT_CORPUS = {
         readProvisionHistoryHandlerMock.mockResolvedValue({
           items: [
             {
+              country: "CZE",
+              slug: "89-2012-sb-obcansky-zakonik",
+              sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
               allowsDerivedAi: true,
               documentId: uid(73),
               versionValidFrom: "2014-01-01",
@@ -1745,6 +1757,12 @@ const CONTRACT_CORPUS = {
   ],
   search_boe_legislation: [
     {
+      expectPayloadContains: [
+        JSON.stringify({ url: `https://boe.es/consolidado/${uid(98)}` }).slice(
+          1,
+          -1,
+        ),
+      ],
       mode: "search",
       buildArgs: () => ({ query: "impuesto" }),
       setup: () => {
@@ -1984,6 +2002,69 @@ beforeEach(() => {
 });
 
 describe("registry projection contract", () => {
+  for (const toolName of ["search_case_law", "search_legislation"] as const) {
+    test(`${toolName} projects the publisher as primary when the deployment cannot serve the item`, async () => {
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      const previous = env.FEATURE_PUBLIC_LAW;
+      env.FEATURE_PUBLIC_LAW = false;
+      try {
+        const call =
+          corpusEntries()
+            .find(([name]) => name === toolName)?.[1]
+            .at(0) ?? panic("Missing citation fixture");
+        call.setup?.();
+        const refRegistry = createChatRefRegistry();
+        const args = call.buildArgs(refRegistry);
+        const handler =
+          toolName === "search_case_law"
+            ? STELLA_TOOL_HANDLERS.search_case_law
+            : LEGISLATION_TOOL_HANDLERS.search_legislation;
+        // The advertised registry hides disabled tools. Exercise the handler's
+        // shared output projection directly to reach its deployment fallback.
+        const response = await handler({
+          args,
+          context: contextFor(toolName, {}),
+        });
+        if (!("status" in response) || response.status !== "success") {
+          panic("Citation handler failed");
+        }
+        const result = projectForChat({
+          payload: response.data,
+          schema: READ_TOOL_REF_FIELD_MAP[toolName].projection,
+          refRegistry,
+          dehydration: {
+            args,
+            resolvedMatterParams: {},
+            resolvedEntityParams: {},
+            dehydratedEntityRefs: new Map(),
+          },
+          source: "run-registry-tool",
+          toolName,
+        });
+        if (Result.isError(result)) {
+          panic("Citation projection failed", result.error);
+        }
+        const payload = result.value;
+        if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+          panic("No citation search results");
+        }
+        expect(payload["results"].length).toBeGreaterThan(0);
+        for (const item of payload["results"]) {
+          if (!isRecord(item)) {
+            panic("Invalid citation result");
+          }
+          expect(item["appUrl"]).toBeNull();
+          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["url"]).toMatch(/^https:/u);
+          expect(item["source_url"]).toBeUndefined();
+        }
+      } finally {
+        env.FEATURE_PUBLIC_LAW = previous;
+        restore();
+      }
+    });
+  }
+
   test("every declared outputRef path is exercised by some fixture call", () => {
     for (const [toolName, calls] of corpusEntries()) {
       // Derived from the entry's projection schema, the only artifact.
@@ -2038,6 +2119,35 @@ describe("registry projection contract", () => {
         }
 
         const payload = result.value;
+        const assertCitationLinks = (value: unknown) => {
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              assertCitationLinks(item);
+            }
+            return;
+          }
+          if (typeof value !== "object" || value === null) {
+            return;
+          }
+          if ("appUrl" in value) {
+            expect(
+              "url" in value,
+              `${toolName}: every reader link has a primary url`,
+            ).toBe(true);
+            if ("url" in value && typeof value.appUrl === "string") {
+              expect(value.url).toBe(value.appUrl);
+              if ("sourceUrl" in value && typeof value.sourceUrl === "string") {
+                expect("source_url" in value && value.source_url).toBe(
+                  new URL(value.sourceUrl).href,
+                );
+              }
+            }
+          }
+          for (const child of Object.values(value)) {
+            assertCitationLinks(child);
+          }
+        };
+        assertCitationLinks(payload);
         if (call.expectPayloadContains) {
           const serialized = JSON.stringify(payload);
           for (const literal of call.expectPayloadContains) {

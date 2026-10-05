@@ -937,12 +937,33 @@ const followAll = async ({
     }
   } while (cursor !== null);
 
+  const firstWindow = buildRenderPlan({
+    payload: firstPayload,
+    textPath,
+    itemsKey,
+    singleReadActive: false,
+    columns: undefined,
+  });
+  const citationFields =
+    firstWindow.kind === "windowed-text"
+      ? {
+          ...(firstWindow.url === undefined ? {} : { url: firstWindow.url }),
+          ...(firstWindow.source_url === undefined
+            ? {}
+            : { source_url: firstWindow.source_url }),
+        }
+      : {};
+
   // The merged windowed payload is the CLI's own shape, flat at
   // `MERGED_TEXT_PATH` whatever path the tool nested its window under.
   const mergedPayload =
     textPath === undefined
       ? { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null }
-      : { [MERGED_TEXT_PATH]: text, nextCursor: null };
+      : {
+          ...citationFields,
+          [MERGED_TEXT_PATH]: text,
+          nextCursor: null,
+        };
 
   const itemCount = stream === undefined ? items.length : streamedCount;
   const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
@@ -1370,10 +1391,11 @@ export const runLeafCommand = async ({
   args = gated.args;
 
   // Windowed-text commands print raw document text by default; only an explicit
-  // --json / --output json switches them to a structured envelope (spec S4).
+  // --json / --output json/jsonl switches them to a structured envelope (spec S4).
   const explicitJson =
     flags[RESERVED_FLAG_KEYS.json] === true ||
-    flags[RESERVED_FLAG_KEYS.output] === "json";
+    flags[RESERVED_FLAG_KEYS.output] === "json" ||
+    flags[RESERVED_FLAG_KEYS.output] === "jsonl";
   const format =
     spec.windowedText && !explicitJson
       ? "table"

@@ -1570,6 +1570,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // nullable; a non-nullable declaration would fail the strict parse and
           // take the tool off the chat surface on any deployment with the flag off.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
           citationCount: v.number(),
           // `ln(1 + weighted citations)`, the score the ranking blends in.
@@ -1634,6 +1636,8 @@ const decisionTextFieldProjections = {
 const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.optional(v.nullable(v.string())),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
   citationsFrom: v.optional(
@@ -1773,6 +1777,8 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
 const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
   court: v.string(),
@@ -1864,6 +1870,8 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
         v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
           caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
@@ -1930,10 +1938,11 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`)
-          // and null for a statute whose ELI carries no citation tail to mint a
-          // slug from: both are addresses that do not exist, not missing data.
+          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
+          // without a stored slug the canonical route uses the document id.
           appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           country: v.string(),
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
@@ -1972,6 +1981,8 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   statute: v.strictObject({
     // Nullable for the same reasons as search_legislation's `appUrl`.
     appUrl: v.nullable(v.string()),
+    url: v.nullable(publicUrl()),
+    source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
     country: v.string(),
     documentId: passthroughId(),
@@ -2027,6 +2038,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...provisionEntrySubject,
+          appUrl: v.nullable(v.string()),
+          url: v.nullable(publicUrl()),
+          source_url: v.optional(publicUrl()),
           documentId: passthroughId(),
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
@@ -2040,6 +2054,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
         projectionBranch(
           v.strictObject({
             ...provisionEntrySubject,
+            appUrl: v.optional(v.nullable(v.string())),
+            url: v.optional(v.nullable(publicUrl())),
+            source_url: v.optional(publicUrl()),
             message: v.string(),
             status: v.literal(status),
           }),
@@ -2063,6 +2080,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
 });
 
 const statuteProvisionVersion = {
+  appUrl: v.nullable(v.string()),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -2180,6 +2200,7 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
             // The gazette's own ELI and consolidated-text URLs, which may
             // embed the publisher's own UUID — never a Stella tenant id, so
             // they are forwarded unchanged.
+            url: v.nullable(publicUrl()),
             url_eli: v.optional(publicUrl()),
             url_html_consolidada: v.optional(publicUrl()),
           }),
