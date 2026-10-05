@@ -300,9 +300,11 @@ export const executeCorpusSuite = async ({
     rmSync(suite.dataDir, { recursive: true, force: true });
     rmSync(temporaryDir, { recursive: true, force: true });
   }
-  const errors = [result, diagnostics, cleanup].flatMap((operation) =>
-    operation.isErr() ? [operation.error.message] : [],
-  );
+  const errors = [
+    result.match({ ok: () => [], err: ({ message }) => [message] }),
+    diagnostics.match({ ok: () => [], err: ({ message }) => [message] }),
+    cleanup.match({ ok: () => [], err: ({ message }) => [message] }),
+  ].flat();
   if (errors.length > 0) {
     throw new CorpusSuiteCommandError({ message: errors.join("; ") });
   }
