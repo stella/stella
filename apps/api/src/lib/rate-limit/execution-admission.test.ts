@@ -146,6 +146,7 @@ describe("chat execution admission owns settlement independently of transport re
       period_exhausted: "period_exhausted",
       daily_exhausted: "daily_exhausted",
       not_enabled: "not_enabled",
+      not_on_plan: "not_on_plan",
       unavailable: "unavailable",
     } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
     const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
@@ -172,7 +173,8 @@ describe("chat execution admission owns settlement independently of transport re
               contactUrl:
                 reason === "period_exhausted" ||
                 reason === "daily_exhausted" ||
-                reason === "not_enabled"
+                reason === "not_enabled" ||
+                reason === "not_on_plan"
                   ? contactUrl
                   : undefined,
               cause: error,

@@ -1271,6 +1271,7 @@ describe("send message disconnect handling", () => {
     period_exhausted: "period_exhausted",
     daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
+    not_on_plan: "not_on_plan",
     unavailable: "unavailable",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {

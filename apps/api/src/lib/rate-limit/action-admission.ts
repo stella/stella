@@ -56,6 +56,7 @@ import {
 import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
   actionDrawsServiceBudget,
+  actionPlanAvailability,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -599,6 +600,20 @@ const resolveAdmissionBudget = async ({
         now: new Date(nowMs),
         freeTier: state.value.freeTier,
       });
+      if (
+        actionPlanAvailability({
+          access,
+          actionKind: periodIdentity.actionKind,
+          modelCredentials: state.value.modelCredentials,
+        }) === "not_on_plan"
+      ) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "This action is not offered on the organization's plan",
+            reason: "not_on_plan",
+          }),
+        );
+      }
       consumesServices = actionDrawsServiceBudget({
         access,
         serviceCredentials:

@@ -11,6 +11,7 @@ type ActionAdmissionReason =
   | "period_exhausted"
   | "daily_exhausted"
   | "not_enabled"
+  | "not_on_plan"
   | "unavailable";
 
 // A daily refusal knows when its budget resets; no other refusal may claim one.
@@ -47,6 +48,8 @@ const ADMISSION_REASON_CODES = {
   period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
   daily_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
   not_enabled: ACTION_ADMISSION_CODES.notEnabled,
+  // A helper the plan does not offer answers as not enabled on the wire.
+  not_on_plan: ACTION_ADMISSION_CODES.notEnabled,
   unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
 } as const satisfies Record<
   ActionAdmissionError["reason"],
