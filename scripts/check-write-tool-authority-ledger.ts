@@ -20,7 +20,7 @@ if (import.meta.main) {
       parseLedger: parseReasonedLedger,
       label: "write-tool-authority",
       remediation:
-        "declare the exact permissions the tool needs (type all) instead of listing it",
+        "declare the exact permissions the tool needs (type all, or type input when the input selects the operation) instead of listing it",
     }),
   );
 }

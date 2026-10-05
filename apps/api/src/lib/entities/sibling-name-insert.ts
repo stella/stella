@@ -37,7 +37,7 @@ type ReadSiblingNamesOptions = Omit<SiblingScope, "parentId"> & {
 };
 
 /** The workspace cap bounds this complete internal sibling set. */
-export const readSiblingNames = async ({
+const readSiblingNames = async ({
   tx,
   workspaceId,
   scope,

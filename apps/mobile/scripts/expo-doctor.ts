@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 const DUPLICATE_CHECK = "Check that no duplicate dependencies are installed";
 const EXPO_BUN_WORKSPACE_ISSUE = "https://github.com/expo/expo/issues/46429";
 
@@ -196,13 +198,18 @@ const run = async () => {
     stderr: "pipe",
     stdout: "pipe",
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
+  const [stdout, stderr] = await Promise.all([
     new Response(processHandle.stdout).text(),
     new Response(processHandle.stderr).text(),
     processHandle.exited,
   ]);
+  const exitCode = childExitStatus(processHandle);
   process.stdout.write(stdout);
   process.stderr.write(stderr);
+
+  if (processHandle.signalCode !== null) {
+    process.exit(exitCode);
+  }
 
   const classification = classifyExpoDoctorResult(
     `${stdout}\n${stderr}`,

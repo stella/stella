@@ -45,6 +45,7 @@ import {
   type McpSession,
 } from "@/api/mcp/auth";
 import {
+  accessibleFeatureCapabilityIds,
   invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
 } from "@/api/mcp/capability-tools";
@@ -69,6 +70,8 @@ import {
   McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
@@ -94,6 +97,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -193,10 +197,11 @@ type McpServerDependencies = {
     mode?: McpMode,
     scopes?: readonly string[],
   ) => Promise<McpTool[]>;
-  listMcpResources: (mode: McpMode) => Resource[];
+  listMcpResources: (mode: McpMode, context?: McpRequestContext) => Resource[];
   readMcpResource: (
     uri: string,
     mode: McpMode,
+    context?: McpRequestContext,
   ) => ReadResourceResult | Promise<ReadResourceResult>;
   recordMcpSessionInitialized: RecordMcpSessionInitialized;
   resolveMcpSessionContext: (
@@ -250,7 +255,9 @@ export const mcpOmittedToolNamesByReason = ({
   grantedScopes,
   isFeatureEnabled = isMcpToolFeatureEnabled,
   mode,
+  context,
 }: {
+  context?: McpFeatureAccessContext;
   grantedScopes: readonly string[];
   isFeatureEnabled?: (feature: DeploymentFeatureFlag | undefined) => boolean;
   mode: McpMode;
@@ -258,6 +265,16 @@ export const mcpOmittedToolNamesByReason = ({
   const feature: string[] = [];
   const scope: string[] = [];
   for (const definition of listStaticMcpToolDefinitions(mode)) {
+    if (
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: definition.name,
+        featureId: definition.featureId,
+      })
+    ) {
+      continue;
+    }
     if (!isFeatureEnabled(definition.feature)) {
       feature.push(definition.name);
       continue;
@@ -634,13 +651,16 @@ const retryableServerErrorResponse = () => {
  * handling a `tools/call` (e.g. a gateway load fault surfaced before dispatch).
  * Details never reach the caller; they are captured at the failure site.
  */
-const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
+const retryableToolErrorResult = (
+  mode: McpMode,
+  context?: McpFeatureAccessContext,
+): CallToolResult =>
   mcpStructuredErrorResult({
     code: "internal_error",
     message:
       "The request could not be completed due to a temporary server error",
     retryable: true,
-    hint: scopeHintToSurface(MCP_INTERNAL_ERROR_HINT, mode),
+    hint: scopeHintToSurface(MCP_INTERNAL_ERROR_HINT, { mode, context }),
   });
 
 type BoundMcpToolResultOptions = {
@@ -782,25 +802,36 @@ export const createMcpHttpRequestHandler = ({
       { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
       {
         capabilities: { resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode),
+        instructions: getMcpInstructions(mode, context),
       },
     );
 
-    server.setRequestHandler("tools/list", async () => ({
-      tools: await listMcpTools(context, mode, session.scopes),
-    }));
+    server.setRequestHandler("tools/list", async () => {
+      const tools = await listMcpTools(context, mode, session.scopes);
+      return {
+        tools,
+        _meta: {
+          featureAccess: {
+            capabilities: await accessibleFeatureCapabilityIds(context),
+            tools: tools
+              .filter((tool) => typeof tool._meta?.["featureId"] === "string")
+              .map(({ name }) => name),
+          },
+        },
+      };
+    });
 
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
     server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode),
+      resources: listMcpResources(mode, context),
     }));
 
     server.setRequestHandler(
       "resources/read",
       async (resourceRequest) =>
-        await readMcpResource(resourceRequest.params.uri, mode),
+        await readMcpResource(resourceRequest.params.uri, mode, context),
     );
 
     server.setRequestHandler("tools/call", async (toolRequest, { mcpReq }) => {
@@ -809,7 +840,17 @@ export const createMcpHttpRequestHandler = ({
         disposition.type = "tool";
       }
       const toolName = toolRequest.params.name;
-      const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
+      const staticTool = listStaticMcpToolDefinitions(mode).find(
+        ({ name }) => name === toolName,
+      );
+      const requiredScopesHint = isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: toolName,
+        featureId: staticTool?.featureId,
+      })
+        ? getMcpToolRequiredScopesHint(toolName, mode)
+        : undefined;
       const missingHintedScope = requiredScopesHint?.find(
         (scope) => !session.scopes.includes(scope),
       );
@@ -839,7 +880,7 @@ export const createMcpHttpRequestHandler = ({
         if (!(error instanceof McpGatewayLoadError)) {
           captureError(error, { phase: "tools/call", mode, source: "mcp" });
         }
-        return retryableToolErrorResult(mode);
+        return retryableToolErrorResult(mode, context);
       }
       if (!definition) {
         // Suggest the closest names the caller can actually see (scope-filtered
@@ -875,6 +916,18 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
+      // Before admission: an unauthorized call must not spend the caller's
+      // action budget, nor be answered with an admission refusal instead.
+      const authorityRefusal = mcpToolAuthorityRefusal({
+        authority: context,
+        definition,
+        toolName,
+        userEmail: context.userEmail,
+      });
+      if (authorityRefusal !== null) {
+        return mcpStructuredErrorResult(authorityRefusal);
+      }
+
       const resultDisposition = toolResultDisposition(definition.annotations);
       const readClass = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")
         ? await resolveMcpReadClass(
@@ -906,6 +959,7 @@ export const createMcpHttpRequestHandler = ({
       if (toolName === "invoke_capability") {
         const classified = await invokedCapabilityConsumesServices(
           toolRequest.params.arguments ?? {},
+          context,
         );
         if (Result.isError(classified)) {
           return serializeToolResult(classified.error);
@@ -946,7 +1000,7 @@ export const createMcpHttpRequestHandler = ({
         phase: "action-admission",
         source: "mcp",
       });
-      return retryableToolErrorResult(mode);
+      return retryableToolErrorResult(mode, context);
     });
 
     return server;

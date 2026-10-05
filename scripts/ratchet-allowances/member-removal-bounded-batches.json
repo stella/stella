@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+  "delta": 26,
+  "reason": "Every loop is bounded by counted input rows and LIMITS.memberRemovalCleanupBatchSize, MAX_FLOW_STEPS for run steps, or LIMITS.workspacesCount per affected organization for matter locks. Sequential awaits preserve ascending matter/membership lock order or the read-update-history/audit dependency before consuming the next counted batch. Independent source reads use one UNION query; tenant audit groups share one chunked insert."
+}

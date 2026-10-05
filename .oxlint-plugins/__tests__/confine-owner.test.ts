@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
@@ -149,6 +150,27 @@ describe.serial("legislation revision corpus ownership", () => {
   });
 });
 
+describe.serial("task assignment ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "task-assignment-membership");
+  test("confines direct and aliased assignment primitives to their owners", async () => {
+    expect(entry).toBeDefined();
+    const source =
+      'import { taskAssignees as assignments } from "@/api/db/schema";\nawait tx.insert(assignments).values({});\n';
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/handlers/tasks/new-writer.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/lib/tasks/assignment-membership.ts",
+      }),
+    ).toEqual([]);
+  });
+});
+
 const storedContentEntries = OWNERSHIP.filter(({ id }) =>
   [
     "stored-file-read",
@@ -216,5 +238,29 @@ describe.serial("confine-owner stored content rows", () => {
         }),
       ).toEqual([]);
     });
+  }
+});
+
+test("translation availability is consumed by the dialog owner", async () => {
+  const source =
+    'import { deepLAvailabilityOptions, deepLConfigOptions } from "@/lib/deepl/queries";';
+  for (const sourcePath of [
+    "apps/web/src/components/translate-document-dialog.tsx",
+    "apps/web/src/components/workspaces/row-actions.tsx",
+    "apps/web/src/components/other-dialog.tsx",
+  ]) {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptionsForRoot: (root) => ({
+          entries: OWNERSHIP.filter(
+            ({ id }) => id === "deepl-availability",
+          ).map((entry) => ({
+            ...entry,
+            owner: entry.owner.map((owner) => path.join(root, owner)),
+          })),
+        }),
+        sourcePath,
+      }),
+    ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
   }
 });

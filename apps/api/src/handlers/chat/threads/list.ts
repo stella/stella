@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/chat/thread-list-pagination";
 import {
   CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
+  CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
   EMPTY_CHAT_THREAD_CONTEXT,
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
@@ -190,6 +191,7 @@ const getThreads = createSafeRootHandler(
 
         // One bounded read for the whole page's context, never one per row.
         const threadContexts = await readChatThreadContexts({
+          previewLimit: CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
           threadIds: listedRows.slice(0, limit).map((row) => row.id),
           tx,
         });

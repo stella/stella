@@ -6,7 +6,9 @@ import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -184,6 +186,12 @@ export type McpToolAccessBranch =
        * it centrally through `write-tool-authority.ts`.
        */
       permissions: McpWriteToolPermissions;
+      /**
+       * Whether the configured demo account may use the tool, declared as its
+       * REST counterpart declares it (`standard` refuses it, `sandbox`
+       * admits it); discovery and dispatch read it through the same owner.
+       */
+      accountAccess: AccountAccess;
     };
 
 export type McpToolDestructiveBehavior =
@@ -253,6 +261,7 @@ export type McpToolDefinition = McpToolAccessBranch &
      * tools.
      */
     feature?: DeploymentFeatureFlag;
+    featureId?: FeatureId;
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -308,6 +317,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
   /** API-owned finite transport deadline projected into generated CLI leaves. */

@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.1.5
+
+### Patch Changes
+
+- [#4619](https://github.com/stella/stella/pull/4619) [`34c5cac`](https://github.com/stella/stella/commit/34c5cac979a5b544a345ceaed8fde5c7355627a2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose a shared catalogue of office archive formats and identity metadata fields.
+
 ## 0.1.4
 
 ### Patch Changes

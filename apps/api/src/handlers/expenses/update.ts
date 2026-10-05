@@ -7,6 +7,7 @@ import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
+import { expenseRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -47,6 +48,7 @@ const config = {
     "unbilled one.",
   permissions: { expense: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;

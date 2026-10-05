@@ -19,6 +19,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { HistoryIcon, TrashIcon } from "@stll/ui/icons";
 import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
+import { LANDING_SECTION_HEADING_CLASS } from "@stll/ui/landing";
 import {
   Sheet,
   SheetHeader,
@@ -153,10 +154,7 @@ export const ThreadsSheet = ({
       {triggerVariant === "section" ? (
         <SheetTrigger
           render={
-            <button
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase outline-none focus-visible:ring-2"
-              type="button"
-            />
+            <button className={LANDING_SECTION_HEADING_CLASS} type="button" />
           }
         >
           {icon ?? <HistoryIcon className="size-4" />}

@@ -20,6 +20,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
+import { SYSTEM_AUDIT_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_REL,
   type AuditMutationLedgerRow,
@@ -95,7 +98,12 @@ const census = (): Map<string, TargetCounts> => {
       JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [path.join(REPO_ROOT, ".oxlint-plugins", `${RULE}.ts`)],
-        rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] },
+        rules: {
+          [`${RULE}/${RULE}`]: [
+            "error",
+            { census: true, systemModules: SYSTEM_AUDIT_MODULES },
+          ],
+        },
       }),
     );
     const result = Bun.spawnSync(
@@ -169,7 +177,7 @@ const readLedger = (): AuditMutationLedgerRow[] => {
 const sortedCounts = (counts: TargetCounts): TargetCounts =>
   Object.fromEntries(
     Object.entries(counts).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareCodeUnit(left, right),
     ),
   );
 
@@ -211,7 +219,7 @@ export const nextAuditMutationLedger = ({
     });
   }
   return {
-    rows: rows.toSorted((left, right) => left.id.localeCompare(right.id)),
+    rows: rows.toSorted((left, right) => compareCodeUnit(left.id, right.id)),
     refused,
   };
 };

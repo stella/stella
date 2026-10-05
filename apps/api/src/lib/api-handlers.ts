@@ -20,6 +20,16 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/auth/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -48,6 +58,7 @@ import {
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
   causeChainAttributes,
+  failureSink,
   identityFields,
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
@@ -59,6 +70,7 @@ import {
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
@@ -69,6 +81,13 @@ import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
+import {
+  announceResourceSetUpdates,
+  isSuccessfulHandlerResult,
+  type NoResourceSetUpdates,
+  type OrganizationResourceSetUpdates,
+  type ResourceSetRealtime,
+} from "@/api/lib/resource-set-realtime";
 import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
@@ -95,8 +114,6 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
-
-export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
@@ -151,7 +168,7 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
  */
-export type McpCapabilityReason =
+type McpCapabilityReason =
   | "template_authoring_ui"
   | "workspace_schema"
   | "knowledge_library_admin"
@@ -217,7 +234,7 @@ export type McpCapabilityReason =
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
  */
-export type McpInternalReason =
+type McpInternalReason =
   | "auth_plumbing"
   | "upload_mechanics"
   | "realtime_stream"
@@ -389,8 +406,15 @@ export type HandlerConfig = InputSchema &
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
+    /**
+     * Resource sets a successful call announces to open tabs. The wrapper
+     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * see `lib/resource-set-realtime.ts`.
+     */
+    realtime?: ResourceSetRealtime;
     mcp: McpExposure;
   };
 
@@ -423,7 +447,7 @@ export const ACCOUNT_ACCESS = {
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+const requiresStandardAccount = (accountAccess: AccountAccess) =>
   accountAccess === ACCOUNT_ACCESS.standard;
 
 type SandboxAccountAccess = {
@@ -448,6 +472,7 @@ type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
     | "access"
     | "contentDelivery"
     | "transport"
+    | "realtime"
   >
 >;
 
@@ -477,6 +502,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     session: {
       activeOrganizationId: SafeId<"organization">;
     };
+    featureAccessSnapshot?: FeatureAccessSnapshot;
+    featureAccessProof?: FeatureAccessProof;
     scopedDb: ScopedDb;
     safeDb: SafeDb;
     /** Resolve non-deleting workspace IDs only when an operation spans matters. */
@@ -600,7 +627,7 @@ type SafeErrorBody = {
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
-export const safeHandlerErrorResponseSchema = t.Object(
+const safeHandlerErrorResponseSchema = t.Object(
   {
     message: t.String(),
     code: t.Optional(t.String()),
@@ -1112,7 +1139,13 @@ export const admitFiniteAction = async function* <
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkDemoAccountOperation;
+  announce?: typeof announceResourceSetUpdates;
 };
+
+const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
+  event: "resource-set-realtime.announce",
+  expected: [],
+});
 
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
@@ -1124,6 +1157,7 @@ const createSafeScopedHandler = <
   {
     admit = withActionAdmission,
     checkAccountOperation = checkDemoAccountOperation,
+    announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
@@ -1134,6 +1168,84 @@ const createSafeScopedHandler = <
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",
       });
+    }
+
+    const featureAccess = config.featureAccess;
+    if (featureAccess !== undefined) {
+      const principal = {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      };
+      const snapshot =
+        ctx.featureAccessSnapshot === undefined ||
+        !isFeatureAccessSnapshotForPrincipal(
+          ctx.featureAccessSnapshot,
+          principal,
+        )
+          ? await ctx.safeDb(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                }),
+            )
+          : Result.ok(ctx.featureAccessSnapshot);
+      if (Result.isError(snapshot)) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler() {
+            return yield* Result.await(
+              Promise.resolve(Result.err(snapshot.error)),
+            );
+          },
+        });
+      }
+      ctx.featureAccessSnapshot = snapshot.value;
+      delete ctx.featureAccessProof;
+      const enabled = isFeatureEnabled(
+        snapshot.value,
+        featureAccess.featureId,
+        principal,
+      );
+      const decision = snapshot.value.decisions.get(featureAccess.featureId);
+      if (enabled && decision?.status === "enabled") {
+        ctx.featureAccessProof = decision.proof;
+      }
+      if (!enabled) {
+        const usage =
+          featureAccess.type === "required"
+            ? Result.ok(true)
+            : await Result.tryPromise(
+                async () =>
+                  await featureAccess.usesFeature({
+                    body: ctx.body,
+                    params: ctx.params,
+                    query: ctx.query,
+                    organizationId: ctx.session.activeOrganizationId,
+                    scopedDb: ctx.scopedDb,
+                    safeDb: ctx.safeDb,
+                    ...(hasWorkspaceId(ctx)
+                      ? { workspaceId: ctx.workspaceId }
+                      : {}),
+                  }),
+              );
+        if (Result.isError(usage)) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(usage.error)),
+              );
+            },
+          });
+        }
+        if (usage.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+      }
     }
 
     if (requiresStandardAccount(config.accountAccess)) {
@@ -1181,25 +1293,41 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
-    if (admission === undefined) {
-      return await runSafeHandler({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      });
-    }
-
-    return await runSafeHandler({
+    const result = await runSafeHandler({
       ctx,
       contentDelivery: config.contentDelivery,
-      handler: (input) =>
-        runAdmittedFiniteHandler({
-          ctx: input,
-          handler,
-          admit,
-          actionKind: admission.actionKind,
-        }),
+      handler:
+        admission === undefined
+          ? handler
+          : (input) =>
+              runAdmittedFiniteHandler({
+                ctx: input,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
     });
+    // The transaction has settled; realtime delivery cannot change its result.
+    if (
+      config.realtime !== undefined &&
+      config.realtime.scope !== "none" &&
+      isSuccessfulHandlerResult(result)
+    ) {
+      const announcement = Result.try(() =>
+        announce({
+          realtime: config.realtime,
+          result,
+          organizationId: ctx.session.activeOrganizationId,
+          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+        }),
+      );
+      if (Result.isError(announcement)) {
+        observeFailure(announcement.error, {
+          sink: REALTIME_ANNOUNCEMENT_FAILURE,
+        });
+      }
+    }
+    return result;
   },
 });
 
@@ -1448,7 +1576,7 @@ export const assertUsageAvailableForHandler = async ({
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
  */
-export const RUN_CONFIRMATION_UNITS = 50;
+const RUN_CONFIRMATION_UNITS = 50;
 
 type RunSizePreflightInput = UsagePreflightInput & {
   /** Units the initiator expects the whole run to consume. */
@@ -1583,8 +1711,16 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.requiredFields ? { requiredFields: error.requiredFields } : {}),
 });
 
+/**
+ * A root handler has no validated matter, so it can only announce
+ * organization-wide resource sets.
+ */
+type RootHandlerConfig = HandlerConfig & {
+  realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
+};
+
 export const createSafeRootHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
@@ -1601,26 +1737,31 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, (ctx) => {
-    // Elysia may expand validateAuth again after validateWorkspaceAccess when a
-    // route also declares permissions. That later resolve carries the root
-    // recorder and can overwrite the recorder bound by the workspace macro.
-    // Rebind here, where the context type proves workspaceId was validated, so
-    // workspace mutations cannot emit organization-only audit rows regardless
-    // of macro composition order.
-    // Direct unit tests below the Elysia boundary may intentionally use a
-    // minimal raw context. Real WorkspaceHandlerContext values always carry
-    // this factory; keep those fixture-only omissions from changing handler
-    // behavior while still rebinding every framework-produced request.
-    const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
-    if (typeof recorderFactory === "function") {
-      ctx.recordAuditEvent = ctx.createAuditRecorder({
-        workspaceId: ctx.workspaceId,
-      });
-    }
-    return handler(ctx);
-  });
+  createSafeScopedHandler(
+    config,
+    (ctx) => {
+      // Elysia may expand validateAuth again after validateWorkspaceAccess when a
+      // route also declares permissions. That later resolve carries the root
+      // recorder and can overwrite the recorder bound by the workspace macro.
+      // Rebind here, where the context type proves workspaceId was validated, so
+      // workspace mutations cannot emit organization-only audit rows regardless
+      // of macro composition order.
+      // Direct unit tests below the Elysia boundary may intentionally use a
+      // minimal raw context. Real WorkspaceHandlerContext values always carry
+      // this factory; keep those fixture-only omissions from changing handler
+      // behavior while still rebinding every framework-produced request.
+      const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
+      if (typeof recorderFactory === "function") {
+        ctx.recordAuditEvent = ctx.createAuditRecorder({
+          workspaceId: ctx.workspaceId,
+        });
+      }
+      return handler(ctx);
+    },
+    dependencies,
+  );
 
 type SessionHandlerDependencies = {
   checkAccountOperation?: typeof checkDemoAccountOperation;

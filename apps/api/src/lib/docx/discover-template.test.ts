@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { evaluateCondition } from "@stll/template-conditions";
+
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -167,6 +169,7 @@ describe("discoverTemplate", () => {
 
     expect(result.fields.find((field) => field.path === "tags")).toEqual({
       path: "tags",
+      itemAliases: ["tag"],
       kind: "array",
       count: 1,
       itemFields: [{ path: "value", kind: "string", count: 1 }],
@@ -185,6 +188,7 @@ describe("discoverTemplate", () => {
 
     expect(result.fields.find((field) => field.path === "groups")).toEqual({
       path: "groups",
+      itemAliases: ["group"],
       kind: "array",
       count: 1,
       itemFields: [
@@ -196,6 +200,7 @@ describe("discoverTemplate", () => {
       result.fields.find((field) => field.path === "groups.items"),
     ).toEqual({
       path: "groups.items",
+      itemAliases: ["item"],
       kind: "array",
       count: 1,
       itemFields: [{ path: "name", kind: "string", count: 1 }],
@@ -228,6 +233,7 @@ describe("discoverTemplate", () => {
       result.fields.find((field) => field.path === "groups.items"),
     ).toEqual({
       path: "groups.items",
+      itemAliases: ["item"],
       kind: "array",
       count: 1,
       itemFields: [{ path: "name", kind: "string", count: 1 }],
@@ -258,6 +264,7 @@ describe("discoverTemplate", () => {
       result.fields.find((field) => field.path === "groups.items"),
     ).toEqual({
       path: "groups.items",
+      itemAliases: ["item"],
       kind: "array",
       count: 1,
       itemFields: [{ path: "name", kind: "string", count: 1 }],
@@ -320,6 +327,7 @@ describe("discoverTemplate", () => {
 
     expect(result.fields.find((field) => field.path === "deal.tags")).toEqual({
       path: "deal.tags",
+      itemAliases: ["tag"],
       kind: "array",
       count: 2,
       itemFields: [{ path: "value", kind: "string", count: 1 }],
@@ -810,6 +818,7 @@ describe("row-form block markers", () => {
       result.fields.find((field) => field.path === "deliverables"),
     ).toEqual({
       path: "deliverables",
+      itemAliases: ["deliverable"],
       kind: "array",
       count: 2,
       itemFields: [
@@ -872,5 +881,55 @@ test("derived manifests cache every distinct clause slot target from template co
       versionModifier: "latest",
       patchKey: "@clause:Header:latest",
     },
+  ]);
+});
+
+test("an item field carries every enclosing inline branch", async () => {
+  const discovered = await discoverTemplate(
+    await makeDocx(
+      WRAP(
+        P(
+          "Lead {% for p in persons %}{% if show %}{% if p.vip %}{{ p.title | required }}{% endif %}{% endif %}{% endfor %}",
+        ),
+      ),
+    ),
+  );
+  const persons = discovered.fields.find((field) => field.path === "persons");
+  const title = persons?.itemFields?.find((field) => field.path === "title");
+  expect(title?.visibleWhen).toBeDefined();
+  if (title?.visibleWhen === undefined) {
+    throw new TypeError("Expected an item branch condition");
+  }
+  for (const show of [false, true]) {
+    for (const vip of [false, true]) {
+      expect(evaluateCondition(title.visibleWhen, { show, p: { vip } })).toBe(
+        show && vip,
+      );
+    }
+  }
+  expect(discovered.renderedFieldPaths?.scoped).toContain("persons.title");
+});
+
+test("sibling loops expose each array's local alias and branch", async () => {
+  const discovered = await discoverTemplate(
+    await makeDocx(
+      WRAP(
+        P(
+          "Lead {% for p in persons %}{% if p.vip %}{{ p.name | required }}{% endif %}{% endfor %}; {% for p in buyers %}{% if p.vip %}{{ p.name | required }}{% endif %}{% endfor %}",
+        ),
+      ),
+    ),
+  );
+  for (const path of ["persons", "buyers"]) {
+    const array = discovered.fields.find((field) => field.path === path);
+    expect(array?.itemAliases).toEqual(["p"]);
+    expect(
+      array?.itemFields?.find((field) => field.path === "name")?.visibleWhen,
+    ).toBe("p.vip");
+    expect(array?.itemFields?.map((field) => field.path)).toContain("vip");
+  }
+  expect(discovered.renderedFieldPaths?.scoped).toEqual([
+    "buyers.name",
+    "persons.name",
   ]);
 });

@@ -19,6 +19,7 @@ import {
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
@@ -221,6 +222,7 @@ const transitionInvoice = createSafeHandler(
       "attached entries and clears the paid timestamp.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -330,6 +332,7 @@ const transitionInvoice = createSafeHandler(
             const series = await findDefaultNumberSeries(
               tx,
               existing.documentType,
+              existing.sellerProfileId,
             );
             if (!series) {
               return Result.err(
@@ -337,7 +340,7 @@ const transitionInvoice = createSafeHandler(
                   status: 409,
                   message:
                     "No default number series configured for this document type",
-                  hint: "Create or update a number series with this documentType and isDefault=true, then finalize again.",
+                  hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
                 }),
               );
             }

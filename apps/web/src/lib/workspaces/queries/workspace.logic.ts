@@ -15,11 +15,10 @@ export const workflowActionsDisabled = (
   switch (view.type) {
     case "pending":
     case "error":
-      return true;
     case "empty":
-      return false;
+      return true;
     case "items":
-      return view.items;
+      return view.refetchError !== undefined || view.items;
     default:
       view satisfies never;
       return panic("Unhandled workflow query state");

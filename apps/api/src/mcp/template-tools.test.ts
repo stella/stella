@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
+import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
@@ -86,6 +87,7 @@ const roleDenied = (toolName: string) => [
       error: {
         code: "permission_denied",
         message: `Your member role does not permit ${toolName}`,
+        hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
       },
     }),
   },
@@ -338,17 +340,21 @@ const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
  * that producer (and is covered where it lives); here it pins that both tools
  * serve exactly what list_templates' detail mode serves.
  */
-const describedTemplate = (
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> => ({
-  name: "NDA",
-  fields: [],
-  conditions: [],
-  computed: [],
-  arrays: [],
-  warnings: [],
-  ...overrides,
-});
+type DescribedTemplateSuccess = Extract<
+  DescribeTemplateResult,
+  { name: string }
+>;
+
+const describedTemplate = (overrides: Partial<DescribedTemplateSuccess> = {}) =>
+  ({
+    name: "NDA",
+    fields: [],
+    conditions: [],
+    computed: [],
+    arrays: [],
+    warnings: [],
+    ...overrides,
+  }) satisfies DescribeTemplateResult;
 
 /** A host file reference pointing at `bytes`, as an MCP host would supply. */
 const hostFileResponse = (bytes: Uint8Array) =>
@@ -684,6 +690,7 @@ describe("MCP template tools", () => {
           path: "company",
           label: "Company",
           inputType: "text",
+          visibleWhen: null,
           required: true,
           hint: "Enter the KRS number",
           options: null,
@@ -703,6 +710,7 @@ describe("MCP template tools", () => {
           path: "scope",
           label: "Scope",
           inputType: "text",
+          visibleWhen: "signed",
           required: false,
           hint: null,
           options: null,
@@ -719,12 +727,17 @@ describe("MCP template tools", () => {
           path: "role",
           label: "Role",
           inputType: "select",
+          visibleWhen: null,
           required: false,
           hint: null,
           options: ["director", "proxy"],
           lookup: null,
           validation: null,
-          source: { kind: "party", role: "counterparty", field: "name" },
+          source: {
+            kind: "party",
+            role: "opposing_party",
+            field: "displayName",
+          },
           aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
@@ -738,9 +751,15 @@ describe("MCP template tools", () => {
         { path: "is_consumer", kind: "ai", prompt: "Is this a consumer?" },
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
-      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      arrays: [
+        {
+          path: "deliverables",
+          itemAliases: ["deliverable"],
+          itemFieldPaths: ["name", "due_date"],
+        },
+      ],
       warnings: [],
-    });
+    } satisfies DescribeTemplateResult);
 
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID },
@@ -756,6 +775,7 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           hint: "Enter the KRS number",
+          visibleWhen: null,
           // The whole lookup, registry included, in the shape the `fields`
           // overlay accepts: read, edit, send back.
           source: {
@@ -766,6 +786,7 @@ describe("MCP template tools", () => {
           validation: { required: true },
         }),
         expect.objectContaining({
+          visibleWhen: "signed",
           source: {
             type: "ai",
             prompt: "Draft the scope of this power of attorney",
@@ -774,8 +795,13 @@ describe("MCP template tools", () => {
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
+          visibleWhen: null,
           options_from: "parties",
-          source: { type: "party", role: "counterparty", field: "name" },
+          source: {
+            type: "party",
+            role: "opposing_party",
+            field: "displayName",
+          },
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
@@ -788,8 +814,27 @@ describe("MCP template tools", () => {
       ],
       // A `{% for %}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
-      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      arrays: [
+        {
+          path: "deliverables",
+          itemAliases: ["deliverable"],
+          itemFieldPaths: ["name", "due_date"],
+        },
+      ],
     });
+    const payload = parseToolPayload(result);
+    if (
+      !isRecord(payload) ||
+      !isRecord(payload["configure"]) ||
+      !Array.isArray(payload["configure"]["fields"])
+    ) {
+      throw new TypeError("Expected a configure field skeleton");
+    }
+    for (const field of payload["configure"]["fields"]) {
+      expect(field).not.toHaveProperty("visibleWhen");
+      expect(field).not.toHaveProperty("itemAliases");
+    }
+    expect(payload["configure"]).not.toHaveProperty("arrays");
   });
 
   test("list_templates (detail) anonymizes nested field option text", async () => {
@@ -800,7 +845,16 @@ describe("MCP template tools", () => {
           path: "role",
           label: "Smith role",
           inputType: "select",
+          visibleWhen: null,
           required: false,
+          hint: null,
+          validation: null,
+          source: null,
+          aiSeesDocument: false,
+          aiPrompt: null,
+          aiAdapt: false,
+          optionsFrom: null,
+          dateFormat: null,
           options: ["Smith director"],
           lookup: {
             registry: "krs",
@@ -821,7 +875,7 @@ describe("MCP template tools", () => {
           hint: "Retype {{Smith.name}} in one run.",
         },
       ],
-    });
+    } satisfies DescribeTemplateResult);
     anonymizeTextFieldsMock.mockResolvedValue(
       Result.ok({
         entityCount: 7,
@@ -941,7 +995,7 @@ describe("MCP template tools", () => {
     });
   });
 
-  test("fill_template returns a complete rendered document plus the DOCX as base64 under output=docx", async () => {
+  test("fill_template returns the rendered document plus the DOCX as base64 under output=docx", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       conditionDecisions: [],
@@ -967,6 +1021,7 @@ describe("MCP template tools", () => {
         template_id: TEMPLATE_ID,
         values: { "tenant.name": "ACME" },
         output_mode: "docx",
+        completion_mode: "allow_partial",
       },
       context: createContext(),
       toolName: "fill_template",
@@ -979,10 +1034,12 @@ describe("MCP template tools", () => {
         organizationId: toSafeId<"organization">("org_1"),
       }),
     );
+    // A directive the renderer could not apply is a shortfall: accepted only
+    // under the explicit partial policy, and reported as partial.
     expect(parseToolPayload(result)).toEqual({
       templateName: "Lease",
       fileName: "lease.docx",
-      completionStatus: "complete",
+      completionStatus: "partial",
       text: "Lease between ACME and Tenant.",
       truncated: false,
       docxBase64: docxBytes.toString("base64"),
@@ -999,21 +1056,28 @@ describe("MCP template tools", () => {
       aiFieldErrors: [],
       decisions: [],
     });
-    // The execution is recorded (fill row + audit) so agent fills are audited.
+    // The execution is recorded (fill row + audit) so agent fills are audited,
+    // with the whole diagnostics record its status is decided on.
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
       expect.objectContaining({
         templateId: TEMPLATE_ID,
         organizationId: toSafeId<"organization">("org_1"),
         format: "docx",
-        unmatchedCount: 0,
-        unusedCount: 0,
-        structureErrors: [
-          {
-            directive: "#if signature",
-            message: "Missing closing directive",
-            paragraphIndex: 4,
-          },
-        ],
+        diagnostics: {
+          unmatchedPlaceholders: [],
+          aiFieldErrors: [],
+          undecidedConditions: [],
+          clauseWarnings: [],
+          structureErrors: [
+            {
+              directive: "#if signature",
+              message: "Missing closing directive",
+              paragraphIndex: 4,
+            },
+          ],
+          unusedValues: [],
+          unrestoredFields: [],
+        },
       }),
     );
   });
@@ -1153,15 +1217,21 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: TEMPLATE_ID, values: { is_signed: true } },
+      args: {
+        template_id: TEMPLATE_ID,
+        values: { is_signed: true },
+        completion_mode: "allow_partial",
+      },
       context: createContext(),
       toolName: "fill_template",
     });
 
     // An excluded block and a block the template never carried render the
     // same, so each condition says what it was settled on and by whom. A
-    // condition nothing could settle is reported undecided, never as false.
+    // condition nothing could settle is reported undecided, never as false,
+    // and makes the fill partial.
     expect(parseToolPayload(result)).toMatchObject({
+      completionStatus: "partial",
       decisions: [
         {
           path: "is_consumer",
@@ -1194,6 +1264,65 @@ describe("MCP template tools", () => {
       ],
     });
   });
+
+  test.each(["failed", "no-backend"] as const)(
+    "fill_template refuses a %s undecided AI condition by default with a typed issue",
+    async (reason) => {
+      fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        templateName: "Lease",
+        fileName: "lease.docx",
+        file: await makeDocxFile(["Lease between ACME and Tenant."]),
+        text: "Lease between ACME and Tenant.",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+        clauseWarnings: [],
+        aiFieldErrors: [],
+        structureErrors: [],
+        conditionDecisions: [
+          {
+            path: "has_penalty",
+            label: "Penalty clause",
+            state: "undecided",
+            reason,
+          },
+        ],
+      });
+
+      const result = await handleMcpToolCall({
+        args: { template_id: TEMPLATE_ID, values: {} },
+        context: createContext(),
+        toolName: "fill_template",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(validationEnvelope(result)).toMatchObject({
+        code: "validation_error",
+        message: `Template fill incomplete; AI-decided conditions left undecided: has_penalty (${reason})`,
+        issues: [
+          {
+            path: "values.has_penalty",
+            message: `AI-decided condition "Penalty clause" was left undecided (${reason}); supply true or false for it.`,
+          },
+        ],
+      });
+      // The refused fill is still recorded, as partial: its diagnostics carry
+      // the undecided condition.
+      expect(recordTemplateFillMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            undecidedConditions: [
+              {
+                path: "has_penalty",
+                label: "Penalty clause",
+                state: "undecided",
+                reason,
+              },
+            ],
+          }),
+        }),
+      );
+    },
+  );
 
   test("preview_template_conditions answers each condition without filling anything", async () => {
     templateDecideConditionsLogicMock.mockResolvedValue(
@@ -1433,7 +1562,11 @@ describe("MCP template tools", () => {
       }),
     );
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ unmatchedCount: 1 }),
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({
+          unmatchedPlaceholders: ["landlord.signature"],
+        }),
+      }),
     );
   });
 
@@ -1443,6 +1576,7 @@ describe("MCP template tools", () => {
       (_, index) => `field_${index}`,
     );
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
@@ -1722,7 +1856,9 @@ describe("MCP template tools", () => {
     expect(fillStoredTemplateWithTextMock).toHaveBeenCalled();
     expect(fillStoredTemplateWithTextStrictMock).not.toHaveBeenCalled();
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ unusedCount: 1 }),
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({ unusedValues: ["intentional"] }),
+      }),
     );
   });
 
@@ -1804,6 +1940,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template creates a document without returning base64", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       fileName: "lease.docx",
       file: testDocxFile(Buffer.from("filled docx")),
@@ -1870,14 +2007,20 @@ describe("MCP template tools", () => {
         }),
       }),
     );
+    // A receipt carries every diagnostic kind and the completion decision.
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_new",
       entityVersionId: "version_new",
       fileName: "Example Lease.docx",
+      completionStatus: "complete",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
       clauseWarnings: [],
+      aiFieldErrors: [],
+      undecidedConditions: [],
+      structureErrors: [],
+      unrestoredFields: [],
     });
     expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
   });
@@ -1948,6 +2091,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template rejects failed AI fields by default and releases its claim", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       fileName: "draft.docx",
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
@@ -1996,6 +2140,7 @@ describe("MCP template tools", () => {
       },
     ];
     fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       fileName: "draft.docx",
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
@@ -2041,7 +2186,12 @@ describe("MCP template tools", () => {
     );
     expect(createEntityFromBufferMock).toHaveBeenCalled();
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({
+          unmatchedPlaceholders: [],
+          aiFieldErrors: [expect.anything()],
+        }),
+      }),
     );
     expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2051,8 +2201,96 @@ describe("MCP template tools", () => {
     expect(releaseTemplatePersistenceClaimMock).not.toHaveBeenCalled();
   });
 
+  test("save_filled_template refuses an undecided AI condition by default and reports it under the partial policy", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
+      conditionDecisions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "undecided",
+          reason: "no-backend",
+        },
+      ],
+      fileName: "draft.docx",
+      file: testDocxFile(Buffer.from("gated block rendered as if false")),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      clauseWarnings: [],
+      aiFieldErrors: [],
+    });
+    createEntityFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        entityId: "entity_partial",
+        entityVersionId: "version_partial",
+        fieldId: "field_partial",
+        fileName: "draft.docx",
+      };
+      await input.afterCreate(fakeTransaction, created);
+      return Result.ok(created);
+    });
+    const args = {
+      action: "create_document",
+      template_id: TEMPLATE_ID,
+      matter_id: WORKSPACE_ID,
+      idempotency_key: "undecided-condition",
+      values: {},
+    };
+
+    const refused = await handleMcpToolCall({
+      args,
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    expect(refused.isError).toBe(true);
+    expect(validationEnvelope(refused)["issues"]).toEqual([
+      {
+        path: "values.is_consumer",
+        message:
+          'AI-decided condition "Consumer contract" was left undecided (no-backend); supply true or false for it.',
+      },
+    ]);
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+
+    const result = await handleMcpToolCall({
+      args: { ...args, completion_mode: "allow_partial" },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const expectedUndecided = [
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "undecided",
+        reason: "no_decision_model",
+      },
+    ];
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({ undecidedConditions: expectedUndecided }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({
+          undecidedConditions: [
+            expect.objectContaining({ path: "is_consumer" }),
+          ],
+        }),
+      }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          undecidedConditions: expectedUndecided,
+        }),
+      }),
+    );
+  });
+
   test("save_filled_template create_version rejects failed AI fields by default before writing", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       fileName: "draft.docx",
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
@@ -2093,6 +2331,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template create_version receipts exact AI errors under an explicit partial policy", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      structureErrors: [],
       conditionDecisions: [],
       fileName: "draft.docx",
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
@@ -2152,7 +2391,11 @@ describe("MCP template tools", () => {
       }),
     );
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ aiFieldErrorCount: 1 }),
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({
+          aiFieldErrors: [expect.anything()],
+        }),
+      }),
     );
     expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2165,6 +2408,7 @@ describe("MCP template tools", () => {
   test("failed row drafts return indexed value paths and record the AI shortfall", async () => {
     for (const fieldPath of ["contracts.summary", "client.contracts.summary"]) {
       fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        structureErrors: [],
         conditionDecisions: [],
         templateName: "Summary",
         fileName: "summary.docx",
@@ -2199,7 +2443,12 @@ describe("MCP template tools", () => {
         },
       ]);
       expect(recordTemplateFillMock).toHaveBeenCalledWith(
-        expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+        expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            unmatchedPlaceholders: [],
+            aiFieldErrors: [expect.anything()],
+          }),
+        }),
       );
     }
   });
@@ -2218,6 +2467,8 @@ describe("MCP template tools", () => {
         unusedValues: [],
         clauseWarnings: [],
         aiFieldErrors: [],
+        structureErrors: [],
+        conditionDecisions: [],
       };
     });
 
@@ -2414,28 +2665,47 @@ describe("MCP template tools", () => {
     );
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        structureErrors: [
-          {
-            directive: "#if signature",
-            message: "Missing closing directive",
-            paragraphIndex: 4,
-          },
-        ],
+        diagnostics: expect.objectContaining({
+          structureErrors: [
+            {
+              directive: "#if signature",
+              message: "Missing closing directive",
+              paragraphIndex: 4,
+            },
+          ],
+        }),
         entityId: ENTITY_ID,
         entityVersionId: "version_2",
         workspaceId: WORKSPACE_ID,
       }),
     );
-    expect(parseToolPayload(result)).toEqual({
+    // The partial receipt names every blocking diagnostic, the directive the
+    // renderer could not apply included, and a retry replays the same.
+    const expectedReceipt = {
       action: "create_version",
       entityId: ENTITY_ID,
       entityVersionId: "version_2",
       versionNumber: 2,
       fileName: "lease.docx",
+      completionStatus: "partial",
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
       clauseWarnings: [],
-    });
+      aiFieldErrors: [],
+      undecidedConditions: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
+      unrestoredFields: [],
+    };
+    expect(parseToolPayload(result)).toEqual(expectedReceipt);
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expectedReceipt }),
+    );
   });
 
   test("save_filled_template fingerprints every argument except the idempotency key", async () => {
@@ -3726,6 +3996,7 @@ describe("MCP template tools", () => {
             path: "company",
             label: "Company",
             inputType: "text",
+            visibleWhen: null,
             required: true,
             hint: null,
             options: null,

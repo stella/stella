@@ -1177,7 +1177,7 @@
         "completion_mode": {
           "enum": ["require_complete", "allow_partial"],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
@@ -1304,7 +1304,7 @@
         "completion_mode": {
           "enum": ["require_complete", "allow_partial"],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
       }
@@ -3286,9 +3286,9 @@
           "description": "Task entity ID to read in detail"
         },
         "assignee": {
-          "enum": ["me", "any"],
+          "enum": ["me", "any", "unassigned"],
           "type": "string",
-          "description": "'me': only tasks assigned to you. Default 'any'"
+          "description": "'me': your assignments; 'unassigned': tasks with no assignee. Default 'any'"
         },
         "date_from": {
           "type": "string",
@@ -3492,7 +3492,7 @@
       "scope": "matters_write"
     },
     "name": "link_matter_contact",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter. At the contact limit, unlink an existing matter_contact_id (without role) before linking another contact.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -3941,6 +3941,16 @@
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
                   },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Document id from list_documents or a search"
+                    },
+                    "maxItems": 20,
+                    "description": "Documents this position was taken or revised from; never name a document, matter, or counterparty in a text field. Omit on a replace to keep the stored sources"
+                  },
                   "enabled": {
                     "type": "boolean",
                     "description": "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value"
@@ -3993,6 +4003,16 @@
                     "type": "string",
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Document id from list_documents or a search"
+                    },
+                    "maxItems": 20,
+                    "description": "Documents this position was taken or revised from; never name a document, matter, or counterparty in a text field. Omit on a replace to keep the stored sources"
                   },
                   "enabled": {
                     "type": "boolean",
@@ -4996,7 +5016,7 @@
           },
           "remove_member": {
             "command": "remove-member",
-            "include": ["matter_id", "user_id"],
+            "include": ["matter_id", "user_id", "reassign_to"],
             "required": ["matter_id", "user_id"],
             "destructive": true
           },
@@ -5034,6 +5054,11 @@
           "type": "string",
           "minLength": 1,
           "description": "User id to add or remove for the member actions"
+        },
+        "reassign_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
         },
         "matter_number_pattern": {
           "type": "string",

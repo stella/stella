@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -9,6 +8,7 @@ import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
@@ -29,7 +29,13 @@ import type {
   HandlerOutputsMatchByName,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
-import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
+import {
+  ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+  type AccountOperationCheck,
+  hasMcpToolAuthority,
+  hasMcpToolInputAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -94,42 +100,6 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
-const REGISTRY_WRITE_ACCOUNT_POLICY = {
-  save_matter: "sandbox",
-  delete_matter: "sandbox",
-  save_contact: "sandbox",
-  delete_contact: "sandbox",
-  save_task: "sandbox",
-  delete_task: "sandbox",
-  link_matter_contact: "sandbox",
-  save_document: "sandbox",
-  upload_document_version: "sandbox",
-  open_document_version_upload: "sandbox",
-  delete_document: "sandbox",
-  compare_documents: "sandbox",
-  prepare_file_comparison: "sandbox",
-  prepare_file_comparison_from_links: "sandbox",
-  open_file_comparison: "sandbox",
-  set_field_value: "sandbox",
-  save_time_entry: "sandbox",
-  delete_time_entry: "sandbox",
-  save_clause: "sandbox",
-  save_playbook: "sandbox",
-  delete_clause: "sandbox",
-  run_playbook: "sandbox",
-  create_reader_annotation: "sandbox",
-  update_reader_annotation: "sandbox",
-  delete_reader_annotation: "sandbox",
-  manage_organization: "restricted",
-  set_practice_jurisdictions: "restricted",
-  fill_template: "sandbox",
-  save_filled_template: "sandbox",
-  create_template: "sandbox",
-  configure_template_fields: "sandbox",
-  invoke_capability: "sandbox",
-  submit_feedback: "sandbox",
-} as const satisfies Record<RegistryWriteToolName, "restricted" | "sandbox">;
-
 type ProjectableRegistryWriteToolName = ChatProjectableToolName<
   typeof WRITE_TOOL_REF_FIELD_MAP
 >;
@@ -167,7 +137,7 @@ export type RunRegistryWriteToolProps = {
 
 export type RunRegistryWriteToolDependencies = {
   isMcpToolFeatureEnabled: typeof isMcpToolFeatureEnabled;
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: AccountOperationCheck;
 };
 
 const defaultRunRegistryWriteToolDependencies = {
@@ -224,18 +194,23 @@ export const runRegistryWriteTool = async (
       }),
     );
   }
-  if (REGISTRY_WRITE_ACCOUNT_POLICY[toolName] === "restricted") {
-    const accountOperation = (
-      dependencies.checkAccountOperation ?? checkDemoAccountOperation
-    )(context.userEmail);
-    if (Result.isError(accountOperation)) {
-      return Result.err(
-        new ChatToolError({
-          kind: "unavailable",
-          message: accountOperation.error.message,
-        }),
-      );
-    }
+  const staticDefinition =
+    getStaticMcpToolDefinition(toolName) ??
+    panic(`Write tool ${toolName} is missing from the static registry`);
+  // The tool's declared account access, as its REST counterpart declares it.
+  if (
+    !isAccountAuthorizedForMcpTool(
+      context.userEmail,
+      staticDefinition,
+      dependencies.checkAccountOperation,
+    )
+  ) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+      }),
+    );
   }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
@@ -252,9 +227,21 @@ export const runRegistryWriteTool = async (
     }
   }
 
-  const staticDefinition =
-    getStaticMcpToolDefinition(toolName) ??
-    panic(`Write tool ${toolName} is missing from the static registry`);
+  if (
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: staticDefinition.name,
+      featureId: staticDefinition.featureId,
+    })
+  ) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: "Tool is unavailable.",
+      }),
+    );
+  }
   if (!dependencies.isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({
@@ -297,6 +284,16 @@ export const runRegistryWriteTool = async (
           subject: `${toolName} arguments`,
         }).error,
       ),
+    );
+  }
+
+  // The exact grant of the operation the normalized input selects.
+  if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit this ${toolName} operation.`,
+      }),
     );
   }
 

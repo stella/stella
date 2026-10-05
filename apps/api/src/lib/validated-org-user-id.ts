@@ -81,3 +81,38 @@ export const validateOrgUserIds = async (
   }
   return userIds.map((id) => v.parse(validatedOrgUserIdSchema, id));
 };
+
+/** Assignment writers hold organization memberships until their write commits. */
+type LockOrgAssignmentMembersOptions = {
+  tx: Transaction;
+  userIds: readonly SafeId<"user">[];
+  organizationId: SafeId<"organization">;
+};
+
+export const lockOrgUserIdsForAssignment = async ({
+  tx,
+  userIds,
+  organizationId,
+}: LockOrgAssignmentMembersOptions): Promise<ValidatedOrgUserId[] | null> => {
+  const uniqueIds = [...new Set(userIds)].toSorted();
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+  const rows = await tx
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, uniqueIds),
+      ),
+    )
+    .orderBy(member.userId)
+    .limit(uniqueIds.length)
+    .for("key share");
+  const ids = new Set(rows.map((row) => row.userId));
+  if (uniqueIds.some((id) => !ids.has(id))) {
+    return null;
+  }
+  return userIds.map((id) => v.parse(validatedOrgUserIdSchema, id));
+};

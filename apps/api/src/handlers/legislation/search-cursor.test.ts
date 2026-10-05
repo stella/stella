@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
@@ -76,7 +77,7 @@ test.each(
       "unobserved",
     );
     expect(result).toMatchObject({
-      code: 503,
+      code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       response: publicCountryUnavailable(jurisdiction),
     });
     expect(reads()).toBe(0);

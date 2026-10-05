@@ -4,6 +4,9 @@ export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
 
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+/** A member removal met concurrent work on the same rows; retry shortly. */
+export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
+
 /** The submitted chat continuation does not match the server-owned pending turn. */
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;

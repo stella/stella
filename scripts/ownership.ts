@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
@@ -30,6 +31,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "status-set";
+      readonly columns: Readonly<Record<string, readonly string[]>>;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "import";
       readonly specifiers: readonly string[];
@@ -82,6 +88,44 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // exemptions cannot drift apart. Adding a door here does not add a shape to
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "public-sanctions-reader-binding",
+    capability:
+      "Binding the public sanctions reader to the scoped connection pool",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "The connection owner constructs a column-restricted, read-only " +
+      "sanctions reader without exporting another raw connection handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createPublicSanctionsReader"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/lists/sanctions/public-read-owner.ts",
+          reason: "Owns the restricted anonymous screening handle.",
+        },
+      ],
+    },
+  },
+  {
+    id: "public-sanctions-screening",
+    capability: "Reading the public sanctions corpus for anonymous screening",
+    owner: ["apps/api/src/lib/lists/sanctions/public-read-owner.ts"],
+    summary:
+      "Anonymous screening uses a column-restricted reader role and read-only " +
+      "transactions. This owner exports the restricted screening handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/lists/sanctions/public-read-owner"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/sanctions/search.ts",
+          reason: "Screens anonymous subjects against the public corpus.",
+        },
+      ],
+    },
+  },
   {
     id: "desktop-account-bootstrap",
     capability: "Claiming desktop connection and document handoff requests",
@@ -338,14 +382,19 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+export const STATUS_TRANSITION_OWNERSHIP = {
+  id: "status-transition",
+  capability: "Changing a row's lifecycle state",
+  owner: ["apps/api/src/lib/db/transitions.ts"],
+  summary:
+    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
+  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+} as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
 const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
   "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
-  "handlers/case-law/ingestion/adapters/cz-ns.ts",
-  "handlers/case-law/ingestion/adapters/cz-nss.ts",
-  "handlers/case-law/ingestion/adapters/cz-regional.ts",
   "handlers/case-law/ingestion/adapters/eu-ecj.ts",
   "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
   "handlers/case-law/ingestion/adapters/pagination.ts",
@@ -359,12 +408,101 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/pl-uodo.ts",
   "handlers/case-law/ingestion/adapters/pl-uokik.ts",
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
-  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
-  "handlers/case-law/ingestion/adapters/sk-courts.ts",
-  "handlers/case-law/ingestion/adapters/sk-us.ts",
 ] as const;
 
 export const OWNERSHIP = [
+  STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "task-assignment-membership",
+    capability: "Writing task assignments for current matter members",
+    owner: [
+      "apps/api/src/lib/tasks/assignment-membership.ts",
+      "apps/api/src/lib/member-assignment-offboarding.ts",
+      "apps/api/src/lib/account-deletion-steps.ts",
+    ],
+    summary:
+      "Assignment writes validate held memberships in their write transaction. Removal clears assignments with former-assignee audit, preserving the task. Matter locks precede workflow run, step, obligation and entity locks; organization offboarding takes its organization membership before the matter prefix.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/db/schema",
+        "@/api/db/schema/entities",
+        "apps/api/src/db/schema/entities.ts",
+      ],
+      names: ["taskAssignees"],
+      allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
+        },
+        {
+          path: "apps/api/src/db/",
+          reason: "Schema and relation declarations.",
+        },
+        {
+          path: "apps/api/src/lib/entities/query-entities.ts",
+          reason: "Read assignment projection.",
+        },
+        {
+          path: "apps/api/src/lib/tasks/assigned.ts",
+          reason: "Read assignment filters.",
+        },
+        {
+          path: "apps/api/src/lib/work-obligations/legacy-work-obligation.ts",
+          reason: "Read legacy ownership projection.",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+          reason: "Read assignment source for obligation backfill.",
+        },
+        {
+          path: "apps/api/src/mcp/matter-tools.ts",
+          reason: "Read task detail projection.",
+        },
+      ],
+    },
+  },
+  {
+    id: "feature-access",
+    capability: "Deciding caller feature admission and discovery",
+    owner: [
+      "apps/api/src/lib/auth/feature-access/policy.ts",
+      "apps/api/src/lib/auth/feature-access/context.ts",
+      "apps/api/src/lib/feature-access/registry.ts",
+      "apps/api/src/mcp/feature-access.ts",
+    ],
+    summary:
+      "The feature registry declares enrolment and ownership. One principal-bound policy decides admission and discovery; the catalog declaration guard and real discovery tests enforce the boundary.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "time-entry-amount",
+    capability: "Price recorded time with its no-charge disposition",
+    owner: ["packages/money/"],
+    summary:
+      "timeEntryAmount requires the noCharge field and returns zero for no-charge time. " +
+      "Invoice lines, exports and displayed time amounts use this calculation.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/money"],
+      names: ["prorateHourlyCents"],
+      allowed: [],
+    },
+  },
+  {
+    id: "deepl-availability",
+    capability: "Reading translation provider availability on demand",
+    owner: ["apps/web/src/components/translate-document-dialog.tsx"],
+    summary:
+      "The translation dialog starts availability reads only while open. Its shared query factory requires an explicit open state, keys the cache by organization, and lets an in-flight read complete across toolbar remounts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/lib/deepl/queries"],
+      names: ["deepLAvailabilityOptions"],
+      allowed: [],
+    },
+  },
   {
     id: "query-view",
     capability: "Presenting non-suspense query results",
@@ -406,6 +544,11 @@ export const OWNERSHIP = [
       specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
       names: ["hostedUsageWebhookEvents"],
       allowed: [
+        {
+          path: "apps/api/scripts/generate-status-tables.ts",
+          reason:
+            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
+        },
         {
           path: "apps/api/src/db/schema.ts",
           reason:
@@ -697,7 +840,9 @@ export const OWNERSHIP = [
       "is still a member of them, so it is built only for writes and lookups an " +
       "earlier check already proved. A run a member queued goes through " +
       "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
-      "and field readers (`ContentReadDb`) refuse.",
+      "and field readers (`ContentReadDb`) refuse. " +
+      "`createRootOrganizationBackgroundDb` validates the organization id and " +
+      "binds background work to that organization with no user or stored workspace ids.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/root-scoped-db"],
@@ -725,6 +870,11 @@ export const OWNERSHIP = [
           reason: "Files inbound mail into the matter its routing resolved.",
         },
         {
+          path: "apps/api/src/lib/email/inbound/upload.ts",
+          reason:
+            "Files an email file as its uploader, whose matter access the filing transaction rechecks.",
+        },
+        {
           path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
           reason: "Writes a new version into a workspace its caller proved.",
         },
@@ -745,16 +895,6 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/folio-collab-rooms.ts",
           reason:
             "Persists a collaboration room re-checked on every token use.",
-        },
-        {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason:
-            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
-          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason:
-            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
@@ -779,7 +919,7 @@ export const OWNERSHIP = [
       "`createRootRunActor` splits a queued run's authority: `writeDb` keeps the " +
       "workspace pinned for the run's own rows and its output, and `inputDb` " +
       "reads under the requester's membership as it stands when the run " +
-      "executes. Member-run queues are listed in " +
+      "executes. Member-run queues and scheduler tasks are listed in " +
       "`apps/api/src/lib/member-run-queues.ts`.",
     enforcement: {
       kind: "import",
@@ -798,6 +938,12 @@ export const OWNERSHIP = [
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
+        // Kept equal to MEMBER_RUN_SCHEDULER_TASKS by scripts/ownership.test.ts.
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Member-run scheduler task; reads each compaction through its owner's inputDb.",
+        },
       ],
     },
   },
@@ -887,6 +1033,11 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
         },
@@ -1087,6 +1238,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
+          reason:
+            "Loads persisted source bytes under the replay tick's byte cap and deadline.",
         },
         {
           path: "apps/api/src/handlers/chat/chat-prompt.ts",
@@ -1969,6 +2125,36 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "public-country-unavailable-answer",
+    capability:
+      "Answering an advertised public-law country that holds no public corpus",
+    owner: ["apps/api/src/lib/legal-search/public-law-country.ts"],
+    summary:
+      "The refusal is an answered client outcome at the contract's " +
+      "`PUBLIC_COUNTRY_UNAVAILABLE_STATUS`, never a server fault. HTTP handlers " +
+      "receive it only as the owner's built answer (`readPublicLawCountry`, " +
+      "`publicLawCountryUnavailable`) and declare it with " +
+      "`withPublicCountryUnavailable`, so no handler holds a bare body to send " +
+      "under another status.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/api-contract/public-country-capability"],
+      names: ["publicCountryUnavailable"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/stella-tools.ts",
+          reason:
+            "MCP tools return the typed body as tool data; no HTTP status is involved.",
+        },
+        {
+          path: "apps/api/src/mcp/legislation-tools.ts",
+          reason:
+            "MCP tools return the typed body as tool data; no HTTP status is involved.",
+        },
+      ],
+    },
+  },
+  {
     id: "legislation-publication",
     capability: "Selecting jurisdictions admitted to public statute reads",
     owner: [
@@ -2341,6 +2527,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "status-set": {
+      return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
     }
     default: {
       enforcement satisfies never;

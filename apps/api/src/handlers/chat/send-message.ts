@@ -223,6 +223,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -1175,6 +1177,8 @@ const acceptIncomingTurn = async ({
 
     let messagesForPersistence: ChatThreadState["data"]["messages"] =
       thread.data.messages;
+    // Every decision below reads this history; acceptance holds the turn to it.
+    let plannedOnHistory = thread.data.historySnapshot;
     let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
     let incomingMessageExists = false;
     if (replayTargetMessageId !== undefined) {
@@ -1202,6 +1206,7 @@ const acceptIncomingTurn = async ({
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
+      plannedOnHistory = truncationTarget.snapshot;
       deleteMessageIdsBeforeLatest =
         truncationTarget.deleteMessageIdsBeforeLatest;
       if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
@@ -1410,6 +1415,7 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        plannedOnHistory,
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {
@@ -1544,6 +1550,7 @@ type PrepareValidatedIncomingMessageOptions = {
     workspaceId: SafeId<"workspace"> | null;
   };
   tools: {
+    featureAccessSnapshot: FeatureAccessSnapshot;
     disabledNativeToolSlugs: ChatToolsInput["disabledNativeToolSlugs"];
     registryDispatch: ChatToolsInput["registryDispatch"];
     docxEditRepresentation: NonNullable<
@@ -1587,6 +1594,7 @@ const prepareValidatedIncomingMessage = async ({
     workspaceId,
   },
   tools: {
+    featureAccessSnapshot,
     disabledNativeToolSlugs,
     registryDispatch,
     docxEditRepresentation,
@@ -1657,6 +1665,7 @@ const prepareValidatedIncomingMessage = async ({
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
+      featureAccessSnapshot,
       organizationId,
       memberRole,
       orgAIConfig,
@@ -2367,6 +2376,13 @@ export const createSendMessage = (
       // generator via `.return()`, which unwinds this `finally` like a normal
       // early `return` would.
       try {
+        const featureAccessSnapshot = yield* Result.await(
+          loadFeatureAccessSnapshot({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          }),
+        );
         const preparedIncomingMessageResult =
           await prepareValidatedIncomingMessage({
             dependencies: {
@@ -2397,6 +2413,7 @@ export const createSendMessage = (
               workspaceId,
             },
             tools: {
+              featureAccessSnapshot,
               disabledNativeToolSlugs,
               registryDispatch,
               docxEditRepresentation,
@@ -2641,6 +2658,7 @@ export const createSendMessage = (
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
         const chatToolContext = {
+          featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
           memberRole,
@@ -2720,6 +2738,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
           activeExternal: body.activeExternal,
@@ -3268,6 +3287,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -3314,6 +3334,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  featureAccessSnapshot,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -3351,6 +3372,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,
         activeExternal,

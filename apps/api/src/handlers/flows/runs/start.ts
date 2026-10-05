@@ -7,6 +7,7 @@ import {
   flowRunsWorkspaceParamsSchema,
   startFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
+import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
@@ -28,6 +29,7 @@ const config = {
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: flowRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

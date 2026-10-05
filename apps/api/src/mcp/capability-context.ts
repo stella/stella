@@ -7,6 +7,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -30,6 +31,7 @@ import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
  * minimal, inert object so a stray read does not throw.
  */
 export type SynthesizedCapabilityContext = {
+  featureAccessSnapshot?: FeatureAccessSnapshot;
   body: unknown;
   params: unknown;
   query: unknown;
@@ -87,6 +89,9 @@ export const synthesizeCapabilityContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<SynthesizedCapabilityContext> => {
+  const featureAccessSnapshot =
+    context.testDependencies?.featureAccessSnapshot ??
+    context.featureAccessSnapshot;
   const recordAuditEvent =
     workspaceId === undefined
       ? context.recordAuditEvent
@@ -123,6 +128,7 @@ export const synthesizeCapabilityContext = async ({
     ));
 
   return {
+    ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     body: input.body,
     params: input.params,
     query: input.query,

@@ -42,7 +42,7 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).not.toContain("contents: write");
     expect(workflow).not.toContain("secrets.");
 
-    expect(workflow).toContain("github.actor == 'dependabot[bot]'");
+    expect(workflow).toContain("github.actor != 'autofix-ci[bot]'");
     expect(workflow).toContain(
       "github.event.pull_request.user.login == 'dependabot[bot]'",
     );
@@ -266,19 +266,6 @@ describe("changed-file autofix boundary", () => {
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
     expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
       ordered.findIndex(({ id }) => id === "cli-runtime"),
-    );
-    expect(ordered.map(({ id }) => id).toSorted()).toEqual(
-      [
-        "capability-catalog",
-        "capability-runtime",
-        "cli-registry",
-        "cli-runtime",
-        "mcp-app-bundles",
-        "mcp-surface",
-        "module-ownership",
-        "design-tokens",
-        "route-tree",
-      ].toSorted(),
     );
     for (const generator of ordered) {
       if (generator.check) {

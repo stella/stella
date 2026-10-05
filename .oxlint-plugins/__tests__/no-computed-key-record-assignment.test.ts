@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import plugin from "../no-computed-key-record-assignment.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -200,6 +201,26 @@ describe.serial("no-computed-key-record-assignment", () => {
         "const shadow = (Object: { assign: (...args: unknown[]) => unknown }) => Object.assign({}, source);",
       ]),
     ).toEqual([2, 3, 4, 5]);
+  });
+
+  test("accepts object spread inside map callbacks and reports Object.assign there", async () => {
+    expect(
+      await lint([
+        "declare const rows: readonly Record<string, number>[];",
+        "declare const extra: Record<string, number>;",
+        "export const spread = rows.map((row) => ({ ...row, ...extra }));",
+        "export const assigned = rows.map((row) => Object.assign({}, row, extra));",
+      ]),
+    ).toEqual([4]);
+  });
+
+  test("names object spread as the one record-copy form", () => {
+    expect(
+      plugin.rules["no-computed-key-record-assignment"]?.meta?.messages
+        ?.assignedSource,
+    ).toBe(
+      "Copy dynamic entries with object spread ({ ...target, ...source }).",
+    );
   });
 
   test("requires an own-key guard for open module table reads", async () => {
