@@ -831,8 +831,13 @@ const runBackfillPage = async (
                 status: "progress",
                 progress: await projectCitationPage(tx, checkpoint, batchSize),
               };
-            default:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
               return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
           }
         },
       );
@@ -852,8 +857,12 @@ const runBackfillPage = async (
               return await verifyCitationPage(tx, checkpoint, batchSize);
             case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
               return { status: "completed" };
-            default:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
               return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
           }
         },
       );
