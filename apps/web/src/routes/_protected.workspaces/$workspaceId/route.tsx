@@ -33,6 +33,8 @@ import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
+import { workspaceContactsOptions } from "@/lib/workspaces/queries/workspace-contacts";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { MatterUploadAction } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-upload-action";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
@@ -68,20 +70,20 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       getAnalytics().captureError(error);
     };
 
-    // Only the workspace name blocks the breadcrumb. Start every independent
-    // metadata request before awaiting it so they share the first network round.
+    // Sidebar reads and action gates need known data at first render. Start
+    // all independent reads together; other metadata remains a warmup.
     return await loadWorkspaceRouteQueries({
       loadWorkspace: async () => await loadWorkspaceOrRedirect(qc, wsId),
-      startPrefetches: [
+      loadFirstRenderQueries: [
+        () => ensureRouteQueryData(qc, workspaceMembersOptions(wsId)),
+        () => ensureRouteQueryData(qc, workspaceContactsOptions(wsId)),
         () =>
-          detached(
-            prefetchRouteQuery(
-              qc,
-              workflowOptions({ key: { workspaceId: wsId } }),
-              onPrefetchError,
-            ),
-            "workspaces.prefetch",
+          ensureRouteQueryData(
+            qc,
+            workflowOptions({ key: { workspaceId: wsId } }),
           ),
+      ],
+      startPrefetches: [
         () =>
           detached(
             prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError),

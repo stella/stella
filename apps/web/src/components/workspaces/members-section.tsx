@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -20,6 +21,7 @@ import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
   AddableMemberSelect,
@@ -33,7 +35,9 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import type { QueryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import {
@@ -47,7 +51,7 @@ type MembersSectionProps = {
 
 export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
   const t = useTranslations();
-  const { data: members = [] } = useQuery(workspaceMembersOptions(workspaceId));
+  const view = useQueryView(useQuery(workspaceMembersOptions(workspaceId)));
   const canUpdate = usePermissions({ workspace: ["update"] });
 
   return (
@@ -70,23 +74,11 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
           />
         )}
       </div>
-      {members.length > 0 ? (
-        <ul>
-          {members.map((member) => (
-            <MemberRow
-              canUpdate={canUpdate}
-              key={member.id}
-              member={member}
-              membersCount={members.length}
-              workspaceId={workspaceId}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-muted-foreground text-sm">
-          {t("workspaces.members.noMembersFound")}
-        </p>
-      )}
+      <MembersList
+        view={view}
+        canUpdate={canUpdate}
+        workspaceId={workspaceId}
+      />
     </section>
   );
 };
@@ -98,6 +90,51 @@ type MemberData = NonNullable<
     >
   >
 >[number];
+
+type MembersListProps = {
+  view: QueryView<MemberData[], Error>;
+  workspaceId: string;
+  canUpdate: boolean;
+};
+
+export const MembersList = ({
+  view,
+  workspaceId,
+  canUpdate,
+}: MembersListProps) => {
+  const t = useTranslations();
+  switch (view.type) {
+    case "pending":
+    case "error":
+      return <QueryViewFeedback view={view} />;
+    case "empty":
+      return (
+        <p className="text-muted-foreground text-sm">
+          {t("workspaces.members.noMembersFound")}
+        </p>
+      );
+    case "items":
+      return (
+        <>
+          <QueryViewFeedback view={view} />
+          <ul>
+            {view.items.map((member) => (
+              <MemberRow
+                canUpdate={canUpdate}
+                key={member.id}
+                member={member}
+                membersCount={view.items.length}
+                workspaceId={workspaceId}
+              />
+            ))}
+          </ul>
+        </>
+      );
+    default:
+      view satisfies never;
+      return panic("Unhandled member list state");
+  }
+};
 
 type MemberRowProps = {
   member: MemberData;
@@ -227,17 +264,22 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const { items: memberItems } = useAddableMembers(workspaceId);
+  const memberQuery = useAddableMembers(workspaceId);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  const selectedMember =
+    memberQuery.view.type === "items"
+      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
+      : undefined;
+
   const handleSubmit = () => {
-    if (!selectedUserId) {
+    if (!selectedMember) {
       return;
     }
 
     addMember.mutate(
-      { workspaceId, userId: selectedUserId },
+      { workspaceId, userId: selectedMember.value },
       {
         onSuccess: () => {
           stellaToast.add({
@@ -293,7 +335,7 @@ export const AddMemberDialog = ({
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           <AddableMemberSelect
-            items={memberItems}
+            query={memberQuery}
             onValueChange={setSelectedUserId}
             value={selectedUserId}
           />
@@ -303,7 +345,7 @@ export const AddMemberDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!selectedUserId || addMember.isPending}
+            disabled={selectedMember === undefined || addMember.isPending}
             onClick={handleSubmit}
           >
             {t("workspaces.members.addMember")}
