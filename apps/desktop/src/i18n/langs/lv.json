@@ -132,7 +132,8 @@
     "takeoverSubtitle": "Rediģēšana turpināsies no jūsu pēdējā saglabātā kontrolpunkta.",
     "takeoverTitle": "{requester} vēlas pārņemt rediģēšanu",
     "takeoverWindowTitle": "Pārņemšanas pieprasījums",
-    "webOrigin": "Tīmekļa izcelsme"
+    "webOrigin": "Tīmekļa izcelsme",
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu"
   },
   "settings": {
     "about": "Par",

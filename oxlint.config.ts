@@ -902,6 +902,10 @@ export default defineConfig({
       { allowConstantLoopConditions: "only-allowed-literals" },
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
+    // NonNullable<unknown> deliberately admits every defined handler payload;
+    // Record<never, never> models empty adapter options and negative type tests.
+    // This rule rejects both contracts, including unresolved Drizzle generics.
+    "typescript/no-generated-empty-object-type": "off",
     "typescript/no-misused-promises": [
       "error",
       { checksVoidReturn: { attributes: false } },

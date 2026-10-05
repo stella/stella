@@ -1,5 +1,6 @@
 "use client";
 
+import { createContext, useContext, useRef, useState } from "react";
 import type * as React from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -11,12 +12,93 @@ import {
 } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
+import { DialogFormContext } from "./dialog-form-state";
+import type { DialogFormSource } from "./dialog-form-state";
 import { ScrollArea } from "./scroll-area";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
 
-const Dialog = DialogPrimitive.Root;
+type DialogLabels = { close: string; unsavedChanges: string };
+const DialogLabelsContext = createContext<DialogLabels>({
+  close: "Close",
+  unsavedChanges: "Unsaved changes. Press Esc again to discard",
+});
+
+const DialogProvider = ({
+  labels,
+  children,
+}: React.PropsWithChildren<{ labels: DialogLabels }>) => (
+  <DialogLabelsContext value={labels}>{children}</DialogLabelsContext>
+);
+
+const DialogDismissalContext = createContext<"idle" | "confirm-discard">(
+  "idle",
+);
+
+const Dialog = <Payload,>({
+  dirty = false,
+  onOpenChange,
+  onOpenChangeComplete,
+  ...props
+}: DialogPrimitive.Root.Props<Payload> & { dirty?: boolean }) => {
+  const [dismissal, setDismissal] = useState<"idle" | "confirm-discard">(
+    "idle",
+  );
+  const pendingDiscard = useRef<(() => void)[]>([]);
+  const [forms] = useState(() => ({
+    sources: new Map<string, DialogFormSource>(),
+    clearConfirmation: () => setDismissal("idle"),
+  }));
+  return (
+    <DialogFormContext value={forms}>
+      <DialogDismissalContext value={dismissal}>
+        <DialogPrimitive.Root
+          {...props}
+          onOpenChange={(open, details) => {
+            const hasChanges =
+              dirty ||
+              [...forms.sources.values()].some((source) => source.dirty);
+            if (
+              !open &&
+              details.reason === "escape-key" &&
+              hasChanges &&
+              (dismissal === "idle" || details.event.repeat)
+            ) {
+              details.cancel();
+              setDismissal("confirm-discard");
+              return;
+            }
+            onOpenChange?.(open, details);
+            if (details.isCanceled) {
+              return;
+            }
+            pendingDiscard.current = [];
+            if (!open) {
+              for (const source of forms.sources.values()) {
+                if (source.dirty && source.onDiscard !== undefined) {
+                  pendingDiscard.current.push(source.onDiscard);
+                }
+              }
+            }
+            setDismissal("idle");
+          }}
+          onOpenChangeComplete={(open) => {
+            if (!open) {
+              const callbacks = pendingDiscard.current;
+              pendingDiscard.current = [];
+              for (const discard of callbacks) {
+                discard();
+              }
+              setDismissal("idle");
+            }
+            onOpenChangeComplete?.(open);
+          }}
+        />
+      </DialogDismissalContext>
+    </DialogFormContext>
+  );
+};
 
 const DialogPortal = DialogPrimitive.Portal;
 
@@ -87,41 +169,55 @@ const DialogPopup = ({
   bottomStickOnMobile?: boolean;
   layer?: OverlayLayer;
   viewportClassName?: string;
-}) => (
-  <DialogPortal>
-    <DialogBackdrop className={backdropClassName} layer={layer} />
-    <DialogViewport
-      className={cn(
-        bottomStickOnMobile &&
-          "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
-        viewportClassName,
-      )}
-      layer={layer}
-    >
-      <DialogPrimitive.Popup
+}) => {
+  const dismissal = useContext(DialogDismissalContext);
+  const labels = useContext(DialogLabelsContext);
+  return (
+    <DialogPortal>
+      <DialogBackdrop className={backdropClassName} layer={layer} />
+      <DialogViewport
         className={cn(
-          "bg-popover text-popover-foreground relative row-start-2 flex max-h-full min-h-0 w-full max-w-lg min-w-0 -translate-y-[calc(1.25rem*var(--nested-dialogs))] scale-[calc(1-0.1*var(--nested-dialogs))] flex-col rounded-2xl border opacity-[calc(1-0.1*var(--nested-dialogs))] shadow-lg/5 transition-[scale,opacity,translate] duration-200 ease-in-out will-change-transform not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-nested:data-ending-style:translate-y-8 data-nested-dialog-open:origin-top data-starting-style:scale-98 data-starting-style:opacity-0 data-nested:data-starting-style:translate-y-8 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           bottomStickOnMobile &&
-            "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
-          className,
+            "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+          viewportClassName,
         )}
-        data-slot="dialog-popup"
-        {...props}
+        layer={layer}
       >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            aria-label="Close"
-            className="absolute end-2 top-2"
-            render={<Button size="icon" variant="ghost" />}
-          >
-            <XIcon />
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Popup>
-    </DialogViewport>
-  </DialogPortal>
-);
+        <DialogPrimitive.Popup
+          className={cn(
+            "bg-popover text-popover-foreground relative row-start-2 flex max-h-full min-h-0 w-full max-w-lg min-w-0 -translate-y-[calc(1.25rem*var(--nested-dialogs))] scale-[calc(1-0.1*var(--nested-dialogs))] flex-col rounded-2xl border opacity-[calc(1-0.1*var(--nested-dialogs))] shadow-lg/5 transition-[scale,opacity,translate] duration-200 ease-in-out will-change-transform not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-nested:data-ending-style:translate-y-8 data-nested-dialog-open:origin-top data-starting-style:scale-98 data-starting-style:opacity-0 data-nested:data-starting-style:translate-y-8 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            bottomStickOnMobile &&
+              "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
+            className,
+          )}
+          data-slot="dialog-popup"
+          {...props}
+        >
+          {dismissal === "confirm-discard" && (
+            <div className="flex shrink-0 justify-end ps-2 pe-12 pt-2">
+              <span
+                className="text-muted-foreground max-w-64 px-2 py-1 text-xs"
+                role="status"
+              >
+                {labels.unsavedChanges}
+              </span>
+            </div>
+          )}
+          {children}
+          {(showCloseButton || dismissal === "confirm-discard") && (
+            <DialogPrimitive.Close
+              aria-label={labels.close}
+              className="absolute end-2 top-2"
+              render={<Button size="icon" variant="ghost" />}
+            >
+              <XIcon />
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Popup>
+      </DialogViewport>
+    </DialogPortal>
+  );
+};
 
 const DialogHeader = ({ className, ...props }: React.ComponentProps<"div">) => (
   <div
@@ -192,6 +288,7 @@ const DialogPanel = ({
 
 export {
   DialogCreateHandle,
+  DialogProvider,
   Dialog,
   DialogTrigger,
   DialogPortal,
@@ -207,3 +304,5 @@ export {
   DialogPanel,
   DialogViewport,
 };
+
+export { DialogFormState } from "./dialog-form-state";
