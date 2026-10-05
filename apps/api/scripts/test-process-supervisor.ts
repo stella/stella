@@ -72,6 +72,12 @@ type RunProcessOptions = {
 export class TestProcessSupervisor {
   private readonly shutdown = new AbortController();
   readonly signal = this.shutdown.signal;
+
+  // A method read: a `this.signal.aborted` check narrows to false for the
+  // rest of `run()`, though a stop can abort it across the awaits.
+  private stopped(): boolean {
+    return this.signal.aborted;
+  }
   private readonly active = new Map<number, ActiveProcess>();
   private readonly deadline: ReturnType<typeof setTimeout>;
   private escalation: ReturnType<typeof setTimeout> | undefined;
@@ -360,7 +366,7 @@ export class TestProcessSupervisor {
     } finally {
       clearTimeout(watchdog);
       // A stopped leader may exit before its descendants, which still need escalation.
-      if (!this.signal.aborted) {
+      if (!this.stopped()) {
         this.active.delete(id);
       }
       const saved = Result.try({
