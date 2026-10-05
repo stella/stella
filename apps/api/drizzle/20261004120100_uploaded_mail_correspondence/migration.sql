@@ -34,10 +34,9 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "correspondence_ws_source_entity_
 REINDEX INDEX CONCURRENTLY "correspondence_ws_source_entity_uidx";
 --> statement-breakpoint
 -- Serves the attachment lookup by file and the cascade from a deleted file.
-DROP INDEX CONCURRENTLY IF EXISTS "correspondence_attachments_ws_entity_idx";
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "correspondence_attachments_ws_entity_idx" ON "correspondence_attachments" ("workspace_id", "entity_id");
 --> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "correspondence_attachments_ws_entity_idx" ON "correspondence_attachments" ("workspace_id", "entity_id");
+REINDEX INDEX CONCURRENTLY "correspondence_attachments_ws_entity_idx";
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint

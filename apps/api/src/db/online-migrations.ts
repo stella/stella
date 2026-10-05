@@ -324,6 +324,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "correspondence_ws_source_entity_uidx",
     tableName: "correspondence",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "correspondence_attachments_ws_entity_idx" ON public."correspondence_attachments" USING btree ("workspace_id", "entity_id")',
+    definitionBody:
+      "ON public.correspondence_attachments USING btree (workspace_id, entity_id)",
+    isUnique: false,
+    name: "correspondence_attachments_ws_entity_idx",
+    tableName: "correspondence_attachments",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
