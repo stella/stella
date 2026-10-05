@@ -1108,7 +1108,7 @@ const statusUpdate = async ({
       },
     ],
     set: options.set,
-    scope,
+    ...(scope === undefined ? {} : { scope }),
     fence: {
       key: spec.fence,
       value: options.fence,
@@ -1274,10 +1274,15 @@ export const transitionBatch = async <
     tx,
     spec,
     identity: { key: spec.key, column: spec.idColumn },
-    scope:
-      spec.scope === undefined
-        ? undefined
-        : { table: spec.table, keys: spec.scope, values: scope ?? {} },
+    ...(spec.scope === undefined
+      ? {}
+      : {
+          scope: {
+            table: spec.table,
+            keys: spec.scope,
+            values: scope ?? {},
+          },
+        }),
     ids,
     match: "many",
     options,
