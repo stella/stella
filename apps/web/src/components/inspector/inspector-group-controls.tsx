@@ -9,6 +9,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -190,6 +191,19 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
+        <DialogFormState
+          dirty={
+            name !== (target.type === "edit" ? target.name : "") ||
+            color !==
+              (target.type === "edit" ? target.color : MATTER_SWATCHES[0])
+          }
+          onDiscard={() => {
+            setName(target.type === "edit" ? target.name : "");
+            setColor(
+              target.type === "edit" ? target.color : MATTER_SWATCHES[0],
+            );
+          }}
+        />
         <form
           onSubmit={(event) => {
             event.preventDefault();

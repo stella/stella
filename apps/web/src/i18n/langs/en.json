@@ -946,7 +946,8 @@
       "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.",
       "textPending": "The decision text is still being retrieved",
       "textReadFailed": "The decision text could not be loaded",
-      "textUnavailable": "No text is available for this decision"
+      "textUnavailable": "No text is available for this decision",
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)"
     }
   },
   "catalogue": {
@@ -1856,6 +1857,7 @@
     "unexpectedError": "An unexpected error occurred. Please contact support.",
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",
     "unverifiedCitationHint": "This quote could not be matched to the source document.",
@@ -5421,6 +5423,7 @@
         "unknownLocation": "Template location: an address stella cannot verify"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account",
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",

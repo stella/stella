@@ -1,3 +1,4 @@
+// parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 // parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
@@ -160,9 +161,27 @@ const slotsByGate = new Map<
 type RunPublisherLimit = {
   gateId: "cellar-eu";
   gateSlot: ReturnType<typeof createPublisherGateSlot>;
+  controls?: PublisherRunControls;
+};
+
+type PublisherRunControls = {
+  check: () => Promise<Result<void, unknown>>;
+  checkBeforeSend: () => Result<void, unknown>;
+  chargeRequest: () => Promise<Result<void, unknown>>;
+  /** The job boundary adapts typed failures to the adapter's Promise rejection contract. */
+  raiseFailure: (error: unknown) => never;
+  retry: "durable";
+  onRefusal?: (cooldownUntilEpochMs: number) => void;
+  onFailure?: (error: unknown) => void;
+  limitResponse?: (response: Response) => Response;
 };
 
 const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+export const publisherRunControls = (gateId: PublisherGateId) => {
+  const run = runPublisherLimit.getStore();
+  return run?.gateId === gateId ? run.controls : undefined;
+};
 
 // Immediate mode checks the shared gate at every outbound request boundary.
 const immediateRequestGate = new AsyncLocalStorage<{
@@ -220,6 +239,7 @@ type WithPublisherRequestRateLimitOptions<T> = {
   requestsPerSecond: number;
   operation: () => Promise<T>;
   dependencies?: PublisherRequestGateDependencies;
+  controls?: PublisherRunControls;
 };
 
 /**
@@ -231,6 +251,7 @@ export const withPublisherRequestRateLimit = async <T>({
   requestsPerSecond,
   operation,
   dependencies,
+  controls,
 }: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
   if (
     !Number.isFinite(requestsPerSecond) ||
@@ -248,6 +269,7 @@ export const withPublisherRequestRateLimit = async <T>({
   return await runPublisherLimit.run(
     {
       gateId,
+      ...(controls === undefined ? {} : { controls }),
       gateSlot: createPublisherGateSlotAtInterval({
         gateId,
         intervalMs: requestedIntervalMs,

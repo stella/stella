@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -200,6 +200,8 @@ export const EditFieldDialog = ({
     }),
   );
 
+  const dirty = useSelector(form.store, (state) => !state.isDefaultValue);
+
   return (
     <Dialog
       onOpenChange={setIsOpen}
@@ -217,6 +219,8 @@ export const EditFieldDialog = ({
         <form.Subscribe selector={(s) => toFormErrors(s.fieldMeta)}>
           {(errors) => (
             <Form
+              dirty={dirty}
+              onDiscard={() => form.reset()}
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
