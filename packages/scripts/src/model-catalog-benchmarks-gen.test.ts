@@ -170,7 +170,7 @@ describe("benchmark check availability", () => {
     await Bun.write(
       preload,
       `
-      const fixture = await Bun.file(Bun.env.BENCHMARK_RESPONSE_FILE).json();
+      const fixture = await Bun.file(${JSON.stringify(responseFile)}).json();
       globalThis.fetch = async (url) => {
         if (fixture.modelsDevUnavailable && String(url).includes("models.dev")) return new Response("unavailable", { status: 503 });
         if (fixture.network) throw new TypeError("network unavailable");
@@ -196,7 +196,6 @@ describe("benchmark check availability", () => {
           stateFile,
         ],
         {
-          env: { ...process.env, BENCHMARK_RESPONSE_FILE: responseFile },
           stdout: "pipe",
           stderr: "pipe",
         },

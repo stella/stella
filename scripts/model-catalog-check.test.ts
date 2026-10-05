@@ -73,7 +73,9 @@ esac
     cwd: directory,
     env: {
       ...process.env,
-      PATH: `${directory}:${process.env.PATH}`,
+      PATH: [directory, process.env["PATH"]]
+        .filter((entry) => entry !== undefined)
+        .join(path.delimiter),
       GH_REPO: "fixture/repository",
       FAKE_ZIP_FILE: zipFile,
       FAKE_ARTIFACT_FILE: artifactFile,

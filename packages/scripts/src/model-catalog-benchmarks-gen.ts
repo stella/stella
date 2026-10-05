@@ -231,7 +231,7 @@ const fetchPage = async (
   const parsed = parseArenaPage(json.value);
   return Result.isError(parsed)
     ? Result.err(inconclusive(parsed.error.message))
-    : parsed;
+    : Result.ok(parsed.value);
 };
 
 const fetchArenaRows = async (): Promise<
