@@ -239,3 +239,27 @@ describe.serial("confine-owner stored content rows", () => {
     });
   }
 });
+
+test("translation availability is consumed by the dialog owner", async () => {
+  const source =
+    'import { deepLAvailabilityOptions, deepLConfigOptions } from "@/lib/deepl/queries";';
+  for (const sourcePath of [
+    "apps/web/src/components/translate-document-dialog.tsx",
+    "apps/web/src/components/workspaces/row-actions.tsx",
+    "apps/web/src/components/other-dialog.tsx",
+  ]) {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptionsForRoot: (root) => ({
+          entries: OWNERSHIP.filter(
+            ({ id }) => id === "deepl-availability",
+          ).map((entry) => ({
+            ...entry,
+            owner: entry.owner.map((path) => `${root}/${path}`),
+          })),
+        }),
+        sourcePath,
+      }),
+    ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
+  }
+});
