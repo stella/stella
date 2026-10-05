@@ -5,23 +5,27 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
   withActionAdmission,
-} from "@/api/lib/rate-limit/action-admission";
-import type {
-  ActionKind,
-  AdmittedActionIdentity,
-} from "@/api/lib/rate-limit/action-kinds";
+} from "./action-admission";
+import type { ActionKind, AdmittedActionIdentity } from "./action-kinds";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "./model-dispatch-admission";
 
 const EXECUTION_ADMISSION_FAILURE = failureSink({
   event: "chat.execution.admission_lost",
   expected: [],
 });
 
-export type ChatExecutionAdmission = {
+export type ExecutionAdmission = {
   signal: AbortSignal;
+  /** The proof every model dispatch of this execution carries. */
+  modelAdmission: ModelDispatchAdmission;
   reservePeriod: (
     identity: AdmittedActionIdentity,
     organizationStateDb?: ScopedDb,
@@ -30,7 +34,7 @@ export type ChatExecutionAdmission = {
   release: () => Promise<void>;
 };
 
-const chatAdmissionError = (error: unknown) => {
+const executionAdmissionError = (error: unknown) => {
   if (ActionAdmissionError.is(error)) {
     return new HandlerError({ ...actionAdmissionRefusal(error), cause: error });
   }
@@ -42,7 +46,7 @@ const chatAdmissionError = (error: unknown) => {
   });
 };
 
-type StartChatExecutionAdmissionOptions = {
+type StartExecutionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   /** Overrides the deployment flag `withActionAdmission` reads. */
@@ -61,7 +65,7 @@ type StartChatExecutionAdmissionOptions = {
 // response cannot release the execution's lease. Continuations acquire anew.
 // Disabled admission still yields an execution: `withActionAdmission` owns that
 // decision and applies the demo account's daily budget either way.
-export const startChatExecutionAdmission = async ({
+export const startExecutionAdmission = async ({
   organizationId,
   userId,
   enabled,
@@ -69,11 +73,11 @@ export const startChatExecutionAdmission = async ({
   mode,
   actionKind,
   periodIdentity,
-}: StartChatExecutionAdmissionOptions): Promise<
-  Result<ChatExecutionAdmission, HandlerError>
+}: StartExecutionAdmissionOptions): Promise<
+  Result<ExecutionAdmission, HandlerError>
 > => {
   const ready =
-    Promise.withResolvers<Result<ChatExecutionAdmission, HandlerError>>();
+    Promise.withResolvers<Result<ExecutionAdmission, HandlerError>>();
   const finished = Promise.withResolvers<undefined>();
   const state: { status: "acquiring" | "executing" | "settled" } = {
     status: "acquiring",
@@ -92,6 +96,11 @@ export const startChatExecutionAdmission = async ({
       ready.resolve(
         Result.ok({
           signal,
+          modelAdmission: admitModelDispatch({
+            organizationId,
+            actionKind:
+              mode === "action" ? periodIdentity.actionKind : actionKind,
+          }),
           reservePeriod: async (identity, organizationStateDb) => {
             const expectedKind =
               mode === "action" ? periodIdentity.actionKind : actionKind;
@@ -103,7 +112,7 @@ export const startChatExecutionAdmission = async ({
               organizationStateDb,
             );
             return Result.isError(reserved)
-              ? Result.err(chatAdmissionError(reserved.error))
+              ? Result.err(executionAdmissionError(reserved.error))
               : Result.ok(reserved.value);
           },
           release: async () => {
@@ -121,7 +130,7 @@ export const startChatExecutionAdmission = async ({
   }).then((outcome) => {
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {
-        ready.resolve(Result.err(chatAdmissionError(outcome.error)));
+        ready.resolve(Result.err(executionAdmissionError(outcome.error)));
       } else {
         // Settlement already owns the durable outcome. Do not make it
         // retryable just because the ephemeral lease or its release failed.

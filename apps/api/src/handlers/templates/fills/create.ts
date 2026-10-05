@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
@@ -24,6 +24,11 @@ import {
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   DOCX_EXT_RE,
   sanitizeFilename,
@@ -152,6 +157,16 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
+    // The fill draws one action, at the preflight that precedes its first
+    // model call; the collaborators built after it carry the proof.
+    let admission: ModelDispatchAdmission | undefined;
+    const admitModelAction = createModelActionAdmitter({
+      organizationId,
+      userId: user.id,
+      organizationStateDb: scopedDb,
+      actionKind: "templates.fill",
+    });
+
     // Built only when the manifest declares an AI field: the fill service
     // defers this, so a deterministic fill opens no metered trace.
     const aiCollaborators = () => {
@@ -172,6 +187,9 @@ const fillTemplateToWorkspace = createSafeHandler(
         traceId: Bun.randomUUIDv7(),
       });
       const shared = {
+        admission:
+          admission ??
+          panic("template fill AI collaborators built before its admission"),
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -208,12 +226,24 @@ const fillTemplateToWorkspace = createSafeHandler(
             })
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
-    const assertUsageAvailable:
-      | (() => Promise<HandlerError<402 | 403 | 500> | null>)
-      | undefined =
-      accessError === null
-        ? checkUsage
-        : async () => await Promise.resolve(accessError);
+    const assertUsageAvailable = async (): Promise<HandlerError | null> => {
+      if (accessError !== null) {
+        return accessError;
+      }
+      const usageRejection =
+        checkUsage === undefined ? null : await checkUsage();
+      if (usageRejection !== null) {
+        return usageRejection;
+      }
+      const admitted = await admitModelAction(({ admission: granted }) =>
+        Promise.resolve(granted),
+      );
+      if (Result.isError(admitted)) {
+        return modelActionRefusal(admitted.error);
+      }
+      admission = admitted.value;
+      return null;
+    };
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.

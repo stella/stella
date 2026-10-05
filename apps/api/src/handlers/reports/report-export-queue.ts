@@ -53,6 +53,8 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { REPORT_EXPORT_QUEUE_NAME } from "@/api/lib/report-export-enqueue";
 import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
@@ -106,7 +108,18 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   const worker = new BullMqWorker<ReportExportJobData>(
     REPORT_EXPORT_QUEUE_NAME,
     async (job) => {
-      await processReportExportJob(job.data);
+      const actor = brandActor(job.data);
+      // The export's period action was drawn when it was queued; the job
+      // takes a background slot. Its steps bound their own time.
+      await runBackgroundJob({
+        actionKind: "report-export.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processReportExport(actor, { ...job.data, admission }),
+      });
     },
     { connection: workerConnection, concurrency: WORKER_CONCURRENCY },
   );
@@ -210,15 +223,11 @@ const notifyStatus = async (actor: ExportActor) =>
     workspaceId: actor.workspaceId,
   });
 
-const processReportExportJob = async (
-  data: ReportExportJobData,
-): Promise<void> => {
-  await processReportExport(brandActor(data), data);
-};
-
 export const processReportExport = async (
   actor: ExportActor,
-  data: Pick<ReportExportJobData, "aiNarrative" | "format">,
+  data: Pick<ReportExportJobData, "aiNarrative" | "format"> & {
+    admission: ModelDispatchAdmission;
+  },
 ): Promise<void> => {
   const { exportId } = actor;
 
@@ -254,6 +263,7 @@ export const processReportExport = async (
     try: async () =>
       await runExport({
         actor,
+        admission: data.admission,
         row,
         format: data.format,
         aiNarrative: data.aiNarrative ?? true,
@@ -340,11 +350,13 @@ export const buildReportDelivery = async ({
 
 const runExport = async ({
   actor,
+  admission,
   row,
   format,
   aiNarrative,
 }: {
   actor: ExportActor;
+  admission: ModelDispatchAdmission;
   row: ExportRow;
   format: ReportExportFormat;
   aiNarrative: boolean;
@@ -402,7 +414,11 @@ const runExport = async ({
   const generators =
     orgAIConfigResult.value === null
       ? {}
-      : buildReportAiGenerators({ actor, ...orgAIConfigResult.value });
+      : buildReportAiGenerators({
+          actor,
+          admission,
+          ...orgAIConfigResult.value,
+        });
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
@@ -675,10 +691,12 @@ type ReportAiGenerators = {
 /** Build the metered AI generators + usage preflight for a narrative export. */
 const buildReportAiGenerators = ({
   actor,
+  admission,
   orgAIConfig,
   managedAIResidency,
 }: {
   actor: ExportActor;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
 }): ReportAiGenerators => {
@@ -713,6 +731,7 @@ const buildReportAiGenerators = ({
       : undefined;
 
   const shared = {
+    admission,
     orgAIConfig,
     managedAIResidency,
     organizationId: actor.organizationId,

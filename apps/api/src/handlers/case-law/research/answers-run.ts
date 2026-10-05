@@ -6,7 +6,11 @@ import {
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
 import { detached } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -19,6 +23,7 @@ import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "case-law.research-answers" },
   access: "write",
   description:
     "Queue answers for the given decisions in the given question columns " +
@@ -44,6 +49,7 @@ const config = {
 const runResearchAnswersHandler = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -148,6 +154,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     detached(
       runResearchAnswers(
         {
+          admission: configuredModelAdmission({ modelAdmission }),
           organizationId: session.activeOrganizationId,
           userId: user.id,
           columns: runColumns,

@@ -21,6 +21,10 @@ import { PLAYBOOK_RUN_DOCUMENTS_MAX } from "@/api/lib/document-review/table-run-
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
@@ -95,6 +99,21 @@ export const createRunPlaybook = (
     }) {
       const organizationId = session.activeOrganizationId;
       const { projection } = body;
+
+      // A review-only run queues one document review per document and draws
+      // one action for all of them, before any run exists. A projected run
+      // draws its action when its workflow starts.
+      if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
+        const admitted = await createModelActionAdmitter({
+          organizationId,
+          userId: user.id,
+          organizationStateDb: scopedDb,
+          actionKind: "document-reviews.start",
+        })(({ admission }) => Promise.resolve(admission));
+        if (Result.isError(admitted)) {
+          return Result.err(modelActionRefusal(admitted.error));
+        }
+      }
 
       const txResult = yield* Result.await(
         safeDb(async (tx): Promise<RunFailure | RunSuccess> => {

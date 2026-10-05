@@ -22,6 +22,7 @@ import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-to
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
@@ -175,6 +176,7 @@ const buildTool = (
   const tools = createSpawnSubagentsTool({
     buildSubagentToolset,
     organizationId,
+    modelAdmission: testModelAdmission(organizationId),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     safeDb: passthroughSafeDb,

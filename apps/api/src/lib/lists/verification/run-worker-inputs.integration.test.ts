@@ -28,6 +28,7 @@ import * as documentText from "@/api/lib/lists/verification/document-text";
 import { processListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -137,6 +138,7 @@ afterAll(async () => {
 const expectStoppedBeforeReading = async () => {
   await processListVerificationRun({
     actor,
+    admission: testModelAdmission(actor.organizationId),
     data: {
       runId,
       organizationId: ids.orgA,
@@ -166,6 +168,7 @@ describe("list verification run", () => {
   test("a run reads its pinned document while its requester keeps access", async () => {
     await processListVerificationRun({
       actor,
+      admission: testModelAdmission(actor.organizationId),
       data: {
         runId,
         organizationId: ids.orgA,

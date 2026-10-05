@@ -24,6 +24,7 @@ import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-co
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -271,6 +272,7 @@ const runCompaction = async ({
     orgAIConfig: null,
     managedAIResidency: "eu",
     organizationId: ids.orgA,
+    admission: testModelAdmission(ids.orgA),
     preserveTokens,
     safeDb: countedSafeDb(),
     summarize: async (prompt) => {
@@ -750,6 +752,7 @@ describe("chat thread compaction retry semantics", () => {
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       preserveTokens: 1,
       safeDb: countedSafeDb(),
       summarize: async () => {

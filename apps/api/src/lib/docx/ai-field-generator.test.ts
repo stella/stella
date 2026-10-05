@@ -19,6 +19,7 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -216,11 +217,21 @@ const outputCeilingAt = (index: number): number => {
   return maxOutputTokens;
 };
 const buildTestAiFieldGenerator = (
-  options: Parameters<typeof buildAiFieldGenerator>[0],
-) => buildAiFieldGenerator({ resolveTextModel, ...options });
+  options: Omit<Parameters<typeof buildAiFieldGenerator>[0], "admission">,
+) =>
+  buildAiFieldGenerator({
+    admission: testModelAdmission(organizationId),
+    resolveTextModel,
+    ...options,
+  });
 const buildTestAiOccurrenceAdapter = (
-  options: Parameters<typeof buildAiOccurrenceAdapter>[0],
-) => buildAiOccurrenceAdapter({ resolveTextModel, ...options });
+  options: Omit<Parameters<typeof buildAiOccurrenceAdapter>[0], "admission">,
+) =>
+  buildAiOccurrenceAdapter({
+    admission: testModelAdmission(organizationId),
+    resolveTextModel,
+    ...options,
+  });
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
@@ -558,6 +569,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -576,6 +588,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -595,6 +608,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -612,6 +626,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -641,6 +656,7 @@ describe("buildAiConditionDecider decision tier", () => {
         orgAIConfig: null,
         managedAIResidency: "eu",
         organizationId,
+        admission: testModelAdmission(organizationId),
         resolveTextModel,
         tenantWorkspaceIds: [],
       });

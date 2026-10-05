@@ -56,6 +56,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   type AssertNoExtraFields,
   projectionPayload,
@@ -1812,6 +1813,15 @@ const readSavePlaybookSources = async ({
   );
 };
 
+/** A playbook save's ask derivations, admitted inside the tool call's action. */
+const playbookDerivationAdmitter = (context: McpRequestContext) =>
+  createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "playbooks.derive-ask",
+  });
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1871,6 +1881,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
+        admitModelAction: playbookDerivationAdmitter(context),
         safeDb: context.safeDb,
         organizationId,
         accessibleWorkspaceIds: context.accessibleWorkspaceIds,
@@ -1991,6 +2002,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   } = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
+      admitModelAction: playbookDerivationAdmitter(context),
       safeDb: context.safeDb,
       organizationId,
       accessibleWorkspaceIds: context.accessibleWorkspaceIds,

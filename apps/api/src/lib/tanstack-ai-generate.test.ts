@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
@@ -444,6 +445,7 @@ describe("TanStack AI structured output generation", () => {
         caching: noCaching,
         finishPolicy: "require-complete" as const,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer" as const,
         managedAIResidency: "eu" as const,
         orgAIConfig: null,
@@ -577,6 +579,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -605,6 +608,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -659,6 +663,7 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -683,6 +688,7 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -713,6 +719,7 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1023,6 +1030,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1087,6 +1095,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1131,6 +1140,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1156,6 +1166,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1195,6 +1206,7 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1236,6 +1248,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1288,6 +1301,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1321,6 +1335,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1348,6 +1363,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1381,6 +1397,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1420,6 +1437,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1453,6 +1471,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-incomplete",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1478,6 +1497,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1504,6 +1524,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1531,6 +1552,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1569,6 +1591,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1594,6 +1617,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1615,6 +1639,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1634,6 +1659,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1661,6 +1687,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1689,6 +1716,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1727,6 +1755,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1750,6 +1779,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1778,6 +1808,7 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,

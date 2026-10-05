@@ -22,6 +22,11 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
 import type { AiFillCollaborators } from "./template-fill-service";
@@ -80,7 +85,9 @@ type TemplateFillAiWiringArgs = {
 };
 
 type TemplateFillAiWiring = {
-  assertUsageAvailable: () => Promise<HandlerError<402 | 403 | 500> | null>;
+  assertUsageAvailable: () => Promise<HandlerError<
+    402 | 403 | 429 | 500 | 503
+  > | null>;
   aiCollaborators: () => Promise<AiFillCollaborators>;
 };
 
@@ -103,6 +110,15 @@ export const buildTemplateFillAiWiring = ({
   documentLanguages,
 }: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
   let configPromise: ReturnType<typeof loadOrgAISettings> | undefined;
+  // The fill draws one action, at the preflight that precedes its first model
+  // call; the collaborators built after it carry the proof.
+  let admission: ModelDispatchAdmission | undefined;
+  const admitModelAction = createModelActionAdmitter({
+    organizationId,
+    userId,
+    organizationStateDb: scopedDb,
+    actionKind: "templates.fill",
+  });
   const orgAISettings = async () => {
     configPromise ??= scopedDb(
       async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
@@ -116,12 +132,23 @@ export const buildTemplateFillAiWiring = ({
       if (Result.isError(config)) {
         return config.error;
       }
-      return await assertTemplateFillUsage({
+      const usageRejection = await assertTemplateFillUsage({
         orgAIConfig: config.value.orgAIConfig,
         organizationId,
         userId,
         safeDb,
       });
+      if (usageRejection !== null) {
+        return usageRejection;
+      }
+      const admitted = await admitModelAction(({ admission: granted }) =>
+        Promise.resolve(granted),
+      );
+      if (Result.isError(admitted)) {
+        return modelActionRefusal(admitted.error);
+      }
+      admission = admitted.value;
+      return null;
     },
     aiCollaborators: async () => {
       const configResult = await orgAISettings();
@@ -132,6 +159,9 @@ export const buildTemplateFillAiWiring = ({
       }
       const config = configResult.value;
       const shared = {
+        admission:
+          admission ??
+          panic("template fill AI collaborators built before its admission"),
         orgAIConfig: config.orgAIConfig,
         managedAIResidency: config.managedAIResidency,
         organizationId,

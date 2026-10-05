@@ -152,18 +152,51 @@ describe("period identity coverage", () => {
     }
     expect(callers.toSorted()).toEqual([
       "lib/api-handlers.ts",
+      "lib/rate-limit/model-action-admission.ts",
       "lib/rate-limit/queued-action-admission.ts",
       "mcp/server-core.ts",
     ]);
     expect(concurrencyOnlyCallers.toSorted()).toEqual([
-      "handlers/chat/chat-execution-admission.ts",
+      "lib/rate-limit/execution-admission.ts",
+      "lib/rate-limit/queued-action-admission.ts",
       "lib/rate-limit/queued-action-admission.ts",
     ]);
     expect(declarations.toSorted()).toEqual([
+      "handlers/bilingual-translations/create-run.ts",
+      "handlers/bilingual-translations/prepare.ts",
+      "handlers/case-law/decisions/search-expand.ts",
+      "handlers/case-law/decisions/search-refine.ts",
+      "handlers/case-law/research/answers-run.ts",
+      "handlers/case-law/research/columns-suggest-prompt.ts",
       "handlers/chat/improve-prompt.ts",
+      "handlers/clauses/rewrite.ts",
+      "handlers/clauses/versions/summarize.ts",
+      "handlers/contacts/extract-procuracao.ts",
+      "handlers/document-reviews/create-run.ts",
+      "handlers/document-reviews/propose-positions.ts",
+      "handlers/document-translations/runs/create.ts",
+      "handlers/entities/placements/suggest.ts",
+      "handlers/entities/versions/summarize.ts",
+      "handlers/lists/verifications/create.ts",
+      "handlers/properties/preview.ts",
+      "handlers/properties/prompt/suggest.ts",
+      "handlers/search/routes.ts",
+      "handlers/search/routes.ts",
+      "handlers/skills/drafts/generate.ts",
+      "handlers/skills/proposals/from-comments/create.ts",
+      "handlers/skills/resources/rewrite.ts",
+      "handlers/templates/fields/suggest.ts",
+      "handlers/templates/prepare.ts",
+      "handlers/templates/versions/summarize.ts",
+      "handlers/time-entries/polish-narrative.ts",
+      "handlers/workspaces/generate-bounding-boxes.ts",
     ]);
-    expect(authorizedFiniteCallers).toEqual([
+    expect(authorizedFiniteCallers.toSorted()).toEqual([
+      "handlers/chat/get-suggested-prompts.ts",
+      "handlers/chat/get-thread-recap.ts",
       "handlers/chat/suggest-thread-title.ts",
+      "handlers/document-reviews/parties.ts",
+      "handlers/templates/prefill.ts",
     ]);
   });
 });

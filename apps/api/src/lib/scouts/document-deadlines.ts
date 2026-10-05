@@ -9,6 +9,7 @@ import {
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -16,11 +17,13 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { resolveCaching } from "@/api/lib/ai-config";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -130,6 +133,67 @@ const resolveActorUserId = async (
     .limit(1);
   const actor = candidates.at(0);
   return actor ? brandPersistedUserId(actor.userId) : null;
+};
+
+type ExtractDeadlinesOptions = {
+  analytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  managedAIResidency: ManagedAIResidency;
+  orgAIConfig: OrgAIConfig | null;
+  prompt: string;
+  run: ClaimedRun;
+  scopedDb: ScopedDb;
+  userId: SafeId<"user">;
+};
+
+/**
+ * One scan draws one action of the member it runs as. A refused scan fails
+ * its observation and retries like any other failure.
+ */
+const extractDeadlines = async ({
+  analytics,
+  managedAIResidency,
+  orgAIConfig,
+  prompt,
+  run,
+  scopedDb,
+  userId,
+}: ExtractDeadlinesOptions) => {
+  const admitted = await createModelActionAdmitter({
+    organizationId: run.organizationId,
+    userId,
+    organizationStateDb: scopedDb,
+    actionKind: "documents.scan-deadlines",
+  })(
+    async ({ admission }) =>
+      await generateTanStackObjectForRole({
+        dataClass: "customer",
+        role: "chat",
+        organizationId: run.organizationId,
+        admission,
+        tenantWorkspaceIds: [run.workspaceId],
+        orgAIConfig,
+        managedAIResidency,
+        analytics,
+        system: DEADLINE_SYSTEM_PROMPT,
+        prompt,
+        maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
+        caching: resolveCaching({
+          promptCachingEnabled: false,
+          role: "chat",
+          scopeKey: run.organizationId,
+        }),
+        serviceTier: "flex",
+        abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
+        outputSchema: deadlineExtractionSchema,
+      }),
+  );
+  if (Result.isError(admitted)) {
+    // An observation reports its failure by rejecting, as the model call
+    // itself does; a refused scan is such a failure.
+    const { error } = admitted;
+    throw error;
+  }
+  return admitted.value;
 };
 
 const currentSourceWhere = (run: ClaimedRun) =>
@@ -313,25 +377,14 @@ export const runDocumentDeadlineScout = async ({
                 workspaceId: run.workspaceId,
               },
             });
-            const extraction = await generateTanStackObjectForRole({
-              dataClass: "customer",
-              role: "chat",
-              organizationId: run.organizationId,
-              tenantWorkspaceIds: [run.workspaceId],
-              orgAIConfig,
-              managedAIResidency,
+            const extraction = await extractDeadlines({
               analytics,
-              system: DEADLINE_SYSTEM_PROMPT,
+              managedAIResidency,
+              orgAIConfig,
               prompt: `Document "${source.entityName}":\n\n${text}`,
-              maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
-              caching: resolveCaching({
-                promptCachingEnabled: false,
-                role: "chat",
-                scopeKey: run.organizationId,
-              }),
-              serviceTier: "flex",
-              abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
-              outputSchema: deadlineExtractionSchema,
+              run,
+              scopedDb,
+              userId: actorUserId,
             });
 
             const now = new Date();

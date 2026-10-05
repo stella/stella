@@ -35,6 +35,7 @@ import {
   streamChatChunks,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   resolveTanStackTextModel,
@@ -55,6 +56,8 @@ type RunSubagentMetering = {
 };
 
 export type RunSubagentOptions = {
+  /** The parent turn's admission; a subagent is never admitted again. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -202,6 +205,7 @@ export const runSubagent = async (
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
+    admission: options.admission,
     orgAIConfig: options.orgAIConfig,
     role: options.role,
   });

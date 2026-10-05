@@ -1401,6 +1401,8 @@ describe("native interrupt boundary persistence", () => {
     const { safeDb } = createScopedDbMock({});
     const tools = createSpawnSubagentsTool({
       buildSubagentToolset: () => ({}),
+      // The tool pauses for approval here and never runs a subagent.
+      modelAdmission: undefined,
       organizationId: toSafeId<"organization">(
         "22222222-2222-4222-8222-222222222222",
       ),

@@ -58,6 +58,11 @@ import {
   projectionPayload,
 } from "@/api/lib/projection-totality";
 import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
@@ -1352,6 +1357,54 @@ const assertTemplateFillUsage = async ({
   });
 };
 
+/**
+ * A fill's usage preflight and the model proof its AI collaborators carry.
+ * The proof is taken at the preflight, which the fill service runs only for
+ * a manifest with AI fields and before the collaborators are built. Inside
+ * the tool call's own admission it joins that action rather than drawing
+ * another.
+ */
+const admitTemplateFillAi = ({
+  context,
+  readOrgAIConfig,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  let admission: ModelDispatchAdmission | undefined;
+  const admitModelAction = createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "templates.fill",
+  });
+  return {
+    assertUsageAvailable: async () => {
+      const usageRejection = await assertTemplateFillUsage({
+        context,
+        readOrgAIConfig,
+        workspaceId,
+      });
+      if (usageRejection !== null) {
+        return usageRejection;
+      }
+      const admitted = await admitModelAction(({ admission: granted }) =>
+        Promise.resolve(granted),
+      );
+      if (Result.isError(admitted)) {
+        return modelActionRefusal(admitted.error);
+      }
+      admission = admitted.value;
+      return null;
+    },
+    admission: () =>
+      admission ??
+      panic("template fill AI collaborators built before its admission"),
+  };
+};
+
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -1372,12 +1425,18 @@ const handleFillTemplateTool: McpToolHandler<
   // leaves those fields unfilled rather than erroring. Read lazily: the fill
   // service asks for it only when the manifest declares an AI field.
   const readOrgAIConfig = deferOrgAIConfig(context);
+  const fillAi = admitTemplateFillAi({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+  });
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
   const aiCollaborators = async () => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission: fillAi.admission(),
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1413,12 +1472,7 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({
-      context,
-      readOrgAIConfig,
-      workspaceId: null,
-    });
+  const { assertUsageAvailable } = fillAi;
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1829,8 +1883,8 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
+  const fillAi = admitTemplateFillAi({ context, readOrgAIConfig, workspaceId });
+  const { assertUsageAvailable } = fillAi;
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1844,6 +1898,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   const aiCollaborators = async () => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission: fillAi.admission(),
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(

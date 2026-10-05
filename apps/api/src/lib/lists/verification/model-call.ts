@@ -24,6 +24,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -38,6 +39,7 @@ export class ListVerificationAccessRevokedError extends TaggedError(
 export type VerificationModelDeps = {
   accessProof: ListVerificationAccessProof;
   refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -144,6 +146,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
           orgAIConfig: deps.orgAIConfig,
           managedAIResidency: deps.managedAIResidency,
           organizationId: deps.organizationId,
+          admission: deps.admission,
           analytics,
           caching,
           serviceTier: deps.serviceTier,

@@ -36,6 +36,10 @@ import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
@@ -59,6 +63,7 @@ const exportViewReport = createSafeHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     workspaceId,
     user,
     session,
@@ -170,6 +175,21 @@ const exportViewReport = createSafeHandler(
     // queue loses can be rebuilt from the row alone.
     const format = body.format ?? "docx";
     const aiNarrative = body.aiNarrative ?? true;
+
+    // A narrative export draws its one action here, before anything is
+    // queued; the worker runs on a background slot. A deterministic export
+    // calls no model and draws none.
+    if (aiNarrative) {
+      const admitted = await createModelActionAdmitter({
+        organizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "report-export.start",
+      })(({ admission }) => Promise.resolve(admission));
+      if (Result.isError(admitted)) {
+        return Result.err(modelActionRefusal(admitted.error));
+      }
+    }
 
     const exportId = yield* Result.await(
       safeDb(async (tx) => {

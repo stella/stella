@@ -41,6 +41,7 @@ import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -1372,6 +1373,7 @@ describe("send message disconnect handling", () => {
               release: async () => {
                 releases += 1;
               },
+              modelAdmission: testModelAdmission(options.organizationId),
               reservePeriod: async (identity: AdmittedActionIdentity) => {
                 expect(turnUpdates).toContainEqual({ runId: "run-test" });
                 expect(identity).toEqual({

@@ -40,6 +40,7 @@ import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -155,7 +156,11 @@ afterAll(async () => {
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processReportExport(actor, { format: "docx", aiNarrative: true });
+  await processReportExport(actor, {
+    admission: testModelAdmission(actor.organizationId),
+    format: "docx",
+    aiNarrative: true,
+  });
   expect(await readExport()).toMatchObject({
     status: "failed",
     error: "The report source is no longer available.",
@@ -186,7 +191,11 @@ describe("report export run", () => {
       .update(reportExports)
       .set({ aiNarrative: false })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      format: "docx",
+      aiNarrative: false,
+    });
     const row = await readExport();
     expect(row).toMatchObject({ status: "completed", error: null });
     expect(reportDataSpy).toHaveBeenCalledTimes(1);
@@ -265,7 +274,11 @@ describe("report export run", () => {
         templateRef: { type: "stored", templateId },
       })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      format: "docx",
+      aiNarrative: false,
+    });
   };
 
   test("a stored template whose AI condition stays undecided fails the export with the condition named and no use recorded", async () => {

@@ -25,6 +25,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
   getTanStackTextModelInfoForRole,
   isAllowedBYOKModelForRole,
   resolveEffectiveServiceTierForProvider,
@@ -342,6 +346,8 @@ type CreateSpawnSubagentsToolProps = {
    * the caller drains the buffer after the run to surface proposed writes.
    */
   buildSubagentToolset: (proposalSink: SubagentProposalSink) => ChatToolMap;
+  /** The parent turn's admission: subagents are steps of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -428,6 +434,7 @@ export const createSpawnSubagentsTool = (
           const tools = props.buildSubagentToolset(proposalBuffer.sink);
           try {
             const run = await dependencies.runSubagent({
+              admission: requireChatToolModelAdmission(props.modelAdmission),
               organizationId: props.organizationId,
               orgAIConfig: props.orgAIConfig,
               managedAIResidency: props.managedAIResidency,

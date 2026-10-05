@@ -24,7 +24,7 @@ import {
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
-import { startChatExecutionAdmission } from "./chat-execution-admission";
+import { startExecutionAdmission } from "./execution-admission";
 
 const organizationId = toSafeId<"organization">("org_execution");
 const userId = toSafeId<"user">("user_execution");
@@ -130,7 +130,7 @@ const coordination = ({
 };
 
 const executionOf = async (
-  operation: ReturnType<typeof startChatExecutionAdmission>,
+  operation: ReturnType<typeof startExecutionAdmission>,
 ) => {
   const acquired = await operation;
   if (Result.isError(acquired)) {
@@ -154,7 +154,7 @@ describe("chat execution admission owns settlement independently of transport re
         env.ACTION_LIMIT_CONTACT_URL = contactUrl;
         for (const reason of Object.values(reasons)) {
           const error = actionAdmissionErrorFor(reason, "Admission refused");
-          const acquired = await startChatExecutionAdmission({
+          const acquired = await startExecutionAdmission({
             ...action,
             enabled: true,
             organizationId,
@@ -213,7 +213,7 @@ describe("chat execution admission owns settlement independently of transport re
         },
       });
     const execution = await executionOf(
-      startChatExecutionAdmission({
+      startExecutionAdmission({
         organizationId,
         userId,
         enabled: true,
@@ -240,7 +240,7 @@ describe("chat execution admission owns settlement independently of transport re
       ).toBe(true);
       expect(stateReads()).toBe(1);
       const title = await executionOf(
-        startChatExecutionAdmission({
+        startExecutionAdmission({
           organizationId,
           userId,
           enabled: true,
@@ -267,7 +267,7 @@ describe("chat execution admission owns settlement independently of transport re
     });
     for (const [index, turn] of ["turn-a", "turn-b", "turn-c"].entries()) {
       const execution = await executionOf(
-        startChatExecutionAdmission({
+        startExecutionAdmission({
           mode: "concurrency-only",
           actionKind: "chat.send",
           enabled: true,
@@ -317,7 +317,7 @@ describe("chat execution admission owns settlement independently of transport re
     ].entries()) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const execution = await executionOf(
-          startChatExecutionAdmission({
+          startExecutionAdmission({
             enabled: true,
             organizationId,
             userId,
@@ -334,7 +334,7 @@ describe("chat execution admission owns settlement independently of transport re
       }
       if (phase === "initial") {
         const title = await executionOf(
-          startChatExecutionAdmission({
+          startExecutionAdmission({
             enabled: true,
             organizationId,
             userId,
@@ -348,7 +348,7 @@ describe("chat execution admission owns settlement independently of transport re
         await title.release();
       }
     }
-    const refused = await startChatExecutionAdmission({
+    const refused = await startExecutionAdmission({
       ...action,
       enabled: true,
       organizationId,
@@ -373,7 +373,7 @@ describe("chat execution admission owns settlement independently of transport re
         mode,
         periodPolicy: { periodMs: 86_400_000, limit: 1 },
       });
-      const acquired = await startChatExecutionAdmission({
+      const acquired = await startExecutionAdmission({
         enabled: true,
         organizationId,
         userId,
@@ -400,10 +400,10 @@ describe("chat execution admission owns settlement independently of transport re
       userId,
       admit: store.admit,
     };
-    const execution = await executionOf(startChatExecutionAdmission(options));
+    const execution = await executionOf(startExecutionAdmission(options));
     expect(execution.signal.aborted).toBe(false);
     expect(store.counts()).toEqual({ acquisitions: 1, releases: 0, active: 1 });
-    const refused = await startChatExecutionAdmission(options);
+    const refused = await startExecutionAdmission(options);
     expect(Result.isError(refused) && refused.error.status).toBe(429);
     expect(store.counts()).toEqual({ acquisitions: 2, releases: 0, active: 1 });
     await execution.release();
@@ -438,7 +438,7 @@ describe("chat execution admission owns settlement independently of transport re
       userId,
       admit,
     };
-    const execution = await executionOf(startChatExecutionAdmission(options));
+    const execution = await executionOf(startExecutionAdmission(options));
     expect(execution.signal.aborted).toBe(false);
     expect(
       Result.isOk(await execution.reservePeriod(action.periodIdentity)),
@@ -447,10 +447,10 @@ describe("chat execution admission owns settlement independently of transport re
     expect(demo.count()).toBe(1);
 
     for (let index = 1; index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max; index++) {
-      const admitted = await executionOf(startChatExecutionAdmission(options));
+      const admitted = await executionOf(startExecutionAdmission(options));
       await admitted.release();
     }
-    const refused = await startChatExecutionAdmission(options);
+    const refused = await startExecutionAdmission(options);
     if (Result.isOk(refused)) {
       throw new Error("Expected the demo account's daily budget to refuse");
     }
@@ -467,7 +467,7 @@ describe("chat execution admission owns settlement independently of transport re
   for (const mode of ["busy", "offline"] as const) {
     test(`${mode} coordination returns a typed refusal without an execution handle`, async () => {
       const store = coordination({ mode });
-      const acquired = await startChatExecutionAdmission({
+      const acquired = await startExecutionAdmission({
         ...action,
         enabled: true,
         organizationId,
@@ -504,7 +504,7 @@ describe("chat execution admission owns settlement independently of transport re
       userId,
       run: async (parentSignal) => {
         const execution = await executionOf(
-          startChatExecutionAdmission({
+          startExecutionAdmission({
             ...action,
             enabled: true,
             organizationId,
@@ -540,11 +540,9 @@ describe("chat execution admission owns settlement independently of transport re
       userId,
       admit: store.admit,
     };
-    const first = await executionOf(startChatExecutionAdmission(options));
+    const first = await executionOf(startExecutionAdmission(options));
     await first.release();
-    const continuation = await executionOf(
-      startChatExecutionAdmission(options),
-    );
+    const continuation = await executionOf(startExecutionAdmission(options));
     expect(continuation.signal).not.toBe(first.signal);
     expect(store.counts()).toEqual({ acquisitions: 2, releases: 1, active: 1 });
     await continuation.release();

@@ -27,6 +27,7 @@ import {
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -134,6 +135,7 @@ const runScriptedSubagent = async (
         workspaceId: ids.wsA1,
       },
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       role: "fast",

@@ -83,6 +83,10 @@ import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
+import {
+  assertModelDispatchScope,
+  type ModelDispatchScope,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
 import {
   joinLayeredSystemPrompt,
@@ -135,7 +139,6 @@ type GenerateTanStackBaseOptions = {
         options: Parameters<typeof resolveTanStackTextModel>[0],
       ) => ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>)
     | undefined;
-  organizationId: SafeId<"organization"> | null;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
   role: ModelRole;
@@ -150,7 +153,8 @@ type GenerateTanStackBaseOptions = {
    */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   temperature?: number | undefined;
-} & AIRequestPolicy;
+} & AIRequestPolicy &
+  ModelDispatchScope;
 
 type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
@@ -200,11 +204,13 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
-type ResolveTextModelOptions = Pick<
-  GenerateTanStackBaseOptions,
-  "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
-> &
-  AIRequestPolicy;
+type ResolveTextModelOptions = {
+  modelId?: string | undefined;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  reasoningEffort?: ReasoningEffort | undefined;
+  role: ModelRole;
+} & AIRequestPolicy &
+  ModelDispatchScope;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
@@ -1159,16 +1165,22 @@ const isStructuredOutputPartial = <TOutput>(
   typeof value === "object" && value !== null;
 
 export const resolveTanStackTextModel = async (
-  {
+  options: ResolveTextModelOptions,
+  credentials = getManagedOpenRouterCredentialProvider(),
+): Promise<ResolvedTanStackTextModel> => {
+  // Every inference path resolves its model here with the proof that its
+  // action was admitted; the type requires the proof, this binds it to the
+  // organization the model serves.
+  assertModelDispatchScope(options);
+  const {
+    admission: _admission,
     modelId,
     organizationId,
     orgAIConfig,
     reasoningEffort,
     role,
     ...policy
-  }: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
-): Promise<ResolvedTanStackTextModel> => {
+  } = options;
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
   // request is classified `ai` for the split latency SLO — a new AI

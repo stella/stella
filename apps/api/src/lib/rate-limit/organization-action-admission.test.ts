@@ -771,6 +771,52 @@ describe("the free floor's service budget", () => {
     );
   });
 
+  test("every model action kind draws the free budget on managed models and none on the organization's own key", async () => {
+    const registered = Object.keys(ACTION_KINDS).filter(
+      (kind): kind is keyof typeof ACTION_KINDS =>
+        Object.hasOwn(ACTION_KINDS, kind),
+    );
+    const modelKinds = registered.filter(
+      (kind): kind is PeriodActionKind =>
+        ACTION_KINDS[kind].admission === "period" &&
+        ACTION_KINDS[kind].serviceCredentials ===
+          ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelKinds.length).toBeGreaterThan(0);
+    for (const actionKind of modelKinds) {
+      const managed = countingRedis();
+      for (let action = 0; action < FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+            redis: managed,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expectRefusal(
+        await admitOnFree({
+          actionKind,
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis: managed,
+        }),
+        ACTION_ADMISSION_CODES.periodExhausted,
+      );
+
+      const own = countingRedis();
+      for (let action = 0; action <= FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+            redis: own,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expect(own.periodAcquisitions()).toBe(0);
+    }
+  });
+
   test("managed services stay counted on the organization's own key", async () => {
     const redis = countingRedis();
     for (let call = 0; call < FREE_ACTIONS; call += 1) {

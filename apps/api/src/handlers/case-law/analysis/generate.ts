@@ -29,7 +29,13 @@ import {
 } from "@/api/lib/case-law/analysis-store";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createModelActionAdmitter,
+  type ModelActionAdmitter,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForRole,
@@ -62,11 +68,13 @@ type RunGenerationOptions = {
   /** The sentinel the claim wrote; cleanup releases exactly this one. */
   sentinel: AnalysisGenerating;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
 };
 
 const runGeneration = async ({
+  admission,
   anchorIds,
   contentHash,
   country,
@@ -105,6 +113,7 @@ const runGeneration = async ({
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
+      admission,
       // Case-law analysis is global, not workspace-scoped (see the store).
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
@@ -155,14 +164,28 @@ type GenerateAnalysisResponse = {
   error?: string;
 };
 
-export const generateAnalysis = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-  orgAIConfig: OrgAIConfig | null,
-  orgAIConfigStatus: OrgAIConfigStatus,
-  promptCachingEnabled: boolean,
-): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
+type GenerateAnalysisOptions = {
+  /** Admits a model run: a new generation or a significance refresh. */
+  admitModelAction: ModelActionAdmitter;
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
+  promptCachingEnabled: boolean;
+};
+
+export const generateAnalysis = async ({
+  admitModelAction,
+  decisionId,
+  scopedDb,
+  organizationId,
+  orgAIConfig,
+  orgAIConfigStatus,
+  promptCachingEnabled,
+}: GenerateAnalysisOptions): Promise<
+  Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
+> => {
   // audit: skip — background AI analysis output
   const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
   switch (resolution.kind) {
@@ -197,6 +220,7 @@ export const generateAnalysis = async (
       if (storesAnalyses()) {
         detached(
           refreshSignificance({
+            admitModelAction,
             analysis: stored.analysis,
             contentHash: decision.contentHash,
             decisionId,
@@ -251,31 +275,47 @@ export const generateAnalysis = async (
     return Result.err(available.error);
   }
 
-  // Another request won the race: return generating.
-  const sentinel = await analysisStore().claim({
-    decisionId,
-    fingerprint: input.fingerprint,
-    observed,
-  });
-  if (sentinel === null) {
-    return Result.ok({ status: "generating" });
-  }
-
-  // Fire-and-forget generation
-  detached(
-    runGeneration({
-      anchorIds,
-      contentHash: decision.contentHash,
-      country: decision.country,
+  // The generation draws one action when it starts; its run continues in the
+  // background on the proof that admission handed out.
+  const started = await admitModelAction(async ({ admission }) => {
+    // Another request won the race: return generating.
+    const sentinel = await analysisStore().claim({
       decisionId,
-      input,
-      orgAIConfig,
-      organizationId,
-      promptCachingEnabled,
-      sentinel,
-    }),
-    "analysis-generate.run-generation",
-  );
+      fingerprint: input.fingerprint,
+      observed,
+    });
+    if (sentinel === null) {
+      return;
+    }
+
+    // Fire-and-forget generation
+    detached(
+      runGeneration({
+        admission,
+        anchorIds,
+        contentHash: decision.contentHash,
+        country: decision.country,
+        decisionId,
+        input,
+        orgAIConfig,
+        organizationId,
+        promptCachingEnabled,
+        sentinel,
+      }),
+      "analysis-generate.run-generation",
+    );
+  });
+  if (Result.isError(started)) {
+    return Result.err(
+      ActionAdmissionError.is(started.error)
+        ? started.error
+        : new HandlerError({
+            status: 503,
+            message: "Analysis generation could not start",
+            cause: started.error,
+          }),
+    );
+  }
 
   return Result.ok({ status: "generating" });
 };
@@ -310,6 +350,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    user,
   }) {
     // AI availability is enforced inside generateAnalysis, after its stored
     // and in-flight branches, so finished analyses stay readable when the
@@ -317,14 +358,20 @@ const generateDecisionAnalysis = createSafeRootHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await generateAnalysis(
+          await generateAnalysis({
+            admitModelAction: createModelActionAdmitter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+            }),
             decisionId,
             scopedDb,
-            session.activeOrganizationId,
+            organizationId: session.activeOrganizationId,
             orgAIConfig,
             orgAIConfigStatus,
             promptCachingEnabled,
-          ),
+          }),
       ),
     );
 

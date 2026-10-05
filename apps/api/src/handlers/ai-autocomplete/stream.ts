@@ -6,6 +6,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -13,6 +14,7 @@ const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
 const MAX_OUTPUT_TOKENS = 96;
 const AUTOCOMPLETE_TIMEOUT_MS = 10_000;
+const AUTOCOMPLETE_ACTION_KIND = "editor.autocomplete";
 
 const requestBody = t.Object({
   prefix: t.String({ maxLength: MAX_PREFIX_CHARS }),
@@ -64,19 +66,41 @@ const buildUserPrompt = (input: {
 
 const autocompleteStream = createSafeRootHandler(
   config,
-  // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({
     body,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    scopedDb,
     session,
     request,
+    user,
   }) {
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);
+    }
+    // The completion streams after the handler returns, so its admission is
+    // held by the stream and released when the stream ends.
+    const admission = yield* Result.await(
+      startExecutionAdmission({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        mode: "concurrency-only",
+        actionKind: AUTOCOMPLETE_ACTION_KIND,
+      }),
+    );
+    const reserved = await admission.reservePeriod(
+      {
+        actionKind: AUTOCOMPLETE_ACTION_KIND,
+        logicalPhaseId: Bun.randomUUIDv7(),
+      },
+      scopedDb,
+    );
+    if (Result.isError(reserved)) {
+      await admission.release();
+      return Result.err(reserved.error);
     }
     const stream = yield* Result.try({
       try: () =>
@@ -87,6 +111,7 @@ const autocompleteStream = createSafeRootHandler(
           orgAIConfig,
           managedAIResidency,
           organizationId: session.activeOrganizationId,
+          admission: admission.modelAdmission,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],
           caching: resolveCaching({
@@ -96,6 +121,7 @@ const autocompleteStream = createSafeRootHandler(
           }),
           abortSignal: AbortSignal.any([
             request.signal,
+            admission.signal,
             AbortSignal.timeout(AUTOCOMPLETE_TIMEOUT_MS),
           ]),
           system: SYSTEM_PROMPT,
@@ -148,6 +174,7 @@ const autocompleteStream = createSafeRootHandler(
             });
           }
         } finally {
+          await admission.release();
           if (!request.signal.aborted) {
             controller.close();
           }
