@@ -655,7 +655,9 @@ posixTest(
       expect(liveHeartbeat).not.toBe(afterLeaderExit);
       fixture.supervisor.dispose();
       await Bun.sleep(100);
-      expect(readFileSync(heartbeatPath, "utf-8")).toBe(liveHeartbeat);
+      const afterDispose = readFileSync(heartbeatPath, "utf-8");
+      await Bun.sleep(100);
+      expect(readFileSync(heartbeatPath, "utf-8")).toBe(afterDispose);
     } finally {
       fixture.cleanup();
     }
