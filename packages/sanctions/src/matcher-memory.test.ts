@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { MATCHER_WORKLOAD_REPORT_COUNT } from "./test-fixtures/matcher-memory-child";
 
-// Five database-free child lifetimes peaked at 500.9 MiB; 640 MiB leaves 139.1 MiB headroom.
-const MATCHER_MEMORY_BUDGET_BYTES = 640 * 1024 * 1024;
+// Five database-free child lifetimes peaked at 500.9 MiB; 575 MiB leaves 74.1 MiB headroom.
+const MATCHER_MEMORY_BUDGET_BYTES = 575 * 1024 * 1024;
 const WORKLOAD_TIMEOUT_MS = 300_000;
 
 test(
