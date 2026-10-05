@@ -50,23 +50,69 @@ impl Schedule {
   }
 }
 
-fn load_desktop_id(path: &Path) -> std::io::Result<Uuid> {
-  match std::fs::read_to_string(path) {
-    Ok(value) => Uuid::parse_str(value.trim())
-      .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-      let parent = path.parent().expect("desktop presence data directory");
-      std::fs::create_dir_all(parent)?;
-      let id = Uuid::new_v4();
-      let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)?;
-      file.write_all(id.to_string().as_bytes())?;
-      Ok(id)
-    }
+fn read_desktop_id(path: &Path) -> std::io::Result<Option<Uuid>> {
+  match std::fs::read(path) {
+    Ok(value) => Ok(
+      std::str::from_utf8(&value)
+        .ok()
+        .and_then(|value| Uuid::parse_str(value.trim()).ok()),
+    ),
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
     Err(error) => Err(error),
   }
+}
+
+fn load_desktop_id(path: &Path) -> std::io::Result<Uuid> {
+  load_desktop_id_with(path, |_| {})
+}
+
+fn load_desktop_id_with(
+  path: &Path,
+  before_publish: impl FnOnce(&Path),
+) -> std::io::Result<Uuid> {
+  if let Some(id) = read_desktop_id(path)? {
+    return Ok(id);
+  }
+  let parent = path.parent().expect("desktop presence data directory");
+  std::fs::create_dir_all(parent)?;
+  let id = Uuid::new_v4();
+  let staged = parent.join(format!(".desktop-presence-id-{id}.tmp"));
+  let mut file = std::fs::OpenOptions::new()
+    .write(true)
+    .create_new(true)
+    .open(&staged)?;
+  let result = (|| {
+    file.write_all(id.to_string().as_bytes())?;
+    file.sync_all()?;
+    // Close before publication so Windows can rename and remove the temporary file.
+    drop(file);
+    before_publish(&staged);
+    match std::fs::hard_link(&staged, path) {
+      Ok(()) => Ok(id),
+      Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+        // Lock a stable sibling, not the inode replaced by the repair's rename.
+        // Never remove the lock file: all concurrent repairs must lock the same inode.
+        let repair_lock = std::fs::OpenOptions::new()
+          .write(true)
+          .create(true)
+          .truncate(false)
+          .open(path.with_extension("lock"))?;
+        repair_lock.lock()?;
+        if let Some(winner) = read_desktop_id(path)? {
+          return Ok(winner);
+        }
+        std::fs::rename(&staged, path)?;
+        Ok(id)
+      }
+      Err(error) => Err(error),
+    }
+  })();
+  if let Err(error) = std::fs::remove_file(&staged)
+    && error.kind() != std::io::ErrorKind::NotFound
+  {
+    tracing::warn!(%error, "desktop presence temporary identity cleanup failed");
+  }
+  result
 }
 
 #[derive(Serialize)]
@@ -210,18 +256,130 @@ mod tests {
     assert_eq!(body, fixture);
   }
 
+  fn identity_test_path() -> std::path::PathBuf {
+    std::env::temp_dir()
+      .join(Uuid::new_v4().to_string())
+      .join("desktop-presence-id")
+  }
+
   #[test]
-  fn installation_identity_is_stable_and_invalid_storage_is_refused() {
-    let root = std::env::temp_dir().join(Uuid::new_v4().to_string());
-    let path = root.join("desktop-presence-id");
-    let id = load_desktop_id(&path).unwrap();
+  fn missing_identity_is_created_and_remains_stable() {
+    let path = identity_test_path();
+    let id = load_desktop_id_with(&path, |staged| {
+      assert!(!path.exists());
+      assert!(read_desktop_id(staged).unwrap().is_some());
+    })
+    .unwrap();
     assert_eq!(id.get_version_num(), 4);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), id.to_string());
     assert_eq!(load_desktop_id(&path).unwrap(), id);
-    std::fs::write(&path, "invalid").unwrap();
-    assert_eq!(
-      load_desktop_id(&path).unwrap_err().kind(),
-      std::io::ErrorKind::InvalidData
-    );
-    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn valid_identity_is_preserved_without_rewriting() {
+    let path = identity_test_path();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let id = Uuid::new_v4();
+    let contents = format!(" {id}\n");
+    std::fs::write(&path, &contents).unwrap();
+    assert_eq!(load_desktop_id(&path).unwrap(), id);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), contents);
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  fn assert_identity_is_repaired(contents: &[u8]) {
+    let path = identity_test_path();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, contents).unwrap();
+    let id = load_desktop_id_with(&path, |staged| {
+      // Until publication, only the complete temporary file contains the new id.
+      assert_eq!(std::fs::read(&path).unwrap(), contents);
+      let staged_id =
+        Uuid::parse_str(&std::fs::read_to_string(staged).unwrap()).unwrap();
+      assert_eq!(staged_id.get_version_num(), 4);
+    })
+    .unwrap();
+    assert_eq!(id.get_version_num(), 4);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), id.to_string());
+    assert_eq!(load_desktop_id(&path).unwrap(), id);
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn empty_identity_is_repaired_atomically() {
+    assert_identity_is_repaired(b"");
+  }
+
+  #[test]
+  fn garbage_and_partial_identities_are_repaired_atomically() {
+    for contents in [b"invalid".as_slice(), b"11111111-1111-", b"\xff\xfe"] {
+      assert_identity_is_repaired(contents);
+    }
+  }
+
+  fn assert_concurrent_identity(initial: Option<&[u8]>) {
+    for winner_first in [true, false] {
+      let path = identity_test_path();
+      if let Some(contents) = initial {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, contents).unwrap();
+      }
+      let ready = std::sync::Barrier::new(2);
+      let (published_tx, published_rx) = std::sync::mpsc::channel();
+      let (winner, (loser_candidate, loser)) = std::thread::scope(|scope| {
+        let path = &path;
+        let ready = &ready;
+        let run_winner = move || {
+          let id = load_desktop_id_with(path, |staged| {
+            assert!(read_desktop_id(path).unwrap().is_none());
+            assert!(read_desktop_id(staged).unwrap().is_some());
+            ready.wait();
+          })
+          .unwrap();
+          published_tx.send(id).unwrap();
+          id
+        };
+        let run_loser = move || {
+          let mut candidate = Uuid::nil();
+          let id = load_desktop_id_with(path, |staged| {
+            assert!(read_desktop_id(path).unwrap().is_none());
+            candidate = read_desktop_id(staged).unwrap().unwrap();
+            ready.wait();
+            let winner = published_rx.recv().unwrap();
+            assert_eq!(read_desktop_id(path).unwrap(), Some(winner));
+          })
+          .unwrap();
+          (candidate, id)
+        };
+        let (winner, loser) = if winner_first {
+          let winner = scope.spawn(run_winner);
+          let loser = scope.spawn(run_loser);
+          (winner, loser)
+        } else {
+          let loser = scope.spawn(run_loser);
+          let winner = scope.spawn(run_winner);
+          (winner, loser)
+        };
+        (winner.join().unwrap(), loser.join().unwrap())
+      });
+      assert_ne!(winner, loser_candidate);
+      assert_eq!(winner, loser);
+      assert_eq!(load_desktop_id(&path).unwrap(), winner);
+      assert_eq!(std::fs::read_to_string(&path).unwrap(), winner.to_string());
+      std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+  }
+
+  #[test]
+  fn concurrent_first_runs_keep_the_already_exists_winner() {
+    assert_concurrent_identity(None);
+  }
+
+  #[test]
+  fn concurrent_repairs_keep_the_first_valid_identity() {
+    for contents in [b"".as_slice(), b"invalid"] {
+      assert_concurrent_identity(Some(contents));
+    }
   }
 }
