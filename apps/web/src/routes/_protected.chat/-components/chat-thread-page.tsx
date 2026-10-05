@@ -239,8 +239,7 @@ export const ChatThreadPage = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters,
+    createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
@@ -555,12 +554,7 @@ export const ChatThreadPage = ({
 
   return (
     <RenderStormRegion name="chat-thread-page">
-      <ChatMattersContext
-        value={{
-          createDocumentMatters,
-          isLoadingCreateDocumentMatters,
-        }}
-      >
+      <ChatMattersContext value={{ createDocumentMattersView }}>
         {shouldSeedWebSearch && (
           <WebSearchSeedLifecycle
             key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
