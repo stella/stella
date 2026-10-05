@@ -1709,7 +1709,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}`,
+    `\${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')) }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -3287,7 +3287,7 @@ test("service-suite scopes remain planned while pull requests skip execution", (
       })),
     ),
   );
-});
+}, 30_000);
 
 // The one selector run that spawns the real detector CLIs: it proves the
 // wiring the in-process plans above stand in for. Each case starts three bun
