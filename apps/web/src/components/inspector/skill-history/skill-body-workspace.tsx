@@ -17,6 +17,7 @@ import {
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
 import { organizationOptions } from "@/lib/organization/queries";
+import { useQueryView } from "@/lib/use-query-view";
 
 import { CommentList } from "./comment-list";
 import { ProposalReview } from "./proposal-review";
@@ -27,6 +28,7 @@ import {
   createMemberNameLookup,
   isProposableOrigin,
 } from "./skill-history.logic";
+import { SkillRevisionComparison } from "./skill-revision-comparison";
 import { useSkillHistoryActions } from "./use-skill-history-actions";
 
 /**
@@ -106,6 +108,8 @@ export const SkillBodyWorkspace = ({
   const comparedRevision = useQuery(
     skillRevisionOptions(organizationId, user.id, skillId, compareRevisionId),
   );
+
+  const comparedRevisionView = useQueryView(comparedRevision);
 
   const openProposalId = mode.type === "proposal" ? mode.proposalId : null;
 
@@ -224,6 +228,30 @@ export const SkillBodyWorkspace = ({
     setMode(LIVE_MODE);
   };
 
+  const renderLiveEditor = (baseline: string | undefined) => (
+    <MarkdownHybridEditor
+      imagePolicy="data-only"
+      baseline={baseline}
+      comments={editorComments}
+      key={`live:${String(editorGeneration)}:${String(commenting)}`}
+      markdown={liveMarkdown}
+      onMarkdownChange={onPersistBody}
+      readOnly={!canManage || commenting}
+      {...(commenting
+        ? { onAddComment: addComment, onDeleteComment: deleteComment }
+        : {})}
+    />
+  );
+
+  const liveBody =
+    compareRevisionId === null ? (
+      renderLiveEditor(undefined)
+    ) : (
+      <SkillRevisionComparison view={comparedRevisionView}>
+        {renderLiveEditor}
+      </SkillRevisionComparison>
+    );
+
   return (
     <>
       <SkillBodyToolbar
@@ -279,22 +307,7 @@ export const SkillBodyWorkspace = ({
           userId={user.id}
         />
       ) : (
-        <MarkdownHybridEditor
-          imagePolicy="data-only"
-          baseline={
-            comparedRevision.data === undefined
-              ? undefined
-              : toEditorMarkdown(comparedRevision.data.body)
-          }
-          comments={editorComments}
-          key={`live:${String(editorGeneration)}:${String(commenting)}`}
-          markdown={liveMarkdown}
-          onMarkdownChange={onPersistBody}
-          readOnly={!canManage || commenting}
-          {...(commenting
-            ? { onAddComment: addComment, onDeleteComment: deleteComment }
-            : {})}
-        />
+        liveBody
       )}
     </>
   );

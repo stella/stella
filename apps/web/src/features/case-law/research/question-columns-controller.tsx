@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
@@ -39,6 +40,7 @@ import {
   NO_QUESTION_ANSWERS,
   NO_QUESTION_COLUMNS,
   questionColumnSurface,
+  questionReads,
   questionRunSet,
 } from "@/features/case-law/research/question-columns.logic";
 import type {
@@ -60,6 +62,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
 
 type QuestionColumnsInput = {
   /**
@@ -151,7 +154,7 @@ export const useQuestionColumns = ({
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
   const [removing, setRemoving] = useState<QuestionColumn | null>(null);
 
-  const { data: columns } = useQuery({
+  const columnsQuery = useQuery({
     ...questionColumnsOptions({
       activeOrganizationId: activeOrganizationId ?? "",
     }),
@@ -160,7 +163,7 @@ export const useQuestionColumns = ({
   // Sorted, so the same page asks the same cache question whatever order the
   // rows arrived in.
   const decisionIds = [...pageDecisionIds].toSorted();
-  const { data: answers } = useQuery({
+  const answersQuery = useQuery({
     ...questionAnswersOptions({
       activeOrganizationId: activeOrganizationId ?? "",
       decisionIds,
@@ -168,14 +171,24 @@ export const useQuestionColumns = ({
     enabled: enabled && activeOrganizationId !== null && decisionIds.length > 0,
   });
 
+  const columnsView = useQueryView(columnsQuery);
+  const answersView = useQueryView(answersQuery);
+  const reads = questionReads({
+    columns: columnsView,
+    answers: decisionIds.length === 0 ? null : answersView,
+  });
+  const columns = reads.type === "ready" ? reads.columns : NO_QUESTION_COLUMNS;
+  const answers = reads.type === "ready" ? reads.answers : NO_QUESTION_ANSWERS;
+  const canRun = reads.type === "ready" && reads.notice === undefined;
+
   // Only what this search shows is drawn, run and searched; the rest of the
   // organization's questions are offered for adding.
   const { shown, addable } = questionsOnSearch({
-    library: columns ?? NO_QUESTION_COLUMNS,
+    library: columns,
     shownIds: shownQuestionIds,
   });
   const answersByKey = new Map<string, QuestionAnswer>();
-  for (const answer of answers ?? NO_QUESTION_ANSWERS) {
+  for (const answer of answers) {
     answersByKey.set(answerKey(answer.columnId, answer.decisionId), answer);
   }
 
@@ -224,6 +237,9 @@ export const useQuestionColumns = ({
 
   /** Ask for a run, or say there is nothing to ask; never run silently. */
   const askToRun = (column: QuestionColumn | null) => {
+    if (!canRun) {
+      return;
+    }
     const runSet = questionRunSet({
       answersByKey,
       ...(column === null ? {} : { columnId: column.id }),
@@ -267,52 +283,61 @@ export const useQuestionColumns = ({
   };
 
   return {
-    surface: questionColumnSurface({
-      // The same two answers that gated the reads above gate the controls: a
-      // surface that asks nothing draws no rail, so nothing reads the
-      // organization's columns to decide whether the rail is at its cap.
-      activeOrganizationId,
-      enabled,
-      answersByKey,
-      columns: shown,
-      addable,
-      onAddToSearch: (columnIds) => {
-        onShownQuestionIdsChange((shownIds) =>
-          withQuestionsOnSearch({
-            added: columnIds,
-            knownIds:
-              columns === undefined
-                ? null
-                : new Set(columns.map((known) => known.id)),
-            shownIds,
-          }),
-        );
-      },
-      grants,
-      isRunning: run.isPending,
-      onColumnAction,
-      onRetryAnswer: (column, decisionId) => {
-        detached(
-          run.mutateAsync({
-            force: true,
-            runSet: {
-              columnIds: [column.id],
-              decisionIds: [decisionId],
-              cells: 1,
+    surface:
+      enabled && activeOrganizationId !== null && reads.type !== "ready"
+        ? reads
+        : questionColumnSurface({
+            // The same two answers that gated the reads above gate the controls: a
+            // surface that asks nothing draws no rail, so nothing reads the
+            // organization's columns to decide whether the rail is at its cap.
+            activeOrganizationId,
+            enabled,
+            answersByKey,
+            columns: shown,
+            addable,
+            onAddToSearch: (columnIds) => {
+              onShownQuestionIdsChange((shownIds) =>
+                withQuestionsOnSearch({
+                  added: columnIds,
+                  knownIds:
+                    reads.type === "ready"
+                      ? new Set(columns.map((known) => known.id))
+                      : null,
+                  shownIds,
+                }),
+              );
             },
+            grants: { ...grants, run: grants.run && canRun },
+            ...(reads.type === "ready" && reads.notice !== undefined
+              ? { readNotice: reads.notice }
+              : {}),
+            isRunning: run.isPending,
+            onColumnAction,
+            onRetryAnswer: (column, decisionId) => {
+              if (!canRun) {
+                return;
+              }
+              detached(
+                run.mutateAsync({
+                  force: true,
+                  runSet: {
+                    columnIds: [column.id],
+                    decisionIds: [decisionId],
+                    cells: 1,
+                  },
+                }),
+                "case-law-questions.retry-answer",
+              );
+            },
+            onShowPassage,
+            suggestion: { ...search, decisionIds: pageDecisionIds },
           }),
-          "case-law-questions.retry-answer",
-        );
-      },
-      onShowPassage,
-      suggestion: { ...search, decisionIds: pageDecisionIds },
-    }),
     editing,
     onEditingChange: setEditing,
     pendingRun,
     onCancelRun: () => setPendingRun(null),
     onConfirmRun: () => {
-      if (pendingRun === null) {
+      if (pendingRun === null || !canRun) {
         return;
       }
       detached(
@@ -343,6 +368,25 @@ export const useQuestionColumns = ({
  * organization gets the add-question trigger alone, because there is no column
  * of theirs to answer or edit yet.
  */
+const QuestionReadError = ({ retry }: { retry: () => Promise<unknown> }) => {
+  const t = useTranslations();
+  return (
+    <div
+      role="alert"
+      className="text-muted-foreground flex items-center gap-2 text-xs"
+    >
+      {t("common.somethingWentWrong")}
+      <Button
+        onClick={() => detached(retry(), "case-law-questions.retry-read")}
+        size="sm"
+        variant="ghost"
+      >
+        {t("common.retry")}
+      </Button>
+    </div>
+  );
+};
+
 export const QuestionColumnControls = ({
   controller,
 }: {
@@ -351,12 +395,30 @@ export const QuestionColumnControls = ({
   const t = useTranslations();
   const { editing, pendingRun, removing, surface } = controller;
 
-  if (surface.type !== "available") {
-    return <AddQuestionColumn surface={surface} triggerVariant="labelled" />;
+  switch (surface.type) {
+    case "pending":
+      return (
+        <div role="status" aria-label={t("common.loading")}>
+          <Skeleton className="h-7 w-32" />
+        </div>
+      );
+    case "error":
+      return <QuestionReadError retry={surface.retry} />;
+    case "hidden":
+    case "gated":
+      return <AddQuestionColumn surface={surface} triggerVariant="labelled" />;
+    case "available":
+      break;
+    default:
+      surface satisfies never;
+      return panic("Unhandled question controls state");
   }
 
   return (
     <>
+      {surface.readNotice !== undefined && (
+        <QuestionReadError retry={surface.readNotice.retry} />
+      )}
       <AddQuestionColumn surface={surface} triggerVariant="labelled" />
       {surface.grants.run && surface.columns.length > 0 && (
         <Button
@@ -418,7 +480,7 @@ export const QuestionColumnControls = ({
               {t("common.cancel")}
             </AlertDialogClose>
             <Button
-              disabled={surface.isRunning}
+              disabled={surface.isRunning || !surface.grants.run}
               onClick={controller.onConfirmRun}
             >
               {t("caseLaw.research.runConfirm")}
