@@ -17,6 +17,38 @@ const deferred = () => {
   return { promise, resolve: complete };
 };
 
+test("nested same-phase operations share one span and stay within wall time", async () => {
+  for (const phase of ["action", "oracle"] as const) {
+    let time = 0;
+    const profile = createChatHarnessProfile("same-phase.test.ts", {
+      now: () => time,
+    });
+    const result = await profile.measure(phase, async () => {
+      time = 2;
+      const value = await profile.measure(phase, async () => {
+        time = 4;
+        return await profile.measure(phase, async () => {
+          profile.logger.logQuery("select 1", []);
+          time = 6;
+          return 42;
+        });
+      });
+      time = 10;
+      return value;
+    });
+    expect(result).toBe(42);
+    const summary = profile.summary();
+    const total = summary.phases.find((entry) => entry.phase === phase);
+    expect(total).toMatchObject({
+      calls: 1,
+      inclusiveMs: 10,
+      selfMs: 10,
+      statements: 1,
+    });
+    expect(total?.inclusiveMs).toBeLessThanOrEqual(summary.elapsedMs);
+  }
+});
+
 test("nested SQL belongs once to its closest phase while the shared counter remains accurate", async () => {
   const profile = createChatHarnessProfile("nested.test.ts");
   await runWithQueryCounter(async () => {

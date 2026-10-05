@@ -92,6 +92,9 @@ export const createChatHarnessProfile = (
     operation: () => Promise<T>,
   ): Promise<T> => {
     const parent = closestActiveSpan();
+    if (parent?.phase === phase) {
+      return await operation();
+    }
     const began = now();
     if (parent !== undefined && parent.activeChildren++ === 0) {
       parent.childBusyStarted = began;
