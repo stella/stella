@@ -41,6 +41,7 @@
     "./entity-options": "./src/entity-options.ts",
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
+    "./legal-citation-links": "./src/legal-citation-links.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./legislation-status": "./src/legislation-status.ts",
     "./legislation-publication": "./src/legislation-publication.ts",

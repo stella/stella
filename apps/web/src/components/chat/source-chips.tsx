@@ -8,13 +8,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import {
-  type CaseLawDecisionSourceReference,
-  useExternalSourceStore,
-} from "@/components/chat/external-source-store";
+import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import type {
   ExternalSourceEntry,
@@ -25,9 +22,7 @@ import {
   collectSourceDocuments,
   dedupeExternalSources,
 } from "@/components/chat/source-chips.logic";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { ReferenceIcon } from "@/components/references/reference-chip";
-import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
@@ -127,7 +122,7 @@ export const SourceChips = ({
         />
       ))}
       {uniqueExternalSourcesWithIcons.map((source) => (
-        <ExternalSourceChip
+        <PublisherSourceChip
           key={`${messageId}-external-source-${source.url}`}
           source={source}
           workspaceId={workspaceId ?? null}
@@ -167,6 +162,8 @@ const collectSourceChipEntries = ({
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
+        appUrl: mcpToolInfo ? undefined : source.appUrl,
+        sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
         connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
         sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,
       });
@@ -214,55 +211,6 @@ const SourceIcon = ({
   />
 );
 
-const CaseLawDecisionSourceChip = ({
-  decision,
-}: {
-  decision: CaseLawDecisionSourceReference;
-}) => {
-  const { open } = useOpenDecisionTab();
-  return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        "hover:bg-muted cursor-pointer",
-      )}
-      onClick={() =>
-        detached(
-          openCaseLawDecision({ type: "ref", ref: decision.decisionId }, open),
-          "source-chips.open-case-law-decision",
-        )
-      }
-      type="button"
-    >
-      <ReferenceIcon
-        reference={{
-          type: "decision",
-          locator: { type: "ref", ref: decision.decisionId },
-          anchorId: null,
-          label: decision.caseNumber,
-        }}
-      />
-      <BidiText as="span" className="max-w-[20ch] truncate">
-        {decision.caseNumber}
-      </BidiText>
-    </button>
-  );
-};
-
-const ExternalSourceChip = ({
-  source,
-  workspaceId,
-}: {
-  source: ExternalSourceEntry;
-  workspaceId: string | null;
-}) => {
-  if (source.caseLawDecision) {
-    return <CaseLawDecisionSourceChip decision={source.caseLawDecision} />;
-  }
-  return <PublisherSourceChip source={source} workspaceId={workspaceId} />;
-};
-
 const PublisherSourceChip = ({
   source,
   workspaceId,
@@ -275,41 +223,24 @@ const PublisherSourceChip = ({
   // requests to every cited host.
   const [faviconRequested, setFaviconRequested] = useState(false);
   const revealFavicon = () => setFaviconRequested(true);
-  const handleClick = () => {
-    useInspectorTabsStore.getState().openExternal({
-      connectorSlug: source.connectorSlug,
-      iconHref: source.iconHref,
-      label: source.title,
-      provider: source.provider,
-      snippet: source.snippet,
-      sourceToolName: source.sourceToolName,
-      text: source.text,
-      url: source.url,
-      workspaceId,
-    });
-  };
-
   return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        "hover:bg-muted cursor-pointer",
-      )}
-      onClick={handleClick}
+    <LegalCitationLink
+      appearance="tray"
+      externalIcon={
+        <ExternalSourceIcon
+          iconHref={source.iconHref}
+          loaded={faviconRequested}
+          url={source.sourceUrl ?? source.url}
+        />
+      }
+      interactive
       onFocus={revealFavicon}
       onMouseEnter={revealFavicon}
-      type="button"
+      source={source}
+      workspaceId={workspaceId}
     >
-      <ExternalSourceIcon
-        iconHref={source.iconHref}
-        loaded={faviconRequested}
-        url={source.url}
-      />
-      <BidiText as="span" className="max-w-[20ch] truncate">
-        {source.title}
-      </BidiText>
-    </button>
+      {source.title}
+    </LegalCitationLink>
   );
 };
 

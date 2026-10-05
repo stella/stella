@@ -55,6 +55,10 @@ const isHttpUrl = (value: unknown): value is string => {
     return false;
   }
 
+  if (safeHref.startsWith("/")) {
+    return true;
+  }
+
   try {
     const url = new URL(safeHref);
     return url.protocol === "https:" || url.protocol === "http:";
@@ -257,9 +261,13 @@ export const collectExternalSources = (
     return;
   }
 
+  const appUrl = getStringField(value, ["appUrl"]);
+  const publisherUrl = getStringField(value, ["source_url", "sourceUrl"]);
   const url = getStringField(value, [
     "url",
+    "source_url",
     "sourceUrl",
+    "appUrl",
     "pdfUrl",
     "rtfUrl",
     "registryUrl",
@@ -268,6 +276,11 @@ export const collectExternalSources = (
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
       sources.push({
+        appUrl: appUrl !== undefined ? sanitizeHref(appUrl) : undefined,
+        sourceUrl:
+          publisherUrl !== undefined && isHttpUrl(publisherUrl)
+            ? sanitizeHref(publisherUrl)
+            : undefined,
         businessRegistry: getBusinessRegistryReference(value, url),
         caseLawDecision: getCaseLawDecisionReference(value),
         url: safeUrl,
@@ -280,7 +293,7 @@ export const collectExternalSources = (
             "caseNumber",
             "ecli",
             "cite_as",
-          ]) ?? new URL(safeUrl).hostname,
+          ]) ?? (safeUrl.startsWith("/") ? safeUrl : new URL(safeUrl).hostname),
         provider: getStringField(value, [
           "provider",
           "source",
@@ -310,6 +323,8 @@ export const dedupeExternalSources = (
       source.url,
       existing
         ? {
+            appUrl: source.appUrl ?? existing.appUrl,
+            sourceUrl: source.sourceUrl ?? existing.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
             caseLawDecision: source.caseLawDecision ?? existing.caseLawDecision,
