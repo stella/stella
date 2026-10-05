@@ -19,6 +19,7 @@ import {
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -110,6 +111,10 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import {
+  CASE_LAW_COVERAGE_FIXTURE,
+  CASE_LAW_COVERAGE_EXPECTED,
+} from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -1435,6 +1440,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_matters",
       "search_across_matters",
       "search_case_law",
+      "case_law_coverage",
       "lookup_case_law",
       "read_content_across_matters",
       "read_case_law_decision",
@@ -1473,6 +1479,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "search",
       "fetch",
       "search_case_law",
+      "case_law_coverage",
       "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",
@@ -5045,6 +5052,103 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(0)).toMatchObject({
       eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    });
+  });
+
+  describe("case_law_coverage", () => {
+    const readCoverage = mock(async () => CASE_LAW_COVERAGE_FIXTURE);
+    const call = (
+      args: Record<string, unknown>,
+      readCaseLawCoverageHandler: NonNullable<
+        McpRequestContext["testDependencies"]
+      >["readCaseLawCoverageHandler"] = readCoverage,
+    ) =>
+      handleMcpToolCall({
+        args,
+        context: createContext({
+          testDependencies: { readCaseLawCoverageHandler },
+        }),
+        toolName: "case_law_coverage",
+      });
+
+    test("reports every jurisdiction with only public coverage facts and the data timestamp", async () => {
+      const result = await call({});
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toEqual(CASE_LAW_COVERAGE_EXPECTED);
+      expect(result.structuredContent).toHaveProperty(
+        "asOf",
+        CASE_LAW_COVERAGE_FIXTURE.generatedAt,
+      );
+      const uuid =
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu;
+      expect(JSON.stringify(CASE_LAW_COVERAGE_FIXTURE)).toMatch(uuid);
+      const walk = (value: unknown): void => {
+        if (typeof value === "string") {
+          expect(value).not.toMatch(uuid);
+          return;
+        }
+        if (value === null || typeof value !== "object") {
+          return;
+        }
+        for (const [key, entry] of Object.entries(value)) {
+          expect(key).not.toMatch(uuid);
+          walk(entry);
+        }
+      };
+      walk(result.structuredContent);
+    });
+
+    test("reads a localized country through the shared convention and filters to it", async () => {
+      const result = await call({ country: "Česká republika" });
+      expect(result.structuredContent).toMatchObject({
+        asOf: CASE_LAW_COVERAGE_EXPECTED.asOf,
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(0)],
+      });
+    });
+
+    test("reports held counts for a jurisdiction in preparation without invented dates or courts", async () => {
+      const result = await call({ country: "SK" });
+      expect(result.structuredContent).toMatchObject({
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(1)],
+      });
+    });
+
+    test("preserves unknown ranges and court breakdowns for an empty searchable jurisdiction", async () => {
+      const result = await call({ country: "EU" });
+      expect(result.structuredContent).toMatchObject({
+        countries: [CASE_LAW_COVERAGE_EXPECTED.countries.at(2)],
+      });
+    });
+
+    test("returns a typed admission miss for a recognized country without coverage", async () => {
+      expectErrorEnvelope(await call({ country: "Germany" }), {
+        code: "not_found",
+        message: "Case-law country not found",
+        hint: "Pass one of the coverage country codes: CZE, SVK, EU, or omit country for all jurisdictions.",
+      });
+    });
+
+    test("asks for clarification when no country matches the spelling", async () => {
+      const result = await call({ country: "XAA" });
+      expect(validationEnvelope(result)["code"]).toBe("validation_error");
+      expect(validationEnvelope(result)["issues"]).toEqual([
+        {
+          path: "country",
+          message: `"XAA" is not a country code, one of ${CASE_LAW_JURISDICTIONS.join(", ")}.`,
+        },
+      ]);
+    });
+
+    test("surfaces unavailable coverage as a retryable typed failure", async () => {
+      expectErrorEnvelope(
+        await call({}, async () => ({ message: "Coverage is unavailable" })),
+        {
+          code: "upstream_unavailable",
+          message: "Coverage is unavailable",
+          hint: "Retry case_law_coverage later.",
+          retryable: true,
+        },
+      );
     });
   });
 

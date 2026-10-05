@@ -313,6 +313,42 @@
   },
   {
     "cli": {
+      "command": ["case-law", "coverage"],
+      "scope": "read",
+      "itemsKey": "countries",
+      "paginationless": true
+    },
+    "name": "case_law_coverage",
+    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": ["AUT", "CZE", "EU", "HUN", "POL", "SVK", "USA"],
+              "tool": "case_law_coverage"
+            }
+          }
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read case-law coverage",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["case-law", "lookup"],
       "scope": "read",
       "itemsKey": "items"

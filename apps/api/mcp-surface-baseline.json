@@ -6,6 +6,11 @@
     "law": 1188
   },
   "tools": {
+    "case_law_coverage": {
+      "anonymized": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527},
+      "default": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527},
+      "law": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527}
+    },
     "check_counterparty": {
       "default": {"title": 18, "description": 809, "inputSchema": 3772, "outputSchema": 3998, "annotations": 95, "payloadUtf8Bytes": 8798}
     },
@@ -53,7 +58,7 @@
       "law": {"title": 5, "description": 363, "inputSchema": 512, "outputSchema": 549, "annotations": 83, "payloadUtf8Bytes": 1602}
     },
     "fill_template": {
-      "default": {"title": 13, "description": 485, "inputSchema": 970, "outputSchema": 2129, "annotations": 114, "payloadUtf8Bytes": 3809}
+      "default": {"title": 13, "description": 485, "inputSchema": 970, "outputSchema": 2184, "annotations": 114, "payloadUtf8Bytes": 3864}
     },
     "get_usage": {
       "anonymized": {"title": 9, "description": 259, "inputSchema": 76, "outputSchema": 795, "annotations": 87, "payloadUtf8Bytes": 1320},
@@ -127,7 +132,7 @@
       "law": {"title": 30, "description": 772, "inputSchema": 684, "outputSchema": 1082, "annotations": 108, "payloadUtf8Bytes": 2776}
     },
     "manage_organization": {
-      "default": {"title": 19, "description": 241, "inputSchema": 2035, "outputSchema": 601, "annotations": 120, "payloadUtf8Bytes": 3120}
+      "default": {"title": 19, "description": 187, "inputSchema": 2179, "outputSchema": 639, "annotations": 120, "payloadUtf8Bytes": 3248}
     },
     "open_document_version_upload": {
       "default": {"title": 28, "description": 216, "inputSchema": 208, "outputSchema": 200, "annotations": 130, "payloadUtf8Bytes": 993},
@@ -208,7 +213,7 @@
       "documents": {"title": 13, "description": 516, "inputSchema": 1455, "outputSchema": 133, "annotations": 115, "payloadUtf8Bytes": 2330}
     },
     "save_filled_template": {
-      "default": {"title": 20, "description": 391, "inputSchema": 1437, "outputSchema": 1951, "annotations": 121, "payloadUtf8Bytes": 4025}
+      "default": {"title": 20, "description": 391, "inputSchema": 1437, "outputSchema": 2006, "annotations": 121, "payloadUtf8Bytes": 4080}
     },
     "save_matter": {
       "default": {"title": 11, "description": 328, "inputSchema": 891, "outputSchema": 157, "annotations": 113, "payloadUtf8Bytes": 1596}
