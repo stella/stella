@@ -143,6 +143,7 @@ marketing:reshoot` re-records only the stale captures (see
    records `main/heavy` on the same commit. If the run is cancelled because
    a newer staging dispatch replaced it while it waited, dispatch it again
    with the same `sha`; tagging refuses until `staging/verified` is green.
+
 7. Tag the commit once both statuses are green:
 
    ```bash
@@ -158,6 +159,7 @@ marketing:reshoot` re-records only the stale captures (see
    commit), apply it with `bun run changeset:version` plus
    `bun run changeset --empty` and release from the commit that merges it.
    The tag then triggers `release.yml`.
+
 8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
    and promotes stable releases automatically; the release is published and
