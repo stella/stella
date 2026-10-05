@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { asc, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { systemAuditRuns } from "@/api/db/schema";
@@ -95,7 +95,17 @@ describe.skipIf(!enabled)("operator registration database pages", () => {
                 createdAt: new Date(NOW),
               },
             ]);
-            const expected = ids.slice(0, 4).map((id) => `${id}@example.test`);
+            // Equal timestamps tie-break on id in the database collation,
+            // which can differ from JavaScript's code-unit order.
+            const tied = await tx
+              .select({ id: user.id })
+              .from(user)
+              .where(inArray(user.id, ids.slice(0, 3)))
+              .orderBy(asc(user.id));
+            const expected = [
+              ...tied.map(({ id }) => id),
+              ...ids.slice(3, 4),
+            ].map((id) => `${id}@example.test`);
             const observed: string[] = [];
             let cursor: string | undefined;
             let pageCount = 0;
