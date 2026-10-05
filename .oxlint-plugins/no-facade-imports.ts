@@ -27,6 +27,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/schema",
   "@/api/db/schema-validators",
   "@/api/db/scoped",
+  "@/api/db/scoped-feature-access",
   "@/api/db/shared-pool-connection-settings",
   "@/api/db/shared-pool-timeout-policy",
   "@/api/db/shared-pool-timeouts",

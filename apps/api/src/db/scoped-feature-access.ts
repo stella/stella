@@ -70,3 +70,19 @@ export const resolveScopedFeatureIds = async ({
       }).status === "enabled",
   );
 };
+
+/** Admission reads the feature decision installed by the authenticated scope. */
+export const isScopedFeatureEnabled = async (
+  tx: Pick<Transaction, "execute">,
+  featureId: string,
+): Promise<boolean> => {
+  const row = executedRows(
+    await tx.execute(sql`SELECT
+    coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? ${featureId} AS enabled
+  `),
+  ).at(0);
+  if (!isRecord(row) || typeof row["enabled"] !== "boolean") {
+    return panic("Feature scope requires a boolean decision");
+  }
+  return row["enabled"];
+};

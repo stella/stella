@@ -20,8 +20,10 @@ export const featurePrerequisiteClosure = (
       return panic("Feature access requires a registered feature");
     }
     active.add(id);
-    for (const prerequisite of definition.prerequisites ?? []) {
-      visit(prerequisite);
+    if (definition.prerequisites !== undefined) {
+      for (const prerequisite of definition.prerequisites) {
+        visit(prerequisite);
+      }
     }
     active.delete(id);
     completed.add(id);

@@ -263,6 +263,11 @@ export type McpToolDefinition = McpToolAccessBranch &
      */
     feature?: DeploymentFeatureFlag;
     featureId?: FeatureId;
+    featureInput?: {
+      featureId: FeatureId;
+      projectInputSchema: (schema: McpToolInputSchema) => McpToolInputSchema;
+      unavailableDescription: string;
+    };
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
