@@ -5422,6 +5422,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",

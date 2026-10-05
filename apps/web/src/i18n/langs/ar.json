@@ -5422,6 +5422,7 @@
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",

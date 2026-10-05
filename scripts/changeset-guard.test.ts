@@ -18,6 +18,7 @@ import {
   checkChangesetPackages,
   decideChangesetGate,
   findCatalogInputs,
+  withoutReleasedPackages,
   isChangesetEntry,
   loadChangesetPolicy,
   parseChangesetPolicy,
@@ -500,6 +501,15 @@ describe("catalog versions a published package ships", () => {
         entry: "react@catalog:react19",
       },
     ]);
+  });
+
+  test("a catalog bump the range already released needs no changeset", () => {
+    expect(withoutReleasedPackages(jszipBump, new Set([DOCX_UTILS]))).toEqual(
+      [],
+    );
+    expect(withoutReleasedPackages(jszipBump, new Set(["@stll/ui"]))).toEqual(
+      jszipBump,
+    );
   });
 
   test("rejects a shipped catalog bump that no changeset names, naming the package and entry", () => {
