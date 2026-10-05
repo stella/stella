@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import {
+  CLIENT_MATTER_ADMIN_ROLES,
+  ORGANIZATION_MANAGEMENT_ROLES,
+} from "@stll/permissions";
+
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 import {
   SETTING_ORGANIZATION_ID,
@@ -10,7 +15,7 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
-import { CLIENT_MATTER_ADMIN_ROLES } from "@/api/lib/member-roles";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS } from "@/api/tests/pglite-test-db";
 import {
   getRlsFixture,
@@ -29,6 +34,19 @@ import {
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
+
+/** The literal lists Postgres prints for `role IN (...)` in a definition. */
+const roleListsIn = (definition: string): Set<string>[] =>
+  [...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu)].map(
+    ([, list = ""]) =>
+      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role = ""]) => role)),
+  );
+
+const isSameSet = (
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean =>
+  left.size === right.size && [...left].every((value) => right.has(value));
 
 type TablePrivilege = {
   table_name: string;
@@ -245,14 +263,39 @@ describe("policy coverage", () => {
       ) AS definition
     `);
     const definition = result.rows.at(0)?.definition ?? "";
-    const roleLists = [
-      ...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu),
-    ].map(
-      ([, list = ""]) =>
-        new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role]) => role)),
+
+    expect(roleListsIn(definition)).toEqual([
+      new Set(CLIENT_MATTER_ADMIN_ROLES),
+    ]);
+  });
+
+  test("every policy role list is a named role set", async () => {
+    const namedSets = [
+      new Set(ORGANIZATION_MANAGEMENT_ROLES),
+      new Set(CLIENT_MATTER_ADMIN_ROLES),
+    ];
+    const policies = await fetchStellaPolicies(testDb);
+    const roleLists = policies.flatMap((policy) =>
+      [policy.using_expr, policy.check_expr]
+        .filter((expression) => expression !== null)
+        .flatMap((expression) => roleListsIn(expression))
+        // Other role columns (a chat message's author) are not member roles.
+        .filter((roles) => [...roles].some((role) => isMemberRole(role)))
+        .map((roles) => ({
+          policy: `${policy.table_name}.${policy.policy_name}`,
+          roles,
+        })),
     );
 
-    expect(roleLists).toEqual([new Set(CLIENT_MATTER_ADMIN_ROLES)]);
+    // The extraction must see the management policies, or a parser that
+    // matches nothing would pass vacuously.
+    expect(roleLists.length).toBeGreaterThan(0);
+    for (const { policy, roles } of roleLists) {
+      expect({
+        policy,
+        named: namedSets.some((named) => isSameSet(named, roles)),
+      }).toEqual({ policy, named: true });
+    }
   });
 
   test("every table with workspace_id has workspace policies", async () => {

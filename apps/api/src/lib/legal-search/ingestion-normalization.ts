@@ -9,6 +9,10 @@ import {
   type DecisionIdentifier,
   type DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
+import {
+  isDocumentAst,
+  withProjectedPlainText,
+} from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
@@ -21,10 +25,6 @@ import {
   type DecisionTextFields,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
-import {
-  isDocumentAst,
-  withProjectedPlainText,
-} from "@/api/lib/case-law/document-ast";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   UNPERSISTABLE_DECISION_FIELDS,

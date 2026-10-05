@@ -8,9 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Let the active release mutation finish; newer main pushes replace obsolete
-  # pending runs, and the shared workflow rejects stale source revisions.
-  group: release-pr-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions: {}

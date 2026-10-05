@@ -946,7 +946,8 @@
       "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
-      "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
+      "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
     }
   },
   "catalogue": {
@@ -1856,6 +1857,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
     "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",
@@ -5421,6 +5423,7 @@
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
