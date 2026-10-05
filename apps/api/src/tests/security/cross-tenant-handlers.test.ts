@@ -513,30 +513,7 @@ const savedSearchCriteria = (
 });
 
 const isolationCases: IsolationCase[] = [
-  {
-    name: "desktop presence across organizations",
-    runAAgainstB: async ({ workspaceA }) =>
-      await runHandler(readDesktopPresence, workspaceA, {}),
-    runBPositive: async ({ sameUserWorkspaceB }) =>
-      await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
-    expectDenied: (result) => expect(result).toEqual({ type: "none" }),
-    expectPositive: (result) =>
-      expect(result).toMatchObject({
-        desktop: { version: "0.9.48", protocol: 1 },
-      }),
-  },
-  {
-    name: "desktop presence in the same organization with another owner",
-    runAAgainstB: async ({ workspaceB }) =>
-      await runHandler(readDesktopPresence, workspaceB, {}),
-    runBPositive: async ({ sameUserWorkspaceB }) =>
-      await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
-    expectDenied: (result) => expect(result).toEqual({ type: "none" }),
-    expectPositive: (result) =>
-      expect(result).toMatchObject({
-        desktop: { version: "0.9.48", protocol: 1 },
-      }),
-  },
+  ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -2326,6 +2303,35 @@ const runHandler = async <TContext>(
     return error;
   }
 };
+
+function desktopPresenceIsolationCases(): IsolationCase[] {
+  return [
+    {
+      name: "desktop presence across organizations",
+      runAAgainstB: async ({ workspaceA }) =>
+        await runHandler(readDesktopPresence, workspaceA, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+    {
+      name: "desktop presence in the same organization with another owner",
+      runAAgainstB: async ({ workspaceB }) =>
+        await runHandler(readDesktopPresence, workspaceB, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
 
 function expectStatus(expectedStatus: number): (result: unknown) => void {
   return (result: unknown): void => {

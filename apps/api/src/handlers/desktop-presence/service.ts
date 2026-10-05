@@ -10,6 +10,10 @@ import type {
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 // Heartbeats overwrite this technical observation; they create no history or audit rows.
 type ReportDesktopPresenceOptions = {
@@ -51,10 +55,35 @@ export const reportDesktopPresence = async ({
       });
   });
 
-type DesktopObservation = Pick<
-  typeof desktopPresence.$inferSelect,
-  "version" | "protocol" | "lastSeenAt"
+type DesktopPresenceRow = typeof desktopPresence.$inferSelect;
+type DesktopProjection = Extract<
+  DesktopPresence,
+  { desktop: unknown }
+>["desktop"];
+
+const UNPROJECTED_DESKTOP_PRESENCE_COLUMNS = [
+  // Ownership scopes the query and is never part of the presence response.
+  "userId",
+  "organizationId",
+  // Installation identity selects the observation, but is not exposed to the browser.
+  "desktopId",
+] as const satisfies readonly (keyof DesktopPresenceRow)[];
+
+type MissingDesktopPresenceColumn = UnprojectedColumns<
+  DesktopPresenceRow,
+  DesktopProjection,
+  (typeof UNPROJECTED_DESKTOP_PRESENCE_COLUMNS)[number]
 >;
+type UnexpectedDesktopPresenceColumn = UnbackedProjectionKeys<
+  DesktopPresenceRow,
+  DesktopProjection,
+  (typeof UNPROJECTED_DESKTOP_PRESENCE_COLUMNS)[number]
+>;
+
+true satisfies MissingDesktopPresenceColumn extends never ? true : never;
+true satisfies UnexpectedDesktopPresenceColumn extends never ? true : never;
+
+type DesktopObservation = Pick<DesktopPresenceRow, keyof DesktopProjection>;
 
 export const classifyDesktopPresence = (
   row: DesktopObservation | undefined,

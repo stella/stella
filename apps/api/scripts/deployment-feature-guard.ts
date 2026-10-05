@@ -61,6 +61,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
   [
+    "apps/api/src/handlers/desktop-presence/routes.ts",
+    "Desktop account presence supports handoff on every deployment",
+  ],
+  [
     "apps/api/src/handlers/sanctions/public-routes.ts",
     "Public sanctions search is available on every deployment",
   ],
