@@ -23,6 +23,7 @@ import readNavigation from "@/api/handlers/workspaces/read-navigation";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -111,7 +112,7 @@ const withAccess = async <T>(
         },
       ],
     },
-  } as const;
+  } satisfies Record<typeof status, FeatureAccessGrants>;
   env.API_FEATURE_ACCESS_GRANTS = grantsByStatus[status];
   try {
     const resolved = await context().safeDb(

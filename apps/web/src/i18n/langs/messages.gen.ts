@@ -267,6 +267,7 @@ type Messages = {
     "runs": {
       "back": "All documents";
       "errors": {
+        "accessRevoked": "Verification stopped because access is unavailable.";
         "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.";
         "enqueueFailed": "The verification could not be started. Try again.";
         "extractionFailed": "The claims in this document could not be extracted.";

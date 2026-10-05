@@ -12,7 +12,7 @@ import latest from "@/api/handlers/lists/verifications/latest/list";
 import list from "@/api/handlers/lists/verifications/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { RootHandlerConfig } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -108,8 +108,9 @@ describe("verification handler access admission", () => {
         featureAccess: { featureId: "list-verification", type: "required" },
         permissions: { workspace: ["read"] },
         access: "read",
-        mcp: { type: "internal", reason: "list_verification" },
-      } satisfies RootHandlerConfig;
+        accountAccess: "sandbox",
+        mcp: { type: "internal", reason: "ui_navigation_state" },
+      } satisfies HandlerConfig;
       let executions = 0;
       const endpoint = createSafeRootHandler(
         config,

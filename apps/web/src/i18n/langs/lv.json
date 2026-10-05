@@ -264,6 +264,7 @@
     "runs": {
       "back": "Visi dokumenti",
       "errors": {
+        "accessRevoked": "Pārbaude tika apturēta, jo piekļuve nav pieejama.",
         "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
         "enqueueFailed": "Neizdevās sākt pārbaudi. Mēģiniet vēlreiz.",
         "extractionFailed": "Neizdevās iegūt šajā dokumentā ietvertos apgalvojumus.",

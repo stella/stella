@@ -264,6 +264,7 @@
     "runs": {
       "back": "Todos os documentos",
       "errors": {
+        "accessRevoked": "A verificação foi interrompida porque o acesso não está disponível.",
         "aiUnavailable": "Nenhum modelo de IA está disponível para verificar documentos. Verifique as configurações de IA da organização.",
         "enqueueFailed": "Não foi possível iniciar a verificação. Tente novamente.",
         "extractionFailed": "Não foi possível extrair as alegações deste documento.",

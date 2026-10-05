@@ -212,7 +212,7 @@ export type TransitionResult<TId, TStatus> =
   | { type: "transitioned"; row: { id: TId; status: TStatus } }
   | { type: "stale" };
 
-type TransitionTransaction = {
+export type TransitionTransaction = {
   execute: (
     query: SQL,
   ) => PromiseLike<

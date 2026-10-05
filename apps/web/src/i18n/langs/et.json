@@ -264,6 +264,7 @@
     "runs": {
       "back": "Kõik dokumendid",
       "errors": {
+        "accessRevoked": "Kontroll peatati, sest juurdepääs pole saadaval.",
         "aiUnavailable": "Dokumentide kontrollimiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
         "enqueueFailed": "Kontrolli ei õnnestunud käivitada. Proovige uuesti.",
         "extractionFailed": "Selle dokumendi väiteid ei õnnestunud eraldada.",

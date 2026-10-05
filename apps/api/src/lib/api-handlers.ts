@@ -1199,6 +1199,15 @@ const createSafeScopedHandler = <
         });
       }
 
+      if (requiresStandardAccount(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(ctx.user.email);
+        if (Result.isError(accountAccess)) {
+          return toSafeStatusResponse(403, {
+            code: "account_access_unavailable",
+            message: "This operation is unavailable for this account.",
+          });
+        }
+      }
       const featureAccess = config.featureAccess;
       if (featureAccess !== undefined) {
         const principal = {
@@ -1278,15 +1287,6 @@ const createSafeScopedHandler = <
         }
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
-        }
-      }
       // A handler that declares AI usage must not run when this request could
       // not read the org's stored config, or the org is barred from the
       // instance provider: `ctx.orgAIConfig` is null there, and resolving a

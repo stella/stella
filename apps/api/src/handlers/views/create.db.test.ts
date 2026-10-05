@@ -14,7 +14,7 @@ import {
   WORKSPACE_VIEWS_CORRESPONDENCE_INDEX,
   workspaceViews,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -90,6 +90,7 @@ const runCreate = async (
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
     route: "/test/views/create",
     safeDb,
+    scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     workspaceId: ids.wsA1,

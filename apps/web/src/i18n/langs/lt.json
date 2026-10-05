@@ -264,6 +264,7 @@
     "runs": {
       "back": "Visi dokumentai",
       "errors": {
+        "accessRevoked": "Tikrinimas sustabdytas, nes prieiga nepasiekiama.",
         "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
         "enqueueFailed": "Nepavyko pradėti tikrinimo. Bandykite dar kartą.",
         "extractionFailed": "Nepavyko išskirti šiame dokumente esančių teiginių.",

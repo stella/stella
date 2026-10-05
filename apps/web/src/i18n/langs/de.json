@@ -264,6 +264,7 @@
     "runs": {
       "back": "Alle Dokumente",
       "errors": {
+        "accessRevoked": "Die Überprüfung wurde beendet, da kein Zugriff verfügbar ist.",
         "aiUnavailable": "Für die Dokumentenprüfung ist kein KI-Modell verfügbar. Prüfen Sie die KI-Einstellungen der Organisation.",
         "enqueueFailed": "Die Prüfung konnte nicht gestartet werden. Versuchen Sie es erneut.",
         "extractionFailed": "Die Behauptungen in diesem Dokument konnten nicht extrahiert werden.",

@@ -264,6 +264,7 @@
     "runs": {
       "back": "Všetky dokumenty",
       "errors": {
+        "accessRevoked": "Overovanie bolo zastavené, pretože prístup nie je dostupný.",
         "aiUnavailable": "Na overenie dokumentov nie je dostupný žiadny model AI. Skontrolujte nastavenia AI organizácie.",
         "enqueueFailed": "Overenie sa nepodarilo spustiť. Skúste to znova.",
         "extractionFailed": "Tvrdenia v tomto dokumente sa nepodarilo extrahovať.",

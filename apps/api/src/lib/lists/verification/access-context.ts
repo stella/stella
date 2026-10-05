@@ -5,10 +5,10 @@ import type { Transaction } from "@/api/db/root";
 import { workspaces, workspaceMembers } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
-import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessResult } from "@/api/lib/lists/verification/access";
 
@@ -33,7 +33,7 @@ type ResolveListVerificationAccessArgs = {
   tx: Pick<Transaction, "select">;
   organizationId: SafeId<"organization">;
   userId: string | null;
-  grants?: FeatureAccessGrants;
+  grants?: FeatureAccessGrants | undefined;
   workspaceId?: SafeId<"workspace">;
 };
 

@@ -21,8 +21,8 @@ import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 
 export const operationProposesAvtLayout = (body: unknown): boolean =>
   isRecord(body) &&
-  (body.targetType === "avt" ||
-    (isRecord(body.layout) && body.layout.type === "avt"));
+  (body["targetType"] === "avt" ||
+    (isRecord(body["layout"]) && body["layout"]["type"] === "avt"));
 
 type OperationUsesAvtLayoutArgs = {
   tx: Pick<Transaction, "select">;
@@ -33,7 +33,7 @@ type OperationUsesAvtLayoutArgs = {
 
 /** Resolves conditional access for execution and validation-only transports. */
 export const isAvtViewLayout = (layout: unknown): boolean =>
-  isRecord(layout) && layout.type === "avt";
+  isRecord(layout) && layout["type"] === "avt";
 
 export const operationUsesAvtLayout = async ({
   tx,
@@ -45,10 +45,10 @@ export const operationUsesAvtLayout = async ({
     return true;
   }
   let viewId: string | undefined;
-  if (isRecord(params) && typeof params.viewId === "string") {
-    viewId = params.viewId;
-  } else if (isRecord(body) && typeof body.viewId === "string") {
-    viewId = body.viewId;
+  if (isRecord(params) && typeof params["viewId"] === "string") {
+    viewId = params["viewId"];
+  } else if (isRecord(body) && typeof body["viewId"] === "string") {
+    viewId = body["viewId"];
   }
   if (viewId === undefined) {
     return false;
@@ -124,10 +124,10 @@ export const avtLayoutVisibilityCondition = (
     : sql`${layout}->>'type' is distinct from 'avt'`;
 
 const projectViewSchema = (schema: TSchema): TSchema => {
-  if (Array.isArray(schema.enum)) {
+  if (Array.isArray(schema["enum"])) {
     return {
       ...schema,
-      enum: schema.enum.filter((value: unknown) => value !== "avt"),
+      enum: schema["enum"].filter((value: unknown) => value !== "avt"),
     };
   }
   if (KindGuard.IsUnion(schema)) {
@@ -139,8 +139,8 @@ const projectViewSchema = (schema: TSchema): TSchema => {
             !(KindGuard.IsLiteral(branch) && branch.const === "avt") &&
             !(
               KindGuard.IsObject(branch) &&
-              KindGuard.IsLiteral(branch.properties.type) &&
-              branch.properties.type.const === "avt"
+              KindGuard.IsLiteral(branch.properties["type"]) &&
+              branch.properties["type"].const === "avt"
             ),
         )
         .map(projectViewSchema),
@@ -190,11 +190,11 @@ const usesAvtFeature = async ({
   if (operationProposesAvtLayout(body)) {
     return true;
   }
-  if (isRecord(params) && typeof params.templateId === "string") {
+  if (isRecord(params) && typeof params["templateId"] === "string") {
     if (userId === null) {
       return false;
     }
-    const templateId = params.templateId;
+    const templateId = params["templateId"];
     const template = (
       await scopedDb((tx) =>
         tx
@@ -215,9 +215,9 @@ const usesAvtFeature = async ({
   if (
     workspaceId !== undefined &&
     isRecord(body) &&
-    Array.isArray(body.viewIds)
+    Array.isArray(body["viewIds"])
   ) {
-    const viewIds = body.viewIds.filter((id) => typeof id === "string");
+    const viewIds = body["viewIds"].filter((id) => typeof id === "string");
     if (viewIds.length === 0) {
       return false;
     }
@@ -230,7 +230,10 @@ const usesAvtFeature = async ({
             eq(workspaceViews.workspaceId, workspaceId),
             inArray(
               workspaceViews.id,
-              viewIds.map((id) => sql`${id}`),
+              sql`(${sql.join(
+                viewIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
             ),
           ),
         ),

@@ -264,6 +264,7 @@
     "runs": {
       "back": "Wszystkie dokumenty",
       "errors": {
+        "accessRevoked": "Weryfikacja została zatrzymana, ponieważ dostęp jest niedostępny.",
         "aiUnavailable": "Do weryfikacji dokumentów nie jest dostępny żaden model AI. Sprawdź ustawienia AI organizacji.",
         "enqueueFailed": "Nie udało się rozpocząć weryfikacji. Spróbuj ponownie.",
         "extractionFailed": "Nie udało się wyodrębnić twierdzeń z tego dokumentu.",

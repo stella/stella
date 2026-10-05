@@ -264,6 +264,7 @@
     "runs": {
       "back": "Všechny dokumenty",
       "errors": {
+        "accessRevoked": "Ověřování bylo zastaveno, protože přístup není dostupný.",
         "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",
         "enqueueFailed": "Ověření se nepodařilo spustit. Zkuste to znovu.",
         "extractionFailed": "Tvrzení v tomto dokumentu se nepodařilo extrahovat.",

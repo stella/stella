@@ -77,7 +77,7 @@ describe("conditional status transitions", () => {
   test.each(["array", "rows"] as const)(
     "%s driver results preserve single, batch and stale transitions",
     async (shape) => {
-      for (const rows of [[], [{ id: "job", status: "failed" }]]) {
+      for (const rows of [[], [{ id: "job", status: "failed" as const }]]) {
         const tx = {
           execute: async () => (shape === "array" ? rows : { rows }),
           rollback,
@@ -89,22 +89,25 @@ describe("conditional status transitions", () => {
           id: "job",
           options: { from: ["running"], to: "failed" },
           recordTransitionAuditEvent: async (auditTx, row) => {
-            expect(auditTx).toBe(tx);
+            expect(auditTx === tx).toBe(true);
             audits.push(row);
           },
         });
-        expect(single).toEqual(
-          rows.length === 0
-            ? { type: "stale" }
-            : { type: "transitioned", row: rows.at(0) },
-        );
+        if (rows.length === 0) {
+          expect(single).toEqual({ type: "stale" });
+        } else {
+          expect(single).toEqual({
+            type: "transitioned",
+            row: { id: "job", status: "failed" },
+          });
+        }
         const batch = await transitionBatch({
           tx,
           spec,
           ids: ["job"],
           options: { from: ["running"], to: "failed" },
           recordTransitionAuditEvent: async (auditTx, changed) => {
-            expect(auditTx).toBe(tx);
+            expect(auditTx === tx).toBe(true);
             audits.push(changed);
           },
         });
@@ -430,7 +433,7 @@ test("a keyed batch binds every identifier and audits only changed rows once", a
       set: { description: "Closed" },
     },
     recordTransitionAuditEvent: async (auditTx, rows) => {
-      expect(auditTx).toBe(tx);
+      expect(auditTx === tx).toBe(true);
       expect(rows).toEqual([{ id: "first", status: "failed" }]);
       audits += 1;
     },
@@ -518,7 +521,7 @@ describe("multi-column lifecycles", () => {
         moves,
         set: { description: "Claimed" },
         recordTransitionAuditEvent: async (auditTx, row) => {
-          expect(auditTx).toBe(tx);
+          expect(auditTx === tx).toBe(true);
           audited.push(row);
         },
       }),

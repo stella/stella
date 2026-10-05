@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legalListClaims,
   legalListVerificationBlocks,
@@ -11,12 +10,17 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import type { TransitionTransaction } from "@/api/lib/db/transitions";
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+
+type VerificationTransaction = Parameters<AuditRecorder>[0] &
+  TransitionTransaction;
 
 const VERIFICATION_RUN_TRANSITIONS = defineTransitions(
   legalListVerificationRuns,
@@ -30,7 +34,7 @@ const VERIFICATION_RUN_TRANSITIONS = defineTransitions(
 );
 
 type VerificationTransitionAuditArgs = {
-  tx: Transaction;
+  tx: VerificationTransaction;
   run: {
     id: SafeId<"legalListVerificationRun">;
     organizationId: SafeId<"organization">;
@@ -74,7 +78,7 @@ export const recordVerificationAuditEvent = async ({
 };
 
 type CompleteVerificationRunArgs = {
-  tx: Transaction;
+  tx: VerificationTransaction;
   runId: SafeId<"legalListVerificationRun">;
   workspaceId: SafeId<"workspace">;
   blocks: readonly VerificationBlock[];
@@ -172,7 +176,7 @@ export const completeVerificationRun = async ({
 };
 
 type FailVerificationRunArgs = {
-  tx: Transaction;
+  tx: VerificationTransaction;
   run: {
     id: SafeId<"legalListVerificationRun">;
     workspaceId: SafeId<"workspace">;
