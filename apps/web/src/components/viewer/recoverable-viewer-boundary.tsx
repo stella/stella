@@ -192,7 +192,8 @@ class ViewerErrorBoundary extends Component<
     recovery: ViewerErrorRecovery;
     attempt: number;
   }) {
-    const area = `viewer:${this.props.surface}`;
+    // A telemetry area is a plain slug (`TELEMETRY_AREA` in posthog.ts).
+    const area = `viewer-${this.props.surface}`;
     getAnalytics().captureError(
       new ClientTelemetryError({
         area,
