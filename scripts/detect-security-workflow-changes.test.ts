@@ -1,7 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
@@ -198,7 +204,7 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   expect(detect("codeql", ["README.md", "source.ts"])).toBe("true");
 });
 
-test("migration coverage includes configured schema sources and excludes unrelated code", () => {
+test("migration coverage includes schema, runtime and check inputs and excludes unrelated code", () => {
   const config = readFileSync(
     new URL("../apps/api/drizzle.config.ts", import.meta.url),
     "utf-8",
@@ -219,6 +225,18 @@ test("migration coverage includes configured schema sources and excludes unrelat
     "apps/api/drizzle/20261001/migration.sql",
     "apps/api/src/db/schema/tables.ts",
     "apps/api/drizzle.config.ts",
+    "apps/api/src/db/migrate.ts",
+    "apps/api/src/db/shared-pool-timeouts.ts",
+    "apps/api/src/db/adaptive-backfill.test.ts",
+    "apps/api/src/lib/db/client.ts",
+    ".github/workflows/db-migrations.yml",
+    "scripts/detect-security-workflow-changes.sh",
+    "scripts/detect-security-workflow-changes.test.ts",
+    "scripts/rehearse-better-auth-constraint-retry.sh",
+    "scripts/fixtures/migration-example/input.sql",
+    ...readdirSync(import.meta.dirname)
+      .filter((entry) => entry.includes("migrat"))
+      .map((entry) => `scripts/${entry}`),
   ]) {
     expect(detect("migrations", [file]), file).toBe("true");
   }
@@ -226,11 +244,7 @@ test("migration coverage includes configured schema sources and excludes unrelat
     detect("migrations", [
       "apps/web/src/view.ts",
       "README.md",
-      "apps/api/src/db/shared-pool-timeouts.ts",
-      "apps/api/src/db/adaptive-backfill.test.ts",
-      "apps/api/src/lib/db/client.ts",
       "apps/api/src/server.ts",
-      "scripts/check-migration-safety.ts",
     ]),
   ).toBe("false");
 });
