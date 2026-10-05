@@ -23,3 +23,18 @@ test("an additional entity reader without the owner fails the census", () => {
     "fixture_entity_reader.entity_id requires the entity feature owner",
   ]);
 });
+
+test("an indirect projection reader without the owner fails the census", () => {
+  const reader = pgTable(
+    "fixture_projection_reader",
+    {
+      entityId: uuid("entity_id").references(
+        () => schema.searchDocuments.entityId,
+      ),
+    },
+    () => wsPolicies(),
+  );
+  expect(entityFeatureCoverageViolations([reader])).toEqual([
+    "fixture_projection_reader.entity_id requires the entity feature owner",
+  ]);
+});

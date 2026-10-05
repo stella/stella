@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import { env } from "@/api/env";
 import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { executedRows } from "@/api/lib/db/executed-rows";

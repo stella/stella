@@ -1,13 +1,50 @@
 import { getTableName } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 const ENTITY_RELATION_ALIASES = {
   entities: "e",
   entity_versions: "v",
   fields: "f",
 } as const;
-const ENTITY_RELATIONS = new Set(Object.keys(ENTITY_RELATION_ALIASES));
+type EntityRelation = keyof typeof ENTITY_RELATION_ALIASES;
+
+/** FK-equivalent identifiers retain their resource identity across projections. */
+const entityRelationsOf = (
+  column: AnyPgColumn,
+  visited = new Set<AnyPgColumn>(),
+): Set<EntityRelation> => {
+  const relations = new Set<EntityRelation>();
+  if (visited.has(column)) {
+    return relations;
+  }
+  visited.add(column);
+  const tableName = getTableName(column.table);
+  if (
+    column.name === "id" &&
+    (tableName === "entities" ||
+      tableName === "entity_versions" ||
+      tableName === "fields")
+  ) {
+    relations.add(tableName);
+    return relations;
+  }
+  for (const foreignKey of getTableConfig(column.table).foreignKeys) {
+    const reference = foreignKey.reference();
+    const index = reference.columns.indexOf(column);
+    if (index === -1) {
+      continue;
+    }
+    const parent = reference.foreignColumns.at(index);
+    if (parent === undefined) {
+      continue;
+    }
+    for (const relation of entityRelationsOf(parent, visited)) {
+      relations.add(relation);
+    }
+  }
+  return relations;
+};
 
 /** Schema-derived census: every app-readable entity relation carries its parent's fence. */
 export const entityFeatureCoverageViolations = (
@@ -36,16 +73,14 @@ export const entityFeatureCoverageViolations = (
     );
     const required =
       root === undefined
-        ? config.foreignKeys.flatMap((foreignKey) => {
-            const reference = foreignKey.reference();
-            return ENTITY_RELATIONS.has(getTableName(reference.foreignTable))
-              ? reference.columns.flatMap((column, index) =>
-                  reference.foreignColumns[index]?.name === "id"
-                    ? [{ column, target: getTableName(reference.foreignTable) }]
-                    : [],
-                )
-              : [];
-          })
+        ? config.columns.flatMap((column) =>
+            column.name === "id"
+              ? []
+              : [...entityRelationsOf(column)].map((target) => ({
+                  column,
+                  target,
+                })),
+          )
         : [{ column: root, target: undefined }];
     if (required.length === 0) {
       continue;

@@ -7,6 +7,7 @@ import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
+import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -601,6 +602,7 @@ export const searchDocumentPreviewPassages = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
+    ...entityFeaturePolicies(table, new Map([[table.entityId, "entities"]])),
   ],
 );
 
