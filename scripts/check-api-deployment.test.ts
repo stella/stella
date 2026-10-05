@@ -40,6 +40,121 @@ const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
 };
 
 describe("API deployment health receipt", () => {
+  test("alerts once per continuous outage and resets after recovery", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL(
+          "../.github/workflows/scheduled-run-alerts.yml",
+          import.meta.url,
+        ),
+      ).text(),
+    );
+    const script = workflowSteps(workflow, "scheduled-run-alerts.yml").find(
+      ({ run }) => run.includes("previous=$(gh api"),
+    )?.run;
+    expect(script).toBeDefined();
+    if (script === undefined) {
+      return;
+    }
+    const cases = [
+      { history: [], send: true },
+      { history: ["success"], send: true },
+      { history: ["failure"], send: false },
+      { history: ["startup_failure"], send: false },
+      { history: ["timed_out"], send: false },
+      { history: ["failure", "cancelled", "skipped"], send: false },
+      { history: ["failure", "success"], send: true },
+      { history: ["success", "failure"], send: false },
+    ];
+    for (const { history, send } of cases) {
+      const workflowRuns = history.map((conclusion, index) => ({
+        run_number: index + 1,
+        conclusion,
+      }));
+      // A later recovery cannot reset the outage for an older run's alert.
+      workflowRuns.push({ run_number: 999, conclusion: "success" });
+      const result = Bun.spawnSync(
+        ["bash", "-c", `gh() { printf '%s' "$TEST_HISTORY"; }\n${script}`],
+        {
+          env: {
+            ...process.env,
+            GITHUB_OUTPUT: "/dev/stdout",
+            GITHUB_REPOSITORY: "stella/stella",
+            RUN_NUMBER: "100",
+            RUN_BRANCH: "main",
+            RUN_EVENT: "schedule",
+            WORKFLOW_ID: "1",
+            TEST_HISTORY: JSON.stringify({
+              workflow_runs: workflowRuns.toReversed(),
+            }),
+          },
+        },
+      );
+      expect(result.exitCode, JSON.stringify(history)).toBe(0);
+      expect(result.stdout.toString(), JSON.stringify(history)).toContain(
+        `send=${String(send)}\n`,
+      );
+    }
+  });
+
+  test("requires every blocking staging smoke before recording verification", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+      ).text(),
+    );
+    const steps = workflowSteps(workflow, "deploy-staging.yml");
+    const script = steps.find(({ run }) => run.includes("state=failure"))?.run;
+    expect(script).toBeDefined();
+    if (script === undefined) {
+      return;
+    }
+    const mcpStep = steps.find(({ run }) => run === "bun run canary:mcp");
+    expect(mcpStep?.env["MCP_CANARY_MODE"]).toBe("full");
+    expect(mcpStep?.env["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
+    expect(mcpStep?.env["MCP_CANARY_TOKEN"]).toBe(
+      `\${{ secrets.STAGING_MCP_CANARY_TOKEN }}`,
+    );
+    const success = {
+      WEB_SMOKE: "success",
+      API_SMOKE: "success",
+      MCP_SMOKE: "success",
+      JOB_STATUS: "success",
+    };
+    const cases = [
+      { outcomes: success, state: "success" },
+      ...["WEB_SMOKE", "API_SMOKE", "MCP_SMOKE"].flatMap((smoke) =>
+        ["failure", "skipped", ""].map((outcome) => ({
+          outcomes: { ...success, [smoke]: outcome },
+          state: "failure",
+        })),
+      ),
+      { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+    ];
+    for (const { outcomes, state } of cases) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          `gh() { cat >/dev/null; }\n${script}\nprintf '%s' "$state"`,
+        ],
+        {
+          env: {
+            ...process.env,
+            ...outcomes,
+            GITHUB_REPOSITORY: "stella/stella",
+            GITHUB_RUN_ID: "1",
+            GITHUB_SERVER_URL: "https://github.com",
+            GITHUB_SHA: "a".repeat(40),
+            DEPLOYMENT_ID: "1",
+          },
+        },
+      );
+      expect(result.exitCode, JSON.stringify(outcomes)).toBe(0);
+      expect(result.stdout.toString(), JSON.stringify(outcomes)).toBe(state);
+    }
+  });
+
   test("supports either scheduled-alert authentication mechanism", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/scheduled-run-alerts.yml", import.meta.url),

@@ -1,30 +1,18 @@
+/** Deployed MCP journeys. Diagnostics contain assertions, never response bodies.
+ * Full mode registers a client; frequent mode uses existing client metadata.
+ * Desktop redemption reuses an existing key and never mints a credential.
+ */
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
   LATEST_PROTOCOL_VERSION,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
-/**
- * Canary for the MCP transport of a *deployed* API.
- *
- * The transport can fail while every response still carries a 2xx: an
- * missing or truncated authenticated `GET` event channel, an `initialize` that
- * returns a JSON-RPC error inside a 200, or a tool list that comes back empty.
- * None of those necessarily raise a 5xx, log an error, or trip an alarm, so the
- * only observer is the client whose session silently stops working. This canary
- * drives the handshake a real client drives and treats a well-formed session as
- * the pass condition.
- *
- * Read-only by construction: it never calls a tool, so it cannot touch tenant
- * data. Response bodies are parsed but never printed, only the shape assertions
- * that failed.
- *
- * Without `MCP_CANARY_TOKEN` the authenticated probes cannot run. They are then
- * reported as skipped and the run stays green on the public surface alone;
- * skips are always named so a credential-less run never reads as full coverage.
- */
+import { TaggedError } from "better-result";
+import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
+import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -140,6 +128,7 @@ const PROBE_NAMES = {
   initialize: `POST ${MCP_HTTP_PATH} (legacy initialize)`,
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
   toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
+  toolCall: `POST ${MCP_HTTP_PATH} (search_case_law)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -317,10 +306,54 @@ export const createJsonRpcRequest = ({
   });
 };
 
+class CanaryTargetError extends TaggedError("CanaryTargetError")<{
+  message: string;
+}>() {}
+
+type DeploymentFetcherOptions = {
+  baseUrl: string;
+  edgeHeaderName?: string;
+  edgeHeaderValue?: string;
+};
+
+// Redirects are never followed: neither bearer keys nor the staging edge
+// credential may travel to a Location supplied by a remote response.
+export const createDeploymentFetcher =
+  (
+    { baseUrl, edgeHeaderName, edgeHeaderValue }: DeploymentFetcherOptions,
+    fetcher: CanaryFetcher = fetchWithTimeout,
+  ): CanaryFetcher =>
+  async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.origin !== new URL(baseUrl).origin) {
+      throw new CanaryTargetError({
+        message: "Canary target must remain on the configured origin",
+      });
+    }
+    const headers = new Headers(
+      input instanceof Request ? input.headers : undefined,
+    );
+    for (const [key, value] of new Headers(init.headers)) {
+      headers.set(key, value);
+    }
+    if (edgeHeaderName && edgeHeaderValue) {
+      headers.set(edgeHeaderName, edgeHeaderValue);
+    }
+    return await fetcher(input, { ...init, headers, redirect: "manual" });
+  };
+
+const deploymentFetcher: CanaryFetcher = async (input, init) =>
+  await createDeploymentFetcher({
+    baseUrl:
+      process.env["MCP_CANARY_BASE_URL"] ??
+      new URL(input instanceof Request ? input.url : input).origin,
+    edgeHeaderName: process.env["E2E_EDGE_HEADER_NAME"],
+    edgeHeaderValue: process.env["E2E_EDGE_HEADER_VALUE"],
+  })(input, init);
+
 const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
   await readProbeResponse(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-    await fetchWithTimeout(createJsonRpcRequest(call), {
+    await deploymentFetcher(createJsonRpcRequest(call), {
       timeoutMs: PROBE_TIMEOUT_MS,
     }),
   );
@@ -330,8 +363,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.discovery, async () =>
       evaluateDiscovery(
         await readProbeResponse(
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-          await fetchWithTimeout(new URL(MCP_DISCOVERY_PATH, baseUrl), {
+          await deploymentFetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
             timeoutMs: PROBE_TIMEOUT_MS,
@@ -342,8 +374,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.unauthenticated, async () =>
       evaluateUnauthenticated(
         await readProbeResponse(
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
+          await deploymentFetcher(new URL(MCP_HTTP_PATH, baseUrl), {
             body: JSON.stringify({
               id: 1,
               jsonrpc: "2.0",
@@ -388,7 +419,9 @@ const inspectNotificationStream = async (
         reader.read().then(
           ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
           (error: unknown) => {
-            console.error("MCP probe stream read failed", error);
+            console.error(
+              `[mcp-canary] stream read failed: ${describeProbeFailure(error)}`,
+            );
             return "read_failed" as const;
           },
         ),
@@ -416,7 +449,7 @@ const inspectNotificationStream = async (
 
 export const runAuthenticatedStreamProbe = async (
   { baseUrl, token }: CanaryTarget,
-  fetcher: CanaryFetcher = fetchWithTimeout,
+  fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult> => {
   const response = await fetcher(new URL(MCP_HTTP_PATH, baseUrl), {
     headers: {
@@ -456,6 +489,31 @@ export const runAuthenticatedStreamProbe = async (
   return headerResult;
 };
 
+export const evaluateToolCall = ({
+  status,
+  body,
+}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+  const result = jsonRpcResult(body);
+  if (
+    status !== 200 ||
+    !result ||
+    result["isError"] === true ||
+    !v.is(
+      v.object({ content: v.pipe(v.array(v.unknown()), v.minLength(1)) }),
+      result,
+    )
+  ) {
+    return failed(
+      PROBE_NAMES.toolCall,
+      "expected a non-error JSON-RPC tool result with content",
+    );
+  }
+  return passed(
+    PROBE_NAMES.toolCall,
+    "read-only case-law search returned content",
+  );
+};
+
 type AuthenticatedProbe = {
   name: string;
   run: (target: CanaryTarget) => Promise<ProbeResult>;
@@ -466,6 +524,23 @@ type AuthenticatedProbe = {
  * skip report both read it, so neither can describe a probe the other lacks.
  */
 export const AUTHENTICATED_PROBES = [
+  {
+    name: PROBE_NAMES.toolCall,
+    run: async ({ baseUrl, token }) =>
+      evaluateToolCall(
+        await postJsonRpc({
+          baseUrl,
+          token,
+          era: "modern",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "search_case_law",
+            arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+          },
+        }),
+      ),
+  },
   {
     name: PROBE_NAMES.stream,
     run: runAuthenticatedStreamProbe,
@@ -529,6 +604,358 @@ const PROBE_ICONS = {
   [PROBE_STATUS.skipped]: "SKIP",
 } as const satisfies Record<ProbeStatus, string>;
 
+const authorizationMetadataSchema = v.object({
+  authorization_endpoint: v.pipe(v.string(), v.url()),
+  token_endpoint: v.pipe(v.string(), v.url()),
+  registration_endpoint: v.pipe(v.string(), v.url()),
+  code_challenge_methods_supported: v.array(v.string()),
+});
+export const evaluateAuthorizationMetadata = ({
+  body,
+  status,
+}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+  if (
+    status !== 200 ||
+    !v.is(authorizationMetadataSchema, body) ||
+    !body.code_challenge_methods_supported.includes("S256")
+  ) {
+    return failed(
+      "authorization server discovery",
+      "expected endpoints and PKCE S256 in a 200 metadata document",
+    );
+  }
+  return passed(
+    "authorization server discovery",
+    "authorize, token, registration endpoints and PKCE S256 advertised",
+  );
+};
+
+export const LOOPBACK_REDIRECTS = [
+  "http://localhost:49152/callback",
+  "http://127.0.0.1:49152/callback",
+  "http://[::1]:49152/callback",
+] as const;
+export const CANARY_CLIENT_IDS = [
+  "https://claude.ai/oauth/claude-code-client-metadata",
+  "https://chatgpt.com/oauth/codex/client.json",
+] as const;
+const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
+  (scope) => scope === "stella:search" || scope === "stella:read",
+).join(" ");
+
+type AuthorizeResponseOptions = {
+  response: Response;
+  endpoint: string;
+  name: string;
+  frontendUrl?: string;
+};
+export const evaluateAuthorize = ({
+  response,
+  endpoint,
+  name,
+  frontendUrl = endpoint,
+}: AuthorizeResponseOptions): ProbeResult => {
+  const location = response.headers.get("location");
+  if (response.status >= 300 && response.status < 400 && location) {
+    const target = new URL(location, endpoint);
+    if (
+      target.origin === new URL(frontendUrl).origin &&
+      target.pathname === "/auth" &&
+      new URLSearchParams(
+        new URLSearchParams(target.hash.slice(1)).get("oauth_query") ?? "",
+      ).has("sig")
+    ) {
+      return passed(name, "redirects to the application sign-in bridge");
+    }
+  }
+  return failed(
+    name,
+    `${String(response.status)} without the application sign-in redirect`,
+  );
+};
+
+export const evaluateRegistration = ({
+  status,
+  body,
+}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+  if (
+    (status !== 200 && status !== 201) ||
+    !v.is(v.object({ client_id: v.pipe(v.string(), v.nonEmpty()) }), body)
+  ) {
+    return failed(
+      "dynamic client registration",
+      "expected a successful registration with client_id",
+    );
+  }
+  return passed(
+    "dynamic client registration",
+    "registered all loopback redirects",
+  );
+};
+
+type OAuthJourneyOptions = {
+  baseUrl: string;
+  mode: "frequent" | "full";
+  frontendUrl?: string;
+};
+export const runOAuthJourneys = async (
+  { baseUrl, mode, frontendUrl }: OAuthJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  const clients: string[] = [...CANARY_CLIENT_IDS];
+  let endpoint: string | undefined;
+  let registrationEndpoint: string | undefined;
+  results.push(
+    await runNamedProbe("authorization server discovery", async () => {
+      const resource = await readProbeResponse(
+        await fetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
+          timeoutMs: PROBE_TIMEOUT_MS,
+        }),
+      );
+      const discovery = evaluateDiscovery(resource);
+      if (
+        discovery.status !== "passed" ||
+        !v.is(protectedResourceMetadataSchema, resource.body)
+      ) {
+        return discovery;
+      }
+      const issuer = resource.body.authorization_servers.at(0);
+      if (!issuer) {
+        return failed("authorization server discovery", "no issuer advertised");
+      }
+      const issuerUrl = new URL(issuer);
+      const metadataUrl = new URL(
+        `/.well-known/oauth-authorization-server${issuerUrl.pathname.replace(/\/$/u, "")}`,
+        issuerUrl.origin,
+      );
+      const metadata = await readProbeResponse(
+        await fetcher(metadataUrl, { timeoutMs: PROBE_TIMEOUT_MS }),
+      );
+      const evaluation = evaluateAuthorizationMetadata(metadata);
+      if (
+        evaluation.status === "passed" &&
+        v.is(authorizationMetadataSchema, metadata.body)
+      ) {
+        endpoint = metadata.body.authorization_endpoint;
+        registrationEndpoint = metadata.body.registration_endpoint;
+      }
+      return evaluation;
+    }),
+  );
+  if (mode === "full") {
+    results.push(
+      await runNamedProbe("dynamic client registration", async () => {
+        if (!registrationEndpoint) {
+          return failed(
+            "dynamic client registration",
+            "discovery did not supply registration endpoint",
+          );
+        }
+        const registration = await readProbeResponse(
+          await fetcher(registrationEndpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            timeoutMs: PROBE_TIMEOUT_MS,
+            body: JSON.stringify({
+              client_name: CANARY_CLIENT_NAME,
+              redirect_uris: LOOPBACK_REDIRECTS,
+              token_endpoint_auth_method: "none",
+              grant_types: ["authorization_code", "refresh_token"],
+              response_types: ["code"],
+              scope: CANARY_SCOPE,
+            }),
+          }),
+        );
+        const evaluation = evaluateRegistration(registration);
+        if (
+          evaluation.status === "passed" &&
+          v.is(v.object({ client_id: v.string() }), registration.body)
+        ) {
+          clients.push(registration.body.client_id);
+        }
+        return evaluation;
+      }),
+    );
+  }
+  const authorizationEndpoint = endpoint;
+  for (const clientId of clients) {
+    for (const redirectUri of LOOPBACK_REDIRECTS) {
+      const name = `authorize ${clientId} -> ${redirectUri}`;
+      results.push(
+        await runNamedProbe(name, async () => {
+          if (!authorizationEndpoint) {
+            return failed(
+              name,
+              "discovery did not supply authorization endpoint",
+            );
+          }
+          const url = new URL(authorizationEndpoint);
+          const challenge = createHash("sha256")
+            .update(randomBytes(32).toString("base64url"))
+            .digest("base64url");
+          url.search = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: "code",
+            code_challenge_method: "S256",
+            code_challenge: challenge,
+            scope: CANARY_SCOPE,
+            state: Bun.randomUUIDv7(),
+            resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+          }).toString();
+          const response = await fetcher(url, {
+            method: "GET",
+            redirect: "manual",
+            timeoutMs: PROBE_TIMEOUT_MS,
+          });
+          const result = evaluateAuthorize({
+            response,
+            endpoint: authorizationEndpoint,
+            name,
+            frontendUrl,
+          });
+          await response.body?.cancel();
+          return result;
+        }),
+      );
+    }
+  }
+  return results;
+};
+
+const desktopIdentitySchema = v.object({
+  userId: v.pipe(v.string(), v.nonEmpty()),
+  organizationId: v.pipe(v.string(), v.nonEmpty()),
+});
+export const evaluateDesktopRedeem = ({
+  status,
+  body,
+  identity,
+}: Pick<ProbeResponse, "body" | "status"> & {
+  identity: v.InferOutput<typeof desktopIdentitySchema>;
+}): ProbeResult => {
+  const schema = v.object({
+    status: v.literal("connected"),
+    identity: desktopIdentitySchema,
+  });
+  if (
+    status !== 200 ||
+    !v.is(schema, body) ||
+    body.identity.userId !== identity.userId ||
+    body.identity.organizationId !== identity.organizationId
+  ) {
+    return failed(
+      "desktop handoff redeem",
+      "expected connected with the existing desktop account identity",
+    );
+  }
+  return passed(
+    "desktop handoff redeem",
+    "redeemed a handoff using the existing desktop credential",
+  );
+};
+type DesktopProbeOptions = {
+  baseUrl: string;
+  desktopKey?: string;
+  sessionCookie?: string;
+  smokeSecret?: string;
+};
+export const runDesktopProbe = async (
+  { baseUrl, desktopKey, sessionCookie, smokeSecret }: DesktopProbeOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult> => {
+  const name = "desktop handoff redeem";
+  let browserCookie = sessionCookie;
+  if (!desktopKey) {
+    return skipped(
+      name,
+      "missing MCP_CANARY_DESKTOP_KEY: existing test desktop key required (never minted by the canary)",
+    );
+  }
+  if (!sessionCookie && !smokeSecret) {
+    return skipped(
+      name,
+      "missing MCP_CANARY_SESSION_COOKIE or SMOKE_SESSION_SECRET: browser session for the desktop key account required",
+    );
+  }
+  if (!sessionCookie && smokeSecret) {
+    const smoke = await readProbeResponse(
+      await fetcher(new URL("/v1/smoke/session", baseUrl), {
+        method: "POST",
+        headers: { "x-smoke-secret": smokeSecret },
+        timeoutMs: PROBE_TIMEOUT_MS,
+      }),
+    );
+    if (
+      smoke.status !== 200 ||
+      !v.is(
+        v.object({ cookieName: v.string(), cookieValue: v.string() }),
+        smoke.body,
+      )
+    ) {
+      return failed(name, "could not mint the smoke browser session");
+    }
+    browserCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
+  }
+  if (!browserCookie) {
+    return failed(name, "browser session unavailable");
+  }
+  const config = await readProbeResponse(
+    await fetcher(new URL("/v1/desktop-registry/request", baseUrl), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${desktopKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ type: "config" }),
+      timeoutMs: PROBE_TIMEOUT_MS,
+    }),
+  );
+  if (
+    config.status !== 200 ||
+    !v.is(v.object({ identity: desktopIdentitySchema }), config.body)
+  ) {
+    return failed(name, "test desktop key did not return an account identity");
+  }
+  const identity = config.body.identity;
+  const correlationId = Bun.randomUUIDv7();
+  const verifier = randomBytes(32).toString("hex");
+  const grant = await fetcher(new URL("/v1/desktop-registry/grant", baseUrl), {
+    method: "POST",
+    headers: { cookie: browserCookie, "content-type": "application/json" },
+    body: JSON.stringify({
+      correlationId,
+      verifierHash: createHash("sha256").update(verifier).digest("hex"),
+    }),
+    timeoutMs: PROBE_TIMEOUT_MS,
+  });
+  await grant.body?.cancel();
+  if (!grant.ok) {
+    return failed(name, "browser session could not issue a desktop handoff");
+  }
+  return evaluateDesktopRedeem({
+    ...(await readProbeResponse(
+      await fetcher(new URL("/v1/desktop-registry/redeem-link", baseUrl), {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${desktopKey}`,
+          "content-type": "application/json",
+          "user-agent": "StellaDesktop/mcp-canary",
+        },
+        body: JSON.stringify({
+          correlationId,
+          verifier,
+          expectedUserId: identity.userId,
+          expectedOrganizationId: identity.organizationId,
+        }),
+        timeoutMs: PROBE_TIMEOUT_MS,
+      }),
+    )),
+    identity,
+  });
+};
+
 const run = async () => {
   const baseUrl = process.env["MCP_CANARY_BASE_URL"];
   if (!baseUrl) {
@@ -538,7 +965,28 @@ const run = async () => {
   }
 
   const token = process.env["MCP_CANARY_TOKEN"];
+  const mode = process.env["MCP_CANARY_MODE"] ?? "frequent";
+  if (mode !== "frequent" && mode !== "full") {
+    console.error("[mcp-canary] MCP_CANARY_MODE must be frequent or full.");
+    process.exitCode = 1;
+    return;
+  }
   const results = [
+    ...(await runOAuthJourneys({
+      baseUrl,
+      mode,
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+    })),
+    await runNamedProbe(
+      "desktop handoff redeem",
+      async () =>
+        await runDesktopProbe({
+          baseUrl,
+          desktopKey: process.env["MCP_CANARY_DESKTOP_KEY"],
+          sessionCookie: process.env["MCP_CANARY_SESSION_COOKIE"],
+          smokeSecret: process.env["SMOKE_SESSION_SECRET"],
+        }),
+    ),
     ...(await runPublicProbes(baseUrl)),
     ...(token
       ? await runAuthenticatedProbes({ baseUrl, token })
@@ -548,6 +996,11 @@ const run = async () => {
   ];
 
   for (const result of results) {
+    if (result.status === PROBE_STATUS.skipped) {
+      console.warn(
+        `::warning title=MCP canary coverage incomplete::${result.name}: ${result.detail}`,
+      );
+    }
     console.log(
       `[mcp-canary] ${PROBE_ICONS[result.status]} ${result.name}: ${result.detail}`,
     );
@@ -556,10 +1009,13 @@ const run = async () => {
   const { failed: failures, skipped: skips } = summarize(results);
   if (skips > 0) {
     console.log(
-      `[mcp-canary] ${String(skips)} probe(s) skipped: the authenticated session was not exercised.`,
+      `[mcp-canary] ${String(skips)} probe(s) skipped: journey coverage is incomplete; configure the named credentials.`,
     );
   }
-  if (failures > 0) {
+  if (
+    failures > 0 ||
+    (skips > 0 && process.env["MCP_CANARY_REQUIRE_CREDENTIALS"] === "true")
+  ) {
     process.exitCode = 1;
   }
 };

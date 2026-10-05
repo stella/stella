@@ -473,6 +473,23 @@ jobs:
           SMOKE_AI_JOURNEY: only
           SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
 
+      - name: Run staging MCP user journeys
+        id: mcp-smoke
+        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        run: bun run canary:mcp
+        env:
+          MCP_CANARY_BASE_URL: https://api-staging.stll.app
+          MCP_CANARY_FRONTEND_URL: https://staging.stll.app
+          MCP_CANARY_MODE: full
+          # Release verification requires every journey, including the
+          # authenticated probes, rather than accepting partial coverage.
+          MCP_CANARY_REQUIRE_CREDENTIALS: "true"
+          MCP_CANARY_TOKEN: ${{ secrets.STAGING_MCP_CANARY_TOKEN }}
+          MCP_CANARY_DESKTOP_KEY: ${{ secrets.STAGING_MCP_CANARY_DESKTOP_KEY }}
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+
       - name: Upload Playwright report
         if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -488,11 +505,12 @@ jobs:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
           WEB_SMOKE: ${{ steps.web-smoke.outcome }}
           API_SMOKE: ${{ steps.api-smoke.outcome }}
+          MCP_SMOKE: ${{ steps.mcp-smoke.outcome }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
           state=failure
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]]; then
+          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$MCP_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]]; then
             state=success
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

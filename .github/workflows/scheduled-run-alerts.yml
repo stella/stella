@@ -35,8 +35,39 @@ jobs:
       && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
     steps:
+      # A recovery resets the outage. Cancelled/skipped runs and unfinished
+      # newer runs do not reset it, and manual delivery tests always send.
+      - name: Detect a continuing outage
+        id: outage
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          set -euo pipefail
+          previous=$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
+            -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
+            jq -r --argjson number "$RUN_NUMBER" '
+              [.workflow_runs[]
+                | select(.run_number < $number)
+                | select(.conclusion != "cancelled" and .conclusion != "skipped")]
+              | sort_by(.run_number) | last | .conclusion // "none"')
+          case "$previous" in
+            failure|startup_failure|timed_out)
+              echo "send=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Suppressing repeated workflow failure during a continuing outage."
+              ;;
+            *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Send failure alert
+        if: github.event_name == 'workflow_dispatch' || steps.outage.outputs.send == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}
