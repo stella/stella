@@ -366,7 +366,7 @@ esac
     ],
     env: {
       ...process.env,
-      PATH: `${path.join(root, "bin")}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+      PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
       MIRROR_COMMAND_LOG: path.join(root, "commands.tsv"),
       MIRROR_SCENARIO: scenario,
       GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),

@@ -107,10 +107,21 @@ export const collectImageReferences = async (
       sources.add(reference);
     }
     // Checkout directories may prefix the same repository-relative path.
-    const files =
-      /(?:[\w.-]+\/)+(?:[\w.-]+\.(?:sh|txt|ya?ml)|Dockerfile|[\w.-]+\.Dockerfile)\b/gu;
+    // Tokenize once before checking suffixes; a failing suffix must not
+    // restart a directory walk at every slash in a long path.
+    const files = /[\w./-]+/gu;
     for (const match of text.matchAll(files)) {
-      let candidate = match[0];
+      let candidate = match[0].replace(/^\/+/u, "");
+      if (
+        !candidate.includes("/") ||
+        !(
+          /\.(?:sh|txt|ya?ml)$/u.test(candidate) ||
+          candidate.endsWith("/Dockerfile") ||
+          candidate.endsWith(".Dockerfile")
+        )
+      ) {
+        continue;
+      }
       while (
         !existsSync(path.join(root, candidate)) &&
         candidate.includes("/")
