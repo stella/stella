@@ -213,7 +213,11 @@ export type TransitionResult<TId, TStatus> =
   | { type: "stale" };
 
 type TransitionTransaction = {
-  execute: (query: SQL) => PromiseLike<Record<string, unknown>[] | { rows: Record<string, unknown>[] }>;
+  execute: (
+    query: SQL,
+  ) => PromiseLike<
+    Record<string, unknown>[] | { rows: Record<string, unknown>[] }
+  >;
   rollback: () => never;
 };
 
