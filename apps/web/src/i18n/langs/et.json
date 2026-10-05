@@ -852,6 +852,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
@@ -1868,6 +1869,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
@@ -4647,6 +4649,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "currentWording": "Kehtiv sõnastus",
     "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
@@ -4696,7 +4699,9 @@
       "unknown": "Olek ebaselge"
     },
     "title": "Õigusaktid",
-    "validity": "Kehtib {from} kuni {to}"
+    "validity": "Kehtib {from} kuni {to}",
+    "wordingValidFrom": "Sõnastus kehtib alates {date}",
+    "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
     "create": "Loo",
@@ -5433,6 +5438,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",

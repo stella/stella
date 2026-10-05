@@ -852,6 +852,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
@@ -1868,6 +1869,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
     "unverifiedCitationHint": "Cette citation n'a pas pu être associée au document source.",
@@ -4647,6 +4649,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "currentWording": "Rédaction actuelle",
     "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
@@ -4696,7 +4699,9 @@
       "unknown": "Statut incertain"
     },
     "title": "Législation",
-    "validity": "En vigueur du {from} au {to}"
+    "validity": "En vigueur du {from} au {to}",
+    "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
+    "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
     "create": "Créer",
@@ -5433,6 +5438,7 @@
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Connectez stella desktop à votre compte",
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",

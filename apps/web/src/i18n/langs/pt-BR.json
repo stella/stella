@@ -852,6 +852,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
@@ -1868,6 +1869,7 @@
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
     "unknownUser": "Usuário desconhecido",
     "unpin": "Desafixar",
+    "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
     "unverified": "Não verificado",
     "unverifiedCitationHint": "Não foi possível associar esta citação ao documento de origem.",
@@ -4647,6 +4649,7 @@
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",
+    "currentWording": "Redação atual",
     "description": "Base pública de normas consolidadas, indexáveis por norma e versão.",
     "diffInserted": "Inserido:",
     "diffRemoved": "Suprimido:",
@@ -4696,7 +4699,9 @@
       "unknown": "Situação incerta"
     },
     "title": "Legislação",
-    "validity": "Vigente de {from} a {to}"
+    "validity": "Vigente de {from} a {to}",
+    "wordingValidFrom": "Redação em vigor desde {date}",
+    "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
     "create": "Criar",
@@ -5433,6 +5438,7 @@
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecte o stella desktop à sua conta",
         "action": "Editar no desktop",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
         "authRequiredTitle": "Sua sessão expirou",

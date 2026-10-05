@@ -852,6 +852,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
@@ -1868,6 +1869,7 @@
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
+    "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
     "unsavedLeaveConfirm": "Turite neišsaugotų pakeitimų. Išeiti neišsaugojus?",
     "unverified": "Nepatvirtinta",
     "unverifiedCitationHint": "Nepavyko susieti šios citatos su šaltinio dokumentu.",
@@ -4647,6 +4649,7 @@
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
     "compareWithVersion": "Palyginti su redakcija {version}",
+    "currentWording": "Galiojanti redakcija",
     "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
     "diffInserted": "Įterpta:",
     "diffRemoved": "Išbraukta:",
@@ -4696,7 +4699,9 @@
       "unknown": "Būsena neaiški"
     },
     "title": "Teisės aktai",
-    "validity": "Galioja nuo {from} iki {to}"
+    "validity": "Galioja nuo {from} iki {to}",
+    "wordingValidFrom": "Redakcija galioja nuo {date}",
+    "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
     "create": "Kurti",
@@ -5433,6 +5438,7 @@
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Prijunkite stella desktop prie savo paskyros",
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",

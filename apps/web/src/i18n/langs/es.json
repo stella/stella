@@ -852,6 +852,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
@@ -1868,6 +1869,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
     "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",
@@ -4647,6 +4649,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
@@ -4696,7 +4699,9 @@
       "unknown": "Estado incierto"
     },
     "title": "Legislación",
-    "validity": "Vigente del {from} al {to}"
+    "validity": "Vigente del {from} al {to}",
+    "wordingValidFrom": "Redacción vigente desde {date}",
+    "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {
     "create": "Crear",
@@ -5433,6 +5438,7 @@
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecta stella desktop a tu cuenta",
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
