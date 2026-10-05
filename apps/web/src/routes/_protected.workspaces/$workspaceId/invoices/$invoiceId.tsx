@@ -713,7 +713,7 @@ const ConfirmAction = ({
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={children} />
+      <AlertDialogTrigger nativeButton render={children} />
       <AlertDialogPopup>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
