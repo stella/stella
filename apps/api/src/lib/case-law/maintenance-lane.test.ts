@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import {
   CASE_LAW_MAINTENANCE_LANE,
   enterCaseLawMaintenanceLane,
@@ -46,7 +47,29 @@ const CASE_LAW_TABLE_MARKERS = ["case_law_", "caseLaw"] as const;
  * transitively: a script that never imports one, directly or through a
  * helper, issues no statements and needs no door.
  */
-const DATABASE_MODULES = ["@/api/db/root", "@/api/db/scoped"] as const;
+const DATABASE_MODULES = [
+  "@/api/db/root",
+  "@/api/db/scoped",
+  "@/api/db/long-running-connection",
+] as const;
+
+type EuCompletionStore = ReturnType<typeof createEuCompletionStore>;
+
+/**
+ * Scripts that write only their own job's control rows. A stop or approval
+ * must not queue behind the job it controls, so these take no door; the
+ * census checks they call nothing beyond the declared control methods.
+ */
+const CONTROL_PLANE_SCRIPTS = {
+  "eu-completion-control.ts": {
+    reason:
+      "Writes only EU completion controls and supervised approvals; a stop must not wait behind the running tick.",
+    methods: ["setControl", "approveSupervisedDryRun"],
+  },
+} as const satisfies Record<
+  string,
+  { reason: string; methods: readonly (keyof EuCompletionStore)[] }
+>;
 
 /** How far the resolver follows imports when looking for database reach. */
 const IMPORT_DEPTH_LIMIT = 6;
@@ -196,7 +219,11 @@ describe("case-law maintenance lane", () => {
     const findings: string[] = [];
     let caseLawScripts = 0;
     for (const name of scriptFiles()) {
-      if (!isCaseLawScript(name) || !reachesDatabase(name)) {
+      if (
+        !isCaseLawScript(name) ||
+        !reachesDatabase(name) ||
+        Object.hasOwn(CONTROL_PLANE_SCRIPTS, name)
+      ) {
         continue;
       }
       caseLawScripts += 1;
@@ -209,6 +236,33 @@ describe("case-law maintenance lane", () => {
       }
     }
     expect(caseLawScripts).toBeGreaterThan(0);
+    expect(findings).toEqual([]);
+  });
+
+  // A control-plane script stops or approves a job that may hold the lane,
+  // so it must never wait for the lane: it opens no door, and its only
+  // writes are the control methods it declares.
+  test("control-plane scripts open no door and call only their declared control methods", () => {
+    const findings: string[] = [];
+    for (const [name, { methods }] of Object.entries(CONTROL_PLANE_SCRIPTS)) {
+      if (!scriptFiles().includes(name) || !reachesDatabase(name)) {
+        findings.push(`${name}: stale control-plane exemption`);
+        continue;
+      }
+      if (doorsOpened(name).length > 0) {
+        findings.push(`${name}: a control-plane script opens a door`);
+      }
+      const called = Array.from(
+        readSource(name).matchAll(/\bstore\.(\w+)\(/gu),
+        (match) => match[1] ?? "",
+      );
+      const declared: readonly string[] = methods;
+      for (const method of called) {
+        if (!declared.includes(method)) {
+          findings.push(`${name}: calls undeclared store method ${method}`);
+        }
+      }
+    }
     expect(findings).toEqual([]);
   });
 

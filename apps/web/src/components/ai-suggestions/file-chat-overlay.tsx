@@ -84,11 +84,7 @@ import {
 import type { PendingReviewChoice } from "@/components/ai-suggestions/file-review-session";
 import { OVERLAY_THREAD_PRESENTATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import type { OverlayThreadPresentation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import {
-  ChatThreadCard,
-  FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
-  PromptBar,
-} from "@/components/ai-suggestions/host";
+import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
 import {
   PENDING_REVIEW_PROMPT_STATUS,
   PendingReviewNewThreadPrompt,
@@ -1022,7 +1018,6 @@ const useFileChatReviewState = ({
       : countPendingReviewSuggestions(state.sessions[reviewEntityId]),
   );
   return {
-    hasPendingReview: pendingReviewCount > 0,
     pendingReviewCount,
     reviewEntityId,
   };
@@ -1231,15 +1226,12 @@ const FileChatOverlayInner = ({
   const hasDocxEditSurface =
     (activeFile !== undefined || activeDraft !== undefined) &&
     docxEditorRef !== undefined;
-  // Whether the floating DOCX `ReviewBar` is showing for this entity — it
-  // renders while any suggestion is pending/applying (mirrors the bar's own
-  // `isPending` gate). When it is, the thread card lifts above the bar so the
-  // two floating surfaces never overlap.
-  const { hasPendingReview, pendingReviewCount, reviewEntityId } =
-    useFileChatReviewState({
-      activeDraft,
-      activeFile,
-    });
+  // The review pill and the thread card both dock in the composer column
+  // (DockedChatStack), so they stack without either measuring the other.
+  const { pendingReviewCount, reviewEntityId } = useFileChatReviewState({
+    activeDraft,
+    activeFile,
+  });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);
   const setEditModeOptionId = useChatEditModeStore(
     (state) => state.setOptionId,
@@ -2517,11 +2509,6 @@ const FileChatOverlayInner = ({
       >
         {threadCardAvailable && panelOpen && hasThreadContent && (
           <ChatThreadCard
-            bottomOffsetClass={
-              hasPendingReview
-                ? FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS
-                : undefined
-            }
             onCollapse={() => setPanelOpen(false)}
             scrollRef={threadScrollRef}
             titleSlot={

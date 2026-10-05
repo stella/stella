@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -448,6 +449,19 @@ export const TranslateDocumentDialog = (
         />
       )}
       <DialogPopup>
+        <DialogFormState
+          dirty={
+            runId === null &&
+            (selectedChoice !== DEFAULT_TRANSLATION_CHOICE ||
+              targetSelection !== null ||
+              commentPolicyState.type !== "unchecked")
+          }
+          onDiscard={() => {
+            setChoice(DEFAULT_TRANSLATION_CHOICE);
+            setTargetSelection(null);
+            setCommentPolicyState({ type: "unchecked" });
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("translate.dialog.title")}</DialogTitle>
           <DialogDescription>

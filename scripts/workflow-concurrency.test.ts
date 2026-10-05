@@ -6,7 +6,7 @@ import { Script } from "node:vm";
 // GitHub has no shared `concurrency` across workflows, so every workflow a
 // pull request triggers declares its own, and this is the one rule they share:
 // a top-level group keyed per pull request, cancelling in progress.
-// Other events remain isolated, except explicit deployment/manual-run designs.
+// Main-push workflows supersede by branch; other events follow their owners.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 const PULL_REQUEST_EVENTS = new Set([
@@ -44,6 +44,24 @@ const triggers = (on: unknown): string[] => {
 const runsOnPullRequests = (workflow: unknown) =>
   isRecord(workflow) &&
   triggers(workflow["on"]).some((event) => PULL_REQUEST_EVENTS.has(event));
+
+const hasMainBranchConcurrency = (workflow: unknown) => {
+  if (
+    !isRecord(workflow) ||
+    !isRecord(workflow["on"]) ||
+    !isRecord(workflow["concurrency"])
+  ) {
+    return false;
+  }
+  const push = workflow["on"]["push"];
+  return (
+    isRecord(push) &&
+    Array.isArray(push["branches"]) &&
+    push["branches"].includes("main") &&
+    workflow["concurrency"]["group"] ===
+      `\${{ github.workflow }}-\${{ github.ref }}`
+  );
+};
 
 type ConcurrencyProblemsOptions = {
   supersedingEvents?: readonly string[];
@@ -85,6 +103,21 @@ const concurrencyProblems = (
       ...(cancel === false
         ? []
         : ["event-preserving workflow must not cancel runs"]),
+    ];
+  }
+  if (hasMainBranchConcurrency(workflow)) {
+    return [
+      ...(!events.includes("issue_comment") &&
+      events
+        .filter((event) => PULL_REQUEST_EVENTS.has(event))
+        .every((event) => event === "pull_request")
+        ? []
+        : [
+            "branch concurrency does not identify target or review pull requests, or commented issues",
+          ]),
+      ...(cancel === true
+        ? []
+        : ["branch concurrency must cancel superseded analysis runs"]),
     ];
   }
   const protectedEvents = [
@@ -285,13 +318,18 @@ describe("pull request workflow concurrency", () => {
         }
         const concurrency = owner["concurrency"];
         const group = concurrency["group"];
+        if (owner === workflow && hasMainBranchConcurrency(workflow)) {
+          return [];
+        }
         // These workflows deliberately supersede builds/deploys or manual
-        // CI on one branch. Promotion itself still must finish.
+        // CI on one branch. Staging builds supersede only a build of the
+        // same commit. Promotion itself still must finish.
         const deliberate =
           (file === "deploy-staging.yml" &&
-            ["staging-api-build", "staging-web-build"].includes(
-              String(group),
-            )) ||
+            [
+              `staging-api-build-\${{ needs.resolve.outputs.sha }}`,
+              `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
+            ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`);
         if (deliberate) {
@@ -324,6 +362,47 @@ describe("pull request workflow concurrency", () => {
     expect(runsOnPullRequests({ on: { push: null, schedule: [] } })).toBe(
       false,
     );
+  });
+
+  test("main analysis supersedes its branch while target events retain pull request identity", () => {
+    const workflow = {
+      on: { push: { branches: ["main"] }, pull_request: null, schedule: [] },
+      concurrency: {
+        group: `\${{ github.workflow }}-\${{ github.ref }}`,
+        "cancel-in-progress": true,
+      },
+    };
+    expect(concurrencyProblems(workflow)).toEqual([]);
+    for (const event of [
+      "pull_request_review",
+      "pull_request_review_comment",
+      "issue_comment",
+    ]) {
+      expect(
+        concurrencyProblems({
+          ...workflow,
+          on: { ...workflow.on, [event]: null },
+        }),
+      ).toEqual([expect.stringContaining("does not identify")]);
+    }
+    expect(
+      concurrencyProblems({
+        ...workflow,
+        on: { ...workflow.on, pull_request_target: null },
+      }),
+    ).toEqual([expect.stringContaining("target or review")]);
+    expect(
+      concurrencyProblems({
+        ...workflow,
+        on: { pull_request: null, schedule: [] },
+      }),
+    ).not.toEqual([]);
+    expect(
+      concurrencyProblems({
+        ...workflow,
+        concurrency: { ...workflow.concurrency, "cancel-in-progress": false },
+      }),
+    ).toEqual([expect.stringContaining("cancel superseded analysis")]);
   });
 
   test("rejects a workflow whose runs would not supersede each other", () => {

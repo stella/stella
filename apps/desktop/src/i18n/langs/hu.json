@@ -132,7 +132,15 @@
     "takeoverSubtitle": "A szerkesztés a legutóbb mentett ellenőrzőponttól folytatódik.",
     "takeoverTitle": "{requester} át szeretné venni a szerkesztést",
     "takeoverWindowTitle": "Átvételi kérés",
-    "webOrigin": "Webes forrás"
+    "webOrigin": "Webes forrás",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Frissítse a Stella Desktop alkalmazást",
+    "handoffAccountRequired": "Csatlakoztassa a Stella Desktop alkalmazást a fiókjához",
+    "handoffFailed": "Nem sikerült megnyitni a dokumentumot",
+    "handoffUpdateNow": "Frissítés most",
+    "handoffConnectAccount": "Fiók csatlakoztatása",
+    "handoffRetry": "Újrapróbálkozás",
+    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt"
   },
   "settings": {
     "about": "Névjegy",

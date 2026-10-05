@@ -102,7 +102,7 @@ type RunInLanesOptions<TBatch extends LaneBatch> = {
   batches: readonly TBatch[];
   lanes: number;
   /** Resolves with the batch's exit code; a rejection counts as exit 1. */
-  runBatch: (batch: TBatch) => Promise<number>;
+  runBatch: (batch: TBatch, lane: number) => Promise<number>;
   /** Once aborted, no further batch starts; running ones finish. */
   signal?: AbortSignal | undefined;
   failurePolicy?: "serial-fast" | "complete";
@@ -142,16 +142,19 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     }
   };
 
-  const runBatchSafely = async (batch: TBatch): Promise<number> => {
+  const runBatchSafely = async (
+    batch: TBatch,
+    lane: number,
+  ): Promise<number> => {
     try {
-      return await runBatch(batch);
+      return await runBatch(batch, lane);
     } catch (error) {
       console.error(error);
       return 1;
     }
   };
 
-  const runLane = async (): Promise<void> => {
+  const runLane = async (lane: number): Promise<void> => {
     if (
       pending.length === 0 ||
       signal?.aborted === true ||
@@ -168,7 +171,7 @@ export const runInLanes = async <TBatch extends LaneBatch>({
       await new Promise<void>((resolve) => {
         parkedLanes.push(resolve);
       });
-      await runLane();
+      await runLane(lane);
       return;
     }
     const [next] = pending.splice(nextPosition, 1);
@@ -177,20 +180,20 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     }
     const exclusive = isExclusiveTestBatch(next.batch.kind);
     exclusiveRunning ||= exclusive;
-    const exitCode = await runBatchSafely(next.batch);
+    const exitCode = await runBatchSafely(next.batch, lane);
     exitCodes[next.index] = exitCode;
     failed ||= exitCode !== 0;
     if (exclusive) {
       exclusiveRunning = false;
     }
     wakeParkedLanes();
-    await runLane();
+    await runLane(lane);
   };
 
   await Promise.all(
     Array.from(
       { length: Math.min(lanes, batches.length) },
-      async () => await runLane(),
+      async (_, index) => await runLane(index + 1),
     ),
   );
 

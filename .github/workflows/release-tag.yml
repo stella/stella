@@ -50,7 +50,7 @@ jobs:
         run: git checkout --detach "$RELEASE_SHA"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: "package.json"
 
@@ -80,6 +80,8 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
+      # Re-checks staging/verified and main/heavy on the exact commit right
+      # before the push, so a status that turned red since selection stops it.
       - name: Push tag
         env:
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
@@ -115,7 +117,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: "package.json"
 

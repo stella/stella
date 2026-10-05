@@ -841,6 +841,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
@@ -865,7 +866,9 @@
       },
       "deleteColumnConfirm": "Pytanie i wszystkie jego odpowiedzi zostaną usunięte dla całej organizacji, ze wszystkich wyszukiwań i u wszystkich członków. Aby usunąć je tylko z tego wyszukiwania, wybierz „Usuń z tego wyszukiwania”.",
       "editQuestionHint": "Zmiana treści, rodzaju odpowiedzi lub jego opcji odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
+      "newQuestionColumn": "Nowe",
       "nothingToRun": "Każda komórka ma już odpowiedź",
+      "questionAdded": "Dodano „{question}” do tabeli",
       "questionPlaceholder": "np. Czy sąd uznał wypowiedzenie za skuteczne?",
       "removeFromSearch": "Usuń z tego wyszukiwania",
       "runAll": "Odpowiedz na wszystko",
@@ -944,7 +947,8 @@
       "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
-      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
+      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)"
     }
   },
   "catalogue": {
@@ -1854,6 +1858,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
     "unverifiedCitationHint": "Nie udało się dopasować tego cytatu do dokumentu źródłowego.",
@@ -1874,15 +1879,23 @@
     "zoomOut": "Pomniejsz"
   },
   "consent": {
+    "actingAs": "{clientName} będzie działać w Twoim imieniu w organizacji {organizationName}",
     "allow": "Zezwól",
-    "appIdentity": "Tożsamość aplikacji",
+    "canChange": "Może zmieniać",
+    "canRead": "Może odczytywać",
     "completeSetup": "Zakończ konfigurację",
+    "connectTitle": "Połącz {clientName} ze stella",
+    "connectedTitle": "Połączono z {clientName}",
+    "connectionDuration": "Pozostaje połączona do chwili odłączenia w Ustawieniach › Połączenia",
     "defaultClientName": "Aplikacja",
-    "description": "{clientName} chce uzyskać dostęp do Twojego obszaru roboczego w stella",
+    "destinationDetails": "Szczegóły przekierowania",
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
-    "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
-    "redirectDestination": "Cel przekierowania",
+    "otherPermissions": "Pozostałe uprawnienia",
+    "publishedBy": "Opublikowano przez <host>{publisherHost}</host>",
+    "returnToAgent": "Wróć do swojego agenta, aby kontynuować.",
+    "returnsLocally": "Wrócisz do {clientName} na tym komputerze",
+    "returnsTo": "Wrócisz do {clientName}",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -1903,8 +1916,11 @@
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
     "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
+    "signedInAs": "Zalogowano jako <email>{accountEmail}</email>",
     "title": "Autoryzacja dostępu",
-    "unverifiedApp": "Niezweryfikowana aplikacja"
+    "unverifiedApp": "Niezweryfikowana aplikacja",
+    "unverifiedExplanation": "stella nie zweryfikowała, kto publikuje tę aplikację.",
+    "useAnotherAccount": "Użyj innego konta"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",
@@ -2295,6 +2311,8 @@
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
+      "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -2450,6 +2468,7 @@
     "current": "Bieżąca",
     "deleteVersion": "Usuń wersję",
     "descriptionPlaceholder": "Dodaj notatkę o tej wersji...",
+    "displayFailed": "Nie udało się wyświetlić tego pliku.",
     "downloadRedline": "Pobierz redline",
     "dropToUploadVersion": "Upuść, aby przesłać jako nową wersję",
     "editLatestVersionDescription": "To nie jest bieżąca wersja. Aby edytować ją w przeglądarce, ustaw ją najpierw jako najnowszą wersję, a następnie odblokuj do edycji.",
@@ -4621,6 +4640,7 @@
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
@@ -4670,7 +4690,9 @@
       "unknown": "Status niejasny"
     },
     "title": "Akty prawne",
-    "validity": "Obowiązuje od {from} do {to}"
+    "validity": "Obowiązuje od {from} do {to}",
+    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
+    "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
     "create": "Utwórz",
@@ -5407,6 +5429,7 @@
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Połącz stella desktop ze swoim kontem",
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
@@ -5429,6 +5452,17 @@
         "updateRequiredDescription": "stella desktop wymaga aktualizacji. Zostanie zaktualizowany automatycznie po zakończeniu aktywnych edycji desktopowych; spróbuj ponownie po restarcie.",
         "updateRequiredTitle": "Zaktualizuj stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Masz już zainstalowane? Połącz",
+        "connect": "Połącz stella desktop",
+        "editNone": "Pobierz stella desktop, aby edytować ten plik",
+        "editOutdated": "Zaktualizuj stella desktop, aby edytować",
+        "editReason": "Edycja na komputerze otwiera plik w aplikacji na Twoim komputerze przez stella desktop.",
+        "signCurrent": "Podpisz w stella desktop",
+        "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
+        "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop."
+      },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",
       "downloadExtractedText": "Wyodrębniony tekst (.txt)",
@@ -5442,7 +5476,6 @@
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "pdfSigning": {
-        "action": "Podpisz w aplikacji desktopowej",
         "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
         "cancelledCertificateDescription": "Wybrany certyfikat nie nadaje się do podpisu. Wybierz taki, który pozwala na podpis cyfrowy.",
         "cancelledCertifiedDescription": "Ten PDF jest certyfikowany, a jego certyfikacja nie pozwala na kolejne podpisy.",

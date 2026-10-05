@@ -124,6 +124,8 @@ export type QuestionColumnsController = {
   onConfirmRemove: () => void;
 };
 
+const NO_ADDED_IDS: ReadonlySet<string> = new Set();
+
 export const useQuestionColumns = ({
   enabled,
   onShowPassage,
@@ -152,6 +154,8 @@ export const useQuestionColumns = ({
 
   const [editing, setEditing] = useState<QuestionColumn | null>(null);
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
+  // Questions added during this visit, so their headers can say so.
+  const [addedIds, setAddedIds] = useState<ReadonlySet<string>>(NO_ADDED_IDS);
   const [removing, setRemoving] = useState<QuestionColumn | null>(null);
 
   const columnsQuery = useQuery({
@@ -260,6 +264,33 @@ export const useQuestionColumns = ({
     });
   };
 
+  /**
+   * A question joins the table at its end, often past the columns on screen,
+   * with no answers until it is run: say that it arrived and offer the run,
+   * so the press is never answered by nothing visible.
+   */
+  const announceAdded = (columnIds: readonly string[]) => {
+    for (const columnId of columnIds) {
+      const column = columns.find((known) => known.id === columnId);
+      if (column === undefined) {
+        continue;
+      }
+      stellaToast.add({
+        title: t("caseLaw.research.questionAdded", {
+          question: column.question,
+        }),
+        ...(canRun
+          ? {
+              actionProps: {
+                children: t("caseLaw.research.runConfirm"),
+                onClick: () => askToRun(column),
+              },
+            }
+          : {}),
+      });
+    }
+  };
+
   const onColumnAction = (
     column: QuestionColumn,
     action: QuestionColumnAction,
@@ -309,7 +340,10 @@ export const useQuestionColumns = ({
                   shownIds,
                 }),
               );
+              setAddedIds((current) => new Set([...current, ...columnIds]));
+              announceAdded(columnIds);
             },
+            addedIds,
             grants: { ...grants, run: grants.run && canRun },
             ...(reads.type === "ready" && reads.notice !== undefined
               ? { readNotice: reads.notice }
@@ -448,7 +482,7 @@ export const QuestionColumnControls = ({
           open
           target={{
             kind: "organisation",
-            editing,
+            mode: { type: "edit", column: editing },
             suggestion: surface.suggestion,
           }}
           triggerVariant="none"

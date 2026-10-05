@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -265,6 +266,15 @@ const ImportSkillDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-2xl" showCloseButton={!busy}>
+      <DialogFormState
+        dirty={url !== "" || scope !== "private" || discovery !== null}
+        onDiscard={() => {
+          setUrl("");
+          setScope("private");
+          setDiscovery(null);
+          setSelected(new Set());
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{tSkills("importTitle")}</DialogTitle>
         <p className="text-muted-foreground text-sm">{tSkills("importHelp")}</p>

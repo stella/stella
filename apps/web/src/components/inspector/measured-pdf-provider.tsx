@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { PropsWithChildren } from "react";
 
+import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
 import { PDFProvider } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 
@@ -9,6 +10,8 @@ export type MeasuredPdfProviderProps = PropsWithChildren<{
   fallback?: PDFPageFallback | undefined;
   fieldId: string;
   initialScaleOffset: number;
+  surface: ViewerSurface;
+  onDownload?: (() => void) | undefined;
   onError?: ((error: Error) => void) | undefined;
 }>;
 
@@ -18,7 +21,9 @@ export const MeasuredPdfProvider = ({
   fallback,
   fieldId,
   initialScaleOffset,
+  onDownload,
   onError,
+  surface,
 }: MeasuredPdfProviderProps) => {
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
 
@@ -64,7 +69,9 @@ export const MeasuredPdfProvider = ({
           initialScaleOffset={initialScaleOffset}
           startPage={1}
           fallback={fallback}
+          onDownload={onDownload}
           onError={onError}
+          surface={surface}
         >
           {children}
         </PDFProvider>

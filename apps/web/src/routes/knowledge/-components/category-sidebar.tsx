@@ -17,6 +17,7 @@ import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -719,6 +720,12 @@ const CategoryFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-sm">
+      <DialogFormState
+        dirty={name !== (initial?.name ?? "")}
+        onDiscard={() => {
+          setName(initial?.name ?? "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? labels.editCategory : labels.createCategory}

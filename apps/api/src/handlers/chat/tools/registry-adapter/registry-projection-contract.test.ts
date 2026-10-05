@@ -21,7 +21,7 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { contacts } from "@/api/db/schema";
+import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -71,9 +71,11 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
  * 1. The corpus is keyed by `ProjectableReadToolName` via `satisfies`, so a
  *    read tool marked `chatProjectable: true` without a fixture here fails
  *    typecheck (plus a runtime both-ways check for `bun test` alone).
- * 2. Every call must produce a payload free of undeclared UUIDs — this is
- *    `runRegistryReadTool`'s own fail-closed backstop; the corpus asserts it
- *    returns ok instead of the anonymization failure.
+ * 2. Every call must produce a payload free of undeclared UUIDs and
+ *    undeclared fields. At runtime the projection degrades instead of
+ *    failing (drops the offending leaf, strips the undeclared key) and
+ *    reports a defect; the corpus asserts it returns ok with NO defect
+ *    reported, so a fixture that only projects degraded still fails here.
  * 3. Anti-vacuity: per tool, the union of the calls' `expectRefPaths` must
  *    equal the map's declared `outputRefs` paths, and each such path must
  *    resolve to at least one minted chat ref in the actual payload. A fixture
@@ -1362,6 +1364,7 @@ const CONTRACT_CORPUS = {
                   vatAmount: 21,
                   grossAmount: 121,
                   source: "time_entry",
+                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
                   timeEntryId: uid(47),
                   expenseId: null,
                   releasedAt: null,
@@ -2077,9 +2080,16 @@ describe("registry projection contract", () => {
         }
 
         // A clean projection reports nothing: no refusal or defect hides
-        // behind a payload that merely looks well formed.
+        // behind a payload that merely looks well formed. This is the guard
+        // on the runtime degrade: a stripped undeclared field or a dropped
+        // unmappable id succeeds at runtime but reports a defect, which
+        // fails the corpus here (its `defect` and `paths` name the leak).
         expect(
-          recordedExceptions(),
+          recordedExceptions().map((event) => ({
+            class: event.properties["error.class"],
+            defect: event.properties["defect"],
+            paths: event.properties["paths"],
+          })),
           `${toolName} (${call.mode}): the call reported an exception`,
         ).toEqual([]);
       });
