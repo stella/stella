@@ -1914,7 +1914,7 @@
     "signedInAs": "Connecté en tant que <email>{accountEmail}</email>",
     "title": "Autoriser l’accès",
     "unverifiedApp": "Application non vérifiée",
-    "unverifiedExplanation": "L’éditeur de cette application n’a pas été vérifié. N’autorisez l’accès que si vous lui faites confiance.",
+    "unverifiedExplanation": "stella n’a pas vérifié qui publie cette application.",
     "useAnotherAccount": "Utiliser un autre compte"
   },
   "contacts": {

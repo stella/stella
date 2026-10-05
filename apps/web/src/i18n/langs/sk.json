@@ -1914,7 +1914,7 @@
     "signedInAs": "Prihlásený ako <email>{accountEmail}</email>",
     "title": "Autorizácia prístupu",
     "unverifiedApp": "Neoverená aplikácia",
-    "unverifiedExplanation": "Vydavateľ tejto aplikácie nebol overený. Prístup povoľte iba vtedy, ak mu dôverujete.",
+    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
     "useAnotherAccount": "Použiť iný účet"
   },
   "contacts": {

@@ -1914,7 +1914,7 @@
     "signedInAs": "Conectado como <email>{accountEmail}</email>",
     "title": "Autorizar acesso",
     "unverifiedApp": "Aplicativo não verificado",
-    "unverifiedExplanation": "O editor deste aplicativo não foi verificado. Permita o acesso somente se você confiar nele.",
+    "unverifiedExplanation": "O stella não verificou quem publica este aplicativo.",
     "useAnotherAccount": "Usar outra conta"
   },
   "contacts": {

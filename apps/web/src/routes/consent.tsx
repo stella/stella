@@ -396,9 +396,8 @@ function ConsentSuccess({
           className="flex flex-col items-center gap-4 py-10 text-center"
           role="status"
         >
-          <StellaMark className="size-8" />
           <CheckCircle2Icon className="size-9" aria-hidden="true" />
-          <h1 className="text-xl font-medium text-balance">
+          <h1 className="text-2xl font-medium text-balance">
             {t("consent.connectedTitle", { clientName })}
           </h1>
           <p className="text-muted-foreground text-sm">

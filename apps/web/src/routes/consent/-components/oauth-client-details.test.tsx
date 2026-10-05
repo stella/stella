@@ -33,6 +33,7 @@ describe("consent app details", () => {
       expect(markup).toContain(messages.consent.unverifiedApp);
       expect(markup).toContain("<button");
       expect(markup).toContain('data-slot="tooltip-trigger"');
+      expect(markup).toContain('data-slot="list-item-status"');
       expect(markup).not.toContain(
         messages.consent.publishedBy.split("<host>")[0],
       );

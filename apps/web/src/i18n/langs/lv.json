@@ -1914,7 +1914,7 @@
     "signedInAs": "Pierakstījies kā <email>{accountEmail}</email>",
     "title": "Autorizēt piekļuvi",
     "unverifiedApp": "Nepārbaudīta lietotne",
-    "unverifiedExplanation": "Šīs lietotnes izdevējs nav verificēts. Atļaujiet piekļuvi tikai tad, ja uzticaties šim izdevējam.",
+    "unverifiedExplanation": "stella nav pārbaudījusi, kas publicē šo lietotni.",
     "useAnotherAccount": "Izmantot citu kontu"
   },
   "contacts": {

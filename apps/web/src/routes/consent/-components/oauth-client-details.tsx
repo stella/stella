@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
+import { InfoIcon } from "@stll/ui/icons";
+import { ListItemStatus } from "@stll/ui/list";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { classifyOAuthDestination } from "@/lib/oauth-destination.logic";
@@ -21,15 +22,17 @@ export const OAuthClientDetails = ({
   const destination = classifyOAuthDestination(info, redirectUri);
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <p>
-        {t(
-          destination === "loopback"
-            ? "consent.returnsLocally"
-            : "consent.returnsTo",
-          { clientName },
-        )}
-      </p>
-      <PublisherIdentity info={info} />
+      <div className="flex flex-wrap items-center gap-x-3">
+        <p>
+          {t(
+            destination === "loopback"
+              ? "consent.returnsLocally"
+              : "consent.returnsTo",
+            { clientName },
+          )}
+        </p>
+        <PublisherIdentity info={info} />
+      </div>
       <details className="text-muted-foreground">
         <summary className="min-h-11 cursor-pointer content-center">
           {t("consent.destinationDetails")}
@@ -56,10 +59,11 @@ function PublisherIdentity({ info }: { info: OAuthConsentInfo }) {
   if (info.unverified) {
     return (
       <Tooltip>
-        <TooltipTrigger
-          render={<Button variant="ghost" className="min-h-11 w-fit" />}
-        >
-          {t("consent.unverifiedApp")}
+        <TooltipTrigger className="inline-flex min-h-11 items-center">
+          <ListItemStatus>
+            {t("consent.unverifiedApp")}
+            <InfoIcon className="size-3" aria-hidden="true" />
+          </ListItemStatus>
         </TooltipTrigger>
         <TooltipPopup>{t("consent.unverifiedExplanation")}</TooltipPopup>
       </Tooltip>

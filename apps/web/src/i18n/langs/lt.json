@@ -1914,7 +1914,7 @@
     "signedInAs": "Prisijungta kaip <email>{accountEmail}</email>",
     "title": "Suteikti prieigą",
     "unverifiedApp": "Nepatvirtinta programėlė",
-    "unverifiedExplanation": "Šios programos leidėjas nebuvo patvirtintas. Prieigą suteikite tik tuo atveju, jei juo pasitikite.",
+    "unverifiedExplanation": "stella nepatikrino, kas skelbia šią programą.",
     "useAnotherAccount": "Naudoti kitą paskyrą"
   },
   "contacts": {

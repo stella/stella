@@ -1914,7 +1914,7 @@
     "signedInAs": "Bejelentkezve mint <email>{accountEmail}</email>",
     "title": "Hozzáférés engedélyezése",
     "unverifiedApp": "Nem ellenőrzött alkalmazás",
-    "unverifiedExplanation": "Az alkalmazás közzétevőjét nem ellenőriztük. Csak akkor engedélyezze a hozzáférést, ha megbízik benne.",
+    "unverifiedExplanation": "A stella nem ellenőrizte, ki teszi közzé ezt az alkalmazást.",
     "useAnotherAccount": "Másik fiók használata"
   },
   "contacts": {

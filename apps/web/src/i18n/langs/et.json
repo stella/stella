@@ -1914,7 +1914,7 @@
     "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
     "title": "Anna juurdepääs",
     "unverifiedApp": "Kinnitamata rakendus",
-    "unverifiedExplanation": "Selle rakenduse avaldajat pole kinnitatud. Luba juurdepääs ainult siis, kui usaldad teda.",
+    "unverifiedExplanation": "stella pole kontrollinud, kes selle rakenduse avaldab.",
     "useAnotherAccount": "Kasuta teist kontot"
   },
   "contacts": {

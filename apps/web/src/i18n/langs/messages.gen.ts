@@ -1917,7 +1917,7 @@ type Messages = {
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
-    "unverifiedExplanation": "This app’s publisher has not been verified. Only allow access if you trust it.";
+    "unverifiedExplanation": "stella has not verified who publishes this app.";
     "useAnotherAccount": "Use another account";
   };
   "contacts": {

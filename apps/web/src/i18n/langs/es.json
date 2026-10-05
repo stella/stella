@@ -1914,7 +1914,7 @@
     "signedInAs": "Sesión iniciada como <email>{accountEmail}</email>",
     "title": "Autorizar acceso",
     "unverifiedApp": "Aplicación no verificada",
-    "unverifiedExplanation": "No se ha verificado al editor de esta aplicación. Permite el acceso solo si confías en él.",
+    "unverifiedExplanation": "stella no ha verificado quién publica esta aplicación.",
     "useAnotherAccount": "Usar otra cuenta"
   },
   "contacts": {

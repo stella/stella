@@ -1914,7 +1914,7 @@
     "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
     "title": "التفويض بالوصول",
     "unverifiedApp": "تطبيق غير موثّق",
-    "unverifiedExplanation": "لم يتم التحقق من ناشر هذا التطبيق. اسمح بالوصول فقط إذا كنت تثق به.",
+    "unverifiedExplanation": "لم تتحقق stella من الجهة التي تنشر هذا التطبيق.",
     "useAnotherAccount": "استخدم حسابًا آخر"
   },
   "contacts": {
