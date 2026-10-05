@@ -346,6 +346,9 @@ test("citing decisions order by decision date, newest first", async () => {
   ]);
   expect(page.items.at(0)?.decisionDate).toBe("2025-01-01");
   expect(page.items.at(0)?.citationAuthority).toBe(1);
+  expect(page.items.map((item) => item.versionBasis)).toEqual(
+    page.items.map(() => ({ type: "inferred", kind: "decision_date" })),
+  );
   expect(page.items.map((item) => item.decisionId)).not.toContain(
     closedDecisionId,
   );

@@ -1180,6 +1180,14 @@ describe("detect-e2e-changes", () => {
     const bunSetup = workflowStep(workflowJob("ci-browser"), "Setup Bun");
     expect(bunSetup).toContain("@oven/bun-linux-x64@$version");
     expect(bunSetup).toContain("--ignore-scripts");
+    // The cached owner's pinned setup-bun reuses this standard install path.
+    expect(bunSetup).toContain('bin="$HOME/.bun/bin"');
+    const cachedSetup = workflowStep(
+      workflowJob("ci-browser"),
+      "Restore Bun install cache",
+    );
+    expect(cachedSetup).toContain("stella/.github/actions/setup-bun-cached@");
+    expect(cachedSetup).toContain("bun-version-file: package.json");
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {

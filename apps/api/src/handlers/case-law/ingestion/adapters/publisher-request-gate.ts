@@ -1,5 +1,7 @@
+// parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Temporal } from "@stll/time";
 
@@ -75,6 +77,20 @@ type PublisherRequestGateConfig = {
 export type PublisherRequestGateDependencies = {
   redis: () => PublisherGateClient | Promise<PublisherGateClient>;
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
+};
+
+const fixtureDependencies =
+  new AsyncLocalStorage<PublisherRequestGateDependencies>();
+
+/** Exercise the actual shared and run-scoped gates without opening Redis. */
+export const withPublisherGateFixture = async <T>(
+  dependencies: PublisherRequestGateDependencies,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  if (!isLocalTestRun()) {
+    panic("Publisher gate fixtures require a local test run");
+  }
+  return await fixtureDependencies.run(dependencies, operation);
 };
 
 export const abortableSleep = async (
@@ -202,6 +218,7 @@ const defaultDependencies = (
  * Every strict process reserves, whatever its NODE_ENV.
  */
 export const publisherGateReserves = (): boolean =>
+  fixtureDependencies.getStore() !== undefined ||
   !(isLocalDevOpen() && isLocalTestRun());
 
 /** Redis answered a gate reservation with something other than a wait. */
@@ -235,7 +252,9 @@ export const createPublisherRequestSlot = (
       try: async () =>
         await withTimeout(
           async () => {
-            const redis = await dependencies.redis();
+            const redis = await (
+              fixtureDependencies.getStore() ?? dependencies
+            ).redis();
             return await redis.send("EVAL", args);
           },
           {
@@ -303,7 +322,10 @@ export const createPublisherRequestSlot = (
         [RESERVE_SLOT_SCRIPT, String(keys.length), ...keys, String(intervalMs)],
         { signal },
       );
-      await dependencies.sleep(waitMs, signal);
+      await (fixtureDependencies.getStore() ?? dependencies).sleep(
+        waitMs,
+        signal,
+      );
       if (cooldown !== "shared") {
         return;
       }
@@ -315,7 +337,10 @@ export const createPublisherRequestSlot = (
       if (remaining === 0) {
         return;
       }
-      await dependencies.sleep(remaining, signal);
+      await (fixtureDependencies.getStore() ?? dependencies).sleep(
+        remaining,
+        signal,
+      );
     }
   };
   const tryReserve = async ({

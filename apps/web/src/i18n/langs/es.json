@@ -841,6 +841,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
@@ -865,7 +866,9 @@
       },
       "deleteColumnConfirm": "Se eliminarán la pregunta y todas sus respuestas para toda su organización, en todas las búsquedas y para todos los miembros. Para quitarla solo de esta búsqueda, use «Quitar de esta búsqueda».",
       "editQuestionHint": "Cambiar la redacción, el tipo de respuesta o sus opciones descarta las respuestas actuales; vuelva a ejecutar la columna después.",
+      "newQuestionColumn": "Nueva",
       "nothingToRun": "Todas las celdas ya tienen respuesta",
+      "questionAdded": "«{question}» añadida a la tabla",
       "questionPlaceholder": "p. ej. ¿Consideró el tribunal válido el despido?",
       "removeFromSearch": "Quitar de esta búsqueda",
       "runAll": "Responder todo",
@@ -944,7 +947,8 @@
       "textNotYetAvailable": "El tribunal no ha publicado el texto de la resolución o aún no está disponible aquí.",
       "textPending": "El texto de la resolución aún se está obteniendo",
       "textReadFailed": "No se ha podido cargar el texto de la resolución",
-      "textUnavailable": "No hay texto disponible para esta resolución"
+      "textUnavailable": "No hay texto disponible para esta resolución",
+      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)"
     }
   },
   "catalogue": {
@@ -1854,6 +1858,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
     "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",
@@ -1874,15 +1879,23 @@
     "zoomOut": "Alejar"
   },
   "consent": {
+    "actingAs": "{clientName} actuará en tu nombre en {organizationName}",
     "allow": "Permitir",
-    "appIdentity": "Identidad de la aplicación",
+    "canChange": "Puede modificar",
+    "canRead": "Puede leer",
     "completeSetup": "Completar configuración",
+    "connectTitle": "Conectar {clientName} a stella",
+    "connectedTitle": "Conectado a {clientName}",
+    "connectionDuration": "Seguirá conectado hasta que lo desconectes en Ajustes › Conexiones",
     "defaultClientName": "Una aplicación",
-    "description": "{clientName} quiere acceder a su espacio de trabajo de stella",
+    "destinationDetails": "Detalles de redirección",
     "error": "Algo salió mal. Inténtelo de nuevo.",
     "missingJurisdictions": "Su organización de stella todavía no ha configurado sus jurisdicciones de práctica. Algunas herramientas que dependen de la jurisdicción no estarán disponibles hasta que complete la configuración.",
-    "permissions": "Esto permitirá a la aplicación:",
-    "redirectDestination": "Destino de redirección",
+    "otherPermissions": "Otros permisos",
+    "publishedBy": "Publicado por <host>{publisherHost}</host>",
+    "returnToAgent": "Vuelve a tu agente para continuar.",
+    "returnsLocally": "Volverás a {clientName} en este ordenador",
+    "returnsTo": "Volverás a {clientName}",
     "scopeAdminRead": "Leer el registro de auditoría de su organización",
     "scopeAdminWrite": "Gestionar los miembros y la configuración de la organización",
     "scopeBillingWrite": "Crear, editar y eliminar sus registros de tiempo",
@@ -1903,8 +1916,11 @@
     "scopeSkills": "Usar tus habilidades de stella guardadas",
     "scopeTemplates": "Listar, rellenar y crear tus plantillas de documentos",
     "scopeTemplatesAnonymized": "Listar, rellenar y crear versiones anonimizadas de sus plantillas de documentos",
+    "signedInAs": "Sesión iniciada como <email>{accountEmail}</email>",
     "title": "Autorizar acceso",
-    "unverifiedApp": "Aplicación no verificada"
+    "unverifiedApp": "Aplicación no verificada",
+    "unverifiedExplanation": "stella no ha verificado quién publica esta aplicación.",
+    "useAnotherAccount": "Usar otra cuenta"
   },
   "contacts": {
     "alsoPartyIn": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
@@ -4622,6 +4638,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
@@ -4671,7 +4688,9 @@
       "unknown": "Estado incierto"
     },
     "title": "Legislación",
-    "validity": "Vigente del {from} al {to}"
+    "validity": "Vigente del {from} al {to}",
+    "wordingValidFrom": "Redacción vigente desde {date}",
+    "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {
     "create": "Crear",
@@ -5408,6 +5427,7 @@
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecta stella desktop a tu cuenta",
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
@@ -5430,6 +5450,18 @@
         "updateRequiredDescription": "stella desktop necesita una actualización. Se actualizará automáticamente cuando terminen las ediciones de escritorio activas; inténtalo de nuevo después de que se reinicie.",
         "updateRequiredTitle": "Actualiza stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "¿Ya está instalado? Conéctalo",
+        "connect": "Conectar stella desktop",
+        "editNone": "Descarga stella desktop para editar este archivo",
+        "editOutdated": "Actualiza stella desktop para editar",
+        "editReason": "La edición en el escritorio abre el archivo en una aplicación de tu ordenador a través de stella desktop.",
+        "signCurrent": "Firmar con stella desktop",
+        "signNone": "Descarga stella desktop para firmar este PDF",
+        "signOutdated": "Actualiza stella desktop para firmar",
+        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop.",
+        "signShort": "Firmar"
+      },
       "downloadAs": "Descargar como…",
       "downloadAsZip": "Descargar archivo .zip",
       "downloadExtractedText": "Texto extraído (.txt)",
@@ -5443,7 +5475,6 @@
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
       "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
       "pdfSigning": {
-        "action": "Firmar en la app de escritorio",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
         "cancelledCertificateDescription": "El certificado elegido no sirve para firmar. Elige uno que permita firmas digitales.",
         "cancelledCertifiedDescription": "Este PDF está certificado y su certificación no permite más firmas.",
