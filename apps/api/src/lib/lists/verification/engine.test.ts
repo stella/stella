@@ -603,8 +603,12 @@ test("access removal after extraction blocks the later grading batch", async () 
     claims: extracted.value.map((claim, position) => ({
       key: String(position),
       text: claim.text,
-      context:
-        BLOCKS.at(claim.blockIndex)?.text ?? panic("Expected extracted block"),
+      context: {
+        text:
+          BLOCKS.at(claim.blockIndex)?.text ??
+          panic("Expected extracted block"),
+        anchor: claim.anchor,
+      },
     })),
     facts: [fact(FACT_A, "The meeting took place on 9 March 2021")],
     deps: currentDeps,

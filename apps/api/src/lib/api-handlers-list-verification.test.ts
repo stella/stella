@@ -12,8 +12,9 @@ import latest from "@/api/handlers/lists/verifications/latest/list";
 import list from "@/api/handlers/lists/verifications/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { RootHandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -22,7 +23,7 @@ const context = (tx: unknown) => ({
   user: { id: toSafeId<"user">("user_a"), email: "member@example.test" },
   session: { activeOrganizationId: toSafeId<"organization">("org_a") },
   workspaceId: toSafeId<"workspace">("workspace_a"),
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   request: new Request("https://example.test/lists"),
@@ -108,7 +109,7 @@ describe("verification handler access admission", () => {
         permissions: { workspace: ["read"] },
         access: "read",
         mcp: { type: "internal", reason: "list_verification" },
-      } satisfies HandlerConfig;
+      } satisfies RootHandlerConfig;
       let executions = 0;
       const endpoint = createSafeRootHandler(
         config,

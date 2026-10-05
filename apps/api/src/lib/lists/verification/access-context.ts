@@ -7,9 +7,9 @@ import { env } from "@/api/env";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import type { ListVerificationAccessResult } from "@/api/lib/lists/verification/access";
 
 type VerificationWorkspaceAccessOptions = {
@@ -45,7 +45,7 @@ export const resolveListVerificationAccess = async ({
   workspaceId,
 }: ResolveListVerificationAccessArgs): Promise<ListVerificationAccessResult> => {
   if (
-    !legalListsDeployed() ||
+    !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
     (grants[LIST_VERIFICATION_FEATURE_ID]?.length ?? 0) === 0 ||
     userId === null
   ) {

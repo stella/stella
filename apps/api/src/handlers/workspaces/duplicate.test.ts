@@ -323,17 +323,6 @@ describe("duplicateWorkspace", () => {
               from: (table: unknown) => {
                 expect(table).toBe(member);
                 return {
-                  where: async () => [{ userId: "user_lead123" }],
-                };
-              },
-            };
-          }
-
-          if ("userId" in selectedFields) {
-            return {
-              from: (table: unknown) => {
-                expect(table).toBe(member);
-                return {
                   where: () => ({
                     orderBy: (column: unknown) => {
                       // Copied memberships lock in the order removal uses.

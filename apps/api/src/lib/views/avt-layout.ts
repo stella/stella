@@ -18,6 +18,7 @@ import type {
   FeatureResourceContext,
 } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 /**
  * An AVT view verifies a matter's documents against one of its legal lists,
  * so storing one needs the lists feature, and a picked list must belong to
@@ -25,7 +26,6 @@ import type { SafeId } from "@/api/lib/branded-types";
  * view; the list row is share-locked so it cannot be deleted before commit.
  */
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import { isRecord } from "@/api/lib/type-guards";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -147,7 +147,7 @@ export const avtViewAccessStatus = ({
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
 }): "available" | "unavailable" =>
-  legalListsDeployed() &&
+  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") &&
   snapshot !== undefined &&
   isFeatureEnabled(snapshot, LIST_VERIFICATION_FEATURE_ID, {
     organizationId,

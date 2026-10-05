@@ -334,7 +334,7 @@ test("queued revocation fails once and makes no execution call", async () => {
   });
   await db
     .update(legalListVerificationRuns)
-    .set({ status: "failed" })
+    .set({ status: "failed", errorCode: "internal" })
     .where(eq(legalListVerificationRuns.entityId, original.entityId));
 });
 
@@ -476,7 +476,7 @@ test("granted duplicate delivery executes once using the persisted requester", a
   const actor = actorFor(runId);
   const execute = async () => {
     calls += 1;
-    await actor.scopedDb(
+    await actor.writeDb(
       async (tx) =>
         await failVerificationRun({
           tx,
@@ -517,7 +517,7 @@ test("job requester mismatch leaves the persisted run unchanged", async () => {
   expect(calls).toBe(0);
   expect(await readRun(runId)).toEqual({ status: "queued", errorCode: null });
   expect(await readAudits(runId)).toHaveLength(0);
-  await actorFor(runId).scopedDb(
+  await actorFor(runId).writeDb(
     async (tx) =>
       await failVerificationRun({
         tx,
@@ -625,6 +625,9 @@ test("membership removal closes queued execution with a server-bound audit", asy
     role: "member",
     createdAt: new Date(),
   });
+  await db
+    .insert(workspaceMembers)
+    .values({ id: workspaceMemberId, workspaceId, userId });
 });
 
 test("current role permission is required for queued execution", async () => {
@@ -663,165 +666,184 @@ test.each([
   "requester",
 ] as const)(
   "running %s revocation stops the next model request and audits once",
-  async (revoke) => {
-    const runId = await seedRun();
-    let calls = 0;
-    let currentGrants: FeatureAccessGrants = grants;
-    await processListVerificationRun({
-      data: { runId, organizationId, workspaceId, userId },
-      actor: actorFor(runId),
-      grants,
-      execute: async ({ actor, accessProof }) => {
-        const call = createVerificationCall({
-          deps: {
-            accessProof,
-            refreshAccessProof: async () => {
-              const decision = await actor.scopedDb(
-                async (tx) =>
-                  await resolveListVerificationRunAccess({
-                    tx,
-                    run: { id: runId, organizationId, workspaceId },
-                    requesterId: userId,
-                    expectedStatus: "running",
-                    grants: currentGrants,
-                  }),
-              );
-              return decision.status === "available" ? decision.proof : null;
-            },
-            organizationId,
-            workspaceId,
-            entityVersionId: createSafeId<"entityVersion">(),
-            orgAIConfig: null,
-            managedAIResidency: "eu",
-            promptCachingEnabled: false,
-            serviceTier: "standard",
-            usageMetering: {
-              actionType: "doc_review",
+  async (revoke) =>
+    await withProductionPrerequisites(async () => {
+      const runId = await seedRun();
+      let calls = 0;
+      let currentGrants: FeatureAccessGrants = grants;
+      expect(
+        await db
+          .select({ role: member.role })
+          .from(member)
+          .where(eq(member.id, organizationMemberId)),
+      ).toEqual([{ role: "member" }]);
+      expect(
+        await db
+          .select({ id: workspaceMembers.id })
+          .from(workspaceMembers)
+          .where(eq(workspaceMembers.id, workspaceMemberId)),
+      ).toEqual([{ id: workspaceMemberId }]);
+      await processListVerificationRun({
+        data: { runId, organizationId, workspaceId, userId },
+        actor: actorFor(runId),
+        grants,
+        execute: async ({ actor, accessProof }) => {
+          const call = createVerificationCall({
+            deps: {
+              accessProof,
+              refreshAccessProof: async () => {
+                const decision = await actor.writeDb(
+                  async (tx) =>
+                    await resolveListVerificationRunAccess({
+                      tx,
+                      run: { id: runId, organizationId, workspaceId },
+                      requesterId: userId,
+                      expectedStatus: "running",
+                      grants: currentGrants,
+                    }),
+                );
+                return decision.status === "available" ? decision.proof : null;
+              },
               organizationId,
               workspaceId,
-              userId,
-              safeDb: actor.safeDb,
+              entityVersionId: createSafeId<"entityVersion">(),
+              orgAIConfig: null,
+              managedAIResidency: "eu",
+              promptCachingEnabled: false,
               serviceTier: "standard",
+              usageMetering: {
+                actionType: "doc_review",
+                organizationId,
+                workspaceId,
+                userId,
+                safeDb: actor.writeSafeDb,
+                serviceTier: "standard",
+              },
+              abortSignal: AbortSignal.timeout(5000),
+              generateObjectForRole: asTestRaw<
+                typeof generateTanStackObjectForRole
+              >(async () => {
+                calls += 1;
+                return { value: "fixture" };
+              }),
             },
-            abortSignal: AbortSignal.timeout(5000),
-            generateObjectForRole: asTestRaw<
-              typeof generateTanStackObjectForRole
-            >(async () => {
-              calls += 1;
-              return { value: "fixture" };
-            }),
-          },
-          feature: "verification-test",
-          system: "Fixture instruction",
-          shared: null,
-          outputSchema: v.object({ value: v.string() }),
-        });
-        expect(await call.generate([])).toEqual(
-          Result.ok({ value: "fixture" }),
-        );
-        switch (revoke) {
-          case "grant":
-            currentGrants = {};
-            break;
-          case "membership":
-            await db.delete(member).where(eq(member.id, organizationMemberId));
-            break;
-          case "matter":
-            await db
-              .delete(workspaceMembers)
-              .where(eq(workspaceMembers.id, workspaceMemberId));
-            break;
-          case "permission":
-            await db
-              .update(member)
-              .set({ role: "intern" })
-              .where(eq(member.id, organizationMemberId));
-            break;
-          case "requester":
-            await db
-              .update(legalListVerificationRuns)
-              .set({ requestedBy: null })
-              .where(eq(legalListVerificationRuns.id, runId));
-            break;
-          default:
-            revoke satisfies never;
-        }
-        const denied = await call.generate([]);
-        expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
-          ListVerificationAccessRevokedError,
-        );
-        return "access_revoked";
-      },
-    });
-    expect(calls).toBe(1);
-    expect(await readRun(runId)).toEqual({
-      status: "failed",
-      errorCode: "access_revoked",
-    });
-    expect(await readAudits(runId)).toHaveLength(1);
-    await processListVerificationRun({
-      data: { runId, organizationId, workspaceId, userId },
-      actor: actorFor(runId),
-      grants,
-      execute: async () => {
-        calls += 1;
-        return null;
-      },
-    });
-    expect(calls).toBe(1);
-    expect(await readAudits(runId)).toHaveLength(1);
-    if (revoke === "membership") {
-      await db.insert(member).values({
-        id: organizationMemberId,
-        organizationId,
-        userId,
-        role: "member",
-        createdAt: new Date(),
+            feature: "verification-test",
+            system: "Fixture instruction",
+            shared: null,
+            outputSchema: v.object({ value: v.string() }),
+          });
+          expect(await call.generate([])).toEqual(
+            Result.ok({ value: "fixture" }),
+          );
+          switch (revoke) {
+            case "grant":
+              currentGrants = {};
+              break;
+            case "membership":
+              await db
+                .delete(member)
+                .where(eq(member.id, organizationMemberId));
+              break;
+            case "matter":
+              await db
+                .delete(workspaceMembers)
+                .where(eq(workspaceMembers.id, workspaceMemberId));
+              break;
+            case "permission":
+              await db
+                .update(member)
+                .set({ role: "intern" })
+                .where(eq(member.id, organizationMemberId));
+              break;
+            case "requester":
+              await db
+                .update(legalListVerificationRuns)
+                .set({ requestedBy: null })
+                .where(eq(legalListVerificationRuns.id, runId));
+              break;
+            default:
+              revoke satisfies never;
+          }
+          const denied = await call.generate([]);
+          expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
+            ListVerificationAccessRevokedError,
+          );
+          return "access_revoked";
+        },
       });
-    }
-    if (revoke === "matter") {
-      await db
-        .insert(workspaceMembers)
-        .values({ id: workspaceMemberId, workspaceId, userId });
-    }
-    if (revoke === "permission") {
-      await db
-        .update(member)
-        .set({ role: "member" })
-        .where(eq(member.id, organizationMemberId));
-    }
-  },
+      expect(calls).toBe(1);
+      expect(await readRun(runId)).toEqual({
+        status: "failed",
+        errorCode: "access_revoked",
+      });
+      expect(await readAudits(runId)).toHaveLength(1);
+      await processListVerificationRun({
+        data: { runId, organizationId, workspaceId, userId },
+        actor: actorFor(runId),
+        grants,
+        execute: async () => {
+          calls += 1;
+          return null;
+        },
+      });
+      expect(calls).toBe(1);
+      expect(await readAudits(runId)).toHaveLength(1);
+      if (revoke === "membership") {
+        await db.insert(member).values({
+          id: organizationMemberId,
+          organizationId,
+          userId,
+          role: "member",
+          createdAt: new Date(),
+        });
+        await db
+          .insert(workspaceMembers)
+          .values({ id: workspaceMemberId, workspaceId, userId });
+      }
+      if (revoke === "matter") {
+        await db
+          .insert(workspaceMembers)
+          .values({ id: workspaceMemberId, workspaceId, userId });
+      }
+      if (revoke === "permission") {
+        await db
+          .update(member)
+          .set({ role: "member" })
+          .where(eq(member.id, organizationMemberId));
+      }
+    }),
 );
 
-test("queue handoff failures surface while the persisted run remains recoverable", async () => {
-  const runId = await seedRun();
-  const healthy = queueFixture();
-  const queueDb =
-    asTestRaw<Parameters<typeof reconcileQueuedListVerificationRuns>[0]["db"]>(
-      db,
-    );
-  const failed = await reconcileQueuedListVerificationRuns({
-    db: queueDb,
-    grants,
-    queue: {
-      ...healthy.queue,
-      add: async () => {
-        throw new Error("Fixture queue unavailable");
+test("queue handoff failures surface while the persisted run remains recoverable", async () =>
+  await withProductionPrerequisites(async () => {
+    const runId = await seedRun();
+    const healthy = queueFixture();
+    const queueDb =
+      asTestRaw<
+        Parameters<typeof reconcileQueuedListVerificationRuns>[0]["db"]
+      >(db);
+    const failed = await reconcileQueuedListVerificationRuns({
+      db: queueDb,
+      grants,
+      queue: {
+        ...healthy.queue,
+        add: async () => {
+          throw new Error("Fixture queue unavailable");
+        },
       },
-    },
-  });
-  expect(failed.isErr()).toBe(true);
-  if (failed.isErr()) {
-    expect(failed.error.message).toBe(
-      "List verification reconciliation failed",
-    );
-  }
-  expect(await readRun(runId)).toEqual({ status: "queued", errorCode: null });
-  const recovered = await reconcileQueuedListVerificationRuns({
-    db: queueDb,
-    grants,
-    queue: healthy.queue,
-  });
-  expect(recovered.isOk()).toBe(true);
-  expect(healthy.added).toHaveLength(1);
-});
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error.message).toBe(
+        "List verification reconciliation failed",
+      );
+    }
+    expect(await readRun(runId)).toEqual({ status: "queued", errorCode: null });
+    const recovered = await reconcileQueuedListVerificationRuns({
+      db: queueDb,
+      grants,
+      queue: healthy.queue,
+    });
+    expect(recovered.isOk()).toBe(true);
+    expect(healthy.added).toHaveLength(1);
+  }));

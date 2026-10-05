@@ -20,8 +20,8 @@ import {
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
@@ -126,7 +126,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     generate: async (messages) => {
       const proof = await deps.refreshAccessProof();
       if (
-        !legalListsDeployed() ||
+        !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
         proof === null ||
         !proofMatchesRequest(proof, deps) ||
         !proofMatchesRequest(deps.accessProof, deps)
