@@ -368,7 +368,7 @@ const SelectionActions = ({
           return;
         default: {
           result satisfies never;
-          return panic("Unhandled workflow start status");
+          panic("Unhandled workflow start status");
         }
       }
     } finally {

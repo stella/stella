@@ -49,37 +49,6 @@ import {
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
 
-export const PropertyCell = ({
-  entity,
-  property,
-}: {
-  entity: WorkspaceEntity;
-  property: WorkspaceProperty;
-}) => {
-  const content = entity.fields[property.id]?.content;
-  const preview = useWorkspaceStore((s) =>
-    content?.type === "pending"
-      ? s.getExtractionPreview(entity.entityId, property.id)
-      : null,
-  );
-  if (property.tool.type !== "ai-model") {
-    return <PropertyCellContent entity={entity} property={property} />;
-  }
-  return (
-    <AiCell
-      state={propertyAiCellState(content)}
-      preview={preview}
-      failure={
-        content?.type === "error" ? (
-          <PropertyCellContent entity={entity} property={property} />
-        ) : undefined
-      }
-    >
-      <PropertyCellContent entity={entity} property={property} />
-    </AiCell>
-  );
-};
-
 const PropertyCellContent = ({
   entity,
   property,
@@ -308,6 +277,37 @@ const PropertyCellContent = ({
         workspaceId={property.workspaceId}
       />
     </>
+  );
+};
+
+export const PropertyCell = ({
+  entity,
+  property,
+}: {
+  entity: WorkspaceEntity;
+  property: WorkspaceProperty;
+}) => {
+  const content = entity.fields[property.id]?.content;
+  const preview = useWorkspaceStore((s) =>
+    content?.type === "pending"
+      ? s.getExtractionPreview(entity.entityId, property.id)
+      : null,
+  );
+  if (property.tool.type !== "ai-model") {
+    return <PropertyCellContent entity={entity} property={property} />;
+  }
+  return (
+    <AiCell
+      state={propertyAiCellState(content)}
+      preview={preview}
+      failure={
+        content?.type === "error" ? (
+          <PropertyCellContent entity={entity} property={property} />
+        ) : undefined
+      }
+    >
+      <PropertyCellContent entity={entity} property={property} />
+    </AiCell>
   );
 };
 

@@ -191,7 +191,7 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
       if (
         !ts.isImportDeclaration(statement) ||
         !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.importClause?.isTypeOnly
+        statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
       ) {
         continue;
       }
@@ -227,6 +227,8 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
           break;
         case "components/public-law-table/public-law-table":
           exports.add("PublicLawTable");
+          break;
+        default:
           break;
       }
       const names =

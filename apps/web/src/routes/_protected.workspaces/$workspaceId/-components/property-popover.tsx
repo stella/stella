@@ -111,9 +111,7 @@ export const PropertyPopover = ({
     propertyAiCellState(row.original.fields[id]?.content),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
-  const selectedRowIds = Object.entries(rowSelection)
-    .filter(([, selected]) => selected)
-    .map(([entityId]) => entityId);
+  const selectedRowIds = Object.keys(rowSelection);
   const runScope = aiColumnRunScope({ pageRowIds, selectedRowIds });
   const availableScopeRowIds = new Set(
     getPropertyRunTargetIds({
