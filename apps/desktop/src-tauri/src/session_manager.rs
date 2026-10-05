@@ -2497,10 +2497,10 @@ async fn show_takeover_dialog(
     urlencode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     handle,
     "takeover-dialog",
-    tauri::WebviewUrl::App(format!("takeover-dialog.html#{hash}").into()),
+    format!("takeover-dialog.html#{hash}"),
   )
   .title(crate::i18n::t("dialog.takeoverWindowTitle"))
   .inner_size(400.0, 260.0)

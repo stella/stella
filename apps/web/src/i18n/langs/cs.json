@@ -54,6 +54,17 @@
       "polish": "Vylepšit znění"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
+    "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
+    "rerunAllPage": "Spustit vše znovu (tato stránka)",
+    "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
+    "runColumnPage": "Spustit sloupec (tato stránka)",
+    "runPageRows": "Spustit pro {count, plural, one {# řádek na této stránce} few {# řádky na této stránce} many {# řádku na této stránce} other {# řádků na této stránce}}",
+    "runRemainingPage": "Spustit zbývající (tato stránka)",
+    "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
+    "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",
@@ -2311,6 +2322,8 @@
       "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
       "filePropertyTypeImmutable": "Typ souborové vlastnosti nelze změnit. Ponechte stávající typ; pro jiné hodnoty vytvořte vlastní vlastnost.",
       "forbidden": "K této akci nemáte oprávnění.",
+      "hostedCheckoutOpen": "Pro tuto organizaci už je otevřená objednávka. Dokončete ji, nebo začněte novou, až vyprší.",
+      "hostedSubscriptionLive": "Tato organizace už má předplatné. Změňte ho v části Spravovat hostované využití.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
@@ -5459,8 +5472,7 @@
         "signCurrent": "Podepsat ve stella desktop",
         "signNone": "Stáhněte stella desktop a podepište toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podepisujte",
-        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
-        "signShort": "Podepsat"
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop."
       },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
@@ -6002,7 +6014,6 @@
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "AI čerpá informace z",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
-      "rerunColumn": "Spustit znovu sloupec",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuální soubor",

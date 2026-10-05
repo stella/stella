@@ -54,6 +54,17 @@
       "polish": "Formulierung verbessern"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
+    "rerunAllPage": "Alle erneut ausführen (diese Seite)",
+    "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
+    "runColumnPage": "Spalte ausführen (diese Seite)",
+    "runPageRows": "Ausführen für {count, plural, one {# Zeile auf dieser Seite} other {# Zeilen auf dieser Seite}}",
+    "runRemainingPage": "Verbleibende ausführen (diese Seite)",
+    "runSelectedRows": "Ausführen für {count, plural, one {# ausgewählte Zeile} other {# ausgewählte Zeilen}}",
+    "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregorianisch",
@@ -2311,6 +2322,8 @@
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
+      "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
@@ -5459,8 +5472,7 @@
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
-        "signShort": "Signieren"
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -6002,7 +6014,6 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
-      "rerunColumn": "Spalte neu ausführen",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
       "scopeFile": "Aktuelle Datei",

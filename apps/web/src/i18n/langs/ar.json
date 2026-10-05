@@ -54,6 +54,17 @@
       "polish": "تحسين الصياغة"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
+    "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
+    "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
+    "runColumnPage": "تشغيل العمود (هذه الصفحة)",
+    "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
+    "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
+    "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
@@ -2311,6 +2322,8 @@
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
+      "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
@@ -5459,8 +5472,7 @@
         "signCurrent": "التوقيع باستخدام stella desktop",
         "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
         "signOutdated": "حدّث stella desktop للتوقيع",
-        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop.",
-        "signShort": "توقيع"
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop."
       },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",
@@ -6002,7 +6014,6 @@
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
-      "rerunColumn": "إعادة تشغيل العمود",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",
       "scopeFile": "الملف الحالي",
