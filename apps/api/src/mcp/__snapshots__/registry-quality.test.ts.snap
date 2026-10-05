@@ -337,6 +337,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "maxLength": 64,
           "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -7064,6 +7065,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "maxLength": 64,
           "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -8624,6 +8626,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "maxLength": 64,
           "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
             "country": {

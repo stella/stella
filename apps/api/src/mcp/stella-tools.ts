@@ -643,8 +643,11 @@ const CASE_LAW_COVERAGE_TOOL = "case_law_coverage";
 const caseLawCoverageArgsSchema = nullAsAbsent(
   v.strictObject({
     country: v.optional(
-      countryInputSchema(
-        "Corpus country; omit for all jurisdictions, including those in preparation.",
+      v.pipe(
+        countryInputSchema(
+          "Corpus country; omit for all jurisdictions, including those in preparation.",
+        ),
+        v.minLength(LIMITS.caseLawCoverageCountryMinLength),
       ),
     ),
   }),

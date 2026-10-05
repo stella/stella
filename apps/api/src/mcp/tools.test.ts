@@ -5057,13 +5057,13 @@ describe("OpenAI-compatible MCP tools", () => {
 
   describe("case_law_coverage", () => {
     const readCoverage = mock(async () => CASE_LAW_COVERAGE_FIXTURE);
-    const call = (
+    const call = async (
       args: Record<string, unknown>,
       readCaseLawCoverageHandler: NonNullable<
         McpRequestContext["testDependencies"]
       >["readCaseLawCoverageHandler"] = readCoverage,
     ) =>
-      handleMcpToolCall({
+      await handleMcpToolCall({
         args,
         context: createContext({
           testDependencies: { readCaseLawCoverageHandler },
