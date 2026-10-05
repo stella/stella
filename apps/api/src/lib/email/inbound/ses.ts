@@ -340,28 +340,40 @@ export const receiveSesInboundMail = async ({
   }
   const delivery = result.value;
   switch (delivery.status) {
-    case "oversized":
-      return (
-        await recordOversizedInboundMail({
-          envelope: delivery.envelope,
-          receivedAt: delivery.receivedAt,
-          deliveryKey: delivery.deliveryKey,
-          inboundDomain,
-          persist,
-        })
-      ).map((deliveries) => ({ deliveries, objectKey: delivery.objectKey }));
-    case "received":
-      return (
-        await ingestInboundMail({
-          raw: delivery.raw,
-          envelope: delivery.envelope,
-          receivedAt: delivery.receivedAt,
-          verify: delivery.verify,
-          scan: delivery.scan,
-          inboundDomain,
-          persist,
-        })
-      ).map((deliveries) => ({ deliveries, objectKey: delivery.objectKey }));
+    case "oversized": {
+      const ingested = await recordOversizedInboundMail({
+        envelope: delivery.envelope,
+        receivedAt: delivery.receivedAt,
+        deliveryKey: delivery.deliveryKey,
+        inboundDomain,
+        persist,
+      });
+      if (ingested.isErr()) {
+        return ingested;
+      }
+      return Result.ok({
+        deliveries: ingested.value,
+        objectKey: delivery.objectKey,
+      });
+    }
+    case "received": {
+      const ingested = await ingestInboundMail({
+        raw: delivery.raw,
+        envelope: delivery.envelope,
+        receivedAt: delivery.receivedAt,
+        verify: delivery.verify,
+        scan: delivery.scan,
+        inboundDomain,
+        persist,
+      });
+      if (ingested.isErr()) {
+        return ingested;
+      }
+      return Result.ok({
+        deliveries: ingested.value,
+        objectKey: delivery.objectKey,
+      });
+    }
     default:
       delivery satisfies never;
       return panic("Unhandled inbound source disposition");

@@ -209,16 +209,17 @@ const drainHarness = ({
       logger,
       receive: async (event) => {
         onReceive?.();
-        return (
-          await receiveSesInboundMail({
-            event,
-            bucket: "inbound-bucket",
-            keyPrefix: "mail/",
-            inboundDomain: "inbound.example.test",
-            readObject,
-            persist,
-          })
-        ).map(({ deliveries }) => deliveries);
+        const received = await receiveSesInboundMail({
+          event,
+          bucket: "inbound-bucket",
+          keyPrefix: "mail/",
+          inboundDomain: "inbound.example.test",
+          readObject,
+          persist,
+        });
+        return received.isErr()
+          ? received
+          : Result.ok(received.value.deliveries);
       },
     });
   return { queue, drain };
