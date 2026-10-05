@@ -1,11 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import {
-  PUBLIC_LAW_READ_RETRY,
-  isPublicLawMiss,
-  unwrapPublicLawEden,
-} from "@/lib/public-law-api";
+import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -73,7 +69,6 @@ export type ProvisionPreviewData = Awaited<
 
 export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: provisionPreviewKeys.byAnchor(key),
     queryFn: async ({ signal }) => await readProvisionPreview(key, signal),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
@@ -89,7 +84,6 @@ const PROVISION_IN_VERSION_ACTION = "readPublicProvisionInVersion";
  */
 export const provisionInVersionOptions = (key: ProvisionInVersionKey) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: provisionPreviewKeys.inVersion(key),
     queryFn: async ({ signal }) => {
       const response = await api.law

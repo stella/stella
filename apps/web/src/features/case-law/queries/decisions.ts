@@ -16,11 +16,7 @@ import {
 import { api } from "@/lib/api";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import {
-  PUBLIC_LAW_READ_RETRY,
-  type PublicLawData,
-  unwrapPublicLawEden,
-} from "@/lib/public-law-api";
+import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -147,7 +143,6 @@ export type CaseLawBrowseFacets = PublicLawData<
 /** Facets of the whole corpus, or of one jurisdiction when `country` is given. */
 export const decisionFacetsOptions = (country: string) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.facets(country),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.facets.get({
@@ -165,7 +160,6 @@ export const decisionFacetsOptions = (country: string) =>
 /** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
 export const latestDecisionsOptions = (country: string) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.latest(country),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.latest.get({
@@ -186,7 +180,6 @@ export const latestDecisionsOptions = (country: string) =>
 /** How much case law the database holds and when it last changed. */
 export const caseLawCorpusStatusOptions = (country: string) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.status(country),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.status.get({
@@ -211,7 +204,6 @@ export const caseLawCorpusStatusOptions = (country: string) =>
  */
 export const caseLawCoverageOptions = () =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.coverage(),
     queryFn: async ({ signal }) => {
       const response = await api.case.coverage.get({ fetch: { signal } });
@@ -231,7 +223,6 @@ export const decisionsInfiniteOptions = (
   pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
 ) =>
   infiniteQueryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.list({ ...filters, pageSize }),
     queryFn: async ({ pageParam, signal }) => {
       const { search, ...listFilters } = filters;
@@ -414,7 +405,6 @@ export const caseLawQueryExpansionOptions = ({
   query,
 }: CaseLawQueryExpansionOptions) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: [
       ...caseLawDecisionKeys.all,
       "expansion",
@@ -456,7 +446,6 @@ export const caseLawQueryExpansionOptions = ({
 
 export const decisionOptions = (decisionId: string) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.byId(decisionId),
     queryFn: async ({ signal }) => {
       const response = await api.case
@@ -502,7 +491,6 @@ export const decisionBySlugOptions = ({
   slug,
 }: DecisionBySlugKey) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: caseLawDecisionKeys.bySlug(
       language === undefined ? { country, slug } : { country, language, slug },
     ),

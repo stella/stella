@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,11 +5,11 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
+import { createAppQueryClient } from "@/lib/app-query-client";
 import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
 import {
   isPublicLawMiss,
   isSearchUnavailableError,
-  PUBLIC_LAW_READ_RETRY,
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
@@ -111,21 +110,20 @@ describe("isSearchUnavailableError", () => {
   test("a corpus at its concurrency limit is a passing outage, not the route's failure", () => {
     const busy = thrownBy(429, { message: "Too many requests" });
     expect(isSearchUnavailableError(busy)).toBe(true);
-    expect(PUBLIC_LAW_READ_RETRY.retry(0, busy)).toBe(true);
+    expect(shouldRetryAPIRequest(0, busy)).toBe(true);
   });
 
   test("a final answer is never retried", () => {
     expect(
-      PUBLIC_LAW_READ_RETRY.retry(0, thrownBy(422, { message: "Invalid" })),
+      shouldRetryAPIRequest(0, thrownBy(422, { message: "Invalid" })),
     ).toBe(false);
   });
 
   test("a route load that meets a busy corpus once recovers instead of failing", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createAppQueryClient();
     let calls = 0;
-    const result = await queryClient.fetchQuery({
-      ...PUBLIC_LAW_READ_RETRY,
-      // A loader's fetch: no retry of its own beyond the shared policy.
+    const result = await queryClient.query({
+      // A loader's fetch: no retry of its own beyond the app default.
       retryDelay: 0,
       queryKey: ["public-law-busy-once"],
       queryFn: async () => {

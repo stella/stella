@@ -2,10 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import {
-  PUBLIC_LAW_READ_RETRY,
-  unwrapPublicLawEden,
-} from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -42,7 +39,6 @@ export const decisionCitationsInfiniteOptions = (
   direction: CitationDirection,
 ) =>
   infiniteQueryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionCitationKeys.forDecision(decisionId, direction),
     queryFn: async ({ pageParam, signal }) => {
       const response = await api.case
@@ -70,7 +66,6 @@ export const decisionLeadingCitationsOptions = (
   direction: CitationDirection,
 ) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionCitationKeys.leading(decisionId, direction),
     queryFn: async ({ signal }) => {
       const response = await api.case
@@ -96,7 +91,6 @@ export type LeadingCitation = Awaited<
 /** How many citations each direction holds, by treatment. */
 export const decisionCitationSummaryOptions = (decisionId: string) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionCitationKeys.summary(decisionId),
     queryFn: async ({ signal }) => {
       const response = await api.case

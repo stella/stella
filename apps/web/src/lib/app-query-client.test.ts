@@ -9,7 +9,7 @@ describe("app query client", () => {
   test("a route load that meets one transient refusal recovers", async () => {
     const queryClient = createAppQueryClient();
     let calls = 0;
-    const result = await queryClient.fetchQuery({
+    const result = await queryClient.query({
       queryKey: ["transient-refusal"],
       queryFn: async () => {
         calls += 1;
@@ -28,7 +28,7 @@ describe("app query client", () => {
   test("a final answer fails the load at once", async () => {
     const queryClient = createAppQueryClient();
     let calls = 0;
-    const load = queryClient.fetchQuery({
+    const load = queryClient.query({
       queryKey: ["final-answer"],
       queryFn: async () => {
         calls += 1;

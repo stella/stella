@@ -2,10 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import {
-  PUBLIC_LAW_READ_RETRY,
-  unwrapPublicLawEden,
-} from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 /**
@@ -46,7 +43,6 @@ export const statuteCitationCountsOptions = (
   key: Pick<CitingDecisionsKey, "eli" | "jurisdiction">,
 ) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: citingDecisionKeys.countsForWork(key),
     queryFn: async ({ signal }) => {
       const response = await api.case.provisions["citation-counts"].get({
@@ -69,7 +65,6 @@ const TOP_CITING_LIMIT = 5;
  */
 export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
   queryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: [...citingDecisionKeys.forProvision(key), "top"],
     queryFn: async ({ signal }) => {
       const response = await api.case.provisions["citing-decisions"].get({
@@ -96,7 +91,6 @@ export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
 
 export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
   infiniteQueryOptions({
-    ...PUBLIC_LAW_READ_RETRY,
     queryKey: citingDecisionKeys.forProvision(key),
     queryFn: async ({ pageParam, signal }) => {
       const response = await api.case.provisions["citing-decisions"].get({
