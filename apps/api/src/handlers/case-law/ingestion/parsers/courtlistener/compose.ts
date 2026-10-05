@@ -23,8 +23,11 @@ import {
   compareOpinionOrder,
   type OpinionType,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
-import { scanRun, US_CITATION_WORK_LIMIT } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import {
+  scanRun,
+  US_CITATION_WORK_LIMIT,
+} from "@/api/handlers/case-law/ingestion/us-citation-scanner";
 import type {
   DecisionSection,
   DecisionSectionType,
@@ -92,7 +95,10 @@ export type CourtListenerTextOutcome =
         /** Supported full and short citations, excluding note and apparatus text. */
         readonly inBodyCitationCount:
           | { readonly status: "counted"; readonly count: number }
-          | { readonly status: "unavailable"; readonly reason: "scan-work-limit" };
+          | {
+              readonly status: "unavailable";
+              readonly reason: "scan-work-limit";
+            };
       };
       readonly opinions: readonly OpinionTextReport[];
     }
@@ -425,7 +431,9 @@ export const composeCourtListenerText = (
     };
   }
 
-  const bodyBlocks = principal.flatMap((unit) => unit.blocks).filter(isPrincipalBody);
+  const bodyBlocks = principal
+    .flatMap((unit) => unit.blocks)
+    .filter(isPrincipalBody);
   const body = bodyBlocks.map(({ plainText }) => plainText).join("\n");
   const budget = { limit: US_CITATION_WORK_LIMIT, spent: 0 };
   const citationCount = Result.gen(function* () {
@@ -454,7 +462,9 @@ export const composeCourtListenerText = (
     citationScopes,
     principal: {
       body,
-      length: Array.from(stripDangerousChars(body).normalize("NFC").replace(/\s+/gu, " ").trim()).length,
+      length: Array.from(
+        stripDangerousChars(body).normalize("NFC").replace(/\s+/gu, " ").trim(),
+      ).length,
       bodyParagraphCount: bodyBlocks.length,
       inBodyCitationCount: Result.isError(citationCount)
         ? { status: "unavailable", reason: "scan-work-limit" }

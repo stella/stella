@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
 import fc from "fast-check";
-import { assertProperty } from "@stll/property-testing";
+import * as v from "valibot";
 
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   decodeSourceRawEnvelope,
@@ -18,7 +18,6 @@ import {
   getSourceRegistration,
   listAdapters,
 } from "../adapter-registry";
-import { OPINION_TYPES } from "./vocabulary";
 import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
 import {
   COURTLISTENER_IMPORT_KEY,
@@ -32,6 +31,7 @@ import {
   opinionRow,
   recordedClusters,
 } from "./test-records";
+import { OPINION_TYPES } from "./vocabulary";
 
 const stored = (result: IngestionResult): StoredRawReparseInput => ({
   raw: new TextEncoder().encode(result.sourceRaw),
@@ -78,7 +78,11 @@ describe("complete CourtListener import mapping", () => {
     });
     const result = mapCourtListenerRecord(input).unwrap();
     expect(result.decisionType).toBeNull();
-    expect(result.metadata["decisionType"]).toEqual({ status: "not-stated", asPublished: null, reason: "source-does-not-state-decision-type" });
+    expect(result.metadata["decisionType"]).toEqual({
+      status: "not-stated",
+      asPublished: null,
+      reason: "source-does-not-state-decision-type",
+    });
     expect(result.sourceDocumentId).toBe("9114912");
     expect(result.courtId).toBe("scotus");
     expect(result.fulltext).toContain("Caption");
@@ -109,7 +113,11 @@ describe("complete CourtListener import mapping", () => {
       mapped += 1;
       expect(v.is(documentAstSchema, outcome.value.documentAst)).toBe(true);
       expect(outcome.value.decisionType).toBeNull();
-      expect(outcome.value.metadata["decisionType"]).toEqual({ status: "not-stated", asPublished: null, reason: "source-does-not-state-decision-type" });
+      expect(outcome.value.metadata["decisionType"]).toEqual({
+        status: "not-stated",
+        asPublished: null,
+        reason: "source-does-not-state-decision-type",
+      });
       expect(outcome.value.metadata["structure"]).toMatchObject({
         principalLength: expect.any(Number),
         bodyParagraphCount: expect.any(Number),
@@ -243,27 +251,46 @@ test("parser scope defects remain distinct from missing or unsupported source te
   ).toBe("no-usable-text");
 });
 
-
 test("CourtListener source types and text never infer a decision type", () => {
   assertProperty(
     "CourtListener source types and text never infer a decision type",
     fc.property(
       fc.constantFrom(...Object.keys(OPINION_TYPES)),
-      fc.constantFrom("Certiorari denied.", "ORDER", "The court explains its reasons.", "Judgment affirmed.", "OPINION"),
+      fc.constantFrom(
+        "Certiorari denied.",
+        "ORDER",
+        "The court explains its reasons.",
+        "Judgment affirmed.",
+        "OPINION",
+      ),
       fc.integer({ min: 1, max: 20 }),
       fc.boolean(),
       (type, text, paragraphs, scdb) => {
         const record = courtListenerRecord({
           cluster: clusterRow({ scdb_id: scdb ? "1991-001" : "" }),
-          opinions: [opinionRow({ type, xml_harvard: `<opinion type="majority">${Array.from({ length: paragraphs }, () => `<p>${text}</p>`).join("")}</opinion>` })],
+          opinions: [
+            opinionRow({
+              type,
+              xml_harvard: `<opinion type="majority">${Array.from({ length: paragraphs }, () => `<p>${text}</p>`).join("")}</opinion>`,
+            }),
+          ],
         });
         const result = mapCourtListenerRecord(record).unwrap();
         expect(result.decisionType).toBeNull();
         expect(result.documentAst?.metadata.decisionType).toBeNull();
-        expect(result.metadata["decisionType"]).toEqual({ status: "not-stated", asPublished: null, reason: "source-does-not-state-decision-type" });
+        expect(result.metadata["decisionType"]).toEqual({
+          status: "not-stated",
+          asPublished: null,
+          reason: "source-does-not-state-decision-type",
+        });
         expect(result.metadata).not.toHaveProperty("classification");
-        expect(result.metadata["structure"]).toMatchObject({ opinionTypes: [type], scdbPresent: scdb });
-        expect(mapCourtListenerRecord(record).unwrap().metadata["structure"]).toEqual(result.metadata["structure"]);
+        expect(result.metadata["structure"]).toMatchObject({
+          opinionTypes: [type],
+          scdbPresent: scdb,
+        });
+        expect(
+          mapCourtListenerRecord(record).unwrap().metadata["structure"],
+        ).toEqual(result.metadata["structure"]);
       },
     ),
     { numRuns: 60 },
@@ -271,30 +298,61 @@ test("CourtListener source types and text never infer a decision type", () => {
 });
 
 test("principal structure counts exclude separate opinions and apparatus", () => {
-  const result = mapCourtListenerRecord(courtListenerRecord({
-    cluster: clusterRow({ scdb_id: "1991-001" }),
-    opinions: [opinionRow({ xml_harvard: '<casebody><headnotes><p>Publisher: 500 U.S. 1.</p></headnotes><opinion type="majority"><p>First: 410 U.S. 113.</p><p>Second: Id. at 120.</p><footnote label="1"><p>Note: 500 U.S. 1.</p></footnote><opinion type="dissent"><p>Separate: 500 U.S. 1.</p></opinion></opinion></casebody>' })],
-  })).unwrap();
-  expect(result.metadata["structure"]).toEqual({ principalLength: "First: 410 U.S. 113. Second: Id. at 120.".length, bodyParagraphCount: 2, inBodyCitationCount: { status: "counted", count: 2 }, opinionTypes: ["020lead"], scdbPresent: true });
+  const result = mapCourtListenerRecord(
+    courtListenerRecord({
+      cluster: clusterRow({ scdb_id: "1991-001" }),
+      opinions: [
+        opinionRow({
+          xml_harvard:
+            '<casebody><headnotes><p>Publisher: 500 U.S. 1.</p></headnotes><opinion type="majority"><p>First: 410 U.S. 113.</p><p>Second: Id. at 120.</p><footnote label="1"><p>Note: 500 U.S. 1.</p></footnote><opinion type="dissent"><p>Separate: 500 U.S. 1.</p></opinion></opinion></casebody>',
+        }),
+      ],
+    }),
+  ).unwrap();
+  expect(result.metadata["structure"]).toEqual({
+    principalLength: "First: 410 U.S. 113. Second: Id. at 120.".length,
+    bodyParagraphCount: 2,
+    inBodyCitationCount: { status: "counted", count: 2 },
+    opinionTypes: ["020lead"],
+    scdbPresent: true,
+  });
 });
-
 
 test("recorded CourtListener fixtures preserve unstated types and deterministic structure", () => {
   assertProperty(
     "recorded CourtListener fixtures preserve unstated types and deterministic structure",
-    fc.property(fc.constantFrom(...recordedClusters()), fc.boolean(), (record, reverse) => {
-      const input = { ...record, opinions: reverse ? [...record.opinions].reverse() : record.opinions };
-      const result = mapCourtListenerRecord(input);
-      if (Result.isError(result)) {
-        expect(["requires-assets", "no-usable-text"]).toContain(result.error.reason);
-        return;
-      }
-      expect(result.value.decisionType).toBeNull();
-      expect(result.value.metadata["decisionType"]).toEqual({ status: "not-stated", asPublished: null, reason: "source-does-not-state-decision-type" });
-      expect(result.value.metadata["structure"]).toMatchObject({ principalLength: expect.any(Number), bodyParagraphCount: expect.any(Number), inBodyCitationCount: { status: "counted", count: expect.any(Number) }, opinionTypes: expect.any(Array), scdbPresent: expect.any(Boolean) });
-      const replay = reparseStoredRaw(stored(result.value));
-      expect(replay).toEqual({ type: "parsed", result: result.value });
-    }),
+    fc.property(
+      fc.constantFrom(...recordedClusters()),
+      fc.boolean(),
+      (record, reverse) => {
+        const input = {
+          ...record,
+          opinions: reverse ? [...record.opinions].reverse() : record.opinions,
+        };
+        const result = mapCourtListenerRecord(input);
+        if (Result.isError(result)) {
+          expect(["requires-assets", "no-usable-text"]).toContain(
+            result.error.reason,
+          );
+          return;
+        }
+        expect(result.value.decisionType).toBeNull();
+        expect(result.value.metadata["decisionType"]).toEqual({
+          status: "not-stated",
+          asPublished: null,
+          reason: "source-does-not-state-decision-type",
+        });
+        expect(result.value.metadata["structure"]).toMatchObject({
+          principalLength: expect.any(Number),
+          bodyParagraphCount: expect.any(Number),
+          inBodyCitationCount: { status: "counted", count: expect.any(Number) },
+          opinionTypes: expect.any(Array),
+          scdbPresent: expect.any(Boolean),
+        });
+        const replay = reparseStoredRaw(stored(result.value));
+        expect(replay).toEqual({ type: "parsed", result: result.value });
+      },
+    ),
     { numRuns: 30 },
   );
 });

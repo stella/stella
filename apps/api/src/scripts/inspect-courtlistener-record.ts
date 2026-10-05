@@ -153,11 +153,14 @@ const inspectText = (input: unknown) => {
           ),
         }),
       ),
-      structure: outcome.status === "parsed" ? {
-        principalLength: outcome.principal.length,
-        bodyParagraphCount: outcome.principal.bodyParagraphCount,
-        inBodyCitationCount: outcome.principal.inBodyCitationCount,
-      } : null,
+      structure:
+        outcome.status === "parsed"
+          ? {
+              principalLength: outcome.principal.length,
+              bodyParagraphCount: outcome.principal.bodyParagraphCount,
+              inBodyCitationCount: outcome.principal.inBodyCitationCount,
+            }
+          : null,
     },
   };
 };

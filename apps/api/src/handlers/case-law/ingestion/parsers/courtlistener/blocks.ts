@@ -197,15 +197,14 @@ const tableBlock = ({
 const buildTextUnits = (
   units: { frame: Frame; blocks: Block[] }[],
   boundaries: TextUnit["boundaries"],
-): TextUnit[] => {
-  return units.map(({ blocks, frame }) => ({
+): TextUnit[] =>
+  units.map(({ blocks, frame }) => ({
     kind: frame.kind,
     domType: frame.domType,
     position: frame.position,
     boundaries,
     blocks,
   }));
-};
 
 /**
  * Numbers one opinion row's blocks under `prefix` and groups them into units:

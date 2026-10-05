@@ -431,7 +431,9 @@ describe("principal text ownership", () => {
   // title before its author line.
   test("keeps the root title in the AST and procedural text in the principal body", () => {
     const { outcome } = compose(fixture("2099017"));
-    expect(outcome.blocks.some((block) => block.plainText === "ORDER")).toBe(true);
+    expect(outcome.blocks.some((block) => block.plainText === "ORDER")).toBe(
+      true,
+    );
     expect(outcome.principal.body).toStartWith(
       "AND NOW, this 23rd day of June, 2010",
     );

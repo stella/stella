@@ -414,7 +414,10 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
-      decisionType: raw.decisionType === null ? null : yield* optionalPlainText(raw.decisionType),
+      decisionType:
+        raw.decisionType === null
+          ? null
+          : yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,
