@@ -17,6 +17,7 @@ import {
   WRITE_TOOL_SCOPE,
   WRITE_TOOL_SCOPES,
 } from "@/api/mcp/matter-requirement";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -37,6 +38,10 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
   getChatTools({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
     docxSuggestionSurface: "file-overlay",
     hasActiveDocxEditClient: false,
     hasActiveDocxFileClient: false,

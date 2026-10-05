@@ -227,6 +227,17 @@ export const runRegistryWriteTool = async (
     }
   }
 
+  // Registration already withholds the tool from a member without its
+  // declared permissions; this keeps the refusal on the execution path.
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
+      }),
+    );
+  }
+
   if (
     !isMcpDescriptorFeatureEnabled({
       context,
@@ -247,16 +258,6 @@ export const runRegistryWriteTool = async (
       new ChatToolError({
         kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
-      }),
-    );
-  }
-  // Registration already withholds the tool from a member without its
-  // declared permissions; this keeps the refusal on the execution path.
-  if (!hasMcpToolAuthority(context, staticDefinition)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }

@@ -65,9 +65,9 @@ describe.skipIf(!runPostgresTests)(
             session: { activeOrganizationId: orgA },
             user: { id: userA },
             params: { featureId: "time-billing" },
-            recordAuditEvent: auditRecorderDouble((events) =>
-              auditEvents.push(...events),
-            ),
+            recordAuditEvent: auditRecorderDouble((events) => {
+              auditEvents.push(...events);
+            }),
           };
           for (let attempt = 0; attempt < 2; attempt++) {
             expect(
@@ -129,12 +129,12 @@ describe.skipIf(!runPostgresTests)(
                 if (owns) {
                   return;
                 }
-                expect(
-                  await tx`UPDATE feature_enrolments SET created_at = now() WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`,
-                ).toHaveLength(0);
-                expect(
-                  await tx`DELETE FROM feature_enrolments WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`,
-                ).toHaveLength(0);
+                const updated =
+                  await tx`UPDATE feature_enrolments SET created_at = now() WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`;
+                expect(updated).toHaveLength(0);
+                const deleted =
+                  await tx`DELETE FROM feature_enrolments WHERE user_id = ${userA} AND organization_id = ${orgA} RETURNING feature_id`;
+                expect(deleted).toHaveLength(0);
               });
               if (owns) {
                 continue;

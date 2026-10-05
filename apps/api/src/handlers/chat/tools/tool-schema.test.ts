@@ -100,6 +100,7 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { createOrgTools } from "./org-tools";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
@@ -291,6 +292,10 @@ const buildFullCoverageChatTools = (
   };
 
   return getChatTools({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     memberRole: sessionMemberRole("owner"),
@@ -2487,6 +2492,10 @@ describe("registry write tool approval policy", () => {
 
   const buildToolsWithWorkspace = () =>
     getChatTools({
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -2576,6 +2585,10 @@ describe("registry write tool approval policy", () => {
 
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
