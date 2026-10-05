@@ -827,7 +827,9 @@ export const OWNERSHIP = [
       "is still a member of them, so it is built only for writes and lookups an " +
       "earlier check already proved. A run a member queued goes through " +
       "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
-      "and field readers (`ContentReadDb`) refuse.",
+      "and field readers (`ContentReadDb`) refuse. " +
+      "`createRootOrganizationBackgroundDb` validates the organization id and " +
+      "binds background work to that organization with no user or stored workspace ids.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/root-scoped-db"],
