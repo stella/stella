@@ -1711,16 +1711,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_list: [{ type: "ApiError", value: "Not Found" }],
-        error_status: 404,
-        error_code: "not_found",
+        $exception_list: [{ type: "ApiError", value: "Conflict" }],
+        error_status: 409,
+        error_code: "conflict",
       },
     });
     expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
-      "ApiError||||404:not_found",
+      "ApiError||||409:conflict",
     );
-    expect(sanitized?.properties?.["error_status"]).toBe(404);
-    expect(sanitized?.properties?.["error_code"]).toBe("not_found");
+    expect(sanitized?.properties?.["error_status"]).toBe(409);
+    expect(sanitized?.properties?.["error_code"]).toBe("conflict");
 
     // A free-text code or an out-of-range status never passes through.
     const rejected = initOptions?.before_send({
