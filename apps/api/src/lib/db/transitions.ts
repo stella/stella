@@ -358,10 +358,12 @@ type StatusUpdateArgs = Pick<
   "tx" | "identity" | "ids" | "match" | "recordTransitionAuditEvent"
 > & {
   spec: TransitionSpec & { table: StatusTable };
+  // Untyped callers still need fence validation when the generic excludes a fence.
   options: {
     from: readonly string[];
     to: string;
     set?: Readonly<Record<string, unknown>>;
+    fence?: unknown;
   };
 };
 
@@ -373,10 +375,8 @@ const statusUpdate = async ({
   match,
   options,
   recordTransitionAuditEvent,
-}: StatusUpdateArgs) => {
-  // Untyped callers still need fence validation when the generic excludes a fence.
-  const runtimeOptions: { readonly fence?: unknown } = options;
-  return await lifecycleUpdate({
+}: StatusUpdateArgs) =>
+  await lifecycleUpdate({
     tx,
     table: spec.table,
     identity,
@@ -392,10 +392,9 @@ const statusUpdate = async ({
       },
     ],
     set: options.set,
-    fence: { key: spec.fence, value: runtimeOptions.fence },
+    fence: { key: spec.fence, value: options.fence },
     recordTransitionAuditEvent,
   });
-};
 
 /** The update and required audit share the caller's transaction. */
 export const transition = async <
@@ -572,7 +571,7 @@ export const defineLifecycle = <
   if (declared.length === 0) {
     panic("A lifecycle must declare at least one column");
   }
-  for (const [column, graph] of declared) {
+  const lifecycleColumns = declared.map(([column, graph]) => {
     const lifecycleColumn =
       runtimeColumns[column] ?? panic(`Unknown lifecycle column ${column}`);
     if (graph === undefined) {
@@ -589,7 +588,12 @@ export const defineLifecycle = <
     Object.freeze(graph.edges);
     Object.freeze(graph.terminal);
     Object.freeze(graph);
-  }
+    return Object.freeze({
+      key: column,
+      column: lifecycleColumn,
+      edges: graph.edges,
+    });
+  });
   assertTransitionIdentity(table, key);
   return Object.freeze({
     kind: "lifecycle",
@@ -597,7 +601,14 @@ export const defineLifecycle = <
     key,
     idColumn: columns[key],
     graphs: Object.freeze(graphs),
+    lifecycleColumns: Object.freeze(lifecycleColumns),
   } as const);
+};
+
+type LifecycleColumn = {
+  readonly key: string;
+  readonly column: AnyPgColumn;
+  readonly edges: Readonly<Record<string, readonly string[]>>;
 };
 
 type DefinedLifecycle<
@@ -610,6 +621,7 @@ type DefinedLifecycle<
   readonly key: TKey;
   readonly idColumn: TTable["_"]["columns"][TKey];
   readonly graphs: TGraphs;
+  readonly lifecycleColumns: readonly LifecycleColumn[];
 };
 
 type GraphEdges<TGraph> = TGraph extends {
@@ -651,28 +663,19 @@ type LifecycleMoveSet = Readonly<
 >;
 
 const lifecycleMoves = (
-  { table, graphs }: { table: PgTable; graphs: object },
+  lifecycleColumns: readonly LifecycleColumn[],
   moves: LifecycleMoveSet,
 ) => {
-  const runtimeColumns: Readonly<Record<string, AnyPgColumn>> =
-    getColumns(table);
-  const declared = Object.entries<LifecycleGraph>(graphs);
   if (
     Object.keys(moves).some(
-      (key) => !declared.some(([column]) => column === key),
+      (key) => !lifecycleColumns.some((column) => column.key === key),
     )
   ) {
     panic("A lifecycle move names an undeclared column");
   }
-  return declared.map(([key, { edges }]) => {
+  return lifecycleColumns.map(({ key, column, edges }) => {
     const move = moves[key] ?? panic(`The transition must move ${key}`);
-    return {
-      key,
-      column: runtimeColumns[key] ?? panic(`Unknown lifecycle column ${key}`),
-      edges,
-      from: move.from,
-      to: move.to,
-    };
+    return { key, column, edges, from: move.from, to: move.to };
   });
 };
 
@@ -712,7 +715,7 @@ export const transitionLifecycle = async <
     identity: { key: spec.key, column: spec.idColumn },
     ids: [id],
     match: "one",
-    moves: lifecycleMoves(spec, moves),
+    moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
     recordTransitionAuditEvent: async ([changed]) => {
@@ -766,7 +769,7 @@ export const transitionLifecycleBatch = async <
     identity: { key: spec.key, column: spec.idColumn },
     ids,
     match: "many",
-    moves: lifecycleMoves(spec, moves),
+    moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
     recordTransitionAuditEvent: async (changed) => {

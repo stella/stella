@@ -620,9 +620,9 @@ describe("multi-column lifecycles", () => {
       }).key,
     ).toBe("key");
     expect(() =>
-      // @ts-expect-error fixed columns must be table columns
       defineFixedLifecycle({
         table: leasedJobs,
+        // @ts-expect-error fixed columns must be table columns
         column: "missing",
         value: "x",
       }),
