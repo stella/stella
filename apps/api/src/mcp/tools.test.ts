@@ -25,6 +25,7 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
+  FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
@@ -2240,7 +2241,14 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         year: [{ count: 1, label: null, value: "2024" }],
         decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        source: [
+          {
+            count: 1,
+            countType: FACET_COUNT_TYPE.EXACT,
+            label: "Nejvyšší soud ČR",
+            value: "source-id",
+          },
+        ],
         language: [{ count: 1, label: null, value: "cs" }],
       },
       hits: [
@@ -2345,7 +2353,14 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         year: [{ count: 1, label: null, value: "2024" }],
         decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        source: [
+          {
+            count: 1,
+            countType: FACET_COUNT_TYPE.EXACT,
+            label: "Nejvyšší soud ČR",
+            value: "source-id",
+          },
+        ],
         language: [{ count: 1, label: null, value: "cs" }],
       },
       nextCursor: "cursor_2",
@@ -3040,6 +3055,56 @@ describe("OpenAI-compatible MCP tools", () => {
         (call) => asTestRaw<{ body: { limit: number } }>(call.at(0)).body.limit,
       ),
     ).toEqual([5, 5]);
+  });
+
+  test("search_case_law returns source facet buckets with their count type", async () => {
+    const sourceFacets = [
+      {
+        value: "source-a",
+        label: "Source A",
+        count: 1000,
+        countType: FACET_COUNT_TYPE.AT_LEAST,
+      },
+      {
+        value: "source-b",
+        label: "Source B",
+        count: 2,
+        countType: FACET_COUNT_TYPE.EXACT,
+      },
+    ];
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ body: { query } }: { body: { query: string } }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: {
+          court: [],
+          year: [],
+          decisionType: [],
+          source: sourceFacets,
+          language: [],
+        },
+        hits: [createCaseLawHit("dec-a", "a")],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: query,
+        warnings: [],
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", limit: 10, queries: ["duty of care"] },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const payload = asTestRaw<MergedSearchPage>(parseToolPayload(result));
+    expect(payload.facets).toEqual({
+      court: [],
+      year: [],
+      decisionType: [],
+      source: sourceFacets,
+      language: [],
+    });
   });
 
   test("search_case_law resumes each phrasing from its own sub-cursor", async () => {

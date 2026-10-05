@@ -59,6 +59,7 @@ describe("grantableScopes", () => {
     for (const [clientId, keeps] of [
       ["https://claude.ai/oauth/claude-code-client-metadata", true],
       ["https://chatgpt.com/oauth/client.json", true],
+      ["https://chatgpt.com/oauth/codex/client.json", true],
       ["https://stella.example/oauth/client.json", true],
       ["https://connector.example/oauth/client.json", false],
       ["https://claude.ai/oauth/other-client-metadata", false],
