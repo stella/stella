@@ -31,6 +31,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { advanceSanctionsMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
+import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import {
   drainSanctionsContactMarks,
   SANCTIONS_MARK_LEASE_MS,
@@ -41,7 +42,7 @@ import {
   monitoringFingerprint,
   monitoringSubject,
 } from "@/api/lib/lists/sanctions/monitoring-input";
-import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
+import { prepareSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
 import { screenSanctionsSubjects } from "@/api/lib/lists/sanctions/screening-service";
 import {
@@ -93,6 +94,29 @@ const scopedFor =
       return await run(productionTransaction(tx));
     });
 const scopedDb = scopedFor(orgId);
+const requestSanctionsMonitoringRefresh = async (
+  tx: Transaction,
+  options: Parameters<typeof prepareSanctionsMonitoringRefresh>[0],
+) => {
+  const request = prepareSanctionsMonitoringRefresh(options);
+  switch (request.type) {
+    case "organization":
+      await tx
+        .insert(sanctionsOrganizationMarks)
+        .values(request.rows.at(0) ?? panic("Organization mark missing"))
+        .onConflictDoNothing();
+      return;
+    case "contacts":
+      if (request.rows.length === 0) {
+        return;
+      }
+      await tx
+        .insert(sanctionsContactMarks)
+        .values(request.rows)
+        .onConflictDoNothing();
+      return;
+  }
+};
 const futureNow = () => new Date(Date.now() + 1000);
 
 beforeAll(async () => {
@@ -173,6 +197,10 @@ const markFor = async (contactId: typeof contacts.$inferSelect.id) =>
       .from(sanctionsContactMarks)
       .where(eq(sanctionsContactMarks.contactId, contactId))
   ).at(0);
+const errorMessages = (error: unknown): string =>
+  error instanceof Error
+    ? `${error.message} ${"cause" in error ? errorMessages(error.cause) : ""}`
+    : String(error);
 
 test(
   "statement triggers batch relevant changes and preserve tenant isolation",
@@ -247,15 +275,13 @@ test(
   async () => {
     const contact = await addContact();
     const controller = new AbortController();
-    let calls = 0;
-    const abortAfterClaim: ScopedDb = async (run) => {
-      const value = await scopedDb(run);
-      calls += 1;
-      if (calls === 1) {
+    const abortAfterClaim: ScopedDb = async (run) =>
+      await scopedDb(async (tx) => {
+        const value = await run(tx);
         controller.abort(new Error("synthetic drain crash"));
-      }
-      return value;
-    };
+        controller.signal.throwIfAborted();
+        return value;
+      });
     const now = futureNow();
     expect(
       await rejectionOf(
@@ -271,7 +297,7 @@ test(
     await drainSanctionsContactMarks({
       db: scopedDb,
       organizationId: orgId,
-      now: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+      now: new Date(now.getTime() + 1),
       signal: new AbortController().signal,
     });
     expect(await markFor(contact.id)).toBeUndefined();
@@ -320,6 +346,96 @@ test(
       signal: new AbortController().signal,
     });
     expect(await markFor(contact.id)).toBeUndefined();
+  },
+  TIMEOUT,
+);
+
+test(
+  "audits exactly one successful drain, none when idle, and rolls queue work back on audit failure",
+  async () => {
+    const organizationId = toSafeId<"organization">("drain-audit-org");
+    await db.insert(organization).values({
+      id: organizationId,
+      name: "Drain audit fixture",
+      slug: organizationId,
+      createdAt: new Date(),
+    });
+    const scoped = scopedFor(organizationId);
+    const now = futureNow();
+    const audits = async () =>
+      await scoped(
+        async (tx) =>
+          await tx
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
+      );
+    const drain = async () =>
+      await drainSanctionsContactMarks({
+        db: scoped,
+        organizationId,
+        now,
+        signal: new AbortController().signal,
+      });
+
+    expect(await drain()).toEqual({ claimed: 0, terminal: 0 });
+    expect(await audits()).toHaveLength(0);
+
+    const contact = await scoped(
+      async (tx) =>
+        (
+          await tx
+            .insert(contacts)
+            .values({
+              organizationId,
+              type: "person",
+              displayName: "Drain audit subject",
+            })
+            .returning()
+        ).at(0) ?? panic("Drain audit contact missing"),
+    );
+    const queuedMark =
+      (
+        await scoped(
+          async (tx) =>
+            await tx
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, contact.id)),
+        )
+      ).at(0) ?? panic("Drain audit mark missing");
+
+    await client.exec(`CREATE FUNCTION reject_drain_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id = 'system:sanctions-monitoring-drain' THEN RAISE EXCEPTION 'synthetic drain audit failure'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER reject_drain_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION reject_drain_audit();`);
+    try {
+      expect(errorMessages(await rejectionOf(drain()))).toContain(
+        "synthetic drain audit failure",
+      );
+      expect(await audits()).toHaveLength(0);
+      expect(await markFor(contact.id)).toMatchObject({
+        generation: queuedMark.generation,
+        scheduledAt: queuedMark.scheduledAt,
+      });
+      expect(
+        await scoped(
+          async (tx) =>
+            await tx
+              .select()
+              .from(sanctionsContactScreenings)
+              .where(eq(sanctionsContactScreenings.contactId, contact.id)),
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await client.exec(
+        "DROP TRIGGER reject_drain_audit ON audit_logs; DROP FUNCTION reject_drain_audit();",
+      );
+    }
+
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    expect(await markFor(contact.id)).toBeUndefined();
+    const events = await audits();
+    expect(events).toHaveLength(1);
+    expect(events.at(0)?.userId).toBe("system:sanctions-monitoring-drain");
   },
   TIMEOUT,
 );
@@ -394,11 +510,6 @@ const emptyEdition = async () => {
     .where(eq(sanctionsSources.id, "eu"));
   return editionId;
 };
-
-const errorMessages = (error: unknown): string =>
-  error instanceof Error
-    ? `${error.message} ${"cause" in error ? errorMessages(error.cause) : ""}`
-    : String(error);
 
 test(
   "backfill checkpoints roll back and replay; activation supersedes older work",
@@ -549,8 +660,19 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
     async (tx) =>
       await tx
         .update(sanctionsContactMarks)
-        .set({ scheduledAt: now })
+        .set({
+          scheduledAt: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS),
+        })
         .where(eq(sanctionsContactMarks.organizationId, organizationId)),
+  );
+  const claimedMarks = await tenant(
+    async (tx) => await tx.select().from(sanctionsContactMarks),
+  );
+  if (claimedMarks.length === 0) {
+    panic("Expired worker mark missing");
+  }
+  const contactRows = await tenant(
+    async (tx) => await tx.select().from(contacts),
   );
 
   const snapshot = async () =>
@@ -584,16 +706,43 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
     }
     return value;
   };
-  const expired = await drainSanctionsContactMarks({
+  const prepared = await prepareMonitoringContacts({
     db: stallAfterFreshnessRead,
-    organizationId,
+    contactRows,
     now,
-    signal: new AbortController().signal,
   });
   if (replacement === undefined) {
     panic("Replacement worker did not finish");
   }
-  expect(expired.terminal).toBe(0);
+  let committed = 0;
+  for (const source of sanctionsSourceIds()) {
+    const results = prepared.map(
+      ({ contactId, contactFingerprint, lists }) => ({
+        contactId,
+        contactFingerprint,
+        outcome:
+          lists.find((list) => list.source === source) ??
+          panic("Expired worker source outcome missing"),
+      }),
+    );
+    committed += (
+      await commitSanctionsMonitoringBatch({
+        db: tenant,
+        organizationId,
+        source,
+        results,
+        now,
+        claim: {
+          leaseExpiresAt: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS),
+          marks: claimedMarks.map(({ contactId, generation }) => ({
+            contactId,
+            generation,
+          })),
+        },
+      })
+    ).length;
+  }
+  expect(committed).toBe(0);
   expect(await snapshot()).toEqual(replacement);
   expect(
     await tenant(async (tx) => await tx.select().from(sanctionsContactMarks)),
@@ -1297,8 +1446,8 @@ test(
       ).toEqual(sources.toSorted());
       expect(
         new Set(
-          expected.value.lists.map(
-            ({ status, reason }) => `${status}:${reason}`,
+          expected.value.lists.map(({ status, reason }) =>
+            JSON.stringify([status, reason]),
           ),
         ).size,
       ).toBeGreaterThanOrEqual(4);
@@ -1306,6 +1455,7 @@ test(
       await client.exec(`CREATE FUNCTION reject_later_source_coverage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic later source failure'; END $$;
       CREATE TRIGGER later_source_coverage_failure BEFORE INSERT OR UPDATE ON sanctions_contact_screenings FOR EACH ROW WHEN (NEW.contact_id = '${contact.id}' AND NEW.source_id = '${failingSource}') EXECUTE FUNCTION reject_later_source_coverage();`);
       try {
+        const beforeAttempt = await census();
         const failed = await Result.tryPromise(
           async () => await drain(attemptNow),
         );
@@ -1315,48 +1465,7 @@ test(
             "synthetic later source failure",
           );
         }
-        const partial = await census();
-        expect(partial.marks).toHaveLength(1);
-        expect(partial.marks.at(0)?.scheduledAt).toEqual(
-          new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS),
-        );
-        for (const [index, sourceId] of sources.entries()) {
-          const coverage =
-            partial.coverage.find((row) => row.sourceId === sourceId) ??
-            panic("Partial source coverage missing");
-          if (index < 2) {
-            const outcome =
-              expected.value.lists.find(({ source }) => source === sourceId) ??
-              panic("Expected source outcome missing");
-            expect(coverage).toMatchObject({
-              status: outcome.status,
-              reason: outcome.reason,
-              editionId: outcome.editionId,
-              contactFingerprint: monitoringFingerprint(updated),
-            });
-          } else {
-            expect(coverage).toEqual(
-              previous.coverage.find((row) => row.sourceId === sourceId),
-            );
-          }
-        }
-        expect(
-          partial.events.map(
-            ({ contactId, sourceId, sourceEntryId, type }) => ({
-              contactId,
-              sourceId,
-              sourceEntryId,
-              type,
-            }),
-          ),
-        ).toEqual([
-          {
-            contactId: contact.id,
-            sourceId: "eu",
-            sourceEntryId: "identity-a",
-            type: "new",
-          },
-        ]);
+        expect(await census()).toEqual(beforeAttempt);
       } finally {
         await client.exec(
           "DROP TRIGGER later_source_coverage_failure ON sanctions_contact_screenings; DROP FUNCTION reject_later_source_coverage();",
@@ -1474,13 +1583,12 @@ test(
                   dateOfBirthDay: 5,
                   nationalityCodes: ["CZ"],
                   ...initial,
-                  ...("type" in initial &&
-                    initial.type === "organization" && {
-                      dateOfBirthYear: null,
-                      dateOfBirthMonth: null,
-                      dateOfBirthDay: null,
-                      nationalityCodes: [],
-                    }),
+                  ...("type" in initial && {
+                    dateOfBirthYear: null,
+                    dateOfBirthMonth: null,
+                    dateOfBirthDay: null,
+                    nationalityCodes: [],
+                  }),
                 })
                 .returning(),
           )

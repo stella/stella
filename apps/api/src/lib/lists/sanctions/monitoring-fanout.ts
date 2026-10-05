@@ -28,7 +28,7 @@ type FanoutPageOptions = {
     tx: Parameters<Parameters<SchedulerDb["transaction"]>[0]>[0],
     transitions: number,
     fanned: number,
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 };
 
 const fanOutEditionPage = async ({
@@ -96,8 +96,14 @@ const fanOutEditionPage = async ({
         })
         .returning();
       await Promise.all(
-        jobs.map((job) =>
-          transitionMonitoringBackfill({ tx, job, to: "pending", set: {} }),
+        jobs.map(
+          async (job) =>
+            await transitionMonitoringBackfill({
+              tx,
+              job,
+              to: "pending",
+              set: {},
+            }),
         ),
       );
     }
@@ -180,8 +186,14 @@ const consumeOrganizationRequest = async (
         })
         .returning();
       await Promise.all(
-        jobs.map((job) =>
-          transitionMonitoringBackfill({ tx, job, to: "pending", set: {} }),
+        jobs.map(
+          async (job) =>
+            await transitionMonitoringBackfill({
+              tx,
+              job,
+              to: "pending",
+              set: {},
+            }),
         ),
       );
     }
@@ -199,7 +211,7 @@ const consumeOrganizationRequest = async (
 const queueFreshnessTransitions = async (
   db: Pick<SchedulerDb, "transaction">,
   now: Date,
-  recordTransitionAuditEvent: (count: number) => Promise<void>,
+  recordTransitionAuditEvent: (count: number) => void,
 ) =>
   await db.transaction(async (tx) => {
     const owner =
@@ -248,19 +260,20 @@ const queueFreshnessTransitions = async (
       );
     });
     await Promise.all(
-      changed.map(({ source, status }) =>
-        transitionBatch({
-          tx,
-          spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
-          ids: [source],
-          options: {
-            from: ["pending", "complete"],
-            to: "pending",
-            set: { freshnessStatus: status, cursorOrganizationId: null },
-          },
-          recordTransitionAuditEvent: async (_auditTx, transitioned) =>
-            await recordTransitionAuditEvent(transitioned.length),
-        }),
+      changed.map(
+        async ({ source, status }) =>
+          await transitionBatch({
+            tx,
+            spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+            ids: [source],
+            options: {
+              from: ["pending", "complete"],
+              to: "pending",
+              set: { freshnessStatus: status, cursorOrganizationId: null },
+            },
+            recordTransitionAuditEvent: (_auditTx, transitioned) =>
+              recordTransitionAuditEvent(transitioned.length),
+          }),
       ),
     );
     // SET LOCAL survives a successful savepoint; nested scheduler calls retain their owner role.
@@ -283,7 +296,7 @@ export const queueSanctionsMonitoringBackfills = async ({
   await db.transaction(async (tx) => {
     // One outer transaction makes the run's aggregated audit inseparable from every nested transition.
     let transitions = 0;
-    const recordTransitionAuditEvent = async (count: number) => {
+    const recordTransitionAuditEvent = (count: number) => {
       transitions += count;
     };
     const freshnessQueued = await queueFreshnessTransitions(
@@ -294,8 +307,8 @@ export const queueSanctionsMonitoringBackfills = async ({
     const requested = await consumeOrganizationRequest(tx);
     const outcome = await fanOutEditionPage({
       db: tx,
-      recordTransitionAuditEvent: async (_auditTx, count) =>
-        await recordTransitionAuditEvent(count),
+      recordTransitionAuditEvent: (_auditTx, count) =>
+        recordTransitionAuditEvent(count),
     });
     await recordSystemAudit(tx, "system:sanctions-monitoring-fanout", {
       subject: runId,

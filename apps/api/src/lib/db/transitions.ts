@@ -22,7 +22,7 @@ export type TransitionSpec = {
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly terminal: readonly string[];
   readonly fence: string | undefined;
-  readonly scope?: readonly string[];
+  readonly scope?: readonly string[] | undefined;
 };
 
 /** Same-state writes preserve metadata without reopening a lifecycle. */
@@ -451,7 +451,7 @@ type TransitionBatchArgs<
       id: GetColumnData<TTable["_"]["columns"][TKey]>;
       status: Status<TTable>;
     }[],
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 } & (TScope extends readonly (keyof TTable["_"]["columns"] & string)[]
   ? {
       scope: {
@@ -486,11 +486,14 @@ export const transitionBatch = async <
   if (ids.length === 0) {
     return [];
   }
-  const scoped = transitionScopePredicate({
-    table: spec.table,
-    keys: spec.scope === undefined ? [] : spec.scope,
-    values: scope ?? {},
-  });
+  const scoped =
+    spec.scope === undefined
+      ? sql``
+      : transitionScopePredicate({
+          table: spec.table,
+          keys: spec.scope,
+          values: scope ?? {},
+        });
   const rows = await tx.execute(sql`
     UPDATE ${spec.table}
     SET ${sql.join(assignments, sql`, `)}

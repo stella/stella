@@ -63,7 +63,7 @@ const blockersFor = async (db: GatedTestDb, pid: number) => {
     }
     await Bun.sleep(10);
   }
-  panic("Monitoring operation did not reach its database barrier");
+  return panic("Monitoring operation did not reach its database barrier");
 };
 
 type InstallGateOptions = {
@@ -319,8 +319,8 @@ if (!databaseUrl || !runPostgresTests) {
           contactFingerprint: monitoringFingerprint(contact),
           outcome,
         };
-        const commit = (db: GatedTestDb) =>
-          commitSanctionsMonitoringBatch({
+        const commit = async (db: GatedTestDb) =>
+          await commitSanctionsMonitoringBatch({
             db: scopedFor({ db, organizationId, gate }),
             organizationId,
             source: "eu",
@@ -641,12 +641,13 @@ if (!databaseUrl || !runPostgresTests) {
           CREATE TRIGGER ${sql.identifier(faultName)} BEFORE DELETE ON sanctions_organization_marks
           FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(faultName)}()
         `);
-        const failed = await Result.tryPromise(() =>
-          queueSanctionsMonitoringBackfills({
-            runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
-            db: consumerDb,
-            now,
-          }),
+        const failed = await Result.tryPromise(
+          async () =>
+            await queueSanctionsMonitoringBackfills({
+              runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+              db: consumerDb,
+              now,
+            }),
         );
         if (failed.isOk()) {
           panic("Expected organization checkpoint failure");
