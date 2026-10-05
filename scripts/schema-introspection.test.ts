@@ -56,6 +56,7 @@ const validate = (
 };
 
 describe("schema-only dependency validation", () => {
+  // This scan parses the committed runtime dependency graph, unlike the tiny fixtures.
   test("accepts the complete committed set", () => {
     expect(
       validateSchemaIntrospection({
@@ -63,7 +64,7 @@ describe("schema-only dependency validation", () => {
         repoRoot: path.resolve(import.meta.dir, ".."),
       }),
     ).toEqual([]);
-  });
+  }, 30_000);
 
   test("accepts table enumeration and type-only database references", () => {
     expect(

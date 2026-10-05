@@ -21,7 +21,8 @@ export const canonicalModuleId = (
   } else if (specifier.startsWith("@/api/")) {
     resolved = `apps/api/src/${specifier.slice("@/api/".length)}`;
   } else if (specifier.startsWith("@/")) {
-    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.app;
+    const { app } =
+      /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups ?? {};
     if (app !== undefined) {
       resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
     }
