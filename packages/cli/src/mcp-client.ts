@@ -28,10 +28,13 @@ import { MCP_HTTP_PATH } from "./mcp-constants.js";
  * this identity to refuse releases that predate its API contract, and a pair
  * test in the API pins both sides, so renaming it is a contract change.
  */
-export const CLI_MCP_CLIENT_INFO = {
+export const CLI_MCP_CLIENT_INFO: {
+  readonly name: "stella-cli";
+  readonly version: string;
+} = {
   name: "stella-cli",
   version: CLI_VERSION,
-} as const;
+};
 
 // Most `tools/call` requests keep the default bounded client ceiling. A
 // generated leaf may carry a larger API-owned finite deadline when its bounded

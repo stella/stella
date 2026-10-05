@@ -2,6 +2,7 @@ import {
   CLIENT_INFO_META_KEY,
   createMcpHandler,
   isInitializeRequest,
+  isJSONRPCRequest,
   isLegacyRequest,
   Server,
   WebStandardStreamableHTTPServerTransport,
@@ -1175,7 +1176,11 @@ export const createMcpHttpRequestHandler = ({
       // (nothing persists on the per-request instance), and the reply is
       // replaced below, so every operation the CLI attempts is refused.
       const admission = mcpClientAdmission(message.params.clientInfo);
-      if (admission.kind === "client_upgrade_required") {
+      // `initialize` is always a request; the guard narrows to its id.
+      if (
+        admission.kind === "client_upgrade_required" &&
+        isJSONRPCRequest(message)
+      ) {
         handshake.refused = {
           id: message.id,
           cliVersion: admission.cliVersion,
