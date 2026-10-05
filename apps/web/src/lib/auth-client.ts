@@ -124,35 +124,40 @@ const authClientPlugins = [
   twoFactorClient(),
 ];
 
+const customFetchImpl = async (
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> => {
+  const method = resolveRequestMethod(input, init);
+  if (method === "GET") {
+    // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
+    // first session/role read so route entry does not wait for the main
+    // graph to boot before these leave the browser. Consume-once + TTL +
+    // the mutation fence below keep a stale response from ever
+    // satisfying a post-auth-change read.
+    const prefetched = await takeBootPrefetch(requestPathname(input));
+    if (prefetched !== null) {
+      return prefetched;
+    }
+  } else {
+    // Any auth mutation (sign-in/out, org switch, 2FA) invalidates
+    // whatever the boot prefetch captured before it.
+    discardBootPrefetch();
+  }
+  return await fetchWithTimeout(input, {
+    ...init,
+    signal: init?.signal ?? undefined,
+    timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+  });
+};
+
 const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
   createAuthClient({
     disableDefaultFetchPlugins: redirectMode === "manual",
     baseURL: browserAuthBaseUrl(),
     plugins: authClientPlugins,
     fetchOptions: {
-      customFetchImpl: async (input, init) => {
-        const method = resolveRequestMethod(input, init);
-        if (method === "GET") {
-          // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
-          // first session/role read so route entry does not wait for the main
-          // graph to boot before these leave the browser. Consume-once + TTL +
-          // the mutation fence below keep a stale response from ever
-          // satisfying a post-auth-change read.
-          const prefetched = await takeBootPrefetch(requestPathname(input));
-          if (prefetched !== null) {
-            return prefetched;
-          }
-        } else {
-          // Any auth mutation (sign-in/out, org switch, 2FA) invalidates
-          // whatever the boot prefetch captured before it.
-          discardBootPrefetch();
-        }
-        return await fetchWithTimeout(input, {
-          ...init,
-          signal: init?.signal ?? undefined,
-          timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
-        });
-      },
+      customFetchImpl,
       headers: {
         get "Accept-Language"() {
           return useI18nStore.getState().lang;
