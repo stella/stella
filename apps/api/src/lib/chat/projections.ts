@@ -1626,6 +1626,7 @@ const citationTreatmentCountsProjection = v.strictObject({
 // only where another tool can act on it.
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
+    // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
     // The count is a lower bound: the scan behind it stopped at its cap.
     capped: v.optional(v.literal(true)),
@@ -1637,6 +1638,8 @@ const caseLawCitationSummaryProjection = v.strictObject({
           caseNumber: v.string(),
           court: v.string(),
           date: v.optional(v.string()),
+          // Always held: read_case_law_decision takes it.
+          decisionId: passthroughId(),
         }),
       ),
     ),

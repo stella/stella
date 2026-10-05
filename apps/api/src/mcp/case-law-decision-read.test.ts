@@ -259,7 +259,7 @@ describe("citation summary", () => {
     expect(ranked).toHaveLength(TOP_CITING_DECISIONS);
   });
 
-  test("a top row is a citable name and a link, never an id", () => {
+  test("a top row is a citable name, a link and the id to read it by", () => {
     const summary = citationSummaryOutput(
       digestOf({
         summary: { ...digestOf().summary, incoming: counts({ positive: 1 }) },
@@ -271,6 +271,7 @@ describe("citation summary", () => {
       {
         caseNumber: "9 Cdo 9/2020",
         court: "Nejvyšší soud",
+        decisionId: decisionId(9),
         appUrl: "https://app.test/law/ns-9",
       },
     ]);

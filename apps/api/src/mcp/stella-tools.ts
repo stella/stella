@@ -1206,8 +1206,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       `true\` for reasoning or citation work (whole text, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} ` +
       "chars), pages for skimming. `query` returns only matching paragraphs " +
       "with neighbours. Page 1 adds details, metadata, " +
-      "published textFields and a citation summary: citedBy count, polarity " +
-      "counts, top 5 citing decisions, and what it cites (decisionId where " +
+      "published textFields and a citation summary: citedBy count of citing " +
+      "references, polarity counts, top 5 citers, and what it cites " +
+      "(decisionId where " +
       "held). All citations: read_case_law_citations ({ decision_id: " +
       "'<uuid>', direction: 'cited_by' }). One id gets an outline with pages; " +
       "outline and query entries deep-link. `include` picks optional " +

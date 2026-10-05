@@ -16,6 +16,7 @@ import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
+import { LIMITS } from "@/api/lib/limits";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
@@ -200,7 +201,7 @@ export const compactDecisionMetadata = ({
 // --- citations ---------------------------------------------------------------
 
 /** Citing decisions the summary names; the rest are one tool call away. */
-export const TOP_CITING_DECISIONS = 5;
+export const TOP_CITING_DECISIONS = LIMITS.caseLawTopCitingDecisions;
 
 type AppUrlOf = (decision: RankedRelatedDecision) => string | null;
 
@@ -248,6 +249,7 @@ export const citationSummaryOutput = (
     return {
       caseNumber: decision.caseNumber,
       court: decision.court,
+      decisionId: String(decision.id),
       ...(decision.decisionDate === null
         ? {}
         : { date: decision.decisionDate }),

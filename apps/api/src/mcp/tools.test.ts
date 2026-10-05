@@ -5483,6 +5483,7 @@ describe("OpenAI-compatible MCP tools", () => {
                     caseNumber: "31 Cdo 2/2025",
                     court: "Nejvyšší soud",
                     date: "2025-01-15",
+                    decisionId: CITING_DECISION_ID,
                     appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
                   },
                 ],
@@ -5662,7 +5663,10 @@ describe("OpenAI-compatible MCP tools", () => {
     const payload = await readDecisions({ decision_ids: [DECISION_ID] });
 
     expect(new Set(uuidKeys(payload))).toEqual(new Set(["decisionId"]));
-    // The held cited decision is the only id in the summary.
+    // Every id in the summary names a decision the corpus holds: the five
+    // citing ones and the held cited one, never the unresolved citation.
+    const summaryIds = uuidKeys(payload.items.at(0)?.decision?.citations);
+    expect(summaryIds).toHaveLength(6);
     expect(JSON.stringify(payload.items.at(0)?.decision?.citations)).toContain(
       heldId,
     );
