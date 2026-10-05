@@ -478,10 +478,7 @@ export const ChatMatterPicker = ({
                   return (
                     <MenuCheckboxItem
                       checked={isOn}
-                      className={cn(
-                        TRUNCATING_ITEM_CLASS,
-                        "min-h-11 sm:min-h-11",
-                      )}
+                      className={TRUNCATING_ITEM_CLASS}
                       closeOnClick={false}
                       key={m.id}
                       onClick={() => toggle(m.id)}

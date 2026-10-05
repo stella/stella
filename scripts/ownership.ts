@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
@@ -71,6 +72,51 @@ export type OwnershipEntry = {
   readonly summary: string;
   readonly enforcement: OwnershipEnforcement;
 };
+
+export const SCHEMA_INTROSPECTION = [
+  {
+    path: "apps/api/scripts/generate-status-tables.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/schema.ts",
+    reason: "Re-exports the schema declarations.",
+  },
+  {
+    path: "apps/api/src/db/code-owned-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/high-volume-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/plan-guard-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/schema-invariants.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+] as const satisfies readonly AllowedFile[];
+
+const isSchemaEnforcement = (
+  enforcement: OwnershipEnforcement,
+  ownerPath: string,
+): boolean =>
+  enforcement.kind === "import" &&
+  enforcement.specifiers.length > 0 &&
+  enforcement.specifiers.every((specifier) => {
+    const module = canonicalModuleId(specifier, ownerPath);
+    return (
+      module === "apps/api/src/db/schema" ||
+      module.startsWith("apps/api/src/db/schema/")
+    );
+  });
 
 const FLUSHES_ITS_OWN_SEARCH_MARKS =
   "Flushes the search marks its own transaction committed.";
@@ -410,7 +456,7 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
 ] as const;
 
-export const OWNERSHIP = [
+const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
   {
     id: "task-assignment-membership",
@@ -431,11 +477,6 @@ export const OWNERSHIP = [
       ],
       names: ["taskAssignees"],
       allowed: [
-        {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
-        },
         {
           path: "apps/api/src/db/",
           reason: "Schema and relation declarations.",
@@ -545,47 +586,12 @@ export const OWNERSHIP = [
       names: ["hostedUsageWebhookEvents"],
       allowed: [
         {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
-        },
-        {
-          path: "apps/api/src/db/schema.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/code-owned-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/high-volume-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/plan-guard-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/pglite-test-db.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
-          path: "apps/api/src/tests/security/schema-invariants.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/security/test-utils.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
@@ -2519,6 +2525,31 @@ export const OWNERSHIP = [
   ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
 
+// Materialize shared exceptions once, before either the lint rule or the
+// documentation consumes the registry; new schema owners inherit them.
+export const withSchemaIntrospection = (
+  entry: OwnershipEntry,
+): OwnershipEntry => {
+  if (
+    entry.enforcement.kind !== "import" ||
+    !isSchemaEnforcement(
+      entry.enforcement,
+      entry.owner.at(0) ?? panic("Schema export ownership requires an owner"),
+    )
+  ) {
+    return entry;
+  }
+  return {
+    ...entry,
+    enforcement: {
+      ...entry.enforcement,
+      allowed: [...entry.enforcement.allowed, ...SCHEMA_INTROSPECTION],
+    },
+  };
+};
+
+export const OWNERSHIP = OWNERSHIP_DECLARATIONS.map(withSchemaIntrospection);
+
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DOC_PATH = "docs/module-ownership.md";
 
@@ -2536,6 +2567,11 @@ Rows whose enforcement is not \`none\` are also read by the
 \`confine-owner/confine-owner\` lint rule, which reports any linted file outside
 the owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
 reason, in the same table.
+
+Schema export owners inherit the exact files in \`SCHEMA_INTROSPECTION\`.
+The ownership check follows their runtime dependencies and checks that they
+only enumerate schema metadata. The ratchet measures each shared path;
+additions require a justified allowance and removals are free.
 `;
 
 const ownerPathExists = (repoRoot: string, entryPath: string): boolean =>
@@ -2608,6 +2644,25 @@ export const validateOwnership = (
     }
     seen.add(entry.id);
 
+    if (entry.enforcement.kind === "import") {
+      const ownerPath = entry.owner.at(0);
+      if (
+        ownerPath !== undefined &&
+        entry.enforcement.specifiers.some((specifier) => {
+          const module = canonicalModuleId(specifier, ownerPath);
+          return (
+            module === "apps/api/src/db/schema" ||
+            module.startsWith("apps/api/src/db/schema/")
+          );
+        }) &&
+        !isSchemaEnforcement(entry.enforcement, ownerPath)
+      ) {
+        problems.push(
+          `${entry.id}: schema imports require a separate ownership entry from other modules`,
+        );
+      }
+    }
+
     for (const entryPath of entry.owner) {
       if (!ownerPathExists(repoRoot, entryPath)) {
         problems.push(`${entry.id}: owner path does not exist: ${entryPath}`);
@@ -2643,7 +2698,15 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const problems = [...validateOwnership(OWNERSHIP, REPO_ROOT)];
+  const { validateSchemaIntrospection } =
+    await import("./schema-introspection.ts");
+  const problems = [
+    ...validateOwnership(OWNERSHIP, REPO_ROOT),
+    ...validateSchemaIntrospection({
+      entries: SCHEMA_INTROSPECTION,
+      repoRoot: REPO_ROOT,
+    }),
+  ];
   const committed = existsSync(docFile) ? readFileSync(docFile, "utf-8") : "";
   if (committed !== rendered) {
     problems.push(

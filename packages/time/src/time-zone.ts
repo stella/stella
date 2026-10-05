@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uokik] new helper; no parser calls it.
+// parser-output-unchanged: [pl-uokik] builds the epoch instant per call instead of at import; parseTimeZoneId results are unchanged.
 import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
@@ -8,10 +8,15 @@ declare const timeZoneIdBrand: unique symbol;
 export type TimeZoneId = string & { readonly [timeZoneIdBrand]: true };
 
 const FIXED_OFFSET = /^[+-]/u;
-const EPOCH = Temporal.Instant.fromEpochMilliseconds(0);
 
+// Builds the instant per call: `@stll/time` re-exports this module, and an
+// import-time Temporal call fails wherever the runtime's Temporal is partial.
 const zoneSpelling = (value: string): string | null =>
-  Result.try(() => EPOCH.toZonedDateTimeISO(value).timeZoneId).unwrapOr(null);
+  Result.try(
+    () =>
+      Temporal.Instant.fromEpochMilliseconds(0).toZonedDateTimeISO(value)
+        .timeZoneId,
+  ).unwrapOr(null);
 
 /** Temporal knows the zone and spells it exactly this way. */
 const isTimeZoneId = (value: string): value is TimeZoneId =>
