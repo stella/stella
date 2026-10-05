@@ -9,6 +9,7 @@ import {
   decisionTypeFilter,
   decisionTypeKey,
   decisionTypeKind,
+  isDocketShapedDecisionType,
   STATED_DECISION_TYPE_KINDS,
   statedDecisionTypesOf,
 } from "@/api/lib/case-law/decision-type-key";
@@ -71,6 +72,21 @@ test("every listed spelling is in stored form and reads as its own kind", () => 
     if (Object.hasOwn(STATED_DECISION_TYPE_KINDS, kind)) {
       expect(decisionTypeKind(kind)).toBe(kind);
     }
+  }
+});
+
+test("a docket number is recognised as one, and no stated type looks like a docket", () => {
+  for (const docket of [
+    "63 az 17/2026 - 28",
+    "72 ad 59/2025 - 26",
+    "8 a 17/2026 - 34",
+    "8 Afs 24/2025-50",
+    "21 Cdo 1234/2020",
+  ]) {
+    expect(isDocketShapedDecisionType(docket)).toBe(true);
+  }
+  for (const stated of Object.keys(STATED_DECISION_TYPE_KINDS)) {
+    expect(isDocketShapedDecisionType(stated)).toBe(false);
   }
 });
 
