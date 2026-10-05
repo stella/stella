@@ -14,7 +14,6 @@ import {
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -28,6 +27,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createHostedSetupSession } from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   checkMemberCapacityChange,
   memberCapacityOf,
@@ -57,6 +58,11 @@ const hostedExternalAccountRef = (
 
 // Covers the provider call; a created session's own expiry replaces it.
 const HOSTED_CHECKOUT_CLAIM_TTL_SECONDS = 60 * 60;
+
+const CHECKOUT_CLAIM_SETTLE_FAILED = failureSink({
+  event: "usage.hosted_checkout.claim_settle_failed",
+  expected: [],
+});
 const HOSTED_CHECKOUT_AUDIT_FIELD = "hostedCheckout";
 // A paid subscription (active, past_due, paused) is changed through hosted
 // management, not bought again; a trial or an ended subscription upgrades
@@ -468,8 +474,9 @@ const createHostedSetup = createSafeRootHandler(
       // The provider outcome is already decided: a created session still
       // reaches the caller, and an unsettled claim lapses at its own expiry.
       if (Result.isError(settled)) {
-        captureError(settled.error, {
-          organizationId: session.activeOrganizationId,
+        observeFailure(settled.error, {
+          sink: CHECKOUT_CLAIM_SETTLE_FAILED,
+          ctx: { organizationId: session.activeOrganizationId },
         });
       }
     }
