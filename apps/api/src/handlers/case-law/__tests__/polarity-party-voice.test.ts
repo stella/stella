@@ -199,12 +199,19 @@ test("a reported submission ends before an independent court clause", () => {
 });
 
 test("citation abbreviations and dates stay inside the reported submission", () => {
-  expect(
-    selectCitationPolarity(
-      csRules,
-      "stěžovatel tvrdí, že rozsudek ze dne 1. 2. 2020, sp. zn. 1 Cdo 1/2020 překonán",
-    )?.polarity,
-  ).toBe("neutral");
+  for (const reference of [
+    "rozsudek ze dne 1. 2. 2020, sp. zn. 1 Cdo 1/2020",
+    "rozsudek ze dne 29. května 2020, sp. zn. 1 Cdo 1/2020",
+    "nález sp. zn. Pl. ÚS 1/20",
+    "nález sp. zn. IV. ÚS 1/20",
+  ]) {
+    expect(
+      selectCitationPolarity(
+        csRules,
+        `stěžovatel tvrdí, že ${reference} překonán`,
+      )?.polarity,
+    ).toBe("neutral");
+  }
 });
 
 test("scope without a departure retains normal precedence and unmatched windows stay empty", () => {
