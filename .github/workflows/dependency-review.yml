@@ -108,6 +108,8 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: ${{ steps.changes.outputs.manifest }}
+          # Parses YAML only; nothing is installed, so nothing is cached.
+          no-cache: true
 
       - name: Compare workflow action dependencies
         id: actions

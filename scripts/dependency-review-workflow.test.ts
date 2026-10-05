@@ -44,8 +44,8 @@ const actionStep = job.steps.find((step) => step.id === "actions");
 if (!selectorStep || !actionStep) {
   throw new TypeError("Missing dependency selector steps");
 }
-const selectorSource = v.parse(v.string(), selectorStep?.with?.["script"]);
-const actionSource = v.parse(v.string(), actionStep?.run);
+const selectorSource = v.parse(v.string(), selectorStep.with?.["script"]);
+const actionSource = v.parse(v.string(), actionStep.run);
 const referencesStart = actionSource.indexOf("const references =");
 const referencesEnd = actionSource.indexOf("const snapshots =");
 if (referencesStart === -1 || referencesEnd <= referencesStart) {
@@ -98,7 +98,7 @@ const selector = ({
   const contentCalls: Record<string, unknown>[] = [];
   const base = event === "pull_request" ? "pr-base" : "queue-base";
   const head = event === "pull_request" ? "pr-head" : "queue-head";
-  const available = {
+  const available: Record<string, string | undefined> = {
     [`${MERGE_BASE}:package.json`]: '{"packageManager":"bun@1.4.1"}',
     ...contents,
   };
@@ -230,7 +230,7 @@ describe("required dependency review workflow boundary", () => {
     expect(Object.keys(workflow.jobs)).toEqual(["dependency-review"]);
     expect(job.if).toBeUndefined();
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
-    expect(selectorStep?.if).toBeUndefined();
+    expect(selectorStep.if).toBeUndefined();
   });
 
   test("conditions setup and trusted checkout/review on actual selector outputs within the same job", () => {
@@ -246,20 +246,21 @@ describe("required dependency review workflow boundary", () => {
     if (!setup || !checkout || !review) {
       throw new TypeError("Missing dependency review execution steps");
     }
-    expect(setup?.if).toBe("steps.changes.outputs.workflows == 'true'");
-    expect(actionStep?.if).toBe(setup?.if);
-    expect(setup?.with?.["bun-version-file"]).toBe(
+    expect(setup.if).toBe("steps.changes.outputs.workflows == 'true'");
+    expect(actionStep.if).toBe(setup.if);
+    expect(setup.with?.["bun-version-file"]).toBe(
       `\${{ steps.changes.outputs.manifest }}`,
     );
+    expect(setup.with?.["no-cache"]).toBe(true);
     const reviewCondition =
       "steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'";
-    expect(checkout?.if).toBe(reviewCondition);
-    expect(review?.if).toBe(reviewCondition);
-    expect(checkout?.with?.["persist-credentials"]).toBe(false);
-    expect(review?.with?.["base-ref"]).toBe(
+    expect(checkout.if).toBe(reviewCondition);
+    expect(review.if).toBe(reviewCondition);
+    expect(checkout.with?.["persist-credentials"]).toBe(false);
+    expect(review.with?.["base-ref"]).toBe(
       `\${{ github.event.merge_group.base_sha || '' }}`,
     );
-    expect(review?.with?.["head-ref"]).toBe(
+    expect(review.with?.["head-ref"]).toBe(
       `\${{ github.event.merge_group.head_sha || '' }}`,
     );
     expect(job.steps.indexOf(selectorStep)).toBeLessThan(
