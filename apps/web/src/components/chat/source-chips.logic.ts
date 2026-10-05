@@ -1,5 +1,9 @@
 import { isBusinessRegistrySlug } from "@stll/api-contract";
-import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import {
+  isCaseLawDecisionId,
+  parseCaseLawDecisionPath,
+} from "@stll/api-contract/case-law-decision-route";
+import { parseStatutePath } from "@stll/api-contract/statute-route";
 
 import type {
   BusinessRegistrySourceReference,
@@ -55,8 +59,13 @@ const isHttpUrl = (value: unknown): value is string => {
     return false;
   }
 
+  // A root-relative URL is only a source when it opens a legal reader page.
   if (safeHref.startsWith("/")) {
-    return true;
+    const { pathname } = new URL(safeHref, "https://app.invalid");
+    return (
+      parseStatutePath(pathname) !== null ||
+      parseCaseLawDecisionPath(pathname) !== null
+    );
   }
 
   try {
