@@ -61,6 +61,113 @@ const conditional = {
 };
 
 describe("feature source declarations", () => {
+  test.each(["capability", "scheduler"] as const)(
+    "%s registration is a dispatch boundary with independently declared entries",
+    (kind) => {
+      const handler =
+        kind === "scheduler"
+          ? "apps/api/src/lib/scheduler/tasks/feature.ts"
+          : "apps/api/src/routes/feature/run.ts";
+      const registryFile = "apps/api/src/dispatch/registry.ts";
+      const name =
+        kind === "scheduler" ? "SCHEDULER_TASKS" : "CAPABILITY_DISPATCH";
+      const target =
+        kind === "scheduler"
+          ? "task: run"
+          : 'load: () => import("../routes/feature/run")';
+      const registration = `import { run } from "${kind === "scheduler" ? "../lib/scheduler/tasks/feature" : "../routes/feature/run"}";
+export const ${name} = { run: { featureId: "fixture", ${target} } };`;
+      const sources = new Map([
+        ...baseSources,
+        [
+          handler,
+          'import { run as core } from "@/api/feature/core"; export const featureAccess = { type: "required", featureId: "fixture" }; export const run = () => core();',
+        ],
+        [registryFile, registration],
+        [
+          "apps/api/src/routes/ordinary.ts",
+          `import * as registry from "../dispatch/registry"; export const list = () => registry;`,
+        ],
+      ]);
+      const endpoints = [
+        { file: "apps/api/src/routes/ordinary.ts", config: {} },
+        ...(kind === "capability" ? [{ file: handler, config: required }] : []),
+      ];
+      const validate = () =>
+        validateFeatureAccessDeclarations({ registry, endpoints, sources });
+      expect(validate()).toEqual([]);
+      sources.set(
+        registryFile,
+        registration.replace('featureId: "fixture", ', ""),
+      );
+      expect(validate()).toContainEqual({
+        file: `${registryFile}.dispatch-entry-0.ts`,
+        message: "source ownership requires featureAccess fixture",
+      });
+      sources.set(registryFile, registration);
+      sources.set(
+        "apps/api/src/routes/ordinary.ts",
+        `import { run } from "${kind === "scheduler" ? "../lib/scheduler/tasks/feature" : "./feature/run"}"; export const direct = () => run();`,
+      );
+      expect(validate()).toContainEqual({
+        file: "apps/api/src/routes/ordinary.ts",
+        message: "source ownership requires featureAccess fixture",
+      });
+      sources.set(
+        "apps/api/src/routes/ordinary.ts",
+        "export const ordinary = true;",
+      );
+      if (kind === "scheduler") {
+        sources.set(
+          handler,
+          sources
+            .get(handler)
+            ?.replace(
+              'export const featureAccess = { type: "required", featureId: "fixture" }; ',
+              "",
+            ) ?? "",
+        );
+      } else {
+        endpoints.splice(1, 1, { file: handler, config: {} });
+      }
+      expect(validate()).toContainEqual({
+        file: handler,
+        message: "source ownership requires featureAccess fixture",
+      });
+    },
+  );
+  test("aggregate registry spreads retain entry validation and mixed imports retain ownership", () => {
+    const additional = [
+      [
+        "apps/api/src/dispatch/leaf.ts",
+        'export const CAPABILITY_DISPATCH = { run: { featureId: "fixture", load: () => import("../routes/feature/run") } };',
+      ],
+      [
+        "apps/api/src/dispatch/registry.ts",
+        'import { CAPABILITY_DISPATCH as leaf } from "./leaf"; export const CAPABILITY_DISPATCH = { ...leaf };',
+      ],
+    ] as const;
+    expect(
+      check(
+        'import { CAPABILITY_DISPATCH } from "../dispatch/registry";',
+        {},
+        additional,
+      ),
+    ).toEqual([]);
+    expect(
+      check(
+        'import { run } from "./feature/run"; export const CAPABILITY_DISPATCH = { run: { featureId: "fixture", task: run } }; export const direct = () => run();',
+      ),
+    ).toContainEqual({
+      file: "apps/api/src/routes/ordinary.ts",
+      message: "source ownership requires featureAccess fixture",
+    });
+    expect(
+      check(
+        'import { run } from "./feature/run"; export const CAPABILITY_DISPATCH = { ...run };',
+      ),
+    ).toHaveLength(1);
+  });
   test("named schema barrel imports require only the selected table owner", () => {
     expect(check('import { ordinaryRows } from "@/api/db/schema";')).toEqual(
       [],
