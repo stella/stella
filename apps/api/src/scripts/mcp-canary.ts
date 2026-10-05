@@ -1,6 +1,6 @@
 /** Deployed MCP journeys. Diagnostics contain assertions, never response bodies.
  * Full mode registers a client; frequent mode uses existing client metadata.
- * Desktop redemption reuses an existing key and never mints a credential.
+ * Staging mints credentials from its smoke session and revokes them each run.
  */
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -32,6 +32,7 @@ const PROBE_STATUS = {
   failed: "failed",
   passed: "passed",
   skipped: "skipped",
+  notApplicable: "not_applicable",
 } as const;
 
 type ProbeStatus = (typeof PROBE_STATUS)[keyof typeof PROBE_STATUS];
@@ -351,9 +352,12 @@ const deploymentFetcher: CanaryFetcher = async (input, init) =>
     edgeHeaderValue: process.env["E2E_EDGE_HEADER_VALUE"],
   })(input, init);
 
-const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
+const postJsonRpc = async (
+  call: JsonRpcCall,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResponse> =>
   await readProbeResponse(
-    await deploymentFetcher(createJsonRpcRequest(call), {
+    await fetcher(createJsonRpcRequest(call), {
       timeoutMs: PROBE_TIMEOUT_MS,
     }),
   );
@@ -516,7 +520,7 @@ export const evaluateToolCall = ({
 
 type AuthenticatedProbe = {
   name: string;
-  run: (target: CanaryTarget) => Promise<ProbeResult>;
+  run: (target: CanaryTarget, fetcher?: CanaryFetcher) => Promise<ProbeResult>;
 };
 
 /**
@@ -526,19 +530,22 @@ type AuthenticatedProbe = {
 export const AUTHENTICATED_PROBES = [
   {
     name: PROBE_NAMES.toolCall,
-    run: async ({ baseUrl, token }) =>
+    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
       evaluateToolCall(
-        await postJsonRpc({
-          baseUrl,
-          token,
-          era: "modern",
-          id: 3,
-          method: "tools/call",
-          params: {
-            name: "search_case_law",
-            arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+        await postJsonRpc(
+          {
+            baseUrl,
+            token,
+            era: "modern",
+            id: 3,
+            method: "tools/call",
+            params: {
+              name: "search_case_law",
+              arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+            },
           },
-        }),
+          fetcher,
+        ),
       ),
   },
   {
@@ -547,47 +554,54 @@ export const AUTHENTICATED_PROBES = [
   },
   {
     name: PROBE_NAMES.initialize,
-    run: async ({ baseUrl, token }) =>
+    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
       evaluateInitialize(
-        await postJsonRpc({
-          baseUrl,
-          era: "legacy",
-          id: 1,
-          method: "initialize",
-          params: {
-            capabilities: {},
-            clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
-            protocolVersion: LATEST_PROTOCOL_VERSION,
+        await postJsonRpc(
+          {
+            baseUrl,
+            era: "legacy",
+            id: 1,
+            method: "initialize",
+            params: {
+              capabilities: {},
+              clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
+              protocolVersion: LATEST_PROTOCOL_VERSION,
+            },
+            token,
           },
-          token,
-        }),
+          fetcher,
+        ),
       ),
   },
   {
     name: PROBE_NAMES.toolsList,
-    run: async ({ baseUrl, token }) =>
+    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
       evaluateToolsList(
-        await postJsonRpc({
-          baseUrl,
-          era: "modern",
-          id: 2,
-          method: "tools/list",
-          params: {},
-          token,
-        }),
+        await postJsonRpc(
+          {
+            baseUrl,
+            era: "modern",
+            id: 2,
+            method: "tools/list",
+            params: {},
+            token,
+          },
+          fetcher,
+        ),
       ),
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
 // Concurrent because both eras are stateless: neither the legacy initialize
 // nor the modern per-request envelope establishes state for another probe.
-const runAuthenticatedProbes = async (
+export const runAuthenticatedProbes = async (
   target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> =>
   await Promise.all(
     AUTHENTICATED_PROBES.map(
       async ({ name, run }) =>
-        await runNamedProbe(name, async () => await run(target)),
+        await runNamedProbe(name, async () => await run(target, fetcher)),
     ),
   );
 
@@ -602,6 +616,7 @@ const PROBE_ICONS = {
   [PROBE_STATUS.failed]: "FAIL",
   [PROBE_STATUS.passed]: "PASS",
   [PROBE_STATUS.skipped]: "SKIP",
+  [PROBE_STATUS.notApplicable]: "N/A",
 } as const satisfies Record<ProbeStatus, string>;
 
 const authorizationMetadataSchema = v.object({
@@ -855,105 +870,349 @@ export const evaluateDesktopRedeem = ({
     "redeemed a handoff using the existing desktop credential",
   );
 };
-type DesktopProbeOptions = {
-  baseUrl: string;
-  desktopKey?: string;
-  sessionCookie?: string;
-  smokeSecret?: string;
-};
-export const runDesktopProbe = async (
-  { baseUrl, desktopKey, sessionCookie, smokeSecret }: DesktopProbeOptions,
-  fetcher: CanaryFetcher = deploymentFetcher,
-): Promise<ProbeResult> => {
-  const name = "desktop handoff redeem";
-  let browserCookie = sessionCookie;
-  if (!desktopKey) {
-    return skipped(
-      name,
-      "missing MCP_CANARY_DESKTOP_KEY: existing test desktop key required (never minted by the canary)",
-    );
-  }
-  if (!sessionCookie && !smokeSecret) {
-    return skipped(
-      name,
-      "missing MCP_CANARY_SESSION_COOKIE or SMOKE_SESSION_SECRET: browser session for the desktop key account required",
-    );
-  }
-  if (!sessionCookie && smokeSecret) {
-    const smoke = await readProbeResponse(
-      await fetcher(new URL("/v1/smoke/session", baseUrl), {
-        method: "POST",
-        headers: { "x-smoke-secret": smokeSecret },
-        timeoutMs: PROBE_TIMEOUT_MS,
-      }),
-    );
-    if (
-      smoke.status !== 200 ||
-      !v.is(
-        v.object({ cookieName: v.string(), cookieValue: v.string() }),
-        smoke.body,
-      )
-    ) {
-      return failed(name, "could not mint the smoke browser session");
-    }
-    browserCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
-  }
-  if (!browserCookie) {
-    return failed(name, "browser session unavailable");
-  }
-  const config = await readProbeResponse(
-    await fetcher(new URL("/v1/desktop-registry/request", baseUrl), {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${desktopKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ type: "config" }),
-      timeoutMs: PROBE_TIMEOUT_MS,
-    }),
-  );
-  if (
-    config.status !== 200 ||
-    !v.is(v.object({ identity: desktopIdentitySchema }), config.body)
-  ) {
-    return failed(name, "test desktop key did not return an account identity");
-  }
-  const identity = config.body.identity;
-  const correlationId = Bun.randomUUIDv7();
-  const verifier = randomBytes(32).toString("hex");
-  const grant = await fetcher(new URL("/v1/desktop-registry/grant", baseUrl), {
-    method: "POST",
-    headers: { cookie: browserCookie, "content-type": "application/json" },
-    body: JSON.stringify({
-      correlationId,
-      verifierHash: createHash("sha256").update(verifier).digest("hex"),
-    }),
-    timeoutMs: PROBE_TIMEOUT_MS,
+const notApplicable = (name: string, detail: string): ProbeResult => ({
+  name,
+  status: PROBE_STATUS.notApplicable,
+  detail,
+});
+
+const STAGING_KEY_NAME = "MCP staging canary";
+const STAGING_KEY_PERMISSIONS = { workspace: ["read"] };
+const EXPIRY_ALERT_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
+
+export const evaluateCredentialExpiry = ({
+  status,
+  body,
+  nowMs,
+}: Pick<ProbeResponse, "body" | "status"> & { nowMs: number }): ProbeResult => {
+  const name = "canary bearer expiry";
+  const schema = v.object({
+    expiresAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
   });
-  await grant.body?.cancel();
-  if (!grant.ok) {
-    return failed(name, "browser session could not issue a desktop handoff");
-  }
-  return evaluateDesktopRedeem({
+  if (status !== 200 || !v.is(schema, body))
+    return failed(name, "could not inspect the current machine key expiry");
+  if (body.expiresAt === null) return passed(name, "credential has no expiry");
+  const remainingMs =
+    Temporal.Instant.from(body.expiresAt).epochMilliseconds - nowMs;
+  if (remainingMs <= EXPIRY_ALERT_WINDOW_MS)
+    return failed(
+      name,
+      "key expires within 15 days: rotate MCP_CANARY_TOKEN (14-day notice plus scheduling margin)",
+    );
+  return passed(name, "credential expiry is more than 15 days away");
+};
+
+export const runCredentialExpiryProbe = async (
+  { baseUrl, token }: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult> =>
+  evaluateCredentialExpiry({
     ...(await readProbeResponse(
-      await fetcher(new URL("/v1/desktop-registry/redeem-link", baseUrl), {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${desktopKey}`,
-          "content-type": "application/json",
-          "user-agent": "StellaDesktop/mcp-canary",
-        },
-        body: JSON.stringify({
-          correlationId,
-          verifier,
-          expectedUserId: identity.userId,
-          expectedOrganizationId: identity.organizationId,
-        }),
+      await fetcher(new URL("/v1/api-keys/current", baseUrl), {
+        headers: { authorization: `Bearer ${token}` },
         timeoutMs: PROBE_TIMEOUT_MS,
       }),
     )),
-    identity,
+    nowMs: Temporal.Now.instant().epochMilliseconds,
   });
+
+type DesktopProbeOptions = { baseUrl: string; sessionCookie: string };
+export const runDesktopProbe = async (
+  { baseUrl, sessionCookie }: DesktopProbeOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  let desktopKey: string | undefined;
+  try {
+    results.push(
+      await runNamedProbe("desktop handoff redeem", async () => {
+        const sessionResponse = await readProbeResponse(
+          await fetcher(new URL("/api/auth/get-session", baseUrl), {
+            headers: { cookie: sessionCookie },
+            timeoutMs: PROBE_TIMEOUT_MS,
+          }),
+        );
+        const schema = v.object({
+          user: v.object({ id: v.pipe(v.string(), v.nonEmpty()) }),
+          session: v.object({
+            activeOrganizationId: v.pipe(v.string(), v.nonEmpty()),
+          }),
+        });
+        if (
+          sessionResponse.status !== 200 ||
+          !v.is(schema, sessionResponse.body)
+        )
+          return failed(
+            "desktop handoff redeem",
+            "smoke browser session did not return an account identity",
+          );
+        const identity = {
+          userId: sessionResponse.body.user.id,
+          organizationId: sessionResponse.body.session.activeOrganizationId,
+        };
+        const redeemHandoff = async (key?: string) => {
+          const correlationId = Bun.randomUUIDv7();
+          const verifier = randomBytes(32).toString("hex");
+          const grant = await fetcher(
+            new URL("/v1/desktop-registry/grant", baseUrl),
+            {
+              method: "POST",
+              headers: {
+                cookie: sessionCookie,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                correlationId,
+                verifierHash: createHash("sha256")
+                  .update(verifier)
+                  .digest("hex"),
+              }),
+              timeoutMs: PROBE_TIMEOUT_MS,
+            },
+          );
+          await grant.body?.cancel();
+          if (!grant.ok) return { body: undefined, status: grant.status };
+          return await readProbeResponse(
+            await fetcher(
+              new URL("/v1/desktop-registry/redeem-link", baseUrl),
+              {
+                method: "POST",
+                headers: {
+                  ...(key ? { authorization: `Bearer ${key}` } : {}),
+                  "content-type": "application/json",
+                  "user-agent": "stella-desktop",
+                },
+                body: JSON.stringify({
+                  correlationId,
+                  verifier,
+                  expectedUserId: identity.userId,
+                  expectedOrganizationId: identity.organizationId,
+                }),
+                timeoutMs: PROBE_TIMEOUT_MS,
+              },
+            ),
+          );
+        };
+        const minted = await redeemHandoff();
+        // Capture a returned key before classifying the rest of the response so
+        // malformed success responses still trigger credential cleanup.
+        if (
+          v.is(v.object({ key: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
+        )
+          desktopKey = minted.body.key;
+        if (
+          minted.status !== 200 ||
+          !desktopKey ||
+          !v.is(v.object({ status: v.literal("credential") }), minted.body)
+        )
+          return failed(
+            "desktop handoff redeem",
+            "could not mint a desktop credential from the smoke browser session",
+          );
+        return evaluateDesktopRedeem({
+          ...(await redeemHandoff(desktopKey)),
+          identity,
+        });
+      }),
+    );
+  } finally {
+    const keyToRevoke = desktopKey;
+    if (keyToRevoke) {
+      results.push(
+        await runNamedProbe("desktop credential cleanup", async () => {
+          const response = await readProbeResponse(
+            await fetcher(new URL("/v1/desktop-registry/request", baseUrl), {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${keyToRevoke}`,
+                "user-agent": "stella-desktop",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ type: "revoke" }),
+              timeoutMs: PROBE_TIMEOUT_MS,
+            }),
+          );
+          if (
+            response.status !== 200 ||
+            !v.is(v.object({ revoked: v.literal(true) }), response.body)
+          )
+            return failed(
+              "desktop credential cleanup",
+              "could not revoke the per-run desktop credential",
+            );
+          return passed(
+            "desktop credential cleanup",
+            "per-run desktop key revoked",
+          );
+        }),
+      );
+    } else {
+      results.push(
+        notApplicable(
+          "desktop credential cleanup",
+          "no desktop credential was returned",
+        ),
+      );
+    }
+  }
+  return results;
+};
+
+type StagingJourneyOptions = { baseUrl: string; smokeSecret?: string };
+export const runStagingCredentialJourneys = async (
+  { baseUrl, smokeSecret }: StagingJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const bootstrapName = "staging credential bootstrap";
+  if (!smokeSecret)
+    return [
+      skipped(
+        bootstrapName,
+        "missing SMOKE_SESSION_SECRET: staging mints its credentials per run",
+      ),
+      ...AUTHENTICATED_PROBES.map(({ name }) =>
+        skipped(name, "no staging smoke session available"),
+      ),
+      skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
+    ];
+  const results: ProbeResult[] = [];
+  let sessionCookie: string | undefined;
+  let keyId: string | undefined;
+  let token: string | undefined;
+  try {
+    results.push(
+      await runNamedProbe(bootstrapName, async () => {
+        const smoke = await readProbeResponse(
+          await fetcher(new URL("/v1/smoke/session", baseUrl), {
+            method: "POST",
+            headers: { "x-smoke-secret": smokeSecret },
+            timeoutMs: PROBE_TIMEOUT_MS,
+          }),
+        );
+        if (
+          smoke.status !== 200 ||
+          !v.is(
+            v.object({
+              cookieName: v.pipe(v.string(), v.nonEmpty()),
+              cookieValue: v.pipe(v.string(), v.nonEmpty()),
+            }),
+            smoke.body,
+          )
+        )
+          return failed(
+            bootstrapName,
+            "could not mint the staging browser session",
+          );
+        sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
+        const minted = await readProbeResponse(
+          await fetcher(new URL("/v1/api-keys/", baseUrl), {
+            method: "POST",
+            headers: {
+              cookie: sessionCookie,
+              "content-type": "application/json",
+            },
+            timeoutMs: PROBE_TIMEOUT_MS,
+            body: JSON.stringify({
+              name: STAGING_KEY_NAME,
+              scopes: CANARY_SCOPE.split(" "),
+              permissions: STAGING_KEY_PERMISSIONS,
+              audience: "default",
+              expiresInDays: 1,
+            }),
+          }),
+        );
+        if (
+          v.is(v.object({ id: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
+        )
+          keyId = minted.body.id;
+        if (
+          minted.status !== 200 ||
+          !v.is(
+            v.object({ key: v.pipe(v.string(), v.nonEmpty()) }),
+            minted.body,
+          ) ||
+          !keyId
+        )
+          return failed(
+            bootstrapName,
+            "could not mint the per-run MCP machine key",
+          );
+        token = minted.body.key;
+        return passed(
+          bootstrapName,
+          "minted a short-lived MCP key using the staging smoke browser session",
+        );
+      }),
+    );
+    const mintedToken = token;
+    if (mintedToken)
+      results.push(
+        ...(await runAuthenticatedProbes(
+          { baseUrl, token: mintedToken },
+          fetcher,
+        )),
+      );
+    else
+      results.push(
+        ...AUTHENTICATED_PROBES.map(({ name }) =>
+          skipped(name, "staging credential bootstrap failed"),
+        ),
+      );
+    const browserCookie = sessionCookie;
+    if (browserCookie)
+      results.push(
+        ...(await runDesktopProbe(
+          { baseUrl, sessionCookie: browserCookie },
+          fetcher,
+        )),
+      );
+    else
+      results.push(
+        skipped(
+          "desktop handoff redeem",
+          "staging smoke browser session unavailable",
+        ),
+      );
+  } finally {
+    const idToRevoke = keyId;
+    const browserCookie = sessionCookie;
+    if (idToRevoke && browserCookie) {
+      results.push(
+        await runNamedProbe("MCP credential cleanup", async () => {
+          const response = await readProbeResponse(
+            await fetcher(new URL("/v1/api-keys/revoke", baseUrl), {
+              method: "POST",
+              headers: {
+                cookie: browserCookie,
+                "content-type": "application/json",
+              },
+              timeoutMs: PROBE_TIMEOUT_MS,
+              body: JSON.stringify({ keyId: idToRevoke }),
+            }),
+          );
+          if (
+            response.status !== 200 ||
+            !v.is(
+              v.object({ id: v.literal(idToRevoke), revoked: v.literal(true) }),
+              response.body,
+            )
+          )
+            return failed(
+              "MCP credential cleanup",
+              "could not revoke the per-run MCP credential",
+            );
+          return passed("MCP credential cleanup", "per-run MCP key revoked");
+        }),
+      );
+    } else
+      results.push(
+        notApplicable(
+          "MCP credential cleanup",
+          "no MCP credential id was returned",
+        ),
+      );
+  }
+  return results;
 };
 
 const run = async () => {
@@ -971,29 +1230,55 @@ const run = async () => {
     process.exitCode = 1;
     return;
   }
+  const environment = process.env["MCP_CANARY_ENVIRONMENT"] ?? "production";
+  if (environment !== "production" && environment !== "staging") {
+    console.error(
+      "[mcp-canary] MCP_CANARY_ENVIRONMENT must be production or staging.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const results = [
     ...(await runOAuthJourneys({
       baseUrl,
       mode,
       frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
     })),
-    await runNamedProbe(
-      "desktop handoff redeem",
-      async () =>
-        await runDesktopProbe({
-          baseUrl,
-          desktopKey: process.env["MCP_CANARY_DESKTOP_KEY"],
-          sessionCookie: process.env["MCP_CANARY_SESSION_COOKIE"],
-          smokeSecret: process.env["SMOKE_SESSION_SECRET"],
-        }),
-    ),
     ...(await runPublicProbes(baseUrl)),
-    ...(token
-      ? await runAuthenticatedProbes({ baseUrl, token })
-      : AUTHENTICATED_PROBES.map(({ name }) =>
-          skipped(name, "no MCP_CANARY_TOKEN configured"),
-        )),
   ];
+  if (environment === "staging") {
+    results.push(
+      ...(await runStagingCredentialJourneys({
+        baseUrl,
+        smokeSecret: process.env["SMOKE_SESSION_SECRET"],
+      })),
+    );
+  } else {
+    results.push(
+      notApplicable(
+        "desktop handoff redeem",
+        "browser-authorized desktop handoffs are exercised by the staging smoke; production needs no browser credential",
+      ),
+    );
+    if (token) {
+      results.push(...(await runAuthenticatedProbes({ baseUrl, token })));
+      results.push(
+        await runNamedProbe(
+          "canary bearer expiry",
+          async () => await runCredentialExpiryProbe({ baseUrl, token }),
+        ),
+      );
+    } else {
+      results.push(
+        ...AUTHENTICATED_PROBES.map(({ name }) =>
+          skipped(name, "no MCP_CANARY_TOKEN configured"),
+        ),
+      );
+      results.push(
+        skipped("canary bearer expiry", "no MCP_CANARY_TOKEN configured"),
+      );
+    }
+  }
 
   for (const result of results) {
     if (result.status === PROBE_STATUS.skipped) {

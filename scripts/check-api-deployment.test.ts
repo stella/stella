@@ -112,8 +112,8 @@ describe("API deployment health receipt", () => {
     const mcpStep = steps.find(({ run }) => run === "bun run canary:mcp");
     expect(mcpStep?.env["MCP_CANARY_MODE"]).toBe("full");
     expect(mcpStep?.env["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
-    expect(mcpStep?.env["MCP_CANARY_TOKEN"]).toBe(
-      `\${{ secrets.STAGING_MCP_CANARY_TOKEN }}`,
+    expect(mcpStep?.env["SMOKE_SESSION_SECRET"]).toBe(
+      `\${{ secrets.SMOKE_SESSION_SECRET }}`,
     );
     const success = {
       WEB_SMOKE: "success",
@@ -152,6 +152,48 @@ describe("API deployment health receipt", () => {
       );
       expect(result.exitCode, JSON.stringify(outcomes)).toBe(0);
       expect(result.stdout.toString(), JSON.stringify(outcomes)).toBe(state);
+    }
+  });
+
+  test("uses only the existing canary and staging session secrets for MCP journeys", async () => {
+    const cases = [
+      {
+        file: "mcp-canary.yml",
+        environment: "production",
+        secrets: ["MCP_CANARY_TOKEN"],
+      },
+      {
+        file: "deploy-staging.yml",
+        environment: "staging",
+        secrets: ["SMOKE_SESSION_SECRET", "STAGING_VIEWER_ACCESS_TOKEN"],
+      },
+    ];
+    for (const { file, environment, secrets } of cases) {
+      const workflow = Bun.YAML.parse(
+        await Bun.file(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+        ).text(),
+      );
+      const mcpStep = workflowSteps(workflow, file).find(
+        ({ run }) => run === "bun run canary:mcp",
+      );
+      expect(mcpStep, file).toBeDefined();
+      if (mcpStep === undefined) {
+        continue;
+      }
+      expect(mcpStep.env["MCP_CANARY_ENVIRONMENT"], file).toBe(environment);
+      const secretNames = Object.values(mcpStep.env).flatMap((value) => {
+        if (typeof value !== "string") {
+          return [];
+        }
+        return Array.from(
+          value.matchAll(/secrets\.(?<name>[A-Z_]+)/gu),
+          (match) => match.groups?.["name"],
+        );
+      });
+      expect(secretNames.toSorted(), file).toEqual(secrets.toSorted());
+      expect(mcpStep.env["MCP_CANARY_DESKTOP_KEY"], file).toBeUndefined();
+      expect(mcpStep.env["MCP_CANARY_SESSION_COOKIE"], file).toBeUndefined();
     }
   });
 

@@ -12,6 +12,7 @@ import {
   createDeploymentFetcher,
   evaluateAuthorizationMetadata,
   evaluateAuthorize,
+  evaluateCredentialExpiry,
   evaluateDesktopRedeem,
   evaluateDiscovery,
   evaluateInitialize,
@@ -23,6 +24,7 @@ import {
   LOOPBACK_REDIRECTS,
   CANARY_CLIENT_IDS,
   runDesktopProbe,
+  runStagingCredentialJourneys,
   runOAuthJourneys,
   runAuthenticatedStreamProbe,
   runNamedProbe,
@@ -578,7 +580,7 @@ describe("OAuth client journeys", () => {
 describe("desktop handoff probes", () => {
   const identity = { userId: "user-1", organizationId: "org-1" };
 
-  test("redeem requires the connected identity to match the existing account", () => {
+  test("accepts only a connected redemption for the expected account identity", () => {
     expect(
       evaluateDesktopRedeem({
         status: 200,
@@ -586,13 +588,6 @@ describe("desktop handoff probes", () => {
         identity,
       }).status,
     ).toBe("passed");
-    expect(
-      evaluateDesktopRedeem({
-        status: 500,
-        body: { status: "error", identity },
-        identity,
-      }).status,
-    ).toBe("failed");
     expect(
       evaluateDesktopRedeem({
         status: 200,
@@ -603,118 +598,354 @@ describe("desktop handoff probes", () => {
         identity,
       }).status,
     ).toBe("failed");
+    expect(
+      evaluateDesktopRedeem({
+        status: 500,
+        body: { status: "error", identity },
+        identity,
+      }).status,
+    ).toBe("failed");
   });
 
-  test("skips explicitly when existing desktop credentials are absent", async () => {
-    let calls = 0;
-    const fetcher: CanaryFetcher = async () => {
-      calls += 1;
-      return Response.json({});
-    };
-    const result = await runDesktopProbe(
-      { baseUrl: "https://api.example" },
-      fetcher,
-    );
-    expect(result.status).toBe("skipped");
-    expect(result.detail).toContain("MCP_CANARY_DESKTOP_KEY");
-    expect(calls).toBe(0);
-  });
+  const sessionResponse = () =>
+    Response.json({
+      user: { id: identity.userId },
+      session: { activeOrganizationId: identity.organizationId },
+    });
 
-  test("skips when the existing key has no browser session or smoke secret", async () => {
-    let calls = 0;
-    const fetcher: CanaryFetcher = async () => {
-      calls += 1;
-      return Response.json({});
-    };
-    const result = await runDesktopProbe(
-      { baseUrl: "https://api.example", desktopKey: "existing-key" },
-      fetcher,
-    );
-    expect(result.status).toBe("skipped");
-    expect(result.detail).toContain(
-      "MCP_CANARY_SESSION_COOKIE or SMOKE_SESSION_SECRET",
-    );
-    expect(calls).toBe(0);
-  });
-
-  test("redeems using an existing key and browser session without minting a key", async () => {
+  test("mints, redeems, and revokes a per-run desktop credential", async () => {
     const requests: { path: string; headers: Headers; body: string }[] = [];
+    let redeemCount = 0;
     const fetcher: CanaryFetcher = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
       const headers = new Headers(init.headers);
       const body = String(init.body ?? "");
       requests.push({ path: url.pathname, headers, body });
-      if (url.pathname.endsWith("/request")) {
-        return Response.json({ identity });
-      }
-      if (url.pathname.endsWith("/grant")) {
+      if (url.pathname === "/api/auth/get-session") return sessionResponse();
+      if (url.pathname.endsWith("/grant"))
         return new Response(null, { status: 204 });
-      }
       if (url.pathname.endsWith("/redeem-link")) {
-        return Response.json({ status: "connected", identity });
+        redeemCount += 1;
+        return redeemCount === 1
+          ? Response.json({ status: "credential", key: "new-desktop-key" })
+          : Response.json({ status: "connected", identity });
       }
+      if (url.pathname.endsWith("/request"))
+        return Response.json({ revoked: true });
       return new Response(null, { status: 404 });
     };
-    const result = await runDesktopProbe(
-      {
-        baseUrl: "https://api.example",
-        desktopKey: "existing-key",
-        sessionCookie: "session=existing",
-      },
+    const results = await runDesktopProbe(
+      { baseUrl: "https://api.example", sessionCookie: "session=smoke" },
       fetcher,
     );
-    expect(result.status).toBe("passed");
+    expect(results.map(({ status }) => status)).toEqual(["passed", "passed"]);
     expect(requests.map(({ path }) => path)).toEqual([
-      "/v1/desktop-registry/request",
+      "/api/auth/get-session",
       "/v1/desktop-registry/grant",
       "/v1/desktop-registry/redeem-link",
+      "/v1/desktop-registry/grant",
+      "/v1/desktop-registry/redeem-link",
+      "/v1/desktop-registry/request",
     ]);
-    expect(requests[0]?.headers.get("authorization")).toBe(
-      "Bearer existing-key",
+    expect(requests[1]?.headers.get("cookie")).toBe("session=smoke");
+    expect(requests[4]?.headers.get("authorization")).toBe(
+      "Bearer new-desktop-key",
     );
-    expect(requests[1]?.headers.get("cookie")).toBe("session=existing");
+    expect(JSON.parse(requests[5]?.body ?? "{}")).toEqual({ type: "revoke" });
   });
 
-  test("uses the explicit smoke secret to obtain the browser cookie for redemption", async () => {
-    const requests: { path: string; headers: Headers }[] = [];
+  test.each([
+    "malformed response with key",
+    "second grant throws",
+    "second redeem throws",
+  ] as const)(
+    "revokes the minted desktop credential after %s",
+    async (failure) => {
+      const requests: { path: string; headers: Headers }[] = [];
+      let redeemCount = 0;
+      let grantCount = 0;
+      const fetcher: CanaryFetcher = async (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : input);
+        const headers = new Headers(init.headers);
+        requests.push({ path: url.pathname, headers });
+        if (url.pathname === "/api/auth/get-session") return sessionResponse();
+        if (url.pathname.endsWith("/grant")) {
+          grantCount += 1;
+          if (failure === "second grant throws" && grantCount === 2)
+            throw new TypeError("synthetic grant failure");
+          return new Response(null, { status: 204 });
+        }
+        if (url.pathname.endsWith("/redeem-link")) {
+          redeemCount += 1;
+          if (redeemCount === 1) {
+            return Response.json(
+              failure === "malformed response with key"
+                ? { status: "unexpected", key: "new-desktop-key" }
+                : { status: "credential", key: "new-desktop-key" },
+            );
+          }
+          if (failure === "second redeem throws")
+            throw new TypeError("synthetic redeem failure");
+        }
+        if (url.pathname.endsWith("/request"))
+          return Response.json({ revoked: true });
+        return Response.json({ status: "connected", identity });
+      };
+      const results = await runDesktopProbe(
+        { baseUrl: "https://api.example", sessionCookie: "session=smoke" },
+        fetcher,
+      );
+      expect(results.at(0)?.status).toBe("failed");
+      expect(results.at(-1)?.name).toBe("desktop credential cleanup");
+      expect(results.at(-1)?.status).toBe("passed");
+      expect(requests.at(-1)?.path).toBe("/v1/desktop-registry/request");
+      expect(requests.at(-1)?.headers.get("authorization")).toBe(
+        "Bearer new-desktop-key",
+      );
+    },
+  );
+
+  test("reports a failed desktop credential cleanup", async () => {
+    let redemption = 0;
+    const fetcher: CanaryFetcher = async (input) => {
+      const path = new URL(input instanceof Request ? input.url : input)
+        .pathname;
+      if (path === "/api/auth/get-session") return sessionResponse();
+      if (path.endsWith("/grant")) return new Response(null, { status: 204 });
+      if (path.endsWith("/redeem-link")) {
+        redemption += 1;
+        return redemption === 1
+          ? Response.json({ status: "credential", key: "key" })
+          : Response.json({ status: "connected", identity });
+      }
+      return Response.json({ revoked: false }, { status: 500 });
+    };
+    const results = await runDesktopProbe(
+      { baseUrl: "https://api.example", sessionCookie: "session=smoke" },
+      fetcher,
+    );
+    expect(results.at(-1)).toMatchObject({
+      name: "desktop credential cleanup",
+      status: "failed",
+    });
+  });
+});
+
+describe("staging credential journeys", () => {
+  const identity = { userId: "user-1", organizationId: "org-1" };
+
+  test("skips staging credential journeys without the smoke secret", async () => {
+    const results = await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example" },
+      async () => {
+        throw new Error("fetch should not run");
+      },
+    );
+    expect(results[0]).toMatchObject({
+      status: "skipped",
+      detail: expect.stringContaining("SMOKE_SESSION_SECRET"),
+    });
+    expect(results.every(({ status }) => status === "skipped")).toBe(true);
+  });
+
+  test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
+    const requests: {
+      path: string;
+      method: string;
+      headers: Headers;
+      body: string;
+    }[] = [];
+    let redeemCount = 0;
     const fetcher: CanaryFetcher = async (input, init) => {
-      const url = new URL(input instanceof Request ? input.url : input);
-      const headers = new Headers(init.headers);
-      requests.push({ path: url.pathname, headers });
-      if (url.pathname === "/v1/smoke/session") {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      const body = await request.clone().text();
+      const headers = new Headers(request.headers);
+      requests.push({
+        path: url.pathname,
+        method: request.method,
+        headers,
+        body,
+      });
+      if (url.pathname === "/v1/smoke/session")
         return Response.json({
           cookieName: "session",
-          cookieValue: "browser-session",
+          cookieValue: "staging-session",
+        });
+      if (url.pathname === "/v1/api-keys/")
+        return Response.json({ id: "mcp-key-id", key: "mcp-token" });
+      if (url.pathname === "/api/auth/get-session")
+        return Response.json({
+          user: { id: identity.userId },
+          session: { activeOrganizationId: identity.organizationId },
+        });
+      if (url.pathname.endsWith("/grant"))
+        return new Response(null, { status: 204 });
+      if (url.pathname.endsWith("/redeem-link")) {
+        redeemCount += 1;
+        return redeemCount === 1
+          ? Response.json({ status: "credential", key: "desktop-token" })
+          : Response.json({ status: "connected", identity });
+      }
+      if (url.pathname === "/v1/desktop-registry/request")
+        return Response.json({ revoked: true });
+      if (url.pathname === "/v1/api-keys/revoke")
+        return Response.json({ id: "mcp-key-id", revoked: true });
+      if (url.pathname === "/mcp" && request.method === "GET") {
+        return new Response(new ReadableStream<Uint8Array>({}), {
+          headers: { "content-type": "text/event-stream" },
         });
       }
-      if (url.pathname.endsWith("/request")) {
-        return Response.json({ identity });
-      }
-      if (url.pathname.endsWith("/grant")) {
-        return new Response(null, { status: 204 });
-      }
-      if (url.pathname.endsWith("/redeem-link")) {
-        return Response.json({ status: "connected", identity });
+      if (url.pathname === "/mcp") {
+        const rpc = JSON.parse(body);
+        const result =
+          rpc.method === "initialize"
+            ? { protocolVersion: "2025-11-25", serverInfo: { name: "stella" } }
+            : rpc.method === "tools/list"
+              ? { tools: [{ name: "search_case_law" }] }
+              : { content: [{ type: "text", text: "ok" }] };
+        return Response.json({ jsonrpc: "2.0", result });
       }
       return new Response(null, { status: 404 });
     };
-    const result = await runDesktopProbe(
-      {
-        baseUrl: "https://api.example",
-        desktopKey: "existing-key",
-        smokeSecret: "smoke-secret",
-      },
+    const results = await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
       fetcher,
     );
-    expect(result.status).toBe("passed");
-    expect(requests.map(({ path }) => path)).toEqual([
-      "/v1/smoke/session",
-      "/v1/desktop-registry/request",
-      "/v1/desktop-registry/grant",
-      "/v1/desktop-registry/redeem-link",
-    ]);
-    expect(requests[0]?.headers.get("x-smoke-secret")).toBe("smoke-secret");
-    expect(requests[2]?.headers.get("cookie")).toBe("session=browser-session");
+    expect(
+      results
+        .filter(
+          ({ name }) =>
+            name.startsWith("POST /mcp") ||
+            name.startsWith("GET /mcp") ||
+            name === "desktop handoff redeem",
+        )
+        .every(({ status }) => status === "passed"),
+    ).toBe(true);
+    expect(results.at(-1)).toMatchObject({
+      name: "MCP credential cleanup",
+      status: "passed",
+    });
+    const bootstrap = requests.find(({ path }) => path === "/v1/api-keys/");
+    expect(JSON.parse(bootstrap?.body ?? "{}")).toEqual({
+      name: "MCP staging canary",
+      scopes: ["stella:search", "stella:read"],
+      permissions: { workspace: ["read"] },
+      audience: "default",
+      expiresInDays: 1,
+    });
+    expect(bootstrap?.headers.get("cookie")).toBe("session=staging-session");
+    expect(
+      requests
+        .filter(({ path }) => path === "/mcp")
+        .every(
+          ({ headers }) => headers.get("authorization") === "Bearer mcp-token",
+        ),
+    ).toBe(true);
+    const revoke = requests.find(({ path }) => path === "/v1/api-keys/revoke");
+    expect(JSON.parse(revoke?.body ?? "{}")).toEqual({ keyId: "mcp-key-id" });
+  });
+
+  test("revokes an MCP key id returned alongside a malformed bootstrap response", async () => {
+    const requests: { path: string; body: string }[] = [];
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      requests.push({ path: url.pathname, body: String(init.body ?? "") });
+      if (url.pathname === "/v1/smoke/session")
+        return Response.json({ cookieName: "session", cookieValue: "session" });
+      if (url.pathname === "/v1/api-keys/")
+        return Response.json({ id: "partial-id" });
+      if (url.pathname === "/v1/api-keys/revoke")
+        return Response.json({ id: "partial-id", revoked: true });
+      return new Response(null, { status: 500 });
+    };
+    const results = await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example", smokeSecret: "secret" },
+      fetcher,
+    );
+    expect(
+      results.find(({ name }) => name === "staging credential bootstrap")
+        ?.status,
+    ).toBe("failed");
+    expect(
+      requests.some(
+        ({ path, body }) =>
+          path === "/v1/api-keys/revoke" && body.includes("partial-id"),
+      ),
+    ).toBe(true);
+  });
+
+  test("reports MCP credential cleanup failures", async () => {
+    const fetcher: CanaryFetcher = async (input) => {
+      const path = new URL(input instanceof Request ? input.url : input)
+        .pathname;
+      if (path === "/v1/smoke/session")
+        return Response.json({ cookieName: "session", cookieValue: "session" });
+      if (path === "/v1/api-keys/")
+        return Response.json({ id: "key-id", key: "token" });
+      if (path === "/v1/api-keys/revoke")
+        return Response.json({ revoked: false }, { status: 500 });
+      if (path === "/mcp" && input instanceof URL)
+        return new Response(null, { status: 404 });
+      return new Response(null, { status: 404 });
+    };
+    const results = await runStagingCredentialJourneys(
+      { baseUrl: "https://api.example", smokeSecret: "secret" },
+      fetcher,
+    );
+    expect(results.at(-1)).toMatchObject({
+      name: "MCP credential cleanup",
+      status: "failed",
+    });
+  });
+});
+
+describe("canary credential expiry", () => {
+  const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+  const expires = (days: number) =>
+    new Date(nowMs + days * 24 * 60 * 60 * 1000).toISOString();
+
+  test.each([
+    [16, "passed"],
+    [15, "failed"],
+    [14, "failed"],
+    [-1, "failed"],
+  ] as const)("classifies expiry at %s days", (days, status) => {
+    expect(
+      evaluateCredentialExpiry({
+        status: 200,
+        body: { expiresAt: expires(days) },
+        nowMs,
+      }).status,
+    ).toBe(status);
+  });
+
+  test("passes credentials with no expiry and fails malformed or unavailable expiry", () => {
+    expect(
+      evaluateCredentialExpiry({
+        status: 200,
+        body: { expiresAt: null },
+        nowMs,
+      }).status,
+    ).toBe("passed");
+    expect(
+      evaluateCredentialExpiry({
+        status: 200,
+        body: { expiresAt: "not-a-date" },
+        nowMs,
+      }).status,
+    ).toBe("failed");
+    expect(
+      evaluateCredentialExpiry({ status: 200, body: null, nowMs }).status,
+    ).toBe("failed");
+    expect(
+      evaluateCredentialExpiry({
+        status: 503,
+        body: { expiresAt: null },
+        nowMs,
+      }).status,
+    ).toBe("failed");
   });
 });
 
