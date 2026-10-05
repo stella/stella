@@ -29,6 +29,7 @@ import {
   chatThreads,
   chatTurns,
   documentTranslationRuns,
+  desktopPresence,
   entities,
   entityViews,
   entityVersions,
@@ -81,6 +82,7 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
+import readDesktopPresence from "@/api/handlers/desktop-presence/read";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
@@ -511,6 +513,30 @@ const savedSearchCriteria = (
 });
 
 const isolationCases: IsolationCase[] = [
+  {
+    name: "desktop presence across organizations",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readDesktopPresence, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+    expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        desktop: { version: "0.9.48", protocol: 1 },
+      }),
+  },
+  {
+    name: "desktop presence in the same organization with another owner",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(readDesktopPresence, workspaceB, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+    expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        desktop: { version: "0.9.48", protocol: 1 },
+      }),
+  },
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -1818,6 +1844,13 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(desktopPresence).values({
+    userId: ids.userA1,
+    organizationId: ids.orgB,
+    desktopId: "22222222-2222-4222-8222-222222222270",
+    version: "0.9.48",
+    protocol: 1,
+  });
   await testDb.insert(billingArrangements).values({
     workspaceId: ids.wsB1,
     organizationId: ids.orgB,

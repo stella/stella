@@ -1,3 +1,4 @@
+import { toJsonSchema } from "@valibot/to-json-schema";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -6,6 +7,29 @@ import {
   desktopPresenceSchema,
 } from "./desktop-presence";
 import fixture from "./desktop-presence-request.fixture.json";
+
+test("observation timestamps have an explicit text bound", () => {
+  const observation = {
+    properties: {
+      desktop: {
+        properties: {
+          version: { maxLength: 64 },
+          lastSeenAt: { maxLength: 32 },
+        },
+      },
+    },
+  };
+  expect(
+    toJsonSchema(desktopPresenceSchema, { errorMode: "ignore" }),
+  ).toMatchObject({
+    oneOf: [
+      observation,
+      observation,
+      observation,
+      { properties: { type: { const: "none" } } },
+    ],
+  });
+});
 
 test("the desktop request fixture satisfies the API's report schema", () => {
   expect(v.parse(desktopPresenceReportSchema, fixture)).toEqual(fixture);

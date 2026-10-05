@@ -1,10 +1,12 @@
 import { Result } from "better-result";
+import { t } from "elysia";
 
 import { desktopPresenceReportSchema } from "@stll/api-contract/desktop-presence";
 
 import {
   ACCOUNT_ACCESS,
-  createSafePublicHandler,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
@@ -16,6 +18,9 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   body: desktopPresenceReportSchema,
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    t.Object({ reported: t.Boolean() }, { additionalProperties: false }),
+  ),
 } satisfies PublicHandlerConfig;
 
 type DesktopPresenceReportDependencies = {
@@ -27,23 +32,26 @@ export const createDesktopPresenceReportEndpoint = (
 ) => {
   const authorizeAccount =
     dependencies?.authorizeAccount ?? authorizeDesktopAccount;
-  return createSafePublicHandler(config, async function* ({ request, body }) {
-    const { scopedDb, userId, organizationId } = yield* Result.await(
-      authorizeAccount(request),
-    );
-    yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await reportDesktopPresence({
-            scopedDb,
-            userId,
-            organizationId,
-            report: body,
-          }),
-      ),
-    );
-    return Result.ok({ reported: true });
-  });
+  return createSafeBoundedPublicHandler(
+    config,
+    async function* ({ request, body }) {
+      const { scopedDb, userId, organizationId } = yield* Result.await(
+        authorizeAccount(request),
+      );
+      yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await reportDesktopPresence({
+              scopedDb,
+              userId,
+              organizationId,
+              report: body,
+            }),
+        ),
+      );
+      return Result.ok({ reported: true });
+    },
+  );
 };
 
 export default createDesktopPresenceReportEndpoint();

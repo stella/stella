@@ -97,6 +97,10 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "desktop-presence/read.ts": {
+    kind: "no-web-caller",
+    calls: ["api.desktop.presence.get"],
+  },
   "organization-settings/get.ts": {
     kind: "keyed",
     calls: ['api["organization-settings"].get'],

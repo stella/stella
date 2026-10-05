@@ -62,6 +62,7 @@ test("authenticated reports converge on one row and use the server clock", async
   });
   const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
     body: endpoint.config.body,
+    response: endpoint.config.response,
   });
   const before = Date.now();
   for (const version of ["0.9.47", report.version]) {

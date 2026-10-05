@@ -28,7 +28,7 @@ export type DesktopPresenceReport = v.InferOutput<
 const desktopSchema = v.strictObject({
   version: desktopVersionSchema,
   protocol: desktopProtocolSchema,
-  lastSeenAt: v.pipe(v.string(), v.isoTimestamp()),
+  lastSeenAt: v.pipe(v.string(), v.maxLength(32), v.isoTimestamp()),
 });
 
 export const desktopPresenceSchema = v.variant("type", [
