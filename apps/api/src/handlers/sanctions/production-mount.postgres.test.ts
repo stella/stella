@@ -277,11 +277,9 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
           expect((await search()).status).toBe(429);
         } finally {
           for (const tenant of tenants) {
-            await owner`DELETE FROM session WHERE user_id = ${tenant.user}`;
-            await owner`DELETE FROM member WHERE user_id = ${tenant.user}`;
-            await owner`DELETE FROM organization_settings WHERE organization_id = ${tenant.id}`;
-            await owner`DELETE FROM "user" WHERE id = ${tenant.user}`;
+            // Parent-first teardown lets owner memberships cascade after the organization is gone.
             await owner`DELETE FROM organization WHERE id = ${tenant.id}`;
+            await owner`DELETE FROM "user" WHERE id = ${tenant.user}`;
           }
           for (const { source } of editions) {
             const snapshot = snapshots.find(({ id }) => id === source);

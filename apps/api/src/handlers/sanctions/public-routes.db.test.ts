@@ -5,7 +5,6 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
-import type { TransferListItem } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
@@ -331,7 +330,10 @@ const assertParity = async ({
         }),
       ));
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = Value.Decode(
+      publicSanctionsResponseSchema[200],
+      await response.json(),
+    );
     expect([...Value.Errors(publicSanctionsResponseSchema[200], body)]).toEqual(
       [],
     );
@@ -406,12 +408,9 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
         }
       });
     }
-    override postMessage(
-      value: unknown,
-      transfers: readonly TransferListItem[] = [],
-    ) {
-      messages.push(asTestRaw<SanctionsMatcherMessage>(value));
-      super.postMessage(value, transfers);
+    override postMessage(...args: Parameters<Worker["postMessage"]>) {
+      messages.push(asTestRaw<SanctionsMatcherMessage>(args[0]));
+      super.postMessage(...args);
     }
   }
   const pool = createSanctionsMatcherPool({
@@ -919,7 +918,10 @@ describe("public sanctions search parity", () => {
           }),
         );
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = Value.Decode(
+          publicSanctionsResponseSchema[200],
+          await response.json(),
+        );
         expect([
           ...Value.Errors(publicSanctionsResponseSchema[200], body),
         ]).toEqual([]);
@@ -943,8 +945,10 @@ describe("public sanctions search parity", () => {
         const initial = await search("Ivan", "Sidorov");
         expect(initial.status).toBe("possible-match");
         expect(
-          initial.lists.find((list: { source: string }) => list.source === "eu")
-            .editionId,
+          (
+            initial.lists.find((list) => list.source === "eu") ??
+            panic("Missing EU list")
+          ).editionId,
         ).toBe(activeEdition("eu"));
         const warmed = loads;
         expect(warmed).toBe(sanctionsSourceIds().length);
@@ -981,16 +985,17 @@ describe("public sanctions search parity", () => {
         const oldPerson = await search("Ivan", "Sidorov");
         expect(oldPerson.status).toBe("clear");
         expect(
-          oldPerson.lists.find(
-            (list: { source: string }) => list.source === "eu",
+          (
+            oldPerson.lists.find((list) => list.source === "eu") ??
+            panic("Missing EU list")
           ).editionId,
         ).toBe(id);
         expect(loads).toBe(warmed + 1);
         const newPerson = await search("Zbigniew", "Wroblewski");
         expect(newPerson.status).toBe("possible-match");
-        const eu = newPerson.lists.find(
-          (list: { source: string }) => list.source === "eu",
-        );
+        const eu =
+          newPerson.lists.find((list) => list.source === "eu") ??
+          panic("Missing EU list");
         expect(eu.editionId).toBe(id);
         expect(eu.possibleMatches.at(0).sourceEntryId).toBe(
           entries.at(0)?.sourceId,
@@ -1302,7 +1307,11 @@ describe("public sanctions search parity", () => {
           product: createSanctionsIndexCache({
             build: (lists) => {
               const list = lists.at(0) ?? panic("Missing benchmark list");
-              expect(digest(lists)).toBe(inputDigests.get(list.version.source));
+              expect(digest(lists)).toBe(
+                inputDigests.get(
+                  list.version.source ?? panic("Missing benchmark source"),
+                ),
+              );
               return buildScreeningIndex(lists);
             },
           }),
