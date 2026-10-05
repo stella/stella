@@ -237,7 +237,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
       const path = typeof inputs["path"] === "string" ? inputs["path"] : "";
       const bunStore =
         /(?:^|[\\/])\.bun[\\/]install[\\/]cache(?:[\\/\s]|$)/u.test(path);
-      if (bunStore && /^actions\/cache@/u.test(uses)) {
+      if (bunStore && uses.startsWith("actions/cache@")) {
         return [`job '${name}': split Bun cache restore from main-only save`];
       }
       if (
