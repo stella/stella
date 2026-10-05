@@ -104,7 +104,9 @@ const TOOL_COVERAGE = {
   open_document_version_upload: excluded(OBJECT_STORAGE),
   upload_document_version: excluded(OBJECT_STORAGE),
   save_matter: RUN,
-  delete_matter: RUN,
+  delete_matter: excluded(
+    "deletes in the root-pool owner transaction (lib/workspace-deletion.ts), which the hermetic test database does not serve",
+  ),
   save_contact: RUN,
   delete_contact: RUN,
   link_matter_contact: RUN,
@@ -350,10 +352,6 @@ const STEPS: readonly Step[] = [
   {
     tool: "delete_clause",
     args: (s) => ({ clause_id: required(s.clauseId, "clause"), confirm: true }),
-  },
-  {
-    tool: "delete_matter",
-    args: (s) => ({ matter_id: required(s.matterId, "matter"), confirm: true }),
   },
   {
     tool: "delete_contact",
