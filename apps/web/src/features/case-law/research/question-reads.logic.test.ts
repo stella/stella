@@ -161,8 +161,15 @@ test("loaded columns remain visible while page answers load and runs wait", () =
       content: { version: 1, type: "text" },
     },
   ] as const satisfies readonly QuestionColumn[];
+  const client = new QueryClient();
+  const observer = new QueryObserver(client, {
+    queryKey: ["question-columns", "pending-answers", columns],
+    initialData: columns,
+    queryFn: async () => columns,
+    enabled: false,
+  });
   const view = questionReads({
-    columns: { type: "items", items: columns, retry: async () => undefined },
+    columns: queryView(observer.getCurrentResult()),
     answers: { type: "pending" },
   });
   expect(view.type).toBe("ready");
@@ -171,4 +178,6 @@ test("loaded columns remain visible while page answers load and runs wait", () =
     expect(view.answers).toEqual([]);
     expect(view.answersStatus).toBe("pending");
   }
+  observer.destroy();
+  client.clear();
 });

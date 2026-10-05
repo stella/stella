@@ -8,7 +8,7 @@ const { getFormatter } = await import("@/i18n/i18n-store");
 const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { QueryClient, QueryClientProvider, useQuery } =
+const { QueryClient, QueryClientProvider, QueryObserver, useQuery } =
   await import("@tanstack/react-query");
 const { useQueryView } = await import("@/lib/use-query-view");
 const { OverviewTimeRead, OverviewTimeTrend } =
@@ -162,37 +162,51 @@ for (const view of [
   {
     type: "error",
     error: new Error("Summary unavailable"),
-    retry: async () => undefined,
   },
   {
     type: "items",
     items: { totalMinutes: 60 },
     refetchError: new Error("Summary unavailable"),
-    retry: async () => undefined,
   },
-] satisfies Parameters<typeof OverviewTimeTrend>[0]["view"][]) {
+] as const) {
   test(`the optional ${view.type} trend leaves the personal read's single error state`, () => {
+    const client = new QueryClient();
+    const observer = new QueryObserver(client, {
+      queryKey: ["overview-time-trend", view.type],
+      queryFn: async () => ({ totalMinutes: 60 }),
+      enabled: false,
+    });
+    const retry = observer.getCurrentResult().refetch;
     const screen = render(
       <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
         <OverviewTimeRead
           view={{
             type: "error",
             error: new Error("Summary unavailable"),
-            retry: async () => undefined,
+            retry,
           }}
         >
           {() => "Current hours"}
         </OverviewTimeRead>
-        <OverviewTimeTrend currentHours={null} view={view} />
+        <OverviewTimeTrend currentHours={null} view={{ ...view, retry }} />
       </IntlProvider>,
     );
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.queryByText(englishMessages.common.noResults)).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
+    screen.unmount();
+    observer.destroy();
+    client.clear();
   });
 }
 
 test("the optional trend displays the change between available weekly summaries", () => {
+  const client = new QueryClient();
+  const observer = new QueryObserver(client, {
+    queryKey: ["overview-time-trend", "available"],
+    queryFn: async () => ({ totalMinutes: 60 }),
+    enabled: false,
+  });
   const screen = render(
     <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
       <OverviewTimeTrend
@@ -200,10 +214,13 @@ test("the optional trend displays the change between available weekly summaries"
         view={{
           type: "items",
           items: { totalMinutes: 60 },
-          retry: async () => undefined,
+          retry: observer.getCurrentResult().refetch,
         }}
       />
     </IntlProvider>,
   );
   expect(screen.getByText("▲ 100%")).toBeDefined();
+  screen.unmount();
+  observer.destroy();
+  client.clear();
 });

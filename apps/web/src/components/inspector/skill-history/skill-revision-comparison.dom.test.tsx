@@ -23,7 +23,7 @@ Object.defineProperties(document, {
 
 const { render, cleanup, fireEvent, waitFor } =
   await import("@testing-library/react");
-const { QueryClient, QueryClientProvider, useQuery } =
+const { QueryClient, QueryClientProvider, QueryObserver, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { useQueryView } = await import("@/lib/use-query-view");
@@ -83,6 +83,13 @@ test("revision transitions retain the live editor and its local source", async (
   const { createRef } = await import("react");
   const { MarkdownHybridEditor } =
     await import("@/components/markdown/markdown-hybrid-editor");
+  const client = new QueryClient();
+  const observer = new QueryObserver(client, {
+    queryKey: ["skill-revision-comparison", "transitions"],
+    queryFn: async () => ({ body: "Initial revision" }),
+    enabled: false,
+  });
+  const retry = observer.getCurrentResult().refetch;
   const editor = createRef<MarkdownHybridEditorHandle>();
   const persisted: string[] = [];
   const renderEditor = (
@@ -96,7 +103,9 @@ test("revision transitions retain the live editor and its local source", async (
             imagePolicy="data-only"
             markdown="Stored source"
             baseline={baseline}
-            onMarkdownChange={(text) => persisted.push(text)}
+            onMarkdownChange={(text) => {
+              persisted.push(text);
+            }}
           />
         )}
       </SkillRevisionComparison>
@@ -106,7 +115,7 @@ test("revision transitions retain the live editor and its local source", async (
     renderEditor({
       type: "items",
       items: { body: "Initial revision" },
-      retry: async () => undefined,
+      retry,
     }),
   );
   await waitFor(() => expect(editor.current).not.toBeNull());
@@ -118,17 +127,17 @@ test("revision transitions retain the live editor and its local source", async (
     {
       type: "error",
       error: new Error("Read unavailable"),
-      retry: async () => undefined,
+      retry,
     },
     {
       type: "items",
       items: { body: "Revision source" },
-      retry: async () => undefined,
+      retry,
     },
     {
       type: "items",
       items: { body: "Refetched source" },
-      retry: async () => undefined,
+      retry,
     },
     null,
     { type: "pending" },
@@ -139,4 +148,6 @@ test("revision transitions retain the live editor and its local source", async (
   }
   expect(persisted).not.toContain("Stored source");
   cleanup();
+  observer.destroy();
+  client.clear();
 });
