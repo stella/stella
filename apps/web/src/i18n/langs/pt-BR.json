@@ -54,6 +54,17 @@
       "polish": "Aprimorar a redação"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "refusedBudget": "Não executado: orçamento de respostas indisponível",
+    "rerunAllPage": "Executar tudo novamente (esta página)",
+    "rerunColumnPage": "Executar coluna novamente (esta página)",
+    "runColumnPage": "Executar coluna (esta página)",
+    "runPageRows": "Executar para {count, plural, one {# linha desta página} other {# linhas desta página}}",
+    "runRemainingPage": "Executar restantes (esta página)",
+    "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
+    "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
+  },
   "appearance": {
     "calendar": "Calendário",
     "calendarGregorian": "Gregoriano",
@@ -6003,7 +6014,6 @@
       "previewUnsupported": "A visualização não é compatível com este tipo de documento.",
       "readingFrom": "A IA lê de",
       "referencesItself": "A propriedade faz referência a si mesma por meio de outras propriedades",
-      "rerunColumn": "Reexecutar coluna",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",
       "scopeFile": "Arquivo atual",
