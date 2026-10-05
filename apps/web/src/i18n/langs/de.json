@@ -4516,6 +4516,13 @@
         "narrativeRequired": "Beschreibungstext erforderlich",
         "title": "Regeln zur Zeiterfassung"
       },
+      "timeZone": {
+        "description": "Gesperrte Monate, Rechnungsdaten und fällige Arbeit richten sich nach dem Kalendertag in dieser Zeitzone. Solange keine gewählt ist, gilt die primäre Jurisdiktion: Europe/Prague für Tschechien und die Slowakei, sonst UTC.",
+        "followJurisdiction": "Der Hauptjurisdiktion folgen",
+        "followingJurisdiction": "Der Hauptjurisdiktion folgen ({timeZone})",
+        "title": "Zeitzone",
+        "updated": "Zeitzone aktualisiert"
+      },
       "usage": "Nutzung",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",

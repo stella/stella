@@ -34,6 +34,7 @@ describe("projectOrganizationSettingsRow", () => {
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,
         timeNarrativeRequired: true,
+        timeZone: null,
       },
       emptySnapshot,
     );

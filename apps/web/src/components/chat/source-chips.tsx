@@ -32,6 +32,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 type SourceChipsProps = {
@@ -83,13 +84,14 @@ export const SourceChips = ({
   const hasMcpExternalSources = uniqueExternalSources.some(
     (source) => source.connectorSlug !== undefined,
   );
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasMcpExternalSources,
   });
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
     if (source.connectorSlug === undefined) {
       return source;

@@ -1808,6 +1808,23 @@ printf "%s\\n" "$package_checks_required"`,
   return new TextDecoder().decode(process.stdout).trim();
 };
 
+test("transfer read guard runs for API-only pull request changes", () => {
+  const guard = jobSteps(ciJobs["ci-checks-rest"]).find(
+    ({ name }) => name === "Transfer timeout and fixed read guard",
+  );
+  expect(guard?.if).toContain("steps.install.outcome == 'success'");
+  expect(guard?.if).toContain(
+    "(needs.ci-plan.outputs.package_checks_required == 'true')",
+  );
+  expect(guard?.run).toContain("scripts/transfer-read-guard.test.ts");
+  expect(guard?.run).toContain("bun scripts/transfer-read-guard.ts");
+  expect(packageChecksPlan(["apps/api/src/handlers/files/get.ts"])).toBe(
+    "true",
+  );
+  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(fastRequired).toContain("ci-checks-rest");
+});
+
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(packageScopeStart).toBeLessThan(selectorStart);
