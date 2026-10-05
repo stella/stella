@@ -10,6 +10,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -116,12 +120,6 @@ jobs:
 
   deploy:
     needs: build
-    # Each deploy ships the whole site, so a newer deploy makes an older one
-    # redundant. The group sits on this job so a push that does not change
-    # the site never cancels a deploy that is still watching.
-    concurrency:
-      group: deploy-landing-${{ github.ref }}
-      cancel-in-progress: true
     runs-on: ubuntu-latest
     # Allows for the single retry below (a 3-minute wait plus a second deploy).
     timeout-minutes: 30
