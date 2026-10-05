@@ -132,7 +132,14 @@
     "takeoverSubtitle": "La modification reprendra à votre dernier point de contrôle enregistré.",
     "takeoverTitle": "{requester} souhaite reprendre la modification",
     "takeoverWindowTitle": "Demande de reprise",
-    "webOrigin": "Origine web"
+    "webOrigin": "Origine web",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Mettez à jour Stella Desktop",
+    "handoffAccountRequired": "Connectez Stella Desktop à votre compte",
+    "handoffFailed": "Impossible d’ouvrir le document",
+    "handoffUpdateNow": "Mettre à jour",
+    "handoffConnectAccount": "Connecter le compte",
+    "handoffRetry": "Réessayer"
   },
   "settings": {
     "about": "À propos",

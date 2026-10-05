@@ -132,7 +132,14 @@
     "takeoverSubtitle": "Bude pokračovat od vašeho posledního uloženého kontrolního bodu.",
     "takeoverTitle": "{requester} chce převzít úpravy",
     "takeoverWindowTitle": "Žádost o převzetí",
-    "webOrigin": "Původ webu"
+    "webOrigin": "Původ webu",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Aktualizujte Stella Desktop",
+    "handoffAccountRequired": "Připojte Stella Desktop ke svému účtu",
+    "handoffFailed": "Dokument se nepodařilo otevřít",
+    "handoffUpdateNow": "Aktualizovat nyní",
+    "handoffConnectAccount": "Připojit účet",
+    "handoffRetry": "Zkusit znovu"
   },
   "settings": {
     "about": "O aplikaci",

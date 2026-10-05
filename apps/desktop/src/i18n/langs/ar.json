@@ -132,7 +132,14 @@
     "takeoverSubtitle": "سيتابع من آخر نقطة حفظ لديك.",
     "takeoverTitle": "يريد {requester} تولي التحرير",
     "takeoverWindowTitle": "طلب تولي التحرير",
-    "webOrigin": "أصل الويب"
+    "webOrigin": "أصل الويب",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "حدّث Stella Desktop",
+    "handoffAccountRequired": "اربط Stella Desktop بحسابك",
+    "handoffFailed": "تعذّر فتح المستند",
+    "handoffUpdateNow": "التحديث الآن",
+    "handoffConnectAccount": "ربط الحساب",
+    "handoffRetry": "إعادة المحاولة"
   },
   "settings": {
     "about": "حول",

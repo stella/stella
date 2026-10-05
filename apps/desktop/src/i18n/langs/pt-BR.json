@@ -132,7 +132,14 @@
     "takeoverSubtitle": "A edição continuará a partir do seu último ponto de controle salvo.",
     "takeoverTitle": "{requester} quer assumir a edição",
     "takeoverWindowTitle": "Solicitação de transferência",
-    "webOrigin": "Origem web"
+    "webOrigin": "Origem web",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Atualize o Stella Desktop",
+    "handoffAccountRequired": "Conecte o Stella Desktop à sua conta",
+    "handoffFailed": "Não foi possível abrir o documento",
+    "handoffUpdateNow": "Atualizar agora",
+    "handoffConnectAccount": "Conectar conta",
+    "handoffRetry": "Tentar novamente"
   },
   "settings": {
     "about": "Sobre",

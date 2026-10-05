@@ -132,7 +132,14 @@
     "takeoverSubtitle": "Edycja będzie kontynuowana od ostatniego zapisanego punktu kontrolnego.",
     "takeoverTitle": "{requester} chce przejąć edycję",
     "takeoverWindowTitle": "Prośba o przejęcie",
-    "webOrigin": "Źródło witryny"
+    "webOrigin": "Źródło witryny",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Zaktualizuj Stella Desktop",
+    "handoffAccountRequired": "Połącz Stella Desktop ze swoim kontem",
+    "handoffFailed": "Nie udało się otworzyć dokumentu",
+    "handoffUpdateNow": "Aktualizuj teraz",
+    "handoffConnectAccount": "Połącz konto",
+    "handoffRetry": "Spróbuj ponownie"
   },
   "settings": {
     "about": "Informacje",

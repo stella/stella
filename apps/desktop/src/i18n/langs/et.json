@@ -132,7 +132,14 @@
     "takeoverSubtitle": "Ta jätkab teie viimasest salvestatud kontrollpunktist.",
     "takeoverTitle": "{requester} soovib redigeerimise üle võtta",
     "takeoverWindowTitle": "Ülevõtmistaotlus",
-    "webOrigin": "Veebi päritolu"
+    "webOrigin": "Veebi päritolu",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Uuendage Stella Desktopi",
+    "handoffAccountRequired": "Ühendage Stella Desktop oma kontoga",
+    "handoffFailed": "Dokumenti ei saanud avada",
+    "handoffUpdateNow": "Uuenda kohe",
+    "handoffConnectAccount": "Ühenda konto",
+    "handoffRetry": "Proovi uuesti"
   },
   "settings": {
     "about": "Teave",

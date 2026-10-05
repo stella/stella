@@ -132,7 +132,14 @@
     "takeoverSubtitle": "They'll continue from your latest saved checkpoint.",
     "takeoverTitle": "{requester} wants to take over editing",
     "takeoverWindowTitle": "Takeover request",
-    "webOrigin": "Web origin"
+    "webOrigin": "Web origin",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Update Stella Desktop",
+    "handoffAccountRequired": "Connect Stella Desktop to your account",
+    "handoffFailed": "Could not open the document",
+    "handoffUpdateNow": "Update now",
+    "handoffConnectAccount": "Connect account",
+    "handoffRetry": "Retry"
   },
   "settings": {
     "about": "About",

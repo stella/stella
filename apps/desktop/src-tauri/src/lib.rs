@@ -13,6 +13,7 @@ mod clipboard_window;
 mod commands;
 mod config;
 mod deep_link;
+mod handoff;
 mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
