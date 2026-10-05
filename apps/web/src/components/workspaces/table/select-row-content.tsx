@@ -7,10 +7,7 @@
 import type React from "react";
 
 import type { RowSelectionState } from "@tanstack/react-table";
-import {
-  row_getIsSelected,
-  row_getIsSomeSelected,
-} from "@tanstack/react-table/static-functions";
+import { row_getIsSomeSelected } from "@tanstack/react-table/static-functions";
 
 import { Checkbox } from "@stll/ui/checkbox";
 
@@ -38,14 +35,11 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
 }: SelectRowContentProps<TRow>) => {
   // A row that contains others is partly selected when only some of them are;
   // a kind whose rows never nest has no sub-rows and so never shows it.
+  const selected = table.state.rowSelection[row.id] === true;
   const someSelected = row.subRows.length > 0 && row_getIsSomeSelected(row);
 
-  const handleChange = (_checked: boolean, eventDetails: { event: Event }) => {
-    if (
-      eventDetails.event instanceof PointerEvent &&
-      eventDetails.event.shiftKey &&
-      lastSelectedIndex.current !== null
-    ) {
+  const toggleSelection = (shiftKey: boolean) => {
+    if (shiftKey && lastSelectedIndex.current !== null) {
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const rows = table.getRowModel().rows;
@@ -68,17 +62,35 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
   };
 
   return (
-    <div className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center">
-      <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
+    <button
+      aria-checked={someSelected ? "mixed" : selected}
+      aria-label={label}
+      className="group/selection ring-ring hover:bg-muted/50 absolute inset-0 flex min-w-12 shrink-0 cursor-pointer items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      data-slot="table-selection-cell"
+      onClick={(event) => {
+        event.stopPropagation();
+        toggleSelection(event.shiftKey);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.stopPropagation();
+        }
+      }}
+      role="checkbox"
+      type="button"
+    >
+      <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-focus-visible/selection:opacity-0 group-data-[state=selected]/row:opacity-0">
         {label}
       </span>
       <Checkbox
-        checked={row_getIsSelected(row)}
-        className="pointer-events-none absolute shrink-0 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-[state=selected]/row:pointer-events-auto group-data-[state=selected]/row:opacity-100"
+        aria-hidden="true"
+        checked={selected}
+        className="pointer-events-none absolute shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/selection:opacity-100 group-data-[state=selected]/row:opacity-100"
         indeterminate={someSelected}
-        onCheckedChange={handleChange}
-        tabIndex={row_getIsSelected(row) ? 0 : -1}
+        readOnly
+        render={<span />}
+        tabIndex={-1}
       />
-    </div>
+    </button>
   );
 };
