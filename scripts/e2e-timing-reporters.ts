@@ -60,7 +60,7 @@ export const ciPlaywrightConfigs = (root: string, workflow: unknown) => {
       const directory =
         step["working-directory"] ??
         job.defaults?.run?.["working-directory"] ??
-        /(?:^|\n)\s*cd\s+([^\s]+)/u.exec(step.run)?.at(1) ??
+        /^[\t ]*cd[\t ]+([^\t \r\n]+)/mu.exec(step.run)?.at(1) ??
         ".";
       for (const match of step.run.matchAll(
         /\bbun\s+(?:--filter\s+([^\s]+)\s+)?(?:run\s+)?(test:(?:e2e[\w:-]*|browser))\b/gu,
@@ -76,7 +76,7 @@ export const ciPlaywrightConfigs = (root: string, workflow: unknown) => {
               )
             : packages.get(name);
         if (pkg === undefined) {
-          panic(`Cannot resolve Playwright package: ${match.at(0)}`);
+          panic(`Cannot resolve Playwright package: ${match[0]}`);
         }
         const command =
           pkg.scripts[script] ?? panic(`Missing Playwright script: ${script}`);

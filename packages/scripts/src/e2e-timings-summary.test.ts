@@ -147,6 +147,7 @@ test("workflow enumeration follows package scripts and inherited config reporter
         fixture: {
           steps: [
             { run: "bun --filter @stll/fixture test:e2e" },
+            { run: "\n\n\tcd apps/fixture\nbun test:e2e" },
             {
               run: "playwright test --config missing.ts",
               "working-directory": "apps/fixture",
