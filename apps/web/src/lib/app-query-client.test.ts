@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
+import { PublicLawUnavailableError } from "@/lib/public-law-api";
 import { createAppQueryClient } from "@/lib/react-query";
 
 const busy = () => new APIError({ status: 429, message: "Too many requests" });
@@ -61,5 +62,46 @@ describe("app query client", () => {
       ),
     ).toBeInstanceOf(APIError);
     expect(calls).toBe(1);
+  });
+  test("a disabled public-law read fails the load at once", async () => {
+    const queryClient = createAppQueryClient();
+    let calls = 0;
+    const load = queryClient.query({
+      queryKey: ["public-law-disabled"],
+      queryFn: async () => {
+        calls += 1;
+        throw new PublicLawUnavailableError({
+          action: "read",
+          area: "public-law",
+          message: "Public law is not available.",
+        });
+      },
+      retryDelay: 0,
+    });
+    expect(
+      await load.then(
+        () => null,
+        (error: unknown) => error,
+      ),
+    ).toBeInstanceOf(PublicLawUnavailableError);
+    expect(calls).toBe(1);
+  });
+
+  test("a dropped connection is retried", async () => {
+    const queryClient = createAppQueryClient();
+    let calls = 0;
+    const result = await queryClient.query({
+      queryKey: ["dropped-connection"],
+      queryFn: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new TypeError("Failed to fetch");
+        }
+        return "answered";
+      },
+      retryDelay: 0,
+    });
+    expect(result).toBe("answered");
+    expect(calls).toBe(2);
   });
 });

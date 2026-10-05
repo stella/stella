@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { isTaggedError, TaggedError } from "better-result";
 
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
@@ -50,6 +50,11 @@ export const shouldRetryAPIRequest = (
       failureCount < MAX_API_RETRY_COUNT &&
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
+  }
+  // Any other typed error is a deliberate outcome (a disabled surface, a
+  // refused operation), never a transient one: asking again cannot change it.
+  if (!APIError.is(error) && isTaggedError(error)) {
+    return false;
   }
   return (
     failureCount < MAX_API_RETRY_COUNT &&
