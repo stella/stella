@@ -557,8 +557,7 @@ describe("a page the origin never answered does not move the cursor", () => {
   /**
    * The origin answered, so the refusal is about this page and skipping it is
    * what keeps one page from stalling a source. A 504 is the publisher proxy's
-   * own read timeout, which the origin earns by being slow on this page — the
-   * same event `page_skipped_timeout` skips when our timeout fires first.
+   * own read timeout; a transport timeout has no response and holds the cursor.
    */
   test.each([500, 503, 504])(
     "a %i still skips its own page",

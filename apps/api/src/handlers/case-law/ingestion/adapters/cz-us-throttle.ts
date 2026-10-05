@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -150,6 +151,14 @@ export const createNalusFetch = (
                   }
                 : documentFetchResponseOutcome(ADAPTER_KEYS.CZ_US, candidate),
           });
+    if ([401, 403].includes(response.status)) {
+      throw new AdapterFetchError({
+        message: "Publisher request refused",
+        adapterKey: ADAPTER_KEYS.CZ_US,
+        cursor: null,
+        httpStatus: response.status,
+      });
+    }
     if (isRateLimitRefusal(response)) {
       return Result.err(
         new NalusRateLimitedError({

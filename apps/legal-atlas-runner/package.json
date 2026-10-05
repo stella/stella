@@ -42,8 +42,10 @@
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   },
   "crawlPosture": "unserved"
 }

@@ -763,10 +763,12 @@ const refusedAddress = (): AdapterFetchError =>
 const requestFailure =
   (path: string) =>
   (cause: unknown): AdapterFetchError =>
-    plNsaDatasetError(
-      PL_NSA_FAILURE.TRANSIENT,
-      `${path} could not be read: ${errorTag(cause)}`,
-    );
+    new AdapterFetchError({
+      message: `${failurePrefix(PL_NSA_FAILURE.TRANSIENT)}${path} could not be read: ${errorTag(cause)}`,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      cursor: null,
+      cause,
+    });
 
 type RangeRequest = {
   fetchStage: DocumentFetchStage;
