@@ -384,7 +384,7 @@ test.each([
     } satisfies ThreadInvariantSnapshot;
     expect(
       threadInvariantViolationsOf(snapshot).unownedPendingInteractions,
-    ).toEqual(expected);
+    ).toEqual([...expected]);
   },
 );
 
@@ -395,7 +395,9 @@ test("completed or ownerless messages cannot retain open server calls", () => {
   } satisfies ThreadInvariantSnapshot;
   const expected = [
     { messageId: answerId, state: "input-streaming", toolCallId: "approval" },
-  ];
+  ] satisfies ReturnType<
+    typeof threadInvariantViolationsOf
+  >["unsettledToolCalls"];
   expect(threadInvariantViolationsOf(snapshot).unsettledToolCalls).toEqual(
     expected,
   );
