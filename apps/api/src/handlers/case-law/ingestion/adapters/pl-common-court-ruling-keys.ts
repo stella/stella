@@ -1,6 +1,3 @@
-// parser-output-unchanged: [pl-ncourt] Treat nullable decision type as absent; publisher output remains strings or undefined.
-// parser-output-unchanged: [pl-uodo] Treat nullable decision type as absent; publisher output remains strings or undefined.
-// parser-output-unchanged: [pl-uokik] Treat nullable decision type as absent; publisher output remains strings or undefined.
 // parser-output-unchanged: The common-court ruling-key implementation is moved without changing its output.
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -32,9 +29,7 @@ export const plCommonCourtRulingKeys = ({
   decisionDate,
   decisionType,
 }: CommonCourtRulingKeyInput): string[] =>
-  decisionDate === undefined ||
-  decisionType === undefined ||
-  decisionType === null
+  decisionDate === undefined || decisionType === undefined
     ? []
     : [
         [

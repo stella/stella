@@ -79,7 +79,7 @@ describe("complete CourtListener import mapping", () => {
       }),
     });
     const result = mapCourtListenerRecord(input).unwrap();
-    expect(result.decisionType).toBeNull();
+    expect(result.decisionType).toBeUndefined();
     expect(result.metadata["decisionType"]).toEqual(
       toPlainTextMetadata({
         status: "not-stated",
@@ -99,7 +99,9 @@ describe("complete CourtListener import mapping", () => {
     expect(result.sections?.map(({ index }) => index)).toEqual(
       result.sections?.map((_, index) => index),
     );
-    expect(reparseStoredRaw(stored(result))).toEqual({
+    expect(
+      reparseStoredRaw({ ...stored(result), decisionType: "opinion" }),
+    ).toEqual({
       type: "parsed",
       result,
     });
@@ -116,7 +118,7 @@ describe("complete CourtListener import mapping", () => {
       }
       mapped += 1;
       expect(v.is(documentAstSchema, outcome.value.documentAst)).toBe(true);
-      expect(outcome.value.decisionType).toBeNull();
+      expect(outcome.value.decisionType).toBeUndefined();
       expect(outcome.value.metadata["decisionType"]).toEqual(
         toPlainTextMetadata({
           status: "not-stated",
@@ -282,9 +284,9 @@ test("CourtListener source types and text never infer a decision type", () => {
           ],
         });
         const result = mapCourtListenerRecord(record).unwrap();
-        expect(result.decisionType).toBeNull();
+        expect(result.decisionType).toBeUndefined();
         const sanitized = sanitizeResult(result);
-        expect(sanitized.decisionType).toBeNull();
+        expect(sanitized.decisionType).toBeUndefined();
         expect(sanitized.metadata["decisionType"]).toEqual(
           result.metadata["decisionType"],
         );
@@ -339,7 +341,8 @@ test("recorded CourtListener fixtures preserve unstated types and deterministic 
     fc.property(
       fc.constantFrom(...recordedClusters()),
       fc.boolean(),
-      (record, reverse) => {
+      fc.option(fc.string(), { nil: null }),
+      (record, reverse, storedDecisionType) => {
         const input = {
           ...record,
           opinions: reverse ? record.opinions.toReversed() : record.opinions,
@@ -351,7 +354,7 @@ test("recorded CourtListener fixtures preserve unstated types and deterministic 
           );
           return;
         }
-        expect(result.value.decisionType).toBeNull();
+        expect(result.value.decisionType).toBeUndefined();
         expect(result.value.metadata["decisionType"]).toEqual(
           toPlainTextMetadata({
             status: "not-stated",
@@ -366,7 +369,10 @@ test("recorded CourtListener fixtures preserve unstated types and deterministic 
           opinionTypes: expect.any(Array),
           scdbPresent: expect.any(Boolean),
         });
-        const replay = reparseStoredRaw(stored(result.value));
+        const replay = reparseStoredRaw({
+          ...stored(result.value),
+          decisionType: storedDecisionType,
+        });
         expect(replay).toEqual({ type: "parsed", result: result.value });
       },
     ),

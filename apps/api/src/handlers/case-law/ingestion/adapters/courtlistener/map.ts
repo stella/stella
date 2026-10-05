@@ -101,7 +101,6 @@ export const mapCourtListenerRecord = (
     caseNumberType: plan.caseNumberType,
     identifiers: plan.identifiers,
     decisionDate: plan.decisionDate,
-    decisionType: null,
     sourceUrl: plan.sourceUrl,
     documentUrl: plan.documentUrl,
     judges: plan.judges,

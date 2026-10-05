@@ -1,4 +1,3 @@
-// parser-output-unchanged: [eu-ecj] Allowing an explicit null decisionType changes no ECJ output; the adapter continues to emit its published type or undefined.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
@@ -200,7 +199,7 @@ export type RawIngestionResult = {
   country: string;
   language: string;
   decisionDate?: string | undefined;
-  decisionType?: string | null | undefined;
+  decisionType?: string | undefined;
   /** Declared publisher enum only; omission means unknown, never ruling. */
   documentRole?: DecisionDocumentRole | undefined;
   fulltext?: string | undefined;
@@ -275,7 +274,7 @@ type PlainTextResultFields = {
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
   court: PlainText;
-  decisionType?: PlainText | null | undefined;
+  decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
     | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
@@ -415,10 +414,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
-      decisionType:
-        raw.decisionType === null
-          ? null
-          : yield* optionalPlainText(raw.decisionType),
+      decisionType: yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,

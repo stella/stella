@@ -402,10 +402,7 @@ export const sanitizeResult = (
         : undefined,
       ecli: strip(result.ecli),
       decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType:
-        result.decisionType === null
-          ? null
-          : normalizeDecisionType(strip(result.decisionType)),
+      decisionType: normalizeDecisionType(strip(result.decisionType)),
       sourceUrl: strip(result.sourceUrl),
       documentUrl: strip(result.documentUrl),
       metadata,
