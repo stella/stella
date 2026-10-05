@@ -202,7 +202,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
           sql`UPDATE entities SET name = 'Denied' WHERE workspace_id = ${workspaces.at(0)}`,
           sql`DELETE FROM entities WHERE workspace_id = ${workspaces.at(1)}`,
         ]) {
-          await expect(
+          expect(
             await rejectionOf(reader(async (tx) => await tx.execute(query))),
           ).toMatchObject({
             cause: {

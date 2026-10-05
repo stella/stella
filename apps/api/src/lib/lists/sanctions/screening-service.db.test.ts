@@ -742,6 +742,7 @@ test(
 test.each(["hang", "crash"])(
   "public worker %s never answers clear and recovers",
   async (fault) => {
+    const warmupFinished = Promise.withResolvers<undefined>();
     let spawned = 0;
     const pool = createSanctionsMatcherPool({
       deadlineMs: 200,
@@ -755,7 +756,18 @@ test.each(["hang", "crash"])(
           : new Worker(new URL("sanctions-matcher-worker.ts", import.meta.url));
       },
     });
-    const publicScreen = createPublicSanctionsScreening({ pool });
+    const publicScreen = createPublicSanctionsScreening({
+      pool: {
+        ...pool,
+        run: async (work, options) => {
+          const outcome = await pool.run(work, options);
+          if (options?.onSettled !== undefined) {
+            warmupFinished.resolve(undefined);
+          }
+          return outcome;
+        },
+      },
+    });
     const props = {
       db: requestDb,
       subject: {
@@ -772,6 +784,8 @@ test.each(["hang", "crash"])(
       expect(first.lists.every((list) => list.status === "unavailable")).toBe(
         true,
       );
+      // Recovery is observed after its real background rebuild, independent of worker startup speed.
+      await warmupFinished.promise;
       const next = (await publicScreen(props)).unwrap();
       expect(next.status).toBe("clear");
       expect(spawned).toBe(2);

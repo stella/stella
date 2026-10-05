@@ -157,35 +157,38 @@ test.each([1, 2])(
     let running = 0;
     let peak = 0;
     const executed: number[] = [];
-    const active = Array.from({ length: size }, (_, index) =>
-      pool.run(async (session) => {
-        signals.push(session.signal);
-        executed.push(index);
-        running += 1;
-        peak = Math.max(peak, running);
-        if (running === size) {
-          activeEntered.resolve(undefined);
-        }
-        await releaseActive.promise;
-        running -= 1;
-        return index;
-      }),
+    const active = Array.from(
+      { length: size },
+      async (_, index) =>
+        await pool.run(async (session) => {
+          signals.push(session.signal);
+          executed.push(index);
+          running += 1;
+          peak = Math.max(peak, running);
+          if (running === size) {
+            activeEntered.resolve(undefined);
+          }
+          await releaseActive.promise;
+          running -= 1;
+          return index;
+        }),
     );
     const pending: Promise<number | null>[] = [];
     try {
       await activeEntered.promise;
       pending.push(
-        ...queued.map((gate, index) =>
-          pool.run(async (session) => {
-            signals.push(session.signal);
-            executed.push(size + index);
-            running += 1;
-            peak = Math.max(peak, running);
-            gate.entered.resolve(undefined);
-            await gate.release.promise;
-            running -= 1;
-            return size + index;
-          }),
+        ...queued.map(
+          async (gate, index) =>
+            await pool.run(async (session) => {
+              signals.push(session.signal);
+              executed.push(size + index);
+              running += 1;
+              peak = Math.max(peak, running);
+              gate.entered.resolve(undefined);
+              await gate.release.promise;
+              running -= 1;
+              return size + index;
+            }),
         ),
       );
       const refused = pool.run(async () => {

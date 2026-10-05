@@ -1000,9 +1000,7 @@ describe("public sanctions search parity", () => {
         const firstMatch =
           eu.possibleMatches.at(0) ?? panic("Missing rollover match");
         const firstEntry = entries.at(0) ?? panic("Missing rollover entry");
-        expect(firstMatch.sourceEntryId).toBe(
-          firstEntry.sourceId ?? panic("Missing rollover source id"),
-        );
+        expect(firstMatch.sourceEntryId).toBe(firstEntry.sourceId);
         await search("Ivan", "Sidorov");
         await search("Zbigniew", "Wroblewski");
         expect(loads).toBe(warmed + 1);
@@ -1311,9 +1309,8 @@ describe("public sanctions search parity", () => {
             build: (lists) => {
               const list = lists.at(0) ?? panic("Missing benchmark list");
               expect(digest(lists)).toBe(
-                inputDigests.get(
-                  list.version.source ?? panic("Missing benchmark source"),
-                ) ?? panic("Missing benchmark input digest"),
+                inputDigests.get(list.version.source) ??
+                  panic("Missing benchmark input digest"),
               );
               return buildScreeningIndex(lists);
             },
