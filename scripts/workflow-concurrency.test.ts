@@ -323,12 +323,14 @@ describe("pull request workflow concurrency", () => {
           return [];
         }
         // These workflows deliberately supersede builds/deploys or manual
-        // CI on one branch. Promotion itself still must finish.
+        // CI on one branch. Staging builds supersede only a build of the
+        // same commit. Promotion itself still must finish.
         const deliberate =
           (file === "deploy-staging.yml" &&
-            ["staging-api-build", "staging-web-build"].includes(
-              String(group),
-            )) ||
+            [
+              `staging-api-build-\${{ needs.resolve.outputs.sha }}`,
+              `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
+            ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`);
         if (deliberate) {

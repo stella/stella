@@ -2311,6 +2311,8 @@
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
+      "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
@@ -5459,8 +5461,7 @@
         "signCurrent": "Allkirjasta stella desktopiga",
         "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
         "signOutdated": "Uuenda stella desktop, et allkirjastada",
-        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
-        "signShort": "Allkirjasta"
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis."
       },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",
