@@ -52,6 +52,12 @@ export const MCP_ERROR_CODES = [
   "upstream_unavailable",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
+  /**
+   * The calling Stella CLI release predates the API contract this server
+   * speaks, so it would misread results. Not retryable: the hint names the
+   * install command, and nothing else the caller can do succeeds.
+   */
+  "client_upgrade_required",
   /** An unexpected server-side failure; details are not leaked to the caller. */
   "internal_error",
 ] as const;

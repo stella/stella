@@ -108,6 +108,7 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   rate_limited: EXIT_CODES.server,
   upstream_unavailable: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
+  client_upgrade_required: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
 } as const satisfies Record<McpErrorCode, ExitCode>;
 

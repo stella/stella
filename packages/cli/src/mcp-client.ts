@@ -23,6 +23,16 @@ import { CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
+/**
+ * How this CLI names itself in the MCP `initialize` handshake. The server reads
+ * this identity to refuse releases that predate its API contract, and a pair
+ * test in the API pins both sides, so renaming it is a contract change.
+ */
+export const CLI_MCP_CLIENT_INFO = {
+  name: "stella-cli",
+  version: CLI_VERSION,
+} as const;
+
 // Most `tools/call` requests keep the default bounded client ceiling. A
 // generated leaf may carry a larger API-owned finite deadline when its bounded
 // server work cannot complete within that generic budget. The `tools/list`
@@ -186,7 +196,7 @@ const runMcpOperation = async <T>({
       requestInit: { headers: { Authorization: `Bearer ${token}` } },
     },
   );
-  const client = new Client({ name: "stella-cli", version: CLI_VERSION });
+  const client = new Client(CLI_MCP_CLIENT_INFO);
   const result = await Result.tryPromise({
     try: async () => {
       const timeout = timeoutMs ?? REQUEST_TIMEOUT_MS;

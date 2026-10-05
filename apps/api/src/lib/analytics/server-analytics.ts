@@ -90,6 +90,8 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
  * count of handshakes; an unreported version is left out rather than invented.
  */
 export type McpSessionInitializedProperties = {
+  /** Whether the handshake was served or refused as a stale Stella CLI. */
+  admission: "admitted" | "client_upgrade_required";
   client_name: string;
   client_version?: string;
   credential_type: McpCredentialType | "unspecified";

@@ -1,4 +1,5 @@
 import {
+  CLIENT_INFO_META_KEY,
   createMcpHandler,
   isInitializeRequest,
   isLegacyRequest,
@@ -51,6 +52,10 @@ import {
   invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
 } from "@/api/mcp/capability-tools";
+import {
+  clientUpgradeRequiredError,
+  mcpClientAdmission,
+} from "@/api/mcp/cli-client-admission";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
 import {
@@ -341,6 +346,32 @@ const withMcpCors = async (
 const MCP_TRANSPORT_ERROR_CODE = -32_000;
 /** Refused for want of usable credentials, in either direction (401/403). */
 const MCP_ACCESS_DENIED_ERROR_CODE = -32_001;
+/** Refused because the client is a Stella CLI older than the API contract. */
+const MCP_CLIENT_UPGRADE_REQUIRED_ERROR_CODE = -32_010;
+
+/**
+ * The answer to a stale Stella CLI's `initialize`. Its id echoes the request so
+ * the client settles the pending handshake instead of timing out; `data`
+ * carries the agent-native error envelope and `message` stands alone, because
+ * published CLIs print only the message.
+ */
+const clientUpgradeRequiredResponse = (id: RequestId, cliVersion: string) => {
+  const error = clientUpgradeRequiredError(cliVersion);
+  const headers = createMcpCorsHeaders();
+  headers.set("Content-Type", "application/json");
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: MCP_CLIENT_UPGRADE_REQUIRED_ERROR_CODE,
+        message: error.message,
+        data: { error },
+      },
+      id,
+      jsonrpc: "2.0",
+    }),
+    { headers, status: 200 },
+  );
+};
 
 /**
  * Every refusal this endpoint serves answers in the JSON-RPC envelope a client
@@ -800,6 +831,17 @@ export const createMcpHttpRequestHandler = ({
     if (disposition !== undefined) {
       disposition.type = "tool";
     }
+    // A modern-era request names its client in every call's `_meta` envelope,
+    // so a stale Stella CLI is refused at dispatch there. A 2025-era
+    // `tools/call` carries no envelope and no identity: that leg is refused at
+    // `initialize` in `serveLegacyRequest`.
+    const envelope: Record<string, unknown> = { ...mcpReq.envelope };
+    const admission = mcpClientAdmission(envelope[CLIENT_INFO_META_KEY]);
+    if (admission.kind === "client_upgrade_required") {
+      return mcpStructuredErrorResult(
+        clientUpgradeRequiredError(admission.cliVersion),
+      );
+    }
     const toolName = toolRequest.params.name;
     const staticTool = listStaticMcpToolDefinitions(mode).find(
       ({ name }) => name === toolName,
@@ -1121,11 +1163,23 @@ export const createMcpHttpRequestHandler = ({
     // slot, so `Reflect.set` performs the assignment the
     // `prefer-add-event-listener` rule bans, as `redis-client.ts` does for
     // Bun's client. The handler is typed from the slot it fills.
+    const handshake: { refused?: { id: RequestId; cliVersion: string } } = {};
     const observeHandshake: NonNullable<typeof transport.onmessage> = (
       message,
     ) => {
       if (!isInitializeRequest(message)) {
         return;
+      }
+      // A stale Stella CLI is identifiable only here: its later stateless
+      // requests carry no identity. The SDK still answers this handshake
+      // (nothing persists on the per-request instance), and the reply is
+      // replaced below, so every operation the CLI attempts is refused.
+      const admission = mcpClientAdmission(message.params.clientInfo);
+      if (admission.kind === "client_upgrade_required") {
+        handshake.refused = {
+          id: message.id,
+          cliVersion: admission.cliVersion,
+        };
       }
       // Telemetry does not decide whether a handshake succeeds. This callback
       // runs inside `handleRequest`, so a throwing analytics sink would reject
@@ -1134,6 +1188,7 @@ export const createMcpHttpRequestHandler = ({
       const recorded = Result.try({
         try: () =>
           recordMcpSessionInitialized({
+            admission: admission.kind,
             clientInfo: message.params.clientInfo,
             mode,
             session,
@@ -1179,6 +1234,14 @@ export const createMcpHttpRequestHandler = ({
     try {
       await server.connect(transport);
       const response = await transport.handleRequest(request, { authInfo });
+      if (handshake.refused !== undefined) {
+        await response.body?.cancel();
+        await teardown();
+        return clientUpgradeRequiredResponse(
+          handshake.refused.id,
+          handshake.refused.cliVersion,
+        );
+      }
       if (response.body === null || !isEventStreamResponse(response)) {
         await teardown();
         return response;

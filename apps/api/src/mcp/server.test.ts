@@ -1,5 +1,6 @@
 import {
   Client,
+  ProtocolError,
   StreamableHTTPClientTransport,
   type FetchLike,
 } from "@modelcontextprotocol/client";
@@ -64,6 +65,8 @@ import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
+import { CLI_MCP_CLIENT_INFO } from "../../../../packages/cli/src/mcp-client";
+
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
   Result.ok(undefined),
 );
@@ -122,11 +125,13 @@ const createMcpRequest = (body: unknown) =>
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
 
 const createModernMcpRequest = ({
+  clientInfo = { name: "stella-test", version: "1.0.0" },
   id,
   method,
   params = {},
   token = "token",
 }: {
+  clientInfo?: { name: string; version: string };
   id: number;
   method: string;
   params?: Record<string, unknown>;
@@ -141,7 +146,7 @@ const createModernMcpRequest = ({
         ...params,
         _meta: {
           [CLIENT_CAPABILITIES_META_KEY]: {},
-          [CLIENT_INFO_META_KEY]: { name: "stella-test", version: "1.0.0" },
+          [CLIENT_INFO_META_KEY]: clientInfo,
           [PROTOCOL_VERSION_META_KEY]: MODERN_PROTOCOL_VERSION,
         },
       },
@@ -1040,6 +1045,7 @@ describe("handleMcpHttpRequest", () => {
         event: "mcp_session_initialized",
         groups: { organization: "org_1" },
         properties: {
+          admission: "admitted",
           client_name: "n".repeat(128),
           client_version: "1.2.3",
           credential_type: "oauth_client",
@@ -1096,6 +1102,142 @@ describe("handleMcpHttpRequest", () => {
       mode: "default",
       phase: "initialize",
       source: "mcp",
+    });
+  });
+
+  describe("stale Stella CLI refusal", () => {
+    const authenticateCli = () => {
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          credential: { clientId: "client_1", type: "oauth_client" },
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    };
+
+    // Drives the real SDK client the CLI uses: `initialize`, then each
+    // operation as its own stateless POST.
+    const connectAs = async (clientInfo: { name: string; version: string }) => {
+      const transport = new StreamableHTTPClientTransport(
+        new URL("http://localhost/mcp"),
+        {
+          fetch: async (input, init) =>
+            await handleMcpHttpRequest(new Request(input.toString(), init)),
+          requestInit: { headers: { authorization: "Bearer token" } },
+        },
+      );
+      const client = new Client(clientInfo);
+      await client.connect(transport, { timeout: 2000 });
+      return client;
+    };
+
+    test("refuses a pre-contract CLI's handshake with the upgrade envelope", async () => {
+      const captured: ServerAnalyticsCaptureParams[] = [];
+      setAnalyticsForTesting({
+        capture: (params) => {
+          captured.push(params);
+        },
+        identifyOrganizationGroup: () => undefined,
+        flush: async () => await Promise.resolve(),
+      });
+      authenticateCli();
+
+      const refusal: unknown = await connectAs({
+        name: "stella-cli",
+        version: "0.10.1",
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+      expect(refusal).toBeInstanceOf(ProtocolError);
+      if (!(refusal instanceof ProtocolError)) {
+        return;
+      }
+      // Published CLIs print only the message, so it carries the fix alone.
+      expect(refusal.message).toContain("Stella CLI 0.10.1 is too old");
+      expect(refusal.message).toContain("npm i -g @stll/cli");
+      expect(refusal.code).toBe(-32_010);
+      expect(refusal.data).toEqual({
+        error: {
+          code: "client_upgrade_required",
+          message: refusal.message,
+          hint: "Run `npm i -g @stll/cli` to install the current Stella CLI (1.0.0 or newer), then retry the command.",
+          retryable: false,
+        },
+      });
+      // Counted as a refused handshake, not reported as a defect.
+      expect(captured.map(({ properties }) => properties)).toEqual([
+        {
+          admission: "client_upgrade_required",
+          client_name: "stella-cli",
+          client_version: "0.10.1",
+          credential_type: "oauth_client",
+          mode: "default",
+        },
+      ]);
+      expect(captureErrorMock).not.toHaveBeenCalled();
+      expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    });
+
+    test("serves the current CLI and other MCP clients normally", async () => {
+      authenticateCli();
+      for (const clientInfo of [
+        { ...CLI_MCP_CLIENT_INFO },
+        { name: "claude-ai", version: "0.10.1" },
+        { name: "openai-mcp", version: "1.0.0" },
+      ]) {
+        const client = await connectAs(clientInfo);
+        try {
+          const called = await client.callTool(
+            { name: "no_such_tool", arguments: {} },
+            { timeout: 2000 },
+          );
+          const text = called.content.at(0);
+          expect(
+            text?.type === "text"
+              ? parseUnknownToolErrorEnvelope(text.text)?.error.code
+              : undefined,
+          ).toBe("unknown_tool");
+        } finally {
+          await client.close();
+        }
+      }
+    });
+
+    test("refuses a pre-contract CLI's modern-era tool call at dispatch", async () => {
+      authenticateCli();
+      const call = async (clientInfo: { name: string; version: string }) => {
+        const response = await handleMcpHttpRequest(
+          createModernMcpRequest({
+            clientInfo,
+            id: 1,
+            method: "tools/call",
+            params: { arguments: {}, name: "no_such_tool" },
+          }),
+        );
+        const body =
+          await readTestJson<McpJsonResponse<CallToolResult>>(response);
+        const text = body.result.content.at(0);
+        return text?.type === "text"
+          ? parseUnknownToolErrorEnvelope(text.text)?.error
+          : undefined;
+      };
+
+      expect(await call({ name: "stella-cli", version: "0.8.0" })).toEqual({
+        code: "client_upgrade_required",
+        hint: "Run `npm i -g @stll/cli` to install the current Stella CLI (1.0.0 or newer), then retry the command.",
+      });
+      expect(await call({ ...CLI_MCP_CLIENT_INFO })).toMatchObject({
+        code: "unknown_tool",
+      });
+      expect(await call({ name: "claude-ai", version: "0.8.0" })).toMatchObject(
+        { code: "unknown_tool" },
+      );
+      expect(handleMcpToolCallMock).not.toHaveBeenCalled();
     });
   });
 

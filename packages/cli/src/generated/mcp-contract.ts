@@ -58,6 +58,7 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   "upstream_unavailable",
   "unknown_tool",
+  "client_upgrade_required",
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];

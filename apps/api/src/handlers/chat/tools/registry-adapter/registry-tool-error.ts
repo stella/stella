@@ -24,6 +24,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   rate_limited: "transient",
   upstream_unavailable: "transient",
   unknown_tool: "unavailable",
+  client_upgrade_required: "unavailable",
   internal_error: "server-defect",
 } as const satisfies Record<McpErrorCode, ChatToolErrorKind>;
 

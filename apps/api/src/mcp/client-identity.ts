@@ -50,6 +50,7 @@ export const sanitizeMcpClientIdentity = (
 };
 
 export type RecordMcpSessionInitialized = (args: {
+  admission: McpSessionInitializedProperties["admission"];
   clientInfo: unknown;
   mode: McpMode;
   session: McpSession;
@@ -62,12 +63,14 @@ export type RecordMcpSessionInitialized = (args: {
  * 2025-era protocol; later requests carry no identity to attribute.
  */
 export const recordMcpSessionInitialized: RecordMcpSessionInitialized = ({
+  admission,
   clientInfo,
   mode,
   session,
 }) => {
   const { clientName, clientVersion } = sanitizeMcpClientIdentity(clientInfo);
   const properties: McpSessionInitializedProperties = {
+    admission,
     client_name: clientName,
     ...(clientVersion === undefined ? {} : { client_version: clientVersion }),
     credential_type: session.credential?.type ?? UNSPECIFIED_CLIENT_FIELD,
