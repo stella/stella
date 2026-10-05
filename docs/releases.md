@@ -140,7 +140,9 @@ marketing:reshoot` re-records only the stale captures (see
 
    The run refuses a SHA that `main` does not contain. When its smokes pass,
    the commit carries `staging/verified` = `success`. `main-heavy.yml`
-   records `main/heavy` on the same commit.
+   records `main/heavy` on the same commit. If the run is cancelled because
+   a newer staging dispatch replaced it while it waited, dispatch it again
+   with the same `sha`; tagging refuses until `staging/verified` is green.
 7. Tag the commit once both statuses are green:
 
    ```bash
@@ -149,7 +151,8 @@ marketing:reshoot` re-records only the stale captures (see
 
    `release-tag.yml` tags exactly that commit, and refuses unless both
    `staging/verified` and `main/heavy` are `success` on it; the refusal names
-   each status that is missing or not green. Leaving `sha` blank selects the
+   each status that is missing or not green. It checks both again right
+   before pushing the tag. Leaving `sha` blank selects the
    newest commit on `main` that carries both. The workflow also runs the CLI
    coupling check; if it fails (a CLI changeset merged after the release
    commit), apply it with `bun run changeset:version` plus

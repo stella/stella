@@ -159,6 +159,24 @@ fi
 grep -q RELEASE_OPEN_MAIN_INCIDENT "$fixture/error"
 ! "$TEST_REAL_GIT" show-ref --verify --quiet refs/tags/v1.2.3
 ! "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3
+# Either status turning red after selection stops the push.
+reset_health
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"},{"context":"staging/verified","state":"success"}]]'
+if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
+  echo 'FAIL staging/verified failed before tag push' >&2; exit 1
+fi
+grep -q 'RELEASE_STATUS_NOT_GREEN: staging/verified = failure' "$fixture/error"
+! "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+export TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
+if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
+  echo 'FAIL main/heavy failed before tag push' >&2; exit 1
+fi
+grep -q 'RELEASE_HEAVY_NOT_GREEN' "$fixture/error"
+! "$TEST_REAL_GIT" show-ref --verify --quiet refs/tags/v1.2.3
+! "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3
+echo 'ok   push re-checks both statuses'
 reset_health
 bash -e "$fixture/push.sh"
 [[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]

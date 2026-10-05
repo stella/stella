@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Read-only release gate; sparse or skipped heavy runs provide no green evidence.
+# Read-only release gate, run again immediately before the tag push: the commit
+# needs staging/verified and trusted main/heavy success, and sparse or skipped
+# heavy runs provide no green evidence.
 set -euo pipefail
 repo="${1:?repository is required}"
 sha="${2:?commit SHA is required}"
@@ -8,6 +10,10 @@ sha="${2:?commit SHA is required}"
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
 statuses=$(gh api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")
+# Statuses arrive newest first, so a later failure replaces an earlier success.
+verified=$(jq -r '[.[][] | select(.context == "staging/verified")][0].state // "missing"' <<< "$statuses")
+[[ "$verified" == "success" ]] \
+  || refuse "RELEASE_STATUS_NOT_GREEN: staging/verified = $verified on $sha; success is required"
 status=$(jq -ce '[.[][] | select(.context == "main/heavy")][0] // error("missing main/heavy")' <<< "$statuses") \
   || refuse "RELEASE_HEAVY_NOT_GREEN: main/heavy is missing on $sha"
 jq -e '.state == "success" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null \
