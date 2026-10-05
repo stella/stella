@@ -25,6 +25,7 @@ import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
+import { evaluate } from "./github-expression";
 import { mainHeavyJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
@@ -1780,6 +1781,37 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     expect(condition, name).toContain(
       "needs.ci-plan.outputs.package_checks_required == 'true'",
     );
+  }
+});
+
+test("API determinism runs only after installation for its selected scope", () => {
+  const condition = jobSteps(ciJobs["ci-checks-generated"]).find(
+    ({ name }) => name === "Web API types determinism guard",
+  )?.if;
+  if (condition === undefined) {
+    panic("Missing API determinism guard");
+  }
+  for (const cancelled of [false, true]) {
+    for (const install of ["success", "failure", "skipped"]) {
+      for (const packageChecks of [false, true]) {
+        for (const apiTypes of [false, true]) {
+          expect(
+            evaluate(condition, {
+              status: { cancelled },
+              values: {
+                "steps.install.outcome": install,
+                "needs.ci-plan.outputs.package_checks_required":
+                  String(packageChecks),
+                "needs.ci-plan.outputs.web_api_types_required":
+                  String(apiTypes),
+              },
+            }),
+          ).toBe(
+            !cancelled && install === "success" && packageChecks && apiTypes,
+          );
+        }
+      }
+    }
   }
 });
 
