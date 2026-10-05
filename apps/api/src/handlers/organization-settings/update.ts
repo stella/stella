@@ -202,6 +202,14 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     | "practiceJurisdictions"
   >;
 
+const timeZoneAuditChanges = (
+  body: NormalizedUpdateBody,
+  existing: Pick<ExistingGeneralSettings, "timeZone"> | undefined,
+) =>
+  body.timeZone !== undefined && body.timeZone !== (existing?.timeZone ?? null)
+    ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
+    : {};
+
 const organizationSettingsAuditChanges = (
   body: NormalizedUpdateBody,
   existing: ExistingGeneralSettings | undefined,
@@ -280,14 +288,6 @@ const normalizeTimeZone = ({
   const parsed = parseTimeZoneId(timeZone);
   return parsed === null ? null : { ...otherSettings, timeZone: parsed };
 };
-
-const timeZoneAuditChanges = (
-  body: NormalizedUpdateBody,
-  existing: Pick<ExistingGeneralSettings, "timeZone"> | undefined,
-) =>
-  body.timeZone !== undefined && body.timeZone !== (existing?.timeZone ?? null)
-    ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
-    : {};
 
 const invalidLockedMonth = () =>
   Result.err(
