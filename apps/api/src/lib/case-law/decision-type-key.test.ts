@@ -6,15 +6,17 @@ import {
 } from "@stll/api-contract/case-law-decision-types";
 
 import {
-  decisionTypeFilter,
   decisionTypeKey,
-  decisionTypeKind,
   isDocketShapedDecisionType,
+} from "@/api/lib/case-law/decision-type-key";
+import {
+  decisionTypeFilter,
+  decisionTypeKind,
   KINDED_DECISION_TYPES,
   readDecisionType,
   STATED_DECISION_TYPE_KINDS,
   statedDecisionTypesOf,
-} from "@/api/lib/case-law/decision-type-key";
+} from "@/api/lib/case-law/decision-type-kind";
 
 test("decision type comparison converges across casing and Unicode spellings", () => {
   expect("Nález".normalize("NFD")).not.toBe("Nález");

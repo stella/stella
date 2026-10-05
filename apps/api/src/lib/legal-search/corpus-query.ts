@@ -12,7 +12,7 @@ import {
   decisionTypeFilter,
   KINDED_DECISION_TYPES,
   statedDecisionTypesOf,
-} from "@/api/lib/case-law/decision-type-key";
+} from "@/api/lib/case-law/decision-type-kind";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   type CorpusProvisionMention,

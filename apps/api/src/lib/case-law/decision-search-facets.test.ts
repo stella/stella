@@ -19,7 +19,7 @@ import {
   labelSourceBuckets,
   type SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
-import { STATED_DECISION_TYPE_KINDS } from "@/api/lib/case-law/decision-type-key";
+import { STATED_DECISION_TYPE_KINDS } from "@/api/lib/case-law/decision-type-kind";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,

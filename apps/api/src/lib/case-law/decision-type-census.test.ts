@@ -24,11 +24,11 @@ import {
 } from "@stll/api-contract/case-law-decision-types";
 
 import inventory from "@/api/lib/case-law/decision-type-inventory.json";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
-  decisionTypeKey,
   readDecisionType,
   STATED_DECISION_TYPE_KINDS,
-} from "@/api/lib/case-law/decision-type-key";
+} from "@/api/lib/case-law/decision-type-kind";
 import {
   ADAPTER_MANIFESTS,
   IMPORT_SOURCE_MANIFESTS,

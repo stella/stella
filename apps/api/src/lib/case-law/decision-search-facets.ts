@@ -20,7 +20,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
-import { decisionTypeKind } from "@/api/lib/case-law/decision-type-key";
+import { decisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 

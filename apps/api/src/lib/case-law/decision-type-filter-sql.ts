@@ -7,7 +7,7 @@ import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-t
 import {
   decisionTypeFilter,
   DECISION_TYPE_KIND_BY_KEY,
-} from "@/api/lib/case-law/decision-type-key";
+} from "@/api/lib/case-law/decision-type-kind";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 /**
