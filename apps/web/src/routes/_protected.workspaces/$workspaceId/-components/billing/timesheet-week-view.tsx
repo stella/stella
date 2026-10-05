@@ -18,6 +18,11 @@ import {
   summarizeBillableAmountByCurrency,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 
+import {
+  timeEntryContextKey,
+  UNAVAILABLE_TIME_ENTRY_CONTEXT,
+} from "./time-entry-context.logic";
+
 export const TimesheetWeekView = ({
   workspaceId,
   weekStart,
@@ -48,10 +53,11 @@ export const TimesheetWeekView = ({
   const grid = (() => {
     const map = new Map<string | null, Map<string, DayData>>();
     for (const entry of entries) {
-      let dayMap = map.get(entry.workItemId);
+      const contextKey = timeEntryContextKey(entry);
+      let dayMap = map.get(contextKey);
       if (!dayMap) {
         dayMap = new Map<string, DayData>();
-        map.set(entry.workItemId, dayMap);
+        map.set(contextKey, dayMap);
       }
       const current = dayMap.get(entry.dateWorked) ?? {
         minutes: 0,
@@ -151,6 +157,13 @@ export const TimesheetWeekView = ({
                 rowMinutes += data.minutes;
               }
             }
+            let matterName = t("common.matter");
+            if (workItemId === UNAVAILABLE_TIME_ENTRY_CONTEXT) {
+              matterName = t("common.unavailable");
+            } else if (workItemId) {
+              matterName =
+                matterNameMap.get(workItemId) ?? t("workspaces.defaultName");
+            }
             const storedAmounts = matterAmountsByCurrency.get(workItemId);
             const rowAmountsByCurrency = normalizeOptionalArray(storedAmounts);
 
@@ -160,12 +173,7 @@ export const TimesheetWeekView = ({
                 key={workItemId ?? "matter"}
               >
                 <td className="bg-background sticky start-0 z-10 px-3 py-2 font-medium">
-                  <span className="truncate">
-                    {workItemId
-                      ? (matterNameMap.get(workItemId) ??
-                        t("workspaces.defaultName"))
-                      : t("common.matter")}
-                  </span>
+                  <span className="truncate">{matterName}</span>
                 </td>
                 {days.map((day) => {
                   const data = dayMap?.get(day);

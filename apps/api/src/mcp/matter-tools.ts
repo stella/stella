@@ -82,7 +82,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
-import { projectNativeTaskListInput } from "@/api/lib/tasks/legal-list-access";
+import {
+  nativeTaskInputUsesLegalLists,
+  projectNativeTaskListInput,
+} from "@/api/lib/tasks/legal-list-access";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
 import {
@@ -2610,6 +2613,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Returns the task ID.",
     featureInput: {
       featureId: LEGAL_LISTS_FEATURE_ID,
+      usesFeature: nativeTaskInputUsesLegalLists,
       projectInputSchema: projectNativeTaskListInput,
       unavailableDescription:
         "Create or update an ordinary task, manage its assignees and entity links. Omit task_id to create (matter_id and name required). Pass task_id to update name, status, priority or due_date, add or remove an assignee, or manage entity links. Returns the task ID.",

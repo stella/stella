@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import type { SQL, GetColumnData } from "drizzle-orm";
+import type { SQL, GetColumnData, SQLWrapper } from "drizzle-orm";
 import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
+import type { EntityContextReference } from "@stll/api-contract/entity-reference";
 import { compareCodeUnit } from "@stll/collation";
 
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -24,10 +25,7 @@ const entityReferences = new WeakMap<
 export const entityReferenceClassification = (column: AnyPgColumn) =>
   entityReferences.get(column.table)?.get(column.name);
 
-export type EntityContextReference =
-  | { type: "available"; id: string }
-  | { type: "unavailable" }
-  | null;
+export type { EntityContextReference };
 
 /** Retains the source classification when a relational query aliases its columns. */
 export const entityContextProjection = <TColumn extends AnyPgColumn>(
@@ -38,12 +36,12 @@ export const entityContextProjection = <TColumn extends AnyPgColumn>(
   if (classification?.kind !== "context") {
     return panic("Context projection requires a classified context reference");
   }
-  const visibility = (column: TColumn) =>
+  const visibility = (column: SQLWrapper) =>
     sql`EXISTS (SELECT 1 FROM ${sql.identifier("public")}.${sql.identifier(classification.target)} context_resource WHERE context_resource.id = ${column})`;
   return {
-    id: (column: TColumn) =>
+    id: (column: SQLWrapper) =>
       sql<GetColumnData<TColumn> | null>`CASE WHEN ${visibility(column)} THEN ${column} ELSE NULL END`,
-    reference: (column: TColumn) =>
+    reference: (column: SQLWrapper) =>
       sql<EntityContextReference>`CASE WHEN ${column} IS NULL THEN NULL WHEN ${visibility(column)} THEN jsonb_build_object('type', 'available', 'id', ${column}) ELSE jsonb_build_object('type', 'unavailable') END`,
   };
 };

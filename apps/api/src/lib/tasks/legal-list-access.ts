@@ -73,3 +73,12 @@ export const projectNativeTaskListInput = (
   }
   return { ...schema, properties };
 };
+
+export const nativeTaskInputUsesLegalLists = (args: unknown): boolean =>
+  isRecord(args) &&
+  ((args["item_type"] !== undefined &&
+    args["item_type"] !== null &&
+    args["item_type"] !== "task") ||
+    ["list_id", "list_section_id", "list_description"].some(
+      (field) => args[field] !== undefined && args[field] !== null,
+    ));

@@ -8,7 +8,10 @@ import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureEnabled,
+  isMcpFeatureInputEnabled,
+} from "@/api/mcp/feature-access";
 import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
@@ -284,6 +287,18 @@ export const runRegistryWriteTool = async (
           subject: `${toolName} arguments`,
         }).error,
       ),
+    );
+  }
+
+  if (
+    !isMcpFeatureInputEnabled({
+      context,
+      definition: staticDefinition,
+      args: normalized.value,
+    })
+  ) {
+    return Result.err(
+      new ChatToolError({ kind: "not-found", message: "Not found" }),
     );
   }
 

@@ -74,3 +74,28 @@ export const projectMcpFeatureInput = (
     inputSchema: input.projectInputSchema(definition.inputSchema),
   };
 };
+
+type McpFeatureInputAccessOptions = {
+  context: McpFeatureAccessContext | undefined;
+  definition: McpToolDefinition;
+  args: unknown;
+};
+
+/** Admission and discovery share the same conditional feature declaration. */
+export const isMcpFeatureInputEnabled = ({
+  context,
+  definition,
+  args,
+}: McpFeatureInputAccessOptions): boolean => {
+  const input = definition.featureInput;
+  return (
+    input === undefined ||
+    !input.usesFeature(args) ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: input.featureId,
+    })
+  );
+};

@@ -19,7 +19,10 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureEnabled,
+  isMcpFeatureInputEnabled,
+} from "@/api/mcp/feature-access";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
@@ -53,6 +56,7 @@ import {
   featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
+  notFoundResult,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -284,7 +288,10 @@ const featureUnavailableToolResult = ({
   context,
   mode,
   toolName,
-}: McpToolSurface & { toolName: string }): CallToolResult | undefined => {
+  args,
+}: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
+  | CallToolResult
+  | undefined => {
   const definition = getStaticMcpToolDefinition(toolName, mode);
   if (
     isMcpDescriptorFeatureEnabled({
@@ -294,6 +301,14 @@ const featureUnavailableToolResult = ({
       featureId: definition?.featureId,
     })
   ) {
+    if (
+      definition !== undefined &&
+      !isMcpFeatureInputEnabled({ context, definition, args })
+    ) {
+      return createSurfaceSerializer({ context, mode })(
+        notFoundResult("Not found"),
+      );
+    }
     return undefined;
   }
   return createSurfaceSerializer({ context, mode })(
@@ -372,6 +387,7 @@ const dispatchMcpToolCall = async ({
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const unavailableResult = featureUnavailableToolResult({
+    args,
     context,
     mode,
     toolName,
@@ -474,8 +490,6 @@ const dispatchMcpToolCall = async ({
     );
   }
   const normalizedArgs = normalized.value;
-  const inputNotes = normalized.notes;
-
   // With the input: the exact grant of the operation it selects.
   const inputDenial = mcpToolInputAuthorityDenial(
     context,

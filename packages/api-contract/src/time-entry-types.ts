@@ -1,3 +1,5 @@
+import type { EntityContextReference } from "./entity-reference";
+
 export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
 export type TimeEntrySource = "manual" | "timer" | "suggested";
@@ -26,6 +28,7 @@ export type TimeEntry = {
   userId: string | null;
   userName: string | null;
   workItemId: string | null;
+  workItemReference: EntityContextReference;
 };
 
 export type TimeEntryListPage = {

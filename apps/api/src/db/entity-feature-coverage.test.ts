@@ -1,9 +1,18 @@
 import { expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { getTableConfig, PgTable, pgTable, uuid } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  getTableConfig,
+  PgTable,
+  pgTable,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverage";
-import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import {
+  entityFeaturePolicies,
+  entityFeaturePolicyStatements,
+} from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 
@@ -83,5 +92,50 @@ test("context rows remain visible while owned content inherits visibility", () =
   );
   expect(entityFeatureCoverageViolations([unprotected])).toEqual([
     "fixture_owned_reader.entity_id requires the entity feature owner",
+  ]);
+});
+
+test("the committed migration matches every schema-owned visibility policy", async () => {
+  const migration = await Bun.file(
+    new URL(
+      "../../drizzle/20261004120500_entity_feature_visibility/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  const statements = migration
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.startsWith("CREATE POLICY"));
+  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  expect(statements).toEqual(entityFeaturePolicyStatements(tables));
+  expect(
+    statements.some((statement) =>
+      statement.includes('ON "public"."time_entries"'),
+    ),
+  ).toBe(false);
+  expect(
+    statements.some((statement) =>
+      statement.includes('ON "public"."expenses"'),
+    ),
+  ).toBe(false);
+});
+
+test("a composite entity relationship also requires a classification", () => {
+  const reader = pgTable(
+    "fixture_composite_reader",
+    {
+      entityId: uuid("entity_id"),
+      workspaceId: uuid("workspace_id"),
+    },
+    (table) => [
+      foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [schema.entities.id, schema.entities.workspaceId],
+      }),
+      ...wsPolicies(),
+    ],
+  );
+  expect(entityFeatureCoverageViolations([reader])).toEqual([
+    "fixture_composite_reader.entity_id requires a classified entity relationship",
   ]);
 });

@@ -3,7 +3,7 @@ import {
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -21,8 +21,14 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { isMcpFeatureInputEnabled } from "@/api/mcp/feature-access";
 import {
   getGatewayMcpToolDefinition,
   listGatewayMcpToolDefinitions,
@@ -30,6 +36,7 @@ import {
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolDefinition,
@@ -368,3 +375,98 @@ for (const kind of [
     expect(scopedDb).not.toHaveBeenCalled();
   });
 }
+
+describe("mixed native task inputs", () => {
+  test("denied list input stops before workspace lookup on MCP and chat", async () => {
+    const { context, scopedDb } = contextFor("ordinary");
+    const writable = {
+      ...context,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    } satisfies McpRequestContext;
+    const result = await handleMcpToolCall({
+      context: writable,
+      toolName: "save_task",
+      args: {
+        matter_id: "00000000-0000-4000-8000-000000000001",
+        name: "Item",
+        item_type: "fact",
+      },
+    });
+    expect(JSON.stringify(result)).toContain('"code":"not_found"');
+    expect(scopedDb).not.toHaveBeenCalled();
+    const chat = await runRegistryWriteTool({
+      context: writable,
+      toolName: "save_task",
+      args: { name: "Item", item_type: "fact" },
+      refRegistry: createChatRefRegistry(),
+    });
+    expect(chat.isErr() && chat.error.kind).toBe("not-found");
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
+  for (const featureIds of [
+    [],
+    [LEGAL_LISTS_FEATURE_ID],
+    [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+  ]) {
+    test(`ordinary inputs and list inputs with ${featureIds.length} grants`, () => {
+      const definition = getStaticMcpToolDefinition("save_task", "default");
+      expect(definition).toBeDefined();
+      if (definition === undefined) {
+        panic("save_task declaration required");
+      }
+      const grants = Object.fromEntries(
+        featureIds.map((id) => [
+          id,
+          [{ type: "organization" as const, organizationId }],
+        ]),
+      );
+      const decisions = new Map(
+        Object.keys(FEATURE_REGISTRY).map((id) => [
+          id,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants,
+            featureId: id,
+            organizationId,
+            userId,
+            user: { email: "member@example.test", emailVerified: true },
+            membership: true,
+          }),
+        ]),
+      );
+      const context = {
+        organizationId,
+        userId,
+        featureAccessSnapshot: createFeatureAccessSnapshot({
+          organizationId,
+          userId,
+          decisions,
+        }),
+      };
+      expect(
+        isMcpFeatureInputEnabled({
+          context,
+          definition,
+          args: { item_type: "task" },
+        }),
+      ).toBe(true);
+      expect(
+        isMcpFeatureInputEnabled({
+          context,
+          definition,
+          args: { item_type: null },
+        }),
+      ).toBe(true);
+      for (const args of [
+        { item_type: "fact" },
+        { list_id: "list" },
+        { list_description: "Description" },
+      ]) {
+        expect(isMcpFeatureInputEnabled({ context, definition, args })).toBe(
+          featureIds.includes(LEGAL_LISTS_FEATURE_ID),
+        );
+      }
+    });
+  }
+});

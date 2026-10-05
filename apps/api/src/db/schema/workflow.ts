@@ -4,6 +4,8 @@ import {
 } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+
 import {
   isNotNull,
   jsonb,
@@ -268,7 +270,7 @@ export const workObligations = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+        [table.sourceEntityId, { target: "entities", kind: "context" }],
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
@@ -297,6 +299,15 @@ export const workObligationEvents = p.pgTable(
         foreignColumns: [workObligations.entityId, workObligations.workspaceId],
       })
       .onDelete("cascade"),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [
+          table.obligationEntityId,
+          { target: "entities", kind: "owned-content" },
+        ],
+      ]),
+    ),
     p.check(
       "work_obligation_events_type_check",
       sql`${table.type} IN (${sql.join(WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES, sql`, `)})`,

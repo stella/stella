@@ -14,6 +14,7 @@ import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 type MatterComboboxProps = {
   workspaceId: string;
   value: string;
+  placeholder?: string;
   onChange: (matterId: string) => void;
 };
 
@@ -21,6 +22,7 @@ export const MatterCombobox = ({
   workspaceId,
   value,
   onChange,
+  placeholder,
 }: MatterComboboxProps) => {
   const t = useTranslations();
   const { data: matters } = useSuspenseQuery(
@@ -36,7 +38,10 @@ export const MatterCombobox = ({
       }}
       value={value || null}
     >
-      <ComboboxInput placeholder={t("billing.selectMatter")} size="default" />
+      <ComboboxInput
+        placeholder={placeholder ?? t("billing.selectMatter")}
+        size="default"
+      />
       <ComboboxPopup>
         <ComboboxList>
           {matters.map((matter) => (

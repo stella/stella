@@ -12,6 +12,7 @@ const entry = (
   overrides: Partial<TimesheetTotalEntry> = {},
 ): TimesheetTotalEntry => ({
   workItemId: "m1",
+  workItemReference: { type: "available", id: "m1" },
   currency: "USD",
   billable: true,
   noCharge: false,
@@ -96,5 +97,20 @@ test("no-charge time contributes zero to week and matter subtotals", () => {
   ]);
   expect(summarizeBillableAmountByMatterAndCurrency(rows).get("m1")).toEqual([
     { currency: "USD", amount: 10_000 },
+  ]);
+});
+
+test("unavailable context retains amounts and remains distinct from absent context", () => {
+  const entries = [
+    entry({ workItemId: null, workItemReference: { type: "unavailable" } }),
+    entry({ workItemId: null, workItemReference: null }),
+  ];
+  const totals = summarizeBillableAmountByMatterAndCurrency(entries);
+  expect(totals.get("unavailable")).toEqual([
+    { currency: "USD", amount: 10_000 },
+  ]);
+  expect(totals.get(null)).toEqual([{ currency: "USD", amount: 10_000 }]);
+  expect(summarizeBillableAmountByCurrency(entries)).toEqual([
+    { currency: "USD", amount: 20_000 },
   ]);
 });

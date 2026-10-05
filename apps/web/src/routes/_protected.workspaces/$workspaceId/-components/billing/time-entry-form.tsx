@@ -61,7 +61,32 @@ type TimeEntryFormProps = {
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  contextState?: "available" | "unavailable";
 };
+
+const timeEntryFormSchema = (
+  contextState: "available" | "unavailable",
+  matterRequired: string,
+) =>
+  v.strictObject({
+    matterId: v.pipe(
+      v.string(),
+      v.check(
+        (value) => value.length > 0 || contextState === "unavailable",
+        matterRequired,
+      ),
+    ),
+    dateWorked: v.string(),
+    durationMinutes: v.number(),
+    narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
+    invoiceNarrative: v.string(),
+    billable: v.boolean(),
+    taskCode: v.string(),
+    activityCode: v.string(),
+    rateAtEntry: v.number(),
+    currency: v.string(),
+  });
 
 export const TimeEntryForm = ({
   workspaceId,
@@ -70,6 +95,7 @@ export const TimeEntryForm = ({
   onSubmit,
   onCancel,
   submitLabel,
+  contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
   const [rateOverride, setRateOverride] = useState(
@@ -92,19 +118,7 @@ export const TimeEntryForm = ({
   );
 
   const today = localISODate();
-  const schema = v.strictObject({
-    matterId: v.pipe(v.string(), v.nonEmpty(t("billing.matterRequired"))),
-    dateWorked: v.string(),
-    durationMinutes: v.number(),
-    narrative: v.string(),
-    narrativeLanguage: v.nullable(v.string()),
-    invoiceNarrative: v.string(),
-    billable: v.boolean(),
-    taskCode: v.string(),
-    activityCode: v.string(),
-    rateAtEntry: v.number(),
-    currency: v.string(),
-  });
+  const schema = timeEntryFormSchema(contextState, t("billing.matterRequired"));
 
   const form = useForm(
     schemaFormOptions({
@@ -188,6 +202,9 @@ export const TimeEntryForm = ({
               <FieldLabel>{t("common.matter")}</FieldLabel>
               <MatterCombobox
                 onChange={field.handleChange}
+                {...(contextState === "unavailable" && field.state.value === ""
+                  ? { placeholder: t("common.unavailable") }
+                  : {})}
                 value={field.state.value}
                 workspaceId={workspaceId}
               />
@@ -220,6 +237,9 @@ export const TimeEntryForm = ({
                 id="billing-time-entry-duration"
                 labelledBy="billing-time-entry-duration-label"
                 onChange={field.handleChange}
+                {...(contextState === "unavailable" && field.state.value === ""
+                  ? { placeholder: t("common.unavailable") }
+                  : {})}
                 value={field.state.value}
               />
             )}

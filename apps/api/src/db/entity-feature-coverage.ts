@@ -33,7 +33,9 @@ const entityRelationsOf = (
   }
   for (const foreignKey of getTableConfig(column.table).foreignKeys) {
     const reference = foreignKey.reference();
-    const index = reference.columns.indexOf(column);
+    const index = reference.columns.findIndex(
+      (source) => source.name === column.name,
+    );
     if (index === -1) {
       continue;
     }

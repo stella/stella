@@ -204,7 +204,7 @@ export const entities = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.parentId, { target: "entities", kind: "owned-content" }],
+        [table.parentId, { target: "entities", kind: "context" }],
         [
           table.currentVersionId,
           { target: "entity_versions", kind: "owned-content" },

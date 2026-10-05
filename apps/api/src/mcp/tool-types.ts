@@ -265,6 +265,7 @@ export type McpToolDefinition = McpToolAccessBranch &
     featureId?: FeatureId;
     featureInput?: {
       featureId: FeatureId;
+      usesFeature: (args: unknown) => boolean;
       projectInputSchema: (schema: McpToolInputSchema) => McpToolInputSchema;
       unavailableDescription: string;
     };
