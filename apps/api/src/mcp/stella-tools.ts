@@ -26,6 +26,7 @@ import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-re
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -48,7 +49,6 @@ import {
   type DecisionIdentityRow,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
-import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import {
   identifyOrganizationJurisdictions,

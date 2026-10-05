@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/ingestion/eu-completion.ts",
+  "delta": 3,
+  "reason": "The EU completion tick processes rows one at a time, each paced to one publisher request per second and bounded by maxRows; a row's pickup, release and failure settlement must land before the next row's request."
+}

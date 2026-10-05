@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DialogFormState } from "@stll/ui/dialog";
 import {
   Frame,
   FrameDescription,
@@ -217,25 +218,31 @@ export const OTPPanel = ({
   });
 
   const panel = (
-    <OTPPanelContent
-      email={email}
-      isOtpComplete={isOtpComplete}
-      isOtpPulsing={isOtpPulsing}
-      isBare={surface === "bare"}
-      onOtpChange={setOtp}
-      onResend={() => resendOtp.mutate()}
-      onSubmit={(code = otp) => {
-        if (code.length !== OTP_LENGTH) {
-          pulseOtp();
-          return;
-        }
-        verifyOtp.mutate({ email, otp: code });
-      }}
-      onUseDifferentEmail={handleUseDifferentEmail}
-      otp={otp}
-      resendPending={resendOtp.isPending}
-      verifyPending={verifyOtp.isPending}
-    />
+    <>
+      <DialogFormState
+        dirty={otp !== (initialOtp ?? "")}
+        onDiscard={() => setOtp(initialOtp ?? "")}
+      />
+      <OTPPanelContent
+        email={email}
+        isOtpComplete={isOtpComplete}
+        isOtpPulsing={isOtpPulsing}
+        isBare={surface === "bare"}
+        onOtpChange={setOtp}
+        onResend={() => resendOtp.mutate()}
+        onSubmit={(code = otp) => {
+          if (code.length !== OTP_LENGTH) {
+            pulseOtp();
+            return;
+          }
+          verifyOtp.mutate({ email, otp: code });
+        }}
+        onUseDifferentEmail={handleUseDifferentEmail}
+        otp={otp}
+        resendPending={resendOtp.isPending}
+        verifyPending={verifyOtp.isPending}
+      />
+    </>
   );
 
   if (surface === "bare") {

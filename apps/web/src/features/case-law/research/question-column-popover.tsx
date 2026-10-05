@@ -45,11 +45,23 @@ type QuestionColumnPopoverProps = {
    */
   actions: readonly QuestionColumnAction[];
   onAction?: (column: QuestionColumn, action: QuestionColumnAction) => void;
+  /** Added during this visit: the header shows it and scrolls into view. */
+  isNew?: boolean | undefined;
+};
+
+/**
+ * Brings a header that just joined the table into view. Stable identity, so
+ * React calls it when the header mounts, not on every render: a reader who
+ * scrolls away afterwards is not pulled back.
+ */
+const scrollHeaderIntoView = (element: HTMLElement | null) => {
+  element?.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
 
 export const QuestionColumnPopover = ({
   actions,
   column,
+  isNew = false,
   onAction,
   question,
 }: QuestionColumnPopoverProps) => {
@@ -64,7 +76,11 @@ export const QuestionColumnPopover = ({
 
   return (
     <Popover modal onOpenChange={setIsOpen} open={isOpen}>
-      <PopoverTrigger className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start">
+      <PopoverTrigger
+        className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start"
+        data-new={isNew ? "" : undefined}
+        ref={isNew ? scrollHeaderIntoView : undefined}
+      >
         <PropertyIcon
           className="size-3.5 shrink-0"
           type={question.content.type}
@@ -72,6 +88,11 @@ export const QuestionColumnPopover = ({
         <span className="w-0 flex-1 truncate" title={question.question}>
           {question.question}
         </span>
+        {isNew && (
+          <span className="bg-primary/10 text-primary shrink-0 rounded-sm px-1 text-xs">
+            {t("caseLaw.research.newQuestionColumn")}
+          </span>
+        )}
       </PopoverTrigger>
       <PopoverPopup
         align="start"
