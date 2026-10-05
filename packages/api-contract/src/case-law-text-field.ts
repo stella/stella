@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
+// parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
 
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
