@@ -220,7 +220,7 @@
     "apps/web/src/components/inspector/desktop-open-button.tsx": 1,
     "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1,
     "apps/web/src/components/inspector/inspector-rail.tsx": 2,
-    "apps/web/src/components/legal-reader/document-ast-text.tsx": 8,
+    "apps/web/src/components/legal-reader/document-ast-text.tsx": 3,
     "apps/web/src/components/pdf/page-organizer.tsx": 1,
     "apps/web/src/components/search-dialog-results.tsx": 2,
     "apps/web/src/components/versions/version-list.tsx": 2,
