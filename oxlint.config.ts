@@ -312,6 +312,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
     "no-direct-error-toast/no-direct-error-toast",
   ]),
+  fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
+    "no-raw-child-exit-status/no-raw-child-exit-status",
+  ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
   ]),
@@ -885,6 +888,7 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
     // It has no fix-only option.
@@ -1342,6 +1346,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
+    "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",

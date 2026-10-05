@@ -498,10 +498,11 @@ const installRouteTreeGeneratorFixture = (directory: string) => {
   writeFileSync(
     script,
     `import { writeFileSync } from "node:fs";
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 const [repository, revision, output] = Bun.argv.slice(2);
 if (!repository || !revision || !output || !/^[a-f0-9]{40}$/.test(revision)) process.exit(1);
 const result = Bun.spawnSync(["git", "-C", repository, "show", revision + ":apps/web/src/fixture-route-tree.txt"]);
-if (result.exitCode !== 0) process.exit(result.exitCode);
+if (result.exitCode !== 0) process.exit(childExitStatus(result));
 writeFileSync(output, result.stdout);
 `,
   );

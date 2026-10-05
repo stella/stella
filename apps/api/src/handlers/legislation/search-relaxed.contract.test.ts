@@ -7,7 +7,7 @@ import fc from "fast-check";
 
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_CODE,
-  publicCountryUnavailable,
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { assertProperty } from "@stll/property-testing";
 
@@ -39,6 +39,7 @@ import {
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -94,7 +95,7 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicCountryUnavailable(country),
+      : publicLawCountryUnavailable(country),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 
@@ -796,7 +797,7 @@ describe.skipIf(!runEngineTests)(
         { provider: "corpus-index", loadSearchConfigs: async () => [] },
       );
       expect(response).toMatchObject({
-        code: 503,
+        code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
           country: "SVK",

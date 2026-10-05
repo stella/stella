@@ -419,7 +419,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
           },
           remove_member: {
             command: "remove-member",
-            include: ["matter_id", "user_id"],
+            include: ["matter_id", "user_id", "reassign_to"],
             required: ["matter_id", "user_id"],
           },
           update_org_settings: {

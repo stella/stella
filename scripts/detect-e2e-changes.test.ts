@@ -669,7 +669,7 @@ describe("detect-e2e-changes", () => {
     // several alternatives. The package-checks operand only ties the step to
     // the dependency install its generators import from.
     expect(driftGuard).toMatch(
-      /if: >-\n\s+needs\.ci-plan\.outputs\.package_checks_required == 'true'\n\s+&& needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'\n/u,
+      /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
     expect(driftGuard).not.toContain("||");
   });

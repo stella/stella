@@ -14,7 +14,7 @@ import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { resultTx } from "@/api/db/safe-db";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -36,6 +36,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
@@ -240,6 +241,21 @@ export const executeFlowStep = async (
       current.step?.status === "awaiting_review"
     ) {
       return null;
+    }
+    const authorization = await resolveMemberAuthorization(
+      {
+        organizationId: scope.organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+      },
+      tx,
+    );
+    if (!authorization?.workspace) {
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer a member of this matter.",
+        }),
+      );
     }
     await tx
       .update(flowRunSteps)

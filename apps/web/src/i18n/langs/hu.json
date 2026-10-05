@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
       "deleteAccountTasksDescription": "Aktív feladatok vannak Önhöz rendelve. Adja át őket a munkaterület más tagjainak, hogy a munka folytatódjon.",
       "deleteAccountTasksTitle": "Aktív feladatok átadása",
+      "deleteAccountTasksUnassignedNotice": "A kiválasztott tag nélküli feladatok felelős nélkül maradnak a munkaterületen.",
       "deleteAccountWarning": "A törlés visszafordíthatatlan. Bejelentkezési adatai és a fiók privát adatai törlődnek.",
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",

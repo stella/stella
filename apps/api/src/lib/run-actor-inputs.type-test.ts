@@ -4,14 +4,10 @@ import type {
   loadEntityVersionDocxBuffer,
   resolveEntityVersionFile,
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
-import type {
-  ContentReadDb,
-  PinnedSafeDb,
-  RootRunActor,
-} from "@/api/lib/root-scoped-db";
+import type { ContentReadDb, RootRunActor } from "@/api/lib/root-scoped-db";
 
 declare const actor: RootRunActor<"documentTranslationRun">;
-declare const pinned: PinnedSafeDb;
+declare const pinned: RootRunActor<"documentTranslationRun">["writeSafeDb"];
 
 type ReviewInputDb = Parameters<typeof resolveDocumentReviewRunInputs>[0];
 type FileReadDb = Parameters<typeof resolveEntityVersionFile>[0]["safeDb"];

@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Mitglied auswählen...",
       "deleteAccountTasksDescription": "Ihnen sind aktive Aufgaben zugewiesen. Übertragen Sie sie an andere Mitglieder des Arbeitsbereichs, damit die Arbeit weiterläuft.",
       "deleteAccountTasksTitle": "Aktive Aufgaben übertragen",
+      "deleteAccountTasksUnassignedNotice": "Aufgaben ohne ausgewähltes Mitglied bleiben ohne zugewiesene Person im Arbeitsbereich.",
       "deleteAccountWarning": "Die Löschung ist endgültig. Ihre Anmeldedaten und privaten Kontodaten werden entfernt.",
       "deleteAccountWarningExplanation": "Wir senden einen Bestätigungscode an Ihre E-Mail-Adresse, um diese Anfrage zu bestätigen. Abgeschlossene Arbeitsbereichshistorie bleibt Ihrem gelöschten Konto zugeordnet.",
       "desktop": "Desktop",

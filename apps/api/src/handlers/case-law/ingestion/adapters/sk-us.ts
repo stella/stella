@@ -98,6 +98,7 @@ import {
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   TEXT_ABSENCE_REASON,
@@ -1657,8 +1658,21 @@ const assembleSkUsDecision = ({
             }),
           ),
         }),
+    // The service's answer to the part it withheld. Kept so the fingerprint
+    // tells a refused part from one stated absent, which otherwise store the
+    // same responses: a row stored either way is rewritten when that changes.
+    ...(withheld === undefined ? {} : { refusal: JSON.stringify(withheld) }),
   };
   const sourceRaw = encodeSourceRawEnvelope(parts);
+  const sourceRawObjects =
+    pdfBytes === undefined
+      ? undefined
+      : {
+          "document-file": {
+            bytes: pdfBytes,
+            contentType: "application/pdf",
+          },
+        };
 
   const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
@@ -1694,30 +1708,13 @@ const assembleSkUsDecision = ({
             [SK_US_PART_READ_METADATA_KEY]: SK_US_PART_READ_STATE.WITHHELD,
           }),
     }),
-    // Over the envelope, not over the listing row: the row is one of seven
-    // responses stored, and a hash of it alone would call a decision
-    // unchanged after the court rewrote the document behind it.
-    // A withheld part joins the hash, so a row stored with the part's
-    // response, or with none stated, is rewritten to carry the refusal.
-    rawHash:
-      withheld === undefined
-        ? hashContent(sourceRaw)
-        : hashContent(`${hashContent(sourceRaw)}|${JSON.stringify(withheld)}`),
+    rawHash: sourceFingerprint({ sourceRaw, sourceRawObjects }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
     documentAst,
     sourceRaw,
     // The file the court serves is binary, so the envelope names it rather
     // than holding it; the pipeline writes it and fills in the address.
-    ...(pdfBytes === undefined
-      ? {}
-      : {
-          sourceRawObjects: {
-            "document-file": {
-              bytes: pdfBytes,
-              contentType: "application/pdf",
-            },
-          },
-        }),
+    ...(sourceRawObjects === undefined ? {} : { sourceRawObjects }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 
@@ -2849,7 +2846,8 @@ const reparseStoredRaw = (
           collection,
         }),
       ),
-      rawHash: hashContent(raw),
+      // The stored envelope names each object by the digest of its bytes.
+      rawHash: sourceFingerprint({ sourceRaw: raw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
       documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
       sourceRaw: raw,

@@ -34,6 +34,7 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { deriveBlockId } from "@stll/folio-core/server";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import {
   billingCodes,
@@ -75,10 +76,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chunked } from "@/api/lib/chunked";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import {
-  DEFAULT_DOCUMENT_TYPES,
-  ensureDefaultDocumentTypes,
-} from "@/api/lib/document-types/defaults";
+import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -6641,23 +6639,29 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 15. Playbooks (knowledge base) + the org document-type taxonomy the
   // type-scoped playbook references. ensureDefaultDocumentTypes is intentionally
-  // non-overwriting (onConflictDoNothing), so reruns must first drop the org's
-  // default-keyed taxonomy rows to pick up label changes. Custom, non-default
-  // document types (keys outside DEFAULT_DOCUMENT_TYPES) are left untouched.
+  // non-overwriting, so reruns refresh the default-keyed rows in place to pick
+  // up label changes: seeded playbooks reference these rows, so they cannot be
+  // deleted and re-inserted. Custom, non-default document types are untouched.
   await db.transaction(
     async (tx) =>
-      await tx.delete(documentTypes).where(
-        and(
-          eq(documentTypes.organizationId, ORG_ID),
-          inArray(
-            documentTypes.key,
-            DEFAULT_DOCUMENT_TYPES.map((documentType) => documentType.key),
-          ),
-        ),
-      ),
-  );
-  await db.transaction(
-    async (tx) => await ensureDefaultDocumentTypes(ORG_ID, tx),
+      // audit: skip — dev seed refreshes the default taxonomy labels.
+      await tx
+        .insert(documentTypes)
+        .values(
+          DEFAULT_DOCUMENT_TYPES.map((documentType) => ({
+            organizationId: ORG_ID,
+            key: documentType.key,
+            label: documentType.label,
+            sortOrder: documentType.sortOrder,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [documentTypes.organizationId, documentTypes.key],
+          set: {
+            label: sql`excluded.label`,
+            sortOrder: sql`excluded.sort_order`,
+          },
+        }),
   );
   await seedPlaybooks(ORG_ID);
 
@@ -6789,7 +6793,8 @@ if (import.meta.main) {
       stderr: "inherit",
       stdout: "inherit",
     });
-    process.exit(await child.exited);
+    await child.exited;
+    process.exit(childExitStatus(child));
   }
 
   console.log(

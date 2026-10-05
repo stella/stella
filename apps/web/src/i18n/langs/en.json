@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Select a member...",
       "deleteAccountTasksDescription": "You have active tasks assigned to you. Transfer them to other workspace members to keep work moving.",
       "deleteAccountTasksTitle": "Transfer active tasks",
+      "deleteAccountTasksUnassignedNotice": "Tasks without a selected member will stay in their workspace with no assignee.",
       "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.",
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.",
       "desktop": "Desktop",

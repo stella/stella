@@ -347,6 +347,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           permissions: addWorkspaceMember.config.permissions,
         })
         .delete("/members/:userId", removeWorkspaceMember.handler, {
+          body: removeWorkspaceMember.config.body,
           params: removeWorkspaceMember.config.params,
           permissions: removeWorkspaceMember.config.permissions,
         }),

@@ -13,6 +13,7 @@ import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { NamedCondition } from "@stll/template-conditions";
+import { scanMarkers, substitutionKey } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
@@ -39,10 +40,11 @@ import {
 } from "./numbering";
 import {
   MAIN_DOCUMENT_PART_PATH,
+  paragraphText,
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
-import { patchXmlPart } from "./rich-patch";
+import { patchParagraphPlaceholders, patchXmlPart } from "./rich-patch";
 import { stripManifest } from "./strip-custom-xml-manifest";
 import type {
   FillTemplateResult,
@@ -118,11 +120,70 @@ const templatePartContainer = (
   return doc.getElementsByTagNameNS(W_NS, localName).at(0);
 };
 
+/**
+ * One `{{ clause(...) }}` marker that survives directive evaluation. Inside a
+ * `{% for %}` iteration it carries that iteration's bindings (the context the
+ * evaluator resolves the iteration's own markers against); at document scope
+ * it carries none and renders from the fill's values.
+ */
+export type ClauseSlotOccurrence = {
+  patchKey: string;
+  loopScope: Record<string, unknown> | undefined;
+};
+
+/**
+ * Called once per surviving clause marker after a part's directives are
+ * evaluated. A value returned for a loop-scoped occurrence is substituted into
+ * that iteration's paragraph; `undefined` leaves the marker to the document
+ * values.
+ */
+export type ClauseSlotVisitor = (
+  occurrence: ClauseSlotOccurrence,
+) => RichPatchValue | undefined;
+
+const visitClauseSlots = (
+  container: slimdom.Element,
+  processingContext: ReturnType<typeof createDirectiveProcessingContext>,
+  visit: ClauseSlotVisitor,
+): void => {
+  for (const paragraph of [...container.getElementsByTagNameNS(W_NS, "p")]) {
+    const loopScope = processingContext.inlineDataByParagraph.get(paragraph);
+    const scoped = new Map<string, RichPatchValue>();
+    for (const { meta } of scanMarkers(paragraphText(paragraph))) {
+      const patchKey = meta.kind === "clause" ? substitutionKey(meta) : null;
+      if (patchKey === null) {
+        continue;
+      }
+      const inlineScope = processingContext.inlineClauseScopes.get(patchKey);
+      const scope = inlineScope?.values ?? loopScope;
+      const value = visit({
+        patchKey: inlineScope?.patchKey ?? patchKey,
+        loopScope: scope,
+      });
+      if (value !== undefined && scope !== undefined) {
+        scoped.set(patchKey, value);
+      }
+    }
+    if (scoped.size > 0) {
+      patchParagraphPlaceholders(paragraph, Object.fromEntries(scoped));
+    }
+  }
+};
+
+type DirectiveEvaluationOptions = {
+  namedConditions?: NamedCondition[] | undefined;
+  conditionValues?: Record<string, string> | undefined;
+  visitClauseSlot?: ClauseSlotVisitor | undefined;
+};
+
 const preProcessTemplateDirectives = async (
   zip: JSZip,
   templateData: TemplateData,
-  namedConditions?: NamedCondition[],
-  conditionValues?: Record<string, string>,
+  {
+    namedConditions,
+    conditionValues,
+    visitClauseSlot,
+  }: DirectiveEvaluationOptions = {},
 ): Promise<{
   buffer: Buffer;
   expandedValues: Record<string, RichPatchValue>;
@@ -158,6 +219,8 @@ const preProcessTemplateDirectives = async (
     (await zip.file("word/numbering.xml")?.async("string")) ?? null;
   const validNumIds = collectValidNumIds(numberingXml);
   const processingContext = createDirectiveProcessingContext();
+  processingContext.clauseScopeMode =
+    visitClauseSlot === undefined ? "ignore" : "collect";
 
   for (const { path, xml } of parts) {
     const doc = slimdom.parseXmlDocument(xml);
@@ -171,6 +234,9 @@ const preProcessTemplateDirectives = async (
     const paragraphOffset = paragraphOffsets[source];
     paragraphOffsets[source] += paragraphCount;
     if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
+      if (visitClauseSlot) {
+        visitClauseSlots(container, processingContext, visitClauseSlot);
+      }
       continue;
     }
 
@@ -194,6 +260,12 @@ const preProcessTemplateDirectives = async (
       });
     }
 
+    // Clause slots render where the evaluator kept them: a pruned branch drops
+    // its marker, and a loop iteration renders the clause under its bindings.
+    if (visitClauseSlot) {
+      visitClauseSlots(container, processingContext, visitClauseSlot);
+    }
+
     if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
       pruneDanglingNumPr(container, validNumIds);
     }
@@ -213,6 +285,49 @@ const preProcessTemplateDirectives = async (
 
 type FillTemplateOptions = {
   namedConditions: NamedCondition[];
+  /** Renders a clause slot inside a loop iteration ({@link ClauseSlotVisitor}). */
+  clauseSlots?: ClauseSlotVisitor | undefined;
+};
+
+/**
+ * Every clause marker the fill renders for `values`, with its loop scope, from
+ * the same directive pass {@link fillTemplate} runs: a marker in a pruned
+ * branch is absent and a marker in a loop appears once per iteration.
+ */
+export const renderedClauseSlotOccurrences = async (
+  template: ScannedFile,
+  values: TemplateData,
+  namedConditions: NamedCondition[],
+): Promise<ClauseSlotOccurrence[]> => {
+  const occurrences: ClauseSlotOccurrence[] = [];
+  const collect: ClauseSlotVisitor = (occurrence) => {
+    occurrences.push(occurrence);
+    return undefined;
+  };
+  const zip = await loadDocx(Buffer.from(template.bytes));
+  const evaluated = await preProcessTemplateDirectives(zip, values, {
+    namedConditions: namedConditions.length > 0 ? namedConditions : undefined,
+    conditionValues: readConditionRawValues(values),
+    visitClauseSlot: collect,
+  });
+  if (evaluated !== null) {
+    return occurrences;
+  }
+  // No part carries a directive: every marker renders at document scope.
+  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
+    const xml = await zip.file(path)?.async("string");
+    const container =
+      xml === undefined
+        ? undefined
+        : templatePartContainer(
+            slimdom.parseXmlDocument(xml),
+            templatePartSource(path),
+          );
+    if (container) {
+      visitClauseSlots(container, createDirectiveProcessingContext(), collect);
+    }
+  }
+  return occurrences;
 };
 
 /** Fills a scanned template; the filled document comes back as a derived
@@ -254,12 +369,11 @@ export const fillTemplate = async (
     const conditionValues = readConditionRawValues(values);
     // Checks for block directives internally; returns null
     // when none are found
-    const result = await preProcessTemplateDirectives(
-      zip,
-      values,
+    const result = await preProcessTemplateDirectives(zip, values, {
       namedConditions,
       conditionValues,
-    );
+      visitClauseSlot: options?.clauseSlots,
+    });
 
     if (result) {
       data = result.buffer;

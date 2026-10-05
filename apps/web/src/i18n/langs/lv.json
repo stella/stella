@@ -4312,6 +4312,7 @@
       "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
       "deleteAccountTasksDescription": "Jums ir piešķirti aktīvi uzdevumi. Nododiet tos citiem darba vietas dalībniekiem, lai darbs turpinātos.",
       "deleteAccountTasksTitle": "Nodot aktīvos uzdevumus",
+      "deleteAccountTasksUnassignedNotice": "Uzdevumi bez izvēlēta dalībnieka paliks darba vietā bez atbildīgās personas.",
       "deleteAccountWarning": "Dzēšana ir neatgriezeniska. Pieteikšanās dati un privātie konta dati tiks noņemti.",
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
