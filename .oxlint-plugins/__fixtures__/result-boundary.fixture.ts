@@ -1,5 +1,6 @@
-// Passive regression fixture for `result-boundary/no-throw-outside-boundary`
-// and `result-boundary/no-try-catch-outside-boundary`.
+// Passive regression fixture for `result-boundary/no-throw-outside-boundary`,
+// `result-boundary/no-try-catch-outside-boundary` and
+// `result-boundary/no-rejected-result-error`.
 //
 // Each `oxlint-disable-next-line` below intentionally suppresses a case the
 // rule MUST flag. If the rule regresses, the corresponding disable becomes
@@ -188,7 +189,32 @@ const _resultTry = (input: string) =>
   // expect-clean: result-boundary/no-try-catch-outside-boundary
   Result.try(() => parseInput(input));
 
+// --- no-rejected-result-error: flagged ---
+
+// A rejection built from a Result's error is a throw by another name.
+const _rejectsResultError = async (input: string) => {
+  const parsed = Result.try(() => parseInput(input));
+  if (Result.isError(parsed)) {
+    // oxlint-disable-next-line result-boundary/no-rejected-result-error -- fixture: rejecting with a Result's error instead of returning the Result
+    await Promise.reject(parsed.error);
+  }
+  return parsed;
+};
+
+// --- no-rejected-result-error: accepted ---
+
+// A rejection built from a mapping call is not a bare Result error.
+const _rejectsMappedError = async (input: string) => {
+  const parsed = Result.try(() => parseInput(input));
+  return Result.isError(parsed)
+    ? // expect-clean: result-boundary/no-rejected-result-error
+      await Promise.reject(mapError(parsed.error))
+    : parsed.value;
+};
+
 export const __resultBoundaryFixture = {
+  _rejectsResultError,
+  _rejectsMappedError,
   _throwsNewTaggedError,
   _throwsFactoryError,
   _throwsRedirect,
