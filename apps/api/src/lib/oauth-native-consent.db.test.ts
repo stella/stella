@@ -214,18 +214,21 @@ const authorize = async ({
   });
   const endpoint = getAuthEndpointUrl("oauth2/authorize");
   const response = await getAuth().handler(
-    new Request(method === "GET" ? `${endpoint}?${query.toString()}` : endpoint, {
-      method,
-      headers: {
-        accept: "application/json",
-        ...(method === "POST"
-          ? { "content-type": "application/x-www-form-urlencoded" }
-          : {}),
-        cookie: browser.cookieHeader(),
-        ...clientAddressHeaders(),
+    new Request(
+      method === "GET" ? `${endpoint}?${query.toString()}` : endpoint,
+      {
+        method,
+        headers: {
+          accept: "application/json",
+          ...(method === "POST"
+            ? { "content-type": "application/x-www-form-urlencoded" }
+            : {}),
+          cookie: browser.cookieHeader(),
+          ...clientAddressHeaders(),
+        },
+        ...(method === "POST" ? { body: query.toString() } : {}),
       },
-      ...(method === "POST" ? { body: query.toString() } : {}),
-    }),
+    ),
   );
   return await readOAuthRedirect(response);
 };
