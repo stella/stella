@@ -326,7 +326,7 @@ export const describeRowUpdateTx = async (
         sheetNumber: result.sheetNumber,
         languageGroupKey,
         decisionDate: persistedDecisionDate,
-        decisionType: result.decisionType ?? null,
+        decisionType: result.decisionType,
         sourceUrl: result.sourceUrl,
         documentUrl: result.documentUrl,
         parserVersion: result.parserVersion ?? 0,

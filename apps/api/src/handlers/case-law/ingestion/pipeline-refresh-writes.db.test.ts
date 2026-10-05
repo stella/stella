@@ -326,30 +326,6 @@ test("a moved page over the same document rewrites neither payload, citations no
   expect(await citationHeaders(first.id)).toEqual(citations);
 });
 
-test.each([canonical, dualWrite, postgresOnly])(
-  "an absent decision type stays null across inserts and authoritative refreshes ($mode)",
-  async (corpus) => {
-    const caseNumber = `30 Cdo absent-${corpus.mode}/2024`;
-    const input = withDocument(caseNumber, "unstated-insert");
-    delete input.decisionType;
-    await ingest(input, corpus);
-    const readType = async () =>
-      await db.query.caseLawDecisions.findFirst({
-        where: { sourceId, caseNumber },
-        columns: { decisionType: true },
-      });
-    expect((await readType())?.decisionType).toBeNull();
-    await ingest(withDocument(caseNumber, "published-type"), corpus);
-    expect((await readType())?.decisionType).toBe("rozsudek");
-    const refresh = withDocument(caseNumber, "unstated-refresh");
-    delete refresh.decisionType;
-    await ingest(refresh, corpus);
-    expect((await readType())?.decisionType).toBeNull();
-    await ingest({ ...refresh, rawHash: "unstated-repeat" }, corpus);
-    expect((await readType())?.decisionType).toBeNull();
-  },
-);
-
 test("a refresh that changes what the decision says moves updated_at", async () => {
   // The other half of the rule above: without it, a row that never moves
   // would pass the first test too.

@@ -69,7 +69,7 @@ const insertedRowValues = (
   language: result.language,
   languageGroupKey,
   decisionDate: persistedDecisionDate,
-  decisionType: result.decisionType ?? null,
+  decisionType: result.decisionType,
   ...payloadColumns,
   sourceUrl: result.sourceUrl,
   documentUrl: result.documentUrl,
