@@ -26,14 +26,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  type LIST_CLAUSES_DETAIL_PROJECTION,
-  type LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_DETAIL_PROJECTION,
+  LIST_CLAUSES_LIST_PROJECTION,
   LIST_CLAUSES_PROJECTION,
-  type LIST_CLAUSES_VERSION_PROJECTION,
+  LIST_CLAUSES_VERSION_PROJECTION,
   type LIST_PLAYBOOKS_DETAIL_PROJECTION,
-  type LIST_PLAYBOOKS_LIST_PROJECTION,
+  LIST_PLAYBOOKS_LIST_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
@@ -57,6 +56,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  type AssertNoExtraFields,
+  projectionPayload,
+} from "@/api/lib/projection-totality";
 import {
   brandPersistedClauseCategoryId,
   brandPersistedClauseId,
@@ -759,7 +762,11 @@ const readClauseDetail = async ({
       ],
       { version },
     );
-    return { egress: "structured", payload: { version }, textFields } as const;
+    return {
+      egress: "structured",
+      payload: projectionPayload(LIST_CLAUSES_VERSION_PROJECTION, { version }),
+      textFields,
+    } as const;
   }
 
   const result = await Result.gen(() =>
@@ -840,7 +847,11 @@ const readClauseDetail = async ({
       ),
     );
   }
-  return { egress: "structured", payload: { clause }, textFields } as const;
+  return {
+    egress: "structured",
+    payload: projectionPayload(LIST_CLAUSES_DETAIL_PROJECTION, { clause }),
+    textFields,
+  } as const;
 };
 
 const handleListClausesTool: TypedMcpToolHandler<
@@ -917,11 +928,11 @@ const handleListClausesTool: TypedMcpToolHandler<
         )
       : undefined;
 
-  const payload = {
+  const payload = projectionPayload(LIST_CLAUSES_LIST_PROJECTION, {
     clauses,
     ...(categories ? { categories } : {}),
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_CLAUSES_LIST_PROJECTION>;
+  });
   const textFields = [
     ...runTextFieldSpecs(clauseListTextFieldSpecs(organizationId), payload),
     ...(categories
@@ -1265,9 +1276,11 @@ const handleSaveClauseTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      clauseId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_CLAUSE_PROJECTION, {
+        clauseId: created.value.id,
+      }),
+    );
   }
 
   // Update branch. Bind clauseId in the narrowed scope: inside the closure below
@@ -1313,9 +1326,11 @@ const handleSaveClauseTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    clauseId: updated.value.id,
-  } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_CLAUSE_PROJECTION, {
+      clauseId: updated.value.id,
+    }),
+  );
 };
 
 // --- delete_clause ------------------------------------------------------
@@ -1358,9 +1373,11 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- list_playbooks -----------------------------------------------------
@@ -1495,10 +1512,10 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
   }
   const items = listed.value.items;
 
-  const payload = {
+  const payload = projectionPayload(LIST_PLAYBOOKS_LIST_PROJECTION, {
     items,
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_PLAYBOOKS_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     playbookListTextFieldSpecs(organizationId),
     payload,
@@ -1801,15 +1818,13 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   }
   const input = parsed.output;
   const organizationId = context.organizationId;
-  const mintId = () => Bun.randomUUIDv7();
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
   const reader = { organizationId, userId: context.userId };
-  const loadOrgSettings = async () =>
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
+  const loadOrgSettings = () =>
+    context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    context.scopedDb((tx) => loadOrgSettingsForAuth(tx, reader));
 
-  // Create branch.
   if (input.playbook_id === undefined) {
     if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
       return errorResult("Forbidden");
@@ -1839,7 +1854,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       positions,
       removeSourceIds: NO_SOURCE_IDS,
       readableSources: readableSources.value,
-      mintId,
+      mintId: () => Bun.randomUUIDv7(),
     });
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
@@ -1887,17 +1902,17 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (Result.isError(stored)) {
       return internalFailureResult(stored.error);
     }
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId: created.value.id,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: merged.written,
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
-  // Update branch: read, merge, then replace through the shared update path.
   if (!hasEffectiveAuthority(context, { playbook: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1925,7 +1940,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     positions,
     removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
     readableSources: readableSources.value,
-    mintId,
+    mintId: () => Bun.randomUUIDv7(),
   });
   const changesDefinition =
     input.name !== undefined ||
@@ -1954,14 +1969,15 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     deepEquals(scope, stored.value.scope) &&
     deepEquals(merged.items, stored.value.positions.items)
   ) {
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: [],
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
   const {
@@ -1995,14 +2011,15 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return savePlaybookFailureResult(updated.error);
   }
-  return toolDataResult({
+  const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
     playbookId,
     updatedAt: updated.value.updatedAt,
     positionCount: merged.items.length,
     positions: merged.written,
     removed: merged.removedSourceIds.map((sourceId) => ({ sourceId })),
     issues: toSavePlaybookIssues(merged.issues),
-  } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+  });
+  return toolDataResult(payload);
 };
 
 // --- run_playbook -------------------------------------------------------
@@ -2105,9 +2122,9 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
-    return toolDataResult({ runPropertyCount: 0 } satisfies v.InferInput<
-      typeof RUN_PLAYBOOK_PROJECTION
-    >);
+    return toolDataResult(
+      projectionPayload(RUN_PLAYBOOK_PROJECTION, { runPropertyCount: 0 }),
+    );
   }
 
   const started = await Result.tryPromise({
@@ -2136,9 +2153,11 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     return workflowStartFailureResult();
   }
 
-  return toolDataResult({
-    runPropertyCount: outcome.materializedPropertyIds.length,
-  } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(RUN_PLAYBOOK_PROJECTION, {
+      runPropertyCount: outcome.materializedPropertyIds.length,
+    }),
+  );
 };
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [

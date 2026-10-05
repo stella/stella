@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * `prepare_file_comparison`: reserve short-lived storage for two DOCX files
  * stella does not hold, so `compare_documents` can redline them. It owns no
@@ -5,8 +6,6 @@
  * and the next call spelled out. The reservation itself is shared with the
  * staging tools that move the bytes server-side.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
@@ -16,6 +15,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import type { PresignedUploadHeaders } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -362,28 +362,30 @@ export const handlePrepareFileComparisonTool = async (
   }
   const { base, target, urlExpiresAt } = reserved.value;
 
-  return toolDataResult({
-    base: {
-      uploadId: base.id,
-      url: base.url,
-      headers: base.headers,
-      expiresAt: urlExpiresAt,
-    },
-    target: {
-      uploadId: target.id,
-      url: target.url,
-      headers: target.headers,
-      expiresAt: urlExpiresAt,
-    },
-    next: {
-      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
-      source: {
-        type: "uploads",
-        base_upload_id: base.id,
-        target_upload_id: target.id,
+  return toolDataResult(
+    projectionPayload(PREPARE_FILE_COMPARISON_OUTPUT_SCHEMA, {
+      base: {
+        uploadId: base.id,
+        url: base.url,
+        headers: base.headers,
+        expiresAt: urlExpiresAt,
       },
-    },
-  });
+      target: {
+        uploadId: target.id,
+        url: target.url,
+        headers: target.headers,
+        expiresAt: urlExpiresAt,
+      },
+      next: {
+        tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+        source: {
+          type: "uploads",
+          base_upload_id: base.id,
+          target_upload_id: target.id,
+        },
+      },
+    }),
+  );
 };
 
 /** The handler's extra dependency argument is optional, so it still is one. */
