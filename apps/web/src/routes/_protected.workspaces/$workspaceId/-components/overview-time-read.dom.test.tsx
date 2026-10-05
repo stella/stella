@@ -188,7 +188,14 @@ for (const view of [
         >
           {() => "Current hours"}
         </OverviewTimeRead>
-        <OverviewTimeTrend currentHours={null} view={{ ...view, retry }} />
+        <OverviewTimeTrend
+          currentHours={null}
+          view={
+            view.type === "pending" || view.type === "empty"
+              ? view
+              : { ...view, retry }
+          }
+        />
       </IntlProvider>,
     );
     expect(screen.getAllByRole("alert")).toHaveLength(1);
