@@ -142,21 +142,6 @@ export default defineConfig({
     ogCards(),
   ],
   vite: {
-    experimental: {
-      // The anonymizer passes emitted native asset URLs to new URL() without
-      // a base. Resolve them against the importing chunk so both main-thread
-      // and worker bundles receive absolute URLs, including on nested routes.
-      renderBuiltUrl(filename, { type, hostType }) {
-        if (
-          type === "asset" &&
-          hostType === "js" &&
-          filename.startsWith("native/")
-        ) {
-          return { relative: true };
-        }
-        return undefined;
-      },
-    },
     // Cross-origin isolation for the live anonymization demo's wasm (needs
     // SharedArrayBuffer). Set on Vite's dev server too — `astro dev` serves
     // through Vite's middleware, and Astro's top-level `server.headers` does
