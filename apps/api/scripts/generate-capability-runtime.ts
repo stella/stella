@@ -4,7 +4,6 @@ import { readdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
-import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
 
 export const generateCapabilityRuntime = async (
   root = new URL("../../../", import.meta.url),
@@ -66,10 +65,7 @@ export const generateCapabilityRuntime = async (
   });
   await writeFile(
     new URL("capability-feature-bindings.ts", directory),
-    await formattedLikeRepository(
-      `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : JSON.stringify(features)});\n`,
-      "ts",
-    ),
+    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : JSON.stringify(features)});\n`,
   );
   const dispatchImports = ids
     .map(

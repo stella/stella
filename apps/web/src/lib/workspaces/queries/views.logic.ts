@@ -6,8 +6,7 @@ export type CachedWorkspaceView = WorkspaceView | UnavailableWorkspaceView;
 
 export const isWorkspaceViewAvailable = (
   view: CachedWorkspaceView,
-): view is WorkspaceView =>
-  !("eligibility" in view && view.eligibility === "unavailable");
+): view is WorkspaceView => !("eligibility" in view);
 
 /** The raw cache retains every identity; consumers receive usable layouts. */
 export const selectAvailableWorkspaceViews = (
