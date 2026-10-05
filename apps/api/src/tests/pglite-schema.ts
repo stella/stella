@@ -769,3 +769,26 @@ export const installPgliteDecisionAliases = async (
     await db.execute(sql.raw(statement));
   }
 };
+
+/** Install the migration-owned verification counter and Prague day function. */
+export const installPgliteListVerificationBudgets = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120200_list_verification_run_caps",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    [
+      "CREATE FUNCTION",
+      "CREATE TRIGGER",
+      "REVOKE ALL ON FUNCTION",
+      "ALTER TABLE",
+    ].some((prefix) => executableSql(statement).startsWith(prefix)),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};

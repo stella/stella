@@ -24,6 +24,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -38,6 +39,7 @@ export class ListVerificationAccessRevokedError extends TaggedError(
 export type VerificationModelDeps = {
   accessProof: ListVerificationAccessProof;
   refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
+  checkRunBudget: () => Promise<Result<void, ListVerificationRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -78,7 +80,10 @@ export type VerificationCall<TSchema extends v.GenericSchema> = {
   generate: (
     messages: ModelMessage[],
   ) => Promise<
-    Result<v.InferOutput<TSchema>, ListVerificationAccessRevokedError>
+    Result<
+      v.InferOutput<TSchema>,
+      ListVerificationAccessRevokedError | ListVerificationRunCapError
+    >
   >;
   captureError: (cause: unknown) => void;
 };
@@ -136,6 +141,10 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
             message: "List verification access is unavailable",
           }),
         );
+      }
+      const budget = await deps.checkRunBudget();
+      if (Result.isError(budget)) {
+        return budget;
       }
       return Result.ok(
         await generate({

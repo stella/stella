@@ -168,5 +168,7 @@ export const RUN_ERROR_KEYS = {
   extraction_failed: "avt.runs.errors.extractionFailed",
   grading_failed: "avt.runs.errors.gradingFailed",
   enqueue_failed: "avt.runs.errors.enqueueFailed",
+  run_limit_reached: "errors.apiCodes.usageLimitExceeded",
+  access_revoked: "errors.apiCodes.accessDenied",
   internal: "avt.runs.errors.internal",
 } as const satisfies Record<VerificationErrorCode, TranslationKey>;

@@ -24,6 +24,7 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
@@ -70,6 +71,7 @@ export const resolveEmailProvider = ({
  * envBase from env-base.ts instead.
  */
 export const envApiServerSchema = {
+  ...verificationRunCapEnvSchema,
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
   AI_PROVIDER: v.optional(
