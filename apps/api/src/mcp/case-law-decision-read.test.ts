@@ -5,7 +5,10 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedCaseLawCitationId,
+  brandPersistedCaseLawDecisionId,
+} from "@/api/lib/safe-id-boundaries";
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
@@ -283,7 +286,9 @@ describe("citation summary", () => {
       citationText: string,
       decision: RankedRelatedDecision | null,
     ) => ({
-      id: `c_${String(n)}` as never,
+      id: brandPersistedCaseLawCitationId(
+        `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+      ),
       citationText,
       sectionIndex: n,
       treatment: "unclassified" as const,
