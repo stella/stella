@@ -10,6 +10,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { projectOrganizationSettingsRow } from "@/api/handlers/organization-settings/get";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -310,24 +311,32 @@ describe("organization time zone REST/MCP/CLI parity", () => {
 });
 
 describe("reading the organization time zone", () => {
+  const emptySnapshot = createFeatureAccessSnapshot({
+    organizationId: "org_test",
+    userId: "user_test",
+    decisions: new Map(),
+  });
   const row = (
     timeZone: TimeZoneId | null,
     practiceJurisdictions: PracticeJurisdiction[],
   ) =>
-    projectOrganizationSettingsRow({
-      documentProcessingMode: "off",
-      matterNumberPadding: 3,
-      matterNumberPattern: "{SEQ}",
-      practiceJurisdictions,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
-      memoryExtractionEnabled: false,
-      timeMinimumUnitMinutes: 6,
-      timeEditWindowDays: 90,
-      timeLockedThroughMonth: null,
-      timeNarrativeRequired: true,
-      timeZone,
-    });
+    projectOrganizationSettingsRow(
+      {
+        documentProcessingMode: "off",
+        matterNumberPadding: 3,
+        matterNumberPattern: "{SEQ}",
+        practiceJurisdictions,
+        promptCachingEnabled: true,
+        managedAIResidency: "eu",
+        memoryExtractionEnabled: false,
+        timeMinimumUnitMinutes: 6,
+        timeEditWindowDays: 90,
+        timeLockedThroughMonth: null,
+        timeNarrativeRequired: true,
+        timeZone,
+      },
+      emptySnapshot,
+    );
 
   test("a chosen zone wins over the jurisdiction", () => {
     expect(
@@ -350,7 +359,7 @@ describe("reading the organization time zone", () => {
         ]),
       ).toMatchObject({ timeZone, timeZoneSource: "practice-jurisdiction" });
     }
-    expect(projectOrganizationSettingsRow(null)).toMatchObject({
+    expect(projectOrganizationSettingsRow(null, emptySnapshot)).toMatchObject({
       timeZone: "UTC",
       timeZoneSource: "practice-jurisdiction",
     });

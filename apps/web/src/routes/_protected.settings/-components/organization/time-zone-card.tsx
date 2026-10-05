@@ -42,10 +42,15 @@ const zoneOptions = (current: string): readonly string[] => {
 export const OrganizationTimeZoneCard = () => {
   const t = useTranslations();
   const selectId = useId();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const user = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
   const view = useQueryView(
-    useQuery(organizationSettingsOptions(activeOrganizationId)),
+    useQuery(
+      organizationSettingsOptions({
+        organizationId: user.activeOrganizationId,
+        userId: user.id,
+      }),
+    ),
   );
 
   const mutation = useSettingsMutation({
