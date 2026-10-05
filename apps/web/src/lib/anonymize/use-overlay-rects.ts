@@ -3,11 +3,14 @@ import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import {
+  clampSliceToText,
   mapEntityToSpanSlices,
   mergeAdjacentRects,
 } from "@/lib/anonymize/overlay-rects";
 import type { OverlayRect } from "@/lib/anonymize/overlay-rects";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { EOC_CLASS_NAME, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -77,6 +80,7 @@ export const useOverlayRects = (
     const containerRect = textLayerEl.getBoundingClientRect();
     const invScale = 1 / scale;
     const result = new Map<number, OverlayRect[]>();
+    let mismatchedSlices = 0;
 
     for (const entity of overlays) {
       const rects: OverlayRect[] = [];
@@ -99,9 +103,20 @@ export const useOverlayRects = (
             continue;
           }
 
+          const offsets = clampSliceToText(
+            slice,
+            textNode.textContent?.length ?? 0,
+          );
+          if (offsets === null || offsets.end < slice.localEnd) {
+            mismatchedSlices += 1;
+          }
+          if (offsets === null) {
+            continue;
+          }
+
           const range = document.createRange();
-          range.setStart(textNode, slice.localStart);
-          range.setEnd(textNode, slice.localEnd);
+          range.setStart(textNode, offsets.start);
+          range.setEnd(textNode, offsets.end);
 
           for (const r of range.getClientRects()) {
             rects.push({
@@ -117,6 +132,17 @@ export const useOverlayRects = (
       if (rects.length > 0) {
         result.set(entity.id, mergeAdjacentRects(rects));
       }
+    }
+
+    if (mismatchedSlices > 0) {
+      // The extracted spans and the rendered text layer disagree; the
+      // overlay covers what is on screen, and the mismatch is reported.
+      getAnalytics().captureError(
+        new ClientTelemetryError({
+          area: "anonymize-overlay",
+          message: `[anonymize-overlay] ${String(mismatchedSlices)} slice(s) past the rendered text`,
+        }),
+      );
     }
 
     setNormalizedRectsCache({ source: overlays, rects: result });
