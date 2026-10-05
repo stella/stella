@@ -2450,6 +2450,7 @@
     "current": "Bieżąca",
     "deleteVersion": "Usuń wersję",
     "descriptionPlaceholder": "Dodaj notatkę o tej wersji...",
+    "displayFailed": "Nie udało się wyświetlić tego pliku.",
     "downloadRedline": "Pobierz redline",
     "dropToUploadVersion": "Upuść, aby przesłać jako nową wersję",
     "editLatestVersionDescription": "To nie jest bieżąca wersja. Aby edytować ją w przeglądarce, ustaw ją najpierw jako najnowszą wersję, a następnie odblokuj do edycji.",
@@ -5429,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop wymaga aktualizacji. Zostanie zaktualizowany automatycznie po zakończeniu aktywnych edycji desktopowych; spróbuj ponownie po restarcie.",
         "updateRequiredTitle": "Zaktualizuj stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Masz już zainstalowane? Połącz",
+        "connect": "Połącz stella desktop",
+        "editNone": "Pobierz stella desktop, aby edytować ten plik",
+        "editOutdated": "Zaktualizuj stella desktop, aby edytować",
+        "editReason": "Edycja na komputerze otwiera plik w aplikacji na Twoim komputerze przez stella desktop.",
+        "signCurrent": "Podpisz w stella desktop",
+        "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
+        "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop.",
+        "signShort": "Podpisz"
+      },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",
       "downloadExtractedText": "Wyodrębniony tekst (.txt)",
@@ -5442,7 +5455,6 @@
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "pdfSigning": {
-        "action": "Podpisz w aplikacji desktopowej",
         "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
         "cancelledCertificateDescription": "Wybrany certyfikat nie nadaje się do podpisu. Wybierz taki, który pozwala na podpis cyfrowy.",
         "cancelledCertifiedDescription": "Ten PDF jest certyfikowany, a jego certyfikacja nie pozwala na kolejne podpisy.",

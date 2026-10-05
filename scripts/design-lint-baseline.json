@@ -2078,8 +2078,6 @@
     "apps/web/src/features/style-sets/style-set-picker-dialog.tsx": 3,
     "apps/web/src/lib/analytics/posthog.test.ts": 1,
     "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx": 2,
-    "apps/web/src/lib/anonymize/pdf-bbox.ts": 1,
-    "apps/web/src/lib/anonymize/pdf-coords.ts": 1,
     "apps/web/src/lib/chat-anonymized-store.ts": 2,
     "apps/web/src/lib/errors/api.ts": 2,
     "apps/web/src/lib/files/document-reference.ts": 7,

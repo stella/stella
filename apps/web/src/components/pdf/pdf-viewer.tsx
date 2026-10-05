@@ -41,9 +41,13 @@ const FullscreenPdfViewer = () => {
   // The page count lives in the PDF store (scoped to this document), but the
   // toolbar that displays it (PdfViewerControls) can render outside the
   // PDFProvider tree, so it reads from the workspace store instead. Push the
-  // count across on change.
+  // count across on change, and clear it on unmount so the next viewer
+  // never shows this document's count.
   useExternalSyncEffect(() => {
     setPdfPageCount(pageCount);
+    return () => {
+      setPdfPageCount(0);
+    };
   }, [pageCount, setPdfPageCount]);
 
   const { data: file } = useSuspenseQuery(

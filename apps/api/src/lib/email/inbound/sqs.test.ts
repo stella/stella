@@ -209,7 +209,7 @@ const drainHarness = ({
       logger,
       receive: async (event) => {
         onReceive?.();
-        return await receiveSesInboundMail({
+        const received = await receiveSesInboundMail({
           event,
           bucket: "inbound-bucket",
           keyPrefix: "mail/",
@@ -217,6 +217,9 @@ const drainHarness = ({
           readObject,
           persist,
         });
+        return received.isErr()
+          ? received
+          : Result.ok(received.value.deliveries);
       },
     });
   return { queue, drain };
