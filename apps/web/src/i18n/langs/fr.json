@@ -841,6 +841,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
@@ -4637,6 +4638,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "currentWording": "Rédaction actuelle",
     "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
@@ -4686,7 +4688,9 @@
       "unknown": "Statut incertain"
     },
     "title": "Législation",
-    "validity": "En vigueur du {from} au {to}"
+    "validity": "En vigueur du {from} au {to}",
+    "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
+    "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
     "create": "Créer",
