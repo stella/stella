@@ -10,6 +10,8 @@ import { documentTypeParamsSchema } from "@/api/handlers/document-types/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { readBounded } from "@/api/lib/db/read-bounded";
+import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -29,12 +31,22 @@ const config = {
   params: documentTypeParamsSchema,
 } satisfies HandlerConfig;
 
-const documentTypeInUseError = (names: string[]) => {
-  const labels = names.slice(0, 5).join(", ");
-  const suffix = names.length > 5 ? ", …" : "";
+/** How many referencing playbooks the refusal names. */
+const IN_USE_NAMED_PLAYBOOKS = 5;
+
+type ReferencingPlaybooks = BoundedReadResult<{ name: string }>;
+
+// A read past the cap names no partial set: its count would be a guess.
+const documentTypeInUseError = (referencing: ReferencingPlaybooks) => {
+  const usage =
+    referencing.type === "overflow"
+      ? `more than ${String(referencing.cap)} playbooks`
+      : `${String(referencing.rows.length)} playbook(s): ${referencing.rows
+          .map((row) => row.name)
+          .join(", ")}`;
   return new HandlerError({
     status: 409,
-    message: `In use by ${String(names.length)} playbook(s): ${labels}${suffix}. Reassign them first.`,
+    message: `In use by ${usage}. Reassign them first.`,
     retryable: false,
   });
 };
@@ -59,18 +71,20 @@ const deleteDocumentType = createSafeRootHandler(
         return { notFound: true } as const;
       }
 
-      const referencing = await tx
-        .select({ name: playbookDefinitions.name })
-        .from(playbookDefinitions)
-        .where(
-          and(
-            eq(playbookDefinitions.organizationId, organizationId),
-            eq(playbookDefinitions.documentTypeKey, existing.key),
+      const referencing = await readBounded(
+        tx
+          .select({ name: playbookDefinitions.name })
+          .from(playbookDefinitions)
+          .where(
+            and(
+              eq(playbookDefinitions.organizationId, organizationId),
+              eq(playbookDefinitions.documentTypeKey, existing.key),
+            ),
           ),
-        )
-        .limit(6);
-      if (referencing.length > 0) {
-        return { inUse: referencing.map((row) => row.name) } as const;
+        IN_USE_NAMED_PLAYBOOKS,
+      );
+      if (referencing.type === "overflow" || referencing.rows.length > 0) {
+        return { inUse: referencing } as const;
       }
 
       await tx
@@ -110,32 +124,33 @@ const deleteDocumentType = createSafeRootHandler(
       // The failed transaction rolled back; read the committed references to
       // preserve the same named refusal as the pre-check.
       const referencing = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ name: playbookDefinitions.name })
-            .from(playbookDefinitions)
-            .innerJoin(
-              documentTypes,
-              and(
-                eq(
-                  documentTypes.organizationId,
-                  playbookDefinitions.organizationId,
+        safeDb(
+          async (tx) =>
+            await readBounded(
+              tx
+                .select({ name: playbookDefinitions.name })
+                .from(playbookDefinitions)
+                .innerJoin(
+                  documentTypes,
+                  and(
+                    eq(
+                      documentTypes.organizationId,
+                      playbookDefinitions.organizationId,
+                    ),
+                    eq(documentTypes.key, playbookDefinitions.documentTypeKey),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(documentTypes.id, params.documentTypeId),
+                    eq(documentTypes.organizationId, organizationId),
+                  ),
                 ),
-                eq(documentTypes.key, playbookDefinitions.documentTypeKey),
-              ),
-            )
-            .where(
-              and(
-                eq(documentTypes.id, params.documentTypeId),
-                eq(documentTypes.organizationId, organizationId),
-              ),
-            )
-            .limit(6),
+              IN_USE_NAMED_PLAYBOOKS,
+            ),
         ),
       );
-      return Result.err(
-        documentTypeInUseError(referencing.map((row) => row.name)),
-      );
+      return Result.err(documentTypeInUseError(referencing));
     }
     const outcome = deleted.value;
 

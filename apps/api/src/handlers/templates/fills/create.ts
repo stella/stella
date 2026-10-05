@@ -9,6 +9,7 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -228,6 +229,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             values: body.values,
             scopedDb,
             organizationId,
+            thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
             workspaceId,
             requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,

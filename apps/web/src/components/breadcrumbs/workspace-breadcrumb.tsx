@@ -11,7 +11,7 @@ import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 
-import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
@@ -24,6 +24,7 @@ import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-c
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
@@ -52,7 +53,10 @@ export const WorkspaceBreadcrumb = ({
     shouldThrow: false,
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
-  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspaceView = useQueryView(workspaceQuery);
+  const cachedWorkspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
   const referenceConflictMessage = useReferenceConflictMessage();
@@ -60,7 +64,7 @@ export const WorkspaceBreadcrumb = ({
     useState<ReferenceConfirmation>({ status: "closed" });
 
   const nameRename = useInlineRename({
-    initial: workspace?.name ?? "",
+    initial: cachedWorkspace?.name ?? "",
     onCommit: (value) => {
       updateWorkspace.mutate({
         workspaceId,
@@ -70,15 +74,15 @@ export const WorkspaceBreadcrumb = ({
   });
 
   const refRename = useInlineRename({
-    initial: workspace?.reference ?? "",
+    initial: cachedWorkspace?.reference ?? "",
     onCommit: (value, { setError }) => {
-      if (!workspace) {
+      if (!cachedWorkspace) {
         return;
       }
       const edit = resolveReferenceEdit({
-        currentReference: workspace.reference,
+        currentReference: cachedWorkspace.reference,
         nextReference: value,
-        stampedVersionCount: workspace.stampedVersionCount,
+        stampedVersionCount: cachedWorkspace.stampedVersionCount,
       });
       switch (edit.type) {
         case "discard":
@@ -157,13 +161,10 @@ export const WorkspaceBreadcrumb = ({
     );
   };
 
-  if (!workspace) {
-    return (
-      <BreadcrumbLink to="/workspaces/$workspaceId">
-        {workspaceId}
-      </BreadcrumbLink>
-    );
+  if (workspaceView.type !== "items") {
+    return <BreadcrumbQueryContent view={workspaceView} />;
   }
+  const workspace = workspaceView.items;
 
   const displayName = workspace.name;
 
@@ -312,6 +313,7 @@ export const WorkspaceBreadcrumb = ({
   if (!match) {
     return (
       <>
+        <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {(() => {
@@ -414,6 +416,7 @@ export const WorkspaceBreadcrumb = ({
   if (isEditing) {
     return (
       <>
+        <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {colorPicker}
@@ -448,6 +451,7 @@ export const WorkspaceBreadcrumb = ({
 
   return (
     <>
+      <BreadcrumbQueryContent view={workspaceView} />
       {clientSegment}
       <BreadcrumbItem className="shrink-0">
         {colorPicker}

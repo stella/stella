@@ -4516,6 +4516,13 @@
         "narrativeRequired": "Vyžadovat popis",
         "title": "Pravidla vykazování času"
       },
+      "timeZone": {
+        "description": "Uzamčené měsíce, data faktur a splatná práce se řídí kalendářním dnem v tomto časovém pásmu. Dokud žádné nevyberete, určuje ho hlavní jurisdikce: Europe/Prague pro Česko a Slovensko, jinak UTC.",
+        "followJurisdiction": "Podle hlavní jurisdikce",
+        "followingJurisdiction": "Podle hlavní jurisdikce ({timeZone})",
+        "title": "Časové pásmo",
+        "updated": "Časové pásmo bylo aktualizováno"
+      },
       "usage": "Využití",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",
