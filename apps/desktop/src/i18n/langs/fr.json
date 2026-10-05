@@ -132,7 +132,8 @@
     "takeoverSubtitle": "La modification reprendra à votre dernier point de contrôle enregistré.",
     "takeoverTitle": "{requester} souhaite reprendre la modification",
     "takeoverWindowTitle": "Demande de reprise",
-    "webOrigin": "Origine web"
+    "webOrigin": "Origine web",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner"
   },
   "settings": {
     "about": "À propos",

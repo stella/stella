@@ -223,6 +223,7 @@ test("pre-grant reader serves legacy links and picks up status grants without a 
         {
           spanStart: 10,
           anchor: "a",
+          versionBasis: { type: "inferred", kind: "decision_date" },
           spanRole: null,
           selection: null,
           printedWorkIdentifier: null,
@@ -246,6 +247,7 @@ test("pre-grant reader serves legacy links and picks up status grants without a 
     expect(await page(id)).toMatchObject({
       items: [
         {
+          versionBasis: { type: "inferred", kind: "decision_date" },
           selection: "misprint-correction",
           printedWorkIdentifier: "98/2012 Sb.",
         },

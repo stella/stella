@@ -288,6 +288,7 @@ describe("who is shown question columns", () => {
     columns,
     addable: [],
     onAddToSearch: noop,
+    addedIds: new Set<string>(),
     grants: READ_ONLY_QUESTIONS,
     isRunning: false,
     onColumnAction: noop,

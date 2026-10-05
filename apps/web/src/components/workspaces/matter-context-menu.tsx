@@ -18,6 +18,7 @@ import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -551,6 +552,12 @@ export const AddMemberDialog = ({
       open={open}
     >
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedUserId !== null}
+          onDiscard={() => {
+            setSelectedUserId(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
           <DialogDescription>
