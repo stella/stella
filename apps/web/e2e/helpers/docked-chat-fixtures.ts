@@ -4,13 +4,16 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import type { FileTab } from "../../src/components/inspector/inspector-store-types";
-import type { WebApiRoutes } from "../../src/lib/eden-client";
-import { toSafeId } from "../../src/lib/safe-id";
+import { toSafeId } from "@stll/api-contract/safe-id";
+
+import type { FileTab } from "../../src/components/inspector/file-tab";
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
 import { createUploadedDocumentRoute } from "./document";
 import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
+
+type WebApiRoutes = WebRoutes["v1"];
 
 type MessagePage =
   WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200];
@@ -42,7 +45,19 @@ const messagePage = {
   webSearchEnabled: false,
   model: null,
   reasoningEffort: null,
-  context: null,
+  context: {
+    estimatedTokens: 0,
+    triggerTokens: 0,
+    cacheStableTokens: 0,
+    summarizedMessageCount: 0,
+    breakdown: {
+      promptTokens: 0,
+      toolTokens: 0,
+      summaryTokens: 0,
+      attachmentTokens: 0,
+      conversationTokens: 0,
+    },
+  },
 } satisfies MessagePage;
 const fileThreadPage = {
   ...messagePage,

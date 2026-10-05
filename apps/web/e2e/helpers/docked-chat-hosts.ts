@@ -100,7 +100,10 @@ const renderedImports = (source: ts.SourceFile): string[] => {
       continue;
     }
     const clause = statement.importClause;
-    if (clause === undefined || clause.isTypeOnly) {
+    if (
+      clause === undefined ||
+      clause.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
       continue;
     }
     const named = clause.namedBindings;
@@ -146,7 +149,10 @@ const mountsDockedChatProvider = (file: string): boolean => {
     }
     const clause = statement.importClause;
     const named = clause?.namedBindings;
-    if (clause?.isTypeOnly || named === undefined) {
+    if (
+      clause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+      named === undefined
+    ) {
       continue;
     }
     if (ts.isNamespaceImport(named)) {
@@ -361,7 +367,7 @@ export const readDockedChatHosts = (): {
         publicKnowledge: true,
         audience: "member",
       }) === "member";
-    if (memberFrame || (symbol.startsWith("Law") && lawShellOwnsInspector)) {
+    if (memberFrame || symbol.startsWith("Law")) {
       surfaces.add("inspector");
     }
     if (surfaces.size > 0) {

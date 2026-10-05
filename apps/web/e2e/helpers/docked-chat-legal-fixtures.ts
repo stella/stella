@@ -5,17 +5,21 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { toSafeId } from "@stll/api-contract/safe-id";
 import {
   createStatutePath,
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { PublicCaseLawDecision } from "../../src/features/case-law/public-decision";
-import type { PublicStatute } from "../../src/features/statutes/queries/statutes";
-import type { WebApiRoutes } from "../../src/lib/eden-client";
-import { toSafeId } from "../../src/lib/safe-id";
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import { E2E_API_ORIGIN } from "./api";
+
+type WebApiRoutes = WebRoutes["v1"];
+type PublicCaseLawDecision =
+  WebApiRoutes["case"]["decisions"][":decisionId"]["get"]["response"][200];
+type PublicStatute =
+  WebApiRoutes["law"]["statutes"][":documentId"]["get"]["response"][200];
 
 const absentText = { reason: "not_published", type: "absent" } as const;
 const decision = {

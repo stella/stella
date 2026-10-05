@@ -66,7 +66,9 @@ const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
     id: "assistant-answer",
     role: "assistant",
     parts: [{ type: "text", content: "Answer text" }],
-    ...(sourceDocuments === undefined ? {} : { metadata: { sourceDocuments } }),
+    ...(sourceDocuments === undefined
+      ? {}
+      : { metadata: { sourceDocuments: [...sourceDocuments] } }),
   } satisfies ChatUIMessage;
 
   return renderWithProviders(
@@ -116,7 +118,7 @@ test("assistant footer places actions before a divider and wrapping citations", 
       return "unexpected";
     }),
   ).toEqual(["actions", "divider", "citations"]);
-  const citations = footer?.querySelector("[data-chat-answer-citations]");
+  const citations = footer.querySelector("[data-chat-answer-citations]");
   expect(citations?.classList.contains("contents")).toBe(true);
   expect(
     citations?.querySelector("button")?.classList.contains("max-w-full"),
