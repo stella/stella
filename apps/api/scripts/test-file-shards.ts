@@ -104,10 +104,13 @@ export const selectApiTestFiles = ({
   assertTestDurations({
     files,
     durations: weights,
-    measurements:
-      measurementPath === undefined
-        ? undefined
-        : readTimingArtifact(readFileSync(measurementPath, "utf-8")),
+    ...(measurementPath === undefined
+      ? {}
+      : {
+          measurements: readTimingArtifact(
+            readFileSync(measurementPath, "utf-8"),
+          ),
+        }),
   });
   const testPaths = partitionTestFiles({
     files,

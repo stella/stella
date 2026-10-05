@@ -1332,6 +1332,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
+  // Native Bun whole-file timing artifacts and optional drift measurements.
+  "API_TEST_MEASUREMENTS",
+  "API_TEST_TIMINGS_DIR",
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
