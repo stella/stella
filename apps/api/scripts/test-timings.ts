@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-// Ignore subsecond noise while rejecting a fourfold change in whole-file time.
+// Runner timings are noisy: drift is advisory, with relative and absolute floors.
 const TEST_DURATION_DRIFT_FACTOR = 4;
 const MIN_COMPARISON_SECONDS = 1;
+const MIN_DRIFT_SECONDS = 10;
 
 export const TEST_DURATION_SOURCE = {
   measured: "measured",
@@ -69,23 +70,24 @@ export const assertTestDurations = ({
       panic(`Invalid duration for ${file}`);
     }
     const measured = measurements[file];
-    if (
-      measured === undefined ||
-      entry.source === TEST_DURATION_SOURCE.estimated
-    ) {
+    if (measured === undefined) {
       continue;
     }
     if (!Number.isFinite(measured) || measured < 0) {
       panic(`Invalid measurement for ${file}`);
     }
+    if (entry.source === TEST_DURATION_SOURCE.estimated) {
+      continue;
+    }
     const previous = Math.max(MIN_COMPARISON_SECONDS, recorded);
     const latest = Math.max(MIN_COMPARISON_SECONDS, measured);
     if (
       Math.max(previous, latest) / Math.min(previous, latest) >
-      TEST_DURATION_DRIFT_FACTOR
+        TEST_DURATION_DRIFT_FACTOR &&
+      Math.abs(recorded - measured) >= MIN_DRIFT_SECONDS
     ) {
-      panic(
-        `Stale API test duration: ${file} (${recorded}s recorded, ${measured}s measured); run bun apps/api/scripts/refresh-test-durations.ts --write <timing-artifact-directory>`,
+      console.warn(
+        `::warning::Stale API test duration: ${file} (${recorded}s recorded, ${measured}s measured); run bun apps/api/scripts/refresh-test-durations.ts --write <timing-artifact-directory>`,
       );
     }
   }

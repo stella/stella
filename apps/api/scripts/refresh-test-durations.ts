@@ -18,6 +18,9 @@ import {
 // files, added to each file's reported body time. New files reserve the median
 // live setup-inclusive weight (at least one second) until CI measures them.
 // Native timing artifacts replace estimates with measured whole-file seconds.
+// Download api-test-timings-* artifacts from a successful merge-group/main run,
+// then run --write <downloaded-artifact-directory>... and commit the result.
+// CI reports measured drift as warnings; it never refreshes committed weights.
 
 /** Later artifacts replace earlier measurements; output order is canonical. */
 export const refreshedTestDurations = (
@@ -113,7 +116,7 @@ if (import.meta.main) {
       ),
     });
     console.log(
-      `API test durations cover ${files.length} files and match available measurements`,
+      `API test durations cover ${files.length} files; reviewed available measurements`,
     );
   } else {
     const liveDurations = estimateMissingTestDurations({
