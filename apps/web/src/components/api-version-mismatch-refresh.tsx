@@ -13,6 +13,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { hasUnsavedWork } from "@/hooks/use-unsaved-work";
 import { browserApiRootUrl } from "@/lib/api-url";
 import { compareSemver } from "@/lib/semver-compare";
+import { useQueryView } from "@/lib/use-query-view";
 
 import {
   shouldRefreshAfterNavigation,
@@ -62,7 +63,7 @@ const useAvailableServerVersion = (): string | null => {
   // Selfhost has its own GitHub-release-driven update banner.
   const enabled = !env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
-  const { data: serverVersion } = useChromeQuery({
+  const versionQuery = useChromeQuery({
     queryKey: ["api-version-check"],
     enabled,
     staleTime: FIVE_MIN_MS,
@@ -84,6 +85,9 @@ const useAvailableServerVersion = (): string | null => {
     },
   });
 
+  const versionView = useQueryView(versionQuery);
+  // The health-version hint only schedules an opportunistic refresh; failures leave the app usable.
+  const serverVersion = versionView.type === "items" ? versionView.items : null;
   if (!enabled || !serverVersion) {
     return null;
   }

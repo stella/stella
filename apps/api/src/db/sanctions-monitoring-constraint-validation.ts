@@ -3,6 +3,10 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 const CONSTRAINTS = [
   {
+    tableName: "sanctions_contact_marks",
+    constraintName: "sanctions_contact_marks_attempt_count_check",
+  },
+  {
     tableName: "contacts",
     constraintName: "contacts_sanctions_monitoring_mode_check",
   },

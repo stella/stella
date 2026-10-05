@@ -1204,6 +1204,31 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bounded-export-read",
+    capability: "Reading a complete set within an export row cap",
+    owner: ["apps/api/src/lib/db/read-bounded.ts"],
+    summary:
+      "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
+      "complete rows or an explicit overflow result without a partial set. " +
+      "This owner handles expected export ceilings; `boundedAll` instead " +
+      "panics when a write-path cardinality invariant is violated. " +
+      "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
+      "enforces their shrink-only migration baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "fetch-transfer-timeout",
+    capability: "Applying response header and body idle deadlines",
+    owner: ["packages/fetch/src/index.ts"],
+    summary:
+      "`@stll/fetch` requires a header or idle timeout policy for new callers " +
+      "and composes caller cancellation. Idle deadlines cover pending body reads; " +
+      "header deadlines stop at the response. Deprecated numeric callers and " +
+      "raw total deadlines on body reads are enumerated by " +
+      "`scripts/transfer-read-guard.ts` with a shrink-only baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "case-law-source-fingerprint",
     capability:
       "The change-detection hash of a case-law decision's stored source",

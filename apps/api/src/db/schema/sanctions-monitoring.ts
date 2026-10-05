@@ -46,7 +46,7 @@ export const sanctionsContactMarks = p.pgTable(
     attemptCount: p.integer("attempt_count").notNull().default(0),
     nextAttemptAt: timestamptz("next_attempt_at")
       .notNull()
-      .default(sql`TIMESTAMPTZ '1970-01-01 00:00:00+00'`),
+      .default(sql`'1970-01-01 00:00:00+00'`),
   },
   (table) => [
     p.primaryKey({ columns: [table.organizationId, table.contactId] }),

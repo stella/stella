@@ -1,5 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: [cz-regional] rawHash comes from the sourceFingerprint owner, equal to the previous envelope hash for a source that stores no objects.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -59,7 +60,6 @@ import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
@@ -69,6 +69,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import {
@@ -1264,7 +1265,7 @@ export const assembleCzRegionalDecision = ({
               [CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY]: chain.entries,
             }),
       }),
-      rawHash: hashContent(sourceRaw),
+      rawHash: sourceFingerprint({ sourceRaw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
       documentAst: parsed?.documentAst ?? EMPTY_AST,
       sourceRaw,
@@ -1296,7 +1297,7 @@ const buildCzRegionalListingFallback = (
       // An unreadable link cannot establish that the publisher has no document.
       isListingOnly: true,
       sourceRaw,
-      rawHash: hashContent(sourceRaw),
+      rawHash: sourceFingerprint({ sourceRaw }),
     },
   };
 };
