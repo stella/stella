@@ -2350,7 +2350,7 @@
     "scripts/check-migration-safety.ts": 6,
     "scripts/check-railway-smoke.ts": 3,
     "scripts/check-test-retries.ts": 4,
-    "scripts/ci-plan.test.ts": 3,
+    "scripts/ci-plan.test.ts": 1,
     "scripts/code-check-affected.test.ts": 23,
     "scripts/code-check-affected.ts": 1,
     "scripts/db-await-in-loop.ts": 2,
