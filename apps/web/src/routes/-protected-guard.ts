@@ -66,14 +66,23 @@ export const loadProtectedContext = async ({
     getAnalytics().captureError(error);
   };
   detached(
-    prefetchTimeBillingServerState(context.queryClient, onPrefetchError),
+    prefetchTimeBillingServerState({
+      queryClient: context.queryClient,
+      caller: { userId, organizationId: activeOrganizationId },
+      onError: onPrefetchError,
+    }),
     "protected-layout.deployment-features-prefetch",
   );
 
   if (location.pathname === "/settings/organization/time-policy") {
     detached(
       (async () => {
-        if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+        if (
+          !(await isTimeBillingRouteEnabled(context.queryClient, {
+            userId,
+            organizationId: activeOrganizationId,
+          }))
+        ) {
           return;
         }
         await context.queryClient.query({

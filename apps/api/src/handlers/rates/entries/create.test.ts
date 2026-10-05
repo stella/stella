@@ -8,6 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createTestIds,
   setupRlsTestData,
@@ -44,27 +45,31 @@ const scopedSafeDb = () =>
 type CreateContext = Parameters<typeof createRateEntry.handler>[0];
 const create = async (body: CreateContext["body"], tableId = rateTableId) =>
   await createRateEntry.handler(
-    createTestHandlerContext<CreateContext>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      params: { rateTableId: tableId },
-      body,
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<CreateContext>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        params: { rateTableId: tableId },
+        body,
+      }),
+    ),
   );
 
 type UpdateContext = Parameters<typeof updateRateEntry.handler>[0];
 const update = async (body: UpdateContext["body"]) =>
   await updateRateEntry.handler(
-    createTestHandlerContext<UpdateContext>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      params: { rateTableId },
-      body,
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<UpdateContext>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        params: { rateTableId },
+        body,
+      }),
+    ),
   );
 
 const clearEntries = async () =>
@@ -116,13 +121,15 @@ describe("effective-dated rate selectors", () => {
     ).toHaveLength(2);
     type ListContext = Parameters<typeof readRateEntries.handler>[0];
     const page = await readRateEntries.handler(
-      createTestHandlerContext<ListContext>({
-        workspaceId: ids.wsA1,
-        session: { activeOrganizationId: ids.orgA },
-        safeDb: scopedSafeDb(),
-        params: { rateTableId },
-        query: { limit: 50 },
-      }),
+      withTimeBillingEnrolment(
+        createTestHandlerContext<ListContext>({
+          workspaceId: ids.wsA1,
+          session: { activeOrganizationId: ids.orgA },
+          safeDb: scopedSafeDb(),
+          params: { rateTableId },
+          query: { limit: 50 },
+        }),
+      ),
     );
     expect(page).toHaveProperty("items");
     if (!("items" in page)) {

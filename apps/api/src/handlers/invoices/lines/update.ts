@@ -69,6 +69,7 @@ const updateInvoiceLine = createSafeHandler(
       "unchanged. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",

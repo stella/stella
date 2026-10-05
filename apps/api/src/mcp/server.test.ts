@@ -1971,7 +1971,7 @@ describe("mcpOmittedToolNamesByReason", () => {
   test("attests each omitted tool under exactly one reason", () => {
     const omitted = mcpOmittedToolNamesByReason({
       grantedScopes: ["stella:read"],
-      isFeatureEnabled: (feature) => feature !== "FEATURE_TIME_BILLING",
+      isFeatureEnabled: (feature) => feature !== "FEATURE_PUBLIC_LAW",
       mode: "default",
     });
 

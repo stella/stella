@@ -29,6 +29,7 @@ const config = {
     "being offered without rewriting entries already recorded under it.",
   permissions: { billingCode: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: billingCodeRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateBillingCodeBodySchema,

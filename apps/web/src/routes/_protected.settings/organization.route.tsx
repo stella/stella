@@ -28,7 +28,12 @@ export const Route = createFileRoute("/_protected/settings/organization")({
     if (location.pathname === "/settings/organization/time-policy") {
       detached(
         (async () => {
-          if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+          if (
+            !(await isTimeBillingRouteEnabled(context.queryClient, {
+              userId: context.user.id,
+              organizationId: context.user.activeOrganizationId,
+            }))
+          ) {
             return;
           }
           await prefetchRouteQuery(

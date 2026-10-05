@@ -26,6 +26,7 @@ const resolveRateHandler = createSafeHandler(
       "rate applies.",
     permissions: { rate: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "resolve_rate" },
     access: "read",
     query: resolveRateQuerySchema,

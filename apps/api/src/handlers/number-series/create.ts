@@ -16,6 +16,7 @@ const config = {
   description: "Create a document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createNumberSeriesBody,
 } satisfies HandlerConfig;

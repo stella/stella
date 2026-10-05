@@ -26,6 +26,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -99,6 +100,10 @@ if (!databaseUrl || !runPostgresTests) {
         }),
         route: "/v1/number-series",
         recordAuditEvent: async () => {},
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: orgId,
+          userId,
+        }),
       });
       const context = contextFor(db);
       const insert = async ({

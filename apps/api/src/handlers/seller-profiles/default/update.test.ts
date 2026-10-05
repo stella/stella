@@ -7,6 +7,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 
 import updateSellerProfileDefault from "./update";
 
@@ -46,21 +47,23 @@ describe("changing the default seller profile", () => {
       expect(auditTx).toBe(tx);
       auditEvent = event;
     };
-    const context = asTestRaw<DefaultContext>({
-      params: { sellerProfileId: profileId },
-      request: new Request(
-        `https://example.test/v1/seller-profiles/${profileId}/default`,
-        { method: "POST" },
-      ),
-      route: "/v1/seller-profiles/:sellerProfileId/default",
-      safeDb,
-      session: {
-        activeOrganizationId: toSafeId<"organization">("org_test"),
-      },
-      memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent,
-    });
+    const context = withTimeBillingEnrolment(
+      asTestRaw<DefaultContext>({
+        params: { sellerProfileId: profileId },
+        request: new Request(
+          `https://example.test/v1/seller-profiles/${profileId}/default`,
+          { method: "POST" },
+        ),
+        route: "/v1/seller-profiles/:sellerProfileId/default",
+        safeDb,
+        session: {
+          activeOrganizationId: toSafeId<"organization">("org_test"),
+        },
+        memberRole: sessionMemberRole("owner"),
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent,
+      }),
+    );
 
     const result = await updateSellerProfileDefault.handler(context);
 

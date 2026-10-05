@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 6,
+  "reason": "Required feature-access declarations extend four existing similar archive/default handlers past the duplicate-block threshold; the two enrolment mutations share a bounded own-preference contract and audit metadata. Explicit handler declarations bind HTTP and generated capability admission to one policy."
+}

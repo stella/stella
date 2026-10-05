@@ -4,6 +4,7 @@ import approveTimeEntries from "@/api/handlers/time-entries/approval-queue/appro
 import listApprovalQueue from "@/api/handlers/time-entries/approval-queue/list";
 import returnTimeEntry from "@/api/handlers/time-entries/approval-queue/return";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
@@ -15,6 +16,7 @@ export const timeApprovalQueueRoute = new Elysia({ prefix: "/v1/time-entries" })
       isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
     ),
   )
+  .use(featureAccessGate("time-billing"))
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .use(authMacro)
   .use(permissionMacro)

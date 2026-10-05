@@ -9,6 +9,7 @@ import {
   invoices,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -61,6 +62,7 @@ if (!databaseUrl || !runPostgresTests) {
               id: userId,
               name: "Billing",
               email: `${userId}@billing.test`,
+              emailVerified: true,
             });
             seeded = true;
             await setup.db.insert(organization).values({
@@ -75,6 +77,11 @@ if (!databaseUrl || !runPostgresTests) {
               userId,
               role: "owner",
               createdAt: new Date(),
+            });
+            await setup.db.insert(featureEnrolments).values({
+              organizationId,
+              userId,
+              featureId: "time-billing",
             });
             await setup.db.insert(workspaces).values({
               id: workspaceId,

@@ -186,6 +186,7 @@ const createInvoiceLine = createSafeHandler(
       "basis points and a VAT treatment. Only draft invoices accept lines.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",

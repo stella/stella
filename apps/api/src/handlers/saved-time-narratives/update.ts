@@ -20,6 +20,7 @@ const config = {
     "Update a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: savedTimeNarrativeParamsSchema,
   body: t.Object({

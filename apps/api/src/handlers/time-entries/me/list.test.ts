@@ -11,6 +11,7 @@ import { cents } from "@/api/lib/money";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -220,20 +221,22 @@ afterAll(async () => {
 
 const listFor = async (query: ListCtx["query"]) =>
   await listMyTimeEntries.handler(
-    asTestRaw<ListCtx>({
-      query,
-      request: new Request("https://example.test/time-entries/me"),
-      route: "/time-entries/me",
-      safeDb: createSafeDb(
-        testDb,
-        [ids.wsA1, ids.wsA2, deletingWorkspaceId, internalWorkspaceId],
-        ids.orgA,
-        ids.userA1,
-      ),
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      memberRole: sessionMemberRole("member"),
-    }),
+    withTimeBillingEnrolment(
+      asTestRaw<ListCtx>({
+        query,
+        request: new Request("https://example.test/time-entries/me"),
+        route: "/time-entries/me",
+        safeDb: createSafeDb(
+          testDb,
+          [ids.wsA1, ids.wsA2, deletingWorkspaceId, internalWorkspaceId],
+          ids.orgA,
+          ids.userA1,
+        ),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        memberRole: sessionMemberRole("member"),
+      }),
+    ),
   );
 
 type MyTimeEntryPage = Extract<
@@ -473,15 +476,17 @@ test("my day includes the owner's internal work without exposing other members o
       });
     }
     const withoutMatters = await listMyTimeEntries.handler(
-      asTestRaw<ListCtx>({
-        query: { date: DAY },
-        request: new Request("https://example.test/time-entries/me"),
-        route: "/time-entries/me",
-        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-        memberRole: sessionMemberRole("member"),
-      }),
+      withTimeBillingEnrolment(
+        asTestRaw<ListCtx>({
+          query: { date: DAY },
+          request: new Request("https://example.test/time-entries/me"),
+          route: "/time-entries/me",
+          safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          memberRole: sessionMemberRole("member"),
+        }),
+      ),
     );
     if (!isPage(withoutMatters)) {
       throw new Error(

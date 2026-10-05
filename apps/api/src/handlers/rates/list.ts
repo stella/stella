@@ -34,6 +34,7 @@ const readRateTables = createSafeHandler(
       "date.",
     permissions: { rate: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

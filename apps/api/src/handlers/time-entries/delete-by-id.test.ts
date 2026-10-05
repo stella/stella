@@ -4,6 +4,7 @@ import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import deleteTimeEntryById from "./delete";
@@ -17,23 +18,25 @@ const createContext = ({
   safeDb: DeleteTimeEntryCtx["safeDb"];
   scopedDb: DeleteTimeEntryCtx["scopedDb"];
 }): DeleteTimeEntryCtx =>
-  asTestRaw<DeleteTimeEntryCtx>({
-    body: { id: toSafeId<"timeEntry">("time_entry_test") },
-    request: new Request(
-      "https://example.test/v1/time-entries/workspace_test",
-      { method: "DELETE" },
-    ),
-    route: "/v1/time-entries/:workspaceId",
-    safeDb,
-    scopedDb,
-    workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: {
-      activeOrganizationId: toSafeId<"organization">("org_test"),
-    },
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent: async () => {},
-  });
+  withTimeBillingEnrolment(
+    asTestRaw<DeleteTimeEntryCtx>({
+      body: { id: toSafeId<"timeEntry">("time_entry_test") },
+      request: new Request(
+        "https://example.test/v1/time-entries/workspace_test",
+        { method: "DELETE" },
+      ),
+      route: "/v1/time-entries/:workspaceId",
+      safeDb,
+      scopedDb,
+      workspaceId: toSafeId<"workspace">("workspace_test"),
+      memberRole: sessionMemberRole("owner"),
+      session: {
+        activeOrganizationId: toSafeId<"organization">("org_test"),
+      },
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent: async () => {},
+    }),
+  );
 
 describe("deleteTimeEntryById", () => {
   test("rejects deleting a billed entry", async () => {

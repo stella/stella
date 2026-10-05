@@ -11,7 +11,12 @@ export const Route = createFileRoute(
   "/_protected/settings/organization/time-policy",
 )({
   beforeLoad: async ({ context }) => {
-    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+    if (
+      !(await isTimeBillingRouteEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       redirect({
         to: "/settings/organization/members",
         replace: true,

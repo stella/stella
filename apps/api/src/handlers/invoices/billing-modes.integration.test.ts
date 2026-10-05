@@ -9,12 +9,14 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import {
   billingArrangements,
   INVOICE_ATTACHMENT,
   invoiceLines,
   invoices,
   timeEntries,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -50,6 +52,21 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 afterEach(async () => {
   if (invoiceIds.length) {

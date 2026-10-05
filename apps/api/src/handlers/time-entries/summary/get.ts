@@ -35,6 +35,7 @@ const readTimeEntrySummary = createSafeHandler(
       "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

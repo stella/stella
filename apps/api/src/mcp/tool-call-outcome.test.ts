@@ -45,6 +45,7 @@ import {
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const PRIVATE_TEXT = "private-content-and-query-37a9";
 true satisfies {
@@ -68,6 +69,10 @@ const contextFor = () =>
     accessibleWorkspaces: [],
     scopedDb: async () => [],
     recordAuditEvent: async () => undefined,
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "private-organization-37a9",
+      userId: "private-user-37a9",
+    }),
   });
 
 const createArgs = {

@@ -194,6 +194,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
   "audit_logs.user_id": "Audit performer history.",
+  "feature_enrolments.user_id":
+    "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":

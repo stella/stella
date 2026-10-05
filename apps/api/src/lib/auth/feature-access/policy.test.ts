@@ -143,18 +143,49 @@ test("feature snapshots cannot transfer enabled decisions across users, organiza
   );
 });
 
-test("self-serve enrolment stays hidden until server enrolment storage is available", () => {
-  expect(
-    decideFeatureAccess({
-      userId: "user-a",
-      registry,
-      grants: { "fixture-self-serve": [organizationGrant] },
-      featureId: "fixture-self-serve",
-      organizationId: "org-a",
-      user: { email: "member@example.test", emailVerified: true },
-      membership: true,
-    }).status,
-  ).toBe("hidden");
+test("self-serve access requires a deployment offer and an enrolment bound to the verified current member", () => {
+  for (const deploymentEnabled of [false, true]) {
+    for (const emailVerified of [false, true]) {
+      for (const membership of [false, true]) {
+        for (const organizationId of ["org-a", "org-b"]) {
+          for (const userId of ["user-a", "user-b", null]) {
+            for (const featureId of [
+              "fixture-self-serve",
+              "fixture-invitation",
+            ]) {
+              const decision = decideFeatureAccess({
+                userId,
+                registry,
+                grants: {},
+                featureId,
+                organizationId,
+                user: { email: "member@example.test", emailVerified },
+                membership,
+                deploymentEnabled,
+                enrolments: [
+                  {
+                    featureId: "fixture-self-serve",
+                    organizationId: "org-a",
+                    userId: "user-a",
+                  },
+                ],
+              });
+              expect(decision.status).toBe(
+                deploymentEnabled &&
+                  emailVerified &&
+                  membership &&
+                  organizationId === "org-a" &&
+                  userId === "user-a" &&
+                  featureId === "fixture-self-serve"
+                  ? "enabled"
+                  : "hidden",
+              );
+            }
+          }
+        }
+      }
+    }
+  }
 });
 
 test("unknown policy declarations are invariants while absent discovery decisions stay hidden", () => {

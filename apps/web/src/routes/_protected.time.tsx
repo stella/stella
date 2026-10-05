@@ -34,7 +34,12 @@ export const Route = createFileRoute("/_protected/time")({
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
   beforeLoad: async ({ context }) => {
-    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+    if (
+      !(await isTimeBillingRouteEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       redirect({ to: "/workspaces", throw: true });
     }
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
