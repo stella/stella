@@ -1857,6 +1857,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
@@ -5422,6 +5423,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",

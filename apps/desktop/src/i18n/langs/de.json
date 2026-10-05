@@ -132,7 +132,8 @@
     "takeoverSubtitle": "Die Bearbeitung wird ab Ihrem zuletzt gespeicherten Checkpoint fortgesetzt.",
     "takeoverTitle": "{requester} möchte die Bearbeitung übernehmen",
     "takeoverWindowTitle": "Übernahmeanfrage",
-    "webOrigin": "Web-Origin"
+    "webOrigin": "Web-Origin",
+    "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen"
   },
   "settings": {
     "about": "Über",
