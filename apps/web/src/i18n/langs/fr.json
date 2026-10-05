@@ -2158,6 +2158,7 @@
     "markHandled": "Marquer comme traité",
     "markNew": "Marquer comme nouveau",
     "noAddress": "Aucune adresse e-mail active.",
+    "openSourceFile": "Ouvrir le fichier e-mail",
     "originalSender": "Expéditeur d’origine",
     "originalSenderUnverified": "Expéditeur d’origine (déclaré, non vérifié)",
     "originalSignatureVerified": "Signature d’origine vérifiée (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Renouveler l’adresse",
     "sentAt": "Envoyé le",
     "sharedMailboxFiler": "Boîte partagée {address}, approuvée par {approver}",
+    "statedInFile": "En-têtes (selon le fichier)",
     "states": {
       "handled": "Traité"
     },
     "title": "Correspondance",
-    "unknownApprover": "Approbateur inconnu"
+    "unknownApprover": "Approbateur inconnu",
+    "uploadedBy": "Importé par {name}",
+    "uploadedFile": "Fichier e-mail importé"
   },
   "docxReview": {
     "acceptAll": "Tout accepter",

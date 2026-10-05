@@ -855,6 +855,11 @@ export const OWNERSHIP = [
           reason: "Files inbound mail into the matter its routing resolved.",
         },
         {
+          path: "apps/api/src/lib/email/inbound/upload.ts",
+          reason:
+            "Files an email file as its uploader, whose matter access the filing transaction rechecks.",
+        },
+        {
           path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
           reason: "Writes a new version into a workspace its caller proved.",
         },
@@ -1013,6 +1018,11 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
         },

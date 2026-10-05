@@ -2158,6 +2158,7 @@
     "markHandled": "Atzīmēt kā izskatītu",
     "markNew": "Atzīmēt kā jaunu",
     "noAddress": "Nav aktīvas e-pasta adreses.",
+    "openSourceFile": "Atvērt e-pasta failu",
     "originalSender": "Sākotnējais sūtītājs",
     "originalSenderUnverified": "Sākotnējais sūtītājs (norādīts, nav pārbaudīts)",
     "originalSignatureVerified": "Sākotnējais paraksts pārbaudīts (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Mainīt adresi",
     "sentAt": "Nosūtīts",
     "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "statedInFile": "Galvenes (pēc faila norādītā)",
     "states": {
       "handled": "Izskatīts"
     },
     "title": "Sarakste",
-    "unknownApprover": "Nezināms apstiprinātājs"
+    "unknownApprover": "Nezināms apstiprinātājs",
+    "uploadedBy": "Augšupielādēja {name}",
+    "uploadedFile": "Augšupielādēts e-pasta fails"
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",

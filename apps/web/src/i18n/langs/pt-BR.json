@@ -2158,6 +2158,7 @@
     "markHandled": "Marcar como resolvido",
     "markNew": "Marcar como novo",
     "noAddress": "Nenhum endereço de e-mail está ativo.",
+    "openSourceFile": "Abrir arquivo de e-mail",
     "originalSender": "Remetente original",
     "originalSenderUnverified": "Remetente original (informado, não verificado)",
     "originalSignatureVerified": "Assinatura original verificada (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Trocar endereço",
     "sentAt": "Enviado em",
     "sharedMailboxFiler": "Caixa compartilhada {address}, aprovada por {approver}",
+    "statedInFile": "Cabeçalhos (conforme o arquivo)",
     "states": {
       "handled": "Resolvido"
     },
     "title": "Correspondência",
-    "unknownApprover": "Aprovador desconhecido"
+    "unknownApprover": "Aprovador desconhecido",
+    "uploadedBy": "Enviado por {name}",
+    "uploadedFile": "Arquivo de e-mail enviado"
   },
   "docxReview": {
     "acceptAll": "Aceitar tudo",
