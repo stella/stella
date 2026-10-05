@@ -11,6 +11,7 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -218,6 +219,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -241,6 +243,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -255,6 +258,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -280,6 +284,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -314,6 +319,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -334,6 +340,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -361,6 +368,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({
         generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
@@ -392,6 +400,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({
         generateAiValue: async () => ({
@@ -433,6 +442,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
     });
@@ -473,6 +483,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -492,6 +503,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: () =>
         panic("deterministic fill resolved the AI collaborators"),
@@ -512,6 +524,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -595,6 +608,7 @@ describe("fillStoredTemplateDocx use recording", () => {
         templateId: usedTemplateId,
         values: { governing_law: "Czech" },
         scopedDb,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         ...options,
       });
@@ -679,6 +693,7 @@ describe("fillTemplateDocx condition decisions", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({ decideAiCondition: decide }),
     });
@@ -806,6 +821,7 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () =>
         decideAiCondition === undefined ? {} : { decideAiCondition },
@@ -1132,6 +1148,7 @@ describe("linked clause directive filling", () => {
         values: { x },
         scopedDb: stubScopedDb(body),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
       });
@@ -1165,6 +1182,7 @@ const fillLinkedClause = async (
     },
     scopedDb: stubScopedDb(body),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     values,
     useRecording: "caller",
@@ -1353,6 +1371,7 @@ describe("clause and template directive parity", () => {
       values: {},
       scopedDb: stubScopedDb(body),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -1570,6 +1589,7 @@ test("strict fills discover condition and loop inputs in linked and adjusted cla
         override === undefined ? body : [{ text: "Stored" }],
       ),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       ...(override === undefined
@@ -1613,6 +1633,7 @@ test("clause resolution uses formula outputs and rule-backed named conditions", 
     values: { base: 10 },
     scopedDb: stubScopedDb(body),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     useRecording: "caller",
   });
@@ -1631,6 +1652,7 @@ test("clause resolution uses formula outputs and rule-backed named conditions", 
     values: { base: 10 },
     scopedDb: stubScopedDb(namedBody),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     useRecording: "caller",
   });
@@ -1931,6 +1953,7 @@ test("stored web discovery, description and effective fill declarations agree fo
       values: { party: "Acme" },
       scopedDb,
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -1991,6 +2014,7 @@ test("clause AI declarations run usage admission and include linked content in g
     },
     values: { active: true },
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     scopedDb: stubScopedDb(body),
     requiredFields: "enforce",
     useRecording: "caller",
@@ -2064,6 +2088,7 @@ describe("clause fill boundaries", () => {
       values: {},
       scopedDb: stubScopedDb([{ text: "Stored" }]),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "allow-partial",
       useRecording: "caller",
       clauseOverrides: {
@@ -2099,6 +2124,7 @@ describe("clause fill boundaries", () => {
         values: {},
         scopedDb: stubScopedDb([{ text: "Buyer: {{ buyer }}" }]),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields,
         useRecording: "caller",
       });
@@ -2365,6 +2391,7 @@ describe("clause slot requiredness follows rendering", () => {
         values: {
           persons: [{ company: "0000123457" }, { company: "0000123458" }],
         },
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         lookupResolver: async ({ query }) => {
           queries.push(query);
           return {
@@ -2413,6 +2440,7 @@ describe("clause slot requiredness follows rendering", () => {
       },
       scopedDb: stubScopedDb(body),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       values: { persons: [{ name: "Ann" }, { name: "Bob", included: false }] },
@@ -2503,6 +2531,7 @@ describe("clause slot requiredness follows rendering", () => {
           buyer: "0000123456",
           persons: [{ company: "0000123457" }, { company: "0000123458" }],
         },
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         lookupResolver: async ({ query }) => {
           queries.push(query);
           return {
@@ -2587,6 +2616,7 @@ describe("clause slot requiredness follows rendering", () => {
         values: { persons: [{ name: "Ann" }, { name: "Bob" }] },
         scopedDb: stubScopedDb(body),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
         aiCollaborators: async () => ({
@@ -2769,6 +2799,7 @@ describe("clause slot requiredness follows rendering", () => {
       values,
       scopedDb: stubScopedDb(partyClause),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       aiCollaborators: async () => ({
@@ -2822,6 +2853,7 @@ describe("clause slot requiredness follows rendering", () => {
       values: { show: true },
       scopedDb: stubScopedDb(partyClause),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       aiCollaborators: async () => {
@@ -3008,6 +3040,7 @@ test("a clause body and the equivalent template body fill to the same text and r
             values,
             scopedDb: stubScopedDb(),
             organizationId,
+            thirdPartyOutboundPermit: undefined,
             requiredFields: "enforce",
             useRecording: "caller",
           }),
@@ -3044,6 +3077,7 @@ describe("template fields are required where they render", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -3097,6 +3131,7 @@ describe("template fields are required where they render", () => {
         values,
         scopedDb: stubScopedDb(),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
       });
@@ -3276,6 +3311,7 @@ describe("template fields are required where they render", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       aiCollaborators: async () => {
@@ -3336,6 +3372,7 @@ describe("template fields are required where they render", () => {
       values: { show: true },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       aiCollaborators: async () => {
@@ -3471,6 +3508,7 @@ describe("clause slots the fill prunes", () => {
       values: {},
       scopedDb: stubScopedDb([{ text: "Stored" }]),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       clauseOverrides: { "@clause:Terms": malformed },
@@ -3626,6 +3664,7 @@ test("template fills surface malformed paragraph markers as a typed refusal", as
     values: { name: "Ann" },
     scopedDb: stubScopedDb(),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
   });
   expect("storedTemplateError" in result).toBe(true);

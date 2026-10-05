@@ -4,6 +4,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -27,6 +28,8 @@ import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 // The register, the lists and the firm's settings are all replaced: these
 // tests pin how a subject becomes a name to screen, and what happens when it
 // cannot.
+
+const permit = grantThirdPartyOutboundPermit();
 
 const noDatabase: ScopedDb = async () =>
   panic("This test must not reach the database");
@@ -59,6 +62,7 @@ const dependencies = ({
   jurisdictions?: CountryCode[];
 }): SanctionsCheckDependencies => ({
   observer: "unobserved",
+  permit,
   scopedDb: noDatabase,
   organizationId: toSafeId<"organization">("org_1"),
   executeLookup:
@@ -357,6 +361,7 @@ describe("counterparty check subject routing", () => {
   test("refuses a tax ID for the sanctions check and names the subjects it takes", async () => {
     const result = await runEntityCheckShared({
       observer: "unobserved",
+      permit,
       check: "sanctions",
       subject: { type: "tax-id", value: "CZ45274649" },
       runCheck: neverRunCheck,
@@ -415,6 +420,7 @@ describe("counterparty check subject routing", () => {
     async ({ subject, message }) => {
       const result = await runEntityCheckShared({
         observer: "unobserved",
+        permit,
         check: "cz-insolvency",
         subject,
         runCheck: neverRunCheck,
@@ -431,6 +437,7 @@ describe("counterparty check subject routing", () => {
   test("does not ask for a birth date the VAT check would not use", async () => {
     const result = await runEntityCheckShared({
       observer: "unobserved",
+      permit,
       check: "cz-vat-reliability",
       subject: {
         type: "person",

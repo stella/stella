@@ -1,4 +1,5 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import type { TimeZoneId } from "@stll/time";
 
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
@@ -198,6 +199,14 @@ export const organizationSettings = p.pgTable(
       .boolean("time_narrative_required")
       .notNull()
       .default(DEFAULT_TIME_NARRATIVE_REQUIRED),
+    /**
+     * IANA zone whose calendar decides the organization's "today" (lock
+     * months, invoice dates, due work). Null means the default derived from
+     * the primary practice jurisdiction at read time; see
+     * `lib/organization-time-zone.ts`. Written only through
+     * `parseTimeZoneId`.
+     */
+    timeZone: p.text("time_zone").$type<TimeZoneId>(),
     documentStampEnabled: p
       .boolean("document_stamp_enabled")
       .notNull()

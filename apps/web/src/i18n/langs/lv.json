@@ -4516,6 +4516,13 @@
         "narrativeRequired": "Pieprasīt aprakstu",
         "title": "Laika uzskaites noteikumi"
       },
+      "timeZone": {
+        "description": "Bloķētie mēneši, rēķinu datumi un termiņā veicamais darbs seko šīs laika joslas kalendārajai dienai. Kamēr neviena nav izvēlēta, to nosaka galvenā jurisdikcija: Europe/Prague Čehijai un Slovākijai, citos gadījumos UTC.",
+        "followJurisdiction": "Atbilstoši galvenajai jurisdikcijai",
+        "followingJurisdiction": "Atbilstoši galvenajai jurisdikcijai ({timeZone})",
+        "title": "Laika josla",
+        "updated": "Laika josla atjaunināta"
+      },
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",
