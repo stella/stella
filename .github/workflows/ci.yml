@@ -3153,14 +3153,7 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
-        run: |
-          mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
-          # This suite is mandatory; retain dynamic discovery for the other engine contracts.
-          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/search-relaxed.contract.test.ts'
-          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/statute-recall.contract.test.ts'
-          test "${#engine_tests[@]}" -gt 0
-          bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
-          python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
+        run: bun scripts/run-corpus-engine-suites.ts
 
       - name: Corpus engine diagnostics and cleanup
         if: ${{ always() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
