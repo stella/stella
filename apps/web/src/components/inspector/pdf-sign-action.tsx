@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { SignatureIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 
-import { PdfSignPlacement } from "@/components/inspector/pdf-sign-placement";
 import type { PdfSignableFile } from "@/components/inspector/pdf-signing";
 import { useDesktopPdfSign } from "@/components/inspector/use-desktop-pdf-sign";
 import {
@@ -17,6 +17,14 @@ import type { DesktopRequiredDialogProps } from "@/features/desktop/desktop-acti
 import { detached } from "@/lib/detached";
 
 export type PdfSignTarget = PdfSignableFile & { fieldId: string };
+
+// The placement preview renders the page with pdf.js; loading it only when the
+// dialog opens keeps pdf.js out of every surface that merely offers signing
+// (the row menu, the reader toolbar).
+const LazyPdfSignPlacement = lazy(async () => {
+  const module = await import("@/components/inspector/pdf-sign-placement");
+  return { default: module.PdfSignPlacement };
+});
 
 type PdfSignFlow = {
   /** What the action does in the current desktop presence. */
@@ -55,19 +63,28 @@ type PdfSignDialogsProps = {
 
 /** Stamp placement, then the desktop hand-off; or what the desktop needs first. */
 export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
+  const t = useTranslations();
   const { sign } = useDesktopPdfSign(target);
   return (
     <>
       <Dialog onOpenChange={flow.setPlacementOpen} open={flow.placementOpen}>
         <DialogPopup className="sm:max-w-xl">
-          <PdfSignPlacement
-            fieldId={target.fieldId}
-            onConfirm={(stamp) => {
-              flow.setPlacementOpen(false);
-              detached(sign(stamp), "pdf-sign-action.sign");
-            }}
-            workspaceId={target.workspaceId}
-          />
+          <Suspense
+            fallback={
+              <div className="flex min-h-48 items-center justify-center">
+                <Loader label={t("common.loading")} size="sm" />
+              </div>
+            }
+          >
+            <LazyPdfSignPlacement
+              fieldId={target.fieldId}
+              onConfirm={(stamp) => {
+                flow.setPlacementOpen(false);
+                detached(sign(stamp), "pdf-sign-action.sign");
+              }}
+              workspaceId={target.workspaceId}
+            />
+          </Suspense>
         </DialogPopup>
       </Dialog>
       <DesktopRequiredDialog {...flow.requiredDialog} />
