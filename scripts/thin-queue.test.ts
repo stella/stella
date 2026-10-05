@@ -441,6 +441,8 @@ const runDepth = ({ event, variable, heavyOnly = false }: RunDepthOptions) => {
         EVENT_NAME: event,
         MERGE_QUEUE_DEPTH: variable,
         DISPATCH_DEPTH: "full",
+        // Full dispatches off main need allow_full; main is always allowed.
+        DISPATCH_REF: "refs/heads/main",
         HEAVY_ONLY: String(heavyOnly),
         GITHUB_OUTPUT: output,
       },
