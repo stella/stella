@@ -20,7 +20,7 @@ import {
   RAW_OBJECT_COPY_TIMEOUT_MS,
   writeOwnedRawPayload,
 } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
-import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { SUPPLEMENT_JUDGMENT_READ_FAILED } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type {
   ProcessSupplementOptions,
@@ -54,7 +54,7 @@ export type SupplementPlacement = Required<
 > &
   Omit<ProcessSupplementOptions, "absorb" | "corpus"> & {
     metadataUrlSchema: unknown;
-    resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+    resolveSourceContract: SourceContractResolver;
     /** The publisher's id for the supplement, as the adapter stated it. */
     sourceDocumentId: string;
     /** The supplement's document, sanitized. */
@@ -449,7 +449,7 @@ export const keepSupplementStandalone = async (
       corpus,
       polarityRules,
     },
-    placement.resolveMetadataUrlSchema,
+    placement.resolveSourceContract,
   );
   if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return written;

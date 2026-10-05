@@ -38,7 +38,7 @@ import {
   PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
@@ -248,8 +248,7 @@ export const runIngestionPipeline = async ({
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(scopedDb);
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -514,7 +513,7 @@ export const runIngestionPipeline = async ({
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
-        resolveMetadataUrlSchema,
+        resolveSourceContract,
       );
       inserted += applied.inserted;
       skipped += applied.skipped;
@@ -576,7 +575,7 @@ export const runIngestionPipeline = async ({
               corpus,
               polarityRules,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           ),
         catch: (cause) => cause,
       });
