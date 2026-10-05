@@ -15,8 +15,8 @@ type RegistryResult =
 export const versionBumpTime = (history: string): number | undefined => {
   for (const commit of history.split("journey-commit ").slice(1)) {
     const timestamp = Number(commit.split("\n").at(0));
-    const oldVersion = commit.match(/^-\s*"version"\s*:\s*"([^"]+)"/mu)?.at(1);
-    const newVersion = commit.match(/^\+\s*"version"\s*:\s*"([^"]+)"/mu)?.at(1);
+    const oldVersion = /^-\s*"version"\s*:\s*"([^"]+)"/mu.exec(commit)?.at(1);
+    const newVersion = /^\+\s*"version"\s*:\s*"([^"]+)"/mu.exec(commit)?.at(1);
     if (
       oldVersion &&
       newVersion &&

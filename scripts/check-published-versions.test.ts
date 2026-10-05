@@ -3,6 +3,7 @@ import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { checkRegistry, versionBumpTime } from "./check-published-versions";
 import { ALL_PACKAGE_ORDER } from "./publish-package-order";
 
@@ -44,7 +45,7 @@ const run = async ({
     expect(JSON.stringify(result)).not.toContain(SENTINEL);
     return result;
   } finally {
-    server.stop(true);
+    await server.stop(true);
   }
 };
 
@@ -76,10 +77,10 @@ describe("published registry versions", () => {
       ?.matchAll(/^ {10}- (.+)$/gmu);
     expect(
       [...(options ?? [])]
-        .map((match) => match.at(1))
+        .flatMap((match) => match.at(1) ?? [])
         .filter((name) => name !== "all")
-        .toSorted(),
-    ).toEqual([...ALL_PACKAGE_ORDER].toSorted());
+        .toSorted(compareCodeUnit),
+    ).toEqual([...ALL_PACKAGE_ORDER].toSorted(compareCodeUnit));
   });
   test("accepts matching published versions regardless of bump age", async () => {
     expect(await run()).toEqual({ status: "passed", reason: "ok" });
@@ -90,7 +91,12 @@ describe("published registry versions", () => {
   });
   test("only a version change within the publication window permits a mismatch", async () => {
     for (const bumpedAt of [undefined, NOW - 86_400, NOW - 86_401, NOW + 1]) {
-      expect(await run({ body: '{"version":"1.2.2"}', bumpedAt })).toEqual({
+      expect(
+        await run({
+          body: '{"version":"1.2.2"}',
+          ...(bumpedAt === undefined ? {} : { bumpedAt }),
+        }),
+      ).toEqual({
         status: "failed",
         reason: "version_mismatch",
       });
@@ -160,7 +166,7 @@ describe("published registry versions", () => {
         {
           env: {
             ...process.env,
-            PATH: `${directory}:${process.env["PATH"]}`,
+            PATH: `${directory}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
             JOURNEY_NPM_REGISTRY_URL: server.url.toString(),
           },
           stdout: "pipe",
@@ -175,13 +181,13 @@ describe("published registry versions", () => {
       expect(exit).toBe(1);
       expect(stderr).toBe("");
       expect(stdout).not.toContain(SENTINEL);
-      expect(stdout.trim().split("\n").toSorted()).toEqual(
+      expect(stdout.trim().split("\n").toSorted(compareCodeUnit)).toEqual(
         ALL_PACKAGE_ORDER.map(
           (name) => `journey registry-@stll/${name} failed http_status`,
-        ).toSorted(),
+        ).toSorted(compareCodeUnit),
       );
     } finally {
-      server.stop(true);
+      await server.stop(true);
       await rm(directory, { recursive: true, force: true });
     }
   });

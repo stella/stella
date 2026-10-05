@@ -302,9 +302,9 @@ const run = async ({
       `#!/usr/bin/env bash\nif [[ "$2" == --paginate ]]; then route=tags; else route=latest; fi\ncurl -fsS "$FAKE_SERVER/desktop/$route"\n`,
     );
     await Promise.all(
-      ["npm", "stella", "gh", "git"].map((file) =>
-        chmod(path.join(work, file), 0o755),
-      ),
+      ["npm", "stella", "gh", "git"].map(async (file) => {
+        await chmod(path.join(work, file), 0o755);
+      }),
     );
     const child = Bun.spawn(
       [
@@ -318,10 +318,10 @@ const run = async ({
         cwd: ROOT,
         env: {
           ...process.env,
-          PATH: `${work}:${process.env["PATH"]}`,
+          PATH: `${work}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
           MCP_CANARY_TOKEN: token,
           JOURNEY_WEB_URL: server.url.toString().replace(/\/$/u, ""),
-          JOURNEY_MCP_URL: `${server.url}mcp`,
+          JOURNEY_MCP_URL: `${server.url.toString()}mcp`,
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
@@ -334,7 +334,7 @@ const run = async ({
           INSTALL_CHECK: path.join(work, "install-check"),
           GH_REPO: "fixture/repository",
           FAKE_SERVER: server.url.toString().replace(/\/$/u, ""),
-          STELLA_DESKTOP_DOWNLOAD_BASE_URL: `${server.url}assets`,
+          STELLA_DESKTOP_DOWNLOAD_BASE_URL: `${server.url.toString()}assets`,
           STELLA_DESKTOP_RELEASE_API_PATH: "",
           STELLA_DESKTOP_RELEASE_EXPECTED_TAG: "",
         },
@@ -365,7 +365,7 @@ const run = async ({
     ).exists();
     return { stdout, exit, counts, calls, cliCalls, installClean };
   } finally {
-    server.stop(true);
+    await server.stop(true);
     await rm(work, { recursive: true, force: true });
   }
 };
@@ -564,6 +564,7 @@ test("schedules bounded journeys and routes alerts", async () => {
   expect(workflow).toContain("cancel-in-progress: false");
   expect(workflow).not.toMatch(/matrix:|bun ci|bun install/u);
   expect(workflow).toContain("persist-credentials: false");
+  expect(workflow).toContain("no-cache: true");
   expect(workflow).toContain("&& '0' || '1'");
   expect(workflow).toContain("bun scripts/check-published-versions.ts");
   expect(workflow).toContain("bash scripts/check-journeys.sh --cli");
