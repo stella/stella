@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-courts] Treat nullable decision type as absent; publisher output remains strings or undefined.
+// parser-output-unchanged: [pl-tk] Treat nullable decision type as absent; publisher output remains strings or undefined.
 /**
  * The key under which a Constitutional Tribunal ruling stored by one Polish
  * source meets the same ruling stored by another.
@@ -73,7 +75,8 @@ export const plConstitutionalTribunalRulingKeys = ({
     court.replace(/\s+/gu, " ").trim().toLocaleLowerCase("pl-PL") !==
       CONSTITUTIONAL_TRIBUNAL ||
     decisionDate === undefined ||
-    decisionType === undefined
+    decisionType === undefined ||
+    decisionType === null
   ) {
     return [];
   }

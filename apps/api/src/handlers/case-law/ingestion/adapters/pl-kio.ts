@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-kio] Treat nullable decision type as absent; publisher output remains strings or undefined.
 import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
@@ -757,7 +758,11 @@ export const plProcurementRulingKeys = ({
   decisionType,
   identifiers,
 }: ProcurementRulingKeyInput): string[] => {
-  if (decisionDate === undefined || decisionType === undefined) {
+  if (
+    decisionDate === undefined ||
+    decisionType === undefined ||
+    decisionType === null
+  ) {
     return [];
   }
   const dockets = [

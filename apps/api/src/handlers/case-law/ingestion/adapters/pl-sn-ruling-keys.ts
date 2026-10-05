@@ -1,3 +1,7 @@
+// parser-output-unchanged: [pl-courts] Treat nullable decision type as absent; publisher output remains strings or undefined.
+// parser-output-unchanged: [pl-sn] Treat nullable decision type as absent; publisher output remains strings or undefined.
+// parser-output-unchanged: [pl-uodo] Treat nullable decision type as absent; publisher output remains strings or undefined.
+// parser-output-unchanged: [pl-uokik] Treat nullable decision type as absent; publisher output remains strings or undefined.
 /**
  * The key under which a Supreme Court ruling stored by one Polish source
  * meets the same ruling stored by another.
@@ -121,7 +125,9 @@ export const plSupremeCourtRulingKeys = ({
     return [];
   }
   const kind =
-    decisionType === undefined ? undefined : rulingKindOf(decisionType);
+    decisionType === undefined || decisionType === null
+      ? undefined
+      : rulingKindOf(decisionType);
   if (kind === undefined) {
     return [];
   }

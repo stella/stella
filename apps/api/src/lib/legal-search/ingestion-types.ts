@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] Allowing an explicit null decisionType changes no ECJ output; the adapter continues to emit its published type or undefined.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.

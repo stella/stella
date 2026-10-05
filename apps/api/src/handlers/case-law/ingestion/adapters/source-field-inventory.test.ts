@@ -307,7 +307,8 @@ describe("every adapter accounts for the fields its source states", () => {
       const textOutputs = [
         { field: "caseNumber", value: decision.caseNumber },
         { field: "court", value: decision.court },
-        ...(decision.decisionType === undefined
+        ...(decision.decisionType === undefined ||
+        decision.decisionType === null
           ? []
           : [{ field: "decisionType", value: decision.decisionType }]),
         ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({

@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { toPlainTextMetadata } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   decodeSourceRawEnvelope,
@@ -79,11 +80,13 @@ describe("complete CourtListener import mapping", () => {
     });
     const result = mapCourtListenerRecord(input).unwrap();
     expect(result.decisionType).toBeNull();
-    expect(result.metadata["decisionType"]).toEqual({
-      status: "not-stated",
-      asPublished: null,
-      reason: "source-does-not-state-decision-type",
-    });
+    expect(result.metadata["decisionType"]).toEqual(
+      toPlainTextMetadata({
+        status: "not-stated",
+        asPublished: null,
+        reason: "source-does-not-state-decision-type",
+      }).unwrap(),
+    );
     expect(result.sourceDocumentId).toBe("9114912");
     expect(result.courtId).toBe("scotus");
     expect(result.fulltext).toContain("Caption");
@@ -114,11 +117,13 @@ describe("complete CourtListener import mapping", () => {
       mapped += 1;
       expect(v.is(documentAstSchema, outcome.value.documentAst)).toBe(true);
       expect(outcome.value.decisionType).toBeNull();
-      expect(outcome.value.metadata["decisionType"]).toEqual({
-        status: "not-stated",
-        asPublished: null,
-        reason: "source-does-not-state-decision-type",
-      });
+      expect(outcome.value.metadata["decisionType"]).toEqual(
+        toPlainTextMetadata({
+          status: "not-stated",
+          asPublished: null,
+          reason: "source-does-not-state-decision-type",
+        }).unwrap(),
+      );
       expect(outcome.value.metadata["structure"]).toMatchObject({
         principalLength: expect.any(Number),
         bodyParagraphCount: expect.any(Number),
@@ -284,11 +289,13 @@ test("CourtListener source types and text never infer a decision type", () => {
           result.metadata["decisionType"],
         );
         expect(result.documentAst?.metadata.decisionType).toBeNull();
-        expect(result.metadata["decisionType"]).toEqual({
-          status: "not-stated",
-          asPublished: null,
-          reason: "source-does-not-state-decision-type",
-        });
+        expect(result.metadata["decisionType"]).toEqual(
+          toPlainTextMetadata({
+            status: "not-stated",
+            asPublished: null,
+            reason: "source-does-not-state-decision-type",
+          }).unwrap(),
+        );
         expect(result.metadata).not.toHaveProperty("classification");
         expect(result.metadata["structure"]).toMatchObject({
           opinionTypes: [type],
@@ -315,13 +322,15 @@ test("principal structure counts exclude separate opinions and apparatus", () =>
       ],
     }),
   ).unwrap();
-  expect(result.metadata["structure"]).toEqual({
-    principalLength: "First: 410 U.S. 113. Second: Id. at 120.".length,
-    bodyParagraphCount: 2,
-    inBodyCitationCount: { status: "counted", count: 2 },
-    opinionTypes: ["020lead"],
-    scdbPresent: true,
-  });
+  expect(result.metadata["structure"]).toEqual(
+    toPlainTextMetadata({
+      principalLength: "First: 410 U.S. 113. Second: Id. at 120.".length,
+      bodyParagraphCount: 2,
+      inBodyCitationCount: { status: "counted", count: 2 },
+      opinionTypes: ["020lead"],
+      scdbPresent: true,
+    }).unwrap(),
+  );
 });
 
 test("recorded CourtListener fixtures preserve unstated types and deterministic structure", () => {
@@ -343,11 +352,13 @@ test("recorded CourtListener fixtures preserve unstated types and deterministic 
           return;
         }
         expect(result.value.decisionType).toBeNull();
-        expect(result.value.metadata["decisionType"]).toEqual({
-          status: "not-stated",
-          asPublished: null,
-          reason: "source-does-not-state-decision-type",
-        });
+        expect(result.value.metadata["decisionType"]).toEqual(
+          toPlainTextMetadata({
+            status: "not-stated",
+            asPublished: null,
+            reason: "source-does-not-state-decision-type",
+          }).unwrap(),
+        );
         expect(result.value.metadata["structure"]).toMatchObject({
           principalLength: expect.any(Number),
           bodyParagraphCount: expect.any(Number),

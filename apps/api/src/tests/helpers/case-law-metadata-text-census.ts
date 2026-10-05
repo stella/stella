@@ -416,6 +416,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   statusLabel: INSPECTED,
   statutes: INSPECTED,
   subArea: INSPECTED,
+  structure: INSPECTED,
   subject: INSPECTED,
   subjectCodes: INSPECTED,
   subjectIndex: INSPECTED,

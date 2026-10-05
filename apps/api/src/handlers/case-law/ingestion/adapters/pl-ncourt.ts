@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-ncourt] Normalize nullable decision type at the parser boundary; publisher output remains strings or undefined.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
@@ -969,7 +970,7 @@ const parseDocument = ({
         ecli: undefined,
         court: keyed.court,
         decisionDate: keyed.decisionDate,
-        decisionType: keyed.decisionType,
+        decisionType: keyed.decisionType ?? undefined,
         sourceUrl: portalUrlOf(id),
         documentUrl: contentUrlOf(id),
         content: content.html,

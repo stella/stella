@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-nsa] Treat nullable decision type as absent; publisher output remains strings or undefined.
+// parser-output-unchanged: [pl-uodo] Treat nullable decision type as absent; publisher output remains strings or undefined.
 /**
  * The keys under which a Polish administrative court's ruling stored by one
  * source meets the same ruling stored by another.
@@ -63,7 +65,8 @@ export const plAdministrativeCourtRulingKeys = ({
   if (
     decisionDate !== undefined &&
     ISO_DATE.test(decisionDate) &&
-    decisionType !== undefined
+    decisionType !== undefined &&
+    decisionType !== null
   ) {
     const docket = foldDecisionIdentifierInput(caseNumber)
       .toLocaleUpperCase("pl-PL")
