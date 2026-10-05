@@ -841,6 +841,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
@@ -1857,6 +1858,7 @@
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
+    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",
     "unverifiedCitationHint": "Ezt az idézetet nem sikerült a forrásdokumentumhoz párosítani.",
@@ -4636,6 +4638,7 @@
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
@@ -4685,7 +4688,9 @@
       "unknown": "Állapota nem egyértelmű"
     },
     "title": "Jogszabályok",
-    "validity": "Hatályos {from} és {to} között"
+    "validity": "Hatályos {from} és {to} között",
+    "wordingValidFrom": "A szöveg {date} óta hatályos",
+    "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },
   "styleSets": {
     "create": "Létrehozás",
@@ -5422,6 +5427,7 @@
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Csatlakoztassa a stella desktop alkalmazást a fiókjához",
         "action": "Szerkesztés az asztali alkalmazásban",
         "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
         "authRequiredTitle": "A munkamenet lejárt",

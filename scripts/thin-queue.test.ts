@@ -22,6 +22,7 @@ const stepSchema = v.looseObject({
   env: v.optional(v.record(v.string(), v.string())),
 });
 const workflowSchema = v.object({
+  name: v.string(),
   "run-name": v.optional(v.string()),
   concurrency: v.optional(
     v.object({
@@ -147,7 +148,12 @@ const concurrencyContext = ({
   const value = context({ event, variable, queueDepth: "full" });
   return {
     ...value,
-    github: { ...value.github, sha: eventSha },
+    github: {
+      ...value.github,
+      sha: eventSha,
+      workflow: main.name,
+      ref: "refs/heads/main",
+    },
     inputs: {
       ...value.inputs,
       sha: event.event === "workflow_dispatch" ? testedSha : "",
@@ -165,8 +171,8 @@ const assertMainConcurrency = (workflow: typeof main) => {
   }
   expect(
     concurrency["cancel-in-progress"],
-    "running heavy work is never cancelled",
-  ).toBe(false);
+    "superseded heavy work is cancelled",
+  ).toBe(true);
   const shaA = "a".repeat(40);
   const shaB = "b".repeat(40);
   for (const event of events.filter(({ event: eventName }) =>
@@ -186,44 +192,20 @@ const assertMainConcurrency = (workflow: typeof main) => {
           testedSha,
         });
         const group = templateValue(concurrency.group, value);
-        const coalesced =
-          event.event === "push" &&
-          variable === "thin" &&
-          !event.message.startsWith("chore: release v");
         expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
-          coalesced ? "main-heavy-push" : `main-heavy-${testedSha}`,
+          `${main.name}-refs/heads/main`,
         );
         expect(
           templateValue(runName, value),
           `${event.event}/tested SHA title`,
         ).toBe(`Main heavy suites ${testedSha}`);
-        if (
-          event.event === "push" &&
-          event.message === "ordinary" &&
-          variable !== "thin"
-        ) {
-          expect(
-            selected(workflow.jobs["validate"]?.if, value),
-            `${variable}/ordinary push skipped`,
-          ).toBe(false);
-        }
         groups.push(group);
       }
       const [first, second] = groups;
-      if (
-        event.event === "push" &&
-        event.message === "ordinary" &&
-        variable === "thin"
-      ) {
-        expect(first, "ordinary thin pushes share one pending group").toBe(
-          second,
-        );
-      } else {
-        expect(
-          first,
-          `${event.event}/${event.message}/${variable}/distinct SHAs`,
-        ).not.toBe(second);
-      }
+      expect(
+        first,
+        `${event.event}/${event.message}/${variable}/same branch`,
+      ).toBe(second);
     }
   }
 };
@@ -326,11 +308,7 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
 const assertMainSelection = (workflow: typeof main) => {
   for (const event of events) {
     for (const variable of ["", "full", "thin", "typo"]) {
-      const validationSelected =
-        mainTriggered(event.event) &&
-        (event.event !== "push" ||
-          event.message.startsWith("chore: release v") ||
-          (variable !== "" && variable !== "full"));
+      const validationSelected = mainTriggered(event.event);
       const valid = variable !== "typo";
       expect(
         mainSelection({ workflow, event, variable }),
@@ -345,23 +323,30 @@ const assertMainSelection = (workflow: typeof main) => {
   }
 };
 
-test("unset and full preserve baseline job predicates across the event matrix", () => {
+test("unset and full preserve CI job predicates and the main heavy job set", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  expect(Object.keys(ci.jobs)).toEqual(Object.keys(baseline.jobs));
+  expect(new Set(Object.keys(ci.jobs))).toEqual(
+    new Set([
+      ...Object.keys(baseline.jobs).filter(
+        (id) => id !== "merge-group-fail-fast",
+      ),
+      "marketing-screenshots-cancel",
+    ]),
+  );
   for (const event of events) {
     for (const variable of ["", "full"]) {
       const value = context({ event, variable, queueDepth: "full" });
       for (const [job, body] of Object.entries(baseline.jobs)) {
+        if (job === "merge-group-fail-fast") {
+          continue;
+        }
         expect(
           selected(ci.jobs[job]?.if, value),
           `${event.event}/${event.message}/${variable}/${job}`,
         ).toBe(selected(body.if, value));
       }
-      expect(mainSelection({ workflow: main, event, variable })).toEqual(
-        mainSelection({ workflow: baselineMain, event, variable }),
-      );
     }
   }
 }, 30_000);
@@ -576,35 +561,34 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("thin ordinary pushes coalesce pending work while releases, schedules and dispatches stay per SHA", () => {
+test("heavy runs supersede work on the same branch while retaining the tested SHA in their title", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("dropping push coalescing or cancelling running heavy work violates the concurrency contract", () => {
+test("per-SHA groups or preserving superseded heavy work violate the concurrency contract", () => {
   const perSha = structuredClone(main);
-  const cancelling = structuredClone(main);
-  if (!perSha.concurrency || !cancelling.concurrency) {
+  const preserving = structuredClone(main);
+  if (!perSha.concurrency || !preserving.concurrency) {
     panic("Missing main heavy concurrency");
   }
   perSha.concurrency.group = `main-heavy-\${{ inputs.sha || github.sha }}`;
   expect(perSha.concurrency.group).not.toBe(main.concurrency?.group);
-  expect(() => assertMainConcurrency(perSha)).toThrow(
-    "push/ordinary/thin/group",
-  );
-  cancelling.concurrency["cancel-in-progress"] = true;
-  expect(() => assertMainConcurrency(cancelling)).toThrow(
-    "running heavy work is never cancelled",
+  expect(() => assertMainConcurrency(perSha)).toThrow("push/ordinary//group");
+  preserving.concurrency["cancel-in-progress"] = false;
+  expect(() => assertMainConcurrency(preserving)).toThrow(
+    "superseded heavy work is cancelled",
   );
 }, 30_000);
 
-test("running main heavy on ordinary full-depth pushes violates the scheduling contract", () => {
+test("skipping ordinary main pushes by queue depth violates the scheduling contract", () => {
   assertMainSelection(main);
   const mutated = structuredClone(main);
   const validate = mutated.jobs["validate"];
   if (!validate) {
     panic("Missing main validation job");
   }
-  validate.if = "true";
+  validate.if =
+    "github.event_name != 'push' || (vars.MERGE_QUEUE_DEPTH != '' && vars.MERGE_QUEUE_DEPTH != 'full') || startsWith(github.event.head_commit.message, 'chore: release v')";
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 

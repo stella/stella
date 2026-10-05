@@ -27,6 +27,7 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -1536,6 +1537,16 @@ const VariantFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-md">
+      <DialogFormState
+        dirty={
+          label !== (variant?.label ?? "") ||
+          bodyText !== (variant ? variantBodyToText(variant.body) : "")
+        }
+        onDiscard={() => {
+          setLabel(variant?.label ?? "");
+          setBodyText(variant ? variantBodyToText(variant.body) : "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? t("clauses.editVariant") : t("clauses.addVariant")}

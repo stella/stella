@@ -1,7 +1,10 @@
+import { useState } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { ColorPickerContent } from "@stll/ui/color-picker";
+import { DialogFormState } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
 
 import {
@@ -31,8 +34,12 @@ export const ClipboardGroupFields = ({
   onChange,
 }: ClipboardGroupFieldsProps) => {
   const t = useTranslations("clipboard");
+  const [initialDraft] = useState({ color, name });
   return (
     <>
+      <DialogFormState
+        dirty={color !== initialDraft.color || name !== initialDraft.name}
+      />
       <label className="block">
         <span className="text-muted-foreground text-sm">{t("groupName")}</span>
         <Input
