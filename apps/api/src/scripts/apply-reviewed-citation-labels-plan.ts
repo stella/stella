@@ -1,14 +1,17 @@
+import { panic } from "better-result";
 /**
  * The input, the plan and the writes `apply-reviewed-citation-labels.ts`
  * runs, kept importable so a database test can execute them.
  */
-
-import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import {
+  fitsCitationStorageField,
+  assertCitationStorageField,
+} from "@/api/handlers/case-law/citation-storage-bounds";
 import { REVIEWABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
 import type { ReviewablePolarity } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -25,7 +28,11 @@ const reviewRefSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
 
 const byCitationKeySchema = v.strictObject({
   citingDecisionId: uuidSchema,
-  citationKey: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  citationKey: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.check((value) => fitsCitationStorageField("key", value)),
+  ),
   polarity: polaritySchema,
   reviewRef: reviewRefSchema,
 });
@@ -280,13 +287,14 @@ const summarizeReviewedLabels = (
 /** Store each review; a stored one that already says the same is left alone. */
 const upsertReviewsStatement = (
   labels: readonly ReviewedCitationLabel[],
-): SQL => sql`
+): SQL =>
+  sql`
   INSERT INTO case_law_citation_reviews AS r
     (id, citing_decision_id, citation_key, polarity, review_ref)
   VALUES ${sql.join(
     labels.map(
       (label) =>
-        sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${label.citationKey}, ${label.polarity}, ${label.reviewRef})`,
+        sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${assertCitationStorageField("key", label.citationKey)}, ${label.polarity}, ${label.reviewRef})`,
     ),
     sql`, `,
   )}

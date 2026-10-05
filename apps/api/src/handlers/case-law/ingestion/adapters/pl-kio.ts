@@ -1,4 +1,15 @@
 import { Result, panic } from "better-result";
+import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
+
+import {
+  DECISION_IDENTIFIER_TYPES,
+  type DecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
+
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -34,17 +45,7 @@ import { Result, panic } from "better-result";
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-
-import {
-  DECISION_IDENTIFIER_TYPES,
-  type DecisionIdentifier,
-} from "@stll/legal-ast/decision-identifier";
-import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
-import { readCappedBytes } from "@stll/skills/streaming";
-import { Temporal } from "@stll/time";
-
+import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -833,6 +834,30 @@ const listOf = (
   return items.length === 0 ? undefined : items;
 };
 
+const plKioCourtStorage = (
+  statedCourt: string | undefined,
+  hasRecordId: boolean,
+) => {
+  const courtTooLong =
+    statedCourt !== undefined &&
+    !fitsCitationStorageField("court", statedCourt);
+  const court = courtTooLong ? "" : (statedCourt ?? "");
+  const unavailableCourt = statedCourt === undefined || courtTooLong;
+  let quarantineReason:
+    | "no-record-id"
+    | "court-not-stated"
+    | "court-too-long"
+    | undefined;
+  if (!hasRecordId) {
+    quarantineReason = "no-record-id";
+  } else if (statedCourt === undefined) {
+    quarantineReason = "court-not-stated";
+  } else if (courtTooLong) {
+    quarantineReason = "court-too-long";
+  }
+  return { court, courtTooLong, quarantineReason, unavailableCourt };
+};
+
 /**
  * Build one ruling from the responses in hand. No I/O: the crawl, the
  * reconciliation and a replay of the stored envelope all reach this with the
@@ -895,14 +920,9 @@ export const assemblePlKioDecision = ({
       sourceDocumentId,
     });
   }
-  const court = statedCourt ?? "";
-  let quarantineReason: "no-record-id" | "court-not-stated" | undefined;
-  if (id === undefined) {
-    quarantineReason = "no-record-id";
-  } else if (statedCourt === undefined) {
-    quarantineReason = "court-not-stated";
-  }
-  const listingOnly = detail === null || statedCourt === undefined;
+  const { court, courtTooLong, quarantineReason, unavailableCourt } =
+    plKioCourtStorage(statedCourt, id !== undefined);
+  const listingOnly = detail === null || unavailableCourt;
   const decisionForm =
     fieldOf(detail, "Rodzaj dokumentu") ?? presentText(item.documentType);
   const decisionType = plKioDecisionType(decisionForm);
@@ -1032,6 +1052,7 @@ export const assemblePlKioDecision = ({
       decisionForm,
       documentId: id,
       quarantineReason,
+      ...(courtTooLong ? { courtAsStated: statedCourt } : {}),
       kind,
       decisionDateSource,
       presiding,

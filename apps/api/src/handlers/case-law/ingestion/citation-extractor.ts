@@ -43,6 +43,7 @@ import {
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
+import { boundedCitationKey } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   type CitationScopeIndex,
   type CitationScopesRejectedError,
@@ -1559,10 +1560,7 @@ export const bareCitationKey = (text: string): string =>
  * call site, and the database refuses the loser (`citation_key <> ''`).
  */
 export const citationKeyOf = (text: string): string | null =>
-  bareCitationKey(text) || null;
-
-/** Width of the decision's `citation_key` column. */
-const DECISION_CITATION_KEY_MAX_LENGTH = 128;
+  boundedCitationKey(bareCitationKey(text));
 
 /**
  * A decision's own `citation_key`: its docket's key, and none where the
@@ -1576,15 +1574,8 @@ export const decisionCitationKeyOf = ({
 }: {
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
-}): string | null => {
-  if (!primaryReferenceIsDocket(caseNumberType)) {
-    return null;
-  }
-  const key = citationKeyOf(caseNumber);
-  return key !== null && key.length <= DECISION_CITATION_KEY_MAX_LENGTH
-    ? key
-    : null;
-};
+}): string | null =>
+  primaryReferenceIsDocket(caseNumberType) ? citationKeyOf(caseNumber) : null;
 
 export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,

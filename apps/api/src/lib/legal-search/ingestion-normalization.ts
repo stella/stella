@@ -1,4 +1,3 @@
-// parser-output-unchanged: threads an optional static metadata URL schema; ordinary text normalization is unchanged
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -11,6 +10,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASON,
@@ -371,13 +371,29 @@ export const sanitizeResult = (
     });
   }
 
+  const caseNumber = storedCaseNumberOf(result);
+  const court = stripDangerousChars(result.court);
+  if (!fitsCitationStorageField("caseNumber", caseNumber)) {
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision number exceeds storage limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.CASE_NUMBER_LENGTH,
+    });
+  }
+  if (!fitsCitationStorageField("court", court)) {
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision court exceeds storage limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.COURT_LENGTH,
+    });
+  }
+
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
   return plainTextIngestionResult(
     {
       ...result,
       observationDetail,
-      caseNumber: storedCaseNumberOf(result),
+      caseNumber,
+      court,
       caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
       identifiers,
       sourceDocumentId,
