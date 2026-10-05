@@ -46,7 +46,7 @@ describe("canary protocol routing", () => {
         });
         server.registerTool("search_case_law", { inputSchema: {} }, () => {
           calls += 1;
-          return { content: [{ type: "text", text: "ok" }] };
+          return { content: [{ type: "text" as const, text: "ok" }] };
         });
         return server;
       },

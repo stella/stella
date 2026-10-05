@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
@@ -73,27 +76,39 @@ describe("API deployment health receipt", () => {
       }));
       // A later recovery cannot reset the outage for an older run's alert.
       workflowRuns.push({ run_number: 999, conclusion: "success" });
-      const result = Bun.spawnSync(
-        ["bash", "-c", `gh() { printf '%s' "$TEST_HISTORY"; }\n${script}`],
-        {
-          env: {
-            ...process.env,
-            GITHUB_OUTPUT: "/dev/stdout",
-            GITHUB_REPOSITORY: "stella/stella",
-            RUN_NUMBER: "100",
-            RUN_BRANCH: "main",
-            RUN_EVENT: "schedule",
-            WORKFLOW_ID: "1",
-            TEST_HISTORY: JSON.stringify({
-              workflow_runs: workflowRuns.toReversed(),
-            }),
+      const outputDir = mkdtempSync(
+        path.join(tmpdir(), "scheduled-alert-test-"),
+      );
+      const outputPath = path.join(outputDir, "github-output");
+      try {
+        const result = Bun.spawnSync(
+          ["bash", "-c", `gh() { printf '%s' "$TEST_HISTORY"; }\n${script}`],
+          {
+            env: {
+              ...process.env,
+              GITHUB_OUTPUT: outputPath,
+              GITHUB_REPOSITORY: "stella/stella",
+              RUN_NUMBER: "100",
+              RUN_BRANCH: "main",
+              RUN_EVENT: "schedule",
+              WORKFLOW_ID: "1",
+              TEST_HISTORY: JSON.stringify({
+                workflow_runs: workflowRuns.toReversed(),
+              }),
+            },
           },
-        },
-      );
-      expect(result.exitCode, JSON.stringify(history)).toBe(0);
-      expect(result.stdout.toString(), JSON.stringify(history)).toContain(
-        `send=${String(send)}\n`,
-      );
+        );
+        expect(
+          result.exitCode,
+          `${JSON.stringify(history)}: ${result.stderr.toString()}`,
+        ).toBe(0);
+        expect(
+          await Bun.file(outputPath).text(),
+          JSON.stringify(history),
+        ).toContain(`send=${String(send)}\n`);
+      } finally {
+        rmSync(outputDir, { recursive: true, force: true });
+      }
     }
   });
 
@@ -191,7 +206,22 @@ describe("API deployment health receipt", () => {
           (match) => match.groups?.["name"],
         );
       });
-      expect(secretNames.toSorted(), file).toEqual(secrets.toSorted());
+      expect(
+        secretNames.toSorted((a, b) => {
+          if (a === b) {
+            return 0;
+          }
+          return (a ?? "") < (b ?? "") ? -1 : 1;
+        }),
+        file,
+      ).toEqual(
+        secrets.toSorted((a, b) => {
+          if (a === b) {
+            return 0;
+          }
+          return a < b ? -1 : 1;
+        }),
+      );
       expect(mcpStep.env["MCP_CANARY_DESKTOP_KEY"], file).toBeUndefined();
       expect(mcpStep.env["MCP_CANARY_SESSION_COOKIE"], file).toBeUndefined();
     }
