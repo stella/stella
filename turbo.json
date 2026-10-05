@@ -652,6 +652,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/desktop/src/**",
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/oxlint.config.ts"

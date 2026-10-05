@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.42.1
+
+### Patch Changes
+
+- [#4853](https://github.com/stella/stella/pull/4853) [`e3c7e1c`](https://github.com/stella/stella/commit/e3c7e1c53cd393918a75af4c8a0a9e559908814e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Menu rows (item, checkbox, radio, submenu trigger) take a 44px minimum height under a coarse pointer.
+
 ## 0.42.0
 
 ### Minor Changes

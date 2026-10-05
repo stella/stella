@@ -2506,13 +2506,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "packages/scripts/src/model-catalog-benchmarks-gen.ts",
-    "function": "module/fetchPageOnce",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "packages/scripts/src/model-catalog-capabilities-gen.ts",
     "function": "module/loadOpenRouterDefaults",
     "kind": "total-timeout-body",

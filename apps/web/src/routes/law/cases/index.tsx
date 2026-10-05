@@ -138,6 +138,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { detachedUserAction } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   isSearchUnavailableError,
@@ -820,7 +821,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
    * named, so it is fetched first and only then does the URL move on to it.
    */
   const walkForward = () => {
-    detached(
+    detachedUserAction(
       (async () => {
         const result = await fetchNextPage();
         const walked = result.data?.pages.length ?? walkedPageCount;
@@ -834,7 +835,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           }),
         });
       })(),
-      "cases.walk-next-page",
+      {
+        context: "cases.walk-next-page",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 
@@ -874,7 +878,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     // touches it.
     shownQuestionIds,
     onShownQuestionIdsChange: (update) => {
-      detached(
+      // Adding or removing a question column is the reader's own press; a
+      // navigation that fails says so instead of leaving the table unchanged.
+      detachedUserAction(
         navigate({
           replace: true,
           search: (previous) => ({
@@ -882,7 +888,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
             questions: update(previous.questions ?? NO_SHOWN_QUESTIONS),
           }),
         }),
-        "cases.questions-navigate",
+        {
+          context: "cases.questions-navigate",
+          failureMessage: t("errors.actionFailed"),
+        },
       );
     },
   });
@@ -906,12 +915,15 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   });
 
   const setPageSize = (next: PublicLawPageSize) => {
-    detached(
+    detachedUserAction(
       searchNavigation((previous) => ({
         ...previous,
         pageSize: publicLawPageSizeSearchValue(next),
       })),
-      "cases.page-size-navigate",
+      {
+        context: "cases.page-size-navigate",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 
@@ -919,12 +931,15 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // other change here — the pending field text folded in, the page dropped —
   // because the words it requires are a different result set.
   const searchEveryWord = () => {
-    detached(
+    detachedUserAction(
       searchNavigation((previous) => ({
         ...previous,
         strict: STRICT_SEARCH_VALUE,
       })),
-      "cases.strict-navigate",
+      {
+        context: "cases.strict-navigate",
+        failureMessage: t("errors.actionFailed"),
+      },
     );
   };
 

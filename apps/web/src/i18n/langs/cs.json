@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Otázka i všechny její odpovědi se smažou pro celou organizaci, tedy ze všech vyhledávání a všem členům. Pokud ji chcete skrýt jen v tomto vyhledávání, zvolte „Odebrat z tohoto vyhledávání“.",
       "editQuestionHint": "Změna znění, typu odpovědi nebo jeho možností zahodí stávající odpovědi; sloupec poté spusťte znovu.",
+      "newQuestionColumn": "Nové",
       "nothingToRun": "Každá buňka už má odpověď",
+      "questionAdded": "„{question}“ přidáno do tabulky",
       "questionPlaceholder": "např. Shledal soud výpověď platnou?",
       "removeFromSearch": "Odebrat z tohoto vyhledávání",
       "runAll": "Odpovědět na vše",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Soud text rozhodnutí nezveřejnil, nebo zde zatím není dostupný.",
       "textPending": "Text rozhodnutí se stále načítá",
       "textReadFailed": "Text rozhodnutí se nepodařilo načíst",
-      "textUnavailable": "K tomuto rozhodnutí není k dispozici text"
+      "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
+      "versionAtDecisionDateInferred": "Znění k datu rozhodnutí (odvozené)"
     }
   },
   "catalogue": {
@@ -1854,6 +1857,7 @@
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
     "unverifiedCitationHint": "Tuto citaci se nepodařilo spárovat se zdrojovým dokumentem.",
@@ -1874,15 +1878,23 @@
     "zoomOut": "Oddálit"
   },
   "consent": {
+    "actingAs": "{clientName} bude ve vaší organizaci {organizationName} jednat vaším jménem",
     "allow": "Povolit",
-    "appIdentity": "Identita aplikace",
+    "canChange": "Může měnit",
+    "canRead": "Může číst",
     "completeSetup": "Dokončit nastavení",
+    "connectTitle": "Připojit {clientName} ke stella",
+    "connectedTitle": "Připojeno k {clientName}",
+    "connectionDuration": "Zůstane připojena, dokud ji neodpojíte v Nastavení › Připojení",
     "defaultClientName": "Aplikace",
-    "description": "{clientName} žádá o přístup k vašemu pracovnímu prostoru stella",
+    "destinationDetails": "Podrobnosti přesměrování",
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
-    "permissions": "Tím aplikaci umožníte:",
-    "redirectDestination": "Cíl přesměrování",
+    "otherPermissions": "Další oprávnění",
+    "publishedBy": "Vydavatel: <host>{publisherHost}</host>",
+    "returnToAgent": "Vraťte se ke svému agentovi a pokračujte.",
+    "returnsLocally": "Vrátíte se do {clientName} na tomto počítači",
+    "returnsTo": "Vrátíte se do {clientName}",
     "scopeAdminRead": "Číst protokol auditu vaší organizace",
     "scopeAdminWrite": "Spravovat členy a nastavení organizace",
     "scopeBillingWrite": "Vytvoření, úprava a smazání vašich časových záznamů",
@@ -1903,8 +1915,11 @@
     "scopeSkills": "Použití vašich uložených dovedností stella",
     "scopeTemplates": "Zobrazení, vyplňování a vytváření vašich vzorů dokumentů",
     "scopeTemplatesAnonymized": "Zobrazení, vyplňování a vytváření anonymizovaných verzí vašich vzorů dokumentů",
+    "signedInAs": "Přihlášeni jako <email>{accountEmail}</email>",
     "title": "Povolit přístup",
-    "unverifiedApp": "Neověřená aplikace"
+    "unverifiedApp": "Neověřená aplikace",
+    "unverifiedExplanation": "Stella neověřila, kdo tuto aplikaci vydává.",
+    "useAnotherAccount": "Použít jiný účet"
   },
   "contacts": {
     "alsoPartyIn": "Také vystupuje jako strana v {count, plural, one {# dalším spisu} few {# dalších spisech} other {# dalších spisech}}",
@@ -2450,6 +2465,7 @@
     "current": "Aktuální",
     "deleteVersion": "Smazat verzi",
     "descriptionPlaceholder": "Přidejte poznámku k této verzi...",
+    "displayFailed": "Tento soubor se nepodařilo zobrazit.",
     "downloadRedline": "Stáhnout redline",
     "dropToUploadVersion": "Přetažením nahrajete jako novou verzi",
     "editLatestVersionDescription": "Tato verze není aktuální. Pokud ji chcete upravovat v prohlížeči, nejdřív z ní vytvořte nejnovější verzi a potom ji odemkněte pro úpravy.",
@@ -5407,6 +5423,7 @@
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
@@ -5429,6 +5446,18 @@
         "updateRequiredDescription": "stella desktop vyžaduje aktualizaci. Proběhne automaticky po dokončení aktivních desktopových úprav; zkuste to znovu po restartu.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Už nainstalováno? Připojit",
+        "connect": "Připojit stella desktop",
+        "editNone": "Stáhněte stella desktop a upravte tento soubor",
+        "editOutdated": "Aktualizujte stella desktop a upravujte",
+        "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
+        "signCurrent": "Podepsat ve stella desktop",
+        "signNone": "Stáhněte stella desktop a podepište toto PDF",
+        "signOutdated": "Aktualizujte stella desktop a podepisujte",
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
+        "signShort": "Podepsat"
+      },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
@@ -5442,7 +5471,6 @@
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
       "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
-        "action": "Podepsat v desktopu",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
         "cancelledCertificateDescription": "Vybraný certifikát nelze použít k podpisu. Zvolte certifikát, který umožňuje digitální podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikace nepovoluje další podpisy.",

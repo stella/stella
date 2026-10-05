@@ -965,7 +965,10 @@ const CreateContactDialog = ({
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   const contactType = useSelector(form.store, (s) => s.values.type);
 
@@ -1027,6 +1030,22 @@ const CreateContactDialog = ({
         className={cn(extraction.stage !== "idle" && "sm:max-w-2xl")}
       >
         <Form
+          dirty={
+            dirty ||
+            birthDate.year !== "" ||
+            birthDate.month !== "" ||
+            birthDate.day !== "" ||
+            nationalityCodes.length > 0 ||
+            aresBillingAddress !== null ||
+            extraction.review.isDirty
+          }
+          onDiscard={() => {
+            form.reset();
+            setBirthDate(birthDateDraft(null));
+            setNationalityCodes([]);
+            setAresBillingAddress(null);
+            extraction.reset();
+          }}
           className="gap-0"
           errors={formErrors}
           onSubmit={(e) => {
