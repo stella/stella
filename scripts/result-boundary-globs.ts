@@ -26,6 +26,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
@@ -59,7 +60,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
+  "apps/api/src/handlers/sanctions/**/*.ts",
   "apps/api/src/handlers/search/**/*.ts",
+  "apps/api/src/handlers/soft-law/**/*.ts",
   "apps/api/src/handlers/seller-profiles/**/*.ts",
   "apps/api/src/handlers/tasks/**/*.ts",
   "apps/api/src/handlers/template-packs/**/*.ts",
@@ -81,6 +84,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/feature-access/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
@@ -95,6 +99,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
+  "apps/api/src/lib/system-audit/**/*.ts",
   "apps/api/src/lib/template-binding/**/*.ts",
   "apps/api/src/lib/uploads/**/*.ts",
   "apps/api/src/lib/usage/**/*.ts",
@@ -187,6 +192,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+  "apps/api/src/lib/email/inbound/upload-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
   // TanStack consumes this adapter through its Promise rejection contract;
   // structuredOutput cannot return a Result to the SDK.
@@ -194,6 +200,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack invokes these server-tool callbacks and turns thrown
   // ChatToolError values into tool failures; it cannot consume Result.err.
   "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
+  // Code mode invokes this read adapter through Promise rejection; the SDK
+  // converts its ChatToolError into a script failure and cannot consume Result.
+  "apps/api/src/handlers/chat/tools/execute/chat-script-read-boundary.ts",
   // Handed to TanStack AI as its StreamDurability adapter: the SDK reads an
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.

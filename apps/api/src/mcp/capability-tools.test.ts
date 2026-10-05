@@ -1,14 +1,24 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import type { Transaction } from "@/api/db/root";
+import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
@@ -217,6 +227,192 @@ describe("generated capability catalog", () => {
     for (const entry of chatEntries) {
       expect(entry.scope, entry.id).toBe("stella:chat");
     }
+  });
+});
+
+describe("capability handler refusal metadata", () => {
+  test("every refusal projection uses a closed envelope code and preserves domain issues", () => {
+    const domainCodes = Object.values(PLAYBOOK_RUN_FAILURE_CODE);
+    for (const code of domainCodes) {
+      expect(MCP_ERROR_CODES).not.toContain(code);
+    }
+    for (const status of [
+      0, 200, 400, 401, 402, 403, 404, 409, 413, 422, 429, 500, 502, 503, 999,
+    ]) {
+      for (const code of [
+        undefined,
+        ...MCP_ERROR_CODES,
+        ...domainCodes,
+        "handler_specific_code",
+      ]) {
+        const message = "Correct the request";
+        const issue = { path: "input.name", message: "Choose a valid name" };
+        const projected = projectMcpRefusal({
+          status,
+          code,
+          message,
+          issues: [issue],
+          hint: "Correct the request and call again.",
+          retryable: false,
+        });
+        expect(MCP_ERROR_CODES).toContain(projected.code);
+        expect(projected.issues).toContainEqual(issue);
+        expect(projected.hint).toBe("Correct the request and call again.");
+        expect(projected.retryable).toBe(false);
+        if (
+          code !== undefined &&
+          !MCP_ERROR_CODES.some((candidate) => candidate === code)
+        ) {
+          expect(projected.issues).toContainEqual({ path: "", code, message });
+        }
+      }
+    }
+  });
+  test("properties.update forwards the file type refusal's corrective action", async () => {
+    const matterId = "00000000-0000-4000-8000-0000000a0001";
+    const propertyId = "00000000-0000-4000-8000-0000000b0001";
+    let writes = 0;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">(propertyId),
+                name: "Documents",
+                content: { version: 1, type: "file" },
+                tool: { version: 1, type: "manual-input" },
+                system: false,
+                kinds: ["document"],
+                role: null,
+                status: "fresh",
+                playbookSourceId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => {
+        writes += 1;
+      },
+    });
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      context: createContext({ safeDb, scopedDb, workspaceIds: [matterId] }),
+      args: {
+        capability: "properties.update",
+        input: {
+          params: { matterId, propertyId },
+          body: {
+            name: "Notes",
+            content: { version: 1, type: "text" },
+            tool: { version: 1, type: "manual-input" },
+          },
+        },
+      },
+    });
+
+    const error = errorEnvelope(result);
+    expect(error).toMatchObject({
+      code: "validation_error",
+      message:
+        "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+      hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
+      retryable: false,
+    });
+    expect(error.code).not.toBe(FILE_PROPERTY_TYPE_IMMUTABLE_CODE);
+    expect(error.issues).toEqual([
+      {
+        path: "",
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        message: error.message,
+      },
+    ]);
+    expect(writes).toBe(0);
+  });
+
+  test("time-entries.me.list forwards its invalid cursor corrective action", async () => {
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      context: createContext(),
+      args: {
+        capability: "time-entries.me.list",
+        input: {
+          query: {
+            date: "2026-10-01",
+            cursor: encodePaginationCursor(["non-uuid"]),
+          },
+        },
+      },
+    });
+
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message: "Invalid cursor",
+      hint: "Restart the list without a cursor.",
+    });
+  });
+
+  test.each([400, 401, 402, 403, 404, 409, 413, 422, 429])(
+    "status %i forwards typed hint and both retryability values",
+    (status) => {
+      for (const retryable of [false, true]) {
+        expect(
+          mappedError(
+            mapHandlerResult({
+              id: "properties.update",
+              access: "write",
+              result: new ElysiaCustomStatusResponse(status, {
+                code: "handler_specific_code",
+                message: "A corrective action is required",
+                hint: "Correct the matter and invoke the capability again.",
+                retryable,
+                issues: [
+                  {
+                    path: "input.name",
+                    code: "invalid_name",
+                    message: "Choose a valid name",
+                  },
+                ],
+              }),
+            }),
+          ),
+        ).toMatchObject({
+          hint: "Correct the matter and invoke the capability again.",
+          retryable,
+          issues: [
+            {
+              path: "",
+              code: "handler_specific_code",
+              message: "A corrective action is required",
+            },
+            {
+              path: "input.name",
+              code: "invalid_name",
+              message: "Choose a valid name",
+            },
+          ],
+        });
+      }
+    },
+  );
+
+  test("malformed response metadata is omitted", () => {
+    const error = mappedError(
+      mapHandlerResult({
+        id: "properties.update",
+        access: "write",
+        result: new ElysiaCustomStatusResponse(422, {
+          message: "Invalid input",
+          hint: { raw: "private details" },
+          retryable: "false",
+          issues: [{ path: 123, message: "Invalid shape" }],
+        }),
+      }),
+    );
+    expect(error).not.toHaveProperty("hint");
+    expect(error).not.toHaveProperty("retryable");
+    expect(error).not.toHaveProperty("issues");
   });
 });
 
@@ -2409,3 +2605,256 @@ describe("status-to-envelope mapping", () => {
     expect(error.message).not.toContain("10.0.3.7");
   });
 });
+
+describe("feature access discovery guard: real capability catalog", () => {
+  const featureId = "fixture-access";
+  const registry = { [featureId]: { enrolment: "invitation" } } as const;
+  const bindings = {
+    capabilities: new Map(capabilityCatalog.map(({ id }) => [id, featureId])),
+    tools: new Map<string, string>(),
+    resources: new Map<string, string>(),
+  };
+  const fixtureContext = (userId: string, organizationId: string) => {
+    const context = createContext();
+    context.userId = toSafeId<"user">(userId);
+    context.organizationId = toSafeId<"organization">(organizationId);
+    context.testDependencies = {
+      ...context.testDependencies,
+      featureAccessBindings: bindings,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            featureId,
+            decideFeatureAccess({
+              registry,
+              grants: {
+                [featureId]: [
+                  {
+                    type: "member",
+                    organizationId: "org_1",
+                    email: "invited@example.test",
+                  },
+                ],
+              },
+              featureId,
+              organizationId,
+              userId,
+              user: {
+                email:
+                  userId === "user_1"
+                    ? "invited@example.test"
+                    : "colleague@example.test",
+                emailVerified: true,
+              },
+              membership: true,
+            }),
+          ],
+        ]),
+      }),
+    };
+    return context;
+  };
+  test.each([
+    ["user_2", "org_1"],
+    ["user_1", "org_2"],
+  ])(
+    "catalog and schema discovery hide without caller grant: %s %s",
+    async (userId, organizationId) => {
+      const context = fixtureContext(userId, organizationId);
+      const list = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        args: { limit: 50 },
+        context,
+      });
+      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
+        0,
+      );
+      for (const { id } of capabilityCatalog) {
+        const described = await handleMcpToolCall({
+          toolName: "describe_capability",
+          args: { capability: id },
+          context,
+        });
+        expect(errorEnvelope(described).code, id).toBe("not_found");
+        const invoked = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          args: { capability: id, validate_only: true },
+          context,
+        });
+        expect(errorEnvelope(invoked).code, id).toBe("not_found");
+      }
+      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+      const typo = await handleMcpToolCall({
+        toolName: "describe_capability",
+        args: { capability: "time-entries.creat" },
+        context,
+      });
+      expect(errorEnvelope(typo).hint).not.toContain("time-entries.create");
+    },
+  );
+  test("caller grant permits real catalog and live schema discovery", async () => {
+    const context = fixtureContext("user_1", "org_1");
+    const list = await handleMcpToolCall({
+      toolName: "list_capabilities",
+      args: { limit: 50 },
+      context,
+    });
+    expect(
+      parseToolPayload<{ items: unknown[] }>(list).items.length,
+    ).toBeGreaterThan(0);
+    const described = await handleMcpToolCall({
+      toolName: "describe_capability",
+      args: { capability: "time-entries.create" },
+      context,
+    });
+    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+      "time-entries.create",
+    );
+  });
+});
+
+test.each(["default-deny", "granted", "colleague"] as const)(
+  "MCP conditional query admission for %s",
+  async (kind) => {
+    const featureId = "fixture-query-access";
+    const organizationId = toSafeId<"organization">("org_1");
+    const userId = toSafeId<"user">(kind === "colleague" ? "user_2" : "user_1");
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const checkedQueries: unknown[] = [];
+    const select = mock(() => ({
+      from: () => ({
+        where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+      }),
+    }));
+    const insert = mock(() => undefined);
+    const database = createScopedDbMock({ select, insert });
+    const context = createContext({
+      workspaceIds: [workspaceId],
+      safeDb: database.safeDb,
+      scopedDb: database.scopedDb,
+    });
+    context.userId = userId;
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId,
+      decisions: new Map([
+        [
+          featureId,
+          decideFeatureAccess({
+            registry: { [featureId]: { enrolment: "invitation" } },
+            featureId,
+            organizationId,
+            userId,
+            user: {
+              email:
+                kind === "colleague"
+                  ? "colleague@example.test"
+                  : "member@example.test",
+              emailVerified: true,
+            },
+            membership: true,
+            grants:
+              kind === "default-deny"
+                ? {}
+                : {
+                    [featureId]: [
+                      {
+                        type: "member",
+                        organizationId,
+                        email: "member@example.test",
+                      },
+                    ],
+                  },
+          }),
+        ],
+      ]),
+    });
+    const previous = Object.getOwnPropertyDescriptor(
+      exportTimeEntriesCsv.config,
+      "featureAccess",
+    );
+    Object.defineProperty(exportTimeEntriesCsv.config, "featureAccess", {
+      configurable: true,
+      value: {
+        type: "conditional",
+        featureId,
+        usesFeature: async ({ query }: { query: unknown }) => {
+          checkedQueries.push(query);
+          return isRecord(query) && query["dateFrom"] === "2026-10-02";
+        },
+        projectInputSchema: (schemas: AdvertisedSchemas) => schemas,
+      },
+    });
+    try {
+      for (const validate_only of [true, false]) {
+        const result = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          context,
+          args: {
+            capability: "time-entries.csv.export",
+            validate_only,
+            input: {
+              params: { matterId: workspaceId },
+              query: { dateFrom: "2026-10-02", status: "approved" },
+            },
+          },
+        });
+        if (kind === "granted") {
+          expect(result.isError).not.toBe(true);
+          if (validate_only) {
+            expect(
+              parseToolPayload<{ valid: boolean; capability: string }>(result),
+            ).toEqual({
+              valid: true,
+              capability: "time-entries.csv.export",
+            });
+          }
+        } else {
+          expect(errorEnvelope(result)).toMatchObject({
+            code: "not_found",
+            message: "Not found",
+          });
+          expect(select).not.toHaveBeenCalled();
+          expect(insert).not.toHaveBeenCalled();
+          expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+          expect(consumeRateLimitMock).not.toHaveBeenCalled();
+        }
+      }
+      expect(checkedQueries).toEqual(
+        kind === "granted"
+          ? []
+          : [
+              { dateFrom: "2026-10-02", status: "approved" },
+              { dateFrom: "2026-10-02", status: "approved" },
+            ],
+      );
+      const ordinary = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context,
+        args: {
+          capability: "time-entries.csv.export",
+          validate_only: false,
+          input: {
+            params: { matterId: workspaceId },
+            query: { dateFrom: "2026-10-01", status: "approved" },
+          },
+        },
+      });
+      expect(ordinary.isError).not.toBe(true);
+      expect(select).toHaveBeenCalledTimes(kind === "granted" ? 2 : 1);
+      expect(insert).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");
+      } else {
+        Object.defineProperty(
+          exportTimeEntriesCsv.config,
+          "featureAccess",
+          previous,
+        );
+      }
+    }
+  },
+);

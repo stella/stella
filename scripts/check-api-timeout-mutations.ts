@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE = "apps/api/src/";
 const SHARED_OWNER = `${API_SOURCE}db/shared-pool-timeouts.ts`;
@@ -13,6 +15,7 @@ const DEDICATED_OWNER = `${API_SOURCE}db/long-running-connection.ts`;
 const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/migration-runner.ts`,
   `${API_SOURCE}db/online-migrations.ts`,
+  `${API_SOURCE}db/online-index-gate.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
   `${API_SOURCE}db/corpus-projection-cleanup-stall-repair.ts`,
   `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
@@ -543,7 +546,7 @@ export const checkApiTimeoutMutations = ({
   }
   return findings.toSorted(
     (left, right) =>
-      left.file.localeCompare(right.file) || left.line - right.line,
+      compareCodeUnit(left.file, right.file) || left.line - right.line,
   );
 };
 

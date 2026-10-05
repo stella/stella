@@ -48,7 +48,10 @@ const QuickEntryDialog = () => {
   const navigate = useNavigate();
   const client = useQueryClient();
   const { data: settings, error: settingsError } = useQuery(
-    organizationSettingsOptions(user.activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const createTime = useCreateTimeEntry();
   const createExpense = useCreateExpense();

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -34,6 +34,7 @@ type TimeEntry = {
   narrative: string;
   invoiceNarrative: string | null;
   billable: boolean;
+  noCharge: boolean;
   status: string;
   userName: string | null;
   timerStartedAt: string | null;
@@ -66,10 +67,7 @@ export const TimeEntryRow = ({
   const [splitOpen, setSplitOpen] = useState(false);
 
   const isActive = entry.timerStartedAt !== null;
-  const billedAmount = prorateHourlyCents({
-    billedMinutes: entry.billedMinutes,
-    hourlyRateCents: entry.rateAtEntry,
-  });
+  const billedAmount = timeEntryAmount(entry);
 
   return (
     <>

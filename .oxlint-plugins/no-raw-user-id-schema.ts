@@ -22,6 +22,7 @@ const CONTACT_OWNER_FIELDS = new Set([
 const ORG_USER_VALIDATORS = new Set([
   "validateOrgUserId",
   "validateOrgUserIds",
+  "lockOrgUserIdsForAssignment",
 ]);
 
 const containsSchemaIdentifier = (node, name) => {

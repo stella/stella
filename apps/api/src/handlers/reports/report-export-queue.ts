@@ -62,6 +62,13 @@ import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { recordTemplateUse } from "@/api/lib/templates/record-use";
+import type { FillDiagnosticSources } from "@/api/lib/templates/template-fill-completion";
+import {
+  decideTemplateFillCompletion,
+  describeFillShortfall,
+  fillDiagnosticsOf,
+} from "@/api/lib/templates/template-fill-completion";
 import type {
   AiFillCollaborators,
   MissingRequiredField,
@@ -175,7 +182,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
-export type ReportExportActor = RootRunActor<"reportExport"> & {
+type ReportExportActor = RootRunActor<"reportExport"> & {
   exportId: SafeId<"reportExport">;
 };
 type ExportActor = ReportExportActor;
@@ -480,11 +487,15 @@ const runExport = async ({
       await markExportFailedRow(actor, created.error.message);
       return;
     }
-    await completeExport(actor, {
-      type: "workspace",
-      entityId: created.value.entityId,
-      fieldId: created.value.fieldId,
-    });
+    await completeExport(
+      actor,
+      {
+        type: "workspace",
+        entityId: created.value.entityId,
+        fieldId: created.value.fieldId,
+      },
+      filled.usedTemplateId,
+    );
     return;
   }
 
@@ -501,27 +512,65 @@ const runExport = async ({
     },
     { type: "lifecycle-prefix", prefix: "exports/" },
   );
-  await completeExport(actor, { type: "download", s3Key: key });
+  await completeExport(
+    actor,
+    { type: "download", s3Key: key },
+    filled.usedTemplateId,
+  );
 };
 
 type FillReportResult =
-  | { templateName: string; fileName: string; buffer: Buffer }
+  | {
+      templateName: string;
+      fileName: string;
+      buffer: Buffer;
+      /** The stored template whose use the completed export records; absent
+       *  for a built-in. Recorded with the completion, so a failed export
+       *  leaves the template's usage statistics untouched. */
+      usedTemplateId?: SafeId<"template"> | undefined;
+    }
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: unknown };
 
 type FilledReportDocx =
-  | { templateName: string; fileName: string; file: ScannedFile }
+  | ({
+      templateName: string;
+      fileName: string;
+      file: ScannedFile;
+    } & FillDiagnosticSources)
   | Exclude<FillReportResult, { buffer: Buffer }>;
 
-const toFillReportResult = (filled: FilledReportDocx): FillReportResult =>
-  "file" in filled
-    ? {
-        templateName: filled.templateName,
-        fileName: filled.fileName,
-        buffer: Buffer.from(filled.file.bytes),
-      }
-    : filled;
+/**
+ * A report export has no reader to hand a partial document to, so it reads
+ * the fill's completion decision under the strict policy: an unfilled
+ * placeholder, a failed AI draft or an undecided AI condition fails the
+ * export with each shortfall named, instead of completing a document with
+ * that content missing.
+ */
+const toFillReportResult = (
+  filled: FilledReportDocx,
+  usedTemplateId?: SafeId<"template">,
+): FillReportResult => {
+  if (!("file" in filled)) {
+    return filled;
+  }
+  const completion = decideTemplateFillCompletion({
+    mode: "require_complete",
+    diagnostics: fillDiagnosticsOf(filled),
+  });
+  if (completion.type === "rejected_partial") {
+    return {
+      error: `Report template fill incomplete; ${describeFillShortfall(completion.blocking)}`,
+    };
+  }
+  return {
+    templateName: filled.templateName,
+    fileName: filled.fileName,
+    buffer: Buffer.from(filled.file.bytes),
+    usedTemplateId,
+  };
+};
 
 const fillReport = async ({
   actor,
@@ -707,8 +756,11 @@ const fillReportDocx = async ({
         scopedDb: actor.writeDb,
         organizationId: actor.organizationId,
         requiredFields: "enforce",
+        // The export records use when it completes, not when the fill does.
+        useRecording: "caller",
         ...generators,
       }),
+      templateRef.templateId,
     );
   }
 
@@ -792,8 +844,14 @@ const completedExportValues = (result: CompletedExportResult) => {
 const completeExport = async (
   actor: ExportActor,
   result: CompletedExportResult,
+  usedTemplateId: SafeId<"template"> | undefined,
 ): Promise<void> => {
   await actor.writeDb(async (tx) => {
+    // A stored template is used by the export that completes, in the same
+    // transaction, so a failed or rejected export never counts as a use.
+    if (usedTemplateId !== undefined) {
+      await recordTemplateUse({ tx, templateId: usedTemplateId });
+    }
     // audit: skip — terminal bookkeeping on the already-audited export row (the
     // created document, in workspace mode, is audited by createEntityFromBuffer).
     await tx

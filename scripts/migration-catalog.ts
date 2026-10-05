@@ -3,6 +3,8 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { REHEARSAL_ROWS_PER_DECISION } from "../apps/api/src/scripts/seed-migration-rehearsal-plan";
 
 type Row = Record<string, unknown>;
@@ -16,13 +18,6 @@ const SEEDED_TABLES = new Set([
   "corpus_index_generations",
   "oauth_client",
 ]);
-// This migration fixture inserts gen_random_uuid() explicitly; the column has
-// no volatile default to discover from pg_attrdef. Compare its meaningful data.
-const NONDETERMINISTIC_MIGRATION_COLUMNS: Readonly<
-  Record<string, readonly string[]>
-> = {
-  "public.case_law_court_weights": ["id"],
-};
 const VOLATILE_DEFAULT =
   /\b(?:now|clock_timestamp|statement_timestamp|transaction_timestamp|gen_random_uuid|uuid_generate_v4|nextval)\s*\(/iu;
 const USER_SCHEMA = "n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'";
@@ -52,12 +47,12 @@ const stable = (value: unknown): unknown => {
   if (isRecord(value)) {
     return Object.fromEntries(
       Object.entries(value)
-        .toSorted(([left], [right]) => left.localeCompare(right))
+        .toSorted(([left], [right]) => compareCodeUnit(left, right))
         .map(([key, nested]) => [
           key,
           Array.isArray(nested) && ["acl", "config", "roles"].includes(key)
             ? nested.toSorted((left, right) =>
-                String(left).localeCompare(String(right)),
+                compareCodeUnit(String(left), String(right)),
               )
             : stable(nested),
         ]),
@@ -168,9 +163,6 @@ const snapshotData = async (
           !selected.includes(String(column["name"])),
       )
       .map((column) => String(column["name"]));
-    excluded.push(
-      ...(NONDETERMINISTIC_MIGRATION_COLUMNS[`${schema}.${name}`] ?? []),
-    );
     const expression =
       excluded.length === 0
         ? "to_jsonb(t)"

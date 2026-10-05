@@ -53,6 +53,11 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
+  isReadRefusal,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+} from "@/api/lib/errors/read-outcome";
+import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -2554,8 +2559,8 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(failure).toBe(deadline.signal.reason);
   });
 
-  test("reports a rich-text read that fails and builds from the text", async () => {
-    failRequestsUnder(
+  test("reports a rich-text read that fails and holds the row instead of building it from the text", async () => {
+    const { requests } = failRequestsUnder(
       "/DokumentOriginal/Html/",
       () => new TypeError("fetch failed"),
     );
@@ -2566,8 +2571,11 @@ describe("cz-nss reads the portal did not answer", () => {
       signal: AbortSignal.timeout(5000),
     });
 
-    expect(built.type).toBe("built");
-    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(built.type).toBe("detail-unavailable");
+    expect(built.decision.isListingOnly).toBe(true);
+    expect(
+      requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+    ).toEqual([]);
     expect(
       warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
     ).toMatchObject({
@@ -2597,5 +2605,164 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(
       requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
     ).toEqual([]);
+  });
+
+  /** Answers that fail a read without stating that the document is absent. */
+  const READ_FAILURES = {
+    "a server error": () => htmlResponse("", 500),
+    "a request timeout": () => {
+      throw new DOMException("request deadline", "TimeoutError");
+    },
+    "an empty 204": () => new Response(null, { status: 204 }),
+    "an empty 200 body": () => htmlResponse(""),
+  } as const satisfies Record<string, () => Response>;
+
+  /** Serve the portal, answering every request under `pathPrefix` with `fail`. */
+  const answerUnder = (
+    pathPrefix: string,
+    fail: () => Response,
+  ): { requests: RecordedRequest[] } => {
+    const recorded = installStub({ search: [] });
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith(pathPrefix)) {
+          return await Promise.resolve().then(fail);
+        }
+        return await served(input, init);
+      },
+    );
+    return recorded;
+  };
+
+  for (const [failure, fail] of Object.entries(READ_FAILURES)) {
+    test(`holds a row whose rich-text read answers ${failure}, without reading the text`, async () => {
+      const { requests } = answerUnder("/DokumentOriginal/Html/", fail);
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.fulltext).toBeUndefined();
+      expect(
+        requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+      ).toEqual([]);
+    });
+  }
+
+  for (const failure of ["an empty 204", "an empty 200 body"] as const) {
+    test(`holds a row whose detail read answers ${failure}`, async () => {
+      answerUnder("/DokumentDetail/Index/", READ_FAILURES[failure]);
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.ecli).toBeUndefined();
+    });
+  }
+
+  /** Build the listed row, with every request under `pathPrefix` answered `status`. */
+  const buildWithStatusUnder = async (pathPrefix: string, status: number) => {
+    const { requests } = answerUnder(pathPrefix, () =>
+      htmlResponse("", status),
+    );
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+    return { built, requests };
+  };
+
+  for (const status of [401, 403] as const) {
+    for (const pathPrefix of [
+      "/DokumentDetail/Index/",
+      "/DokumentOriginal/Html/",
+    ] as const) {
+      test(`holds a row whose ${pathPrefix} read answers ${status} with the typed refusal`, async () => {
+        const { built, requests } = await buildWithStatusUnder(
+          pathPrefix,
+          status,
+        );
+
+        expect(built.type).toBe("detail-unavailable");
+        expect(built.decision.isListingOnly).toBe(true);
+        expect(built.decision.fulltext).toBeUndefined();
+        const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+        expect(isReadRefusal(outcome)).toBe(true);
+        expect(outcome).toMatchObject({ status, scope: "document" });
+        // A refused rich original is never replaced by the text endpoint.
+        expect(
+          requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+        ).toEqual([]);
+      });
+    }
+
+    test(`holds a row whose text read answers ${status} with the typed refusal`, async () => {
+      installStub({ search: [], htmlDocumentStatus: 404 });
+      const served = globalThis.fetch;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) =>
+          new URL(
+            input instanceof Request ? input.url : String(input),
+          ).pathname.startsWith("/DokumentOriginal/Text/")
+            ? htmlResponse("", status)
+            : await served(input, init),
+      );
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.metadata[READ_OUTCOME_METADATA_KEY]).toMatchObject({
+        type: "refused",
+        status,
+        scope: "document",
+      });
+    });
+  }
+
+  test("a row held for a failed document read states the typed unavailable outcome", async () => {
+    const { built } = await buildWithStatusUnder(
+      "/DokumentOriginal/Html/",
+      500,
+    );
+
+    expect(built.decision.isListingOnly).toBe(true);
+    const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(isStoredReadUnavailable(outcome)).toBe(true);
+    expect(outcome).toMatchObject({
+      scope: "document",
+      cause: { kind: "status", status: 500 },
+    });
+  });
+
+  test("builds from the text where the portal holds no rich original", async () => {
+    installStub({ search: [], htmlDocumentStatus: 404 });
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("built");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
   });
 });

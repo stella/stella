@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { isFileProperty } from "@stll/api-contract/property-policy";
+
 import { properties } from "@/api/db/schema";
+import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -18,6 +21,7 @@ const config = {
     "another property depends on are refused.",
   permissions: { property: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: propertyRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -72,7 +76,7 @@ const deleteProperty = createSafeHandler(
       }
 
       // File properties are system-managed until file-property creation exists.
-      if (property.content.type === "file") {
+      if (isFileProperty(property.content)) {
         return {
           ok: false as const,
           status: 400 as const,

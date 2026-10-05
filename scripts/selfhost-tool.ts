@@ -11,8 +11,10 @@ import {
   ENV_REQUIREMENT,
 } from "./env-catalog";
 import {
+  deploymentFlagPairingIssues,
   exampleValueForCatalogEntry,
   parseEnvText,
+  readDoctorInput,
   renderEnvironmentEntries,
   validateDoctorEnvironment,
 } from "./env-tool";
@@ -51,6 +53,7 @@ const SELFHOST_ACTIVE_API_ENV_NAMES = [
   "BETTER_AUTH_URL",
   "CONTENT_ENCRYPTION_KEY",
   "DATABASE_URL",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "FRONTEND_URL",
   "GOTENBERG_PASSWORD",
   "GOTENBERG_URL",
@@ -79,6 +82,7 @@ const SELFHOST_API_EXAMPLES = {
   CONTENT_ENCRYPTION_KEY: "",
   DATABASE_URL:
     "postgres://stella_owner:password@postgres.example.internal:5432/stella?sslmode=require",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: "https://stella.example.com",
   GOTENBERG_PASSWORD: "",
   GOTENBERG_URL: "http://gotenberg:3000",
@@ -435,6 +439,26 @@ const check = async () => {
   return false;
 };
 
+type SelfhostDoctorIssuesOptions = {
+  ambientEnvironment: NodeJS.ProcessEnv;
+  text: string;
+  /** The web build's variables; the web reads its flags from apps/web. */
+  webEnvironment: Record<string, string | undefined>;
+};
+
+export const selfhostDoctorIssues = ({
+  ambientEnvironment,
+  text,
+  webEnvironment,
+}: SelfhostDoctorIssuesOptions) => [
+  ...productionEnvironmentIssues(text),
+  ...ambientComposeOverrideIssues(text, ambientEnvironment),
+  ...deploymentFlagPairingIssues({
+    api: parseEnvText(text, {}),
+    web: webEnvironment,
+  }),
+];
+
 const doctor = (envPath = SELFHOST_ENV_PATH) => {
   const absolutePath = path.resolve(REPO_ROOT, envPath);
   if (!existsSync(absolutePath)) {
@@ -442,10 +466,11 @@ const doctor = (envPath = SELFHOST_ENV_PATH) => {
     return false;
   }
   const text = readFileSync(absolutePath, "utf-8");
-  const issues = [
-    ...productionEnvironmentIssues(text),
-    ...ambientComposeOverrideIssues(text, process.env),
-  ];
+  const issues = selfhostDoctorIssues({
+    ambientEnvironment: process.env,
+    text,
+    webEnvironment: readDoctorInput({ app: "web", mode: "production" }).input,
+  });
   if (issues.length === 0) {
     console.log(`${envPath}: valid production self-host configuration.`);
     return true;

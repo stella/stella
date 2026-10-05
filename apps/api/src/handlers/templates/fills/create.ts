@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { templateFills } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -10,7 +9,6 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -31,7 +29,12 @@ import {
   type SanitizedFileName,
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { recordTemplateFill } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -310,40 +313,27 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     const entityId = created.value.entityId;
 
-    // A failed AI draft leaves its field unfilled, so it counts against the
-    // fill the same way an unmatched placeholder does.
-    const fillStatus =
-      filled.unmatchedPlaceholders.length > 0 || filled.aiFieldErrors.length > 0
-        ? "partial"
-        : "success";
+    const diagnostics = fillDiagnosticsOf(filled);
+    // The completion decision over every diagnostic: a failed AI draft, an
+    // undecided AI condition or an unresolved clause counts against the fill
+    // the same way an unmatched placeholder does.
+    const fillStatus = templateFillStatus(diagnostics);
 
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await scopedDb(async (tx) => {
-            await tx.insert(templateFills).values({
-              organizationId,
+            await recordTemplateFill({
+              tx,
               templateId,
+              organizationId,
               userId: user.id,
+              // The handler's own workspace, which its recorder is bound to.
+              workspaceId,
+              entityId,
               format: "docx",
-              status: fillStatus,
-              unmatchedCount: filled.unmatchedPlaceholders.length,
-              unusedCount: filled.unusedValues.length,
-              structureErrors:
-                filled.structureErrors.length > 0
-                  ? filled.structureErrors
-                  : null,
-            });
-
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.EXECUTE,
-              resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-              resourceId: templateId,
-              metadata: {
-                entityId,
-                status: fillStatus,
-                unmatchedCount: filled.unmatchedPlaceholders.length,
-              },
+              diagnostics,
+              recordAuditEvent,
             });
           }),
         catch: (cause) =>
@@ -359,12 +349,31 @@ const fillTemplateToWorkspace = createSafeHandler(
       entityId,
       fieldId: created.value.fieldId,
       fileName: created.value.fileName,
+      // The recorded completion decision: `partial` when any diagnostic
+      // below is blocking, so the client reports the document as incomplete
+      // instead of as created.
+      completionStatus:
+        fillStatus === "success" ? ("complete" as const) : ("partial" as const),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
       clauseWarnings: filled.clauseWarnings,
       // Fields whose AI draft failed: unfilled in the saved document, so the
       // person who filled the template has to write them.
       aiFieldErrors: filled.aiFieldErrors,
+      // AI-decided conditions nothing settled: their blocks were rendered as
+      // if false, so the person who filled the template has to decide them.
+      undecidedConditions: diagnostics.undecidedConditions.map(
+        ({ path, label, reason }) => ({ path, label, reason }),
+      ),
+      // Directives the renderer could not apply: the saved document renders
+      // them wrong, so the person who filled the template has to fix them.
+      structureErrors: diagnostics.structureErrors.map(
+        ({ directive, message, paragraphIndex }) => ({
+          directive,
+          message,
+          paragraphIndex,
+        }),
+      ),
     });
   },
 );

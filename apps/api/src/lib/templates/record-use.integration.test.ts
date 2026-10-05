@@ -121,6 +121,7 @@ const fillOverChat: Transport["fill"] = async ({
       text: RENDERED_TEXT,
       unmatchedPlaceholders: [],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [],
       conditionDecisions: [],
       clauseWarnings: [],

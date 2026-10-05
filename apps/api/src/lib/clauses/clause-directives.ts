@@ -147,7 +147,14 @@ export const validateClauseBodyDirectives = (
 };
 
 export const clauseDirectiveWarningSchema = v.strictObject({
-  code: v.literal("CLAUSE_LEGACY_DIRECTIVES"),
+  /** `CLAUSE_LEGACY_DIRECTIVES`: a stored clause the fill rendered keeps
+   *  literal legacy markers. `CLAUSE_OVERRIDE_NOT_RENDERED`: a per-fill
+   *  override with invalid directives was not used, because its slot does not
+   *  render in this fill. */
+  code: v.picklist([
+    "CLAUSE_LEGACY_DIRECTIVES",
+    "CLAUSE_OVERRIDE_NOT_RENDERED",
+  ]),
   clauseName: v.string(),
   version: v.nullable(v.pipe(v.number(), v.integer())),
   clauseId: v.optional(v.string()),
@@ -165,6 +172,26 @@ type LegacyClauseIdentity = Pick<
   ClauseDirectiveWarning,
   "clauseName" | "version" | "clauseId" | "slotKey" | "hint"
 >;
+
+/** An override that would be refused where its slot renders, reported
+ *  instead of refusing a fill that never renders it. */
+export const unrenderedOverrideWarning = ({
+  clauseName,
+  slotKey,
+  issues,
+}: {
+  clauseName: string;
+  slotKey: string;
+  issues: ClauseDirectiveWarning["issues"];
+}): ClauseDirectiveWarning => ({
+  code: "CLAUSE_OVERRIDE_NOT_RENDERED",
+  clauseName,
+  version: null,
+  slotKey,
+  hint: "Correct the clause override before a fill that renders this slot.",
+  message: `The clause override for slot ${slotKey} has invalid directives and was not used: the slot does not render in this fill.`,
+  issues,
+});
 
 /** Historical content remains readable; only new publication is refused. */
 export const inspectLegacyClauseDirectives = (

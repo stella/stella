@@ -24,11 +24,19 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+} from "@/api/mcp/feature-access-prose";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
-import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
+import {
+  hasMcpToolAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * Chat's write surface, projected from the `access: "write"` slice of the MCP
@@ -155,6 +163,10 @@ export const buildChatWriteTools = (
     ...contextDeps
   } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
 
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
@@ -162,9 +174,19 @@ export const buildChatWriteTools = (
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat write tool ${toolName} is missing from the static registry`);
-    // The same declared-permission gate MCP discovery applies: a member who
-    // cannot run any of the tool's operations is not offered it.
-    if (!hasMcpToolAuthority(context, definition)) {
+    // The same declared gates MCP discovery applies: a member who cannot run
+    // any of the tool's operations, or an account its declared account
+    // access refuses, is not offered it.
+    if (
+      !hasMcpToolAuthority(context, definition) ||
+      !isAccountAuthorizedForMcpTool(context.userEmail, definition) ||
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: definition.name,
+        featureId: definition.featureId,
+      })
+    ) {
       continue;
     }
     const inputSchema =
@@ -181,7 +203,7 @@ export const buildChatWriteTools = (
 
     tools[toolName] = toolDefinition({
       name: toolName,
-      description,
+      description: scopeMcpDescriptorProse(description, hiddenIds),
       inputSchema,
     }).server(async (args: unknown) => {
       const toolArgs = isRecord(args) ? args : {};

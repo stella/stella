@@ -1,19 +1,39 @@
 import { panic, Result } from "better-result";
+import type * as slimdom from "slimdom";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
-import type { NamedCondition } from "@stll/template-conditions";
+import {
+  scanMarkers,
+  type NamedCondition,
+  type LoopProperty,
+} from "@stll/template-conditions";
 
 import {
   createDirectiveProcessingContext,
   processBlockDirectives,
   readConditionRawValues,
 } from "@/api/lib/docx/block-directives";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import {
+  discoverTemplate,
+  locateFieldMarkers,
+} from "@/api/lib/docx/discover-template";
 import { processInlineConditions } from "@/api/lib/docx/inline-conditions";
 import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
-import { patchParagraphPlaceholders } from "@/api/lib/docx/rich-patch";
+import {
+  collectRenderedFieldTokens,
+  createFieldMarkerTable,
+  scopeInlineFieldTokens,
+  swapFieldMarkersForTokens,
+} from "@/api/lib/docx/rendered-field-markers";
+import type { RenderedFieldOccurrence } from "@/api/lib/docx/rendered-field-markers";
+import {
+  paragraphSpanText,
+  patchParagraphPlaceholders,
+  replaceParagraphTextRanges,
+} from "@/api/lib/docx/rich-patch";
 import type {
   ClauseProvenance,
+  EnclosingScope,
   TemplateData,
   RichRun,
   RichPatchValue,
@@ -159,13 +179,142 @@ export type ClauseFillContext = {
   slotKey: string;
   namedConditions?: NamedCondition[] | undefined;
   source?: "stored" | "authored" | undefined;
+  /** The template loop iteration the slot renders in, whose counters the
+   *  body's own `{{ loop.* }}` markers print, as a marker written inline in
+   *  that loop body would. */
+  enclosingLoop?: Record<LoopProperty, number | boolean> | undefined;
+};
+
+const hasTemplateMarkers = (body: ClauseBody): boolean =>
+  body.some((paragraph) => {
+    const text = paragraph.isDirective
+      ? paragraph.text
+      : paragraphRuns(paragraph)
+          .map(({ text: runText }) => runText)
+          .join("");
+    return text.includes("{{") || text.includes("{%");
+  });
+
+type ClauseEvaluationOptions = Pick<
+  ClauseFillContext,
+  "values" | "namedConditions"
+> & {
+  /** Sees the body's container before its directives are evaluated. */
+  prepare?:
+    | ((container: slimdom.Element) => Result<void, HandlerError<422>>)
+    | undefined;
+  scopeInlineText?: ReturnType<
+    typeof createDirectiveProcessingContext
+  >["scopeInlineText"];
+};
+
+/** The body's directives evaluated against `values`: one pass shared by the
+ *  rendering and by reading which of its markers render. */
+const evaluateClauseDirectives = (
+  body: ClauseBody,
+  {
+    values,
+    namedConditions,
+    prepare,
+    scopeInlineText,
+  }: ClauseEvaluationOptions,
+) => {
+  const container = clauseDirectiveContainer(body);
+  const prepared = prepare?.(container);
+  if (prepared !== undefined && Result.isError(prepared)) {
+    return Result.err(prepared.error);
+  }
+  const conditionValues = readConditionRawValues(values);
+  const processingContext = createDirectiveProcessingContext();
+  processingContext.scopeInlineText = scopeInlineText;
+  const { patchValues, errors } = processBlockDirectives(container, values, {
+    conditionValues,
+    namedConditions,
+    processingContext,
+  });
+  const inlineErrors = processInlineConditions(
+    container,
+    conditionValues === undefined ? values : { ...values, ...conditionValues },
+    namedConditions,
+    { processingContext },
+  );
+  return Result.ok({
+    container,
+    patchValues,
+    errors: [...errors, ...inlineErrors],
+    loopScopes: processingContext.inlineDataByParagraph,
+  });
+};
+
+type RenderedClauseFieldOptions = Pick<
+  ClauseFillContext,
+  "values" | "namedConditions"
+> & {
+  /** Where the slot renders the body, from the template's discovery. */
+  slotScope: EnclosingScope | null | undefined;
+};
+
+/**
+ * The value markers a clause body renders where its slot renders it with
+ * `values` (the slot's document values or loop iteration). A body whose
+ * directives do not validate renders as literal text, so none of its markers
+ * render as fields.
+ */
+export const renderedClauseFieldMarkers = (
+  body: ClauseBody,
+  { values, namedConditions, slotScope }: RenderedClauseFieldOptions,
+): Result<RenderedFieldOccurrence[], HandlerError<422>> => {
+  if (
+    Result.isError(validateClauseBodyDirectives(body)) ||
+    !hasTemplateMarkers(body)
+  ) {
+    return Result.ok([]);
+  }
+  const table = createFieldMarkerTable(
+    body.map((paragraph) =>
+      paragraph.isDirective
+        ? paragraph.text
+        : paragraphRuns(paragraph)
+            .map(({ text }) => text)
+            .join(""),
+    ),
+  );
+  const evaluated = evaluateClauseDirectives(body, {
+    values,
+    namedConditions,
+    scopeInlineText: (options) => scopeInlineFieldTokens(table, options),
+    prepare: (prepared) =>
+      swapFieldMarkersForTokens(
+        locateFieldMarkers(prepared, { scope: slotScope }).fieldMarkers,
+        table,
+      ),
+  });
+  if (Result.isError(evaluated)) {
+    return evaluated;
+  }
+  const { container, errors, loopScopes } = evaluated.value;
+  if (errors.length > 0) {
+    return Result.ok([]);
+  }
+  const rendered: RenderedFieldOccurrence[] = [];
+  collectRenderedFieldTokens(container, loopScopes, table, rendered);
+  for (const occurrence of rendered) {
+    occurrence.scope ??= values;
+  }
+  return Result.ok(rendered);
 };
 
 /** Resolve the stored body with the template engine before list labels or rich
  * patches are constructed. Synthetic loop keys stay local to this clause. */
 export const clauseBodyToRichPatch = (
   body: ClauseBody,
-  { values, slotKey, namedConditions, source }: ClauseFillContext,
+  {
+    values,
+    slotKey,
+    namedConditions,
+    source,
+    enclosingLoop,
+  }: ClauseFillContext,
 ): Result<RichPatchValue, HandlerError<422>> => {
   const structureError = (
     errors: { message: string; paragraphIndex: number; directive: string }[],
@@ -189,41 +338,36 @@ export const clauseBodyToRichPatch = (
       ? Result.ok(resolvedBodyToRichPatch(body))
       : Result.err(validation.error);
   }
-  if (
-    !body.some((paragraph) => {
-      const text = paragraph.isDirective
-        ? paragraph.text
-        : paragraphRuns(paragraph)
-            .map(({ text: runText }) => runText)
-            .join("");
-      return text.includes("{{") || text.includes("{%");
-    })
-  ) {
+  if (!hasTemplateMarkers(body)) {
     return Result.ok(resolvedBodyToRichPatch(body));
   }
 
-  const container = clauseDirectiveContainer(body);
-
-  const conditionValues = readConditionRawValues(values);
-  const processingContext = createDirectiveProcessingContext();
-  const { patchValues, errors } = processBlockDirectives(container, values, {
-    conditionValues,
+  const evaluated = evaluateClauseDirectives(body, {
+    values,
     namedConditions,
-    processingContext,
   });
-  const inlineErrors = processInlineConditions(
-    container,
-    conditionValues === undefined ? values : { ...values, ...conditionValues },
-    namedConditions,
-    { processingContext },
-  );
-  if (errors.length > 0 || inlineErrors.length > 0) {
-    return structureError([...errors, ...inlineErrors]);
+  if (Result.isError(evaluated)) {
+    return evaluated;
+  }
+  const { container, patchValues, errors } = evaluated.value;
+  if (errors.length > 0) {
+    return structureError(errors);
   }
 
   // Insertion does not recursively patch a rich value's contents. Resolve the
   // loop engine's generated keys here, never in the template's global key map.
   for (const paragraph of [...container.getElementsByTagNameNS(W_NS, "p")]) {
+    // Clause-local loops have resolved their counters; surviving tokens bind
+    // to the template iteration that contains this clause occurrence.
+    if (enclosingLoop !== undefined) {
+      const ranges = scanMarkers(paragraphSpanText(paragraph)).flatMap(
+        ({ meta, start, end }) =>
+          meta.kind === "loop"
+            ? [{ start, end, value: String(enclosingLoop[meta.property]) }]
+            : [],
+      );
+      replaceParagraphTextRanges(paragraph, ranges);
+    }
     patchParagraphPlaceholders(paragraph, patchValues);
   }
   const resolved: ClauseBody = [];

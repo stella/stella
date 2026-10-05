@@ -41,6 +41,7 @@ const createPlaybookFromStarter = createSafeRootHandler(
   config,
   async function* ({
     body,
+    getActiveWorkspaceIds,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
@@ -56,9 +57,13 @@ const createPlaybookFromStarter = createSafeRootHandler(
       );
     }
 
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

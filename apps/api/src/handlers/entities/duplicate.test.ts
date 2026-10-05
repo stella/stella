@@ -299,6 +299,7 @@ describe("duplicate name collisions", () => {
     const otherWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
     const targetParentId = toSafeId<"entity">(Bun.randomUUIDv7());
     const otherParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    const otherMatterParentId = toSafeId<"entity">(Bun.randomUUIDv7());
     await tx.insert(organization).values({
       id: seededOrganizationId,
       name: "Copy name test",
@@ -333,9 +334,16 @@ describe("duplicate name collisions", () => {
         kind: "folder",
       },
     ]);
+    await tx.insert(entities).values({
+      id: otherMatterParentId,
+      workspaceId: otherWorkspaceId,
+      name: "Other matter folder",
+      kind: "folder",
+    });
     return {
       targetWorkspaceId,
       otherWorkspaceId,
+      otherMatterParentId,
       targetParentId,
       otherParentId,
     };
@@ -357,7 +365,7 @@ describe("duplicate name collisions", () => {
         },
         {
           workspaceId: scope.otherWorkspaceId,
-          parentId: scope.targetParentId,
+          parentId: scope.otherMatterParentId,
           name: "contract.md",
         },
         {
@@ -407,7 +415,7 @@ describe("duplicate name collisions", () => {
         },
         {
           workspaceId: scope.otherWorkspaceId,
-          parentId: scope.targetParentId,
+          parentId: scope.otherMatterParentId,
           name: "contract_1.md",
         },
       ]);
@@ -485,7 +493,7 @@ describe("duplicate name collisions", () => {
         },
         {
           workspaceId: scope.otherWorkspaceId,
-          parentId: scope.otherParentId,
+          parentId: scope.otherMatterParentId,
           name: "a_.docx",
         },
       ]);

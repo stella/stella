@@ -33,7 +33,7 @@ import {
 } from "@/api/lib/account-deletion-steps";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { runConfirmedTransaction } from "@/api/lib/confirmation-otp";
 import {
   anonymizeDeletedAccountRow,
   lockAccountRow,
@@ -42,6 +42,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding";
 import { logger } from "@/api/lib/observability/logger";
 
 export { ACCOUNT_DELETION_ERROR_CODE };
@@ -273,92 +274,91 @@ export const verifyAndDeleteUser = async (
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
       const s3KeysToDelete: string[] = [];
 
-      // Burn the confirmation OTP *before* opening the deletion transaction.
-      // The consume runs on its own root connection and commits independently,
-      // so a wrong/expired code (or any later abort of the destructive work
-      // below) can never restore the row and reopen it to replay/guessing.
-      // The atomic DELETE ... RETURNING also serializes concurrent verifies on
-      // its own, so this no longer needs the user-row lock to gate it. The
-      // purpose-specific error codes keep the frontend's localized
-      // invalid/expired messaging working.
-      const otpResult = await verifyConfirmationOtp({
-        purpose: "delete-account",
-        email,
-        code,
-        errorCode: {
-          invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
-          expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
-        },
-      });
-      if (Result.isError(otpResult)) {
-        throw otpResult.error;
-      }
-
-      await rootDb.transaction(async (tx) => {
-        await lockAccountRow(tx, currentUserId);
-
-        // 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction
-        await assertUserIsNotSoleOrgOwner(tx, currentUserId);
-
-        const { organizationIds, workspaceIds } =
-          await collectUserOrganizationAndWorkspaceIds(tx, currentUserId);
-
-        // The user row is retained for historical attribution in collaborative
-        // records. Account deletion revokes access and clears private profile
-        // fields, but completed/cancelled task history can still show who did
-        // the work with a deleted-account marker.
-
-        await revokeAuthCredentialsAndInvitations({
-          tx,
-          currentUserId,
+      // The code is consumed inside the deletion transaction, after every
+      // lock the deletion needs. A busy matter refuses before the code is
+      // read, and any refusal after a correct code rolls the consume back, so
+      // the same code retries. A wrong or expired code commits its burn.
+      const deletion = await runConfirmedTransaction({
+        confirmation: {
+          purpose: "delete-account",
           email,
-        });
-        await revokeOAuthTokensAndGrants(tx, currentUserId);
-        await deleteConnectedCredentialsAndOAuthState(tx, currentUserId);
-        await clearWorkspaceLeadRole(tx, currentUserId);
-        await resetFolioCollabUserState(tx, currentUserId);
+          code,
+          errorCode: {
+            invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
+            expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
+          },
+        },
+        beforeConsume: async (tx) => {
+          await lockAccountRow(tx, currentUserId);
+          // Ownership check with SELECT FOR UPDATE locks on owner rows.
+          await assertUserIsNotSoleOrgOwner(tx, currentUserId);
+          // Organization membership -> every affected matter, without waiting.
+          await tryLockAccountMemberCleanup(tx, currentUserId);
+        },
+        afterConsume: async (tx) => {
+          const { organizationIds, workspaceIds } =
+            await collectUserOrganizationAndWorkspaceIds(tx, currentUserId);
 
-        const taskReassignmentCount =
-          await reassignActiveTaskAssignmentsAndDropMemberships({
+          // The user row is retained for historical attribution in collaborative
+          // records. Account deletion revokes access and clears private profile
+          // fields, but completed/cancelled task history can still show who did
+          // the work with a deleted-account marker.
+
+          await revokeAuthCredentialsAndInvitations({
             tx,
             currentUserId,
+            email,
+          });
+          await revokeOAuthTokensAndGrants(tx, currentUserId);
+          await deleteConnectedCredentialsAndOAuthState(tx, currentUserId);
+          await clearWorkspaceLeadRole(tx, currentUserId);
+          await resetFolioCollabUserState(tx, currentUserId);
+
+          const taskReassignmentCount =
+            await reassignActiveTaskAssignmentsAndDropMemberships({
+              tx,
+              currentUserId,
+              deletionRequestId,
+              reassignments,
+            });
+
+          await deleteDesktopEditSessionsAndHandoffs({
+            tx,
+            currentUserId,
+            s3KeysToDelete,
+          });
+          await deletePdfSigningSessions(tx, currentUserId);
+          await deletePendingUploads({ tx, currentUserId, s3KeysToDelete });
+          await deleteFileComparisonUploads({
+            tx,
+            currentUserId,
+            s3KeysToDelete,
+          });
+          await deleteUserFiles({ tx, currentUserId, s3KeysToDelete });
+          await deleteChatThreadsAndFileLinks(tx, currentUserId);
+          await deletePersonalAiMemories(tx, currentUserId);
+          await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
+            tx,
+            currentUserId,
+          );
+          await deletePersonalBillingRates(tx, currentUserId);
+
+          await recordAccountDeletionRequest({
+            tx,
             deletionRequestId,
-            reassignments,
+            currentUserId,
+            organizationIds,
+            workspaceIds,
+            taskReassignmentCount,
+            s3KeysToDelete,
           });
 
-        await deleteDesktopEditSessionsAndHandoffs({
-          tx,
-          currentUserId,
-          s3KeysToDelete,
-        });
-        await deletePdfSigningSessions(tx, currentUserId);
-        await deletePendingUploads({ tx, currentUserId, s3KeysToDelete });
-        await deleteFileComparisonUploads({
-          tx,
-          currentUserId,
-          s3KeysToDelete,
-        });
-        await deleteUserFiles({ tx, currentUserId, s3KeysToDelete });
-        await deleteChatThreadsAndFileLinks(tx, currentUserId);
-        await deletePersonalAiMemories(tx, currentUserId);
-        await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
-          tx,
-          currentUserId,
-        );
-        await deletePersonalBillingRates(tx, currentUserId);
-
-        await recordAccountDeletionRequest({
-          tx,
-          deletionRequestId,
-          currentUserId,
-          organizationIds,
-          workspaceIds,
-          taskReassignmentCount,
-          s3KeysToDelete,
-        });
-
-        await anonymizeDeletedAccountRow(tx, currentUserId);
+          await anonymizeDeletedAccountRow(tx, currentUserId);
+        },
       });
+      if (Result.isError(deletion)) {
+        throw deletion.error;
+      }
 
       if (s3KeysToDelete.length > 0) {
         await enqueueStorageCleanupOrLog(deletionRequestId);

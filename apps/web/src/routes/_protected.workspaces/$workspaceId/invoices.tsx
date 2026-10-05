@@ -27,8 +27,8 @@ import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices",
 )({
-  beforeLoad: ({ params }) => {
-    if (!isTimeBillingRouteEnabled()) {
+  beforeLoad: async ({ context, params }) => {
+    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },

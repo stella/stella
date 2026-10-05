@@ -499,6 +499,68 @@ describe("handleMcpHttpRequest", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
+  test("refuses the demo account every MCP request, read-only discovery and read calls included", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    resolveMcpSessionContextMock.mockImplementation(
+      async (session, options) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () => ({
+            memberId: "member_one",
+            email: "limited@example.test",
+            role: "owner",
+            workspace: null,
+          }),
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    );
+    // A read-only tool: the refusal is session-wide, not per write tool.
+    const readTool = listStaticMcpToolDefinitions("default").find(
+      (definition) => definition.access === "read",
+    );
+    if (readTool === undefined) {
+      throw new Error("The default surface must serve a read tool");
+    }
+    const requests = [
+      { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: readTool.name, arguments: {} },
+      },
+    ];
+    for (const body of requests) {
+      const response = await handleMcpHttpRequest(createMcpRequest(body));
+      expect({ method: body.method, status: response.status }).toEqual({
+        method: body.method,
+        status: 403,
+      });
+      expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+        error: { code: -32_001, message: "Forbidden" },
+        id: null,
+        jsonrpc: "2.0",
+      });
+    }
+    expect(listMcpToolsMock).not.toHaveBeenCalled();
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
   test("captures unexpected transport errors as a retryable 5xx, not a 401", async () => {
     const error = new Error("database connection refused");
     authenticateMcpRequestMock.mockResolvedValue(
@@ -619,7 +681,9 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("the official v2 client separates host-file upload from the picker app", async () => {
-    const context = { type: "documents-mcp-context" };
+    // The transport checks write authority before dispatch, so the session
+    // carries a role that holds both upload tools.
+    const context = { type: "documents-mcp-context", memberRole: "owner" };
     const definitions = DOCUMENTS_MCP_TOOL_DEFINITIONS.filter(({ name }) =>
       ["upload_document_version", "open_document_version_upload"].includes(
         name,
@@ -1460,7 +1524,9 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default");
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
+      type: "mcp-context",
+    });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);
@@ -1501,6 +1567,7 @@ describe("handleMcpHttpRequest", () => {
     expect(readMcpResourceMock).toHaveBeenCalledWith(
       "stella://reference/template-markers",
       "default",
+      { type: "mcp-context" },
     );
     expect(body.result.contents).toEqual([
       {

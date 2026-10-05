@@ -28,6 +28,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
   DESIGN_LINT_BACKLOG_RULES,
@@ -90,7 +92,7 @@ const backlogRule = (code: string): DesignLintBacklogRule | undefined => {
   return undefined;
 };
 
-const emptyBacklog = (): DesignLintBacklog => ({
+export const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
@@ -98,15 +100,19 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
+  "no-direct-status-set/no-direct-status-set": {},
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},
+  "react/no-children-prop": {},
+  "eslint/no-unexpected-multiline": {},
+  "eslint/no-use-before-define": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>
   Object.fromEntries(
     Object.entries(counts).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareCodeUnit(left, right),
     ),
   );
 

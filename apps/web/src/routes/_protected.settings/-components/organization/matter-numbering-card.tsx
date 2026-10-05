@@ -37,9 +37,12 @@ const PATTERN_PRESETS = [
 const PADDING_OPTIONS = [2, 3, 4, 5, 6] as const;
 
 export const MatterNumberingCard = () => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
 
   if (!settings) {

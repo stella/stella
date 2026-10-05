@@ -8,7 +8,7 @@ import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
 export type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
-type FilenameContext = {
+export type FilenameContext = {
   filename?: string;
   getFilename?: () => string;
 };

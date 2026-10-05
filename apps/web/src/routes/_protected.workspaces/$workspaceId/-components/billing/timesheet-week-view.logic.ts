@@ -1,4 +1,4 @@
-import { type CentsAmount, prorateHourlyCents } from "@stll/money";
+import { type CentsAmount, timeEntryAmount } from "@stll/money";
 
 /**
  * The fields of a time entry the weekly timesheet totals depend on.
@@ -8,6 +8,7 @@ export type TimesheetTotalEntry = {
   workItemId: string | null;
   currency: string;
   billable: boolean;
+  noCharge: boolean;
   billedMinutes: number;
   rateAtEntry: CentsAmount;
 };
@@ -35,10 +36,7 @@ export const summarizeBillableAmountByCurrency = (
     if (!entry.billable) {
       continue;
     }
-    const amount = prorateHourlyCents({
-      billedMinutes: entry.billedMinutes,
-      hourlyRateCents: entry.rateAtEntry,
-    });
+    const amount = timeEntryAmount(entry);
     byCurrency.set(
       entry.currency,
       (byCurrency.get(entry.currency) ?? 0) + amount,
@@ -64,10 +62,7 @@ export const summarizeBillableAmountByMatterAndCurrency = (
       byCurrency = new Map<string, number>();
       byMatter.set(entry.workItemId, byCurrency);
     }
-    const amount = prorateHourlyCents({
-      billedMinutes: entry.billedMinutes,
-      hourlyRateCents: entry.rateAtEntry,
-    });
+    const amount = timeEntryAmount(entry);
     byCurrency.set(
       entry.currency,
       (byCurrency.get(entry.currency) ?? 0) + amount,

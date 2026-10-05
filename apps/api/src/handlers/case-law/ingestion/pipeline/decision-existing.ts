@@ -20,11 +20,14 @@ import type {
   AttemptStep,
   DecisionRefresh,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import type { PlainTextMetadataValue } from "@/api/lib/case-law/plain-text";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -53,6 +56,12 @@ export type ObservationShape = {
   storesUnpublishedWithoutDocument: boolean;
   /** A partial observation of a row that was enriched from detail before. */
   preservesExistingDetail: boolean;
+  /**
+   * An observation that carries more detail than the stored row, such as a
+   * complete one of a listing-only row. It is always written: a source
+   * fingerprint that leaves the detail out cannot tell the two apart.
+   */
+  upgradesStoredDetail: boolean;
 };
 
 type ClassifyObservationOptions = {
@@ -75,17 +84,26 @@ export const classifyObservation = ({
   const storesUnpublishedWithoutDocument =
     !incomingCarriesDocument &&
     result.documentDelivery !== DOCUMENT_DELIVERY.DEFERRED;
+  const incomingDetailRank =
+    OBSERVATION_DETAIL_RANK[observationDetailOf(result)];
+  const storedDetailRank =
+    OBSERVATION_DETAIL_RANK[storedPartialObservation.detail];
   const preservesExistingDetail =
     existing !== undefined &&
     ((result.caseNumberIsPlaceholder === true &&
       !storedPartialObservation.caseNumberIsPlaceholder) ||
-      OBSERVATION_DETAIL_RANK[observationDetailOf(result)] <
-        OBSERVATION_DETAIL_RANK[storedPartialObservation.detail]);
+      incomingDetailRank < storedDetailRank);
   return {
     storedPartialObservation,
     incomingCarriesDocument,
     storesUnpublishedWithoutDocument,
     preservesExistingDetail,
+    // An observation stored under the listing-only marker for want of a
+    // document upgrades nothing.
+    upgradesStoredDetail:
+      existing !== undefined &&
+      !storesUnpublishedWithoutDocument &&
+      incomingDetailRank > storedDetailRank,
   };
 };
 
@@ -138,9 +156,35 @@ type WatermarkOptions = {
   observationOrder: bigint;
 };
 
+/** Write an unread item's typed outcome under its metadata key. */
+const recordReadOutcome = (outcome: PlainTextMetadataValue) =>
+  sql`jsonb_set(coalesce(${caseLawDecisions.metadata}, '{}'::jsonb), ${`{${READ_OUTCOME_METADATA_KEY}}`}::text[], ${JSON.stringify(outcome)}::text::jsonb)`;
+
+/**
+ * The read-outcome marker an unchanged observation leaves on its row: an
+ * unread item's outcome, or none once a read produced the item again.
+ */
+const unchangedReadOutcomeMetadata = (
+  existing: ExistingDecision,
+  result: IngestionResult,
+) => {
+  const unreadOutcome = unreadOutcomeOf(result);
+  if (unreadOutcome !== undefined) {
+    return { metadata: recordReadOutcome(unreadOutcome) };
+  }
+  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] === undefined) {
+    return {};
+  }
+  return {
+    metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
+  };
+};
+
 /**
  * Advance only the observation watermark of a row a partial observation
- * reached, while the row's corpus mirror is settled.
+ * reached, while the row's corpus mirror is settled. An observation of an
+ * unread item also records its typed outcome under one metadata key; the
+ * row's detail, text and payload stay as stored.
  */
 const advancePartialObservationWatermark = async ({
   scopedDb,
@@ -154,6 +198,7 @@ const advancePartialObservationWatermark = async ({
       family: "case_law",
       entityId: existing.id,
     });
+    const unreadOutcome = unreadOutcomeOf(result);
     // audit: skip — background case-law observation watermark; public data
     const advanced = (
       await tx
@@ -162,6 +207,11 @@ const advancePartialObservationWatermark = async ({
           sourceObservedAt: observedAt,
           sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
+          ...(unreadOutcome === undefined
+            ? {}
+            : {
+                metadata: recordReadOutcome(unreadOutcome),
+              }),
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
         })
         .where(
@@ -189,7 +239,8 @@ const advancePartialObservationWatermark = async ({
 /**
  * Advance only the observation watermark of a row an unchanged observation
  * reached, while the row still holds the source hash and metadata the
- * refresh check compared.
+ * refresh check compared. The row's read-outcome marker follows this
+ * observation.
  */
 const advanceUnchangedObservationWatermark = async ({
   scopedDb,
@@ -211,6 +262,7 @@ const advanceUnchangedObservationWatermark = async ({
           sourceObservedAt: observedAt,
           sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
+          ...unchangedReadOutcomeMetadata(existing, result),
           // Drizzle applies the schema's on-update value unless this column is
           // explicit. A watermark-only replay is not a content modification.
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
@@ -324,6 +376,7 @@ export const resolveExistingDecisionPolicy = async ({
     preservesExistingDetail,
     storedPartialObservation,
     storesUnpublishedWithoutDocument,
+    upgradesStoredDetail,
   },
   observedAt,
   observationOrder,
@@ -365,6 +418,9 @@ export const resolveExistingDecisionPolicy = async ({
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+    // A matching publisher hash cannot settle a row this observation
+    // completes: the hash may leave out the detail that completes it.
+    !upgradesStoredDetail &&
     // A matching publisher hash cannot settle a row whose stored document
     // is gone when this observation can restore it.
     !(incomingCarriesDocument && !existing.hasStoredDocument) &&

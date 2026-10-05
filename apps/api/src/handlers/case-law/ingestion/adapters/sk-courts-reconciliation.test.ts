@@ -505,6 +505,26 @@ describe("sk-courts buildDecision", () => {
     expect(built.decision.documentUrl).toBeUndefined();
   });
 
+  test("the crawl reports a record it cannot read as an unread item, which the reconciliation refuses", async () => {
+    mockJustice({ detail: { body: JSON.stringify({ ecli: 42 }) } });
+
+    const built = await buildSkCourtsDecision(BARDEJOV_ITEM);
+
+    expect(built.type).toBe("unread");
+    if (built.type !== "unread") {
+      return;
+    }
+    expect(built.item.outcome.type).toBe("unavailable");
+    expect(built.item.listing).toMatchObject({
+      sourceDocumentId: BARDEJOV_ITEM.guid,
+      isListingOnly: true,
+    });
+    expect(built.item.listing.documentUrl).toBeUndefined();
+    expect(await reconciliation.buildDecision(BARDEJOV_ITEM)).toEqual({
+      type: "detail-unavailable",
+    });
+  });
+
   test("a payload no current shape recognises is unkeyable", async () => {
     mockJustice({});
 

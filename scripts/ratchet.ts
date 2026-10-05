@@ -34,6 +34,8 @@ import path from "node:path";
 import { analyse } from "scslre";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -44,7 +46,10 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { ROOT_CONNECTION_DOORS } from "./ownership";
+import {
+  ROOT_CONNECTION_DOORS,
+  STATUS_TRANSITION_OWNERSHIP,
+} from "./ownership";
 import { memoizeRecent, parseSource, sourceDialect } from "./parse-memo";
 import {
   isResultConventionExcludedFile,
@@ -60,6 +65,10 @@ import {
   isExcludedSource,
   isExcludedTestInclusiveSource,
 } from "./source-globs";
+import {
+  unmanagedTransitionTables,
+  statusWriteCalls,
+} from "./status-write-shapes";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -1769,6 +1778,35 @@ const countShadowedNamespaces = (content: string): number => {
   return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
+const UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE =
+  "apps/api/src/lib/resource-set-realtime.registry.test.ts";
+
+/**
+ * Write capabilities that do not yet declare what they announce to open tabs
+ * (UNCLASSIFIED_WRITE_CAPABILITIES in the resource-set realtime registry
+ * test). The list only shrinks; it is absent from trees older than the
+ * declaration, and a head tree that renames or drops the constant fails
+ * loudly rather than reading as zero.
+ */
+const countUnclassifiedRealtimeWriteCapabilities: RoleSensitiveFileCounter = (
+  content,
+  { role },
+) => {
+  const block =
+    /const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string\[\] = \[([\s\S]*?)\];/u.exec(
+      content,
+    )?.[1];
+  if (block === undefined) {
+    if (role === "base") {
+      return 0;
+    }
+    return panic(
+      "unclassified-realtime-write-capabilities: UNCLASSIFIED_WRITE_CAPABILITIES not found",
+    );
+  }
+  return (block.match(/^[ \t]*"/gmu) ?? []).length;
+};
+
 const PG_TABLE_MARKER = "p.pgTable(";
 const WORKSPACE_ONLY_POLICIES_MARKER = "...wsPolicies()";
 const ORGANIZATION_ID_COLUMN_MARKER = "organizationId:";
@@ -2268,7 +2306,7 @@ type RepoMetricResult = {
 
 type RepoCounter = (context: ScanContext) => RepoMetricResult;
 
-export type RatchetMetric =
+export type RatchetMetric = (
   | ({
       readonly scope: "file";
       readonly id: string;
@@ -2300,7 +2338,10 @@ export type RatchetMetric =
       readonly id: string;
       readonly description: string;
       readonly count: RepoCounter;
-    };
+      /** Gate each measured member independently, including virtual file keys. */
+      readonly perFile?: true;
+    }
+) & { readonly growth?: "shrink-only" };
 
 // One decrease-only budget per tracked rule, derived from the single
 // tracked-rule table rather than hand-listed here: a rule added to that table
@@ -2889,6 +2930,46 @@ const RESULT_BOUNDARY_METRICS = [
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "file",
+    id: "direct-status-writes",
+    description:
+      "lifecycle keys in direct/conflict Drizzle updates and visible raw SQL assignments outside the transition owner; opaque handles/payloads count conservatively and each file's debt can only shrink",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      STATUS_TRANSITION_OWNERSHIP.owner.some((owner) => file === owner),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      statusWriteCalls({
+        content,
+        file,
+        columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+      }).length) satisfies FileCounter,
+  },
+  {
+    scope: "repo",
+    id: "unmanaged-transition-specs",
+    description:
+      "reasoned unmanaged status-table entries, each table independently shrink-only; before specs exist, every inventoried status table is unmanaged",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const file = "apps/api/src/lib/db/transition-specs.ts";
+      const tables =
+        existsSync(path.join(context.root, file)) &&
+        (context.trackedFiles === undefined || context.trackedFiles.has(file))
+          ? unmanagedTransitionTables(readSource(context, file))
+          : Object.keys(STATUS_TRANSITION_OWNERSHIP.enforcement.columns);
+      return {
+        count: tables.length,
+        files: Object.fromEntries(
+          tables.map((table) => [`${file}#${table}`, 1]),
+        ),
+      };
+    },
+  },
+  {
+    scope: "file",
     id: "as-casts",
     description:
       "`as` type assertions in app source (excl. `as const`, import aliases, tests/gen/d.ts)",
@@ -3260,6 +3341,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "unclassified-realtime-write-capabilities",
+    description:
+      "write capabilities listed in UNCLASSIFIED_WRITE_CAPABILITIES because their handler does not yet declare what it announces to open tabs (a resource set or noResourceSetUpdates); classify a capability and remove it from the list, never add one",
+    include: [UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE],
+    exclude: () => false,
+    measurement: "role-sensitive",
+    count: countUnclassifiedRealtimeWriteCapabilities,
+  },
+  {
+    scope: "file",
     id: "cross-feature-imports",
     description:
       "imports crossing web feature slices (features/<a> -> features/<b>); features are independent end-to-end slices",
@@ -3399,9 +3490,9 @@ const printReportOnlyMetrics = (context: ScanContext): void => {
 };
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
-  RATCHET_METRICS.filter(
-    (metric) => metric.scope === "file" && metric.perFile === true,
-  ).map(({ id }) => id),
+  RATCHET_METRICS.filter((metric) => metric.perFile === true).map(
+    ({ id }) => id,
+  ),
 );
 
 // How `--check` gates a metric: per file, and whether below-baseline files
@@ -3412,7 +3503,7 @@ const metricGate = (metric: RatchetMetric): DiffOptions =>
         perFile: metric.allowlist === undefined ? metric.perFile : true,
         allowlist: metric.allowlist === undefined ? undefined : true,
       }
-    : {};
+    : { perFile: metric.perFile };
 
 // --- Scanning ---------------------------------------------------------------
 
@@ -3851,7 +3942,7 @@ const diffMetric = (
       regressedFiles.push({ file, from, to });
     }
   }
-  regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
+  regressedFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
@@ -3861,7 +3952,7 @@ const diffMetric = (
         staleFiles.push({ file, from, to });
       }
     }
-    staleFiles.sort((a, b) => a.file.localeCompare(b.file));
+    staleFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
   }
 
   const totalStatus = metricStatus(current.count, baseline.count);
@@ -4060,6 +4151,12 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
     };
   }
   const perFile = metricGate(metric).perFile === true;
+  if (metric.growth === "shrink-only") {
+    return {
+      type: "invalid",
+      message: `${filename}: shrink-only metric takes no allowances ${metric.id}`,
+    };
+  }
   const { file } = value;
   if (perFile && !isRepositoryPath(file)) {
     return {
@@ -4149,6 +4246,12 @@ const checkAllowances = ({
             ({ delta }) => delta > 0,
           );
     for (const { file, delta } of increases) {
+      if (metric.growth === "shrink-only") {
+        errors.push(
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+        );
+        continue;
+      }
       const key = allowanceKey({ metric: diff.id, file });
       const funded = funding.get(key);
       funding.delete(key);
@@ -4766,6 +4869,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
+  "no-direct-clause-variant-insert/no-direct-clause-variant-insert": 0,
   "require-query-limit/require-query-limit": 6,
   "no-network-await-in-loop/no-network-await-in-loop": 0,
   "require-bounded-request-schema/require-bounded-request-schema": 0,
@@ -5651,6 +5755,56 @@ const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+// Two listed capabilities; the comment line and the neighbouring array are
+// not entries.
+const SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = `
+const OTHER_LIST: readonly string[] = ["not.counted"];
+const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string[] = [
+  // grouped by domain
+  "clauses.create",
+  "clauses.delete",
+];
+`;
+const EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = 2;
+
+const unclassifiedRealtimeWriteCapabilitiesSelfTestFailures = (
+  snapshot: Baseline,
+): string[] => {
+  const failures: string[] = [];
+  const metric = requireSnapshot(
+    snapshot,
+    "unclassified-realtime-write-capabilities",
+  );
+  if (metric.count !== EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES) {
+    failures.push(
+      `unclassified-realtime-write-capabilities counted ${metric.count}, expected ${EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES}`,
+    );
+  }
+  const withoutList = "export {};\n";
+  if (
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "base",
+    }) !== 0
+  ) {
+    failures.push(
+      "unclassified-realtime-write-capabilities did not read a base without the list as 0",
+    );
+  }
+  const renamed = Result.try(() =>
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "head",
+    }),
+  );
+  if (renamed.isOk()) {
+    failures.push(
+      "unclassified-realtime-write-capabilities read a head without the list as a count",
+    );
+  }
+  return failures;
+};
+
 const legacyPaintSelfTestFailures = (snapshot: Baseline): string[] => {
   const metric = requireSnapshot(snapshot, "legacy-paint-transitions");
   if ("apps/web/dist/generated.css" in metric.files) {
@@ -6027,6 +6181,11 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/legacy-realtime-invalidations.ts",
       SELF_TEST_LEGACY_REALTIME_INVALIDATIONS,
+    );
+    writeFixture(
+      root,
+      UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES,
     );
     writeFixture(
       root,
@@ -6414,6 +6573,10 @@ const runSelfTest = (): number => {
         `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
       );
     }
+
+    failures.push(
+      ...unclassifiedRealtimeWriteCapabilitiesSelfTestFailures(snapshot),
+    );
 
     const adHocSubjectGateMetric = requireSnapshot(
       snapshot,

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
+
 import {
   legislationDocuments,
   legislationSources,
@@ -287,7 +289,7 @@ test("a pending public jurisdiction reports unavailability before reading its st
     () => panic("A pending country must not read the statute database"),
   );
   expect(response).toMatchObject({
-    code: 503,
+    code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
     response: {
       code: "public_country_unavailable",
       status: "unavailable",

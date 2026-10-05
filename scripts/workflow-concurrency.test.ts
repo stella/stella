@@ -45,10 +45,18 @@ const runsOnPullRequests = (workflow: unknown) =>
   isRecord(workflow) &&
   triggers(workflow["on"]).some((event) => PULL_REQUEST_EVENTS.has(event));
 
+type ConcurrencyProblemsOptions = {
+  supersedingEvents?: readonly string[];
+  mode?: "supersede" | "preserve-events";
+};
+
 /** Why a pull request workflow's runs would not supersede each other. */
 const concurrencyProblems = (
   workflow: unknown,
-  supersedingEvents: readonly string[] = [],
+  {
+    supersedingEvents = [],
+    mode = "supersede",
+  }: ConcurrencyProblemsOptions = {},
 ): string[] => {
   if (!isRecord(workflow) || !runsOnPullRequests(workflow)) {
     return [];
@@ -67,6 +75,18 @@ const concurrencyProblems = (
   const mixed = events.some((event) => !PULL_REQUEST_EVENTS.has(event));
   const group = concurrency["group"];
   const cancel = concurrency["cancel-in-progress"];
+  // Disarming consumes individual push events. A later trusted autofix must
+  // never supersede an earlier invalidation, including a pending run.
+  if (mode === "preserve-events") {
+    return [
+      ...(group === `\${{ github.workflow }}-\${{ github.run_id }}`
+        ? []
+        : ["event-preserving workflow needs a unique run group"]),
+      ...(cancel === false
+        ? []
+        : ["event-preserving workflow must not cancel runs"]),
+    ];
+  }
   const protectedEvents = [
     "push",
     "merge_group",
@@ -110,6 +130,84 @@ const repositoryWorkflows = async () => {
   );
 };
 
+const TURBO_CACHE_ACTION = "rharkor/caching-for-turbo@";
+
+const turboCacheSites = (workflow: unknown) => {
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    return [];
+  }
+  return Object.entries(workflow["jobs"]).flatMap(([job, value]) => {
+    if (!isRecord(value) || !Array.isArray(value["steps"])) {
+      return [];
+    }
+    return value["steps"].flatMap((step: unknown, index) => {
+      if (
+        !isRecord(step) ||
+        typeof step["uses"] !== "string" ||
+        !step["uses"].startsWith(TURBO_CACHE_ACTION)
+      ) {
+        return [];
+      }
+      return [
+        {
+          job,
+          index,
+          port: isRecord(step["with"])
+            ? step["with"]["server-port"]
+            : undefined,
+        },
+      ];
+    });
+  });
+};
+
+const turboCachePortProblems = (workflow: unknown) =>
+  turboCacheSites(workflow).filter(({ port }) => port !== "0");
+
+describe("Turbo cache server port isolation", () => {
+  test("every workflow cache server requests an available port", async () => {
+    const workflows = await repositoryWorkflows();
+    const sites = workflows.flatMap(({ workflow }) =>
+      turboCacheSites(workflow),
+    );
+    expect(sites.length).toBeGreaterThan(0);
+    expect(
+      workflows.flatMap(({ file, workflow }) =>
+        turboCachePortProblems(workflow).map(
+          ({ job, index }) =>
+            `${file}: ${job} step ${index} needs server-port: "0"`,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test.each([
+    ["missing inputs", "", false],
+    ["missing port", "with: {}", false],
+    ["fixed port", 'with: {server-port: "41230"}', false],
+    ["ephemeral port", 'with: {server-port: "0"}', true],
+  ])("detects %s in every job", (_name, inputs, isolated) => {
+    const workflow: unknown = Bun.YAML.parse(`
+jobs:
+  first:
+    steps:
+      - uses: actions/checkout@fixture
+      - uses: rharkor/caching-for-turbo@fixture
+        ${inputs}
+  second:
+    steps:
+      - uses: rharkor/caching-for-turbo@fixture
+        ${inputs}
+`);
+    const sites = turboCacheSites(workflow);
+    expect(sites.map(({ job, index }) => ({ job, index }))).toEqual([
+      { job: "first", index: 1 },
+      { job: "second", index: 0 },
+    ]);
+    expect(turboCachePortProblems(workflow)).toHaveLength(isolated ? 0 : 2);
+  });
+});
+
 describe("pull request workflow concurrency", () => {
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
@@ -122,12 +220,42 @@ describe("pull request workflow concurrency", () => {
     );
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
-        concurrencyProblems(
-          workflow,
-          file === "ci.yml" ? ["workflow_dispatch"] : [],
-        ).map((problem) => `${file}: ${problem}`),
+        concurrencyProblems(workflow, {
+          supersedingEvents: file === "ci.yml" ? ["workflow_dispatch"] : [],
+          mode:
+            file === "disarm-auto-merge.yml" ? "preserve-events" : "supersede",
+        }).map((problem) => `${file}: ${problem}`),
       ),
     ).toEqual([]);
+  });
+
+  test("event-preserving concurrency rejects shared groups and cancellation", () => {
+    const workflow = {
+      on: { pull_request: { types: ["synchronize"] } },
+      concurrency: {
+        group: `\${{ github.workflow }}-\${{ github.run_id }}`,
+        "cancel-in-progress": false,
+      },
+    };
+    expect(concurrencyProblems(workflow, { mode: "preserve-events" })).toEqual(
+      [],
+    );
+    expect(concurrencyProblems(workflow)).not.toEqual([]);
+    for (const concurrency of [
+      {
+        ...workflow.concurrency,
+        group: `\${{ github.event.pull_request.number }}`,
+      },
+      { ...workflow.concurrency, "cancel-in-progress": true },
+      { ...workflow.concurrency, "cancel-in-progress": `\${{ true }}` },
+    ]) {
+      expect(
+        concurrencyProblems(
+          { ...workflow, concurrency },
+          { mode: "preserve-events" },
+        ),
+      ).not.toEqual([]);
+    }
   });
 
   test("protected events cancel only in explicit supersession groups", async () => {

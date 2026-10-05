@@ -137,6 +137,107 @@ describe("toMajorUnits", () => {
 });
 
 describe("formatMoneyCents", () => {
+  test("preserves every minor unit near the safe integer limit for each exponent", () => {
+    for (const currency of ["USD", "JPY", "KWD"]) {
+      for (const distance of [0, 1, 2, 9, 10, 99, 100, 999, 1000]) {
+        for (const sign of [-1, 1]) {
+          const amountCents = sign * (Number.MAX_SAFE_INTEGER - distance);
+          const rendered = formatMoneyCents({
+            amountCents,
+            currency,
+            locale: "en-US",
+          });
+          const decimal = rendered.replaceAll(/[^\d.-]/gu, "");
+          expect(toMinorUnits({ amount: decimal, currency })).toBe(
+            cents(amountCents),
+          );
+        }
+      }
+    }
+    expect(
+      formatMoneyCents({
+        amountCents: Number.MAX_SAFE_INTEGER,
+        currency: "USD",
+        locale: "en-US",
+      }),
+    ).toBe("$90,071,992,547,409.91");
+    expect(
+      formatMoneyCents({
+        amountCents: Number.MAX_SAFE_INTEGER,
+        currency: "KWD",
+        locale: "en-US",
+      }),
+    ).toBe("KWD\u00A09,007,199,254,740.991");
+  });
+
+  test("retains credit signs below one major unit and rounds half away from zero", () => {
+    for (const [amountCents, fractionDigits, expected] of [
+      [-1, 2, "-$0.01"],
+      [-49, 0, "-$0"],
+      [-50, 0, "-$1"],
+      [50, 0, "$1"],
+      [-5, 1, "-$0.1"],
+      [5, 1, "$0.1"],
+      [-99, 1, "-$1.0"],
+      [99, 1, "$1.0"],
+      [-1, 3, "-$0.010"],
+      [0, 2, "$0.00"],
+      [-0, 2, "-$0.00"],
+    ] as const) {
+      expect(
+        formatMoneyCents({
+          amountCents,
+          fractionDigits,
+          currency: "USD",
+          locale: "en-US",
+        }),
+      ).toBe(expected);
+    }
+    expect(
+      formatMoneyCents({
+        amountCents: -1,
+        currency: "KWD",
+        locale: "en-US",
+      }),
+    ).toBe("-KWD\u00A00.001");
+    expect(
+      formatMoneyCents({
+        amountCents: 15,
+        currency: "JPY",
+        locale: "en-US",
+        fractionDigits: 3,
+      }),
+    ).toBe("¥15.000");
+  });
+
+  test("localizes exact integer and fraction digits with Arabic separators and sign", () => {
+    const large = formatMoneyCents({
+      amountCents: Number.MAX_SAFE_INTEGER,
+      currency: "USD",
+      locale: "ar-EG-u-nu-arab",
+    });
+    expect(large).toContain("٩٠٬٠٧١٬٩٩٢٬٥٤٧٬٤٠٩٫٩١");
+    expect(large).not.toMatch(/\d/u);
+    const credit = formatMoneyCents({
+      amountCents: -1,
+      currency: "KWD",
+      locale: "ar-EG-u-nu-arab",
+    });
+    expect(credit).toContain("٠٫٠٠١");
+    expect(credit).toContain("-");
+    expect(credit).not.toMatch(/\d/u);
+  });
+
+  test("keeps rejected currency fallback exact at the integer limit", () => {
+    expect(
+      formatMoneyCents({
+        amountCents: -Number.MAX_SAFE_INTEGER,
+        currency: "A1C",
+        locale: "en-US",
+      }),
+    ).toBe("-90071992547409.91 A1C");
+  });
+
   test("scales by the currency's own exponent", () => {
     expect(
       formatMoneyCents({ amountCents: 1500, currency: "USD", locale: "en-US" }),

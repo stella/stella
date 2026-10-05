@@ -13,12 +13,13 @@ import { panic } from "better-result";
 import { SQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
+import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
 
-const openDatabase = (client: SQL) =>
-  drizzle({ client, relations: databaseRelations });
+const openDatabase = (client: SQL, logger?: Logger) =>
+  drizzle({ client, relations: databaseRelations, logger });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
@@ -72,6 +73,7 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
   /** Seconds of inactivity before Bun closes a connection. */
@@ -112,10 +114,11 @@ export const withGatedTestClients = async <T>(
     max = 1,
     idleTimeout,
     connection,
+    logger,
   }: OpenClientOptions = {}) => {
     const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
     opened.push(client);
-    return { sql: client, db: openDatabase(client) };
+    return { sql: client, db: openDatabase(client, logger) };
   };
 
   try {

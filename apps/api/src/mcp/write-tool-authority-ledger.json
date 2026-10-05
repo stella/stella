@@ -1,50 +1,14 @@
 [
   {
-    "id": "create_template::any",
-    "reason": "template_id selects template:update over template:create; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "delete_document::any",
-    "reason": "version_id selects entity:update (one version) over entity:delete (the document); the central gate checks only that one of them is held."
-  },
-  {
     "id": "invoke_capability::delegated",
     "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
   },
   {
-    "id": "manage_organization::any",
-    "reason": "action selects workspace:update (matter membership) or organizationSettings:update; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "save_clause::any",
-    "reason": "clause_id selects clause:update over clause:create; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "save_contact::any",
-    "reason": "contact_id selects contact:update over contact:create; the central gate checks only that one of them is held."
-  },
-  {
     "id": "save_document::any",
-    "reason": "entity_id selects entity:update over entity:create; the central gate checks only that one of them is held."
+    "reason": "entity_id selects entity:update over entity:create; the per-operation grant stays aligned with the document-write authorization owner."
   },
   {
     "id": "save_filled_template::any",
-    "reason": "action selects entity:create (new document) or entity:update (new version), each with template:use; the central gate checks only that one pair is held."
-  },
-  {
-    "id": "save_matter::any",
-    "reason": "matter_id selects workspace:update over workspace:create; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "save_playbook::any",
-    "reason": "playbook_id selects playbook:update over playbook:create; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "save_task::any",
-    "reason": "task_id selects entity:update over entity:create; the central gate checks only that one of them is held."
-  },
-  {
-    "id": "save_time_entry::any",
-    "reason": "time_entry_id selects timeEntry:update over timeEntry:create; the central gate checks only that one of them is held."
+    "reason": "action selects entity:create (new document) or entity:update (new version), each with template:use; the per-operation grant stays aligned with the document-write authorization owner."
   }
 ]

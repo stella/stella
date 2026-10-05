@@ -29,13 +29,13 @@ import { and, asc, eq } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  fields,
   entities,
+  taskAssignees,
+  fields,
   flowDefinitions,
-  flowRuns,
   flowRunSteps,
   notifications,
   properties,
@@ -52,6 +52,7 @@ import { createUpdateKanbanPlacement } from "@/api/handlers/fields/kanban-placem
 import readTaskById from "@/api/handlers/tasks/get";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
+import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -276,6 +277,13 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       name: "Flow Worker Test User",
       email: `${userId}@example.com`,
     });
+    await testDb.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
+    });
     await testDb.insert(workspaces).values({
       id: workspaceId,
       organizationId,
@@ -311,14 +319,22 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
 
   const createWaitingGate = async (
     governedWorkflow: boolean,
-    nextStep: FlowStep = CREATE_DOCUMENT_STEP,
+    {
+      nextStep = CREATE_DOCUMENT_STEP,
+      initialStep = REVIEW_GATE_STEP,
+      initialRunStatus = "awaiting_review",
+    }: {
+      nextStep?: FlowStep;
+      initialStep?: FlowStep;
+      initialRunStatus?: "pending" | "awaiting_review";
+    } = {},
   ) => {
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({
       id: definitionId,
       organizationId,
       name: "Task-owned review flow",
-      steps: [REVIEW_GATE_STEP, nextStep],
+      steps: [initialStep, nextStep],
       trigger: MANUAL_TRIGGER,
       enabled: true,
       createdByUserId: userId,
@@ -340,29 +356,58 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     const { runId } = started.value;
     expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
-    await executeFlowStep(
-      { runId, stepIndex: 0 },
-      new AbortController().signal,
-      {
-        database: flowDatabase,
-        makeScopedDb,
-        makeSafeDb,
-        enqueueStep: enqueueFlowStepMock,
-        broadcastUpdate,
-        taskFeatures: { governedWorkflow, legalLists: false },
-        flushSearchRepairs,
-      },
-    );
+    if (initialRunStatus === "pending") {
+      const taskEntityId = createSafeId<"entity">();
+      await testDb.insert(entities).values({
+        id: taskEntityId,
+        workspaceId,
+        kind: "task",
+        name: "Review task",
+        status: "open",
+      });
+      if (governedWorkflow) {
+        await testDb.insert(workObligations).values({
+          entityId: taskEntityId,
+          workspaceId,
+          sourceType: WORK_OBLIGATION_SOURCE.FLOW,
+          status: WORK_OBLIGATION_STATUS.ACTIVE,
+          ownerUserId: userId,
+          acknowledgedAt: new Date(),
+          acknowledgedByUserId: userId,
+          createdByUserId: userId,
+        });
+      }
+      await testDb
+        .update(flowRunSteps)
+        .set({ reviewTaskEntityId: taskEntityId })
+        .where(and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, 0)));
+    } else {
+      await executeFlowStep(
+        { runId, stepIndex: 0 },
+        new AbortController().signal,
+        {
+          database: flowDatabase,
+          makeScopedDb,
+          makeSafeDb,
+          enqueueStep: enqueueFlowStepMock,
+          broadcastUpdate,
+          taskFeatures: { governedWorkflow, legalLists: false },
+          flushSearchRepairs,
+        },
+      );
+    }
     const gate = await testDb.query.flowRunSteps.findFirst({
       where: { runId: { eq: runId }, index: { eq: 0 } },
       columns: { status: true, reviewTaskEntityId: true },
     });
-    expect(gate?.status).toBe("awaiting_review");
+    expect(gate?.status).toBe(initialRunStatus);
     const taskEntityId = gate?.reviewTaskEntityId;
     if (!taskEntityId) {
       throw new Error("expected the waiting gate to own a task");
     }
-    expect(flushedEntityIds.at(-1)).toEqual([taskEntityId]);
+    if (initialRunStatus === "awaiting_review") {
+      expect(flushedEntityIds.at(-1)).toEqual([taskEntityId]);
+    }
     const obligation = await testDb.query.workObligations.findFirst({
       where: { entityId: { eq: taskEntityId } },
     });
@@ -830,10 +875,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   });
 
   test("a previous review task cannot decide the run's next waiting gate", async () => {
-    const { runId, taskEntityId, safeDb } = await createWaitingGate(
-      true,
-      REVIEW_GATE_STEP,
-    );
+    const { runId, taskEntityId, safeDb } = await createWaitingGate(true, {
+      nextStep: REVIEW_GATE_STEP,
+    });
     const approved = await resolveFlowReviewGate({
       safeDb,
       workspaceId,
@@ -900,15 +944,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   test.each(["before start", "before pause", "before failure"] as const)(
     "worker preserves cancellation committed %s",
     async (boundary) => {
-      const { runId, taskEntityId, safeDb } = await createWaitingGate(false);
-      await testDb
-        .update(flowRuns)
-        .set({ status: "pending", currentStepIndex: 0 })
-        .where(eq(flowRuns.id, runId));
-      await testDb
-        .update(flowRunSteps)
-        .set({ status: "pending", startedAt: null, finishedAt: null })
-        .where(eq(flowRunSteps.runId, runId));
+      const { runId, taskEntityId, safeDb } = await createWaitingGate(false, {
+        initialRunStatus: "pending",
+      });
       const entered = Promise.withResolvers<undefined>();
       const release = Promise.withResolvers<undefined>();
       let transactionIndex = 0;
@@ -1015,22 +1053,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   );
 
   test("worker completion preserves cancellation committed during generation", async () => {
-    const { runId, taskEntityId, safeDb } = await createWaitingGate(false);
-    await testDb
-      .update(flowRuns)
-      .set({
-        status: "pending",
-        currentStepIndex: 0,
-        definitionSnapshot: {
-          name: "Task-owned review flow",
-          steps: [AI_STEP, CREATE_DOCUMENT_STEP],
-        },
-      })
-      .where(eq(flowRuns.id, runId));
-    await testDb
-      .update(flowRunSteps)
-      .set({ kind: "ai", status: "pending", startedAt: null, finishedAt: null })
-      .where(and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, 0)));
+    const { runId, taskEntityId, safeDb } = await createWaitingGate(false, {
+      initialRunStatus: "pending",
+      initialStep: AI_STEP,
+    });
     const entered = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();
     const generateTextForRole: typeof generateTanStackTextForRole =
@@ -1447,6 +1473,191 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(run?.status).toBe("cancelled");
     // Rejecting must never chain into the (absent) create-document step.
     expect(enqueuedSteps).toHaveLength(0);
+  });
+
+  test.each(["approved", "rejected", "closed"] as const)(
+    "an eligible member can finish an unassigned review gate: %s",
+    async (decision) => {
+      const reviewer = mintAuthProviderId<"user">();
+      await testDb.insert(user).values({
+        id: reviewer,
+        name: "Departing reviewer",
+        email: `${reviewer}@example.test`,
+      });
+      await testDb.insert(member).values({
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId: reviewer,
+        role: "member",
+        createdAt: new Date(),
+      });
+      await testDb
+        .insert(workspaceMembers)
+        .values({ workspaceId, userId: reviewer });
+      const definitionId = createSafeId<"flowDefinition">();
+      await testDb.insert(flowDefinitions).values({
+        id: definitionId,
+        organizationId,
+        name: "Unassigned review",
+        steps: [REVIEW_GATE_STEP],
+        trigger: MANUAL_TRIGGER,
+        enabled: true,
+        createdByUserId: reviewer,
+      });
+      const reviewerDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [workspaceId], organizationId, reviewer),
+      );
+      const started = await startFlowRun({
+        safeDb: reviewerDb,
+        workspaceId,
+        organizationId,
+        definitionId,
+        triggerSource: { type: "manual", userId: reviewer },
+        inputEntityIds: [],
+        enqueueStep: enqueueFlowStepMock,
+      });
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const runId = started.value.runId;
+      await executeFlowStepWithTestModel(
+        { runId, stepIndex: 0 },
+        new AbortController().signal,
+      );
+      const raised = await loadReviewTask(runId, 0);
+      expect(
+        await testDb.$count(taskAssignees, eq(taskAssignees.userId, reviewer)),
+      ).toBe(1);
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [workspaceId], organizationId, userId),
+      );
+      const removed = await Result.gen(() =>
+        removeWorkspaceMemberHandler({
+          safeDb,
+          workspaceId,
+          userId: reviewer,
+          actorUserId: userId,
+          recordAuditEvent: async () => undefined,
+          dependencies: {
+            broadcastSessionEvent: () => undefined,
+            broadcastWorkspaceResourceSetUpdated: () => undefined,
+            closeSessionConnections: () => undefined,
+            revokeWorkspaceSseAccess: async () => undefined,
+          },
+        }),
+      );
+      if (Result.isError(removed)) {
+        throw removed.error;
+      }
+      expect(
+        await testDb.$count(
+          taskAssignees,
+          eq(taskAssignees.entityId, raised.taskEntityId),
+        ),
+      ).toBe(0);
+      expect(
+        await testDb.$count(entities, eq(entities.id, raised.taskEntityId)),
+      ).toBe(1);
+      if (decision === "closed") {
+        const updated = await Result.gen(() =>
+          updateTaskHandler({
+            safeDb,
+            workspaceId,
+            userId,
+            recordAuditEvent: async () => undefined,
+            body: { taskId: raised.taskEntityId, status: "done" },
+            features: { governedWorkflow: true, legalLists: false },
+            decideGate: async (options) =>
+              await decideGateForTask(options, {
+                broadcastUpdate,
+                enqueueStep: enqueueFlowStepMock,
+                notifyRunCompleted,
+              }),
+          }),
+        );
+        if (Result.isError(updated)) {
+          throw updated.error;
+        }
+      } else {
+        const resolved = await resolveFlowReviewGate({
+          safeDb,
+          workspaceId,
+          organizationId,
+          runId,
+          userId,
+          decision,
+          note: null,
+          recordAuditEvent: async () => undefined,
+        });
+        if (Result.isError(resolved)) {
+          throw resolved.error;
+        }
+      }
+      const run = await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+        columns: { status: true },
+      });
+      expect(run?.status).toBe(
+        decision === "rejected" ? "cancelled" : "completed",
+      );
+      expect((await loadReviewTask(runId, 0)).obligation.status).toBe(
+        WORK_OBLIGATION_STATUS.COMPLETED,
+      );
+    },
+  );
+
+  test("a queued step revalidates its actor before invoking the model", async () => {
+    const departed = mintAuthProviderId<"user">();
+    await testDb.insert(user).values({
+      id: departed,
+      name: "Former actor",
+      email: `${departed}@example.test`,
+    });
+    await testDb.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId: departed,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Actor checked step",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: departed,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      workspaceId,
+      organizationId,
+      definitionId,
+      inputEntityIds: [],
+      triggerSource: { type: "manual", userId: departed },
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const calls = generateTanStackTextForRoleMock.mock.calls.length;
+    const attempted = await Result.tryPromise(
+      async () =>
+        await executeFlowStepWithTestModel(
+          { runId: started.value.runId, stepIndex: 0 },
+          new AbortController().signal,
+        ),
+    );
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error.cause).toBeInstanceOf(FlowStepError);
+    }
+    expect(generateTanStackTextForRoleMock.mock.calls.length).toBe(calls);
   });
 
   test("approving a final review gate completes the run and files its pointer", async () => {

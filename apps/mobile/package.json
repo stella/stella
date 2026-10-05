@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@stll/scripts": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",

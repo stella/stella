@@ -4,9 +4,16 @@ import * as v from "valibot";
 import {
   CLAUSE_WARNINGS_HEADER,
   clauseWarningCountHeaderSchema,
+  UNDECIDED_CONDITIONS_HEADER,
+  undecidedConditionsHeaderSchema,
 } from "@stll/api-contract/template-fill-headers";
+import { evaluateCondition } from "@stll/template-conditions";
 
-import type { ResolvedField } from "@/components/templates/template-discover-types";
+import type {
+  NamedCondition,
+  ResolvedField,
+} from "@/components/templates/template-discover-types";
+import { optionalArray } from "@/lib/arrays";
 
 const aiFieldErrorPathsSchema = v.array(
   v.object({ fieldPath: v.pipe(v.string(), v.nonEmpty()) }),
@@ -24,6 +31,100 @@ export const readAiFieldErrorPaths = (headers: Headers) =>
       .parse(aiFieldErrorPathsSchema, decoded)
       .map(({ fieldPath }) => fieldPath);
   });
+
+/** How a warning names an undecided condition: its label, or its path when
+ *  the template authored an empty label. */
+export const undecidedConditionName = ({
+  label,
+  path,
+}: {
+  label: string;
+  path: string;
+}): string => (label === "" ? path : label);
+
+/** The labels of the AI-decided conditions a download left undecided. */
+export const readUndecidedConditionLabels = (headers: Headers) =>
+  Result.try(() => {
+    const encoded = headers.get(UNDECIDED_CONDITIONS_HEADER);
+    if (encoded === null) {
+      return [];
+    }
+    const decoded: unknown = JSON.parse(decodeURIComponent(encoded));
+    return v
+      .parse(undecidedConditionsHeaderSchema, decoded)
+      .map(undecidedConditionName);
+  });
+
+/** What a fill saved into a matter reports back, as far as the notices read
+ *  it. */
+type SavedFill = {
+  completionStatus: "complete" | "partial";
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly { fieldPath: string }[];
+  undecidedConditions: readonly { label: string; path: string }[];
+  structureErrors: readonly unknown[];
+};
+
+/** One notice the save-to-matter flow shows, in display order. */
+export type SavedFillNotice =
+  | { kind: "created" }
+  | { kind: "createdIncomplete" }
+  | { kind: "unmatchedPlaceholders"; list: string }
+  | { kind: "aiFieldsNotDrafted"; list: string }
+  | { kind: "aiConditionsUndecided"; list: string }
+  | { kind: "structureErrors"; count: number };
+
+/**
+ * The notices for a fill saved into a matter. The document is reported as
+ * created only when the server graded the fill complete; a partial fill is
+ * reported as incomplete, followed by every reason it fell short.
+ */
+export const savedFillNotices = (created: SavedFill): SavedFillNotice[] => [
+  created.completionStatus === "complete"
+    ? { kind: "created" }
+    : { kind: "createdIncomplete" },
+  ...(created.unmatchedPlaceholders.length === 0
+    ? []
+    : [
+        {
+          kind: "unmatchedPlaceholders" as const,
+          list: created.unmatchedPlaceholders.join(", "),
+        },
+      ]),
+  // A field whose draft failed is unfilled, so it is already listed above
+  // as an unmatched placeholder; this names the ones the model could not
+  // write, which the person filling the template has to write instead.
+  ...(created.aiFieldErrors.length === 0
+    ? []
+    : [
+        {
+          kind: "aiFieldsNotDrafted" as const,
+          list: created.aiFieldErrors
+            .map((fieldError) => fieldError.fieldPath)
+            .join(", "),
+        },
+      ]),
+  // A condition nothing decided rendered its sections as if it did not
+  // apply; the person filling the template has to decide it instead.
+  ...(created.undecidedConditions.length === 0
+    ? []
+    : [
+        {
+          kind: "aiConditionsUndecided" as const,
+          list: created.undecidedConditions
+            .map(undecidedConditionName)
+            .join(", "),
+        },
+      ]),
+  ...(created.structureErrors.length === 0
+    ? []
+    : [
+        {
+          kind: "structureErrors" as const,
+          count: created.structureErrors.length,
+        },
+      ]),
+];
 
 type SingleFlightState = {
   current: Promise<void> | null;
@@ -130,4 +231,64 @@ export const readClauseWarnings = (headers: Headers) =>
       clauseWarningCountHeaderSchema,
       headers.get(CLAUSE_WARNINGS_HEADER) ?? "0",
     ),
+  );
+
+/**
+ * The values an item field's `visibleWhen` reads for one item, as the fill
+ * evaluates a condition inside that loop iteration: the item's fields under
+ * the array path and every loop alias, its non-empty fields under their bare
+ * names (an iteration reads its own item first), and the loop counters.
+ */
+const itemConditionValues = (
+  field: ResolvedField,
+  index: number,
+  itemCount: number,
+  values: Readonly<Record<string, unknown>>,
+): Record<string, unknown> => {
+  const scoped = new Map<string, unknown>(
+    Object.entries({
+      ...values,
+      "loop.index": index + 1,
+      "loop.index0": index,
+      "loop.first": index === 0,
+      "loop.last": index === itemCount - 1,
+      "loop.length": itemCount,
+    }),
+  );
+  for (const sub of optionalArray(field.itemFields)) {
+    const value = values[`${field.path}[${String(index)}].${sub.path}`];
+    for (const head of [field.path, ...optionalArray(field.itemAliases)]) {
+      scoped.set(`${head}.${sub.path}`, value);
+    }
+    if (value !== undefined && value !== "") {
+      scoped.set(sub.path, value);
+    }
+  }
+  return Object.fromEntries(scoped);
+};
+
+/** The item fields the form asks for on item `index`: those whose
+ *  `visibleWhen` holds for that item. A field the item's branch prunes is
+ *  never rendered for it, so it is neither shown nor required. */
+export const visibleItemFields = ({
+  field,
+  index,
+  itemCount,
+  values,
+  conditions,
+}: {
+  field: ResolvedField;
+  index: number;
+  itemCount: number;
+  values: Readonly<Record<string, unknown>>;
+  conditions: readonly NamedCondition[];
+}): ResolvedField[] =>
+  optionalArray(field.itemFields).filter(
+    (sub) =>
+      sub.visibleWhen === undefined ||
+      evaluateCondition(
+        sub.visibleWhen,
+        itemConditionValues(field, index, itemCount, values),
+        conditions,
+      ),
   );
