@@ -116,9 +116,11 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
         ),
       );
     }
-    await seedAt(offset + SEED_BATCH_SIZE);
   };
-  await seedAt(0);
+  for (let offset = 0; offset < ENTRY_COUNT; offset += SEED_BATCH_SIZE) {
+    // db-await-in-loop: bounded fixture batches must finish and release their buffers before allocating the next batch
+    await seedAt(offset);
+  }
   await db
     .update(sanctionsSources)
     .set({ activeEditionId: editionId, lastSuccessfulVerifiedAt: now })
@@ -214,9 +216,15 @@ test("measure full-index screening and scoped commit throughput for 10000 contac
       now,
     });
     expect(terminal).toHaveLength(batch.length);
-    await commitAt(offset + SANCTIONS_MONITORING_BATCH_SIZE);
   };
-  await commitAt(0);
+  for (
+    let offset = 0;
+    offset < CONTACT_COUNT;
+    offset += SANCTIONS_MONITORING_BATCH_SIZE
+  ) {
+    // db-await-in-loop: sequential bounded pages measure scoped commit throughput without retaining previous page results
+    await commitAt(offset);
+  }
   const combinedMs = performance.now() - combinedStarted;
   console.log(
     JSON.stringify({
