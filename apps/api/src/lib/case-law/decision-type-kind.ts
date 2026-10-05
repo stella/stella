@@ -6,7 +6,7 @@ import {
   type DecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
 
-import inventory from "@/api/lib/case-law/decision-type-inventory.json";
+import { inventory } from "@/api/lib/case-law/decision-type-inventory";
 import {
   decisionTypeKey,
   isDocketShapedDecisionType,
@@ -19,7 +19,7 @@ import {
  * search providers. Keys are folded (`decisionTypeKey`), so `Uznesenie` and
  * `uznesenie` are one entry.
  *
- * Total over `decision-type-inventory.json`, the census of what each
+ * Total over `decision-type-inventory.ts`, the census of what each
  * jurisdiction stores: `decision-type-census.test.ts` fails on a stored type
  * missing here. An entry mapped to `other` is a decision, with its reason.
  */

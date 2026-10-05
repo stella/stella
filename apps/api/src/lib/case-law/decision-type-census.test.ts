@@ -1,7 +1,7 @@
 /**
  * Census of stored decision types against the canonical-kind table.
  *
- * `decision-type-inventory.json` lists, per jurisdiction, every decision type
+ * `decision-type-inventory.ts` lists, per jurisdiction, every decision type
  * the corpus index holds (regenerated from the engine) and every type an
  * adapter's closed vocabulary can state before it is first stored. The facet
  * and its filter read a stored type only through `readDecisionType`, so a
@@ -23,7 +23,7 @@ import {
   DECISION_TYPE_KINDS,
 } from "@stll/api-contract/case-law-decision-types";
 
-import inventory from "@/api/lib/case-law/decision-type-inventory.json";
+import { inventory } from "@/api/lib/case-law/decision-type-inventory";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
   readDecisionType,
