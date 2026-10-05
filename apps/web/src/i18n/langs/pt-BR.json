@@ -1495,6 +1495,7 @@
     "noResults": "Ainda não há cláusulas",
     "noVariants": "Sem variantes",
     "outdatedVersion": "Atualização disponível",
+    "overrideNotRenderedWarning": "A substituição da cláusula {clauseName} não foi usada: o espaço dela não aparece neste documento.",
     "renameSlot": "Renomear slot",
     "renameSlotInvalid": "Os nomes dos slots devem ser únicos e não podem conter espaços, dois-pontos ou chaves.",
     "restoreVersion": "Restaurar esta versão",
@@ -2157,6 +2158,7 @@
     "markHandled": "Marcar como resolvido",
     "markNew": "Marcar como novo",
     "noAddress": "Nenhum endereço de e-mail está ativo.",
+    "openSourceFile": "Abrir arquivo de e-mail",
     "originalSender": "Remetente original",
     "originalSenderUnverified": "Remetente original (informado, não verificado)",
     "originalSignatureVerified": "Assinatura original verificada (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Trocar endereço",
     "sentAt": "Enviado em",
     "sharedMailboxFiler": "Caixa compartilhada {address}, aprovada por {approver}",
+    "statedInFile": "Cabeçalhos (conforme o arquivo)",
     "states": {
       "handled": "Resolvido"
     },
     "title": "Correspondência",
-    "unknownApprover": "Aprovador desconhecido"
+    "unknownApprover": "Aprovador desconhecido",
+    "uploadedBy": "Enviado por {name}",
+    "uploadedFile": "Arquivo de e-mail enviado"
   },
   "docxReview": {
     "acceptAll": "Aceitar tudo",
@@ -4312,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Selecionar um membro...",
       "deleteAccountTasksDescription": "Você tem tarefas ativas atribuídas. Transfira-as para outros membros do espaço de trabalho para manter o trabalho em andamento.",
       "deleteAccountTasksTitle": "Transferir tarefas ativas",
+      "deleteAccountTasksUnassignedNotice": "As tarefas sem um membro selecionado permanecerão no espaço de trabalho sem responsável.",
       "deleteAccountWarning": "A exclusão é irreversível. Seus dados de login e dados privados da conta serão removidos.",
       "deleteAccountWarningExplanation": "Enviaremos um código de verificação para o seu endereço de e-mail para confirmar esta solicitação. O histórico concluído do espaço de trabalho permanecerá atribuído à sua conta excluída.",
       "desktop": "Área de trabalho",

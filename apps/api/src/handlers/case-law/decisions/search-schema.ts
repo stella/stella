@@ -25,7 +25,10 @@ import {
 } from "@/api/lib/custom-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
-import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
+import {
+  tPublicLawCountry,
+  withPublicCountryUnavailable,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
@@ -280,7 +283,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
   { additionalProperties: false },
 );
 
-export const searchDecisionsResponseSchema = {
+export const searchDecisionsResponseSchema = withPublicCountryUnavailable({
   ...safePublicHandlerResponseSchemasWithStatusText(
     searchDecisionsSuccessResponseSchema,
   ),
@@ -292,4 +295,4 @@ export const searchDecisionsResponseSchema = {
       { additionalProperties: false },
     ),
   ]),
-};
+});

@@ -29,6 +29,7 @@ const BULLMQ_QUEUE_HOSTS = {
   "legal-list-verification-runs": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
+  "uploaded-mail-correspondence": "api",
   workflow: "api",
   "workflow-flex": "api",
 } as const satisfies Record<string, BullMqWorkerHost>;

@@ -10,12 +10,12 @@ import type {
 } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -55,38 +55,54 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   cause?: unknown;
 }> {}
 
-const loadEditionEntries = async (
-  db: ScopedDb,
-  edition: SanctionsActiveEdition,
-): Promise<SanctionsEntry[]> => {
+type LoadEditionEntriesOptions = {
+  db: SanctionsReadDb;
+  edition: SanctionsActiveEdition;
+  signal?: AbortSignal;
+};
+
+export const loadEditionEntries = async ({
+  db,
+  edition,
+  signal,
+}: LoadEditionEntriesOptions): Promise<SanctionsEntry[]> => {
   const entries: SanctionsEntry[] = [];
   const loadPage = async (cursor: string | null): Promise<void> => {
-    const page = await db(
-      async (tx) =>
-        await tx
-          .select({
-            sourceEntryId: sanctionsEditionEntries.sourceEntryId,
-            payload: sanctionsEntryPayloads.payload,
-          })
-          .from(sanctionsEditionEntries)
-          .innerJoin(
-            sanctionsEntryPayloads,
-            eq(
-              sanctionsEditionEntries.contentHash,
-              sanctionsEntryPayloads.contentHash,
-            ),
-          )
-          .where(
-            and(
-              eq(sanctionsEditionEntries.editionId, edition.id),
-              cursor === null
-                ? undefined
-                : gt(sanctionsEditionEntries.sourceEntryId, cursor),
-            ),
-          )
-          .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
-          .limit(ENTRY_PAGE_SIZE),
-    );
+    if (signal?.aborted) {
+      return;
+    }
+    const page = await db(async (tx) => {
+      // Acquiring a transaction may outlive cancellation; never issue its page.
+      if (signal?.aborted) {
+        return [];
+      }
+      return await tx
+        .select({
+          sourceEntryId: sanctionsEditionEntries.sourceEntryId,
+          payload: sanctionsEntryPayloads.payload,
+        })
+        .from(sanctionsEditionEntries)
+        .innerJoin(
+          sanctionsEntryPayloads,
+          eq(
+            sanctionsEditionEntries.contentHash,
+            sanctionsEntryPayloads.contentHash,
+          ),
+        )
+        .where(
+          and(
+            eq(sanctionsEditionEntries.editionId, edition.id),
+            cursor === null
+              ? undefined
+              : gt(sanctionsEditionEntries.sourceEntryId, cursor),
+          ),
+        )
+        .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
+        .limit(ENTRY_PAGE_SIZE);
+    });
+    if (signal?.aborted) {
+      return;
+    }
     for (const row of page) {
       entries.push(row.payload);
     }
@@ -102,7 +118,7 @@ const loadEditionEntries = async (
 type BuildSanctionsIndex = typeof buildScreeningIndex;
 
 type LoadIndexProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
   build: BuildSanctionsIndex;
@@ -117,7 +133,7 @@ const loadIndex = async ({
   Result<ScreeningIndex, SanctionsIndexLoadFailure>
 > => {
   const loaded = await Result.tryPromise({
-    try: async () => await loadEditionEntries(db, edition),
+    try: async () => await loadEditionEntries({ db, edition }),
     catch: (cause) =>
       new SanctionsIndexLoadFailure({
         stage: "read-failed",
@@ -161,7 +177,7 @@ const loadIndex = async ({
 };
 
 type CacheProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
 };
@@ -300,6 +316,6 @@ export const createSanctionsIndexCache = ({
   };
 };
 
-/** Shared by every screening in this process: the in-product check and public search. */
+/** Shared by signed-in screening callers in this process. */
 export const sharedSanctionsIndexCache: SanctionsIndexCache =
   createSanctionsIndexCache();

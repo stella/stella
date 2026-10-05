@@ -49,6 +49,8 @@ export const questionColumnAddAction = (
 ): QuestionColumnAddAction | null => {
   switch (surface.type) {
     case "hidden":
+    case "pending":
+    case "error":
       return null;
     case "gated":
       return { mode: "gate", suggestion: surface.suggestion };

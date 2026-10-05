@@ -4,7 +4,6 @@ import type { OxlintOverride } from "oxlint";
 import {
   libraryIgnorePatterns,
   libraryOverrides,
-  libraryRules,
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
@@ -26,7 +25,7 @@ import {
   SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
-import { OWNERSHIP } from "./scripts/ownership.ts";
+import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -53,7 +52,9 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
-  (entry) => entry.enforcement.kind !== "none",
+  (entry) =>
+    entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "status-set",
 );
 
 // Public route files may build handlers only from the factories whose context
@@ -309,6 +310,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
     "no-direct-error-toast/no-direct-error-toast",
+  ]),
+  fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
+    "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
@@ -596,6 +600,19 @@ const uiStandaloneImports = [
   },
 ];
 
+// The all-locales folio catalog entries (and their `getFolioMessages`) bundle
+// every editor locale into the importing chunk. apps/web loads English eagerly
+// and each other locale on demand through `folioMessageLoaders`.
+const webFolioAllLocalesImports = [
+  "@stll/folio-react/messages",
+  "@stll/folio-core/i18n/messages",
+].map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Import one locale from '@stll/folio-react/messages/<locale>' (see folioMessageLoaders in '@/i18n/i18n-store'); the all-locales entry ships every folio catalog.",
+}));
+
 const webDatePickerImport = {
   // Both spellings: the grouped subpath is a deprecated alias of the flat one
   // and still resolves, so banning only the flat one would leave a way around.
@@ -869,7 +886,91 @@ export default defineConfig({
     },
   },
   rules: {
-    ...libraryRules,
+    // Every base rule is decided here or in the vendored presets, never by a
+    // spread: a spread replaces preset severities without naming the rules,
+    // and scripts/check-oxlint-effective-config.ts fails on that.
+    "stella-lowercase/stella-lowercase": "error",
+    "no-raw-colors/no-raw-colors": "error",
+    "no-useless-assignment": "error",
+    "promise/no-return-in-finally": "error",
+    // A `.then` callback returns or throws; `no-useless-return` is off below
+    // so the trailing `return;` this asks for can stay.
+    "promise/always-return": "error",
+    "typescript/no-unnecessary-condition": [
+      "error",
+      { allowConstantLoopConditions: "only-allowed-literals" },
+    ],
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/no-misused-promises": [
+      "error",
+      { checksVoidReturn: { attributes: false } },
+    ],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      { allowNullableString: true, allowNullableBoolean: true },
+    ],
+    "typescript/no-confusing-void-expression": [
+      "error",
+      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
+    ],
+    "typescript/prefer-nullish-coalescing": [
+      "error",
+      { ignorePrimitives: { string: true, boolean: true } },
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    // A `let`, `const` or class read before its declaration runs throws in
+    // the temporal dead zone. A function declaration is hoisted, so calling
+    // one declared further down is not a defect.
+    "eslint/no-use-before-define": [
+      "error",
+      {
+        functions: false,
+        classes: true,
+        variables: true,
+        allowNamedExports: false,
+      },
+    ],
+    // Preset style rules, decided by cost: each fires far more often than
+    // its fix is worth, so it stays off.
+    // Route files, React components and generated modules follow their
+    // framework's names, not one case (54 files).
+    "unicorn/filename-case": "off",
+    // Closures stay next to their only caller (1004 findings).
+    "unicorn/consistent-function-scoping": "off",
+    // Its fix drops the `undefined` that `useRef<T | undefined>(undefined)`
+    // needs (2767 findings).
+    "unicorn/no-useless-undefined": "off",
+    // Style only: an if/else of statements reads as well (40 findings).
+    "unicorn/prefer-ternary": "off",
+    // Wrapping callback and event APIs needs `new Promise` (365 findings).
+    "promise/avoid-new": "off",
+    // Event handlers and stream callbacks are callbacks by design (507
+    // findings).
+    "promise/prefer-await-to-callbacks": "off",
+    // Effects and fire-and-forget calls run outside an async function (485
+    // findings).
+    "promise/prefer-await-to-then": "off",
+    // Arrow functions take the name of their binding (1086 findings).
+    "func-names": "off",
+    // Style only; `function-component-definition` owns component style (343
+    // findings).
+    "func-style": "off",
+    // `i++` in a loop has no ASI hazard under the formatter (733 findings).
+    "no-plusplus": "off",
+    // As with unicorn/no-negated-condition: the negated form is often clearer
+    // (237 findings).
+    "no-negated-condition": "off",
+    // `const x = object.x` is as clear; the fix churns without catching bugs
+    // (2273 findings).
+    "prefer-destructuring": "off",
+    // Methods that implement an interface need not read `this` (26 findings).
+    "class-methods-use-this": "off",
+    // A TaggedError family lives beside the module that raises it (86
+    // findings).
+    "max-classes-per-file": "off",
+    // Trailing comments document table rows and literal values (962 findings).
+    "no-inline-comments": "off",
+    "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
     // It has no fix-only option.
@@ -917,8 +1018,7 @@ export default defineConfig({
     // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
     "logical-assignment-operators": "off",
 
-    // Override libraryRules so React correctness is checked in every app and
-    // shared package.
+    // React correctness is checked in every app and shared package.
     "react/jsx-key": "error",
     "react/jsx-props-no-spread-multi": "error",
     "react/no-array-index-key": "error",
@@ -1094,9 +1194,6 @@ export default defineConfig({
       { checkConditionalExpressions: true },
     ],
     ...SIZE_LINT_RULES,
-    // libraryRules sets the bare `complexity` key, which outranks the
-    // canonical id above.
-    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
     // Annotations on literal initializers are deliberate widening
     // (`const marker: string = "…"`); removing them narrows to the literal.
@@ -1159,10 +1256,12 @@ export default defineConfig({
     "unicorn/no-useless-spread": "off",
     // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
-    // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
-    "unicorn/no-nested-ternary": "off",
     // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
+    // Restates the core preset: the fix mutates the mapped items and
+    // contradicts no-computed-key-record-assignment, so object spread is the
+    // one record copy. scripts/oxlint-rule-decisions.test.ts holds it off.
+    "oxc/no-map-spread": "off",
 
     // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
@@ -1327,6 +1426,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
+    "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -1465,6 +1565,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-direct-status-set.ts",
+    "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
@@ -1477,6 +1579,62 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      // Plugin fixtures are inputs for the local rules' tests; route fixtures
+      // name their component before declaring it, as route modules do.
+      files: [".oxlint-plugins/__fixtures__/**"],
+      rules: { "eslint/no-use-before-define": "off" },
+    },
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-direct-status-set.fixture.ts"],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-discarded-transition-result.fixture.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
     {
       files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
       rules: { "s3-object-boundary/no-etag-content-identity": "error" },
@@ -3178,7 +3336,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3221,7 +3383,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, ...webFolioAllLocalesImports],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3427,7 +3589,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3452,6 +3618,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -3482,7 +3649,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webProtectedRouteImportGroup,
@@ -3526,6 +3697,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -3568,6 +3740,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -5150,11 +5323,15 @@ export default defineConfig({
     {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
-      // helper. Scoped to apps/web, apps/api and the helper's own package,
+      // helper. Scoped to apps/web, apps/api, the repository and API scripts
+      // (whose sorted output feeds committed baselines and CI reports, so it
+      // must not depend on the runner's locale) and the helper's own package,
       // where the one legitimate bare call lives.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "apps/api/src/**/*.ts",
+        "apps/api/scripts/**/*.ts",
+        "scripts/**/*.ts",
         "packages/collation/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
       ],

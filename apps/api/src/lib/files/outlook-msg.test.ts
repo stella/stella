@@ -1,18 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildCompoundFile,
-  type CompoundFileFixtureStream,
-} from "./compound-file.test-fixture";
+import { buildCompoundFile } from "./compound-file.test-fixture";
 import {
   parsedEmailToText,
   parseEmail,
   renderEmailHtml,
 } from "./email-to-html";
 import { parseOutlookMsg } from "./outlook-msg";
+import {
+  buildOutlookMessage,
+  fileTimeProperty,
+  int32,
+  rootProperty,
+  storageProperty,
+  toArrayBuffer,
+  utf16Property,
+} from "./outlook-msg.test-fixture";
 
 const SECTOR_SIZE = 512;
-const UINT32_RANGE = 4_294_967_296n;
 
 // 1x1 transparent PNG.
 const PNG_BYTES = Buffer.from(
@@ -166,49 +171,25 @@ describe("parseOutlookMsg", () => {
     expect(html).toContain("data:image/png;base64");
     expect(html).not.toContain("cid:generic-logo");
   });
+
+  test("reads the internet message identity and the submit time", () => {
+    const message = parseOutlookMsg(
+      buildOutlookMessage({
+        subject: "Re: Settlement",
+        fromEmail: "counsel@example.org",
+        submittedAt: "2026-06-02T09:30:00Z",
+        messageId: "<reply@example.org>",
+        inReplyTo: "<offer@example.com>",
+        references: "<thread@example.com> <offer@example.com>",
+        text: "Agreed.",
+      }),
+    );
+
+    expect(message.messageId).toBe("<reply@example.org>");
+    expect(message.inReplyTo).toBe("<offer@example.com>");
+    expect(message.references).toBe("<thread@example.com> <offer@example.com>");
+    expect(message.submittedAt).toBe("Tue, 02 Jun 2026 09:30:00 GMT");
+    // Without a delivery time the display date falls back to the submit time.
+    expect(message.date).toBe("Tue, 02 Jun 2026 09:30:00 GMT");
+  });
 });
-
-const rootProperty = (
-  propertyId: string,
-  propertyType: string,
-  bytes: Uint8Array,
-): CompoundFileFixtureStream => ({
-  path: [`__substg1.0_${propertyId}${propertyType}`],
-  bytes,
-});
-
-const storageProperty = (
-  storageName: string,
-  propertyId: string,
-  propertyType: string,
-  bytes: Uint8Array,
-): CompoundFileFixtureStream => ({
-  path: [storageName, `__substg1.0_${propertyId}${propertyType}`],
-  bytes,
-});
-
-const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
-
-const utf16Property = (value: string): Uint8Array =>
-  Buffer.from(`${value}\u0000`, "utf16le");
-
-const int32 = (value: number): Uint8Array => {
-  const bytes = new Uint8Array(4);
-  new DataView(bytes.buffer).setInt32(0, value, true);
-  return bytes;
-};
-
-const fileTimeProperty = (isoDate: string): Uint8Array => {
-  const unixMs = BigInt(new Date(isoDate).getTime());
-  const windowsEpochOffsetMs = 11_644_473_600_000n;
-  const fileTime = (unixMs + windowsEpochOffsetMs) * 10_000n;
-  const bytes = new Uint8Array(8);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, Number(fileTime % UINT32_RANGE), true);
-  view.setUint32(4, Number(fileTime / UINT32_RANGE), true);
-  return bytes;
-};

@@ -71,10 +71,7 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import type {
-  CreateDocumentDestination,
-  NeedsMatterMatter,
-} from "@/components/chat/needs-matter-card";
+import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -132,6 +129,7 @@ import { sha256Hex } from "@/lib/files/sha256";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
@@ -883,40 +881,35 @@ export const useChatSession = ({
         return;
       }
 
-      // SAFETY: spreading inside `.map` is flagged by no-map-spread,
-      // but slice's elements are shared refs with the original
-      // `messages` array — mutating in place would corrupt the
-      // SDK's history. The spread builds a new message object that
-      // owns the rewritten parts array.
-      const truncated = messages
-        .slice(0, targetIndex + 1)
-        // oxlint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
-        .map((message) => {
-          if (message.role !== "assistant") {
-            return message;
+      // slice's elements are shared refs with the original `messages`
+      // array; mutating in place would corrupt the SDK's history, so the
+      // spread builds a new message object that owns the rewritten parts.
+      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
+        if (message.role !== "assistant") {
+          return message;
+        }
+        // Reset the matching ask-user part so `addToolResult` can
+        // overwrite its output. Keeping `input` on the tool-call
+        // keeps the card body stable during the brief frame between
+        // truncation and the next tool-result write.
+        const nextParts: ChatPart[] = [];
+        for (const part of message.parts) {
+          if (part.type === "tool-result" && part.toolCallId === toolCallId) {
+            continue;
           }
-          // Reset the matching ask-user part so `addToolResult` can
-          // overwrite its output. Keeping `input` on the tool-call
-          // keeps the card body stable during the brief frame between
-          // truncation and the next tool-result write.
-          const nextParts: ChatPart[] = [];
-          for (const part of message.parts) {
-            if (part.type === "tool-result" && part.toolCallId === toolCallId) {
-              continue;
-            }
-            if (
-              part.type === "tool-call" &&
-              part.name === "ask-user" &&
-              part.id === toolCallId &&
-              part.state === "complete"
-            ) {
-              nextParts.push(resetAskUserToolCall(part));
-              continue;
-            }
-            nextParts.push(part);
+          if (
+            part.type === "tool-call" &&
+            part.name === "ask-user" &&
+            part.id === toolCallId &&
+            part.state === "complete"
+          ) {
+            nextParts.push(resetAskUserToolCall(part));
+            continue;
           }
-          return { ...message, parts: nextParts };
-        });
+          nextParts.push(part);
+        }
+        return { ...message, parts: nextParts };
+      });
       setMessages(truncated);
       const replayOptions = snapshotChatRequestOptions({
         docxEditRepresentation: undefined,
@@ -940,22 +933,20 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
-    workspacesNavigationOptions(organizationId),
+  const createDocumentMattersView = useQueryView(
+    useQuery({
+      ...workspacesNavigationOptions(organizationId),
+      select: (navigation) =>
+        navigation.workspaces.map((matter) => ({
+          id: matter.id,
+          name: matter.name,
+          color: matter.color,
+          client: matter.client?.displayName
+            ? { displayName: matter.client.displayName }
+            : null,
+        })),
+    }),
   );
-  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(() => {
-    if (!workspacesNavigation) {
-      return [];
-    }
-    return workspacesNavigation.workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      color: w.color,
-      client: w.client?.displayName
-        ? { displayName: w.client.displayName }
-        : null,
-    }));
-  }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
@@ -1479,8 +1470,7 @@ export const useChatSession = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters: isLoadingMatters,
+    createDocumentMattersView,
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,

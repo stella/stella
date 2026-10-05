@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -22,6 +23,7 @@ import {
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  executeCheckCommands,
   planCheck,
   planFullCheck,
   planResultBoundaryLint,
@@ -272,6 +274,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
       "--filter=./packages/ui",
     ]);
@@ -282,6 +285,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck:repo",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -436,6 +440,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
     expect(commands).toContainEqual([
       "bun",
@@ -444,6 +449,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
     ]);
   });
@@ -477,6 +483,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -629,12 +636,13 @@ describe("full and affected code-check parity", () => {
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 if (process.argv[2] === "merge-base") {
   process.stderr.write("fatal: injected failure\\n");
   process.exit(128);
 }
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );
@@ -663,9 +671,10 @@ process.exit(result.exitCode);
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );
@@ -747,6 +756,7 @@ process.exit(result.exitCode);
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -997,6 +1007,176 @@ describe("parallel code-quality legs", () => {
       ).toHaveLength(1);
     }
   });
+});
+
+describe("check failure reporting", () => {
+  const commands = [
+    ["bun", "turbo", "lint"],
+    ["bun", "turbo", "typecheck"],
+    ["bun", "turbo", "typecheck:repo"],
+  ];
+  test("reports every failed command after executing the complete plan", async () => {
+    const executed: (readonly string[])[] = [];
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands,
+        runner: async (command) => {
+          expect(output).toEqual([]);
+          executed.push(command);
+          return command.includes("typecheck")
+            ? Result.ok()
+            : Result.err(
+                new CommandFailedError({
+                  message: "Check failed",
+                  command,
+                  exitCode: 2,
+                  output: "check error",
+                }),
+              );
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(1);
+    expect(executed).toEqual(commands);
+    const report = output.join("");
+    expect(report).toContain("code-check: 2 failed command(s)\n");
+    expect(report).toContain("code-check: failed (exit 2): bun turbo lint");
+    expect(report).toContain(
+      "code-check: failed (exit 2): bun turbo typecheck:repo",
+    );
+    expect(report).not.toContain(
+      "code-check: failed (exit 2): bun turbo typecheck\n",
+    );
+  });
+  test("all successful commands and an empty plan exit zero without a failure summary", async () => {
+    for (const successfulCommands of [commands, []]) {
+      const executed: (readonly string[])[] = [];
+      const output: string[] = [];
+      expect(
+        await executeCheckCommands({
+          commands: successfulCommands,
+          runner: (command) => {
+            executed.push(command);
+            return Result.ok();
+          },
+          write: (line) => {
+            output.push(line);
+          },
+        }),
+      ).toBe(0);
+      expect(executed).toEqual(successfulCommands);
+      expect(output).toEqual([]);
+    }
+  });
+  test("dry runs show the same continuation flags without executing checks", async () => {
+    const plannedCommands = scopedCommands({
+      type: "scoped",
+      lint: { type: "all" },
+      typecheck: { type: "all" },
+      rootLintPaths: [],
+      rootChecks: ["repo-typecheck"],
+    });
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands: plannedCommands,
+        dryRun: true,
+        runner: () => {
+          throw new Error("dry run executed a check");
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(0);
+    expect(output.join("")).toBe(
+      plannedCommands.map((command) => `  ${command.join(" ")}\n`).join(""),
+    );
+    expect(plannedCommands.length).toBeGreaterThan(0);
+    for (const command of plannedCommands) {
+      expect(command).toContain("--continue=dependencies-successful");
+    }
+  });
+});
+
+test("the CLI completes later checks, reports failures, and propagates its exit code", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "code-check-runner-"));
+  const log = path.join(directory, "commands.log");
+  const realGit = Bun.which("git");
+  if (realGit === null) {
+    throw new Error("CLI execution fixture requires Git");
+  }
+  writeFileSync(
+    path.join(directory, "git"),
+    `#!/bin/sh
+if [ "$*" = 'rev-parse --verify --quiet origin/main^{commit}' ]; then
+  exit 1
+fi
+exec "$CHECK_REAL_GIT" "$@"
+`,
+    { mode: 0o755 },
+  );
+  const fakeRunner = `#!/bin/sh
+printf '%s\n' "$*" >> "$CHECK_COMMAND_LOG"
+case "$CHECK_FAIL:$*" in
+  yes:*"turbo run lint"*|yes:*"turbo run typecheck:repo"*) exit 2 ;;
+esac
+`;
+  for (const executable of ["bun", "bash"]) {
+    writeFileSync(path.join(directory, executable), fakeRunner, {
+      mode: 0o755,
+    });
+  }
+  try {
+    for (const failure of ["yes", "no"]) {
+      writeFileSync(log, "");
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "--no-env-file",
+          path.join(import.meta.dir, "code-check-affected.ts"),
+          "--all",
+          "--leg",
+          "rest",
+        ],
+        {
+          cwd: path.resolve(import.meta.dir, ".."),
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            CHECK_COMMAND_LOG: log,
+            CHECK_REAL_GIT: realGit,
+            CHECK_FAIL: failure,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const output = result.stdout.toString();
+      const commands = readFileSync(log, "utf-8");
+      expect(commands).toContain("turbo run lint typecheck");
+      expect(commands).toContain("turbo run typecheck:repo");
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        failure === "yes" ? 1 : 0,
+      );
+      if (failure === "yes") {
+        expect(output).toContain("code-check: 2 failed command(s)");
+        expect(output).toContain(
+          "code-check: failed (exit 2): bun --bun turbo run lint typecheck",
+        );
+        expect(output).toContain(
+          "code-check: failed (exit 2): bun --bun turbo run typecheck:repo",
+        );
+      } else {
+        expect(output).not.toContain("failed command(s)");
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 const TURBO_LINT_TYPECHECK = [

@@ -21,6 +21,7 @@ import { buildApp } from "./build-cli-tree.js";
 import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { reportFatalError } from "./main-error-boundary.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
@@ -31,9 +32,11 @@ import {
   removedCommandError,
   shouldReportRegistryDrift,
 } from "./registry-drift.js";
+import type { CurrentRegistry } from "./registry-refresh.js";
 import {
   refreshRegistryCache,
   resolveCommandTree,
+  requiresFeatureAccessRefresh,
 } from "./registry-refresh.js";
 
 const resolvePreamble = async (
@@ -129,12 +132,24 @@ const main = async (): Promise<void> => {
   // Keep an EXISTING per-origin cache current before building the tree; a
   // missing cache stays offline-instant (seeded at `auth login` below). Any
   // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  if (serverUrl !== undefined && token !== undefined && needsRegistry) {
+  const requiresFeatureSnapshot = requiresFeatureAccessRefresh();
+  let currentRegistry: CurrentRegistry | undefined;
+  let featureAccess: CallerFeatureAccess | undefined;
+  if (
+    serverUrl !== undefined &&
+    token !== undefined &&
+    (needsRegistry || requiresFeatureSnapshot)
+  ) {
     const outcome = await refreshRegistryCache({
       serverOrigin: serverUrl,
       token,
       env: cacheEnv,
+      force: requiresFeatureSnapshot,
     });
+    if (outcome.status === "refreshed") {
+      featureAccess = outcome.featureAccess;
+      currentRegistry = outcome.registry;
+    }
     if (outcome.status === "admission-refused") {
       refuseAdmission(outcome.refusal, argv);
       return;
@@ -146,12 +161,13 @@ const main = async (): Promise<void> => {
     }
   }
 
-  // Startup always resolves against the baked-in tree unless a validated cache
-  // shows a non-empty delta, in which case build from the cached listings
-  // (spec S5.3). No network here.
+  // Only this invocation's validated response can project caller commands.
+  // Disk supplies deployment metadata; resolution itself performs no network.
   const { tree, drift, disabled } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
+    ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
+    ...(featureAccess === undefined ? {} : { featureAccess }),
   });
   if (drift !== undefined) {
     // The one place the drift is reported, so "once per process" is structural

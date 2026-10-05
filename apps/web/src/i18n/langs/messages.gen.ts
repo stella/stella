@@ -1498,6 +1498,7 @@ type Messages = {
     "noResults": "No clauses yet";
     "noVariants": "No variants";
     "outdatedVersion": "Update available";
+    "overrideNotRenderedWarning": "The override for clause {clauseName} was not used: its slot does not appear in this document.";
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
@@ -2160,6 +2161,7 @@ type Messages = {
     "markHandled": "Mark handled";
     "markNew": "Mark new";
     "noAddress": "No email address is active.";
+    "openSourceFile": "Open email file";
     "originalSender": "Original sender";
     "originalSenderUnverified": "Original sender (as stated, not verified)";
     "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
@@ -2168,11 +2170,14 @@ type Messages = {
     "rotateAddress": "Rotate address";
     "sentAt": "Sent on";
     "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "statedInFile": "Headers (as stated in the file)";
     "states": {
       "handled": "Handled";
     };
     "title": "Correspondence";
     "unknownApprover": "Unknown approver";
+    "uploadedBy": "Uploaded by {name}";
+    "uploadedFile": "Uploaded email file";
   };
   "docxReview": {
     "acceptAll": "Accept all";
@@ -4315,6 +4320,7 @@ type Messages = {
       "deleteAccountTaskReassignPlaceholder": "Select a member...";
       "deleteAccountTasksDescription": "You have active tasks assigned to you. Transfer them to other workspace members to keep work moving.";
       "deleteAccountTasksTitle": "Transfer active tasks";
+      "deleteAccountTasksUnassignedNotice": "Tasks without a selected member will stay in their workspace with no assignee.";
       "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.";
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";

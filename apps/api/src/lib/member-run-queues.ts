@@ -40,8 +40,6 @@ export const MEMBER_RUN_QUEUES = [
   },
 ] as const satisfies readonly { queue: BullMqQueueName; module: string }[];
 
-export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
-
 /**
  * Scheduler tasks that act for one member per item they process, through a
  * `createRootRunActor` built for that member each time. `scripts/ownership.ts`
@@ -176,6 +174,12 @@ export const QUEUE_AUTHORITY = {
     authority: "org-automation",
     worker: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
     reason: "Platform cleanup of stored style-set packages.",
+  },
+  "uploaded-mail-correspondence": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/email/inbound/upload-queue.ts",
+    reason:
+      "Retries filing a stored email file as correspondence; the filing transaction rechecks the uploader's current matter access.",
   },
   workflow: WORKFLOW_RUN,
   "workflow-flex": WORKFLOW_RUN,

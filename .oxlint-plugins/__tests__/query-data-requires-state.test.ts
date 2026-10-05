@@ -31,6 +31,20 @@ function Alias() { const query = useQuery(q); const other = query; const { data 
     ).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13]);
   });
 
+  test("contact picker search requires query state before defaulting results", async () => {
+    expect(
+      await lint(`
+const ContactPicker = () => {
+  const { data: results = [] } = useQuery({
+    ...contactPickerSearchOptions({ organizationId, q: debouncedQuery, type }),
+    enabled: debouncedQuery.length > 0,
+  });
+  return results.map(contact => <Option contact={contact} />);
+};
+`),
+    ).toEqual([6]);
+  });
+
   test("spinner and retry counters cannot distinguish an initial error from empty data", async () => {
     expect(
       await lint(`

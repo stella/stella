@@ -10,6 +10,7 @@ import {
 import type { LocaleMessages } from "@/i18n/i18n-store";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 
 import { correspondenceProvenancePresentation } from "./correspondence-provenance.logic";
 
@@ -25,6 +26,7 @@ const authenticatedSender = {
 } as const;
 
 const forgedInline = {
+  source: "delivery",
   intake: "forwarded_inline",
   authenticatedSender,
   originalSignature: { status: "unverified" },
@@ -37,15 +39,22 @@ describe("correspondence delivery and original provenance", () => {
     expect(forgedInline.from.address).not.toBe(authenticatedSender.address);
     const presentation = correspondenceProvenancePresentation(forgedInline);
     expect(presentation).toEqual({
-      deliveryLabel: "correspondence.forwardedByAuthenticated",
-      deliverySender: "member@firm.example",
+      origin: {
+        type: "delivery",
+        label: "correspondence.forwardedByAuthenticated",
+        sender: "member@firm.example",
+      },
       originalSenderLabel: "correspondence.originalSenderUnverified",
+      assertedHeadersLabel: "correspondence.assertedOriginal",
       signatureDomain: null,
     });
+    if (presentation.origin.type !== "delivery") {
+      throw new Error("expected a delivery origin");
+    }
     const t = createTranslator({ locale: "en", messages: en });
     expect(
-      t.markup(presentation.deliveryLabel, {
-        sender: presentation.deliverySender,
+      t.markup(presentation.origin.label, {
+        sender: presentation.origin.sender,
         address: (chunks) => chunks,
       }),
     ).toBe("Forwarded by member@firm.example · authenticated");
@@ -57,9 +66,12 @@ describe("correspondence delivery and original provenance", () => {
   test("Arabic preserves the outer address in an isolated rich-text slot", () => {
     const t = createTranslator({ locale: "ar", messages: arabicMessages });
     const presentation = correspondenceProvenancePresentation(forgedInline);
+    if (presentation.origin.type !== "delivery") {
+      throw new Error("expected a delivery origin");
+    }
     expect(
-      t.markup(presentation.deliveryLabel, {
-        sender: presentation.deliverySender,
+      t.markup(presentation.origin.label, {
+        sender: presentation.origin.sender,
         address: (chunks) => `<bdi dir="ltr">${chunks}</bdi>`,
       }),
     ).toBe(
@@ -77,6 +89,7 @@ describe("correspondence delivery and original provenance", () => {
         "forwarded_attachment",
       ] as const) {
         const presentation = correspondenceProvenancePresentation({
+          source: "delivery",
           intake,
           authenticatedSender: { ...authenticatedSender, dmarc },
           originalSignature: { status: "unverified" },
@@ -85,17 +98,21 @@ describe("correspondence delivery and original provenance", () => {
           "correspondence.originalSenderUnverified",
         );
         expect(presentation.signatureDomain).toBeNull();
-        expect(presentation.deliveryLabel).toBe(
-          dmarc === "pass"
-            ? "correspondence.forwardedByAuthenticated"
-            : "correspondence.forwardedBy",
-        );
+        expect(presentation.origin).toEqual({
+          type: "delivery",
+          label:
+            dmarc === "pass"
+              ? "correspondence.forwardedByAuthenticated"
+              : "correspondence.forwardedBy",
+          sender: authenticatedSender.address,
+        });
       }
     }
   });
 
   test("a verified signing domain does not authenticate an unrelated original From", () => {
     const signedUnrelated = {
+      source: "delivery",
       intake: "forwarded_attachment",
       authenticatedSender,
       originalSignature: { status: "verified", domain: "sender.example" },
@@ -108,7 +125,9 @@ describe("correspondence delivery and original provenance", () => {
       "correspondence.originalSenderUnverified",
     );
     expect(presentation.signatureDomain).toBe("sender.example");
-    expect(presentation.deliverySender).toBe("member@firm.example");
+    expect(presentation.origin).toMatchObject({
+      sender: "member@firm.example",
+    });
     const t = createTranslator({ locale: "en", messages: en });
     expect(
       t.markup("correspondence.originalSignatureVerified", {
@@ -121,15 +140,58 @@ describe("correspondence delivery and original provenance", () => {
   test("direct deliveries have no asserted original or original signature", () => {
     expect(
       correspondenceProvenancePresentation({
+        source: "delivery",
         intake: "direct",
         authenticatedSender,
         originalSignature: null,
       }),
     ).toEqual({
-      deliveryLabel: "correspondence.deliveredByAuthenticated",
-      deliverySender: "member@firm.example",
+      origin: {
+        type: "delivery",
+        label: "correspondence.deliveredByAuthenticated",
+        sender: "member@firm.example",
+      },
       originalSenderLabel: "emailViewer.from",
+      assertedHeadersLabel: null,
       signatureDomain: null,
     });
+  });
+});
+
+describe("uploaded correspondence provenance", () => {
+  const sourceEntityId = toSafeId<"entity">("entity-1");
+
+  test("an uploaded file's headers are stated by the file, not verified", () => {
+    expect(
+      correspondenceProvenancePresentation({
+        source: "upload",
+        sourceEntityId,
+        originalSignature: { status: "unverified" },
+      }),
+    ).toEqual({
+      origin: { type: "upload", sourceEntityId },
+      originalSenderLabel: "correspondence.originalSenderUnverified",
+      assertedHeadersLabel: "correspondence.statedInFile",
+      signatureDomain: null,
+    });
+    const t = createTranslator({ locale: "en", messages: en });
+    expect(t("correspondence.statedInFile")).toBe(
+      "Headers (as stated in the file)",
+    );
+    expect(t("correspondence.uploadedBy", { name: "Jane" })).toBe(
+      "Uploaded by Jane",
+    );
+  });
+
+  test("a verified file signature names only its signing domain", () => {
+    const presentation = correspondenceProvenancePresentation({
+      source: "upload",
+      sourceEntityId,
+      originalSignature: { status: "verified", domain: "sender.example" },
+    });
+    expect(presentation.signatureDomain).toBe("sender.example");
+    expect(presentation.originalSenderLabel).toBe(
+      "correspondence.originalSenderUnverified",
+    );
   });
 });

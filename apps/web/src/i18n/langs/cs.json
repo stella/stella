@@ -1495,6 +1495,7 @@
     "noResults": "Zatím žádná vzorová ustanovení",
     "noVariants": "Žádné varianty",
     "outdatedVersion": "Je dostupná aktualizace",
+    "overrideNotRenderedWarning": "Náhrada ustanovení {clauseName} nebyla použita: jeho místo se v tomto dokumentu nezobrazuje.",
     "renameSlot": "Přejmenovat slot",
     "renameSlotInvalid": "Názvy slotů musí být jedinečné a nesmí obsahovat mezery, dvojtečky ani složené závorky.",
     "restoreVersion": "Obnovit tuto verzi",
@@ -2157,6 +2158,7 @@
     "markHandled": "Označit jako vyřízené",
     "markNew": "Označit jako nové",
     "noAddress": "Není aktivní žádná e-mailová adresa.",
+    "openSourceFile": "Otevřít soubor e-mailu",
     "originalSender": "Původní odesílatel",
     "originalSenderUnverified": "Původní odesílatel (uvedený, neověřený)",
     "originalSignatureVerified": "Původní podpis ověřen (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Změnit adresu",
     "sentAt": "Odesláno dne",
     "sharedMailboxFiler": "Sdílená schránka {address}, schválil(a) {approver}",
+    "statedInFile": "Hlavičky (jak jsou uvedeny v souboru)",
     "states": {
       "handled": "Vyřízené"
     },
     "title": "Korespondence",
-    "unknownApprover": "Neznámý schvalovatel"
+    "unknownApprover": "Neznámý schvalovatel",
+    "uploadedBy": "Nahrál/a {name}",
+    "uploadedFile": "Nahraný soubor e-mailu"
   },
   "docxReview": {
     "acceptAll": "Přijmout vše",
@@ -4312,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vybrat člena...",
       "deleteAccountTasksDescription": "Máte přiřazené aktivní úkoly. Převést je na jiné členy pracovního prostoru, aby práce pokračovala.",
       "deleteAccountTasksTitle": "Převést aktivní úkoly",
+      "deleteAccountTasksUnassignedNotice": "Úkoly bez vybraného člena zůstanou v pracovním prostoru bez řešitele.",
       "deleteAccountWarning": "Smazání je nezvratný krok. Přihlašovací údaje a soukromá data účtu budou odstraněny.",
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Dokončená historie pracovních prostorů zůstane přiřazená ke smazanému účtu.",
       "desktop": "Aplikace pro počítač",

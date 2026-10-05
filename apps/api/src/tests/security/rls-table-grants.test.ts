@@ -15,6 +15,7 @@ const AUDITED_DYNAMIC_GRANT_SITES = new Set([
   "20260516000000_case_law_ingestion_role: EXECUTE format( 'GRANT USAGE, SELECT ON SEQUENCE %s TO stella_ingestion', target_sequence )",
   "20260516000000_case_law_ingestion_role: EXECUTE format('GRANT stella_ingestion TO %I', CURRENT_USER)",
   "20260808014000_legal_lists: EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name)",
+  "20261003122400_public_sanctions_reader: EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER)",
   "20261003122400_ingestion_role_set_grant: EXECUTE format('GRANT stella_ingestion TO %I WITH SET TRUE', CURRENT_USER)",
 ]);
 
@@ -689,6 +690,22 @@ const collectRlsGrantState = () => {
 };
 
 describe("RLS table grants", () => {
+  test("the public sanctions reader can be assumed by the application connection", () => {
+    const migration = readFileSync(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261003122400_public_sanctions_reader/migration.sql",
+      ),
+      "utf-8",
+    );
+    expect(migration).toContain(
+      "NOT pg_has_role(CURRENT_USER, 'stella_public_sanctions_reader', 'SET')",
+    );
+    expect(migration).toContain(
+      "EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER)",
+    );
+  });
+
   test("rejects dynamic grants outside the exact deployed allowlist", () => {
     expect(
       dynamicGrantSites({

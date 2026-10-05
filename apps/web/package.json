@@ -155,6 +155,7 @@
     "@happy-dom/global-registrator": "20.14.5",
     "@playwright/test": "^1.63.0",
     "@stll/property-testing": "workspace:*",
+    "@stll/scripts": "workspace:*",
     "@stll/ssr-testkit": "workspace:^",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",

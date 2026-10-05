@@ -6,30 +6,34 @@
 // lint still passes. The same holds for a path in a rule option such as
 // `allowedFiles`, and for a scope that switches off a rule no earlier scope
 // enabled for any of its files. Each is dead configuration that reads as a
-// decision, so this test fails on all three.
+// decision, so this test fails on all three. A base entry may restate a
+// preset's "off" only with its reason on the same or the preceding line.
 
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import {
-  libraryIgnorePatterns,
-  libraryOverrides,
-  libraryRules,
-} from "@stll/oxlint-config";
+import { libraryIgnorePatterns, libraryOverrides } from "@stll/oxlint-config";
 
 import config from "../oxlint.config.ts";
 import {
   BASE_SCOPE,
+  baseOffNoOps,
   createFileIndex,
   isRecord,
   matches,
+  readBaseOffEntries,
   readScopes,
   ruleIsOff,
   ruleOptions,
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
+import {
+  SEVERITY,
+  declaredBaseRules,
+  flattenLayers,
+} from "./oxlint-effective-config.ts";
 import core from "./oxlint-presets/core.mjs";
 import {
   builtinRules,
@@ -69,9 +73,6 @@ const ignored = (file: string) =>
 const fileIndex = createFileIndex(
   trackedRepoFiles().filter((file) => !ignored(file)),
 );
-
-const presets = (): Record<string, unknown>[] =>
-  Array.isArray(config.extends) ? config.extends.filter(isRecord) : [];
 
 test(
   "every override glob matches a linted file",
@@ -167,35 +168,36 @@ test(
         ),
       );
 
-    const presetState = new Map<string, boolean>();
-    for (const id of pluginDefaults([
-      "eslint",
-      ...presets().flatMap((preset) => stringArray(preset["plugins"])),
-    ])) {
-      presetState.set(id, true);
-    }
-    for (const preset of presets()) {
-      for (const [id, enabled] of stateOf(
-        isRecord(preset["rules"]) ? preset["rules"] : {},
-      )) {
-        presetState.set(id, enabled);
-      }
-    }
+    // What the presets declare, merged by the precedence the effective-config
+    // guard checks against `oxlint --print-config`, so the two cannot disagree
+    // on what a base entry replaces.
+    const presetLayers = flattenLayers(config, "oxlint.config.ts").slice(0, -1);
+    // JS plugin rules have no category or alias to resolve: the last preset
+    // that names one decides it.
+    const presetState = new Map([
+      ...presetLayers.flatMap(({ rules: layerRules }) => [
+        ...stateOf(layerRules),
+      ]),
+      ...[
+        ...declaredBaseRules({
+          layers: presetLayers,
+          builtins: rules,
+          canonical,
+        }).rules,
+      ].map(([id, { severity }]) => [id, severity !== SEVERITY.off] as const),
+    ]);
 
-    const noOps: string[] = [];
     const scopes = readScopes(config);
     const baseRules =
       scopes.find((scope) => scope.scope === BASE_SCOPE)?.rules ?? {};
-    const vendoredBase: Readonly<Record<string, unknown>> = libraryRules;
-    for (const [key, value] of Object.entries(baseRules)) {
-      // A base entry the shared library config ships is its decision.
-      if (Bun.deepEquals(vendoredBase[key], value)) {
-        continue;
-      }
-      if (ruleIsOff(value) && presetState.get(canonical(key)) !== true) {
-        noOps.push(`${BASE_SCOPE} | ${key}`);
-      }
-    }
+    const noOps = baseOffNoOps({
+      baseRules,
+      presetState,
+      canonical,
+      offEntries: readBaseOffEntries(
+        readFileSync(new URL("../oxlint.config.ts", import.meta.url), "utf-8"),
+      ),
+    }).map((key) => `${BASE_SCOPE} | ${key}`);
     const baseState = new Map([...presetState, ...stateOf(baseRules)]);
 
     const overrides = scopes
@@ -249,6 +251,53 @@ test(
   },
   TIMEOUT_MS,
 );
+
+const RESTATEMENT_FIXTURE = [
+  "export default defineConfig({",
+  "  rules: {",
+  "    // Reason above the entry.",
+  '    "oxc/no-map-spread": "off",',
+  '    "unicorn/prefer-spread": "off", // Reason on the same line.',
+  '    "no-plusplus": "off",',
+  "    // A reason does not make an off for an unnamed rule live.",
+  '    "no-inline-comments": "off",',
+  "  },",
+  "});",
+].join("\n");
+
+const restatementNoOps = (baseRules: Record<string, unknown>) =>
+  baseOffNoOps({
+    baseRules,
+    presetState: new Map([
+      ["oxc/no-map-spread", false],
+      ["unicorn/prefer-spread", false],
+      ["eslint/no-plusplus", false],
+    ]),
+    canonical: (key) => (key.includes("/") ? key : `eslint/${key}`),
+    offEntries: readBaseOffEntries(RESTATEMENT_FIXTURE),
+  });
+
+test("reads a reason comment on an off entry's line or the line above", () => {
+  expect(readBaseOffEntries(RESTATEMENT_FIXTURE)).toEqual([
+    { rule: "oxc/no-map-spread", line: 4, reasoned: true },
+    { rule: "unicorn/prefer-spread", line: 5, reasoned: true },
+    { rule: "no-plusplus", line: 6, reasoned: false },
+    { rule: "no-inline-comments", line: 8, reasoned: true },
+  ]);
+});
+
+test("accepts a restated preset off only with its reason", () => {
+  expect(
+    restatementNoOps({
+      "oxc/no-map-spread": "off",
+      "unicorn/prefer-spread": "off",
+    }),
+  ).toEqual([]);
+  expect(restatementNoOps({ "no-plusplus": "off" })).toEqual(["no-plusplus"]);
+  expect(restatementNoOps({ "no-inline-comments": "off" })).toEqual([
+    "no-inline-comments",
+  ]);
+});
 
 test("the pre-commit autofix preserves includes checks", () => {
   const directory = mkdtempSync(

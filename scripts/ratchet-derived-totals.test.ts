@@ -100,6 +100,8 @@ const withClone = (exercise: (root: string) => void) => {
       "scripts/db-await-in-loop.ts",
       "scripts/lint-suppressions.ts",
       "scripts/ownership.ts",
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "scripts/status-write-shapes.ts",
       "scripts/parse-memo.ts",
       "scripts/generated-artifacts.ts",
       "scripts/result-boundary-globs.ts",
@@ -924,5 +926,53 @@ test("staged removal excludes untracked root manifests and lockfiles from all mo
       /direct-third-party-declarations\s+0\s+\(baseline 0, 0\)/u,
     );
     expect(report).toContain("lockfile-package-entries: 0 (report only)");
+  });
+}, 30_000);
+
+test("lifecycle ratchets reject allowances for direct writes and unmanaged specs", () => {
+  withClone((root) => {
+    const specs = "apps/api/src/lib/db/transition-specs.ts";
+    write({
+      root,
+      relative: specs,
+      contents: "export const TRANSITIONS = {};\n",
+    });
+    commit(root, "managed fixture base");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({
+      root,
+      relative: FIRST,
+      contents: 'db.update(flowRuns).set({ status: "running" });\n',
+    });
+    write({
+      root,
+      relative: specs,
+      contents:
+        'export const TRANSITIONS = { flowRuns: { unmanaged: "fixture reason" } };\n',
+    });
+    fund(
+      root,
+      {
+        metric: "direct-status-writes",
+        file: FIRST,
+        delta: 1,
+        reason: "Fixture",
+      },
+      "scripts/ratchet-allowances/direct.json",
+    );
+    fund(
+      root,
+      { metric: "unmanaged-transition-specs", delta: 1, reason: "Fixture" },
+      "scripts/ratchet-allowances/unmanaged.json",
+    );
+    commit(root, "attempt lifecycle allowances");
+    const rejected = check(root);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain(
+      "shrink-only metric takes no allowances direct-status-writes",
+    );
+    expect(rejected.output).toContain(
+      "shrink-only metric takes no allowances unmanaged-transition-specs",
+    );
   });
 }, 30_000);

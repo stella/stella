@@ -49,7 +49,7 @@ type BackgroundReplayCompletion = {
   healthyEvidence?: "adjacent-row" | "none";
 };
 
-export type BackgroundReplayTickStatus =
+type BackgroundReplayTickStatus =
   | "empty"
   | "complete"
   | "held"

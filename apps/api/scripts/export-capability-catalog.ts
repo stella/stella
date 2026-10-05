@@ -55,6 +55,7 @@ import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,
@@ -116,6 +117,7 @@ import {
   type ParsedExposure,
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
+import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
@@ -465,7 +467,8 @@ const readApiModule = (importPath: string): string | undefined => {
  *  - FEATURE_TIME_BILLING gates the billing tool family (list/save/delete
  *    time entries, resolve_rate, list_invoices) and the billing app routes;
  *    the whole billing capability surface (time-entries, rates, invoices,
- *    expenses, billing-codes) rides the same flag.
+ *    expenses, billing-codes, and the invoicing configuration: seller
+ *    profiles, number series, VAT rates) rides the same flag.
  *  - FEATURE_PUBLIC_LAW gates the public legal-corpus surface (search_case_law,
  *    read_case_law_decision, the legislation corpus tools search_legislation,
  *    read_statute, read_statute_provisions and read_provision_history, the BOE
@@ -493,11 +496,14 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
+  "seller-profiles": "FEATURE_TIME_BILLING",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
+  "vat-rates": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
 
@@ -545,6 +551,8 @@ type CapabilityEntry = {
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
   permissions?: unknown;
   /**
    * The handler config's `body`/`params`/`query`, `$defs`-compacted: repeated
@@ -937,6 +945,9 @@ type BuildCatalogEntryOptions = {
   compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
+  featureAccess:
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
 };
@@ -963,6 +974,7 @@ const buildCatalogEntry = ({
   compactedInputSchema,
   exposure,
   feature,
+  featureAccess,
   transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
@@ -983,6 +995,12 @@ const buildCatalogEntry = ({
     : {}),
   transport,
   ...(feature === undefined ? {} : { feature }),
+  ...(featureAccess === undefined
+    ? {}
+    : {
+        featureId: featureAccess.featureId,
+        featureAccess: featureAccess.type,
+      }),
   ...(hasPermissions ? { permissions } : {}),
   inputSchema: compactedInputSchema,
   mcp: toCapabilityMcp(exposure),
@@ -1199,10 +1217,40 @@ const collectClassGuardErrors = ({
   return errors;
 };
 
+const parseFeatureRequirement = (value: unknown) => {
+  if (!isRecord(value) || typeof value["featureId"] !== "string") {
+    return undefined;
+  }
+  const type = value["type"];
+  if (type !== "required" && type !== "conditional") {
+    return undefined;
+  }
+  return { featureId: value["featureId"], type } as const;
+};
+
+const readFeatureDeclarationSources = async () => {
+  const featureSources = new Map<string, string>();
+  for (const file of new Bun.Glob(
+    "apps/api/{src,scripts}/**/*.{ts,tsx}",
+  ).scanSync({ cwd: REPO_ROOT, onlyFiles: true })) {
+    if (/\.(?:test|spec)\.tsx?$/u.test(file) || file.includes("/tests/")) {
+      continue;
+    }
+    featureSources.set(file, await Bun.file(path.join(REPO_ROOT, file)).text());
+  }
+  return featureSources;
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, routeFiles, importErrors } =
     await discoverSafeHandlers();
   const errors: string[] = [];
+  const featureSources = await readFeatureDeclarationSources();
+  assertFeatureAccessDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+  });
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1634,6 +1682,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
         compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+        featureAccess: parseFeatureRequirement(
+          endpoint.config["featureAccess"],
+        ),
         transport,
       }),
     );

@@ -1495,6 +1495,7 @@
     "noResults": "Klausleid pole veel",
     "noVariants": "Variante pole",
     "outdatedVersion": "Uuendus saadaval",
+    "overrideNotRenderedWarning": "Klausli {clauseName} asendust ei kasutatud: selle koht ei ilmu selles dokumendis.",
     "renameSlot": "Nimeta pesa ümber",
     "renameSlotInvalid": "Pesade nimed peavad olema kordumatud ega tohi sisaldada tühikuid, kooloneid ega loogsulge.",
     "restoreVersion": "Taasta see versioon",
@@ -2157,6 +2158,7 @@
     "markHandled": "Märgi käsitletuks",
     "markNew": "Märgi uueks",
     "noAddress": "Aktiivset e-posti aadressi pole.",
+    "openSourceFile": "Ava e-kirja fail",
     "originalSender": "Algne saatja",
     "originalSenderUnverified": "Algne saatja (esitatud, kontrollimata)",
     "originalSignatureVerified": "Algne allkiri kontrollitud (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Vaheta aadress",
     "sentAt": "Saadetud",
     "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
+    "statedInFile": "Päised (failis esitatud)",
     "states": {
       "handled": "Käsitletud"
     },
     "title": "Kirjavahetus",
-    "unknownApprover": "Tundmatu kinnitaja"
+    "unknownApprover": "Tundmatu kinnitaja",
+    "uploadedBy": "Üles laadinud {name}",
+    "uploadedFile": "Üles laaditud e-kirja fail"
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
@@ -4312,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vali liige...",
       "deleteAccountTasksDescription": "Teile on määratud aktiivseid ülesandeid. Andke need teistele tööruumi liikmetele üle, et töö jätkuks.",
       "deleteAccountTasksTitle": "Anna aktiivsed ülesanded üle",
+      "deleteAccountTasksUnassignedNotice": "Valitud liikmeta ülesanded jäävad tööruumi ilma vastutajata.",
       "deleteAccountWarning": "Kustutamine on pöördumatu. Teie sisselogimisandmed ja konto privaatsed andmed eemaldatakse.",
       "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Lõpetatud tööruumi ajalugu jääb seotuks teie kustutatud kontoga.",
       "desktop": "Töölaud",

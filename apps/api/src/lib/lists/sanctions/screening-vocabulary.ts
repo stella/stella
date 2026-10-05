@@ -31,7 +31,7 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "access-denied",
   // The list has not been verified against its publisher within its limit.
   "stale",
-  // The stored edition could not be read.
+  // The stored edition could not be read or its screening could not complete.
   "load-failed",
   // A company ID was given without a name and the register holds no company
   // under it, so there was no name to screen.

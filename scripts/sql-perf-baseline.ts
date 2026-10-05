@@ -4,6 +4,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
   analyzeMigrationSqlPerf,
@@ -61,7 +63,7 @@ export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
   }
   return Object.fromEntries(
     Object.entries(counts).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareCodeUnit(left, right),
     ),
   );
 };
@@ -141,7 +143,7 @@ export const parseSqlPerfCounts = (value: unknown): SqlPerfCounts => {
   }
   return Object.fromEntries(
     Object.entries(counts).toSorted(([left], [right]) =>
-      left.localeCompare(right),
+      compareCodeUnit(left, right),
     ),
   );
 };
@@ -166,7 +168,9 @@ export const compareSqlPerfCounts = (
       issues.push({ file, expected, actual: null, kind: "stale" });
     }
   }
-  return issues.toSorted((left, right) => left.file.localeCompare(right.file));
+  return issues.toSorted((left, right) =>
+    compareCodeUnit(left.file, right.file),
+  );
 };
 
 export const lowerSqlPerfBaseline = (

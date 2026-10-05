@@ -1495,6 +1495,7 @@
     "noResults": "Még nincsenek záradékok",
     "noVariants": "Nincs változat",
     "outdatedVersion": "Frissítés elérhető",
+    "overrideNotRenderedWarning": "A(z) {clauseName} záradék helyettesítése nem lett felhasználva: a helye nem jelenik meg ebben a dokumentumban.",
     "renameSlot": "Foglalat átnevezése",
     "renameSlotInvalid": "A foglalatok neveinek egyedinek kell lenniük, és nem tartalmazhatnak szóközt, kettőspontot vagy kapcsos zárójelet.",
     "restoreVersion": "Verzió visszaállítása",
@@ -2157,6 +2158,7 @@
     "markHandled": "Megjelölés elintézettként",
     "markNew": "Megjelölés újként",
     "noAddress": "Nincs aktív e-mail-cím.",
+    "openSourceFile": "E-mail-fájl megnyitása",
     "originalSender": "Eredeti feladó",
     "originalSenderUnverified": "Eredeti feladó (közölt, nem ellenőrzött)",
     "originalSignatureVerified": "Eredeti aláírás ellenőrizve (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Cím cseréje",
     "sentAt": "Elküldve",
     "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "statedInFile": "Fejlécek (a fájl szerint)",
     "states": {
       "handled": "Elintézett"
     },
     "title": "Levelezés",
-    "unknownApprover": "Ismeretlen jóváhagyó"
+    "unknownApprover": "Ismeretlen jóváhagyó",
+    "uploadedBy": "Feltöltötte: {name}",
+    "uploadedFile": "Feltöltött e-mail-fájl"
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
@@ -4312,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
       "deleteAccountTasksDescription": "Aktív feladatok vannak Önhöz rendelve. Adja át őket a munkaterület más tagjainak, hogy a munka folytatódjon.",
       "deleteAccountTasksTitle": "Aktív feladatok átadása",
+      "deleteAccountTasksUnassignedNotice": "A kiválasztott tag nélküli feladatok felelős nélkül maradnak a munkaterületen.",
       "deleteAccountWarning": "A törlés visszafordíthatatlan. Bejelentkezési adatai és a fiók privát adatai törlődnek.",
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",

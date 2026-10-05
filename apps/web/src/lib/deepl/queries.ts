@@ -24,18 +24,23 @@ export const deepLKeys = {
   ],
 };
 
-type DeepLAvailabilityOptionsInput = QueryOptionsInput<DeepLAvailabilityKey>;
+type DeepLAvailabilityOptionsInput = DeepLAvailabilityKey & {
+  open: boolean;
+};
 
 export const deepLAvailabilityOptions = ({
   organizationId,
+  open,
 }: DeepLAvailabilityOptionsInput) =>
   queryOptions({
     queryKey: deepLKeys.availability({ organizationId }),
     staleTime: DEEPL_AVAILABILITY_STALE_MS,
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"].deepl.get({
-        fetch: { signal },
-      });
+    enabled: open,
+    // SAFETY: TanStack deduplicates this organization-keyed read and discards
+    // cancelled results. Let it populate the cache across toolbar remounts.
+    queryFn: async () => {
+      // oxlint-disable-next-line require-query-signal/require-query-signal -- Cached availability must survive observer teardown.
+      const response = await api["organization-settings"].deepl.get();
 
       return unwrapEden(response);
     },
@@ -43,7 +48,7 @@ export const deepLAvailabilityOptions = ({
 
 export const deepLConfigOptions = ({
   organizationId,
-}: DeepLAvailabilityOptionsInput) =>
+}: QueryOptionsInput<DeepLAvailabilityKey>) =>
   queryOptions({
     queryKey: deepLKeys.config({ organizationId }),
     queryFn: async ({ signal }) => {
