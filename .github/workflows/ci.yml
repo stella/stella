@@ -755,10 +755,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
@@ -969,10 +966,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Parser versions must advance whenever an adapter's parser inputs change.
   # This guard reads Git history and needs no dependency installation.
@@ -1014,10 +1008,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
@@ -1174,10 +1165,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   ci-checks-policy:
     needs: ci-plan
@@ -1391,10 +1379,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   ci-checks-rest:
     needs: ci-plan
@@ -2335,10 +2320,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # The `test` task, split into shards that run in parallel. Each shard filters
   # the same scope the serial run computed (scripts/test-scope.ts) down to the
@@ -2675,10 +2657,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   code-quality-api:
     needs: ci-plan
@@ -2754,10 +2733,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   code-quality-web:
     needs: ci-plan
@@ -2836,10 +2812,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   code-quality-rest:
     needs: ci-plan
@@ -2965,10 +2938,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # API suites that need real services, at full depth or on scoped PRs. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
@@ -3126,10 +3096,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
@@ -3237,10 +3204,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   release-typecheck:
     needs: ci-plan
@@ -3281,10 +3245,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # A fix's tests must fail without the fix. On a fix pull request that
   # changes an apps/api test, this puts the base source back under the pull
@@ -3509,10 +3470,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Vite web build. Same rationale as landing-build below: the
   # required code-quality and test checks don't exercise the
@@ -3620,10 +3578,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # The prod-deps boot smoke above runs inside a full checkout, where
   # workspace sources exist and can mask the runner image's filesystem
@@ -3703,10 +3658,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Expo/Metro bundle smoke. TypeScript and lint do not exercise Babel,
   # autolinking, or platform-specific module resolution, so keep one path-
@@ -3750,10 +3702,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Astro landing build. The required checks run code quality and tests,
   # but no `astro build`, so plugin/runtime
@@ -3798,10 +3747,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Browser checks use isolated parallel runners: broad production shards,
   # a small Vite dependency canary, and the built landing-page suite. The
@@ -4076,10 +4022,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   stack-redaction-browsers:
     needs: ci-plan
@@ -4122,10 +4065,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   e2e-vite-canary:
     needs: ci-plan
@@ -4308,10 +4248,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   e2e-landing:
     needs: ci-plan
@@ -4395,10 +4332,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Release candidates compare the captured PNGs before shipping, on the
   # release pull request itself (fast depth) as well as its merge group. These
@@ -4435,6 +4369,20 @@ jobs:
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # The remote action is pinned so cancellation also works before checkout.
+  # Reusable workflow callers cannot have steps. Cancel immediately after
+  # this call fails, without a runner waiting or polling for its result.
+  marketing-screenshots-cancel:
+    needs: marketing-screenshots
+    if: failure() && github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel failed merge-group run
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # One HTML report from the browser suites' blob reports, when a suite
   # failed. Diagnostic only: ci-result evaluates the suites themselves, so
@@ -4488,10 +4436,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Build the final API image and rehearse it at every depth. The image build
   # runs the runtime-asset stage on the runner filesystem; the smoke then
@@ -4606,10 +4551,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   legal-atlas-image:
     needs: ci-plan
@@ -4665,10 +4607,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
@@ -4711,10 +4650,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
@@ -4862,10 +4798,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   dependency-malware:
     needs: ci-plan
@@ -4905,10 +4838,7 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
@@ -5208,7 +5138,4 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        uses: stella/stella/.github/actions/cancel-merge-group@d7aebdd5fc749163952b183d044f2d2e7c1cf98e
