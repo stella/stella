@@ -349,11 +349,21 @@ test("unset and full preserve baseline job predicates across the event matrix", 
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  expect(Object.keys(ci.jobs)).toEqual(Object.keys(baseline.jobs));
+  expect(new Set(Object.keys(ci.jobs))).toEqual(
+    new Set([
+      ...Object.keys(baseline.jobs).filter(
+        (id) => id !== "merge-group-fail-fast",
+      ),
+      "marketing-screenshots-cancel",
+    ]),
+  );
   for (const event of events) {
     for (const variable of ["", "full"]) {
       const value = context({ event, variable, queueDepth: "full" });
       for (const [job, body] of Object.entries(baseline.jobs)) {
+        if (job === "merge-group-fail-fast") {
+          continue;
+        }
         expect(
           selected(ci.jobs[job]?.if, value),
           `${event.event}/${event.message}/${variable}/${job}`,
