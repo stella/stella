@@ -230,12 +230,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
-    "specifier": "@/api/lib/case-law/document-ast",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
     "specifier": "@/api/lib/legal-search/sk-document-backfill",
     "target": "apps/api"
   },

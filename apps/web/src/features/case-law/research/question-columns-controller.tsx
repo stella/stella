@@ -482,7 +482,7 @@ export const QuestionColumnControls = ({
           open
           target={{
             kind: "organisation",
-            editing,
+            mode: { type: "edit", column: editing },
             suggestion: surface.suggestion,
           }}
           triggerVariant="none"
