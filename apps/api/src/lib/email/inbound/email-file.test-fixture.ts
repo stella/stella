@@ -18,17 +18,21 @@ export type StatedMessage = {
   messageId: string;
   inReplyTo?: string | undefined;
   text: string;
-  attachments?: { fileName: string; mimeType: string; bytes: Uint8Array }[];
+  attachments: { fileName: string; mimeType: string; bytes: Uint8Array }[];
 };
 
 const BOUNDARY = "stella-boundary";
 
-const base64Lines = (bytes: Uint8Array) =>
-  (
-    Buffer.from(bytes)
-      .toString("base64")
-      .match(/.{1,76}/gu) ?? []
-  ).join("\r\n");
+const BASE64_LINE_LENGTH = 76;
+
+const base64Lines = (bytes: Uint8Array) => {
+  const encoded = Buffer.from(bytes).toString("base64");
+  const lines: string[] = [];
+  for (let start = 0; start < encoded.length; start += BASE64_LINE_LENGTH) {
+    lines.push(encoded.slice(start, start + BASE64_LINE_LENGTH));
+  }
+  return lines.join("\r\n");
+};
 
 const htmlBody = (text: string) => `<p>${text}</p>`;
 
@@ -62,7 +66,7 @@ export const emlBytes = (message: StatedMessage): Uint8Array => {
       htmlBody(message.text),
       "--alt--",
     ].join("\r\n"),
-    ...(message.attachments ?? []).map(({ fileName, mimeType, bytes }) =>
+    ...message.attachments.map(({ fileName, mimeType, bytes }) =>
       [
         `--${BOUNDARY}`,
         `Content-Type: ${mimeType}; name="${fileName}"`,
@@ -97,7 +101,7 @@ export const msgFile = (message: StatedMessage): ArrayBuffer =>
       ...message.to.map((email) => ({ email, type: "to" as const })),
       ...message.cc.map((email) => ({ email, type: "cc" as const })),
     ],
-    attachments: message.attachments ?? [],
+    attachments: message.attachments,
   });
 
 export const EMAIL_FILE_RENDERINGS = {

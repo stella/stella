@@ -141,6 +141,7 @@ const statedMessage = fc.record({
     .stringMatching(/^[a-z0-9]{1,12}$/u)
     .map((id) => `<${id}@example.com>`),
   text: fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9 ,.]{0,200}$/u),
+  attachments: fc.constant([]),
 });
 
 describe("attachment policy by source", () => {

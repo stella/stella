@@ -38,8 +38,8 @@ export type InboundAttachment = {
 /** The fields an email format states, before shared normalization. */
 type MessageFields = {
   fromHeaders: string[];
-  to: Address[];
-  cc: Address[];
+  to: Address[] | undefined;
+  cc: Address[] | undefined;
   subject: string | undefined;
   text: string | undefined;
   html: string | undefined;
@@ -500,8 +500,8 @@ const mimeMessageFields = (email: Email): MessageFields => ({
   fromHeaders: email.headers
     .filter(({ key }) => key === "from")
     .map(({ value }) => value),
-  to: email.to ?? [],
-  cc: email.cc ?? [],
+  to: email.to,
+  cc: email.cc,
   subject: email.subject,
   text: email.text,
   html: email.html,
