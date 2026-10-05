@@ -1846,6 +1846,7 @@ const CONTRACT_CORPUS = {
           fields: [
             {
               path: "client_name",
+              visibleWhen: null,
               label: "Client name",
               inputType: "text",
               required: true,

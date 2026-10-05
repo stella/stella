@@ -18,6 +18,7 @@ import path from "node:path";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
+import { childExitStatus } from "./child-exit-status";
 import {
   type DevProcessGroupError,
   spawnDevProcess,
@@ -2567,10 +2568,10 @@ const main = async () => {
     });
 
     const firstExit = await Promise.race(
-      children.map(async ({ child, label }) => ({
-        exitCode: await child.exited,
-        label,
-      })),
+      children.map(async ({ child, label }) => {
+        await child.exited;
+        return { exitCode: childExitStatus(child), label };
+      }),
     );
     console.error(
       `${firstExit.label} exited with code ${String(firstExit.exitCode)}; shutting down the dev runner.`,

@@ -1495,6 +1495,7 @@
     "noResults": "Klausleid pole veel",
     "noVariants": "Variante pole",
     "outdatedVersion": "Uuendus saadaval",
+    "overrideNotRenderedWarning": "Klausli {clauseName} asendust ei kasutatud: selle koht ei ilmu selles dokumendis.",
     "renameSlot": "Nimeta pesa ümber",
     "renameSlotInvalid": "Pesade nimed peavad olema kordumatud ega tohi sisaldada tühikuid, kooloneid ega loogsulge.",
     "restoreVersion": "Taasta see versioon",

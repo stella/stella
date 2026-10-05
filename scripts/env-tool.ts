@@ -37,6 +37,7 @@ import {
   API_ENV_SCHEMA,
   COLLAB_ENV_SCHEMA,
   DEPLOYMENT_ENV_KEYS,
+  DEPLOYMENT_FLAG_PAIRS,
   ENV_CATALOG,
   ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
@@ -1208,14 +1209,48 @@ export const validateDoctorEnvironment = ({
   return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
 };
 
-const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
-  const { examplePath, owners } = ENV_APP_CONFIG[app];
-  const envDirectory = path.dirname(examplePath);
-  const baseEnvPath = path.join(envDirectory, ".env");
-  const envPaths = doctorEnvFileNames({ app, mode }).map((name) =>
-    path.join(envDirectory, name),
+type DeploymentFlagPairingInput = {
+  api: DoctorInput;
+  web: DoctorInput;
+};
+
+const isFlagEnabled = (schema: v.GenericSchema, value: string | undefined) => {
+  const parsed = v.safeParse(schema, value);
+  return parsed.success && parsed.output === true;
+};
+
+/**
+ * The one check for web build flags whose feature only the paired API flag
+ * serves (`DEPLOYMENT_FLAG_PAIRS`). Values are read through each app's own
+ * schema, so a flag counts as on exactly when that app would treat it so.
+ */
+export const deploymentFlagPairingIssues = ({
+  api,
+  web,
+}: DeploymentFlagPairingInput): string[] => {
+  const apiValues = normalizeEmptyEnvironment(api);
+  const webValues = normalizeEmptyEnvironment(web);
+  return DEPLOYMENT_FLAG_PAIRS.filter(
+    (pair) =>
+      isFlagEnabled(WEB_ENV_SCHEMA[pair.web], webValues[pair.web]) &&
+      !isFlagEnabled(API_ENV_SCHEMA[pair.api], apiValues[pair.api]),
+  ).map(
+    (pair) =>
+      `${pair.web}=true needs ${pair.api}=true on the API: the web build would offer a feature the API does not serve.`,
   );
-  const existingEnvPaths = envPaths.filter(existsSync);
+};
+
+type ReadDoctorInputOptions = {
+  app: EnvApp;
+  mode: EnvMode | undefined;
+};
+
+/** The layered env files an app loads in `mode`, under the process env. */
+export const readDoctorInput = ({ app, mode }: ReadDoctorInputOptions) => {
+  const envDirectory = path.dirname(ENV_APP_CONFIG[app].examplePath);
+  const existingEnvPaths = doctorEnvFileNames({ app, mode })
+    .map((name) => path.join(envDirectory, name))
+    .filter(existsSync);
   const doctorProcessEnvironment = resolveDoctorProcessEnvironment({
     environment: process.env,
     mode,
@@ -1224,11 +1259,21 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
     existingEnvPaths.map((envPath) => readFileSync(envPath, "utf-8")),
     doctorProcessEnvironment,
   );
-  const validation = validateDoctorEnvironment({
-    app,
+  return {
+    envDirectory,
+    existingEnvPaths,
+    fileValues,
     input: { ...fileValues, ...doctorProcessEnvironment },
-    mode,
-  });
+  };
+};
+
+const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
+  const { owners } = ENV_APP_CONFIG[app];
+  const { envDirectory, existingEnvPaths, fileValues, input } = readDoctorInput(
+    { app, mode },
+  );
+  const baseEnvPath = path.join(envDirectory, ".env");
+  const validation = validateDoctorEnvironment({ app, input, mode });
   const displayedEnvPaths = (
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
   ).map((envPath) => path.relative(REPO_ROOT, envPath));

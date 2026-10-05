@@ -1495,6 +1495,7 @@
     "noResults": "Zatím žádná vzorová ustanovení",
     "noVariants": "Žádné varianty",
     "outdatedVersion": "Je dostupná aktualizace",
+    "overrideNotRenderedWarning": "Náhrada ustanovení {clauseName} nebyla použita: jeho místo se v tomto dokumentu nezobrazuje.",
     "renameSlot": "Přejmenovat slot",
     "renameSlotInvalid": "Názvy slotů musí být jedinečné a nesmí obsahovat mezery, dvojtečky ani složené závorky.",
     "restoreVersion": "Obnovit tuto verzi",

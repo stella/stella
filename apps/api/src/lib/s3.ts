@@ -517,6 +517,15 @@ const getAbortableS3 = (): AwsS3Client => {
   return _abortableClient;
 };
 
+/**
+ * The AWS SDK client on the documents credentials, rebuilt first when they
+ * are past their horizon, for readers that own their bucket and abort signal.
+ */
+export const getFreshAbortableS3 = async (): Promise<AwsS3Client> => {
+  await documentsCredentials.refreshStale();
+  return getAbortableS3();
+};
+
 /** True when credentials are older than 50 minutes (or not yet built). */
 export const isS3Stale = (): boolean =>
   !_client ||

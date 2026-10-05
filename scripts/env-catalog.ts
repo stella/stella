@@ -163,7 +163,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "GOTENBERG_URL",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
+  "INBOUND_MAIL_BUCKET",
   "INBOUND_MAIL_DOMAIN",
+  "INBOUND_MAIL_KEY_PREFIX",
+  "INBOUND_MAIL_QUEUE_URL",
+  "INBOUND_MAIL_TOPIC_ARN",
   "LEGAL_CORPUS_S3_BUCKET",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
@@ -222,6 +226,11 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
   INBOUND_MAIL_DOMAIN: "inbound.example.com",
+  INBOUND_MAIL_QUEUE_URL:
+    "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound-mail",
+  INBOUND_MAIL_TOPIC_ARN: "arn:aws:sns:eu-west-1:123456789012:inbound-mail",
+  INBOUND_MAIL_BUCKET: "inbound-mail",
+  INBOUND_MAIL_KEY_PREFIX: "mail/",
   EDGAR_USER_AGENT: "stella admin@example.com",
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
@@ -391,6 +400,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   INBOUND_MAIL_DOMAIN:
     "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
+  INBOUND_MAIL_QUEUE_URL:
+    "SQS queue subscribed to the SES receipt topic. Set with the other INBOUND_MAIL_* transport keys to file inbound mail; unset disables receiving.",
+  INBOUND_MAIL_TOPIC_ARN:
+    "SNS topic the SES receipt rule publishes to. Queue messages from any other topic are left for the dead-letter queue.",
+  INBOUND_MAIL_BUCKET:
+    "S3 bucket the SES receipt rule stores raw messages in, in S3_REGION.",
+  INBOUND_MAIL_KEY_PREFIX:
+    "Object key prefix of the SES receipt rule's S3 action, for example mail/.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
@@ -582,6 +599,11 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
+  INBOUND_MAIL_BUCKET: "another INBOUND_MAIL_* transport key is set",
+  INBOUND_MAIL_DOMAIN: "an INBOUND_MAIL_* transport key is set",
+  INBOUND_MAIL_KEY_PREFIX: "another INBOUND_MAIL_* transport key is set",
+  INBOUND_MAIL_QUEUE_URL: "another INBOUND_MAIL_* transport key is set",
+  INBOUND_MAIL_TOPIC_ARN: "another INBOUND_MAIL_* transport key is set",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
   ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
@@ -745,7 +767,11 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  INBOUND_MAIL_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
   INBOUND_MAIL_DOMAIN: ENV_CREDENTIAL_KIND.notCredential,
+  INBOUND_MAIL_KEY_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  INBOUND_MAIL_QUEUE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  INBOUND_MAIL_TOPIC_ARN: ENV_CREDENTIAL_KIND.notCredential,
   INEGI_DENUE_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   INGESTION_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   JINA_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -1135,6 +1161,23 @@ export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
 
+export type WebEnvironmentName = keyof typeof WEB_ENV_SCHEMA;
+
+type DeploymentFlagPair = {
+  web: WebEnvironmentName;
+  api: ApiEnvironmentName;
+};
+
+/**
+ * Web build flags that offer a feature only the paired API flag serves. A
+ * deployment that turns the web flag on without the API flag shows pages
+ * whose requests the API answers as absent routes, so the deployment
+ * environment check refuses that combination.
+ */
+export const DEPLOYMENT_FLAG_PAIRS = [
+  { web: "VITE_FEATURE_TIME_BILLING", api: "FEATURE_TIME_BILLING" },
+] as const satisfies readonly DeploymentFlagPair[];
+
 export const isActiveExampleEntry = (name: string) =>
   ACTIVE_EXAMPLE_KEYS.has(name);
 
@@ -1240,6 +1283,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_SESSION_ID",
   // ci-result evaluates each independently scoped suite in folded jobs.
   "FOLDED_SUITES",
+  // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
+  "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.

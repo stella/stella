@@ -88,6 +88,7 @@ import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { reportsRoute } from "@/api/handlers/reports/routes";
+import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
@@ -529,7 +530,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(publicLegislationRoute)
+      .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
       .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)

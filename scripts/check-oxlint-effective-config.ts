@@ -7,10 +7,10 @@
 //   `plugins`, a spelling oxlint reads as another rule, or a precedence the
 //   config's readers assume but oxlint does not apply would otherwise leave a
 //   rule silently off (or on).
-// - shadowed: a vendored preset states a severity that another preset
-//   replaces without oxlint.config.ts naming the rule. `...libraryRules`
-//   replaces several, so the preset file reads "off" for a rule that is on,
-//   or "error" for one that is off.
+// - shadowed: a vendored preset states a severity that another preset, or a
+//   spread in oxlint.config.ts, replaces without oxlint.config.ts naming the
+//   rule. The preset file then reads "off" for a rule that is on, or "error"
+//   for one that is off.
 //
 // Known findings carry a reason in
 // scripts/oxlint-effective-config-baseline.json, which may only shrink: an
@@ -22,8 +22,6 @@ import { panic } from "better-result";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-import { libraryRules } from "@stll/oxlint-config";
 
 import config from "../oxlint.config.ts";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -41,7 +39,6 @@ import type { BaselineEntry, Finding } from "./oxlint-effective-config.ts";
 import { builtinRules, ruleCanonicalizer } from "./oxlint-rule-ids.ts";
 
 const CONFIG_FILE = "oxlint.config.ts";
-const LIBRARY_LAYER = "@stll/oxlint-config libraryRules";
 const BASELINE_PATH = BASELINE_PATHS.oxlintEffectiveConfig;
 const SECTIONS = ["effective", "shadowed"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -118,15 +115,8 @@ const parsedBaseline = isRecord(baselineJson)
 
 const builtins = builtinRules();
 const canonical = ruleCanonicalizer(builtins);
-const configLayers = flattenLayers(config, CONFIG_FILE);
-// oxlint.config.ts spreads libraryRules first in its own rules; modelling the
-// spread as the layer below lets a finding name it.
 const declared = declaredBaseRules({
-  layers: [
-    ...configLayers.slice(0, -1),
-    { name: LIBRARY_LAYER, rules: libraryRules, plugins: [], categories: {} },
-    ...configLayers.slice(-1),
-  ],
+  layers: flattenLayers(config, CONFIG_FILE),
   builtins,
   canonical,
 });

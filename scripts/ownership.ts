@@ -89,6 +89,44 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "public-sanctions-reader-binding",
+    capability:
+      "Binding the public sanctions reader to the scoped connection pool",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "The connection owner constructs a column-restricted, read-only " +
+      "sanctions reader without exporting another raw connection handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createPublicSanctionsReader"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/lists/sanctions/public-read-owner.ts",
+          reason: "Owns the restricted anonymous screening handle.",
+        },
+      ],
+    },
+  },
+  {
+    id: "public-sanctions-screening",
+    capability: "Reading the public sanctions corpus for anonymous screening",
+    owner: ["apps/api/src/lib/lists/sanctions/public-read-owner.ts"],
+    summary:
+      "Anonymous screening uses a column-restricted reader role and read-only " +
+      "transactions. This owner exports the restricted screening handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/lists/sanctions/public-read-owner"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/sanctions/search.ts",
+          reason: "Screens anonymous subjects against the public corpus.",
+        },
+      ],
+    },
+  },
+  {
     id: "desktop-account-bootstrap",
     capability: "Claiming desktop connection and document handoff requests",
     owner: [

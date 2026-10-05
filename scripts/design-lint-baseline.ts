@@ -90,7 +90,7 @@ const backlogRule = (code: string): DesignLintBacklogRule | undefined => {
   return undefined;
 };
 
-const emptyBacklog = (): DesignLintBacklog => ({
+export const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
@@ -102,6 +102,9 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},
+  "react/no-children-prop": {},
+  "eslint/no-unexpected-multiline": {},
+  "eslint/no-use-before-define": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>

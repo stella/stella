@@ -20,7 +20,6 @@ import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthFromColumns,
   dateOfBirthToColumns,
-  nationalityCodesSchema,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
@@ -30,6 +29,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";

@@ -33,6 +33,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
+  readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
   installPgliteTreeParentGuards,
@@ -539,6 +540,7 @@ export const ROLE_GRANT_STATEMENTS = [
         TO stella_public_law_reader
     `,
     ),
+  ...readPglitePublicSanctionsGrants(),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -629,6 +631,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await db.execute(
+    sql.raw("CREATE ROLE stella_public_sanctions_reader NOLOGIN"),
+  );
+  await db.execute(
     sql.raw("CREATE ROLE stella_case_law_analysis_writer NOLOGIN"),
   );
   await db.execute(
@@ -689,9 +694,8 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();
   }
-  const snapshotBytes = await Bun.file(snapshotPath).arrayBuffer();
   return await PGlite.create({
     extensions: { pg_trgm },
-    loadDataDir: new Blob([snapshotBytes]),
+    loadDataDir: Bun.file(snapshotPath),
   });
 };

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "apps/api/package.json adds @aws-sdk/client-sqs, the client for the inbound mail queue, from the same AWS SDK family and version line as the @aws-sdk/client-s3 it already declares."
+}

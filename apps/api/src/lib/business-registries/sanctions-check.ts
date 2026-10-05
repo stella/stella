@@ -19,6 +19,7 @@ import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   screenSanctionsSubject,
+  SANCTIONS_SUBJECT_ERROR_MESSAGES,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type {
@@ -197,25 +198,18 @@ const resolveCompanyName = async ({
   });
 };
 
-const resolveSubject = async (
-  subject: SanctionsCheckSubject,
-  dependencies: SanctionsCheckDependencies,
-): Promise<Result<ResolvedName, HandlerError>> => {
+/** Normalize a name subject identically for public and in-product screening. */
+export const resolveSanctionsNameSubject = (
+  subject: Exclude<SanctionsCheckSubject, { type: "company-id" }>,
+): Extract<ResolvedName, { type: "resolved" }> => {
   switch (subject.type) {
-    case "company-id": {
-      return await resolveCompanyName({
-        value: subject.value,
-        country: subject.country,
-        dependencies,
-      });
-    }
     case "organization": {
       const name = subject.name.trim();
       const identifiers =
         subject.companyId === null || subject.companyId.trim() === ""
           ? []
           : [subject.companyId.trim()];
-      return Result.ok({
+      return {
         type: "resolved",
         subject: { type: "organization", name, identifiers },
         checked: {
@@ -224,13 +218,13 @@ const resolveSubject = async (
           identifiers,
           resolvedFrom: null,
         },
-      });
+      };
     }
     case "person": {
       const name = `${subject.firstName.trim()} ${subject.lastName.trim()}`;
       const { dateOfBirth } = subject;
       const nationalityCodes = [...new Set(subject.nationalityCodes)];
-      return Result.ok({
+      return {
         type: "resolved",
         subject: {
           type: "person",
@@ -250,7 +244,30 @@ const resolveSubject = async (
           nationalityCodes,
         },
         checked: { type: "person", name, dateOfBirth, nationalityCodes },
+      };
+    }
+    default: {
+      subject satisfies never;
+      return panic("Unhandled sanctions subject");
+    }
+  }
+};
+
+const resolveSubject = async (
+  subject: SanctionsCheckSubject,
+  dependencies: SanctionsCheckDependencies,
+): Promise<Result<ResolvedName, HandlerError>> => {
+  switch (subject.type) {
+    case "company-id": {
+      return await resolveCompanyName({
+        value: subject.value,
+        country: subject.country,
+        dependencies,
       });
+    }
+    case "organization":
+    case "person": {
+      return Result.ok(resolveSanctionsNameSubject(subject));
     }
     default: {
       subject satisfies never;
@@ -317,13 +334,22 @@ export const runSanctionsCheck = async ({
   const screened = await screen({
     db: dependencies.scopedDb,
     subject: outcome.subject,
+    nameSource: subject.type === "company-id" ? "register" : "free-text",
     practiceJurisdictions,
   });
   if (screened.isErr()) {
+    if (subject.type === "company-id") {
+      return Result.ok({
+        kind: "sanctions",
+        subject: outcome.checked,
+        ...unavailableSanctionsScreening({
+          reason: "load-failed",
+          practiceJurisdictions,
+        }),
+      });
+    }
     return invalidSubject(
-      screened.error.code === "empty-query"
-        ? "The name to screen has no letters"
-        : "The date of birth is not a valid calendar date",
+      SANCTIONS_SUBJECT_ERROR_MESSAGES[screened.error.code],
     );
   }
   return Result.ok({

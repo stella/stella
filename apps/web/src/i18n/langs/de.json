@@ -1495,6 +1495,7 @@
     "noResults": "Keine Klauseln gefunden",
     "noVariants": "Keine Varianten",
     "outdatedVersion": "Aktualisierung verfügbar",
+    "overrideNotRenderedWarning": "Die Ersetzung für Klausel {clauseName} wurde nicht verwendet: Ihr Platzhalter erscheint in diesem Dokument nicht.",
     "renameSlot": "Slot umbenennen",
     "renameSlotInvalid": "Slot-Namen müssen eindeutig sein und dürfen keine Leerzeichen, Doppelpunkte oder geschweiften Klammern enthalten.",
     "restoreVersion": "Diese Version wiederherstellen",
