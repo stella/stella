@@ -12,7 +12,9 @@ const { DocxSuggestionsQueryStatus } =
 const { queryView } = await import("@/lib/query-view.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(cleanup);
+afterEach(async () => {
+  await cleanup();
+});
 afterAll(() => GlobalRegistrator.unregister());
 
 const renderStatus = (
@@ -67,11 +69,17 @@ for (const items of [[], [{ id: "cached-suggestion" }]]) {
     });
     const cached = { items };
     client.setQueryData(["suggestions"], cached);
+    let attempts = 0;
+    const read = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("refresh failed");
+      }
+      return cached;
+    };
     const observer = new QueryObserver(client, {
       queryKey: ["suggestions"],
-      queryFn: async () => {
-        throw new Error("refresh failed");
-      },
+      queryFn: read,
       enabled: false,
     });
     const refreshed = await observer.refetch();
@@ -79,17 +87,31 @@ for (const items of [[], [{ id: "cached-suggestion" }]]) {
       isEmpty: ({ items: suggestions }) => suggestions.length === 0,
     });
     expect(view.type).toBe("items");
-    if (view.type !== "items") {
-      throw new Error("cached suggestions were discarded");
+    switch (view.type) {
+      case "items": {
+        expect(view.items).toBe(cached);
+        const status = renderStatus(view);
+        expect(status.getByRole("alert").textContent).toContain(
+          messages.errors.actionFailed,
+        );
+        fireEvent.click(
+          status.getByRole("button", { name: messages.common.retry }),
+        );
+        await waitFor(() =>
+          expect(observer.getCurrentResult().status).toBe("success"),
+        );
+        expect(attempts).toBe(2);
+        expect(observer.getCurrentResult().data).toBe(cached);
+        break;
+      }
+      case "pending":
+      case "error":
+      case "empty":
+        throw new Error("cached suggestions were discarded");
+      default:
+        view satisfies never;
+        throw new Error("Unhandled suggestions query state");
     }
-    expect(view.items).toBe(cached);
-    const status = renderStatus(view);
-    expect(status.getByRole("alert").textContent).toContain(
-      messages.errors.actionFailed,
-    );
-    expect(
-      status.getByRole("button", { name: messages.common.retry }),
-    ).toBeDefined();
     observer.destroy();
     client.clear();
   });

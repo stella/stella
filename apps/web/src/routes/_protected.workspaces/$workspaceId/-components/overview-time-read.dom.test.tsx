@@ -15,7 +15,9 @@ const { OverviewTimeRead } = await import("./overview-time-read");
 
 const TEST_UNIT_LABEL = "hours";
 
-afterEach(cleanup);
+afterEach(async () => {
+  await cleanup();
+});
 afterAll(() => GlobalRegistrator.unregister());
 
 for (const site of ["current-week", "previous-week", "team-week"]) {

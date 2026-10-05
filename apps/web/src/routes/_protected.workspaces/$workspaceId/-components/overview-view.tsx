@@ -507,10 +507,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           <StatCard
             icon={<ClockIcon className="size-4" />}
             label={t("workspaces.overview.timeThisWeek")}
-            onClick={
-              currentTimeView.type === "items" &&
-              currentTimeView.refetchError === undefined
-                ? () => {
+            {...(currentTimeView.type === "items" &&
+            currentTimeView.refetchError === undefined
+              ? {
+                  onClick: () => {
                     detached(
                       navigate({
                         to: "/workspaces/$workspaceId/timesheets",
@@ -518,9 +518,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       }),
                       "overview-view.navigate",
                     );
-                  }
-                : undefined
-            }
+                  },
+                }
+              : {})}
             value={
               canReviewTimeEntries ? (
                 <OverviewTimeRead view={teamTimeSummaryView}>
