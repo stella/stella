@@ -6125,6 +6125,8 @@ describe("OpenAI-compatible MCP tools", () => {
       [THIRD_DECISION_ID, decisionText("C", 6000)],
     ]);
     serveTexts(texts);
+    const textOf = (id: string): string =>
+      texts.get(id) ?? panic(`No text for ${id}`);
     const maxChars = 4000;
 
     const payload = await readWindows({
@@ -6149,7 +6151,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionId: DECISION_ID,
         nextCursor: encodePaginationCursor([maxChars, null]),
         status: "found",
-        text: texts.get(DECISION_ID)?.slice(0, maxChars),
+        text: textOf(DECISION_ID).slice(0, maxChars),
         truncated: true,
       },
       {
@@ -6157,7 +6159,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionId: SECOND_DECISION_ID,
         nextCursor: null,
         status: "found",
-        text: texts.get(SECOND_DECISION_ID),
+        text: textOf(SECOND_DECISION_ID),
         truncated: false,
       },
       {
@@ -6165,7 +6167,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionId: THIRD_DECISION_ID,
         nextCursor: encodePaginationCursor([maxChars, null]),
         status: "found",
-        text: texts.get(THIRD_DECISION_ID)?.slice(0, maxChars),
+        text: textOf(THIRD_DECISION_ID).slice(0, maxChars),
         truncated: true,
       },
     ]);
@@ -6178,7 +6180,7 @@ describe("OpenAI-compatible MCP tools", () => {
       max_chars: maxChars,
     });
     expect(resumed.items.at(0)?.decision).toMatchObject({
-      text: texts.get(THIRD_DECISION_ID)?.slice(maxChars),
+      text: textOf(THIRD_DECISION_ID).slice(maxChars),
       truncated: false,
     });
     expect(resumed.items.at(0)?.nextCursor).toBeNull();
@@ -6206,7 +6208,9 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.items).toHaveLength(ids.length);
     for (const [index, item] of payload.items.entries()) {
       expect(item.decision).toMatchObject({
-        text: texts.get(ids[index] ?? panic("Missing id"))?.slice(0, share),
+        text: (
+          texts.get(ids[index] ?? panic("Missing id")) ?? panic("Missing text")
+        ).slice(0, share),
         truncated: true,
       });
       expect(item.nextCursor).toBe(encodePaginationCursor([share, null]));
