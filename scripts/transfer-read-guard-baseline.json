@@ -2227,7 +2227,7 @@
   },
   {
     "file": "apps/web/src/lib/auth-client.ts",
-    "function": "module/customFetchImpl",
+    "function": "module/createStellaAuthClient",
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
