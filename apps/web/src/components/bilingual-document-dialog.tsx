@@ -15,6 +15,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -142,6 +143,16 @@ export const BilingualDocumentDialog = ({
         }
       />
       <DialogPopup>
+        <DialogFormState
+          dirty={
+            sourceLang !== defaultLanguagePair(locale).source ||
+            targetLang !== defaultLanguagePair(locale).target
+          }
+          onDiscard={() => {
+            setSourceLang(defaultLanguagePair(locale).source);
+            setTargetLang(defaultLanguagePair(locale).target);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("bilingual.dialog.title")}</DialogTitle>
           <DialogDescription>

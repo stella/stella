@@ -1,15 +1,25 @@
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
-import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
-import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
+import {
+  DESKTOP_HANDOFF_PROTOCOL_HEADER,
+  DESKTOP_HANDOFF_PROTOCOL_VERSION,
+} from "@stll/api-contract/desktop-handoff";
+
+import { createDesktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
+import { createPdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
+import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 
 const HANDOFF_TOKEN = "ab".repeat(32);
 
 test("document handoffs require an authenticated desktop account", async () => {
+  const dependencies = {
+    authorizeAccount: authorizeDesktopAccount,
+    recordFailure: async () => false,
+  };
   const app = new Elysia()
-    .use(desktopEditSessionsRoute)
-    .use(pdfSigningSessionsRoute);
+    .use(createDesktopEditSessionsRoute(dependencies))
+    .use(createPdfSigningSessionsRoute(dependencies));
 
   for (const [path, body] of [
     ["/desktop-edit-handoffs/redeem", { handoffToken: HANDOFF_TOKEN }],
@@ -28,6 +38,9 @@ test("document handoffs require an authenticated desktop account", async () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
+            [DESKTOP_HANDOFF_PROTOCOL_HEADER]: String(
+              DESKTOP_HANDOFF_PROTOCOL_VERSION,
+            ),
             ...(authorization ? { authorization } : {}),
           },
           body: JSON.stringify(body),

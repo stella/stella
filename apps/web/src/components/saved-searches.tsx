@@ -20,6 +20,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPopup,
@@ -330,6 +331,13 @@ export const SavedSearches = ({
         open={dialog.type === "create" || dialog.type === "rename"}
       >
         <DialogPopup layer={overlayLayer}>
+          <DialogFormState
+            dirty={
+              dialog.type === "create"
+                ? dialog.name !== ""
+                : dialog.type === "rename" && dialog.name !== dialog.search.name
+            }
+          />
           <DialogHeader>
             <DialogTitle>
               {dialog.type === "rename"
