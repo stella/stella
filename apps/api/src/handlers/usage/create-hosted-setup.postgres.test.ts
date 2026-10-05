@@ -108,7 +108,7 @@ const installFakeProvider = (
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof globalThis.fetch>[0]) => {
       const url = requestUrl(input);
-      if (!url.startsWith(PROVIDER_BASE_URL)) {
+      if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
         return panic(`Unexpected outbound request to ${url}`);
       }
       calls += 1;
