@@ -2453,6 +2453,7 @@ type Messages = {
     "current": "Current";
     "deleteVersion": "Delete version";
     "descriptionPlaceholder": "Add a note about this version...";
+    "displayFailed": "This file couldn't be displayed.";
     "downloadRedline": "Download redline";
     "dropToUploadVersion": "Drop to upload as new version";
     "editLatestVersionDescription": "This is not the current version. To edit it in the browser, first make it the latest version, then unlock it for editing.";
