@@ -2,7 +2,7 @@ name: Record network baseline
 
 # Main owns recordings. PR checks never write the shared JSON.
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] label requests record only trusted main, never PR source
+  pull_request_target: # zizmor: ignore[dangerous-triggers] label requests dispatch only trusted main, never PR source
     branches: [main]
     types: [labeled]
   schedule:
@@ -22,8 +22,26 @@ concurrency:
 permissions: {}
 
 jobs:
+  request:
+    if: github.event_name == 'pull_request_target' && github.event.label.name == 'baseline:record'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      actions: write
+    steps:
+      - name: Request main recording
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "network-baseline-record.yml",
+              ref: "main",
+            });
+
   build:
-    if: github.ref == 'refs/heads/main' && (github.event_name != 'pull_request_target' || github.event.label.name == 'baseline:record')
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

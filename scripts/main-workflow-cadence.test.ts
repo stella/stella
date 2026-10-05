@@ -227,7 +227,7 @@ test("main maintenance triggers avoid duplicate push work and cache warming foll
   ).toBe(false);
 });
 
-test("baseline labels record only trusted main with read-only permissions", () => {
+test("baseline labels dispatch trusted main while recording permissions stay read-only", async () => {
   const recording = read("network-baseline-record");
   expect(Object.keys(recording.on)).toEqual([
     "pull_request_target",
@@ -247,8 +247,7 @@ test("baseline labels record only trusted main with read-only permissions", () =
     ]) {
       for (const label of ["baseline:record", "unrelated"]) {
         const permitted =
-          ref === "refs/heads/main" &&
-          (event_name !== "pull_request_target" || label === "baseline:record");
+          ref === "refs/heads/main" && event_name !== "pull_request_target";
         expect(
           new Script(`Boolean(${build?.if})`).runInNewContext({
             github: { ref, event_name, event: { label: { name: label } } },
@@ -257,7 +256,10 @@ test("baseline labels record only trusted main with read-only permissions", () =
       }
     }
   }
-  for (const job of Object.values(recording.jobs)) {
+  for (const [name, job] of Object.entries(recording.jobs)) {
+    if (name === "request") {
+      continue;
+    }
     expect(
       Object.values(job.permissions ?? {}).every((value) => value === "read"),
     ).toBe(true);
@@ -271,8 +273,58 @@ test("baseline labels record only trusted main with read-only permissions", () =
       });
     }
   }
+  const request = recording.jobs["request"];
+  expect(request?.permissions).toEqual({ actions: "write" });
+  expect(request?.steps).toHaveLength(1);
+  const requestScript = v.parse(
+    v.string(),
+    request?.steps?.at(0)?.with?.["script"],
+  );
+  for (const event_name of [
+    "pull_request_target",
+    "workflow_dispatch",
+    "schedule",
+  ]) {
+    for (const label of ["baseline:record", "unrelated"]) {
+      const calls: unknown[] = [];
+      const enabled = new Script(`Boolean(${request?.if})`).runInNewContext({
+        github: { event_name, event: { label: { name: label } } },
+      });
+      if (enabled) {
+        await new Script(
+          `(async () => { ${requestScript} })()`,
+        ).runInNewContext({
+          context: {
+            repo: { owner: "example", repo: "repository" },
+            payload: { pull_request: { head: { ref: "untrusted" } } },
+          },
+          github: {
+            rest: {
+              actions: {
+                createWorkflowDispatch: async (query: unknown) => {
+                  calls.push(query);
+                },
+              },
+            },
+          },
+        });
+      }
+      expect(calls).toEqual(
+        event_name === "pull_request_target" && label === "baseline:record"
+          ? [
+              {
+                owner: "example",
+                repo: "repository",
+                workflow_id: "network-baseline-record.yml",
+                ref: "main",
+              },
+            ]
+          : [],
+      );
+    }
+  }
   expect(read("network-baseline-deliver").jobs["deliver"]?.if).toContain(
-    '"pull_request_target"',
+    '["schedule", "workflow_dispatch"]',
   );
 });
 
