@@ -365,11 +365,10 @@ export const ChatThreadCard = ({
         )}
         role="dialog"
       >
-        {/* The header is its own opaque row: a flat tint over the popover
-          (no gradient, at most 2%) and a hairline under it, so the
+        {/* The header is its own opaque row with a hairline under it, so the
           transcript and whatever lies behind the glass never show through
           the title. The transcript scrolls in the row below, never under it. */}
-        <div className="border-border flex shrink-0 items-center justify-end gap-2 border-b bg-[color-mix(in_oklab,var(--popover),var(--foreground)_2%)] px-1.5 py-1.5">
+        <div className="border-border bg-popover flex shrink-0 items-center justify-end gap-2 border-b px-1.5 py-1.5">
           {titleSlot !== undefined && (
             <div className="flex min-w-0 flex-1 items-center ps-1.5">
               {titleSlot}
