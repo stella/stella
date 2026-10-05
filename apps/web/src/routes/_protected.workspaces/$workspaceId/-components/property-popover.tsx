@@ -1,5 +1,6 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
+import { useSelector } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -92,6 +93,7 @@ export const PropertyPopover = ({
   const startWorkflow = useStartWorkflow(workspaceId);
   const queryClient = useQueryClient();
   const table = header.getContext().table;
+  const rowSelection = useSelector(table.store, (state) => state.rowSelection);
   const tableRows = table.getRowModel().flatRows;
   const pageRowIds = tableRows
     .filter((row) => row.original.kind !== "folder")
@@ -109,7 +111,7 @@ export const PropertyPopover = ({
     propertyAiCellState(row.original.fields[id]?.content),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
-  const selectedRowIds = Object.entries(table.getState().rowSelection)
+  const selectedRowIds = Object.entries(rowSelection)
     .filter(([, selected]) => selected)
     .map(([entityId]) => entityId);
   const runScope = aiColumnRunScope({ pageRowIds, selectedRowIds });

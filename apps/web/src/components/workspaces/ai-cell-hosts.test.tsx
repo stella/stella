@@ -140,7 +140,7 @@ const fixtures = {
             entityId: entity.entityId,
             id: toSafeId<"field">("synthetic-field"),
             propertyId: property.id,
-            content: { type: "pending" },
+            content: { type: "pending", version: 1 },
           },
         },
       }}

@@ -1,9 +1,16 @@
 import type { AiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import type { TranslationKey } from "@/i18n/types";
 
+const RUN_MENU_LABELS = {
+  page: "aiColumns.runColumnPage",
+  remaining: "aiColumns.runRemainingPage",
+  rerun: "aiColumns.rerunColumnPage",
+  rerunAll: "aiColumns.rerunAllPage",
+} as const satisfies Record<string, TranslationKey>;
+
 type AiColumnRunMenuItem = {
   type: "remaining" | "rerun";
-  label: TranslationKey;
+  label: (typeof RUN_MENU_LABELS)[keyof typeof RUN_MENU_LABELS];
 };
 
 export const aiColumnRunMenu = (
@@ -13,14 +20,14 @@ export const aiColumnRunMenu = (
     (state) => state.type === "done" || state.type === "failed",
   ).length;
   if (done === 0) {
-    return [{ type: "remaining", label: "aiColumns.runColumnPage" }];
+    return [{ type: "remaining", label: RUN_MENU_LABELS.page }];
   }
   if (done === states.length) {
-    return [{ type: "rerun", label: "aiColumns.rerunColumnPage" }];
+    return [{ type: "rerun", label: RUN_MENU_LABELS.rerun }];
   }
   return [
-    { type: "remaining", label: "aiColumns.runRemainingPage" },
-    { type: "rerun", label: "aiColumns.rerunAllPage" },
+    { type: "remaining", label: RUN_MENU_LABELS.remaining },
+    { type: "rerun", label: RUN_MENU_LABELS.rerunAll },
   ];
 };
 

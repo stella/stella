@@ -44,6 +44,8 @@ import type {
   QuestionColumnAction,
 } from "@/features/case-law/research/question-columns.logic";
 
+const NO_DECISION_IDS = [] as const;
+
 type QuestionColumnPopoverProps = {
   column: TableColumn<DecisionRowData>;
   question: QuestionColumn;
@@ -93,14 +95,13 @@ export const QuestionColumnPopover = ({
       refusedBudget: questions?.refusedAnswerKeys.has(key) ?? false,
     });
   };
+  const pageDecisionIds = questions?.pageDecisionIds ?? NO_DECISION_IDS;
   const scope = aiColumnRunScope({
-    pageRowIds: questions?.pageDecisionIds ?? [],
-    selectedRowIds: questions?.selectedDecisionIds ?? [],
+    pageRowIds: pageDecisionIds,
+    selectedRowIds: questions?.selectedDecisionIds ?? NO_DECISION_IDS,
   });
   const scopedStates = scope.rowIds.map(stateFor);
-  const pageMenu = aiColumnRunMenu(
-    (questions?.pageDecisionIds ?? []).map(stateFor),
-  );
+  const pageMenu = aiColumnRunMenu(pageDecisionIds.map(stateFor));
   const primaryRun = aiColumnRunMenu(scopedStates).at(0);
 
   return (
@@ -170,8 +171,7 @@ export const QuestionColumnPopover = ({
                     key={item.type}
                     className="justify-start"
                     disabled={
-                      questions?.isRunning ||
-                      (questions?.pageDecisionIds.length ?? 0) === 0
+                      questions?.isRunning || pageDecisionIds.length === 0
                     }
                     onClick={() => {
                       setIsOpen(false);

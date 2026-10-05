@@ -345,19 +345,17 @@ export const useQuestionColumns = ({
             answersByKey,
             pageDecisionIds,
             selectedDecisionIds,
-            queuedAnswerKeys:
-              run.isPending && run.variables !== undefined
-                ? questionQueuedAnswerKeys({
-                    answersByKey,
-                    force: run.variables.force,
-                    runSet: run.variables.runSet,
-                  })
-                : NO_ADDED_IDS,
+            queuedAnswerKeys: run.isPending
+              ? questionQueuedAnswerKeys({
+                  answersByKey,
+                  force: run.variables.force,
+                  runSet: run.variables.runSet,
+                })
+              : NO_ADDED_IDS,
             refusedAnswerKeys:
               run.isError &&
               APIError.is(run.error) &&
-              run.error.code === ANSWER_BUDGET_REFUSAL_CODE &&
-              run.variables !== undefined
+              run.error.code === ANSWER_BUDGET_REFUSAL_CODE
                 ? questionRefusedAnswerKeys({
                     answersByKey,
                     runSet: run.variables.runSet,

@@ -1,4 +1,4 @@
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlayIcon } from "@stll/ui/icons";
@@ -53,6 +53,7 @@ export const AiColumnSelectionAction = ({
   onRun,
 }: AiColumnSelectionActionProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   return (
     <>
       <Button disabled={disabled} onClick={onRun} size="sm" variant="outline">
@@ -61,8 +62,8 @@ export const AiColumnSelectionAction = ({
       </Button>
       <span className="text-muted-foreground text-xs tabular-nums">
         {t("aiColumns.countSummary", {
-          columns,
-          rows,
+          columns: format.number(columns),
+          rows: format.number(rows),
           answers: columns * rows,
         })}
       </span>
