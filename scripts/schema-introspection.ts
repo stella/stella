@@ -4,10 +4,10 @@ import path from "node:path";
 import ts from "typescript";
 
 import {
-  canonicalModuleId,
   isDatabaseHandleName,
   isDatabaseOperationMethod,
-} from "../.oxlint-plugins/utils.ts";
+} from "../.oxlint-plugins/database-access.ts";
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import type { AllowedFile } from "./ownership.ts";
 
 const DYNAMIC_CALL = "dynamic-call";

@@ -18,7 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { canonicalModuleId } from "../.oxlint-plugins/utils.ts";
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
