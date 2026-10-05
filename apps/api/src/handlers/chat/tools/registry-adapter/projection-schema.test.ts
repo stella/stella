@@ -13,6 +13,10 @@ import {
   PUBLIC_COUNTRIES,
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
+import {
+  FACET_COUNT_TYPE,
+  SEARCH_TOTAL_NOT_COUNTED,
+} from "@stll/api-contract/search";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
@@ -728,6 +732,36 @@ describe("projectForChat", () => {
         expect(project({ schema, payload }).unwrap()).toEqual(payload);
       }
     }
+  });
+
+  test("a case-law source facet forwards its source id verbatim", () => {
+    const payload = {
+      facets: {
+        court: [],
+        year: [],
+        decisionType: [],
+        source: [
+          {
+            value: WS_UUID,
+            label: "Supreme Court",
+            count: 3,
+            countType: FACET_COUNT_TYPE.EXACT,
+          },
+        ],
+        language: [],
+      },
+      nextCursor: null,
+      searches: [],
+      results: [],
+      total: SEARCH_TOTAL_NOT_COUNTED,
+    };
+
+    const projected = project({
+      payload,
+      schema: READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
+    }).unwrap();
+
+    expect(projected).toEqual(payload);
   });
 
   test("an unwrapped union branch fails before projection", () => {
