@@ -149,7 +149,7 @@ export const collapseLegislationHitsByWork = ({
   for (const [index, work] of named.entries()) {
     const representative = representatives.get(work);
     if (representative === undefined || isExcluded(work)) {
-      continue; // unsignalled-skip-allow: Named works are prefiltered by membership; cursor exclusions avoid replay.
+      continue;
     }
     const best = bestByWork.get(work);
     emit(work, {

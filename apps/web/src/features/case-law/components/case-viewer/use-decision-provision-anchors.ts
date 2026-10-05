@@ -197,7 +197,7 @@ export const useDecisionProvisionAnchors = ({
       statute === undefined ||
       !referencesOutsideVersion(statute, work.rows)
     ) {
-      continue; // unsignalled-skip-allow: Selects extra version requests only; covered references are processed in the anchor pass.
+      continue;
     }
     versionedWorks.push({ key, statuteId: statute.id });
   }
