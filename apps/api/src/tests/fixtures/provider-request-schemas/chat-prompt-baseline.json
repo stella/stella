@@ -104,6 +104,10 @@
       {
         "reason": "Position sources on save_playbook",
         "tokens": 32913
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33097
       }
     ],
     "google/extended": [
@@ -122,6 +126,10 @@
       {
         "reason": "Position sources on save_playbook",
         "tokens": 33392
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33575
       }
     ],
     "mistral/default": [

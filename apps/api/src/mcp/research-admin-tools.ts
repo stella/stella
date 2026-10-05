@@ -791,7 +791,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           ),
           v.description(
             "IANA time zone, e.g. Europe/Prague; null follows the primary " +
-              "practice jurisdiction (update_org_settings)",
+              "practice jurisdiction",
           ),
         ),
       ),
@@ -911,9 +911,8 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
-    "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, document processing, time policy, and time " +
-    "zone. Manage provider secrets in the dashboard.",
+    "require matter_id and user_id; the other fields apply to " +
+    "update_org_settings. Manage provider secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],

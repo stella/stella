@@ -5039,7 +5039,7 @@
       }
     },
     "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, document processing, time policy, and time zone. Manage provider secrets in the dashboard.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
     "inputSchema": {
       "type": "object",
       "required": ["action"],
@@ -5124,7 +5124,7 @@
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction (update_org_settings)"
+          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
         },
         "confirm": {
           "type": "boolean",
