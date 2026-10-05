@@ -7,7 +7,7 @@ const HISTORY_WINDOWS = new Set(["clipboard", "clipboard-editor"]);
 const HISTORY_COMMAND_PREFIX = "allow-clipboard-";
 const WINDOW_OWNER = "src/app_window.rs";
 
-const readNative = (relativePath: string) =>
+const readNative = async (relativePath: string) =>
   readFile(path.join(NATIVE_ROOT, relativePath), "utf-8");
 
 const parseJson = (source: string): unknown => JSON.parse(source);
