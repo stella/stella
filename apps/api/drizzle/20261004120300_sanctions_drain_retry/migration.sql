@@ -4,8 +4,7 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE public.sanctions_contact_marks
  ADD COLUMN attempt_count integer NOT NULL DEFAULT 0,
  ADD COLUMN next_attempt_at timestamptz NOT NULL DEFAULT TIMESTAMPTZ '1970-01-01 00:00:00+00',
- ADD CONSTRAINT sanctions_contact_marks_attempt_count_check CHECK (attempt_count >= 0);--> statement-breakpoint
-CREATE INDEX sanctions_contact_marks_retry_idx ON public.sanctions_contact_marks (next_attempt_at, scheduled_at, organization_id, contact_id);--> statement-breakpoint
+ ADD CONSTRAINT sanctions_contact_marks_attempt_count_check CHECK (attempt_count >= 0) NOT VALID;--> statement-breakpoint
 CREATE FUNCTION public.reset_sanctions_mark_retry() RETURNS trigger
  LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
