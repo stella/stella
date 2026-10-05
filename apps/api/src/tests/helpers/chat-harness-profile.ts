@@ -70,7 +70,8 @@ export const createChatHarnessProfile = (
       queryCountLogger.logQuery(query, params);
       const span = closestActiveSpan();
       const total = phaseTotals(span?.phase ?? "unattributed");
-      const keyword = query.trimStart().match(/^\w+/u)?.at(0)?.toLowerCase();
+      const keyword =
+        /^\w+/u.exec(query.trimStart())?.at(0)?.toLowerCase() ?? "";
       total.statements += 1;
       switch (keyword) {
         case "select":

@@ -81,9 +81,11 @@ import { drainResponse } from "@/api/tests/helpers/chat-round-trip";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import type { ScriptedRun } from "@/api/tests/helpers/chat-scripted-provider";
 import {
-  findOfferedInteractions,
-  findThreadInvariantViolations,
+  offeredInteractionsOf,
+  readThreadInvariantSnapshot,
+  threadInvariantViolationsOf,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import type { ThreadInvariantSnapshot } from "@/api/tests/helpers/chat-thread-invariants";
 import {
   findLiveOutcomeViolations,
   findTurnOutcomeViolations,
@@ -536,28 +538,22 @@ export const createApprovalHarness = ({
    * `chat.persisted.run-identity`: the turn the response names holds the run
    * id its request posted.
    */
-  const findRunViolations = async ({
+  const findRunViolations = ({
     ctx,
     ended,
+    snapshot,
     turnId,
   }: {
     ctx: SendMessageCtx;
     ended: RecordedExchange["ended"];
+    snapshot: ThreadInvariantSnapshot;
     turnId: string | null;
-  }): Promise<OracleViolation[]> => {
+  }): OracleViolation[] => {
     const reads = requestOf(ctx).readsAfterResponse();
     const turn =
       turnId === null
         ? undefined
-        : await testDb.query.chatTurns.findFirst({
-            columns: {
-              cancellationReason: true,
-              interruptionReason: true,
-              runId: true,
-              status: true,
-            },
-            where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
-          });
+        : snapshot.turns.find(({ id }) => id === turnId);
     const reason =
       ended === "complete"
         ? (turn?.interruptionReason ?? turn?.cancellationReason)
@@ -698,27 +694,29 @@ export const createApprovalHarness = ({
       : statusResponse(answer);
   };
 
-  const findPersistedViolations = async (
-    threadId: SafeId<"chatThread">,
-  ): Promise<OracleViolation[]> =>
-    await measure("oracle", async () => {
-      const {
-        turnOutcomeMismatches,
+  const readSnapshot = async (threadId: SafeId<"chatThread">) =>
+    await measure(
+      "oracle",
+      async () => await readThreadInvariantSnapshot({ db: testDb, threadId }),
+    );
+
+  const persistedViolationsOf = (
+    snapshot: ThreadInvariantSnapshot,
+  ): OracleViolation[] => {
+    const {
+      turnOutcomeMismatches,
+      unownedPendingInteractions,
+      unsettledToolCalls,
+    } = threadInvariantViolationsOf(snapshot);
+    return [
+      ...violationsOf(
+        CHAT_ORACLE.persistedPendingOwned,
         unownedPendingInteractions,
-        unsettledToolCalls,
-      } = await findThreadInvariantViolations({ db: testDb, threadId });
-      return [
-        ...violationsOf(
-          CHAT_ORACLE.persistedPendingOwned,
-          unownedPendingInteractions,
-        ),
-        ...violationsOf(CHAT_ORACLE.persistedCallsSettled, unsettledToolCalls),
-        ...violationsOf(
-          CHAT_ORACLE.persistedTurnOutcome,
-          turnOutcomeMismatches,
-        ),
-      ];
-    });
+      ),
+      ...violationsOf(CHAT_ORACLE.persistedCallsSettled, unsettledToolCalls),
+      ...violationsOf(CHAT_ORACLE.persistedTurnOutcome, turnOutcomeMismatches),
+    ];
+  };
 
   const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
     await measure("oracle", async () =>
@@ -738,6 +736,7 @@ export const createApprovalHarness = ({
   /** Refs whose target moved, checked once a request of `threadId` settled. */
   const findUnstableRefs = async (
     threadId: SafeId<"chatThread">,
+    snapshot: ThreadInvariantSnapshot,
   ): Promise<OracleViolation[]> => {
     // As the next request reads them: under the thread owner's row scope.
     const names = await safeDb(
@@ -752,7 +751,7 @@ export const createApprovalHarness = ({
         refs: new Set(held?.refBindings.map(({ ref }) => ref)),
         toolCallIds: new Set(held?.toolCallIds),
       },
-      stored: await readThreadMessages(threadId),
+      stored: snapshot.messages,
       threadId,
     });
   };
@@ -767,12 +766,16 @@ export const createApprovalHarness = ({
     before,
     chunks,
     ended,
+    snapshot,
+    reload,
     threadId,
     turnId,
   }: {
     before: readonly { id: string; parts: readonly ChatPart[] }[];
     chunks: Parameters<typeof findTurnOutcomeViolations>[0]["chunks"];
     ended: RecordedExchange["ended"];
+    snapshot: ThreadInvariantSnapshot;
+    reload: Awaited<ReturnType<typeof reloadView>>;
     threadId: SafeId<"chatThread">;
     turnId: string | null;
   }): Promise<OracleViolation[]> =>
@@ -784,27 +787,15 @@ export const createApprovalHarness = ({
           { missingTurnHeader: CHAT_TURN_ID_HEADER, threadId },
         ]);
       }
-      const turn = await testDb.query.chatTurns.findFirst({
-        columns: {
-          assistantMessageId: true,
-          failureCode: true,
-          failureRetryable: true,
-          id: true,
-          status: true,
-        },
-        where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
-      });
+      const turn = snapshot.turns.find(({ id }) => id === turnId);
       if (turn === undefined) {
         return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
           { unstoredTurnId: turnId, threadId },
         ]);
       }
       const messageId = turn.assistantMessageId;
-      const [stored, reload, web] = await Promise.all([
-        readThreadMessages(threadId),
-        reloadView(threadId),
-        loadWebChat(),
-      ]);
+      const stored = snapshot.messages;
+      const web = await loadWebChat();
       const message =
         messageId === null
           ? undefined
@@ -856,6 +847,10 @@ export const createApprovalHarness = ({
         threadId,
       });
       const unsettled = await awaitSettledTurns(threadId);
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(threadId),
+        reloadView(threadId),
+      ]);
       return {
         chunks,
         headers: result.headers,
@@ -864,29 +859,32 @@ export const createApprovalHarness = ({
         violations: await measure("oracle", async () => [
           ...settledUnread,
           ...unsettled,
-          ...(await findRunViolations({
+          ...findRunViolations({
             ctx,
             ended: "complete",
+            snapshot,
             turnId: result.headers.get(CHAT_TURN_ID_HEADER),
-          })),
+          }),
           ...findWireIdentityViolations(chunks),
           ...findUnstoredWireResults({
             chunks,
-            stored: await reloadView(threadId),
+            stored: reload,
           }),
           ...findUnservedSnapshotMessages({
             chunks,
             served: await readAllMessages(threadId),
           }),
-          ...(await findPersistedViolations(threadId)),
+          ...persistedViolationsOf(snapshot),
           ...(await findSettledTurnViolations({
             before,
             chunks,
             ended: "complete",
+            snapshot,
+            reload,
             threadId,
             turnId: result.headers.get(CHAT_TURN_ID_HEADER),
           })),
-          ...(await findUnstableRefs(threadId)),
+          ...(await findUnstableRefs(threadId, snapshot)),
           ...findTranscriptViolations(provider.takeRequests(threadId)),
         ]),
       } as const;
@@ -1055,27 +1053,34 @@ export const createApprovalHarness = ({
         runId: raw.runId,
         threadId: raw.threadId,
       });
+      const unsettled = await awaitSettledTurns(raw.threadId);
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(raw.threadId),
+        reloadView(raw.threadId),
+      ]);
       clientFindings.push(
-        ...(await awaitSettledTurns(raw.threadId)),
-        ...(await findRunViolations({ ctx, ended, turnId })),
+        ...unsettled,
+        ...findRunViolations({ ctx, ended, snapshot, turnId }),
         ...findWireIdentityViolations(chunks),
         ...findUnstoredWireResults({
           chunks,
-          stored: await reloadView(raw.threadId),
+          stored: reload,
         }),
         ...findUnservedSnapshotMessages({
           chunks,
           served: await readAllMessages(raw.threadId),
         }),
-        ...(await findPersistedViolations(raw.threadId)),
+        ...persistedViolationsOf(snapshot),
         ...(await findSettledTurnViolations({
           before,
           chunks,
           ended,
+          snapshot,
+          reload,
           threadId: raw.threadId,
           turnId,
         })),
-        ...(await findUnstableRefs(raw.threadId)),
+        ...(await findUnstableRefs(raw.threadId, snapshot)),
       );
       delivered.set(raw.threadId, deliveredInterrupts(chunks));
       await endRecord({ ended, response: { body: text, status: 200 } });
@@ -1336,11 +1341,12 @@ export const createApprovalHarness = ({
   }): Promise<OracleViolation[]> =>
     await measure("oracle", async () => {
       const unsettled = await awaitSettledTurns(threadId);
-      const [offered, reload, persisted] = await Promise.all([
-        findOfferedInteractions({ db: testDb, threadId }),
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(threadId),
         reloadView(threadId),
-        findPersistedViolations(threadId),
       ]);
+      const offered = offeredInteractionsOf(snapshot);
+      const persisted = persistedViolationsOf(snapshot);
       const { changedToolResults, unconsumedScripts, unscriptedCalls } =
         provider.takeFindings(threadId);
       const requests = clientFindings.splice(0);
