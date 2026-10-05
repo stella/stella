@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -22,6 +15,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -37,11 +31,11 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import Tooltip from "@/components/tooltip";
 import {
+  columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
@@ -171,17 +165,8 @@ export const BulkAddColumns = ({
   open,
   onOpenChange,
 }: BulkAddColumnsProps) => {
-  const t = useTranslations();
   const isLimitReached = useAddColumnsLimit(target);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [flashClose, setFlashClose] = useState(false);
-  const dirtyRef = useRef(false);
-  // Set to true by the X button click handler immediately before
-  // it triggers onOpenChange(false). The dirty guard sees this flag,
-  // resets it, and lets the close through — Esc / backdrop clicks
-  // never set it, so they still get the flash treatment.
-  const explicitCloseRef = useRef(false);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dialogOpen = open ?? uncontrolledOpen;
   const setDialogOpen = (next: boolean) => {
     onOpenChange?.(next);
@@ -190,56 +175,17 @@ export const BulkAddColumns = ({
     }
   };
 
-  const triggerFlash = useCallback(() => {
-    if (flashTimerRef.current !== null) {
-      clearTimeout(flashTimerRef.current);
-    }
-    setFlashClose(true);
-    flashTimerRef.current = setTimeout(() => {
-      setFlashClose(false);
-      flashTimerRef.current = null;
-    }, 700);
-  }, []);
-
   if (isLimitReached) {
     return null;
   }
 
   return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && dirtyRef.current && !explicitCloseRef.current) {
-          triggerFlash();
-          return;
-        }
-        explicitCloseRef.current = false;
-        setDialogOpen(nextOpen);
-      }}
-      open={dialogOpen}
-    >
+    <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
       <BulkTrigger triggerVariant={triggerVariant} />
-      <DialogPopup className="sm:max-w-[640px]" showCloseButton={false}>
-        <DialogClose
-          aria-label={t("common.close")}
-          className={cn(
-            "absolute end-2 top-2 z-10 transition-transform duration-200",
-            flashClose &&
-              "bg-muted ring-foreground-strong-muted scale-125 ring-2",
-          )}
-          onClick={() => {
-            explicitCloseRef.current = true;
-          }}
-          render={<Button size="icon" variant="ghost" />}
-        >
-          <XIcon />
-        </DialogClose>
+      <DialogPopup className="sm:max-w-[640px]">
         {dialogOpen && (
           <Suspense fallback={<BulkBodyFallback />}>
-            <BulkBody
-              dirtyRef={dirtyRef}
-              onClose={() => setDialogOpen(false)}
-              target={target}
-            />
+            <BulkBody onClose={() => setDialogOpen(false)} target={target} />
           </Suspense>
         )}
       </DialogPopup>
@@ -332,14 +278,12 @@ const BulkBodyFallback = () => (
 type BulkBodyProps = {
   target: AddColumnsTarget;
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
 };
 
-const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
+const BulkBody = ({ target, onClose }: BulkBodyProps) => {
   if (target.kind === "organisation") {
     return (
       <QuestionColumnsBody
-        dirtyRef={dirtyRef}
         {...(target.editing === undefined ? {} : { editing: target.editing })}
         onClose={onClose}
         {...(target.onCreated === undefined
@@ -350,11 +294,7 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
     );
   }
   return (
-    <PropertyColumnsBody
-      dirtyRef={dirtyRef}
-      onClose={onClose}
-      workspaceId={target.workspaceId}
-    />
+    <PropertyColumnsBody onClose={onClose} workspaceId={target.workspaceId} />
   );
 };
 
@@ -383,9 +323,10 @@ type DraftHandlers = {
 
 /** The drafts a reader is composing, and what they may do to one. */
 const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
-  const [drafts, setDrafts] = useState<Draft[]>(() => [
+  const [initialDrafts] = useState<Draft[]>(() => [
     seed ?? makeEmptyDraft(0, defaultFileIds),
   ]);
+  const [drafts, setDrafts] = useState(initialDrafts);
   const nextId = useNextId(drafts.length);
 
   const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
@@ -408,13 +349,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
     () => drafts.filter((d) => d.name.trim().length > 0),
     [drafts],
   );
-  const isDirty = useMemo(
-    () =>
-      drafts.some(
-        (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
-      ),
-    [drafts],
-  );
+  const isDirty = columnDraftsChanged(drafts, initialDrafts);
 
   const handlersFor = (draft: Draft): DraftHandlers => ({
     canRemove: drafts.length > 1,
@@ -430,6 +365,7 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
   /** The matter's document-type gate; the organization's columns have none. */
   footerExtra?: React.ReactNode;
   isPending: boolean;
+  dirty: boolean;
   /** Omitted while one existing column is being reworded. */
   onAddDraft?: (() => void) | undefined;
   onSubmit: () => void;
@@ -438,6 +374,7 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  dirty,
   children,
   footerExtra,
   isPending,
@@ -448,6 +385,7 @@ const BulkColumnsForm = ({
 
   return (
     <>
+      <DialogFormState dirty={dirty} />
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
         <DialogTitle className="flex-1 text-base leading-tight font-semibold">
           {t("workspaces.properties.bulk.title")}
@@ -529,13 +467,11 @@ const useColumnsSubmit = (onClose: () => void) => {
 
 type ColumnsBodyProps = {
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
 };
 
 const PropertyColumnsBody = ({
   workspaceId,
   onClose,
-  dirtyRef,
 }: ColumnsBodyProps & { workspaceId: string }) => {
   const t = useTranslations();
   const submit = useColumnsSubmit(onClose);
@@ -585,13 +521,6 @@ const PropertyColumnsBody = ({
   const canSubmit =
     validDrafts.length > 0 && withinDependencyCap && !batch.isPending;
 
-  // The dialog's onOpenChange close guard reads dirtiness off the
-  // parent-owned ref at close time; mirror it after commit so the
-  // compiler can model this component.
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
-
   const handleSubmit = async () => {
     if (!canSubmit) {
       return;
@@ -639,6 +568,7 @@ const PropertyColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
       footerExtra={
         classifier && docTypeOptions.length > 0 ? (
@@ -707,7 +637,6 @@ const QuestionColumnsBody = ({
   editing,
   onClose,
   onCreated,
-  dirtyRef,
   suggestion,
 }: ColumnsBodyProps & {
   editing?: QuestionColumn | undefined;
@@ -755,10 +684,6 @@ const QuestionColumnsBody = ({
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
-
   const inputs = validDrafts.map((draft) => ({
     question: draft.name.trim(),
     content: questionColumnContent(draft),
@@ -781,6 +706,7 @@ const QuestionColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      dirty={isDirty}
       canSubmit={canSubmit}
       {...(discardsAnswers
         ? {

@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -119,6 +120,7 @@ const ClauseFormDialogBody = ({
     categoryId: initial?.categoryId ?? "",
     bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
   }));
+  const [initialForm] = useState(form);
   const [saving, setSaving] = useState(false);
   const [reviewStatus, setReviewStatus] =
     useState<ClauseEditorReviewStatus>("resolved");
@@ -205,6 +207,10 @@ const ClauseFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={JSON.stringify(form) !== JSON.stringify(initialForm)}
+        onDiscard={() => setForm(initialForm)}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? t("clauses.editClause") : t("clauses.createClause")}

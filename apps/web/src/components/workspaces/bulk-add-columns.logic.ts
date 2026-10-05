@@ -11,6 +11,7 @@
 import { panic, Result } from "better-result";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
+import { stableStringify } from "@stll/stable-stringify";
 
 import type { CreatableContentType } from "@/components/workspaces/properties/composer-primitives";
 import type {
@@ -47,6 +48,11 @@ export const makeEmptyDraft = (
   options: [],
   fallback: null,
 });
+
+export const columnDraftsChanged = (
+  drafts: readonly Draft[],
+  initialDrafts: readonly Draft[],
+) => stableStringify(drafts) !== stableStringify(initialDrafts);
 
 const NO_FILE_IDS: string[] = [];
 

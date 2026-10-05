@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
 
 import {
+  columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
@@ -165,5 +166,37 @@ describe("what a partly refused batch leaves behind", () => {
     release?.();
     await settled;
     expect(order).toEqual(["write", "refresh"]);
+  });
+});
+
+describe("column draft opening baseline", () => {
+  test("stored questions and new drafts start clean, detect every field edit, and become clean on revert", () => {
+    const initial = draftOf({
+      name: "Stored question",
+      contentType: "single-select",
+      options: [{ value: "yes", color: "green" }],
+    });
+    const patches = {
+      id: 1,
+      name: "Changed question",
+      prompt: "Changed prompt",
+      mentions: ["mention"],
+      fileIds: ["file"],
+      contentType: "text",
+      tool: "manual-input",
+      options: [{ value: "no", color: "red" }],
+      fallback: "fallback",
+    } satisfies Draft;
+    expect(columnDraftsChanged([initial], [initial])).toBe(false);
+    const blank = makeEmptyDraft(0, NO_FILES);
+    expect(columnDraftsChanged([blank], [blank])).toBe(false);
+    for (const [field, value] of Object.entries(patches)) {
+      const changed = { ...initial, [field]: value };
+      expect(columnDraftsChanged([changed], [initial])).toBe(true);
+      expect(columnDraftsChanged([structuredClone(initial)], [initial])).toBe(
+        false,
+      );
+    }
+    expect(columnDraftsChanged([initial, blank], [initial])).toBe(true);
   });
 });
