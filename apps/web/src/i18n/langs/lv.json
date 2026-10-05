@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Jautājums un visas tā atbildes tiks dzēstas visai jūsu organizācijai – no katras meklēšanas un visiem dalībniekiem. Lai to noņemtu tikai no šīs meklēšanas, izvēlieties “Noņemt no šīs meklēšanas”.",
       "editQuestionHint": "Formulējuma, atbildes veida vai tā iespēju maiņa atmet esošās atbildes; pēc tam palaidiet kolonnu vēlreiz.",
+      "newQuestionColumn": "Jauns",
       "nothingToRun": "Katrai šūnai jau ir atbilde",
+      "questionAdded": "“{question}” pievienots tabulai",
       "questionPlaceholder": "piem. Vai tiesa atzina uzteikumu par spēkā esošu?",
       "removeFromSearch": "Noņemt no šīs meklēšanas",
       "runAll": "Atbildēt uz visiem",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Tiesa nav publicējusi nolēmuma tekstu, vai tas šeit vēl nav pieejams.",
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
-      "textUnavailable": "Šim nolēmumam teksts nav pieejams"
+      "textUnavailable": "Šim nolēmumam teksts nav pieejams",
+      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)"
     }
   },
   "catalogue": {
@@ -1854,6 +1857,7 @@
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
     "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
@@ -1874,15 +1878,23 @@
     "zoomOut": "Tālināt"
   },
   "consent": {
+    "actingAs": "{clientName} darbosies jūsu vārdā organizācijā {organizationName}",
     "allow": "Atļaut",
-    "appIdentity": "Lietotnes identitāte",
+    "canChange": "Var mainīt",
+    "canRead": "Var lasīt",
     "completeSetup": "Pabeigt iestatīšanu",
+    "connectTitle": "Savienot {clientName} ar stella",
+    "connectedTitle": "Savienots ar {clientName}",
+    "connectionDuration": "Savienojums paliek aktīvs, līdz to pārtraucat sadaļā Iestatījumi › Savienojumi",
     "defaultClientName": "Lietojumprogramma",
-    "description": "{clientName} vēlas piekļūt jūsu stella darbvietai",
+    "destinationDetails": "Novirzīšanas informācija",
     "error": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
     "missingJurisdictions": "Jūsu stella organizācija vēl nav iestatījusi savas prakses jurisdikcijas. Daži ar jurisdikciju saistīti rīki nebūs pieejami, līdz pabeigsiet iestatīšanu.",
-    "permissions": "Tas atļaus lietotnei:",
-    "redirectDestination": "Novirzīšanas galamērķis",
+    "otherPermissions": "Citas atļaujas",
+    "publishedBy": "Publicējis <host>{publisherHost}</host>",
+    "returnToAgent": "Lai turpinātu, atgriezieties pie sava aģenta.",
+    "returnsLocally": "Šajā datorā jūs atgriezīsities lietotnē {clientName}",
+    "returnsTo": "Jūs atgriezīsities lietotnē {clientName}",
     "scopeAdminRead": "Lasīt jūsu organizācijas audita žurnālu",
     "scopeAdminWrite": "Pārvaldīt organizācijas dalībniekus un iestatījumus",
     "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
@@ -1903,8 +1915,11 @@
     "scopeSkills": "Izmantot jūsu saglabātās stella prasmes",
     "scopeTemplates": "Dokumentu veidņu saraksts, aizpildīšana un izveide",
     "scopeTemplatesAnonymized": "Skatīt, aizpildīt un izveidot jūsu dokumentu veidņu anonimizētās versijas",
+    "signedInAs": "Pierakstījies kā <email>{accountEmail}</email>",
     "title": "Autorizēt piekļuvi",
-    "unverifiedApp": "Nepārbaudīta lietotne"
+    "unverifiedApp": "Nepārbaudīta lietotne",
+    "unverifiedExplanation": "stella nav pārbaudījusi, kas publicē šo lietotni.",
+    "useAnotherAccount": "Izmantot citu kontu"
   },
   "contacts": {
     "alsoPartyIn": "Ir arī puse {count, plural, zero {# citās lietās} one {# citā lietā} other {# citās lietās}}",
@@ -2452,6 +2467,7 @@
     "current": "Pašreizējā",
     "deleteVersion": "Dzēst versiju",
     "descriptionPlaceholder": "Pievienot piezīmi par šo versiju...",
+    "displayFailed": "Šo failu neizdevās parādīt.",
     "downloadRedline": "Lejupielādēt redline",
     "dropToUploadVersion": "Nometiet, lai augšupielādētu kā jaunu versiju",
     "editLatestVersionDescription": "Šī nav pašreizējā versija. Lai to rediģētu pārlūkā, vispirms padariet to par jaunāko versiju, pēc tam atbloķējiet rediģēšanai.",
@@ -5409,6 +5425,7 @@
         "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Savienojiet stella desktop ar savu kontu",
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
@@ -5431,6 +5448,18 @@
         "updateRequiredDescription": "stella desktop ir jāatjaunina. Tas atjaunināsies automātiski, kad aktīvie darbvirsmas labojumi būs pabeigti; mēģiniet vēlreiz pēc restartēšanas.",
         "updateRequiredTitle": "Atjauniniet stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Jau instalēts? Savienot",
+        "connect": "Savienot stella desktop",
+        "editNone": "Lejupielādējiet stella desktop, lai rediģētu šo failu",
+        "editOutdated": "Atjauniniet stella desktop, lai rediģētu",
+        "editReason": "Rediģēšana datorā atver failu jūsu datora lietotnē, izmantojot stella desktop.",
+        "signCurrent": "Parakstīt ar stella desktop",
+        "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
+        "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
+        "signShort": "Parakstīt"
+      },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadExtractedText": "Izvilktais teksts (.txt)",
@@ -5444,7 +5473,6 @@
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
-        "action": "Parakstīt datora lietotnē",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
         "cancelledCertificateDescription": "Izvēlēto sertifikātu nevar izmantot parakstīšanai. Izvēlieties tādu, kas atļauj digitālo parakstu.",
         "cancelledCertifiedDescription": "Šis PDF ir sertificēts, un tā sertifikācija neatļauj pievienot citus parakstus.",

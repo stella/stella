@@ -2,12 +2,15 @@ import type { ReactNode } from "react";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { DesktopHandoffFailedError } from "@/features/desktop/desktop-edit-handoff";
+import { desktopHandoffFailureToastOptions } from "@/features/desktop/desktop-handoff-failure-toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type DesktopEditToastMessages = {
+  accountRequiredTitle: string;
   notOpenedDescription: ReactNode;
   openedDescription: ReactNode;
   openedTitle: string;
@@ -48,6 +51,17 @@ export const showDesktopEditOpenResultToast = async ({
       type: "success",
     });
   } catch (error) {
+    if (DesktopHandoffFailedError.is(error)) {
+      const options = desktopHandoffFailureToastOptions(
+        error.failureReason,
+        messages,
+      );
+      notifyUserError(error, options.title, {
+        toastId,
+        description: options.description,
+      });
+      return;
+    }
     getAnalytics().captureError(error);
     if (error instanceof DesktopBridgeIncompatibleError) {
       notifyUserError(error, messages.updateRequiredTitle, {

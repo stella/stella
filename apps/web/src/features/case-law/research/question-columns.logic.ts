@@ -408,6 +408,12 @@ export type AvailableQuestionColumns = {
   addable: readonly QuestionColumn[];
   /** Shows questions on this search, after the ones it already shows. */
   onAddToSearch: (columnIds: readonly string[]) => void;
+  /**
+   * Questions the reader added to this search during this visit. Their
+   * headers scroll into view and say they are new, so an add that lands past
+   * the visible columns, with no answers yet, is never mistaken for nothing.
+   */
+  addedIds: ReadonlySet<string>;
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
   onColumnAction: (
     column: QuestionColumn,

@@ -361,6 +361,56 @@ const findEntitlementByOwner = async (
   return rows.at(0) ?? null;
 };
 
+/**
+ * Whether an organization's hosted entitlement in each status admits a
+ * further provider subscription. A subscription event under another
+ * provider id while the mapped one blocks means the organization holds
+ * two live subscriptions.
+ */
+const SECOND_SUBSCRIPTION_DISPOSITION_BY_STATUS = {
+  trialing: "admits",
+  active: "blocks",
+  past_due: "blocks",
+  cancelled: "admits",
+  paused: "blocks",
+} as const satisfies Record<UsageEntitlementStatus, "admits" | "blocks">;
+
+const SECOND_LIVE_SUBSCRIPTION_EVENT =
+  "usage_provider.webhook.second_live_subscription";
+
+type SecondLiveSubscriptionSignalOptions = {
+  mode: DispatchMode;
+  mapped: ExistingEntitlement;
+  payload: HostedUsageEntitlementPayload;
+};
+
+/**
+ * Emit one operator signal when a non-terminal subscription event resolves
+ * to an organization whose entitlement is live under a different provider
+ * subscription. The entitlement outcome stays with the caller.
+ */
+const signalSecondLiveSubscription = ({
+  mode,
+  mapped,
+  payload,
+}: SecondLiveSubscriptionSignalOptions): void => {
+  const liveSubscriptionId = mapped.hostedEntitlementExternalId;
+  if (
+    mode === "replay_dry_run" ||
+    liveSubscriptionId === null ||
+    liveSubscriptionId === payload.id ||
+    TERMINAL_PROVIDER_STATUSES.has(payload.status) ||
+    SECOND_SUBSCRIPTION_DISPOSITION_BY_STATUS[mapped.status] === "admits"
+  ) {
+    return;
+  }
+  logger.error(SECOND_LIVE_SUBSCRIPTION_EVENT, {
+    organizationId: mapped.organizationId,
+    liveSubscriptionId,
+    incomingSubscriptionId: payload.id,
+  });
+};
+
 const HOSTED_PROVIDER_STATUS_MAP = {
   trialing: "trialing",
   active: "active",
@@ -409,6 +459,24 @@ const mapHostedProviderStatus = (
   return null;
 };
 
+/**
+ * Existence read under FOR KEY SHARE, the lock a referencing insert takes on
+ * its parent row: once this returns true, the organization stays in place
+ * until the transaction ends, so rows written for it keep a valid owner.
+ */
+const lockOrganizationIfExists = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<boolean> => {
+  const rows = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+    .for("key share");
+  return rows.length > 0;
+};
+
 type HostedEntitlementReconciliationParams = {
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
@@ -439,18 +507,11 @@ export const handleHostedEntitlementReconciliation = async ({
       reason: "cannot resolve reconciliation audit owner",
     };
   }
-  if (!existing) {
-    const owners = await tx
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.id, organizationId))
-      .limit(1);
-    if (owners.length === 0) {
-      return {
-        kind: "ignored",
-        reason: "reconciliation organization does not exist",
-      };
-    }
+  if (!existing && !(await lockOrganizationIfExists(tx, organizationId))) {
+    return {
+      kind: "ignored",
+      reason: "reconciliation organization does not exist",
+    };
   }
   await recordWebhookAuditEvent({
     tx,
@@ -615,6 +676,7 @@ type FirstEntitlementResolution =
   | { type: "ignored"; reason: string };
 
 type CreateFirstEntitlementOptions = {
+  mode: DispatchMode;
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
   eventId: string;
@@ -626,6 +688,7 @@ type CreateFirstEntitlementOptions = {
 };
 
 const createFirstEntitlement = async ({
+  mode,
   tx,
   payload,
   eventId,
@@ -647,6 +710,9 @@ const createFirstEntitlement = async ({
   );
   if (organizationId === null) {
     return { type: "ignored", reason: "invalid metadata.organization_id" };
+  }
+  if (!(await lockOrganizationIfExists(tx, organizationId))) {
+    return { type: "ignored", reason: "organization does not exist" };
   }
   const inserted = await tx
     .insert(usageEntitlements)
@@ -712,6 +778,7 @@ const createFirstEntitlement = async ({
     byAccount !== null &&
     byProvider.id !== byAccount.id
   ) {
+    signalSecondLiveSubscription({ mode, mapped: byAccount, payload });
     return {
       type: "ignored",
       reason: "hosted account reference already maps to another entitlement",
@@ -837,6 +904,11 @@ export const handleHostedEntitlementUpsert = async ({
       existingByAccountRef &&
       existingByAccountRef.id !== existingByProvider.id
     ) {
+      signalSecondLiveSubscription({
+        mode,
+        mapped: existingByAccountRef,
+        payload,
+      });
       return {
         kind: "ignored",
         reason: "hosted account reference already maps to another entitlement",
@@ -887,6 +959,7 @@ export const handleHostedEntitlementUpsert = async ({
       existingByAccountRef !== null
         ? ({ type: "existing", row: existingByAccountRef } as const)
         : await createFirstEntitlement({
+            mode,
             tx,
             payload,
             eventId,
@@ -938,6 +1011,7 @@ export const handleHostedEntitlementUpsert = async ({
             reason: "terminal event for a superseded external entitlement",
           };
         }
+        signalSecondLiveSubscription({ mode, mapped: existing, payload });
         if (
           isStaleProviderEvent({
             mode,
