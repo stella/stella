@@ -32,6 +32,20 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
+/** The script's import closure, copied into checkouts without an install. */
+const NO_INSTALL_FILES = [
+  SCRIPT,
+  "scripts/changeset-guard.ts",
+  "scripts/changeset-entry.ts",
+  "packages/collation/src/collation.ts",
+] as const;
+
+const copyNoInstallFiles = (root: string) => {
+  for (const file of NO_INSTALL_FILES) {
+    mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    copyFileSync(path.join(REPO_ROOT, file), path.join(root, file));
+  }
+};
 
 const published: PublishedCli = {
   latest: "0.10.1",
@@ -466,18 +480,7 @@ describe("catalog storage layout preserves the release contract", () => {
 
   test("reads the head contract in a checkout without installed dependencies", () => {
     withPackageFixture((root) => {
-      const directory = path.join(root, "scripts");
-      mkdirSync(directory);
-      for (const file of [
-        "check-cli-release-coupling.ts",
-        "changeset-guard.ts",
-        "changeset-entry.ts",
-      ]) {
-        copyFileSync(
-          path.join(REPO_ROOT, "scripts", file),
-          path.join(directory, file),
-        );
-      }
+      copyNoInstallFiles(root);
       writeFileSync(
         path.join(root, "read-surface.ts"),
         'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
@@ -512,18 +515,7 @@ test("release contract reads committed data without installed dependencies or de
     path.join(tmpdir(), "stella-cli-release-no-install-"),
   );
   try {
-    const directory = path.join(root, "scripts");
-    mkdirSync(directory);
-    for (const file of [
-      "check-cli-release-coupling.ts",
-      "changeset-guard.ts",
-      "changeset-entry.ts",
-    ]) {
-      copyFileSync(
-        path.join(REPO_ROOT, "scripts", file),
-        path.join(directory, file),
-      );
-    }
+    copyNoInstallFiles(root);
     for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
       // The catalog's committed data is the per-capability shard directory.
       if (part === "capability-catalog.json") {

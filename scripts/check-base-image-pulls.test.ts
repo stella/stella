@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { compareCodeUnit } from "@stll/collation";
+// Relative: CI runs this before the dependency install.
+import { compareCodeUnit } from "../packages/collation/src/collation";
 
 const GITHUB_URL = new URL("../.github/", import.meta.url);
 const PULL_SCRIPT = "scripts/pull-base-images.sh";

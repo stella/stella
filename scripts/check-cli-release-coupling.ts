@@ -40,8 +40,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { compareCodeUnit } from "@stll/collation";
-
+// Relative: CI runs this before the dependency install.
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { isChangesetEntry } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
