@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -119,7 +119,7 @@ const StatuteReaderChat = ({
   signedIn,
 }: {
   activeLegal: ActiveLegalDocument | null;
-  children: ReactNode;
+  children: ReactElement;
   signedIn: boolean;
 }) => {
   if (activeLegal === null) {
