@@ -1,6 +1,8 @@
+import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
@@ -47,3 +49,25 @@ export const notifyAuthClientError = (
         ? (error.message ?? fallback)
         : fallback,
   });
+
+type DetachedUserActionOptions = {
+  /** A fixed label for telemetry, as `detached` takes. */
+  context: string;
+  /** What the person is told when the action fails. */
+  failureMessage: string;
+};
+
+/**
+ * Run work a person started with a press, without awaiting it. Unlike
+ * `detached`, a rejection is shown as well as reported: a press must never
+ * end in nothing.
+ */
+export const detachedUserAction = (
+  operation: unknown,
+  { context, failureMessage }: DetachedUserActionOptions,
+): void => {
+  createDetached((error, label) => {
+    getAnalytics().captureError(error, { type: "detached", operation: label });
+    notifyUserError(error, failureMessage);
+  })(operation, context);
+};
