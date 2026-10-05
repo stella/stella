@@ -54,6 +54,7 @@ import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import type {
   FresherDetail,
   PlaybookDraft,
+  PlaybookSnapshot,
   PositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
@@ -67,6 +68,7 @@ import {
   resolveDetailSeed,
   resolvePlaybookScrollTop,
   resolvePositionSources,
+  resolveServerFollow,
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
@@ -89,8 +91,6 @@ import {
   newExtractPosition,
   newGradedPosition,
   type PlaybookApprovalStatus,
-  type PlaybookPerspective,
-  type PlaybookTrigger,
   type Position,
   type PositionErrors,
   type PositionSeverity,
@@ -128,6 +128,20 @@ type ToastFailure = { title: string; description: string };
 
 // ── Root component ────────────────────────────────────
 
+const NEW_PLAYBOOK_SNAPSHOT: PlaybookSnapshot = {
+  draft: {
+    name: "",
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions: [],
+  },
+  updatedAt: null,
+  status: "draft",
+  approvedAt: null,
+};
+
 type PlaybookEditorProps = {
   organizationId: string;
   playbookId: string | null;
@@ -144,19 +158,11 @@ export const PlaybookEditor = ({
   if (playbookId === null) {
     return (
       <PlaybookEditorForm
-        initialApprovedAt={null}
-        initialDescription=""
-        initialDocumentTypeKey={null}
-        initialName=""
-        initialPerspective={null}
-        initialStatus="draft"
-        initialTrigger={null}
-        initialPositions={[]}
         onBack={onBack}
         onSaved={onSaved}
         organizationId={organizationId}
         playbookId={null}
-        initialUpdatedAt={null}
+        server={NEW_PLAYBOOK_SNAPSHOT}
       />
     );
   }
@@ -292,18 +298,9 @@ const PlaybookEditorLoader = ({
     <>
       {detailView.refetchError !== undefined && readFailure}
       <PlaybookEditorForm
-        initialApprovedAt={detail.approvedAt}
-        initialDescription={detail.description ?? ""}
-        initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
-        initialName={detail.name}
-        initialPerspective={detail.scope?.perspective ?? null}
-        initialStatus={detail.status}
-        initialTrigger={detail.scope?.trigger ?? null}
-        initialPositions={detail.positions.items}
         key={seedState.reloadKey}
         onBack={onBack}
-        // Derived from the org's findings on every read, so it tracks the cache
-        // rather than freezing at mount like the `initial*` seeds.
+        // Derived from the org's findings on every read, so it tracks the cache.
         positionDecisions={readPositionDecisions(detail.positionDecisions)}
         // Looked up for this reader on every read, like the decisions above.
         positionSources={toPositionSourceLookup(detail.positionSources)}
@@ -311,7 +308,19 @@ const PlaybookEditorLoader = ({
         onSaved={onSaved}
         organizationId={organizationId}
         playbookId={playbookId}
-        initialUpdatedAt={detail.updatedAt}
+        server={{
+          draft: {
+            name: detail.name,
+            description: detail.description ?? "",
+            documentTypeKey: detail.scope?.documentTypeKey ?? null,
+            perspective: detail.scope?.perspective ?? null,
+            trigger: detail.scope?.trigger ?? null,
+            positions: detail.positions.items,
+          },
+          updatedAt: detail.updatedAt,
+          status: detail.status,
+          approvedAt: detail.approvedAt,
+        }}
         staleDetail={
           seed.type === "stale"
             ? { fresher: seed.fresher, onRetry: refetchDetail }
@@ -408,22 +417,15 @@ const SCOPE_ALL_VALUE = "__all__";
 type PlaybookEditorFormProps = {
   organizationId: string;
   playbookId: string | null;
-  initialName: string;
-  initialDescription: string;
-  initialDocumentTypeKey: string | null;
-  initialPerspective: PlaybookPerspective | null;
-  initialTrigger: PlaybookTrigger | null;
-  initialPositions: Position[];
-  initialStatus: PlaybookApprovalStatus;
-  initialApprovedAt: string | null;
+  /** The playbook as the server last returned it, passed on every render:
+   *  the form seeds from it at mount and follows it while it has no edits. */
+  server: PlaybookSnapshot;
   /** What the org's reviewers did with each position, by `sourceId`; empty
    *  for a playbook that has never been run. */
   positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
   /** The source documents this reader can open; absent for a new playbook,
    *  which has none. */
   positionSources?: PositionSourceLookup | undefined;
-  /** Concurrency token the seeds were read with; null for a new playbook. */
-  initialUpdatedAt: string | null;
   /** Set when the form was filled from an outdated detail because the
    *  refetch did not complete (offline, or the request failed). */
   staleDetail?: StaleDetail | undefined;
@@ -438,17 +440,9 @@ type PlaybookEditorFormProps = {
 const PlaybookEditorForm = ({
   organizationId,
   playbookId,
-  initialName,
-  initialDescription,
-  initialDocumentTypeKey,
-  initialPerspective,
-  initialTrigger,
-  initialPositions,
-  initialStatus,
-  initialApprovedAt,
+  server,
   positionDecisions,
   positionSources,
-  initialUpdatedAt,
   staleDetail,
   onBack,
   onSaved,
@@ -465,23 +459,25 @@ const PlaybookEditorForm = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigationLeaveRequestedRef = useRef(false);
 
-  // The token stays with the draft it was read with and moves only on this
-  // form's own writes. Were it to follow the cache, a refetch under the form
-  // (a chat save, another editor, a window refocus) would pair a fresh token
-  // with a stale draft, and the next save, a full replace, would silently
-  // drop the change that moved it instead of meeting the version conflict.
-  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-  const [status, setStatus] = useState<PlaybookApprovalStatus>(initialStatus);
-  const [approvedAt, setApprovedAt] = useState<string | null>(
-    initialApprovedAt,
-  );
+  // The token stays with the draft it was read with. It moves on this form's
+  // own writes, or together with the content when the form follows a newer
+  // server version (see `resolveServerFollow`). Were it to move alone, a
+  // refetch under the form (a chat save, another editor, a window refocus)
+  // would pair a fresh token with a stale draft, and the next save, a full
+  // replace, would silently drop the change that moved it instead of meeting
+  // the version conflict.
+  const [updatedAt, setUpdatedAt] = useState(server.updatedAt);
+  const [name, setName] = useState(server.draft.name);
+  const [description, setDescription] = useState(server.draft.description);
+  const [perspective, setPerspective] = useState(server.draft.perspective);
+  const [trigger, setTrigger] = useState(server.draft.trigger);
+  const [status, setStatus] = useState(server.status);
+  const [approvedAt, setApprovedAt] = useState(server.approvedAt);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [positions, setPositions] = useState<Position[]>(() =>
-    playbookId === null && initialPositions.length === 0
+    playbookId === null && server.draft.positions.length === 0
       ? [newGradedPosition()]
-      : initialPositions,
+      : [...server.draft.positions],
   );
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(
     () => new Set(positions.slice(0, 1).map((p) => p.sourceId)),
@@ -496,8 +492,8 @@ const PlaybookEditorForm = ({
   // Which document type this playbook runs for (null = every document). A
   // files-table run gates the materialized columns on the Document Type
   // classifier, so this is what makes "a different playbook per type" work.
-  const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
-    initialDocumentTypeKey,
+  const [documentTypeKey, setDocumentTypeKey] = useState(
+    server.draft.documentTypeKey,
   );
   // The clean state every later draft is measured against. Seeded from the
   // state above rather than from the props, so a New Playbook form — whose
@@ -509,8 +505,8 @@ const PlaybookEditorForm = ({
       name,
       description,
       documentTypeKey,
-      perspective: initialPerspective,
-      trigger: initialTrigger,
+      perspective,
+      trigger,
       positions,
     }),
   );
@@ -528,11 +524,36 @@ const PlaybookEditorForm = ({
     name,
     description,
     documentTypeKey,
-    perspective: initialPerspective,
-    trigger: initialTrigger,
+    perspective,
+    trigger,
     positions,
   };
   const isDirty = hasPlaybookDraftChanges({ baseline, current: draft });
+
+  // Another writer (a chat, an agent, a second editor) saved a newer version.
+  // A form without edits takes it in place: cards are keyed by `sourceId`,
+  // which saves keep stable, so expanded cards and scroll position hold.
+  // Adjusting state during render settles in the same pass, before paint.
+  const serverFollow = resolveServerFollow({
+    formUpdatedAt: updatedAt,
+    serverUpdatedAt: server.updatedAt,
+    isDirty,
+  });
+  if (serverFollow.type === "reseed") {
+    const nextPositions = [...server.draft.positions];
+    setName(server.draft.name);
+    setDescription(server.draft.description);
+    setDocumentTypeKey(server.draft.documentTypeKey);
+    setPerspective(server.draft.perspective);
+    setTrigger(server.draft.trigger);
+    setPositions(nextPositions);
+    setBaseline(
+      createPlaybookBaseline({ ...server.draft, positions: nextPositions }),
+    );
+    setStatus(server.status);
+    setApprovedAt(server.approvedAt);
+    setUpdatedAt(server.updatedAt);
+  }
 
   const navigationBlocker = useUnsavedWork({
     surface: "playbook-editor",
@@ -1055,13 +1076,17 @@ const PlaybookEditorForm = ({
             </div>
           </div>
 
-          {staleDetail !== undefined && (
-            <StaleDetailNotice
-              isDirty={isDirty}
-              onReload={onReload}
-              staleDetail={staleDetail}
-            />
-          )}
+          {/* Once the fresher copy has loaded, a form without edits has already
+              followed it; the notice stays only over unsaved edits. */}
+          {staleDetail !== undefined &&
+            (staleDetail.fresher !== "loaded" ||
+              serverFollow.type === "behind") && (
+              <StaleDetailNotice
+                isDirty={isDirty}
+                onReload={onReload}
+                staleDetail={staleDetail}
+              />
+            )}
 
           {isEdit &&
             canApprove &&

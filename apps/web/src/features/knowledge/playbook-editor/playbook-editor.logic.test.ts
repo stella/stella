@@ -5,6 +5,9 @@ import {
   queryOptions,
 } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type {
   DetailSeedGate,
@@ -21,6 +24,7 @@ import {
   resolveDetailSeed,
   resolvePlaybookScrollTop,
   resolvePositionSources,
+  resolveServerFollow,
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
@@ -551,5 +555,65 @@ describe("Playbook position sources", () => {
         lookup,
       ),
     ).toBe(true);
+  });
+});
+
+describe("Following the server's newer version", () => {
+  const EARLIER = "2026-10-05T10:00:00.000Z";
+  const LATER = "2026-10-05T10:00:05.000Z";
+
+  test("a clean form takes a newer version", () => {
+    expect(
+      resolveServerFollow({
+        formUpdatedAt: EARLIER,
+        serverUpdatedAt: LATER,
+        isDirty: false,
+      }),
+    ).toEqual({ type: "reseed" });
+  });
+
+  test("a form with edits keeps them and falls behind", () => {
+    expect(
+      resolveServerFollow({
+        formUpdatedAt: EARLIER,
+        serverUpdatedAt: LATER,
+        isDirty: true,
+      }),
+    ).toEqual({ type: "behind" });
+  });
+
+  test("a new playbook has nothing to follow", () => {
+    expect(
+      resolveServerFollow({
+        formUpdatedAt: null,
+        serverUpdatedAt: null,
+        isDirty: false,
+      }),
+    ).toEqual({ type: "current" });
+  });
+
+  test("the form never moves to the same or an older version", () => {
+    const instant = fc
+      .date({
+        min: new Date("2000-01-01T00:00:00.000Z"),
+        max: new Date("2100-01-01T00:00:00.000Z"),
+        noInvalidDate: true,
+      })
+      .map((date) => date.toISOString());
+    assertProperty(
+      "the form never moves to the same or an older version",
+      fc.property(instant, instant, fc.boolean(), (form, server, isDirty) => {
+        const follow = resolveServerFollow({
+          formUpdatedAt: form,
+          serverUpdatedAt: server,
+          isDirty,
+        });
+        const newer = new Date(server) > new Date(form);
+        if (!newer) {
+          return follow.type === "current";
+        }
+        return follow.type === (isDirty ? "behind" : "reseed");
+      }),
+    );
   });
 });

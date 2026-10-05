@@ -9,10 +9,12 @@ import type {
 import { panic } from "better-result";
 
 import { stableStringify } from "@stll/stable-stringify";
+import { Temporal } from "@stll/time";
 
 import { optionalArray } from "@/lib/arrays";
 import {
   normalizePosition,
+  type PlaybookApprovalStatus,
   type PlaybookPerspective,
   type PlaybookPositionSources,
   type PlaybookPositionsValue,
@@ -146,6 +148,65 @@ export const hasPlaybookDraftChanges = ({
     return false;
   }
   return playbookDraftFingerprint(current) !== baseline.fingerprint;
+};
+
+// ── Following the server ──────────────────────────────
+
+/**
+ * The playbook as the server last returned it, or the blank state of a new
+ * one. The form takes its values from it at mount and again whenever a newer
+ * one arrives while the form is clean.
+ */
+export type PlaybookSnapshot = {
+  draft: PlaybookDraft;
+  /** Concurrency token of this content; null for a playbook not yet saved. */
+  updatedAt: string | null;
+  status: PlaybookApprovalStatus;
+  approvedAt: string | null;
+};
+
+const isNewerToken = (candidate: string | null, current: string | null) =>
+  candidate !== null &&
+  current !== null &&
+  Temporal.Instant.compare(
+    Temporal.Instant.from(candidate),
+    Temporal.Instant.from(current),
+  ) > 0;
+
+/**
+ * - `current`: the form already holds this version or a newer one.
+ * - `reseed`: the server has a newer version and the form has no edits, so
+ *   the form takes the server's content and token together.
+ * - `behind`: the server has a newer version, but the form has edits; its
+ *   next save meets the version conflict.
+ */
+export type ServerFollow =
+  | { type: "current" }
+  | { type: "reseed" }
+  | { type: "behind" };
+
+type ResolveServerFollowArgs = {
+  /** The token the form's draft was read or saved with. */
+  formUpdatedAt: string | null;
+  serverUpdatedAt: string | null;
+  isDirty: boolean;
+};
+
+/**
+ * A token always stays with the draft it was read with: the form moves to a
+ * newer token only by taking that version's content too, and never moves to
+ * an older one, so a refetch that started before the form's own save cannot
+ * roll it back.
+ */
+export const resolveServerFollow = ({
+  formUpdatedAt,
+  serverUpdatedAt,
+  isDirty,
+}: ResolveServerFollowArgs): ServerFollow => {
+  if (!isNewerToken(serverUpdatedAt, formUpdatedAt)) {
+    return { type: "current" };
+  }
+  return isDirty ? { type: "behind" } : { type: "reseed" };
 };
 
 // ── Seeding from the cached detail ────────────────────
