@@ -139,7 +139,8 @@
     "handoffFailed": "Nepavyko atverti dokumento",
     "handoffUpdateNow": "Atnaujinti dabar",
     "handoffConnectAccount": "Susieti paskyrą",
-    "handoffRetry": "Bandyti dar kartą"
+    "handoffRetry": "Bandyti dar kartą",
+    "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte"
   },
   "settings": {
     "about": "Apie",

@@ -39,6 +39,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
   ScanTextIcon,
+  SignatureIcon,
   Trash2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
@@ -67,6 +68,11 @@ import {
   type DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
+import {
+  PdfSignDialogs,
+  usePdfSignFlow,
+} from "@/components/inspector/pdf-sign-action";
+import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import {
@@ -102,6 +108,10 @@ import {
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -416,6 +426,16 @@ export const RowActions = ({
     fileType: desktopEditFileType,
     lockState: desktopEditLockState,
     readOnly: entity.readOnly,
+  });
+  const desktopEditGate = useDesktopActionGate("edit-file");
+  const pdfSignFlow = usePdfSignFlow();
+  // A folder has no file; a row always shows the current version.
+  const pdfSignTarget = resolvePdfSignTarget({
+    canUpdateEntity: !entity.readOnly,
+    entityId: entity.entityId,
+    file: isBulk ? null : file,
+    isCurrentVersion: true,
+    workspaceId,
   });
   const openCopyToMatterDialog = () => {
     setCopyToMatterEntities(
@@ -1045,7 +1065,12 @@ export const RowActions = ({
           isBulk={isBulk}
           isCellContext={isCellContext}
           isFolder={isFolder}
-          onOpenInDesktop={handleOpenInDesktop}
+          onOpenInDesktop={() => {
+            desktopEditGate.run(() => {
+              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
+            });
+          }}
+          openInDesktopLabel={desktopEditGate.label}
           onReleaseDesktopLock={handleReleaseLock}
           onSubfolderCreated={onSubfolderCreated}
           workspaceId={workspaceId}
@@ -1063,6 +1088,8 @@ export const RowActions = ({
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
           onEditPages={openPDFPageEditor}
+          onSign={pdfSignTarget === null ? undefined : pdfSignFlow.start}
+          signLabel={pdfSignFlow.label}
           onTranslate={openTranslationDialog}
           translationTarget={translationTarget}
         />
@@ -1118,6 +1145,10 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
+      {pdfSignTarget !== null && (
+        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
+      )}
+      <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
 };
@@ -1309,6 +1340,7 @@ const RowFolderDesktopMenuActions = ({
   isCellContext,
   isFolder,
   onOpenInDesktop,
+  openInDesktopLabel,
   onReleaseDesktopLock,
   onSubfolderCreated,
   workspaceId,
@@ -1319,7 +1351,8 @@ const RowFolderDesktopMenuActions = ({
   isBulk: boolean;
   isCellContext: boolean;
   isFolder: boolean;
-  onOpenInDesktop: () => Promise<void>;
+  onOpenInDesktop: () => void;
+  openInDesktopLabel: string;
   onReleaseDesktopLock: () => Promise<void>;
   onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
   workspaceId: string;
@@ -1338,13 +1371,9 @@ const RowFolderDesktopMenuActions = ({
         />
       )}
       {canOpenInDesktop && (
-        <MenuItem
-          onClick={() =>
-            detached(onOpenInDesktop(), "row-actions.open-in-desktop")
-          }
-        >
+        <MenuItem onClick={onOpenInDesktop}>
           <LaptopIcon />
-          {t("workspaces.files.desktopEdit.action")}
+          {openInDesktopLabel}
         </MenuItem>
       )}
       {canReleaseDesktopLock && (
@@ -1370,7 +1399,9 @@ const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
+  onSign,
   onTranslate,
+  signLabel,
   translationTarget,
 }: {
   canCreateEntity: boolean;
@@ -1381,7 +1412,10 @@ const RowFeatureMenuActions = ({
   onChatAbout: () => void;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
+  /** Always offered for a signable PDF; the label says what it needs. */
+  onSign: (() => void) | undefined;
   onTranslate: () => void;
+  signLabel: string;
   translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
@@ -1404,6 +1438,12 @@ const RowFeatureMenuActions = ({
         <MenuItem onClick={onEditPages}>
           <FilePenLineIcon />
           {t("workspaces.pdf.pageEditor.editPages")}
+        </MenuItem>
+      )}
+      {onSign !== undefined && (
+        <MenuItem onClick={onSign}>
+          <SignatureIcon />
+          {signLabel}
         </MenuItem>
       )}
       <MenuItem onClick={onChatAbout}>

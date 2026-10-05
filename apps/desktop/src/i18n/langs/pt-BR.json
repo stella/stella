@@ -139,7 +139,8 @@
     "handoffFailed": "Não foi possível abrir o documento",
     "handoffUpdateNow": "Atualizar agora",
     "handoffConnectAccount": "Conectar conta",
-    "handoffRetry": "Tentar novamente"
+    "handoffRetry": "Tentar novamente",
+    "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las"
   },
   "settings": {
     "about": "Sobre",

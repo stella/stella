@@ -8,8 +8,8 @@ import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
-import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
 import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/handlers/case-law/ingestion/pipeline/supplement-document-role";
 import {
@@ -101,7 +101,7 @@ const leaveFormerHolder = async (
       corpus,
       polarityRules,
     },
-    placement.resolveMetadataUrlSchema,
+    placement.resolveSourceContract,
   );
   if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return rewritten;
@@ -152,7 +152,7 @@ const leaveFormerHolder = async (
       polarityRules,
       absorb,
     },
-    placement.resolveMetadataUrlSchema,
+    placement.resolveSourceContract,
   );
 };
 
@@ -182,11 +182,11 @@ export const processSupplement = async (
     polarityRules,
     absorb = absorbStandaloneSupplementRow,
   }: ProcessSupplementOptions,
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+  resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     scopedDb,
   ),
 ): Promise<ProcessSupplementResult> => {
-  const metadataUrlSchema = await resolveMetadataUrlSchema(sourceId);
+  const { metadataUrlSchema } = await resolveSourceContract(sourceId);
   const { sourceDocumentId } = supplement.document;
   const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
   if (
@@ -238,7 +238,7 @@ export const processSupplement = async (
 
   const placement: SupplementPlacement = {
     metadataUrlSchema,
-    resolveMetadataUrlSchema,
+    resolveSourceContract,
     supplement,
     sourceId,
     scopedDb,
@@ -331,7 +331,7 @@ export const processSupplement = async (
       corpus,
       polarityRules,
     },
-    resolveMetadataUrlSchema,
+    resolveSourceContract,
   );
   if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return written;

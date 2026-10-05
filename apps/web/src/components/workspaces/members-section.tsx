@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -327,6 +328,12 @@ export const AddMemberDialog = ({
         {showTriggerLabel ? t("workspaces.members.addMember") : null}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedUserId !== null}
+          onDiscard={() => {
+            setSelectedUserId(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
           <DialogDescription>
