@@ -4253,6 +4253,7 @@ type Messages = {
     "placeholder": "Search across all matters...";
     "previewUnavailable": "Preview unavailable";
     "recentDocuments": "Recent documents";
+    "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
     "registryChoose": "Choose a company registry";
     "registryCredentialAskAdmin": "Ask an organization administrator to configure access to this registry.";
