@@ -246,6 +246,19 @@ const consentAndReadRedirect = async (
 };
 
 describe("OAuth native client consent", () => {
+  test("exercises every declared client and redirect kind combination", () => {
+    const exercised = consentCases.map(
+      ({ clientKind, redirectKind }) => `${clientKind}/${redirectKind}`,
+    );
+    const declared = Object.keys(CLIENT_FIXTURES).flatMap((clientKind) =>
+      Object.keys(REDIRECT_FIXTURES).map(
+        (redirectKind) => `${clientKind}/${redirectKind}`,
+      ),
+    );
+    expect(new Set(exercised)).toEqual(new Set(declared));
+    expect(exercised).toHaveLength(declared.length);
+  });
+
   test.each(
     consentCases.flatMap((scenario) =>
       (["GET", "POST"] as const).map(
