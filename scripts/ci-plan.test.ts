@@ -1812,8 +1812,9 @@ test("transfer read guard runs for API-only pull request changes", () => {
   const guard = jobSteps(ciJobs["ci-checks-rest"]).find(
     ({ name }) => name === "Transfer timeout and fixed read guard",
   );
-  expect(guard?.if).toBe(
-    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  expect(guard?.if).toContain("steps.install.outcome == 'success'");
+  expect(guard?.if).toContain(
+    "(needs.ci-plan.outputs.package_checks_required == 'true')",
   );
   expect(guard?.run).toContain("scripts/transfer-read-guard.test.ts");
   expect(guard?.run).toContain("bun scripts/transfer-read-guard.ts");
