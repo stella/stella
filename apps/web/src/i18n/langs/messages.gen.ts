@@ -868,7 +868,9 @@ type Messages = {
       };
       "deleteColumnConfirm": "This deletes the question and all its answers for your whole organization, from every search and for every member. To take it off this search only, use “Remove from this search”.";
       "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.";
+      "newQuestionColumn": "New";
       "nothingToRun": "Every cell already has an answer";
+      "questionAdded": "Added “{question}” to the table";
       "questionPlaceholder": "e.g. Did the court find the termination valid?";
       "removeFromSearch": "Remove from this search";
       "runAll": "Answer all";
