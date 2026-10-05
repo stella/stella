@@ -84,3 +84,64 @@ test(
   },
   propertyTestTimeout(30_000),
 );
+
+/**
+ * An older print page sets each caption line in its own run, which the
+ * parser merges into one paragraph and then cuts at the case number. Every
+ * caption character must survive the cut, in order.
+ */
+const captionPreamble = fc.option(
+  fc.constantFrom("NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY", "NEJVYŠŠÍ SOUD"),
+  { nil: undefined },
+);
+const captionCaseNumber = fc.constantFrom(
+  "21 Cdo 4994/2007",
+  "29 Odo 975/2006",
+  "6 Tdo 647/2017",
+);
+const captionTitleLines = fc.array(
+  fc.constantFrom(
+    "ČESKÁ REPUBLIKA",
+    "ROZSUDEK",
+    "U S N E S E N Í",
+    "JMÉNEM REPUBLIKY",
+  ),
+  { minLength: 1, maxLength: 4 },
+);
+
+test(
+  "a run-on caption keeps every character in order",
+  () => {
+    assertProperty(
+      "a run-on caption keeps every character in order",
+      fc.property(
+        captionPreamble,
+        captionCaseNumber,
+        captionTitleLines,
+        (preamble, caseNumber, titleLines) => {
+          const lines = [
+            ...(preamble === undefined ? [] : [preamble]),
+            caseNumber,
+            ...titleLines,
+          ];
+          const runs = lines
+            .map((line) => `<font face="Arial CE">${line} </font><br>\n<br>\n`)
+            .join("");
+          const parsed = parseNsDecisionHtml({
+            documentId: "property-fixture",
+            webUrl: "https://example.test/detail",
+            printUrl: "https://example.test/print",
+            webHtml: "",
+            printHtml: `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><br><p><br>${runs}<font face="Arial CE">Nejvyšší soud České republiky rozhodl v senátě takto:</font><br></p></body></html>`,
+          });
+          const text = parsed.documentAst.blocks
+            .map((block) => block.plainText)
+            .join(" ")
+            .replaceAll(/\s+/gu, " ");
+          expect(text).toContain(lines.join(" "));
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(30_000),
+);

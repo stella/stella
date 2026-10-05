@@ -1,16 +1,20 @@
-// parser-output-unchanged: adds explicit URL projection modes and reserves internal diagnostics; existing publisher metadata and public text fields are unchanged
+// parser-output-unchanged: Absence provenance changes metadata only; canonical documents and replay comparison inputs are unchanged.
 import { panic } from "better-result";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
   TEXT_ABSENCE_REASON,
-  TEXT_ABSENCE_REASONS,
+  parseDecisionTextAbsence,
   TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
+  type DecisionTextAbsenceEntry,
+  type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
   type ReadDecisionTextFields,
   type TextAbsenceReason,
@@ -151,23 +155,6 @@ export const storeTextField = (field: TextField): string | undefined => {
   }
 };
 
-type StoredTextAbsenceReason = Exclude<
-  TextAbsenceReason,
-  typeof TEXT_ABSENCE_REASON.NOT_PUBLISHED
->;
-
-type StoredTextAbsence = {
-  readonly field: DecisionTextFieldKey;
-  readonly reason: StoredTextAbsenceReason;
-};
-
-const isStoredTextAbsenceReason = (
-  reason: unknown,
-): reason is StoredTextAbsenceReason =>
-  typeof reason === "string" &&
-  TEXT_ABSENCE_REASONS.some((candidate) => candidate === reason) &&
-  reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED;
-
 type StoreDecisionTextFieldsOptions = {
   metadata: Record<string, unknown>;
   textFields: DecisionTextFields;
@@ -231,8 +218,14 @@ export const storeDecisionTextFields = ({
   // URL diagnostics are generated before the internal text-field projection;
   // publisher keys are reserved by checkedDecisionMetadata at the producer.
   checkDecisionTextMetadata(metadata);
-  const stored = { ...metadata };
-  const absent: StoredTextAbsence[] = [];
+  // Spreading an index-signature record beside a computed key drops the index
+  // signature from the inferred type; the stored row is an open record.
+  const stored: Record<string, unknown> = {
+    ...metadata,
+    [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+      DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  };
+  const absent: DecisionTextAbsenceEntry[] = [];
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const field = textFields[key];
     const value = storeTextField(field);
@@ -240,10 +233,7 @@ export const storeDecisionTextFields = ({
       stored[key] = value;
       continue;
     }
-    if (
-      field.type === TEXT_FIELD_TYPE.ABSENT &&
-      isStoredTextAbsenceReason(field.reason)
-    ) {
+    if (field.type === TEXT_FIELD_TYPE.ABSENT) {
       absent.push({ field: key, reason: field.reason });
     }
   }
@@ -337,67 +327,15 @@ type SplitStoredDecisionTextMetadataResult = {
   textFields: DecisionTextFields;
 };
 
-type ReadTextAbsence = {
-  readonly field: DecisionTextFieldKey;
-  readonly reason: TextAbsenceReason;
-};
-
-type StoredTextAbsenceParseResult =
-  | { readonly type: "invalid" }
-  | { readonly type: "valid"; readonly entries: readonly ReadTextAbsence[] };
-
-const isReadTextAbsenceReason = (
-  reason: unknown,
-): reason is TextAbsenceReason =>
-  typeof reason === "string" &&
-  TEXT_ABSENCE_REASONS.some((candidate) => candidate === reason);
-
-const parseStoredTextAbsence = (
-  value: unknown,
-): StoredTextAbsenceParseResult => {
-  if (value === undefined) {
-    return { type: "valid", entries: [] };
-  }
-  if (!Array.isArray(value)) {
-    return { type: "invalid" };
-  }
-  const entries: ReadTextAbsence[] = [];
-  const seenFields = new Set<string>();
-  for (const entry of value) {
-    if (
-      !isRecord(entry) ||
-      Object.keys(entry).length !== 2 ||
-      !Object.hasOwn(entry, "field") ||
-      !Object.hasOwn(entry, "reason")
-    ) {
-      return { type: "invalid" };
-    }
-    const field = entry["field"];
-    const reason = entry["reason"];
-    if (
-      typeof field !== "string" ||
-      !isReadTextAbsenceReason(reason) ||
-      seenFields.has(field)
-    ) {
-      return { type: "invalid" };
-    }
-    seenFields.add(field);
-    // New publisher fields must not poison text reads during a rolling deploy.
-    if (!isDecisionTextFieldKey(field)) {
-      continue;
-    }
-    entries.push({ field, reason });
-  }
-  return { type: "valid", entries };
-};
-
 export const readStoredDecisionTextAbsence = (
   storedMetadata: Record<string, unknown> | null,
-): StoredTextAbsenceParseResult =>
-  parseStoredTextAbsence(storedMetadata?.[DECISION_TEXT_ABSENCE_METADATA_KEY]);
+): DecisionTextAbsenceParseResult =>
+  parseDecisionTextAbsence(
+    storedMetadata?.[DECISION_TEXT_ABSENCE_METADATA_KEY],
+  );
 
 type ReadStoredTextFieldOptions = {
-  absence: StoredTextAbsenceParseResult;
+  absence: DecisionTextAbsenceParseResult;
   field: DecisionTextFieldKey;
   value: unknown;
 };
@@ -422,7 +360,8 @@ export const splitStoredDecisionTextMetadata = (
     Object.entries(storedMetadata).filter(
       ([key]) =>
         !isDecisionTextFieldKey(key) &&
-        key !== DECISION_TEXT_ABSENCE_METADATA_KEY,
+        key !== DECISION_TEXT_ABSENCE_METADATA_KEY &&
+        key !== DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
     ),
   );
   return {

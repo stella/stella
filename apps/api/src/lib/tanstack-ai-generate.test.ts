@@ -84,7 +84,13 @@ type ProviderRun =
     }
   | { type: "throw"; error: unknown }
   | { type: "abort-then-throw"; controller: AbortController }
-  | { type: "object"; object: unknown; raw: string };
+  | {
+      type: "object";
+      object: unknown;
+      raw: string;
+      /** Cancels the caller's signal before the provider answers. */
+      abortBefore?: AbortController | undefined;
+    };
 
 type ProviderRequestMethod = "chatStream" | "structuredOutput";
 
@@ -164,6 +170,18 @@ const objectRun = (
   type: "object",
   object,
   raw,
+});
+
+// The provider answers, but the caller's signal fired while it worked: the
+// chat loop drops the answer and ends the run without an error of its own.
+const cancelledObjectRun = (
+  object: unknown,
+  controller: AbortController,
+): ProviderRun => ({
+  type: "object",
+  object,
+  raw: JSON.stringify(object),
+  abortBefore: controller,
 });
 
 const throwingRun = (error: unknown): ProviderRun => ({ type: "throw", error });
@@ -305,6 +323,7 @@ const providerAdapter: AnyTextAdapter = {
     const run = takeRun();
     switch (run.type) {
       case "object":
+        run.abortBefore?.abort();
         return { data: run.object, rawText: run.raw };
       case "throw":
         throw run.error;
@@ -1021,6 +1040,40 @@ describe("TanStack AI structured output generation", () => {
     });
     expect(providerRequests[1]?.modelOptions).toMatchObject({
       service_tier: "default",
+    });
+  });
+
+  test("rejects a cancelled object run as a cancelled generation", async () => {
+    const controller = new AbortController();
+    queueRun(cancelledObjectRun({ answer: "yes" }, controller));
+
+    const caught = await generateObjectForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({
+      reason: "generation_cancelled",
+      grade: "anticipated",
     });
   });
 
