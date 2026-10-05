@@ -22,6 +22,7 @@ import type {
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
 import {
+  CITATION_DIRECTIONS,
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
 } from "@/features/case-law/queries/citations";
@@ -44,6 +45,8 @@ type DecisionCitationsProps = {
   /** The decision being read, as a citation names it. */
   decision: CitedDecisionAddress;
   decisionId: SafeId<"caseLawDecision">;
+  /** The compact inspector owns the one disclosure around both directions. */
+  expanded?: boolean;
 };
 
 /**
@@ -56,6 +59,7 @@ type DecisionCitationsProps = {
 export const DecisionCitations = ({
   decision,
   decisionId,
+  expanded,
 }: DecisionCitationsProps) => {
   const t = useTranslations();
   const {
@@ -67,6 +71,7 @@ export const DecisionCitations = ({
   // known differs between the server pass and the client's hydration pass.
   // Rendering nothing until hydrated keeps the two passes identical.
   const hydrated = useHydrated();
+  const compactExpanded = expanded === true;
 
   // Absent is the answer for a decision nobody cites. A failed read is not
   // that answer, so it says so and offers a retry instead of disappearing.
@@ -96,6 +101,31 @@ export const DecisionCitations = ({
 
   const incomingTotal = totalCitations(summary.incoming);
   const outgoingTotal = totalCitations(summary.outgoing);
+  if (expanded !== undefined) {
+    if (!compactExpanded) {
+      return null;
+    }
+    return (
+      <div className="flex flex-col gap-3">
+        {CITATION_DIRECTIONS.map((direction) =>
+          totalCitations(summary[direction]) > 0 ||
+          summary.capped[direction] ? (
+            <section className="flex flex-col gap-2" key={direction}>
+              <h3 className="text-foreground-strong-muted text-xs font-medium">
+                {t(DIRECTION_TITLE[direction])}
+              </h3>
+              <CitationList
+                decision={decision}
+                decisionId={decisionId}
+                direction={direction}
+              />
+            </section>
+          ) : null,
+        )}
+      </div>
+    );
+  }
+
   if (
     incomingTotal === 0 &&
     outgoingTotal === 0 &&

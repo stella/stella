@@ -31,8 +31,7 @@ import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-sc
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
-import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
+import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import {
   buildDecisionFacts,
@@ -44,7 +43,6 @@ import type {
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
-import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -214,20 +212,7 @@ export const CaseDecisionInspectorView = ({
             )}
             {decision !== undefined && (
               <>
-                <CitationHeader
-                  decisionDate={decision.decisionDate}
-                  decisionId={decisionId}
-                  target={{
-                    caseNumber: decision.caseNumber,
-                    country: decision.country,
-                    court: decision.court,
-                    decisionId: decision.id,
-                    language: decision.language,
-                    languageAlternates: decision.languageAlternates,
-                    slug: decision.slug,
-                  }}
-                />
-                <DecisionCitations
+                <DecisionCitationBox
                   decision={{
                     caseNumber: decision.caseNumber,
                     caseNumberType: decision.caseNumberType,
@@ -241,9 +226,6 @@ export const CaseDecisionInspectorView = ({
                     languageAlternates: decision.languageAlternates,
                     slug: decision.slug,
                   }}
-                  decisionId={decisionId}
-                />
-                <ProvisionsCited
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
                 />
