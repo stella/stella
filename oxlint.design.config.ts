@@ -19,20 +19,18 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 // The built-in backlog rules carry the value the repository lint resolves:
 // its own entry, else the last preset that names the rule. Both spellings of
 // an ESLint core rule count.
-const repositoryRuleLayers = flattenLayers(repository, "oxlint.config.ts")
-  .map(({ rules }) => rules)
-  .reverse();
+const repositoryRuleLayers = flattenLayers(repository, "oxlint.config.ts").map(
+  ({ rules }) => rules,
+);
 const repositoryRule = (rule: string) => {
   const spellings = [rule, rule.replace(/^eslint\//u, "")];
-  for (const layer of repositoryRuleLayers) {
-    for (const spelling of spellings) {
-      const value = layer[spelling];
-      if (value !== undefined) {
-        return value;
-      }
-    }
-  }
-  return panic(`oxlint.config.ts and its presets do not configure ${rule}`);
+  const values = repositoryRuleLayers.flatMap((layer) =>
+    spellings.flatMap((spelling) =>
+      layer[spelling] === undefined ? [] : [layer[spelling]],
+    ),
+  );
+  return values.at(-1) ??
+    panic(`oxlint.config.ts and its presets do not configure ${rule}`);
 };
 const builtinBacklogRules = Object.fromEntries(
   BUILTIN_LINT_BACKLOG_RULES.map((rule) => [rule, repositoryRule(rule)]),
