@@ -61,6 +61,49 @@ const conditional = {
 };
 
 describe("feature source declarations", () => {
+  test("shared view storage and feature execution have separate owners", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const shared = "apps/api/src/db/schema/views.ts";
+    const source =
+      'import { views } from "@/api/db/schema/views"; export const read = (tx) => tx.select().from(views);';
+    const sources = new Map([
+      ...baseSources,
+      [shared, 'export const views = p.pgTable("workspace_views", {});'],
+      [file, source],
+    ]);
+    const options = { sources, endpoints: [{ file, config: {} }] };
+    expect(validateFeatureAccessDeclarations({ ...options, registry })).toEqual(
+      [],
+    );
+    const broadRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          conditionalTableSchemas: { [shared]: ["views"] },
+        },
+      },
+    };
+    expect(
+      validateFeatureAccessDeclarations({
+        ...options,
+        registry: broadRegistry,
+      }),
+    ).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+    sources.set(
+      file,
+      'import { run } from "@/api/feature/core"; export const execute = () => run();',
+    );
+    expect(
+      validateFeatureAccessDeclarations({ ...options, registry }),
+    ).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test.each(["capability", "scheduler"] as const)(
     "%s registration is a dispatch boundary with independently declared entries",
     (kind) => {

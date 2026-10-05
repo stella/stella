@@ -4,13 +4,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { workspaceViewTemplates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { LIMITS } from "@/api/lib/limits";
-import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import {
   AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   avtViewAccessStatus,
   isAvtLayoutVisible,
-} from "@/api/lib/views/avt-layout";
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { LIMITS } from "@/api/lib/limits";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   description:

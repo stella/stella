@@ -5,6 +5,11 @@ import { t } from "elysia";
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  avtLayoutVisibilityCondition,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -12,11 +17,6 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import {
-  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  avtLayoutVisibilityCondition,
-} from "@/api/lib/views/avt-layout";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",

@@ -13,19 +13,21 @@ import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { normalizeDefaultViewLayout } from "@/api/lib/views";
-import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import {
   AVT_LAYOUT_FEATURE_ACCESS,
   avtViewAccessStatus,
   isAvtLayoutVisible,
-  avtLayoutErrorDetail,
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
   rejectAvtLayout,
-} from "@/api/lib/views/avt-layout";
+  avtLayoutErrorDetail,
+} from "@/api/lib/lists/verification/view-layout";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { normalizeDefaultViewLayout } from "@/api/lib/views";
+import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
 
 const config = {

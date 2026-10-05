@@ -20,6 +20,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -76,11 +81,6 @@ import {
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
-import {
-  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  isAvtLayoutVisible,
-} from "@/api/lib/views/avt-layout";
 import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 

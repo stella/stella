@@ -21,6 +21,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -40,7 +41,6 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
-import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/views/avt-layout";
 
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal

@@ -7,6 +7,10 @@ import { workspaceViewTemplates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -15,10 +19,6 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
-import {
-  AVT_LAYOUT_FEATURE_ACCESS,
-  avtViewAccessStatus,
-} from "@/api/lib/views/avt-layout";
 import { collectTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,

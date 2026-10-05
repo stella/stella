@@ -16,9 +16,17 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  rejectAvtLayout,
+  avtLayoutErrorDetail,
+} from "@/api/lib/lists/verification/view-layout";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -27,12 +35,6 @@ import {
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
-import {
-  AVT_LAYOUT_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  avtLayoutErrorDetail,
-  rejectAvtLayout,
-} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,

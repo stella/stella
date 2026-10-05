@@ -26,6 +26,11 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -34,11 +39,6 @@ import { extractLangFromRequest } from "@/api/lib/locale";
 import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
-import {
-  AVT_LAYOUT_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  isAvtLayoutVisible,
-} from "@/api/lib/views/avt-layout";
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,

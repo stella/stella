@@ -10,13 +10,13 @@ import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { legalLists, workspaceViews } from "@/api/db/schema";
-import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import type { ViewLayout } from "@/api/lib/views-schema";
 import {
   operationProposesAvtLayout,
   operationUsesAvtLayout,
-  rejectAvtLayout,
-} from "@/api/lib/views/avt-layout";
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { rejectAvtLayout } from "@/api/lib/lists/verification/view-layout";
+import type { ViewLayout } from "@/api/lib/views-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

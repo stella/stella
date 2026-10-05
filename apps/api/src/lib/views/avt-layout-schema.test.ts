@@ -6,14 +6,14 @@ import { t } from "elysia";
 import { VIEW_LAYOUT_TYPES } from "@stll/api-contract";
 
 import {
-  tCreateViewInputSchema,
-  tUpdateViewBodySchema,
-} from "@/api/lib/views-schema";
-import {
   projectAvtViewInputSchemas,
   isAvtLayoutVisible,
   projectViewEligibility,
-} from "@/api/lib/views/avt-layout";
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import {
+  tCreateViewInputSchema,
+  tUpdateViewBodySchema,
+} from "@/api/lib/views-schema";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
 
 const filesystem = {

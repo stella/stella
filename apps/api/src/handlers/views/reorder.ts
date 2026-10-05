@@ -13,16 +13,16 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
-import {
-  AVT_LAYOUT_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  isAvtLayoutVisible,
-} from "@/api/lib/views/avt-layout";
 
 const config = {
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,

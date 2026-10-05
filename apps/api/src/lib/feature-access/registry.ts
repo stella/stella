@@ -23,12 +23,6 @@ export const FEATURE_REGISTRY = {
         "apps/api/src/handlers/lists/items/sources/verification",
       ],
       tableSchemaFiles: ["apps/api/src/db/schema/lists-verification.ts"],
-      conditionalTableSchemas: {
-        "apps/api/src/db/schema/files-views.ts": [
-          "workspaceViews",
-          "workspaceViewTemplates",
-        ],
-      },
       coreModules: [
         "apps/api/src/lib/lists/verification/access-context.ts",
         "apps/api/src/lib/lists/verification/claim-extract.ts",
@@ -41,7 +35,9 @@ export const FEATURE_REGISTRY = {
         "apps/api/src/lib/lists/verification/run-queue.ts",
         "apps/api/src/lib/lists/verification/run-summary.ts",
       ],
-      conditionalModules: ["apps/api/src/lib/views/avt-layout.ts"],
+      conditionalModules: [
+        "apps/api/src/lib/lists/verification/view-layout.ts",
+      ],
     },
   },
 } as const satisfies FeatureRegistry;

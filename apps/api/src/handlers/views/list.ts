@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm";
 import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+  projectViewEligibility,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
 import {
@@ -11,12 +17,6 @@ import {
   normalizeDefaultViewLayout,
 } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
-import {
-  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
-  avtViewAccessStatus,
-  isAvtLayoutVisible,
-  projectViewEligibility,
-} from "@/api/lib/views/avt-layout";
 import { cleanStalePropertyIds } from "@/api/lib/views/utils";
 
 const config = {

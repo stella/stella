@@ -5,13 +5,13 @@ import { workspaceViewTemplates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   AVT_LAYOUT_FEATURE_ACCESS,
   avtViewAccessStatus,
   isAvtLayoutVisible,
-} from "@/api/lib/views/avt-layout";
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,

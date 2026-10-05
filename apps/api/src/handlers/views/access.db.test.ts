@@ -21,9 +21,9 @@ import deleteViewTemplate from "@/api/handlers/view-templates/delete";
 import listViewTemplates from "@/api/handlers/view-templates/list";
 import readNavigation from "@/api/handlers/workspaces/read-navigation";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { avtViewAccessStatus } from "@/api/lib/views/avt-layout";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
