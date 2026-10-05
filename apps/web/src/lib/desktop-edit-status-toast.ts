@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { DesktopHandoffFailedError } from "@/features/desktop/desktop-edit-handoff";
+import { desktopHandoffFailureToastOptions } from "@/features/desktop/desktop-handoff-failure-toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
-import { DesktopHandoffFailedError } from "@/lib/desktop-edit-handoff";
-import { desktopHandoffFailureToastOptions } from "@/lib/desktop-handoff-failure-toast";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type DesktopEditToastMessages = {

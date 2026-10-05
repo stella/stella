@@ -23,9 +23,9 @@ import {
   pdfSigningStartErrorCode,
   type PdfSigningStartErrorCode,
 } from "@/components/inspector/pdf-signing.logic";
+import { desktopHandoffFailureToastOptions } from "@/features/desktop/desktop-handoff-failure-toast";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { desktopHandoffFailureToastOptions } from "@/lib/desktop-handoff-failure-toast";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";

@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
@@ -28,7 +28,9 @@ export const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 export const watchDesktopEditHandoff = async ({
   expiresAt,
   readStatus,
-}: WatchDesktopEditHandoffOptions): Promise<"opened" | "expired"> => {
+}: WatchDesktopEditHandoffOptions): Promise<
+  Result<"opened" | "expired", DesktopHandoffFailedError>
+> => {
   const parsedDeadline = new Date(expiresAt).getTime();
   let deadline = Number.isFinite(parsedDeadline)
     ? parsedDeadline
@@ -37,14 +39,16 @@ export const watchDesktopEditHandoff = async ({
     const handoffStatus = await readStatus();
     switch (handoffStatus.status) {
       case "opened":
-        return "opened";
+        return Result.ok("opened");
       case "failed":
-        throw new DesktopHandoffFailedError({
-          message: handoffStatus.failureReason,
-          failureReason: handoffStatus.failureReason,
-        });
+        return Result.err(
+          new DesktopHandoffFailedError({
+            message: handoffStatus.failureReason,
+            failureReason: handoffStatus.failureReason,
+          }),
+        );
       case "expired":
-        return "expired";
+        return Result.ok("expired");
       case "pending": {
         const nextDeadline = new Date(handoffStatus.expiresAt).getTime();
         if (Number.isFinite(nextDeadline) && nextDeadline > deadline) {
@@ -67,5 +71,5 @@ export const watchDesktopEditHandoff = async ({
         return panic("Unhandled desktop handoff status");
     }
   }
-  return "expired";
+  return Result.ok("expired");
 };

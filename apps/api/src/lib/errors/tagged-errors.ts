@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
 import { panic, TaggedError } from "better-result";
