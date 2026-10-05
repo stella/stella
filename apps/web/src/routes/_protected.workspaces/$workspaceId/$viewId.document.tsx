@@ -61,13 +61,16 @@ import {
   DOCUMENT_PANE_SEARCH_VALUES,
 } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
 import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
+import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -766,10 +769,40 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  const pdfSignTarget = resolvePdfSignTarget({
+    canUpdateEntity,
+    entityId,
+    file:
+      activeFileContent === null
+        ? null
+        : {
+            fieldId,
+            mimeType: activeFileContent.mimeType,
+            propertyId: activeFileField?.propertyId,
+          },
+    // `entity.fields` holds the current version only; an older version
+    // arrives through the field-file lookup instead.
+    isCurrentVersion: activeFileField !== undefined,
+    workspaceId,
+  });
   const downloadRenditions = getEntityFileDownloadRenditions({
     entityData: entity,
     fieldId,
   });
+  const downloadActiveFile = () => {
+    detached(
+      downloadTabFile({
+        fieldId,
+        fileName: activeFileLabel,
+        variant: "original",
+        workspaceId,
+        onError: (message, error) => {
+          notifyUserError(error, message);
+        },
+      }),
+      "document.viewer-download",
+    );
+  };
   // The panes have traded places: the findings get this column's full width
   // and the document moves to the inspector's preview. Only a DOCX has a
   // review to show, so anything else reads as the default arrangement.
@@ -925,6 +958,7 @@ function RouteComponentInner({
                       ? () => setIsPDFPageOrganizerOpen(true)
                       : undefined
                   }
+                  pdfSignTarget={pdfSignTarget}
                   workspaceId={workspaceId}
                 />
               </div>
@@ -1022,26 +1056,33 @@ function RouteComponentInner({
                     entityId={entityId}
                     workspaceId={workspaceId}
                   >
-                    <Suspense fallback={<DocxLoadingShell />}>
-                      <OfficeFileViewer
-                        desktopEditTarget={
-                          canUpdateEntity &&
-                          filePropertyId !== undefined &&
-                          activeFileField !== undefined
-                            ? {
-                                fileType: officeViewerFormat,
-                                propertyId: filePropertyId,
-                              }
-                            : null
-                        }
-                        entityId={entityId}
-                        fieldId={fieldId}
-                        fileName={activeFileLabel}
-                        format={officeViewerFormat}
-                        key={fieldId}
-                        workspaceId={workspaceId}
-                      />
-                    </Suspense>
+                    <RecoverableViewerBoundary
+                      key={fieldId}
+                      onDownload={downloadActiveFile}
+                      pending={<DocxLoadingShell />}
+                      surface="document-office"
+                    >
+                      <Suspense fallback={<DocxLoadingShell />}>
+                        <OfficeFileViewer
+                          desktopEditTarget={
+                            canUpdateEntity &&
+                            filePropertyId !== undefined &&
+                            activeFileField !== undefined
+                              ? {
+                                  fileType: officeViewerFormat,
+                                  propertyId: filePropertyId,
+                                }
+                              : null
+                          }
+                          entityId={entityId}
+                          fieldId={fieldId}
+                          fileName={activeFileLabel}
+                          format={officeViewerFormat}
+                          key={fieldId}
+                          workspaceId={workspaceId}
+                        />
+                      </Suspense>
+                    </RecoverableViewerBoundary>
                   </VersionDropZone>
                 );
               }
@@ -1053,15 +1094,24 @@ function RouteComponentInner({
                     entityId={entityId}
                     workspaceId={workspaceId}
                   >
-                    <Suspense
-                      fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                    <RecoverableViewerBoundary
+                      key={fieldId}
+                      onDownload={downloadActiveFile}
+                      pending={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                      surface="document-docx"
                     >
-                      <FullscreenDocxViewer
-                        fieldId={fieldId}
-                        scaleOffset={scaleOffset}
-                        workspaceId={workspaceId}
-                      />
-                    </Suspense>
+                      <Suspense
+                        fallback={
+                          <DocxLoadingShell scaleOffset={scaleOffset} />
+                        }
+                      >
+                        <FullscreenDocxViewer
+                          fieldId={fieldId}
+                          scaleOffset={scaleOffset}
+                          workspaceId={workspaceId}
+                        />
+                      </Suspense>
+                    </RecoverableViewerBoundary>
                   </VersionDropZone>
                 );
               }
@@ -1077,14 +1127,17 @@ function RouteComponentInner({
                     fieldId={fieldId}
                     initialScaleOffset={scaleOffset}
                     startPage={pageNumber}
+                    surface="document-pdf"
+                    onDownload={downloadActiveFile}
                     fallback={{
                       suspense: <PDFSuspenseFallback />,
-                      error: (error) => (
-                        <DocumentDisplayUnavailable
-                          entityId={entityId}
-                          error={error}
-                        />
-                      ),
+                      // A 400 is the server's authoritative "no full-screen
+                      // rendition"; every other failure takes the boundary's
+                      // own recovery.
+                      error: (error) =>
+                        APIError.is(error) && error.status === 400 ? (
+                          <DocumentDisplayUnavailable entityId={entityId} />
+                        ) : undefined,
                     }}
                   >
                     {isPDFPageOrganizerOpen ? (
@@ -1136,35 +1189,13 @@ function RouteComponentInner({
 
 // -- Fullscreen DOCX viewer (read-only Folio) --
 
-type DocumentDisplayUnavailableProps = {
-  entityId: string;
-  error: Error;
-};
-
-/**
- * Error fallback for the full-screen viewer's file area. A 400 from the
- * display-URL endpoint is the server's authoritative "this format has no
- * full-screen rendition" — recover by opening the file where every format
- * renders, the side panel — while any other failure keeps the generic
- * message.
- */
-const DocumentDisplayUnavailable = ({
-  entityId,
-  error,
-}: DocumentDisplayUnavailableProps) => {
+/** Recovers by opening the file where every format renders, the side panel. */
+const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
   const t = useTranslations();
   const navigate = Route.useNavigate();
   const { viewId, workspaceId } = Route.useParams({
     select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
   });
-
-  if (!(APIError.is(error) && error.status === 400)) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
-        {t("common.somethingWentWrong")}
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

@@ -868,7 +868,9 @@ type Messages = {
       };
       "deleteColumnConfirm": "This deletes the question and all its answers for your whole organization, from every search and for every member. To take it off this search only, use “Remove from this search”.";
       "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.";
+      "newQuestionColumn": "New";
       "nothingToRun": "Every cell already has an answer";
+      "questionAdded": "Added “{question}” to the table";
       "questionPlaceholder": "e.g. Did the court find the termination valid?";
       "removeFromSearch": "Remove from this search";
       "runAll": "Answer all";
@@ -948,6 +950,7 @@ type Messages = {
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)";
     };
   };
   "catalogue": {
@@ -1877,15 +1880,23 @@ type Messages = {
     "zoomOut": "Zoom out";
   };
   "consent": {
+    "actingAs": "{clientName} will work as you in {organizationName}";
     "allow": "Allow";
-    "appIdentity": "App identity";
+    "canChange": "Can change";
+    "canRead": "Can read";
     "completeSetup": "Complete setup";
+    "connectTitle": "Connect {clientName} to stella";
+    "connectedTitle": "Connected to {clientName}";
+    "connectionDuration": "Stays connected until you disconnect it in Settings › Connections";
     "defaultClientName": "An application";
-    "description": "{clientName} wants to access your stella workspace";
+    "destinationDetails": "Redirect details";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
-    "permissions": "This will allow the application to:";
-    "redirectDestination": "Redirect destination";
+    "otherPermissions": "Other permissions";
+    "publishedBy": "Published by <host>{publisherHost}</host>";
+    "returnToAgent": "Return to your agent to continue.";
+    "returnsLocally": "Returns you to {clientName} on this computer";
+    "returnsTo": "Returns you to {clientName}";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1906,8 +1917,11 @@ type Messages = {
     "scopeSkills": "Use your saved stella skills";
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
+    "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
+    "unverifiedExplanation": "stella has not verified who publishes this app.";
+    "useAnotherAccount": "Use another account";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -2453,6 +2467,7 @@ type Messages = {
     "current": "Current";
     "deleteVersion": "Delete version";
     "descriptionPlaceholder": "Add a note about this version...";
+    "displayFailed": "This file couldn't be displayed.";
     "downloadRedline": "Download redline";
     "dropToUploadVersion": "Drop to upload as new version";
     "editLatestVersionDescription": "This is not the current version. To edit it in the browser, first make it the latest version, then unlock it for editing.";
@@ -5433,6 +5448,18 @@ type Messages = {
         "updateRequiredDescription": "stella desktop needs an update. It will update automatically when active desktop edits are finished; try again after it restarts.";
         "updateRequiredTitle": "Update stella desktop";
       };
+      "desktopGate": {
+        "alreadyInstalled": "Already installed? Connect it";
+        "connect": "Connect stella desktop";
+        "editNone": "Download stella desktop to edit this file";
+        "editOutdated": "Update stella desktop to edit";
+        "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.";
+        "signCurrent": "Sign with stella desktop";
+        "signNone": "Download stella desktop to sign this PDF";
+        "signOutdated": "Update stella desktop to sign";
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.";
+        "signShort": "Sign";
+      };
       "downloadAs": "Download as…";
       "downloadAsZip": "Download as ZIP";
       "downloadExtractedText": "Extracted text (.txt)";
@@ -5446,7 +5473,6 @@ type Messages = {
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
       "pdfSigning": {
-        "action": "Sign with desktop app";
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.";
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.";
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.";

@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Die Frage und alle ihre Antworten werden für Ihre gesamte Organisation gelöscht, aus jeder Suche und für jedes Mitglied. Um sie nur in dieser Suche auszublenden, wählen Sie „Aus dieser Suche entfernen“.",
       "editQuestionHint": "Eine Änderung des Wortlauts, des Antworttyps oder seiner Optionen verwirft die vorhandenen Antworten; führen Sie die Spalte danach erneut aus.",
+      "newQuestionColumn": "Neu",
       "nothingToRun": "Jede Zelle hat bereits eine Antwort",
+      "questionAdded": "„{question}“ zur Tabelle hinzugefügt",
       "questionPlaceholder": "z. B. Hielt das Gericht die Kündigung für wirksam?",
       "removeFromSearch": "Aus dieser Suche entfernen",
       "runAll": "Alle beantworten",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Das Gericht hat den Entscheidungstext nicht veröffentlicht, oder er ist hier noch nicht verfügbar.",
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
-      "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
+      "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
     }
   },
   "catalogue": {
@@ -1874,15 +1877,23 @@
     "zoomOut": "Verkleinern"
   },
   "consent": {
+    "actingAs": "{clientName} handelt in {organizationName} in Ihrem Namen",
     "allow": "Zulassen",
-    "appIdentity": "App-Identität",
+    "canChange": "Kann ändern",
+    "canRead": "Kann lesen",
     "completeSetup": "Einrichtung abschließen",
+    "connectTitle": "{clientName} mit stella verbinden",
+    "connectedTitle": "Mit {clientName} verbunden",
+    "connectionDuration": "Bleibt verbunden, bis Sie die Verbindung unter Einstellungen › Verbindungen trennen",
     "defaultClientName": "Eine Anwendung",
-    "description": "{clientName} möchte auf Ihren stella-Arbeitsbereich zugreifen",
+    "destinationDetails": "Details zur Weiterleitung",
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",
-    "permissions": "Dies erlaubt der Anwendung:",
-    "redirectDestination": "Weiterleitungsziel",
+    "otherPermissions": "Weitere Berechtigungen",
+    "publishedBy": "Veröffentlicht von <host>{publisherHost}</host>",
+    "returnToAgent": "Kehren Sie zu Ihrem Agenten zurück, um fortzufahren.",
+    "returnsLocally": "Sie kehren auf diesem Computer zu {clientName} zurück",
+    "returnsTo": "Sie kehren zu {clientName} zurück",
     "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
     "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
@@ -1903,8 +1914,11 @@
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
+    "signedInAs": "Angemeldet als <email>{accountEmail}</email>",
     "title": "Zugriff autorisieren",
-    "unverifiedApp": "Nicht verifizierte App"
+    "unverifiedApp": "Nicht verifizierte App",
+    "unverifiedExplanation": "stella hat nicht überprüft, wer diese App veröffentlicht.",
+    "useAnotherAccount": "Anderes Konto verwenden"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",
@@ -2450,6 +2464,7 @@
     "current": "Aktuell",
     "deleteVersion": "Version löschen",
     "descriptionPlaceholder": "Notiz zu dieser Version hinzufügen...",
+    "displayFailed": "Diese Datei konnte nicht angezeigt werden.",
     "downloadRedline": "Redline herunterladen",
     "dropToUploadVersion": "Zum Hochladen als neue Version ablegen",
     "editLatestVersionDescription": "Dies ist nicht die aktuelle Version. Um sie im Browser zu bearbeiten, machen Sie sie zuerst zur neuesten Version und entsperren Sie sie dann zur Bearbeitung.",
@@ -5430,6 +5445,18 @@
         "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung erfolgt automatisch, sobald aktive Desktop-Bearbeitungen abgeschlossen sind; versuchen Sie es nach dem Neustart erneut.",
         "updateRequiredTitle": "stella desktop aktualisieren"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Bereits installiert? Verbinden",
+        "connect": "stella desktop verbinden",
+        "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
+        "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
+        "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
+        "signCurrent": "Mit stella desktop signieren",
+        "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
+        "signOutdated": "stella desktop aktualisieren, um zu signieren",
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
+        "signShort": "Signieren"
+      },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
       "downloadExtractedText": "Extrahierter Text (.txt)",
@@ -5443,7 +5470,6 @@
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
-        "action": "Im Desktop signieren",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
         "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
         "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",
