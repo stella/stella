@@ -2314,6 +2314,8 @@ type Messages = {
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
+      "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
+      "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";

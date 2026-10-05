@@ -2311,6 +2311,8 @@
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
+      "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",

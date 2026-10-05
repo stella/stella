@@ -2311,6 +2311,8 @@
       "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
       "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
+      "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
