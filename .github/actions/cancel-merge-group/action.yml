@@ -1,0 +1,14 @@
+name: Cancel failed merge-group run
+description: Cancel the current workflow run after a merge-group job fails.
+runs:
+  using: composite
+  steps:
+    - name: Cancel current run
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      with:
+        retries: 0
+        script: |
+          await github.rest.actions.cancelWorkflowRun({
+            ...context.repo,
+            run_id: context.runId,
+          });
