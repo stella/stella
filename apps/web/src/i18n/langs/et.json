@@ -5429,6 +5429,18 @@
         "updateRequiredDescription": "stella desktop vajab värskendust. See värskendub automaatselt, kui aktiivsed töölauamuudatused on lõpetatud; proovige pärast taaskäivitumist uuesti.",
         "updateRequiredTitle": "Värskendage stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Juba paigaldatud? Ühenda",
+        "connect": "Ühenda stella desktop",
+        "editNone": "Laadi alla stella desktop, et seda faili muuta",
+        "editOutdated": "Uuenda stella desktop, et muuta",
+        "editReason": "Arvutis muutmine avab faili stella desktopi kaudu sinu arvuti rakenduses.",
+        "signCurrent": "Allkirjasta stella desktopiga",
+        "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
+        "signOutdated": "Uuenda stella desktop, et allkirjastada",
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
+        "signShort": "Allkirjasta"
+      },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadExtractedText": "Eraldatud tekst (.txt)",
@@ -5442,7 +5454,6 @@
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "pdfSigning": {
-        "action": "Allkirjasta töölauarakenduses",
         "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
         "cancelledCertificateDescription": "Valitud sertifikaati ei saa allkirjastamiseks kasutada. Vali sertifikaat, mis lubab digiallkirja.",
         "cancelledCertifiedDescription": "See PDF on sertifitseeritud ja sertifitseerimine ei luba rohkem allkirju lisada.",

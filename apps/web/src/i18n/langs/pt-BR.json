@@ -5429,6 +5429,18 @@
         "updateRequiredDescription": "O stella desktop precisa de uma atualização. Ele será atualizado automaticamente quando as edições ativas no desktop terminarem; tente novamente após reiniciar.",
         "updateRequiredTitle": "Atualize o stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Já está instalado? Conectar",
+        "connect": "Conectar o stella desktop",
+        "editNone": "Baixe o stella desktop para editar este arquivo",
+        "editOutdated": "Atualize o stella desktop para editar",
+        "editReason": "A edição no computador abre o arquivo em um app do seu computador pelo stella desktop.",
+        "signCurrent": "Assinar com o stella desktop",
+        "signNone": "Baixe o stella desktop para assinar este PDF",
+        "signOutdated": "Atualize o stella desktop para assinar",
+        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop.",
+        "signShort": "Assinar"
+      },
       "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",
       "downloadExtractedText": "Texto extraído (.txt)",
@@ -5442,7 +5454,6 @@
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
-        "action": "Assinar no desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
         "cancelledCertificateDescription": "O certificado escolhido não pode ser usado para assinar. Escolha um que permita assinaturas digitais.",
         "cancelledCertifiedDescription": "Este PDF é certificado, e a certificação não permite novas assinaturas.",

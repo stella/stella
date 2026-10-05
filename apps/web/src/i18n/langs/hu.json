@@ -5429,6 +5429,18 @@
         "updateRequiredDescription": "A stella desktop frissítést igényel. Automatikusan frissül, amikor az aktív asztali szerkesztések befejeződtek; próbálja újra az újraindítás után.",
         "updateRequiredTitle": "stella desktop frissítése"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Már telepítve van? Csatlakoztatás",
+        "connect": "stella desktop csatlakoztatása",
+        "editNone": "Töltse le a stella desktopot a fájl szerkesztéséhez",
+        "editOutdated": "Frissítse a stella desktopot a szerkesztéshez",
+        "editReason": "Az asztali szerkesztés a stella desktopon keresztül a számítógépén lévő alkalmazásban nyitja meg a fájlt.",
+        "signCurrent": "Aláírás a stella desktoppal",
+        "signNone": "Töltse le a stella desktopot a PDF aláírásához",
+        "signOutdated": "Frissítse a stella desktopot az aláíráshoz",
+        "signReason": "Az aláírás a számítógépén lévő tanúsítványt használja, ezért a stella desktopban történik.",
+        "signShort": "Aláírás"
+      },
       "downloadAs": "Letöltés másként…",
       "downloadAsZip": ".zip fájl letöltése",
       "downloadExtractedText": "Kinyert szöveg (.txt)",
@@ -5442,7 +5454,6 @@
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
       "pdfSigning": {
-        "action": "Aláírás az asztali alkalmazásban",
         "cancelledBaseVersionDescription": "A dokumentum aláírás közben megváltozott. Nyisd meg a legújabb verziót, és írd alá újra.",
         "cancelledCertificateDescription": "A kiválasztott tanúsítvány nem használható aláírásra. Válassz olyat, amely engedélyezi a digitális aláírást.",
         "cancelledCertifiedDescription": "Ez a PDF hitelesített, és a hitelesítése nem enged további aláírásokat.",

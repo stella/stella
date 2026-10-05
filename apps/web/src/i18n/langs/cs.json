@@ -5429,6 +5429,18 @@
         "updateRequiredDescription": "stella desktop vyžaduje aktualizaci. Proběhne automaticky po dokončení aktivních desktopových úprav; zkuste to znovu po restartu.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Už nainstalováno? Připojit",
+        "connect": "Připojit stella desktop",
+        "editNone": "Stáhněte stella desktop a upravte tento soubor",
+        "editOutdated": "Aktualizujte stella desktop a upravujte",
+        "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
+        "signCurrent": "Podepsat ve stella desktop",
+        "signNone": "Stáhněte stella desktop a podepište toto PDF",
+        "signOutdated": "Aktualizujte stella desktop a podepisujte",
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
+        "signShort": "Podepsat"
+      },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
@@ -5442,7 +5454,6 @@
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
       "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
-        "action": "Podepsat v desktopu",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
         "cancelledCertificateDescription": "Vybraný certifikát nelze použít k podpisu. Zvolte certifikát, který umožňuje digitální podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikace nepovoluje další podpisy.",
