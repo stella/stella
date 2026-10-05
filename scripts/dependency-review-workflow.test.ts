@@ -533,6 +533,64 @@ describe("workflow dependency snapshots", () => {
   );
 });
 
+describe("composite action dependency snapshots", () => {
+  const before =
+    "runs: { using: composite, steps: [{ uses: 'example/action@old' }] }\n";
+  const after =
+    "runs: { using: composite, steps: [{ uses: 'example/action@new' }] }\n";
+  for (const filename of [
+    ".github/actions/example/action.yml",
+    ".github/actions/nested/example/action.yaml",
+    "tools/example/action.yml",
+    "action.yaml",
+  ]) {
+    test.each(["modified", "added", "removed", "renamed"] as const)(
+      `compares composite references in ${filename} for %s`,
+      async (status) => {
+        const previous_filename = "archive/example.txt";
+        const run = selector({
+          files: [
+            {
+              filename,
+              status,
+              ...(status === "renamed" ? { previous_filename } : {}),
+            },
+          ],
+          contents: {
+            [`${MERGE_BASE}:${filename}`]: before,
+            [`pr-head:${filename}`]: after,
+          },
+        });
+        await run.execute();
+        const snapshots = run.snapshots();
+        expect(run.outputs["workflows"]).toBe("true");
+        expect(snapshots).toEqual([
+          {
+            before: status === "added" || status === "renamed" ? "" : before,
+            after: status === "removed" ? "" : after,
+          },
+        ]);
+        expect(
+          snapshots.some(
+            (snapshot) =>
+              JSON.stringify(references(snapshot.before)) !==
+              JSON.stringify(references(snapshot.after)),
+          ),
+        ).toBe(true);
+      },
+    );
+  }
+  test("compares unchanged composite references as a no-op and rejects invalid references", () => {
+    expect(references(before)).toEqual(["example/action@old"]);
+    expect(references(`${before}# uses: ignored/action@fake\n`)).toEqual(
+      references(before),
+    );
+    expect(() =>
+      references("runs: { using: composite, steps: [{ uses: 42 }] }"),
+    ).toThrow("Invalid workflow action reference");
+  });
+});
+
 describe("parsed workflow action dependencies", () => {
   test.each([
     "jobs:\n  build:\n    steps:\n      - uses: example/action@old\n",

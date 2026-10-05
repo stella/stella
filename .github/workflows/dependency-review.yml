@@ -69,8 +69,8 @@ jobs:
             const required = files.length >= 300 || files.some(file => paths(file).some(path => manifest.test(path)));
             core.setOutput("required", String(required));
             if (required) return;
-            const workflow = /^\.github\/workflows\/[^/]+\.ya?ml$/u;
-            const changed = files.filter(file => paths(file).some(path => workflow.test(path)));
+            const actionInput = /(?:^\.github\/workflows\/[^/]+\.ya?ml$|(?:^|\/)action\.ya?ml$)/u;
+            const changed = files.filter(file => paths(file).some(path => actionInput.test(path)));
             core.setOutput("workflows", String(changed.length > 0));
             if (changed.length === 0) {
               await core.summary.addRaw("No dependency manifests, lockfiles or workflow actions changed. Review is a no-op.").write();
@@ -87,9 +87,9 @@ jobs:
             const snapshots = [];
             for (const file of changed) {
               const beforePath = file.previous_filename || file.filename;
-              const before = file.status === "added" || !workflow.test(beforePath)
+              const before = file.status === "added" || !actionInput.test(beforePath)
                 ? "" : await content(beforePath, beforeRef);
-              const after = file.status === "removed" || !workflow.test(file.filename)
+              const after = file.status === "removed" || !actionInput.test(file.filename)
                 ? "" : await content(file.filename, head);
               snapshots.push({ before, after });
             }
@@ -118,13 +118,16 @@ jobs:
           bun --no-env-file - <<'JS'
           const references = source => {
             if (source === "") return [];
-            const workflow = Bun.YAML.parse(source);
+            const definition = Bun.YAML.parse(source);
             const uses = [];
-            for (const job of Object.values(workflow.jobs ?? {})) {
+            for (const job of Object.values(definition.jobs ?? {})) {
               if (job.uses !== undefined) uses.push(job.uses);
               for (const step of job.steps ?? []) {
                 if (step.uses !== undefined) uses.push(step.uses);
               }
+            }
+            for (const step of definition.runs?.steps ?? []) {
+              if (step.uses !== undefined) uses.push(step.uses);
             }
             if (uses.some(value => typeof value !== "string")) {
               throw new Error("Invalid workflow action reference");
