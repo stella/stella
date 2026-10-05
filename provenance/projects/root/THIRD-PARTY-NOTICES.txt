@@ -19,6 +19,7 @@ Project: root
 - @aws-sdk/client-cloudwatch 3.1141.0 — Apache-2.0
 - @aws-sdk/client-s3 3.1138.0 — Apache-2.0
 - @aws-sdk/client-sesv2 3.1138.0 — Apache-2.0
+- @aws-sdk/client-sqs 3.1142.0 — Apache-2.0
 - @aws-sdk/client-sts 3.1138.0 — Apache-2.0
 - @aws-sdk/s3-request-presigner 3.1138.0 — Apache-2.0
 - @base-ui/react 1.8.0 — MIT
@@ -88,7 +89,7 @@ Project: root
 - @tanstack/react-table-devtools 9.2.0 — MIT
 - @tanstack/react-virtual 3.14.13 — MIT
 - @tanstack/router-generator 1.167.38 — MIT
-- @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
+- @tauri-apps/api 2.12.0 — Apache-2.0 OR MIT
 - @testing-library/react 16.3.3 — MIT
 - @tiptap/core 3.31.3 — MIT
 - @tiptap/extension-bold 3.31.3 — MIT

@@ -262,8 +262,7 @@ export const ChatTabPanel = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters,
+    createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
@@ -532,12 +531,7 @@ export const ChatTabPanel = ({
   );
 
   return (
-    <ChatMattersContext
-      value={{
-        createDocumentMatters,
-        isLoadingCreateDocumentMatters,
-      }}
-    >
+    <ChatMattersContext value={{ createDocumentMattersView }}>
       <AIUnavailableDialogTrigger />
       <ChatApprovalContext
         value={{

@@ -18,6 +18,7 @@ Project: root
 - @aws-sdk/client-cloudwatch 3.1141.0 — Apache-2.0
 - @aws-sdk/client-s3 3.1138.0 — Apache-2.0
 - @aws-sdk/client-sesv2 3.1138.0 — Apache-2.0
+- @aws-sdk/client-sqs 3.1142.0 — Apache-2.0
 - @aws-sdk/client-sts 3.1138.0 — Apache-2.0
 - @aws-sdk/s3-request-presigner 3.1138.0 — Apache-2.0
 - @base-ui/react 1.8.0 — MIT
@@ -87,7 +88,7 @@ Project: root
 - @tanstack/react-table-devtools 9.2.0 — MIT
 - @tanstack/react-virtual 3.14.13 — MIT
 - @tanstack/router-generator 1.167.38 — MIT
-- @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
+- @tauri-apps/api 2.12.0 — Apache-2.0 OR MIT
 - @testing-library/react 16.3.3 — MIT
 - @tiptap/core 3.31.3 — MIT
 - @tiptap/extension-bold 3.31.3 — MIT
@@ -228,7 +229,6 @@ Project: desktop-tauri
 - brotli 9.0.0 — BSD-3-Clause AND MIT
 - brotli-decompressor 6.0.1 — BSD-3-Clause/MIT
 - bs58 0.5.1 — MIT/Apache-2.0
-- bstr 1.13.0 — Apache-2.0 OR MIT
 - bumpalo 3.20.3 — Apache-2.0 OR MIT
 - bytemuck 1.25.2 — Apache-2.0 OR MIT OR Zlib
 - byteorder 1.5.0 — MIT OR Unlicense
@@ -244,7 +244,6 @@ Project: desktop-tauri
 - cc 1.4.2 — Apache-2.0 OR MIT
 - cesu8 1.1.0 — Apache-2.0/MIT
 - cfb 0.14.0 — MIT
-- cfb 0.7.3 — MIT
 - cfg-expr 0.15.8 — Apache-2.0 OR MIT
 - cfg-if 1.0.4 — Apache-2.0 OR MIT
 - cfg_aliases 0.2.2 — MIT
@@ -277,7 +276,7 @@ Project: desktop-tauri
 - crunchy 0.2.4 — MIT
 - crypto-common 0.1.7 — Apache-2.0 OR MIT
 - crypto-common 0.2.2 — Apache-2.0 OR MIT
-- csscolorparser 0.8.4 — Apache-2.0 OR MIT
+- csscolorparser 0.9.0 — Apache-2.0 OR MIT
 - cssparser 0.37.0 — MPL-2.0
 - cssparser 0.38.0 — MPL-2.0
 - cssparser-macros 0.7.1 — MPL-2.0
@@ -296,7 +295,6 @@ Project: desktop-tauri
 - digest 0.10.7 — Apache-2.0 OR MIT
 - digest 0.11.3 — Apache-2.0 OR MIT
 - dirs 4.0.0 — Apache-2.0 OR MIT
-- dirs 6.0.0 — Apache-2.0 OR MIT
 - dirs 7.0.0 — Apache-2.0 OR MIT
 - dirs-sys 0.3.7 — Apache-2.0 OR MIT
 - dirs-sys 0.5.0 — Apache-2.0 OR MIT
@@ -416,7 +414,6 @@ Project: desktop-tauri
 - image-webp 0.2.4 — Apache-2.0 OR MIT
 - indexmap 1.9.3 — Apache-2.0 OR MIT
 - indexmap 2.14.0 — Apache-2.0 OR MIT
-- infer 0.19.0 — MIT
 - infer 0.22.0 — MIT
 - inotify 0.11.4 — ISC
 - inotify-sys 0.1.8 — ISC
@@ -512,7 +509,7 @@ Project: desktop-tauri
 - objc2-web-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - once_cell 1.21.4 — Apache-2.0 OR MIT
 - open 5.4.1 — MIT
-- opener 0.8.5 — Apache-2.0 OR MIT
+- opener 0.9.0 — Apache-2.0 OR MIT
 - openssl-probe 0.2.1 — Apache-2.0 OR MIT
 - option-ext 0.2.0 — MPL-2.0
 - ordered-multimap 0.7.3 — MIT
@@ -533,6 +530,7 @@ Project: desktop-tauri
 - phf_generator 0.13.1 — MIT
 - phf_generator 0.14.0 — MIT
 - phf_macros 0.13.1 — MIT
+- phf_macros 0.14.0 — MIT
 - phf_shared 0.13.1 — MIT
 - phf_shared 0.14.0 — MIT
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
@@ -663,13 +661,13 @@ Project: desktop-tauri
 - tauri-plugin 2.7.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.6.0 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.4.0 — Apache-2.0 OR MIT
-- tauri-plugin-deep-link 2.5.0 — Apache-2.0 OR MIT
+- tauri-plugin-deep-link 2.6.0 — Apache-2.0 OR MIT
 - tauri-plugin-global-shortcut 2.4.0 — Apache-2.0 OR MIT
 - tauri-plugin-notification 2.5.0 — Apache-2.0 OR MIT
-- tauri-plugin-opener 2.6.0 — Apache-2.0 OR MIT
+- tauri-plugin-opener 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
-- tauri-plugin-single-instance 2.5.0 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.13.0 — Apache-2.0 OR MIT
+- tauri-plugin-single-instance 2.5.1 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.13.1 — Apache-2.0 OR MIT
 - tauri-runtime 2.12.1 — Apache-2.0 OR MIT
 - tauri-runtime-wry 2.12.1 — Apache-2.0 OR MIT
 - tauri-utils 2.10.1 — Apache-2.0 OR MIT
@@ -788,7 +786,6 @@ Project: desktop-tauri
 - windows-native-keyring-store 1.1.0 — Apache-2.0 OR MIT
 - windows-numerics 0.2.0 — Apache-2.0 OR MIT
 - windows-numerics 0.3.1 — Apache-2.0 OR MIT
-- windows-registry 0.5.3 — Apache-2.0 OR MIT
 - windows-registry 0.6.1 — Apache-2.0 OR MIT
 - windows-result 0.3.4 — Apache-2.0 OR MIT
 - windows-result 0.4.1 — Apache-2.0 OR MIT

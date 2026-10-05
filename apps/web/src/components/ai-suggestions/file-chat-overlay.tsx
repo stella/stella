@@ -1570,8 +1570,7 @@ const FileChatOverlayInner = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters,
+    createDocumentMattersView,
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
@@ -2507,12 +2506,7 @@ const FileChatOverlayInner = ({
         }
       : null;
   return (
-    <ChatMattersContext
-      value={{
-        createDocumentMatters,
-        isLoadingCreateDocumentMatters,
-      }}
-    >
+    <ChatMattersContext value={{ createDocumentMattersView }}>
       <ChatApprovalContext
         value={{
           activeOrganizationId,
