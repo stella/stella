@@ -171,9 +171,9 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
 export const authClient = createStellaAuthClient("automatic");
 
 /** Consent owns the completion view and navigation; the SDK's redirect hook must not race it. */
-export const submitOAuthConsent = (accept: boolean) => {
+export const submitOAuthConsent = async (accept: boolean) => {
   const consentClient = createStellaAuthClient("manual");
-  return consentClient.oauth2.consent({ accept });
+  return await consentClient.oauth2.consent({ accept });
 };
 
 export const listAuthSessions = async () => {

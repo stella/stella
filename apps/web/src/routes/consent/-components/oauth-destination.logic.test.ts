@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyOAuthDestination } from "@/lib/oauth-destination.logic";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
+import { classifyOAuthDestination } from "@/routes/consent/-components/oauth-destination.logic";
 
 const info = (redirectHosts: string[]): OAuthConsentInfo => ({
   client_name: "Example app",

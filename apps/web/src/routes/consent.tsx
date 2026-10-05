@@ -169,7 +169,9 @@ function ConsentPage() {
 
   const handleAccountSwitch = async () => {
     setSubmission({ status: "pending" });
-    const outcome = await Result.tryPromise(() => signOutAndRelease());
+    const outcome = await Result.tryPromise(
+      async () => await signOutAndRelease(),
+    );
     if (outcome.isErr()) {
       await queryClient.refetchQueries({ queryKey: sessionOptions.queryKey });
       setSubmission({ status: "error" });
@@ -193,7 +195,9 @@ function ConsentPage() {
   const handleConsent = async (accept: boolean) => {
     setSubmission({ status: "pending" });
 
-    const outcome = await Result.tryPromise(() => submitOAuthConsent(accept));
+    const outcome = await Result.tryPromise(
+      async () => await submitOAuthConsent(accept),
+    );
     if (outcome.isErr()) {
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));

@@ -4,8 +4,8 @@ import { InfoIcon } from "@stll/ui/icons";
 import { ListItemStatus } from "@stll/ui/list";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
-import { classifyOAuthDestination } from "@/lib/oauth-destination.logic";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
+import { classifyOAuthDestination } from "@/routes/consent/-components/oauth-destination.logic";
 
 type OAuthClientDetailsProps = {
   info: OAuthConsentInfo;
