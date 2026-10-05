@@ -1,21 +1,27 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
+  caseLawDecisionIdentifierBackfills,
   caseLawCitations,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import {
+  runCitationGraphTransaction,
+  tryCitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -25,7 +31,10 @@ import {
 } from "@/api/tests/helpers/transaction-interleaving";
 
 import { citationKeyOf } from "./citation-extractor";
-import { runDecisionIdentifierBackfill } from "./decision-identifier-backfill";
+import {
+  DECISION_IDENTIFIER_BACKFILL_VERSION,
+  runDecisionIdentifierBackfill,
+} from "./decision-identifier-backfill";
 import { processDecision } from "./pipeline/decision";
 import { classifyObservation } from "./pipeline/decision-existing";
 import {
@@ -66,6 +75,10 @@ if (!databaseUrl || !enabled) {
   const withFixture = async <T>(
     run: (fixture: {
       scopedDb: ScopedDb;
+      rootDb: CaseLawRootHandle;
+      setPhase: (
+        phase: (typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE)[keyof typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE],
+      ) => Promise<void>;
       participant: (tx: Transaction) => ScopedDb;
       reset: () => Promise<void>;
       refresh: () => DecisionRowWrite;
@@ -304,8 +317,36 @@ if (!databaseUrl || !enabled) {
           });
           trace.length = 0;
         };
+        const rootDb: CaseLawRootHandle = {
+          transaction: scopedDb,
+          execute: async <TRow extends Record<string, unknown>>(
+            query: SQLWrapper | string,
+          ) => await scopedDb(async (tx) => await tx.execute<TRow>(query)),
+        };
         return await run({
           scopedDb,
+          rootDb,
+          setPhase: async (phase) => {
+            await scopedDb(async (tx) => {
+              await tx
+                .update(caseLawDecisionIdentifierBackfills)
+                .set({
+                  phase,
+                  cursorId: null,
+                  completedAt:
+                    phase ===
+                    CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
+                      ? new Date()
+                      : null,
+                })
+                .where(
+                  eq(
+                    caseLawDecisionIdentifierBackfills.version,
+                    DECISION_IDENTIFIER_BACKFILL_VERSION,
+                  ),
+                );
+            });
+          },
           participant,
           reset,
           refresh: () => prepared ?? panic("Fixture not prepared"),
@@ -495,6 +536,533 @@ if (!databaseUrl || !enabled) {
           120_000,
         );
       }
+    }
+
+    for (const phase of [
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS,
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
+    ]) {
+      test(
+        `backfill ${phase} completes while another transaction holds the graph`,
+        async () =>
+          await withFixture(async (fixture) => {
+            const results = await withInterleaving({
+              databaseUrl,
+              reset: async () => {
+                await fixture.reset();
+                expect(
+                  (
+                    await runDecisionIdentifierBackfill(fixture.rootDb, {
+                      batchSize: 10,
+                    })
+                  ).status,
+                ).toBe("complete");
+                await fixture.setPhase(phase);
+              },
+              readState: fixture.readState,
+              a: {
+                steps: [
+                  {
+                    name: "graph",
+                    run: async (tx) =>
+                      await runCitationGraphTransaction(
+                        fixture.participant(tx),
+                        async () => undefined,
+                      ),
+                  },
+                ],
+              },
+              b: {
+                steps: [
+                  {
+                    name: "verify",
+                    run: async (tx) => {
+                      await fixture.participant(tx)(async () => undefined);
+                      const result = await runDecisionIdentifierBackfill(
+                        {
+                          execute: tx.execute.bind(tx),
+                          transaction: fixture.participant(tx),
+                        },
+                        { batchSize: 10 },
+                      );
+                      expect(result.status).toBe("complete");
+                    },
+                  },
+                ],
+              },
+              schedules: [["a.graph", "b.verify", "a.commit", "b.commit"]],
+              invariant: ({ outcomes, blocked }) => {
+                expect(outcomes).toEqual({
+                  a: { status: "committed" },
+                  b: { status: "committed" },
+                });
+                expect(blocked).not.toContain("b.verify");
+              },
+              timeoutMs: 15_000,
+            });
+            expect(results).toHaveLength(1);
+          }),
+        60_000,
+      );
+    }
+
+    for (const phase of [
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+    ]) {
+      test(
+        `backfill ${phase} owns the graph before waiting for its checkpoint`,
+        async () =>
+          await withFixture(async (fixture) => {
+            const results = await withInterleaving({
+              databaseUrl,
+              reset: async () => {
+                await fixture.reset();
+                expect(
+                  (
+                    await runDecisionIdentifierBackfill(fixture.rootDb, {
+                      batchSize: 10,
+                    })
+                  ).status,
+                ).toBe("complete");
+                await fixture.setPhase(phase);
+              },
+              readState: fixture.readState,
+              a: {
+                steps: [
+                  {
+                    name: "checkpoint",
+                    run: async (tx) =>
+                      await fixture.participant(tx)(
+                        async (local) =>
+                          await local.execute(
+                            sql`SELECT version FROM ${caseLawDecisionIdentifierBackfills} WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION} FOR UPDATE`,
+                          ),
+                      ),
+                  },
+                  {
+                    name: "try-graph",
+                    run: async (tx) => {
+                      expect(
+                        await tryCitationGraphTransaction(
+                          fixture.participant(tx),
+                          async () => "admitted",
+                        ),
+                      ).toBeNull();
+                    },
+                  },
+                ],
+              },
+              b: {
+                steps: [
+                  {
+                    name: "project",
+                    run: async (tx) => {
+                      await fixture.participant(tx)(async () => undefined);
+                      expect(
+                        (
+                          await runDecisionIdentifierBackfill(
+                            {
+                              execute: tx.execute.bind(tx),
+                              transaction: fixture.participant(tx),
+                            },
+                            { batchSize: 10 },
+                          )
+                        ).status,
+                      ).toBe("complete");
+                    },
+                  },
+                ],
+              },
+              schedules: [
+                [
+                  "a.checkpoint",
+                  "b.project",
+                  "a.try-graph",
+                  "a.commit",
+                  "b.commit",
+                ],
+              ],
+              invariant: ({ outcomes, blocked }) => {
+                expect(outcomes).toEqual({
+                  a: { status: "committed" },
+                  b: { status: "committed" },
+                });
+                expect(blocked).toContain("b.project");
+              },
+              timeoutMs: 15_000,
+            });
+            expect(results).toHaveLength(1);
+          }),
+        60_000,
+      );
+    }
+
+    for (const [selectedPhase, changedPhase] of [
+      [
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+      ],
+      [
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+      ],
+      [
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS,
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+      ],
+      [
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS,
+      ],
+      [
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+      ],
+    ] as const) {
+      test(
+        `a ${selectedPhase}-to-${changedPhase} phase race restarts before domain work`,
+        async () =>
+          await withFixture(async (fixture) => {
+            await fixture.reset();
+            expect(
+              (
+                await runDecisionIdentifierBackfill(fixture.rootDb, {
+                  batchSize: 10,
+                })
+              ).status,
+            ).toBe("complete");
+            await fixture.setPhase(selectedPhase);
+            fixture.trace.length = 0;
+            const transactions: string[][] = [];
+            let transactionCount = 0;
+            const rootDb: CaseLawRootHandle = {
+              execute: fixture.rootDb.execute,
+              transaction: async (work) => {
+                transactionCount += 1;
+                // Initial read, then unlocked page selection, then its locked recheck.
+                if (transactionCount === 3) {
+                  await fixture.setPhase(changedPhase);
+                }
+                return await fixture.scopedDb(async (tx) => {
+                  const from = fixture.trace.length;
+                  const value = await work(tx);
+                  transactions.push(
+                    fixture.trace.slice(from).map(({ query }) => query),
+                  );
+                  return value;
+                });
+              },
+            };
+            const interruption = new Error("first projection committed");
+            const result = await Result.tryPromise({
+              try: async () =>
+                await runDecisionIdentifierBackfill(rootDb, {
+                  batchSize: 10,
+                  onProgress: (progress) => {
+                    if (progress.type === "page") {
+                      expect(progress.progress.phase).toBe(changedPhase);
+                      throw interruption;
+                    }
+                  },
+                }),
+              catch: (error: unknown) => error,
+            });
+            expect(result.isErr()).toBe(true);
+            if (result.isOk()) {
+              panic("Expected committed projection interruption");
+            }
+            expect(result.error).toBe(interruption);
+            const plainRecheck =
+              transactions.at(2) ?? panic("Phase recheck absent");
+            expect(
+              plainRecheck.some((query) => query.includes("FOR UPDATE")),
+            ).toBe(true);
+            expect(
+              plainRecheck.some((query) => query.includes("pg_advisory")),
+            ).toBe(
+              selectedPhase ===
+                CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS ||
+                selectedPhase ===
+                  CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+            );
+            expect(
+              plainRecheck.every(
+                (query) =>
+                  query.includes("case_law_decision_identifier_backfills") ||
+                  query.includes("pg_advisory_xact_lock"),
+              ),
+            ).toBe(true);
+            // Two page attempts plus the initial read: no intervening verification scan.
+            expect(transactions).toHaveLength(5);
+            const resumed = transactions.at(4) ?? panic("Resumed page absent");
+            const graphIndex = resumed.findIndex((query) =>
+              query.includes("pg_advisory_xact_lock"),
+            );
+            const writing =
+              changedPhase ===
+                CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS ||
+              changedPhase ===
+                CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS;
+            expect(graphIndex !== -1).toBe(writing);
+            if (writing) {
+              const checkpointIndex = resumed.findIndex(
+                (query) =>
+                  query.includes("case_law_decision_identifier_backfills") &&
+                  query.includes("FOR UPDATE"),
+              );
+              expect(checkpointIndex).toBeGreaterThan(graphIndex);
+            }
+          }),
+        60_000,
+      );
+    }
+
+    test(
+      "consecutive phase races stop within their own budget without full verification",
+      async () =>
+        await withFixture(async (fixture) => {
+          await fixture.reset();
+          expect(
+            (
+              await runDecisionIdentifierBackfill(fixture.rootDb, {
+                batchSize: 10,
+              })
+            ).status,
+          ).toBe("complete");
+          await fixture.setPhase(
+            CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+          );
+          fixture.trace.length = 0;
+          let transactionCount = 0;
+          let changes = 0;
+          const rootDb: CaseLawRootHandle = {
+            execute: fixture.rootDb.execute,
+            transaction: async (work) => {
+              transactionCount += 1;
+              if (transactionCount >= 3 && transactionCount % 2 === 1) {
+                changes += 1;
+                await fixture.setPhase(
+                  changes % 2 === 1
+                    ? CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
+                    : CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+                );
+              }
+              return await fixture.scopedDb(work);
+            },
+          };
+          const result = await Result.tryPromise({
+            try: async () =>
+              await runDecisionIdentifierBackfill(rootDb, {
+                batchSize: 10,
+                onProgress: () =>
+                  panic(
+                    "A raced page must not report repair or projection progress",
+                  ),
+              }),
+            catch: (error: unknown) => error,
+          });
+          expect(result.isErr()).toBe(true);
+          if (result.isOk()) {
+            panic("Expected bounded phase race refusal");
+          }
+          expect(result.error).toMatchObject({
+            message:
+              "Decision identifier backfill phase changed without progress after 3 retries",
+          });
+          expect(changes).toBe(4);
+          expect(transactionCount).toBe(9);
+          expect(
+            fixture.trace.every(
+              ({ query }) =>
+                query.includes("case_law_decision_identifier_backfills") ||
+                query.includes("pg_advisory_xact_lock") ||
+                query.includes("set_config") ||
+                /^(?:begin|commit)/iu.test(query.trim()),
+            ),
+          ).toBe(true);
+        }),
+      60_000,
+    );
+
+    test(
+      "committed progress resets the consecutive phase-race budget",
+      async () =>
+        await withFixture(async (fixture) => {
+          await fixture.reset();
+          expect(
+            (
+              await runDecisionIdentifierBackfill(fixture.rootDb, {
+                batchSize: 10,
+              })
+            ).status,
+          ).toBe("complete");
+          await fixture.setPhase(
+            CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+          );
+          let transactionCount = 0;
+          let rechecks = 0;
+          let changes = 0;
+          let pages = 0;
+          const interruption = new Error("second page committed");
+          const rootDb: CaseLawRootHandle = {
+            execute: fixture.rootDb.execute,
+            transaction: async (work) => {
+              transactionCount += 1;
+              if (transactionCount >= 3 && transactionCount % 2 === 1) {
+                rechecks += 1;
+                if (rechecks !== 4 && changes < 6) {
+                  changes += 1;
+                  await fixture.setPhase(
+                    changes % 2 === 1
+                      ? CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
+                      : CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS,
+                  );
+                }
+              }
+              return await fixture.scopedDb(work);
+            },
+          };
+          const result = await Result.tryPromise({
+            try: async () =>
+              await runDecisionIdentifierBackfill(rootDb, {
+                batchSize: 1,
+                onProgress: (progress) => {
+                  expect(progress.type).toBe("page");
+                  pages += 1;
+                  if (pages === 2) {
+                    throw interruption;
+                  }
+                },
+              }),
+            catch: (error: unknown) => error,
+          });
+          expect(result.isErr()).toBe(true);
+          if (result.isOk()) {
+            panic("Expected second committed page interruption");
+          }
+          expect(result.error).toBe(interruption);
+          expect(pages).toBe(2);
+          expect(changes).toBe(6);
+          expect(transactionCount).toBe(17);
+        }),
+      60_000,
+    );
+
+    for (const newerPhase of [
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
+    ]) {
+      test(
+        `a stale completion cannot reset the newer ${newerPhase} checkpoint`,
+        async () =>
+          await withFixture(async (fixture) => {
+            await fixture.reset();
+            expect(
+              (
+                await runDecisionIdentifierBackfill(fixture.rootDb, {
+                  batchSize: 10,
+                })
+              ).status,
+            ).toBe("complete");
+            await fixture.scopedDb(async (tx) => {
+              await tx
+                .delete(caseLawDecisionIdentifiers)
+                .where(
+                  eq(
+                    caseLawDecisionIdentifiers.decisionId,
+                    fixture.standaloneId(),
+                  ),
+                );
+            });
+            let retryReported = false;
+            let restartQueries: string[] = [];
+            const interruption = new Error("restart guard committed");
+            const rootDb: CaseLawRootHandle = {
+              execute: fixture.rootDb.execute,
+              transaction: async (work) => {
+                const inject = retryReported;
+                if (inject) {
+                  await fixture.setPhase(newerPhase);
+                  if (
+                    newerPhase ===
+                    CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
+                  ) {
+                    await fixture.scopedDb(async (tx) => {
+                      await tx
+                        .update(caseLawDecisionIdentifierBackfills)
+                        .set({ completedAt: new Date("2099-01-01") })
+                        .where(
+                          eq(
+                            caseLawDecisionIdentifierBackfills.version,
+                            DECISION_IDENTIFIER_BACKFILL_VERSION,
+                          ),
+                        );
+                    });
+                  }
+                }
+                const value = await fixture.scopedDb(async (tx) => {
+                  const from = fixture.trace.length;
+                  const result = await work(tx);
+                  if (inject) {
+                    restartQueries = fixture.trace
+                      .slice(from)
+                      .map(({ query }) => query);
+                  }
+                  return result;
+                });
+                if (inject) {
+                  throw interruption;
+                }
+                return value;
+              },
+            };
+            const result = await Result.tryPromise({
+              try: async () =>
+                await runDecisionIdentifierBackfill(rootDb, {
+                  batchSize: 10,
+                  onProgress: (progress) => {
+                    expect(progress.type).toBe("retry");
+                    retryReported = true;
+                  },
+                }),
+              catch: (error: unknown) => error,
+            });
+            expect(result.isErr()).toBe(true);
+            if (result.isOk()) {
+              panic("Expected committed restart guard interruption");
+            }
+            expect(result.error).toBe(interruption);
+            expect(
+              restartQueries.some((query) => query.includes("FOR UPDATE")),
+            ).toBe(true);
+            expect(
+              restartQueries.some((query) => /^update/iu.test(query.trim())),
+            ).toBe(false);
+            const checkpoint = await fixture.scopedDb(async (tx) =>
+              (
+                await tx
+                  .select()
+                  .from(caseLawDecisionIdentifierBackfills)
+                  .where(
+                    eq(
+                      caseLawDecisionIdentifierBackfills.version,
+                      DECISION_IDENTIFIER_BACKFILL_VERSION,
+                    ),
+                  )
+              ).at(0),
+            );
+            expect(checkpoint?.phase).toBe(newerPhase);
+            if (
+              newerPhase ===
+              CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
+            ) {
+              expect(checkpoint?.completedAt).toEqual(new Date("2099-01-01"));
+            }
+          }),
+        60_000,
+      );
     }
 
     test(
