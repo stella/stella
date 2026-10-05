@@ -133,6 +133,7 @@ const decodeEntity = (
   try {
     return String.fromCodePoint(codePoint);
   } catch {
+    // unsignalled-skip-allow: Invalid character entities are returned verbatim.
     // Not a valid code point (out of range or a lone surrogate).
     return entity;
   }

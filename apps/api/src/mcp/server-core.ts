@@ -832,6 +832,7 @@ export const createMcpHttpRequestHandler = ({
     try {
       definition = await getMcpToolDefinition(toolName, context, mode);
     } catch (error) {
+      // unsignalled-skip-allow: Returns a retryable tool-error envelope; unexpected failures are captured.
       // A gateway load fault is already captured at the load site; anything
       // else is unexpected here and must be captured before it degrades to a
       // generic retryable result.
@@ -1435,6 +1436,7 @@ export const createMcpHttpRequestHandler = ({
 
       return await completeResponse(response, session);
     } catch (error) {
+      // unsignalled-skip-allow: Returns an access denial or an observed retryable server-error response.
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({ denial: "organization_forbidden", mode });
       }

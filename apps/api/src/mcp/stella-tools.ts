@@ -1913,7 +1913,7 @@ const mergeCaseLawSearchHits = (
       const seen = merged.get(hit.decisionId);
       if (seen === undefined) {
         merged.set(hit.decisionId, { hit, matchedQueries: [queryIndex], rank });
-        continue;
+        continue; // unsignalled-skip-allow: The destructured search hit is retained in merged above.
       }
       // Queries are walked in index order, so this stays ascending.
       seen.matchedQueries.push(queryIndex);

@@ -1660,6 +1660,7 @@ const parseResultPage = ({
             new URL(rawUrl).searchParams.get("sz") || undefined,
           );
         } catch {
+          // unsignalled-skip-allow: Optional text-action URL; the listing retains its stable identity and HTML.
           // A malformed or withdrawn text action does not erase the stable
           // ResultDetail record identity exposed by the listing.
         }
@@ -3270,6 +3271,7 @@ export const czUsAdapter = defineSourceAdapter({
             signal,
           });
         } catch (error) {
+          // unsignalled-skip-allow: Page drift returns a restart cursor; other failures are rethrown.
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
               decisions: [],

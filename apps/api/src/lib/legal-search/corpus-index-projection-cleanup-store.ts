@@ -569,7 +569,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
         deleteTaskCreatedAt,
         intentIds: [id],
       });
-      continue;
+      continue; // unsignalled-skip-allow: The destructured intent ID is retained in the grouped lease above.
     }
     group.intentIds.push(id);
   }

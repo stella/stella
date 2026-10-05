@@ -171,6 +171,7 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
     try {
       url = new URL(core);
     } catch {
+      // unsignalled-skip-allow: Unparseable URL text is returned verbatim.
       // Not a parseable URL; leave it untouched rather than guess.
       return match;
     }

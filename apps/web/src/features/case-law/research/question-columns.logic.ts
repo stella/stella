@@ -224,7 +224,7 @@ const contentFingerprint = (value: unknown): string => {
     const entries = new Map(Object.entries(value));
     // Code-unit order, not collation: these are field names, not words.
     const fields = [...entries.keys()]
-      .filter((key) => entries.get(key) !== undefined)
+      .filter((key) => entries.get(key) !== undefined) // unsignalled-skip-allow: Undefined object fields are omitted to match JSON serialization.
       .toSorted()
       .map(
         (key) =>

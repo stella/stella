@@ -356,7 +356,7 @@ const readCachedCourtNames = async (
   });
   // A failed read must not be served from the cache for ten minutes. The
   // caller awaiting `courts` observes the failure itself.
-  courts.catch((_failure: unknown) => courtNamesCache.delete(country));
+  courts.catch((_failure: unknown) => courtNamesCache.delete(country)); // unsignalled-skip-allow: Evicts a failed cache entry; awaiting the original promise below propagates rejection.
   return await courts;
 };
 

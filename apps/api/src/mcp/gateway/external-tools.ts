@@ -108,7 +108,7 @@ export const listGatewayExternalMcpTools = async ({
   for (const row of cachedRows) {
     const connection = connectionsById.get(row.userConnectionId);
     if (!connection) {
-      continue;
+      continue; // unsignalled-skip-allow: Discovery includes active connections only; revoked connections are omitted.
     }
 
     const allowedTools = row.allowedTools ? new Set(row.allowedTools) : null;
@@ -160,6 +160,7 @@ export const callGatewayExternalMcpTool = async ({
       dependencies,
     });
   } catch (error) {
+    // unsignalled-skip-allow: Returns a serialized retryable load-error result or rethrows.
     // A load fault means we cannot tell whether the tool exists: answer with a
     // retryable error, never a definitive `unknown_tool`.
     const loadError = gatewayLoadErrorResult(error);

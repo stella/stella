@@ -557,7 +557,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       documentId === undefined ||
       !isPersistableSourceDocumentId(documentId)
     ) {
-      continue;
+      continue; // unsignalled-skip-allow: Listing gaps are counted and observed by crawl; reconciliation refuses incomplete rows.
     }
 
     const cells: string[] = [];

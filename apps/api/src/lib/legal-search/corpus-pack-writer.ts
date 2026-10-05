@@ -211,7 +211,7 @@ export const planCorpusPacks = async ({
     const pack = await encodePack({ jurisdiction, members: group });
     packs.push(pack);
     for (const { member, location } of pack.entries) {
-      const forDocument = locations.get(member.documentId) ?? {};
+      const forDocument = locations.get(member.documentId) ?? {}; // unsignalled-skip-allow: Initializes the document accumulator, populated and stored below.
       forDocument[member.kind] = location;
       locations.set(member.documentId, forDocument);
     }

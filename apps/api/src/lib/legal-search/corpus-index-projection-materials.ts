@@ -192,13 +192,13 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
     const intent = intents.get(lease.intentId);
     if (intent === undefined || !intentMatchesLease(intent, lease)) {
       rejected.push(rejection(lease, "lease_lost", "reservation changed"));
-      continue;
+      continue; // unsignalled-skip-allow: The returned rejected list records lease_lost for this lease.
     }
     const state = states.get(lease.entityId);
     const row = byEntityId.get(lease.entityId);
     if (state === undefined || row === undefined) {
       rejected.push(rejection(lease, "stale", "canonical state disappeared"));
-      continue;
+      continue; // unsignalled-skip-allow: The returned rejected list records stale for this lease.
     }
     const { descriptor, material } = project(row);
     if (
@@ -213,7 +213,7 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       rejected.push(
         rejection(lease, "unreadable", "canonical text pointer is absent"),
       );
-      continue;
+      continue; // unsignalled-skip-allow: The returned rejected list records unreadable for this lease.
     }
     ready.push(material(lease, row.textS3Key));
   }

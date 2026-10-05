@@ -187,7 +187,7 @@ export const groupProvisionsByWork = (
         versionValidFrom: row.versionValidFrom,
         versionBasis: row.versionBasis,
       });
-      continue;
+      continue; // unsignalled-skip-allow: The provision fields and occurrence are retained in byProvision above.
     }
 
     existing.occurrences.push(occurrence);

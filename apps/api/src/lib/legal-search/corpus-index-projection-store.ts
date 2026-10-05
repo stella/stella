@@ -357,7 +357,7 @@ export const reserveCorpusProjectionIntentsTx = async <
   for (const reservation of reservations) {
     const insertedExpiry = expiryByIntentId.get(reservation.intentId);
     if (insertedExpiry === undefined) {
-      continue;
+      continue; // unsignalled-skip-allow: Existing reservations remain owned; only newly inserted rows produce leases.
     }
     leases.push({
       intentId: reservation.intentId,

@@ -216,9 +216,147 @@ const unwrapExpression = (node: ts.Node): ts.Expression => {
 
 const LOCAL_HELPER_DEPTH = 4;
 
+const isFailureHelper = (name: string): boolean =>
+  /(?:Error|Failure|Fault|Rejection).*?(?:Result|Response)$|^(?:forbidden|rejection|reject|fail|failure|accessDenied)(?:[A-Z_]|$)/u.test(
+    name,
+  );
+
+const bindingIdentifiers = (name: ts.BindingName): ts.Identifier[] => {
+  if (ts.isIdentifier(name)) {
+    return [name];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isBindingElement(element) ? bindingIdentifiers(element.name) : [],
+  );
+};
+
+const localBinding = (identifier: ts.Identifier): ts.Identifier | undefined => {
+  const matching = (name: ts.BindingName) =>
+    bindingIdentifiers(name).find(
+      (binding) => binding.text === identifier.text,
+    );
+  for (
+    let scope: ts.Node | undefined = identifier.parent;
+    scope;
+    scope = scope.parent
+  ) {
+    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
+      for (const statement of scope.statements.toReversed()) {
+        if (
+          ts.isVariableStatement(statement) &&
+          statement.getStart() < identifier.getStart()
+        ) {
+          for (const declaration of statement.declarationList.declarations) {
+            const binding = matching(declaration.name);
+            if (binding) {
+              return binding;
+            }
+          }
+        }
+        if (
+          ts.isFunctionDeclaration(statement) &&
+          statement.name?.text === identifier.text
+        ) {
+          return statement.name;
+        }
+      }
+    }
+    if (
+      ts.isForOfStatement(scope) &&
+      ts.isVariableDeclarationList(scope.initializer)
+    ) {
+      for (const declaration of scope.initializer.declarations) {
+        const binding = matching(declaration.name);
+        if (binding) {
+          return binding;
+        }
+      }
+    }
+    if (ts.isCatchClause(scope) && scope.variableDeclaration) {
+      const binding = matching(scope.variableDeclaration.name);
+      if (binding) {
+        return binding;
+      }
+    }
+    if (ts.isFunctionLike(scope)) {
+      for (const parameter of scope.parameters) {
+        const binding = matching(parameter.name);
+        if (binding) {
+          return binding;
+        }
+      }
+    }
+  }
+  return undefined;
+};
+
+const bindingWasWritten = (
+  reference: ts.Identifier,
+  binding: ts.Identifier,
+): boolean => {
+  let written = false;
+  const visit = (node: ts.Node) => {
+    if (
+      node.getEnd() <= binding.getEnd() ||
+      node.getStart() >= reference.getStart()
+    ) {
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      let left = node.left;
+      while (
+        ts.isPropertyAccessExpression(left) ||
+        ts.isElementAccessExpression(left)
+      ) {
+        left = left.expression;
+      }
+      if (ts.isIdentifier(left) && localBinding(left) === binding) {
+        written = true;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(reference.getSourceFile());
+  return written;
+};
+
+const isInjectedErrorCallback = (callee: ts.Expression): boolean => {
+  if (
+    !ts.isIdentifier(callee) ||
+    !/^on(?:[A-Z]\w*)?Error$/u.test(callee.text)
+  ) {
+    return false;
+  }
+  const binding = localBinding(callee);
+  if (!binding || bindingWasWritten(callee, binding)) {
+    return false;
+  }
+  for (
+    let declaration: ts.Node | undefined = binding.parent;
+    declaration;
+    declaration = declaration.parent
+  ) {
+    if (ts.isParameter(declaration)) {
+      return true;
+    }
+    if (
+      !ts.isBindingElement(declaration) &&
+      !ts.isObjectBindingPattern(declaration) &&
+      !ts.isArrayBindingPattern(declaration)
+    ) {
+      return false;
+    }
+  }
+  return false;
+};
+
 function isSignalCall(node: ts.CallExpression, depth: number): boolean {
   const callee = unwrap(node.expression);
-  if (SIGNAL_CALLS.has(callName(callee))) {
+  if (SIGNAL_CALLS.has(callName(callee)) || isInjectedErrorCallback(callee)) {
     return true;
   }
   if (ts.isIdentifier(callee)) {
@@ -256,7 +394,11 @@ function isSignalCall(node: ts.CallExpression, depth: number): boolean {
       /(?:logger|log|console)$/iu.test(receiver)) ||
     (METRIC_METHODS.has(callee.name.text) &&
       /(?:metric|counter|skip|reject|fail)/iu.test(receiver)) ||
-    (callee.name.text === "push" && node.arguments.some(isTypedRecord)) ||
+    (["push", "add", "set"].includes(callee.name.text) &&
+      (callee.name.text === "set"
+        ? node.arguments.slice(1)
+        : node.arguments
+      ).some((argument) => isTypedReturn(argument, depth))) ||
     (receiver === "Result" &&
       ["err", "ok", "try", "tryPromise"].includes(callee.name.text))
   );
@@ -324,7 +466,21 @@ function isTypedReturn(expression: ts.Expression, depth = 0): boolean {
     );
   }
   if (ts.isCallExpression(node)) {
-    return hasSignal(node, depth);
+    if (
+      node.questionDotToken ||
+      (ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.questionDotToken)
+    ) {
+      return false;
+    }
+    const callee = unwrap(node.expression);
+    const body = ts.isIdentifier(callee)
+      ? localFunctionBody(callee)
+      : undefined;
+    if (body && isFailureHelper(callName(callee))) {
+      return depth < LOCAL_HELPER_DEPTH && !dropsWithoutSignal(body, depth + 1);
+    }
+    return isFailureHelper(callName(callee)) || hasSignal(node, depth);
   }
   if (ts.isIdentifier(node) && depth < LOCAL_HELPER_DEPTH) {
     const value = declarationValue(node);
@@ -340,18 +496,95 @@ type Flow = { live: boolean[]; unsignalledExit: boolean };
 type FlowOptions = {
   signalled?: boolean;
   depth?: number;
+  retainedNames?: ReadonlySet<ts.Identifier>;
+};
+
+const retainsItem = (
+  node: ts.Node,
+  names: ReadonlySet<ts.Identifier>,
+  depth = 0,
+): boolean => {
+  if (depth >= LOCAL_HELPER_DEPTH || ts.isFunctionLike(node)) {
+    return false;
+  }
+  if (ts.isIdentifier(node)) {
+    const binding = localBinding(node);
+    if (binding && names.has(binding) && !bindingWasWritten(node, binding)) {
+      return true;
+    }
+    if (
+      !binding ||
+      !ts.isVariableDeclaration(binding.parent) ||
+      !ts.isVariableDeclarationList(binding.parent.parent) ||
+      binding.parent.parent.getFirstToken()?.kind !==
+        ts.SyntaxKind.ConstKeyword ||
+      bindingWasWritten(node, binding)
+    ) {
+      return false;
+    }
+    const value = binding.parent.initializer;
+    return value !== undefined && retainsItem(value, names, depth + 1);
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return false;
+  }
+  if (ts.isPropertyAssignment(node)) {
+    return retainsItem(node.initializer, names, depth);
+  }
+  if (ts.isShorthandPropertyAssignment(node)) {
+    return retainsItem(node.name, names, depth);
+  }
+  if (ts.isObjectLiteralExpression(node) || ts.isArrayLiteralExpression(node)) {
+    return node.getChildren().some((child) => retainsItem(child, names, depth));
+  }
+  // Syntax lists connect literal members without treating arbitrary calls as
+  // retention (a transform may discard the input).
+  return (
+    node.kind === ts.SyntaxKind.SyntaxList &&
+    node.getChildren().some((child) => retainsItem(child, names, depth))
+  );
+};
+
+const isRetention = (
+  statement: ts.Node,
+  names: ReadonlySet<ts.Identifier>,
+): boolean => {
+  if (!ts.isExpressionStatement(statement)) {
+    return false;
+  }
+  const node = unwrap(statement.expression);
+  if (
+    ts.isCallExpression(node) &&
+    !node.questionDotToken &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    !node.expression.questionDotToken
+  ) {
+    const method = node.expression.name.text;
+    const values = method === "set" ? node.arguments.slice(1) : node.arguments;
+    return (
+      ["set", "push", "add"].includes(method) &&
+      values.some((value) => retainsItem(value, names))
+    );
+  }
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    (ts.isPropertyAccessExpression(node.left) ||
+      ts.isElementAccessExpression(node.left)) &&
+    retainsItem(node.right, names)
+  );
 };
 
 function flow(
   statement: ts.Node,
-  { signalled = false, depth = 0 }: FlowOptions = {},
+  { signalled = false, depth = 0, retainedNames }: FlowOptions = {},
 ): Flow {
   if (ts.isBlock(statement)) {
     let live = [signalled];
     let unsignalledExit = false;
     for (const child of statement.statements) {
       const next = live.map((state) =>
-        flow(child, { signalled: state, depth }),
+        flow(child, { signalled: state, depth, retainedNames }),
       );
       live = [...new Set(next.flatMap((item) => item.live))];
       unsignalledExit ||= next.some((item) => item.unsignalledExit);
@@ -363,11 +596,16 @@ function flow(
     const yes = flow(statement.thenStatement, {
       signalled: state,
       depth,
+      retainedNames,
     });
     const no =
       statement.elseStatement === undefined
         ? { live: [state], unsignalledExit: false }
-        : flow(statement.elseStatement, { signalled: state, depth });
+        : flow(statement.elseStatement, {
+            signalled: state,
+            depth,
+            retainedNames,
+          });
     return {
       live: [...yes.live, ...no.live],
       unsignalledExit: yes.unsignalledExit || no.unsignalledExit,
@@ -383,7 +621,7 @@ function flow(
       let unsignalledExit = false;
       for (const child of clause.statements) {
         const next = live.map((state) =>
-          flow(child, { signalled: state, depth }),
+          flow(child, { signalled: state, depth, retainedNames }),
         );
         live = next.flatMap((item) => item.live);
         unsignalledExit ||= next.some((item) => item.unsignalledExit);
@@ -414,7 +652,13 @@ function flow(
   // establish observation for the following statement.
   const observed =
     ts.isExpressionStatement(statement) || ts.isVariableStatement(statement)
-      ? hasSignal(statement, depth)
+      ? hasSignal(statement, depth) ||
+        (retainedNames !== undefined &&
+          isRetention(statement, retainedNames)) ||
+        (ts.isExpressionStatement(statement) &&
+          ts.isYieldExpression(statement.expression) &&
+          statement.expression.expression !== undefined &&
+          isTypedReturn(statement.expression.expression, depth))
       : false;
   return { live: [signalled || observed], unsignalledExit: false };
 }
@@ -662,7 +906,12 @@ const isFailureFilter = (expression: ts.Expression, depth = 0): boolean => {
 
 type ItemSkipContext =
   | { type: "none" }
-  | { type: "loop" | "filter"; failureBranch: ts.Statement | undefined };
+  | {
+      type: "loop";
+      failureBranch: ts.Statement | undefined;
+      retainedNames: ReadonlySet<ts.Identifier>;
+    }
+  | { type: "filter"; failureBranch: ts.Statement | undefined };
 
 const itemSkipContext = (node: ts.Node): ItemSkipContext => {
   let child: ts.Node = node;
@@ -685,7 +934,14 @@ const itemSkipContext = (node: ts.Node): ItemSkipContext => {
       }
     }
     if (isLoop(parent)) {
-      return { type: "loop", failureBranch };
+      const names =
+        ts.isForOfStatement(parent) &&
+        ts.isVariableDeclarationList(parent.initializer)
+          ? parent.initializer.declarations.flatMap((declaration) =>
+              ts.isIdentifier(declaration.name) ? [declaration.name] : [],
+            )
+          : [];
+      return { type: "loop", failureBranch, retainedNames: new Set(names) };
     }
     if (ts.isFunctionLike(parent)) {
       if (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) {
@@ -733,7 +989,59 @@ const isUnsignalledItemSkip = (node: ts.Node): boolean => {
     (ts.isReturnStatement(node) &&
       context.type === "filter" &&
       node.expression?.kind === ts.SyntaxKind.FalseKeyword);
-  return dropsItem && flow(context.failureBranch).unsignalledExit;
+  return (
+    dropsItem &&
+    flow(context.failureBranch, {
+      retainedNames:
+        context.type === "loop" ? context.retainedNames : undefined,
+    }).unsignalledExit
+  );
+};
+
+const isControllerCleanup = (clause: ts.CatchClause): boolean => {
+  const body = clause.parent.tryBlock;
+  if (body.statements.length !== 1 || clause.block.statements.length !== 0) {
+    return false;
+  }
+  const statement = body.statements.at(0);
+  if (!statement || !ts.isExpressionStatement(statement)) {
+    return false;
+  }
+  const call = unwrap(statement.expression);
+  if (
+    !ts.isCallExpression(call) ||
+    !ts.isPropertyAccessExpression(call.expression) ||
+    !["close", "cancel", "enqueue"].includes(call.expression.name.text)
+  ) {
+    return false;
+  }
+  const receiver = call.expression.expression;
+  if (!ts.isIdentifier(receiver)) {
+    return false;
+  }
+  const binding = localBinding(receiver);
+  if (
+    !binding ||
+    !ts.isParameter(binding.parent) ||
+    bindingWasWritten(receiver, binding)
+  ) {
+    return false;
+  }
+  const hasCall = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) ||
+    ts.isNewExpression(node) ||
+    node.getChildren().some(hasCall);
+  if (call.arguments.some(hasCall)) {
+    return false;
+  }
+  const parameter = binding.parent;
+  return (
+    parameter.type !== undefined &&
+    ts.isTypeReferenceNode(parameter.type) &&
+    /^(?:ReadableStream(?:Default|BYOB)Controller|WritableStreamDefaultController)$/u.test(
+      parameter.type.typeName.getText(),
+    )
+  );
 };
 
 type SkipSite = {
@@ -747,14 +1055,14 @@ export const unsignalledSkipSites = (
 ): SkipSite[] => {
   const source = parseSource({ fileName: file, text: content });
   const allowanceLines = new Set<number>();
+  const isAllowance = (range: ts.CommentRange): boolean =>
+    range.kind === ts.SyntaxKind.SingleLineCommentTrivia &&
+    /^\/\/\s*unsignalled-skip-allow:[\t ]*\S[^\r\n]*$/u.test(
+      content.slice(range.pos, range.end),
+    );
   const collectComments = (ranges: readonly ts.CommentRange[] | undefined) => {
     for (const range of ranges ?? []) {
-      if (
-        range.kind === ts.SyntaxKind.SingleLineCommentTrivia &&
-        /^\/\/\s*unsignalled-skip-allow:[\t ]*\S[^\r\n]*$/u.test(
-          content.slice(range.pos, range.end),
-        )
-      ) {
+      if (isAllowance(range)) {
         allowanceLines.add(
           source.getLineAndCharacterOfPosition(range.pos).line,
         );
@@ -784,7 +1092,14 @@ export const unsignalledSkipSites = (
   const sites: SkipSite[] = [];
   const charge = (node: ts.Node, shape: SkipSite["shape"]) => {
     const line = siteLine(node);
-    if (!allowanceLines.has(line)) {
+    // Formatters move a catch-header comment to the start of its body. Keep
+    // that allowance scoped to this catch, never to an adjacent statement.
+    const catchAllowance =
+      ts.isCatchClause(node) &&
+      ts
+        .getLeadingCommentRanges(content, node.block.getStart() + 1)
+        ?.some(isAllowance);
+    if (!allowanceLines.has(line) && !catchAllowance) {
       sites.push({ shape, line: line + 1 });
     }
   };
@@ -799,7 +1114,11 @@ export const unsignalledSkipSites = (
     ) {
       charge(node, "empty-extraction-fallback");
     }
-    if (ts.isCatchClause(node) && dropsWithoutSignal(node.block)) {
+    if (
+      ts.isCatchClause(node) &&
+      !isControllerCleanup(node) &&
+      dropsWithoutSignal(node.block)
+    ) {
       charge(node, "catch-outcome");
     }
     if (

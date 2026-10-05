@@ -104,7 +104,7 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
     if (closers === undefined) {
       plain += char;
       index += 1;
-      continue;
+      continue; // unsignalled-skip-allow: The ordinary character is appended to plain before advancing.
     }
 
     const end = findPhraseEnd(text, index + 1, closers);
@@ -682,7 +682,7 @@ const corpusProvisionGroups = ({
       if (retained.has(token)) {
         required.push(token);
       }
-      continue;
+      continue; // unsignalled-skip-allow: Ordinary terms are retained above; only provision expansion is omitted.
     }
     const typed = tokens
       .slice(mention.actTokenRange.start, mention.actTokenRange.end)

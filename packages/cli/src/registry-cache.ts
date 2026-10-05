@@ -167,7 +167,7 @@ export const computeDelta = ({
   for (const tool of fetched) {
     const bakedTool = bakedByName.get(tool.name);
     if (bakedTool === undefined) {
-      continue;
+      continue; // unsignalled-skip-allow: New tools are already included in added; this pass compares existing schemas.
     }
     if (
       schemaFingerprint(bakedTool.inputSchema) !==

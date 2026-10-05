@@ -580,6 +580,7 @@ const decodeCursor = (
   try {
     parsed = JSON.parse(value);
   } catch {
+    // unsignalled-skip-allow: Invalid cursors are refused by fetchPage with AdapterFetchError.
     return undefined;
   }
   if (!isRecord(parsed)) {

@@ -373,7 +373,7 @@ export const joinSkCollectionRecords = (
         return decision.ecli === record.target.ecli;
       }
       if (targetDocket === null || targetCourt === undefined) {
-        return false;
+        return false; // unsignalled-skip-allow: Candidate selection; the collection record receives a terminal join outcome.
       }
       return (
         courtAbbreviation(decision) === targetCourt &&

@@ -129,7 +129,7 @@ export const normalizeLegalAlternatives = (
   for (const [key, term] of expandable) {
     const kept = byKey.get(key);
     if (kept === undefined || kept.length === 0) {
-      continue;
+      continue; // unsignalled-skip-allow: Optional synonym expansion; the original query terms remain.
     }
     if (alternatives.length >= LEGAL_ALTERNATIVES_LIMITS.terms) {
       break;

@@ -399,7 +399,7 @@ const resolveFlags = ({
     const groups = new Map<string, (typeof resolved)[number][]>();
     for (const entry of resolved) {
       const parserKey = parserKeyForFlag(finalName(entry));
-      const group = groups.get(parserKey) ?? [];
+      const group = groups.get(parserKey) ?? []; // unsignalled-skip-allow: Initializes a collision group, populated and stored below.
       group.push(entry);
       groups.set(parserKey, group);
     }

@@ -184,7 +184,7 @@ export const censusCaseLawRawObjectsPage = async ({
         counts.recent += 1;
       }
       if (!sweepable || mode === RAW_CENSUS_MODE.PLAN) {
-        continue;
+        continue; // unsignalled-skip-allow: Prefix states are counted above; plan mode and protected prefixes do not enqueue deletion.
       }
       owed.push(decisionId);
     }

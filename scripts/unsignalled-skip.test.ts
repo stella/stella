@@ -11,7 +11,163 @@ const count = (content: string) =>
   countUnsignalledSkips(content, { file: "apps/api/src/example.ts" });
 
 describe("unsignalled skip shapes", () => {
+  const retentionCases = [
+    ["collection insertion", "kept.push(row);", "kept.push(other);"],
+    ["set value", "groups.set(key, [row]);", "groups.set(row, [other]);"],
+    ["set member", "kept.add(row);", "kept.add(other);"],
+    [
+      "nested collection",
+      "groups.set(key, { entries: [row] });",
+      "groups.set(key, { entries: [other] });",
+    ],
+    ["assigned member", "kept[key] = row;", "kept[key] = other;"],
+    [
+      "retained alias",
+      "const next = { entries: [row] }; kept.push(next);",
+      "const next = { entries: [other] }; kept.push(next);",
+    ],
+  ] as const;
+  for (const [name, retained, discarded] of retentionCases) {
+    test(`${name} retains the current iteration value`, () => {
+      const code = (retention: string) =>
+        `for (const row of rows) { const group = groups.get(row.id); if (!group) { ${retention} continue; } }`;
+      expect(count(code(retained))).toBe(0);
+      expect(count(code(discarded))).toBe(1);
+    });
+  }
+  for (const helper of [
+    "retryableToolErrorResult",
+    "gatewayLoadErrorResult",
+    "loadFaultResult",
+    "failureResponse",
+    "forbidden",
+    "rejectRecord",
+    "failRequest",
+    "accessDeniedResponse",
+  ]) {
+    test(`${helper} propagates a named failure outcome`, () => {
+      expect(
+        count(`try { read(); } catch (error) { return ${helper}(error); }`),
+      ).toBe(0);
+      expect(
+        count(`try { read(); } catch (error) { ${helper}(error); return []; }`),
+      ).toBe(1);
+      expect(
+        count(
+          `function* results() { try { read(); } catch (error) { yield ${helper}(error); } }`,
+        ),
+      ).toBe(0);
+    });
+  }
+  test("injected error callbacks observe the failure on the exit path", () => {
+    expect(
+      count(
+        "function read({ onRedisError }) { try { fetch(); } catch (error) { onRedisError(error); return []; } }",
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        "function read({ onRedisError }) { try { fetch(); } catch (error) { if (debug) onRedisError(error); return []; } }",
+      ),
+    ).toBe(1);
+  });
+  test("local wrappers propagate throws", () => {
+    expect(
+      count(
+        "const rethrow = error => { throw error; }; try { read(); } catch (error) { rethrow(error); }",
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        "const rethrow = error => { if (debug) throw error; }; try { read(); } catch (error) { rethrow(error); }",
+      ),
+    ).toBe(1);
+  });
+  test("collections retain classified failure outcomes", () => {
+    expect(
+      count(
+        "for (const row of rows) { const parsed = parseRow(row); if (!parsed.success) { rejected.push(rejection(row)); continue; } }",
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        'for (const row of rows) { const parsed = parseRow(row); if (!parsed.success) { outcomes.set(row.id, { type: "rejected" }); continue; } }',
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        "for (const row of rows) { const parsed = parseRow(row); if (!parsed.success) { rejected.push(render(row)); continue; } }",
+      ),
+    ).toBe(1);
+  });
+  test("optional failure outcomes leave an unsignalled path", () => {
+    expect(
+      count(
+        "try { read(); } catch (error) { return failureResponse?.(error); }",
+      ),
+    ).toBe(1);
+    expect(
+      count(
+        "try { read(); } catch (error) { return responses?.failureResponse(error); }",
+      ),
+    ).toBe(1);
+  });
+  for (const method of ["close", "cancel", "enqueue"]) {
+    test(`controller ${method} cleanup tolerates concurrent completion`, () => {
+      const code = (body: string) =>
+        `function cleanup(controller: ReadableStreamDefaultController<Uint8Array>) { try { ${body} } catch {} }`;
+      expect(count(code(`controller.${method}();`))).toBe(0);
+      expect(count(code(`read(); controller.${method}();`))).toBe(1);
+      expect(count(`try { controller.${method}(); } catch {}`)).toBe(1);
+      expect(
+        count(
+          code(`controller.${method}();`).replace(
+            "catch {}",
+            "catch { return []; }",
+          ),
+        ),
+      ).toBe(1);
+    });
+  }
+  const retentionGaps = [
+    "if (debug) kept.push(row);",
+    "kept?.push(row);",
+    "kept.push?.(row);",
+    "const deferred = () => kept.push(row);",
+    "kept.push(transform(row));",
+    "kept.push(row.id);",
+    "text += row;",
+    "let alias = row; alias = other; kept.push(alias);",
+    "const alias = { row }; alias.row = other; kept.push(alias);",
+    "const row = other; kept.push(row);",
+  ];
+  for (const retention of retentionGaps) {
+    test(`conditional or transformed retention: ${retention}`, () => {
+      expect(
+        count(
+          `for (const row of rows) { const item = table.get(row.id); if (!item) { ${retention} continue; } }`,
+        ),
+      ).toBe(1);
+    });
+  }
+  const scopeGaps = [
+    "for (const { id } of rows) { const item = table.get(id); if (!item) { kept.push(id); continue; } }",
+    "function read({ onRedisError }) { { const onRedisError = () => {}; try { fetch(); } catch (error) { onRedisError(error); return []; } } }",
+    "function read({ onRedisError }) { onRedisError = () => {}; try { fetch(); } catch (error) { onRedisError(error); return []; } }",
+    "function cleanup(controller: ReadableStreamDefaultController<Uint8Array>) { try { controller.enqueue(read()); } catch {} }",
+    "function cleanup(controller: ReadableStreamDefaultController<Uint8Array>) { { const controller = service; try { controller.close(); } catch {} } }",
+    "const failureResponse = () => []; try { read(); } catch (error) { return failureResponse(error); }",
+    "function* results() { try { read(); } catch (error) { yield failureResponse?.(error); } }",
+  ];
+  for (const code of scopeGaps) {
+    test(`lexical and evaluation boundaries: ${code}`, () =>
+      expect(count(code)).toBe(1));
+  }
   const counted = [
+    [
+      "catch allowance after ordinary work is not catch scoped",
+      "try { read(); } catch { cleanup();\n // unsignalled-skip-allow: optional cleanup\n return []; }",
+    ],
     [
       "cyclic helper without an observation",
       "const report = cause => report(cause); try { read(); } catch { report(cause); }",
@@ -169,6 +325,10 @@ describe("unsignalled skip shapes", () => {
   }
 
   const sanctioned = [
+    [
+      "formatter catch body allowance",
+      "try { read(); } catch {\n // unsignalled-skip-allow: optional field\n return []; }",
+    ],
     [
       "multiline promise allowance",
       "read()\n.catch( // unsignalled-skip-allow: optional cache\n () => undefined\n);",

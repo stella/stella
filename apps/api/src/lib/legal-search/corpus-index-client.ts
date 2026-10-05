@@ -638,7 +638,7 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
 const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
   const response = await sendRequest(request);
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
+    const body = await response.text().catch(() => ""); // unsignalled-skip-allow: Optional diagnostic body; the HTTP failure is thrown below with its status.
     throw new CorpusIndexError({
       message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
