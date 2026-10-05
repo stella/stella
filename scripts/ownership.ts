@@ -33,6 +33,11 @@ export type AllowedFile = {
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
   | {
+      readonly kind: "literal-pattern";
+      readonly pattern: string;
+      readonly allowed: readonly AllowedFile[];
+    }
+  | {
       readonly kind: "status-set";
       readonly columns: Readonly<Record<string, readonly string[]>>;
       readonly allowed: readonly AllowedFile[];
@@ -482,6 +487,36 @@ const UNMIGRATED_PUBLISHER_READERS = [
 
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "citation-graph-transaction",
+    capability: "Acquiring the citation graph transaction lock",
+    owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
+    summary:
+      "The graph owner acquires its advisory lock before domain row locks and passes a branded transaction to graph writers. The conditional owner declines busy walks before reading their cursor.",
+    enforcement: {
+      kind: "literal-pattern",
+      pattern: "citation_resolution_walk",
+      allowed: [
+        {
+          path: "scripts/ownership.ts",
+          reason: "Declares the confined lock key.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/citation-graph-transaction.test.ts",
+          reason: "Checks graph admission and failed acquisition.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/citation-graph-lock-order.postgres.test.ts",
+          reason: "Exercises graph lock ordering and the rejecting mutation.",
+        },
+        {
+          path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
+          reason:
+            "Exercises rejected literal and SQL fixtures through the lint rule.",
+        },
+      ],
+    },
+  },
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -2620,6 +2655,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
+    }
+    case "literal-pattern": {
+      return `literal pattern \`${enforcement.pattern}\``;
     }
     default: {
       enforcement satisfies never;

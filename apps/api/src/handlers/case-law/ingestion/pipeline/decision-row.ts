@@ -6,7 +6,8 @@ import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -105,7 +106,7 @@ type DecisionSlugLadder = (attempt: SlugAllocationAttempt) => string;
  * violation, as it did when each candidate was a transaction of its own.
  */
 const insertDecisionRowTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   slugLadder: DecisionSlugLadder,
 ): Promise<SafeId<"caseLawDecision">> => {
@@ -148,7 +149,7 @@ const insertDecisionRowTx = async (
  * the citation graph, and its citations.
  */
 const finishInsertedRowTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   insertedId: SafeId<"caseLawDecision">,
   projectionLock: ActiveCorpusProjectionSourceLock | null,
@@ -170,7 +171,6 @@ const finishInsertedRowTx = async (
         // One indexed lookup per citation against the fetch and parse this
         // page already paid for; without it every new citation waits for the
         // standing walk to come round, and the citator trails the crawl.
-        await lockCitationGraph(tx);
         await writeDecisionCitations(tx, {
           decisionId: insertedId,
           citations,
@@ -197,7 +197,7 @@ const writeDecisionRow = async (
   write: DecisionRowWrite,
   slugLadder?: DecisionSlugLadder,
 ): Promise<DecisionRowWriteStatus> =>
-  await scopedDb(async (tx) => {
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
     const {
       sourceId,
       decisionId,

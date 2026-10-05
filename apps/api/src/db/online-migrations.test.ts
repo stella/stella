@@ -1155,6 +1155,9 @@ const createHarness = ({
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }
+          if (query.includes("pg_advisory_xact_lock")) {
+            return [];
+          }
           if (
             query.includes(" AS acquired") ||
             query.includes("pg_try_advisory_lock") ||
