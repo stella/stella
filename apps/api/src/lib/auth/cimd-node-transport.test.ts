@@ -8,7 +8,14 @@ const addresses = [ipv6Address, ipv4Address];
 
 type ProbeOptions = {
   addresses: { address: string; family: number }[];
-  outcomes: ("refused" | "stall" | "success" | "redirect" | "connected-error" | "slow-response")[];
+  outcomes: (
+    | "refused"
+    | "stall"
+    | "success"
+    | "redirect"
+    | "connected-error"
+    | "slow-response"
+  )[];
   all?: boolean;
   timeoutMs?: number;
   stallDns?: boolean;
@@ -119,13 +126,29 @@ const probe = async (options: ProbeOptions) => {
 };
 
 describe("CIMD connections use only vetted addresses within one fetch budget", () => {
-  test.each([false, true])("fails over from refused IPv6 to IPv4 (lookup all=%s)", async (all) => {
-    const result = await probe({ addresses, outcomes: ["refused", "success"], all });
-    expect(result).toMatchObject({ status: 200, body: "metadata", resolutions: 1, attempts: addresses });
-    expect(result.authorities).toEqual(addresses.map(() => ({
-      host: "client.example.test:8443", servername: "client.example.test", agent: false,
-    })));
-  });
+  test.each([false, true])(
+    "fails over from refused IPv6 to IPv4 (lookup all=%s)",
+    async (all) => {
+      const result = await probe({
+        addresses,
+        outcomes: ["refused", "success"],
+        all,
+      });
+      expect(result).toMatchObject({
+        status: 200,
+        body: "metadata",
+        resolutions: 1,
+        attempts: addresses,
+      });
+      expect(result.authorities).toEqual(
+        addresses.map(() => ({
+          host: "client.example.test:8443",
+          servername: "client.example.test",
+          agent: false,
+        })),
+      );
+    },
+  );
 
   test("alternates families and tries every candidate until one connects", async () => {
     const secondIpv6 = { address: "2606:4700:4700::1001", family: 6 };
@@ -133,23 +156,39 @@ describe("CIMD connections use only vetted addresses within one fetch budget", (
       addresses: [ipv6Address, secondIpv6, ipv4Address],
       outcomes: ["refused", "refused", "success"],
     });
-    expect(result).toMatchObject({ status: 200, resolutions: 1, attempts: [ipv6Address, ipv4Address, secondIpv6] });
+    expect(result).toMatchObject({
+      status: 200,
+      resolutions: 1,
+      attempts: [ipv6Address, ipv4Address, secondIpv6],
+    });
   });
 
   test.each(["10.0.0.1", "127.0.0.1", "::1", "fc00::1"])(
     "rejects the entire DNS answer set containing %s before connecting",
     async (address) => {
       const result = await probe({
-        addresses: [...addresses, { address, family: address.includes(":") ? 6 : 4 }],
+        addresses: [
+          ...addresses,
+          { address, family: address.includes(":") ? 6 : 4 },
+        ],
         outcomes: ["success"],
       });
-      expect(result).toMatchObject({ error: "metadata hostname must resolve only to public-routable addresses", resolutions: 1, attempts: [] });
+      expect(result).toMatchObject({
+        error:
+          "metadata hostname must resolve only to public-routable addresses",
+        resolutions: 1,
+        attempts: [],
+      });
     },
   );
 
   test("moves past a stalled connection within its attempt budget", async () => {
     const result = await probe({ addresses, outcomes: ["stall", "success"] });
-    expect(result).toMatchObject({ status: 200, attempts: addresses, resolutions: 1 });
+    expect(result).toMatchObject({
+      status: 200,
+      attempts: addresses,
+      resolutions: 1,
+    });
     expect(result.elapsedMs).toBeGreaterThanOrEqual(900);
     expect(result.elapsedMs).toBeLessThan(2500);
   });
@@ -160,18 +199,36 @@ describe("CIMD connections use only vetted addresses within one fetch budget", (
       outcomes: ["stall", "stall", "success"],
       timeoutMs: 1300,
     });
-    expect(result).toMatchObject({ error: "overall deadline", name: "TimeoutError", attempts: addresses, resolutions: 1 });
+    expect(result).toMatchObject({
+      error: "overall deadline",
+      name: "TimeoutError",
+      attempts: addresses,
+      resolutions: 1,
+    });
     expect(result.elapsedMs).toBeLessThan(2300);
   });
 
   test("the overall deadline also bounds DNS resolution", async () => {
-    const result = await probe({ addresses, outcomes: [], stallDns: true, timeoutMs: 30 });
-    expect(result).toMatchObject({ error: "overall deadline", attempts: [], resolutions: 1 });
+    const result = await probe({
+      addresses,
+      outcomes: [],
+      stallDns: true,
+      timeoutMs: 30,
+    });
+    expect(result).toMatchObject({
+      error: "overall deadline",
+      attempts: [],
+      resolutions: 1,
+    });
   });
 
   test("an already expired deadline performs no DNS lookup or connection", async () => {
     const result = await probe({ addresses, outcomes: [], preAborted: true });
-    expect(result).toMatchObject({ error: "overall deadline", attempts: [], resolutions: 0 });
+    expect(result).toMatchObject({
+      error: "overall deadline",
+      attempts: [],
+      resolutions: 0,
+    });
   });
 
   test.each(["connected-error", "redirect", "slow-response"] as const)(
@@ -179,13 +236,20 @@ describe("CIMD connections use only vetted addresses within one fetch budget", (
     async (outcome) => {
       const result = await probe({ addresses, outcomes: [outcome, "success"] });
       expect(result.attempts).toEqual([ipv6Address]);
-      if (outcome === "connected-error") expect(result.error).toBe("response failed");
-      else expect(result.status).toBe(outcome === "redirect" ? 302 : 200);
+      if (outcome === "connected-error") {
+        expect(result.error).toBe("response failed");
+      } else {
+        expect(result.status).toBe(outcome === "redirect" ? 302 : 200);
+      }
     },
   );
 
   test("surfaces the final connection failure when all candidates fail", async () => {
     const result = await probe({ addresses, outcomes: ["refused", "refused"] });
-    expect(result).toMatchObject({ error: "ECONNREFUSED", attempts: addresses, resolutions: 1 });
+    expect(result).toMatchObject({
+      error: "ECONNREFUSED",
+      attempts: addresses,
+      resolutions: 1,
+    });
   });
 });
