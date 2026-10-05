@@ -278,7 +278,8 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
                 ),
               });
             default:
-              return panic(`Unexpected failure: ${failure satisfies never}`);
+              failure satisfies never;
+              return panic("Unexpected failure");
           }
         },
       };
