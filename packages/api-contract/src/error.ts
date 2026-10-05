@@ -4,6 +4,9 @@ export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
 
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+/** A member removal met concurrent work on the same rows; retry shortly. */
+export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
+
 /** The submitted chat continuation does not match the server-owned pending turn. */
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;
@@ -11,6 +14,13 @@ export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
 /** A chat request whose turn has no execution it may continue: the turn was
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
+
+/**
+ * A request needed an encrypted (password-protected) file's content: an
+ * encrypted PDF or Office document cannot be read, extracted or sent to a
+ * model. Shared so every client can explain it instead of a generic failure.
+ */
+export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
 
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;

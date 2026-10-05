@@ -1,5 +1,45 @@
 # @stll/cli
 
+## 3.8.2
+
+### Patch Changes
+
+- [#4737](https://github.com/stella/stella/pull/4737) [`0dff393`](https://github.com/stella/stella/commit/0dff393483053ad01e658230d3435be0be46ad10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update member removal options and task filters.
+
+## 3.8.1
+
+### Patch Changes
+
+- [#4541](https://github.com/stella/stella/pull/4541) [`2741120`](https://github.com/stella/stella/commit/2741120fa70af8b51c02acd3077512a1dd393d4a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Project feature commands and help from the authenticated caller's access decision.
+
+## 3.8.0
+
+### Minor Changes
+
+- [#4424](https://github.com/stella/stella/pull/4424) [`20f5391`](https://github.com/stella/stella/commit/20f539146213cb55c538343d6bd653c71b87b131) Thanks [@shanehobson](https://github.com/shanehobson)! - Add position sources to playbook save and list.
+
+## 3.7.0
+
+### Minor Changes
+
+- [#4502](https://github.com/stella/stella/pull/4502) [`ca5df32`](https://github.com/stella/stella/commit/ca5df32b4a006745b026adeb4c572da622be71ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add invoice PDF capability metadata and preserve exact minor-unit formatting.
+
+## 3.6.2
+
+### Patch Changes
+
+- [#4605](https://github.com/stella/stella/pull/4605) [`c9125de`](https://github.com/stella/stella/commit/c9125de1a278d7fca5934b60f09718eb17a761f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify file column update requirements and preserve playbook refusal codes and recovery hints.
+
+## 3.6.1
+
+### Patch Changes
+
+- [#4716](https://github.com/stella/stella/pull/4716) [`b64acc4`](https://github.com/stella/stella/commit/b64acc48136876e2a638c8994d6f1664875d3fd7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify matter contact capacity requirements.
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe edit attribution returned by the skill listing command.
+
+- [#4732](https://github.com/stella/stella/pull/4732) [`2e3ed99`](https://github.com/stella/stella/commit/2e3ed993016a296132301badca5717596b7f32a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Template fills report undecided AI conditions, and the completion gate grades every fill diagnostic.
+
 ## 3.6.0
 
 ### Minor Changes

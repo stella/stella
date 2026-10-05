@@ -1,0 +1,165 @@
+{
+  "effective": {},
+  "shadowed": {
+    "eslint/class-methods-use-this": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/func-names": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/func-style": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/max-classes-per-file": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/no-inline-comments": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/no-negated-condition": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/no-plusplus": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/no-unexpected-multiline": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/no-use-before-define": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "eslint/prefer-destructuring": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "oxc/no-map-spread": {
+      "from": "off",
+      "to": "error",
+      "reason": "The vendored preset turns it off; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it on without oxlint.config.ts naming it. Decide it in oxlint.config.ts, then delete this entry."
+    },
+    "promise/always-return": {
+      "from": "off",
+      "to": "error",
+      "reason": "The vendored preset turns it off; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it on without oxlint.config.ts naming it. Decide it in oxlint.config.ts, then delete this entry."
+    },
+    "promise/avoid-new": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "promise/prefer-await-to-callbacks": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "promise/prefer-await-to-then": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/jsx-no-duplicate-props": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/jsx-no-undef": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-children-prop": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-did-mount-set-state": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-did-update-set-state": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-direct-mutation-state": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-find-dom-node": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-is-mounted": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-render-return-value": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-string-refs": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-this-in-sfc": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-unsafe": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "react/no-will-update-set-state": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "unicorn/consistent-function-scoping": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "unicorn/filename-case": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "unicorn/no-useless-undefined": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    },
+    "unicorn/prefer-ternary": {
+      "from": "error",
+      "to": "off",
+      "reason": "The vendored preset enables it; @stll/oxlint-config libraryRules, spread into oxlint.config.ts, turns it off without oxlint.config.ts naming it. Decide it in oxlint.config.ts (on, or off with a reason), then delete this entry."
+    }
+  }
+}

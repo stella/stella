@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The typed publisher read wraps fetchPublisher at one boundary, like retry.ts: the outbound-target rule checks each URL where readPublisher or readPublisherText is called, so the owner's own pass-through call carries the single suppression."
+}

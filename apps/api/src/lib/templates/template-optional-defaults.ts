@@ -129,6 +129,20 @@ export const isMissingRequiredFieldValue = ({
 };
 
 /**
+ * Fields that render only where a scope renders them (a clause slot's own
+ * fields): each is checked against every scope that renders it, with that
+ * scope's values, and never globally. A scope the template prunes is absent,
+ * so its fields gate nothing; a loop renders one scope per iteration.
+ */
+export type ScopedRequiredFields = {
+  paths: ReadonlySet<string>;
+  scopes: readonly {
+    paths: ReadonlySet<string>;
+    values: Record<string, unknown>;
+  }[];
+};
+
+/**
  * The shared required-fields gate: every fill boundary — the fill service,
  * every REST fill route, and the workspace-persistence path — must run this
  * before filling and reject when it reports a non-empty list, so a required
@@ -141,16 +155,26 @@ export const collectMissingRequiredFields = ({
   fields,
   policy,
   values,
+  scoped,
 }: {
   fields: readonly TemplateFieldDescriptor[];
   policy: RequiredFieldsPolicy;
   values: Record<string, unknown>;
+  scoped?: ScopedRequiredFields | undefined;
 }): MissingRequiredField[] => {
   if (policy === "allow-partial") {
     return [];
   }
   return fields
-    .filter((field) => isMissingRequiredFieldValue({ field, values }))
+    .filter((field) =>
+      scoped?.paths.has(field.path)
+        ? scoped.scopes.some(
+            (scope) =>
+              scope.paths.has(field.path) &&
+              isMissingRequiredFieldValue({ field, values: scope.values }),
+          )
+        : isMissingRequiredFieldValue({ field, values }),
+    )
     .map((field) => ({
       path: field.path,
       label: field.label ?? null,

@@ -8,12 +8,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
-import { isAstNode } from "./utils.ts";
-
-type FilenameContext = {
-  filename?: string;
-  getFilename?: () => string;
-};
+import { filenameForContext, isAstNode } from "./utils.ts";
 
 const INTERACTIVE_ELEMENTS = new Set([
   "AlertDialogClose",
@@ -346,9 +341,6 @@ const isIconOnlyInteractive = (node: unknown): boolean => {
   return hasIconChild(node);
 };
 
-const filenameOf = (context: FilenameContext): string =>
-  context.filename ?? context.getFilename?.() ?? "";
-
 export default eslintCompatPlugin({
   meta: { name: "icon-button-requires-tooltip" },
   rules: {
@@ -363,7 +355,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           before() {
-            return filenameOf(context).endsWith(".tsx");
+            return filenameForContext(context).endsWith(".tsx");
           },
           JSXElement(node) {
             if (!isIconOnlyInteractive(node) || hasTooltip(node)) {

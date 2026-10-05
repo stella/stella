@@ -7,9 +7,12 @@ import { listApiTestPaths } from "./api-test-plan";
 import {
   measuredTestRssTable,
   readTestRssEnvironment,
+  readTestRssInstant,
   readTestRssSource,
+  TEST_RSS_RECEIPT_VERSION,
   type TestRssEnvironment,
   type TestRssFile,
+  type TestRssShard,
   type TestRssTable,
   type TestRssSource,
 } from "./test-batch-plan";
@@ -25,6 +28,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const positiveFinite = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0;
+const positiveInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 const safeTestPath = (file: string) =>
   file.length > 0 &&
   !file.includes("\\") &&
@@ -64,6 +69,18 @@ const parseMeasurement = ({
   return { file, row: { peakMb, baselineMb, source } };
 };
 
+const parseShard = (value: unknown, receipt: string): TestRssShard => {
+  if (
+    !isRecord(value) ||
+    !positiveInteger(value["index"]) ||
+    !positiveInteger(value["count"]) ||
+    value["index"] > value["count"]
+  ) {
+    return reject(`Invalid shard in ${receipt}`);
+  }
+  return { index: value["index"], count: value["count"] };
+};
+
 type ParseReceiptOptions = {
   artifactDirectory: string;
   receipt: string;
@@ -84,7 +101,7 @@ const parseReceipt = ({
   const payload = parsed.value;
   if (
     !isRecord(payload) ||
-    payload["version"] !== 1 ||
+    payload["version"] !== TEST_RSS_RECEIPT_VERSION ||
     !Array.isArray(payload["measurements"]) ||
     payload["measurements"].length === 0
   ) {
@@ -92,6 +109,15 @@ const parseReceipt = ({
   }
   const environment = readTestRssEnvironment(payload["environment"]);
   const source = readTestRssSource(payload["source"]);
+  const measuredAt = readTestRssInstant(
+    payload["measuredAt"],
+    `measurement time in ${receipt}`,
+  );
+  const shard = parseShard(payload["shard"], receipt);
+  const plannedFiles = payload["plannedFiles"];
+  if (!positiveInteger(plannedFiles)) {
+    reject(`Invalid planned file count in ${receipt}`);
+  }
   const baselineMb = payload["baselineMb"];
   if (!positiveFinite(baselineMb)) {
     reject(`Invalid baseline RSS in ${receipt}`);
@@ -102,23 +128,19 @@ const parseReceipt = ({
   ) {
     reject(`Mixed measurement environments: ${receipt}`);
   }
+  if (payload["measurements"].length !== plannedFiles) {
+    reject(
+      `Incomplete shard ${shard.index}/${shard.count} in ${receipt}: measured ${payload["measurements"].length} of ${plannedFiles} files`,
+    );
+  }
   return {
     environment,
     source,
+    measuredAt,
+    shard,
     baselineMb,
     measurements: payload["measurements"],
   };
-};
-
-const validatedRow = (
-  file: string,
-  measured: ReadonlyMap<string, TestRssFile>,
-) => {
-  const row = measured.get(file);
-  if (row === undefined) {
-    reject(`Missing validated measurement: ${file}`);
-  }
-  return row;
 };
 
 type ChangeReportOptions = {
@@ -133,6 +155,7 @@ const changeReport = ({
   previousPeaks,
 }: ChangeReportOptions) => {
   const newFiles: string[] = [];
+  const unmeasuredFiles: string[] = [];
   let biggestRelativeChange:
     | {
         file: string;
@@ -142,7 +165,11 @@ const changeReport = ({
       }
     | undefined;
   for (const file of files) {
-    const row = validatedRow(file, measured);
+    const row = measured.get(file);
+    if (row === undefined) {
+      unmeasuredFiles.push(file);
+      continue;
+    }
     const previousPeakMb = previousPeaks[file];
     if (previousPeakMb === undefined) {
       newFiles.push(file);
@@ -164,7 +191,7 @@ const changeReport = ({
       };
     }
   }
-  return { newFiles, biggestRelativeChange };
+  return { newFiles, unmeasuredFiles, biggestRelativeChange };
 };
 
 type RefreshTestPeakRssOptions = {
@@ -173,7 +200,12 @@ type RefreshTestPeakRssOptions = {
   previousPeaks?: Readonly<Record<string, number>>;
 };
 
-/** Receipts replace the table only when their union covers the current runner census. */
+/**
+ * Receipts replace the table only when they cover every shard of one run and
+ * every file each shard owned. The current tree usually moved on since that
+ * run: files deleted since are dropped, files added since stay unmeasured and
+ * keep the planner's conservative weight until the next run.
+ */
 export const refreshTestPeakRss = ({
   artifactDirectory,
   apiRoot,
@@ -185,9 +217,14 @@ export const refreshTestPeakRss = ({
   }
   const current = new Set(files);
   const measured = new Map<string, TestRssFile>();
+  const removedFiles: string[] = [];
+  const seen = new Set<string>();
+  const shardIndexes = new Set<number>();
+  let shardCount: number | undefined;
   let environment: TestRssEnvironment | undefined;
   let runId: string | undefined;
   let baselineMb = 0;
+  let measuredAt: string | undefined;
   const receipts = [
     ...new Bun.Glob("**/*.json").scanSync({
       cwd: artifactDirectory,
@@ -204,14 +241,29 @@ export const refreshTestPeakRss = ({
       expectedEnvironment: environment,
     });
     environment = shard.environment;
-    // Disjoint shards from different runs could still form a complete census.
     runId ??= shard.source.runId;
     if (shard.source.runId !== runId) {
       reject(
         `Measurement receipts come from different runs: ${runId} and ${shard.source.runId}`,
       );
     }
+    shardCount ??= shard.shard.count;
+    if (shard.shard.count !== shardCount) {
+      reject(
+        `Measurement receipts disagree on the shard count: ${shardCount} and ${shard.shard.count}`,
+      );
+    }
+    if (shardIndexes.has(shard.shard.index)) {
+      reject(`Duplicate shard ${shard.shard.index}/${shardCount}`);
+    }
+    shardIndexes.add(shard.shard.index);
     baselineMb = Math.max(baselineMb, shard.baselineMb);
+    if (
+      measuredAt === undefined ||
+      Date.parse(shard.measuredAt) > Date.parse(measuredAt)
+    ) {
+      measuredAt = shard.measuredAt;
+    }
     for (const value of shard.measurements) {
       const { file, row } = parseMeasurement({
         value,
@@ -219,34 +271,50 @@ export const refreshTestPeakRss = ({
         baselineMb: shard.baselineMb,
         source: shard.source,
       });
-      if (!current.has(file)) {
-        reject(`Stale test measurement: ${file}`);
-      }
-      if (measured.has(file)) {
+      if (seen.has(file)) {
         reject(`Duplicate test measurement: ${file}`);
       }
-      measured.set(file, row);
+      seen.add(file);
+      if (current.has(file)) {
+        measured.set(file, row);
+      } else {
+        removedFiles.push(file);
+      }
     }
   }
-  const missing = files.filter((file) => !measured.has(file));
-  if (missing.length > 0) {
-    reject(`Incomplete test census: ${missing.join(", ")}`);
+  if (
+    shardCount === undefined ||
+    environment === undefined ||
+    measuredAt === undefined
+  ) {
+    return reject("No validated measurement receipt");
   }
-  const changes = changeReport({ files, measured, previousPeaks });
-  if (environment === undefined) {
-    reject("No validated measurement environment");
+  const missingShards = Array.from(
+    { length: shardCount },
+    (_, index) => index + 1,
+  ).filter((index) => !shardIndexes.has(index));
+  if (missingShards.length > 0) {
+    reject(
+      `Incomplete measurement run: missing shard ${missingShards.map((index) => `${index}/${shardCount}`).join(", ")}`,
+    );
   }
   const table = {
-    type: "measured",
     environment,
+    measuredAt,
     baselineMb,
     files: Object.fromEntries(
-      files.map((file) => [file, validatedRow(file, measured)] as const),
+      files.flatMap((file) => {
+        const row = measured.get(file);
+        return row === undefined ? [] : [[file, row] as const];
+      }),
     ),
   } as const satisfies TestRssTable;
   return {
     content: `${JSON.stringify(table, null, 2)}\n`,
-    changes,
+    changes: {
+      ...changeReport({ files, measured, previousPeaks }),
+      removedFiles: removedFiles.toSorted(),
+    },
   };
 };
 
@@ -256,15 +324,11 @@ if (import.meta.main) {
     if (!artifactDirectory || !outputJson || extra.length > 0) {
       reject("Usage: refresh-test-peak-rss.ts <artifact-dir> <output-json>");
     }
-    const previous = measuredTestRssTable();
-    const previousPeaks =
-      previous.type === "uncalibrated"
-        ? previous.files
-        : Object.fromEntries(
-            Object.entries(previous.files).map(
-              ([file, row]) => [file, row.peakMb] as const,
-            ),
-          );
+    const previousPeaks = Object.fromEntries(
+      Object.entries(measuredTestRssTable().files).map(
+        ([file, row]) => [file, row.peakMb] as const,
+      ),
+    );
     const refreshed = refreshTestPeakRss({
       artifactDirectory,
       apiRoot: path.resolve(import.meta.dir, ".."),

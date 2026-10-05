@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import {
   FILE_COMPARISON_SWEEP_LIMIT,
   sweepExpiredFileComparisonUploads,
@@ -26,7 +27,7 @@ export const createSweepFileComparisonUploadsTask =
    * client whose PUT never lands, leaves rows and possibly objects behind. The
    * sweep is what makes the expiry in the row real.
    */
-  async ({ db, logger, signal }) => {
+  async ({ db, logger, runId, signal }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
@@ -39,6 +40,10 @@ export const createSweepFileComparisonUploadsTask =
       signal,
     });
 
+    await recordSystemAudit(db, "system:file-comparison-sweep", {
+      subject: runId,
+      counts: { sweptUploads },
+    });
     logger.info("scheduler.file_comparison_uploads_swept", {
       "fileComparisonUploads.swept": sweptUploads,
     });

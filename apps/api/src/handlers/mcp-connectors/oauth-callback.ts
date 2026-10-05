@@ -8,7 +8,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { mcpOAuthState, mcpUserConnections } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,6 +51,7 @@ const requestQuery = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   query: requestQuery,
 } satisfies HandlerConfig;

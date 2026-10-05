@@ -14,8 +14,9 @@ import {
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -64,6 +65,8 @@ const config = {
     "Create a new matter (name required; pass clientId to attach a client " +
     "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "tool", name: "save_matter" },
   body: createWorkspaceBodySchema,
 } satisfies HandlerConfig;
@@ -101,6 +104,7 @@ export const createWorkspaceHandler = async function* ({
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
+      const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
       const [countResult, duplicatedNames, settings, client, orgMembers] =
@@ -136,18 +140,19 @@ export const createWorkspaceHandler = async function* ({
                 .limit(1)
                 .then((rows) => rows.at(0) ?? null)
             : Promise.resolve(null),
-          requestedMemberUserIds.length > 0
-            ? tx
-                .select({ userId: member.userId })
-                .from(member)
-                .where(
-                  and(
-                    eq(member.organizationId, organizationId),
-                    inArray(member.userId, requestedMemberUserIds),
-                  ),
-                )
-                .for("update")
-            : Promise.resolve([]),
+          tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                inArray(member.userId, grantedUserIds),
+              ),
+            )
+            // Same order as organization removal's membership locks.
+            .orderBy(member.userId)
+            .limit(grantedUserIds.length)
+            .for("update"),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
@@ -161,7 +166,7 @@ export const createWorkspaceHandler = async function* ({
         );
       }
 
-      if (orgMembers.length !== requestedMemberUserIds.length) {
+      if (orgMembers.length !== grantedUserIds.length) {
         return Result.err(
           new HandlerError({
             status: 400,

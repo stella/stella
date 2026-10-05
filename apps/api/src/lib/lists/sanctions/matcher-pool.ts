@@ -61,6 +61,31 @@ const retireMatcherSlot = async (slot: Slot) => {
   await slot.termination;
 };
 
+type MatcherExitOptions = { slot: Slot; worker: Worker; notify: () => void };
+
+const handleMatcherExit = ({ slot, worker, notify }: MatcherExitOptions) => {
+  if (slot.worker !== worker) {
+    return;
+  }
+  if (slot.fail !== null) {
+    slot.fail();
+    return;
+  }
+  slot.busy = true;
+  detached(
+    retireMatcherSlot(slot).then(() => {
+      slot.busy = false;
+      notify();
+      return undefined;
+    }),
+    "sanctions.matcher-retire",
+  );
+};
+
+type MatcherWorkOutcome<T> =
+  | { status: "completed"; value: T }
+  | { status: "unavailable" };
+
 const createMatcherWorker = () =>
   new Worker(
     resolveRuntimeWorkerPath({
@@ -191,7 +216,12 @@ export const createSanctionsMatcherPool = ({
     if (closed || signal.aborted) {
       return null;
     }
-    const slot = slots.find((candidate) => !candidate.busy);
+    // A warmup may use a second slot while a canceled acquisition still holds
+    // the first. Prefer a populated idle worker so its next request stays warm.
+    const slot = slots
+      .filter((candidate) => !candidate.busy)
+      .toSorted((a, b) => b.editions.size - a.editions.size)
+      .at(0);
     if (slot !== undefined) {
       slot.busy = true;
       return slot;
@@ -234,13 +264,13 @@ export const createSanctionsMatcherPool = ({
       const durationMs = options?.deadlineMs ?? deadlineMs;
       const expiresAt = performance.now() + durationMs;
       const timer = setTimeout(fail, durationMs);
-      const work = async (): Promise<T | null> => {
+      const work = async (): Promise<MatcherWorkOutcome<T>> => {
         lease.slot = await acquire(controller.signal);
         if (
           lease.slot === null ||
           isSanctionsMatcherCancelled(controller.signal)
         ) {
-          return null;
+          return { status: "unavailable" };
         }
         const slot = lease.slot;
         slot.fail = fail;
@@ -248,45 +278,12 @@ export const createSanctionsMatcherPool = ({
           const created = Result.try(createWorker);
           if (created.isErr()) {
             fail();
-            return null;
+            return { status: "unavailable" };
           }
           const worker = created.value;
           slot.worker = worker;
-          worker.on("error", () => {
-            if (slot.worker !== worker) {
-              return;
-            }
-            if (slot.fail !== null) {
-              slot.fail();
-            } else {
-              slot.busy = true;
-              detached(
-                retireMatcherSlot(slot).then(() => {
-                  slot.busy = false;
-                  notify();
-                  return undefined;
-                }),
-                "sanctions.matcher-retire",
-              );
-            }
-          });
-          worker.on("exit", () => {
-            if (slot.worker === worker) {
-              if (slot.fail !== null) {
-                slot.fail();
-              } else {
-                slot.busy = true;
-                detached(
-                  retireMatcherSlot(slot).then(() => {
-                    slot.busy = false;
-                    notify();
-                    return undefined;
-                  }),
-                  "sanctions.matcher-retire",
-                );
-              }
-            }
-          });
+          worker.on("error", () => handleMatcherExit({ slot, worker, notify }));
+          worker.on("exit", () => handleMatcherExit({ slot, worker, notify }));
           // An idle cache must not prevent shutdown of tests or the API.
           worker.unref();
         }
@@ -317,15 +314,22 @@ export const createSanctionsMatcherPool = ({
         const result = await Result.tryPromise(
           async () => await operation(session),
         );
-        if (result.isErr() || performance.now() >= expiresAt) {
+        if (result.isErr()) {
           fail();
-          return null;
+          return { status: "unavailable" };
         }
-        return result.value;
+        if (performance.now() >= expiresAt) {
+          fail();
+          return { status: "unavailable" };
+        }
+        return { status: "completed", value: result.value };
       };
       const pendingWork = work().finally(options?.onSettled);
       try {
-        return await Promise.race([pendingWork, failed.promise]);
+        const outcome = await Promise.race([pendingWork, failed.promise]);
+        return outcome === null || outcome.status === "unavailable"
+          ? null
+          : outcome.value;
       } finally {
         clearTimeout(timer);
         controller.abort();

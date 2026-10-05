@@ -2,8 +2,9 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
+import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -16,6 +17,8 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
   body: requestBody,
 } satisfies HandlerConfig;

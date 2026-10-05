@@ -3,8 +3,9 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { mcpUserConnections } from "@/api/db/schema";
+import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -14,6 +15,8 @@ const routeParams = t.Object({
 
 const config = {
   permissions: { integration: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
 } satisfies HandlerConfig;

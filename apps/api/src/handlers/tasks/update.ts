@@ -1,4 +1,5 @@
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   updateTaskBodySchema,
   updateTaskHandler,
@@ -16,6 +17,8 @@ const updateTask = createSafeHandler(
       "change also records a lifecycle event, and workflowReason carries the " +
       "explanation stored with it.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,
   },

@@ -44,7 +44,13 @@ import type {
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readBodyText,
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -69,7 +75,6 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -82,8 +87,8 @@ const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
 } as const;
 
-/** One entry's detail read ran out of time. */
-const detailReadTimedOut = failureSink({
+/** One entry's detail or print page read failed. */
+const detailReadFailed = failureSink({
   event: "case_law.ingestion.detail_fetch_failed",
   expected: [],
 });
@@ -122,6 +127,8 @@ const CZ_NS_RAW_PART = {
   DETAIL: "detail",
   PRINT: "print",
 } as const;
+
+type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
 
 /** The Domino universal id as every NS listing and detail URL states it. */
 const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
@@ -590,13 +597,18 @@ const caseNumbersOf = ({
 
 /**
  * What building one listed decision produced. `detail-unavailable` carries
- * the status the publisher answered with so the crawl can log it; the
- * reconciliation drops it, having only the three outcomes its contract names.
+ * the page that was not read and what its read established, so the crawl can
+ * report it; the reconciliation drops it, having only the three outcomes its
+ * contract names.
  */
 type CzNsBuildResult =
   | { type: "built"; decision: IngestionResult }
   | { type: "unkeyable" }
-  | { type: "detail-unavailable"; httpStatus: number };
+  | {
+      type: "detail-unavailable";
+      page: CzNsRawPart;
+      read: UnreadPublisherOutcome;
+    };
 
 type BuildCzNsDecisionFromPagesOptions = {
   row: CzNsListingRow;
@@ -743,9 +755,13 @@ const buildCzNsDecisionFromPages = ({
  * that stored the listing alone would make the identity held and take the
  * document out of every later pass.
  *
- * The print page is the AST's source and is treated as enrichment, exactly as
- * the crawl treats it: without it the decision still carries the fulltext and
- * metadata the detail page states, and is stored with an empty AST.
+ * The print page is the AST's source and is treated as enrichment: where the
+ * publisher has none (404 or 410), the decision still carries the fulltext
+ * and metadata the detail page states, and is stored with an empty AST. A
+ * print read that failed or was refused is not that absence: the decision is
+ * reported unread like a failed detail read rather than stored without its
+ * AST. A refusal is reported with its typed `ReadRefusal` and does not stop
+ * the crawl.
  */
 export const buildCzNsDecision = async (
   row: CzNsListingRow,
@@ -762,33 +778,66 @@ export const buildCzNsDecision = async (
 
   // Detail and print pages in parallel; the pair is one document's worth of
   // work.
-  const [detailResponse, printResponse] = await Promise.all([
-    fetchPublisher(webUrl, {
+  const [detail, print] = await Promise.all([
+    readPublisherText(webUrl, {
       fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      refusalScope: "document",
     }),
-    fetchPublisher(printUrl, {
+    readPublisherText(printUrl, {
       fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      // The AST's source: a refusal withholds the document, not a part.
+      refusalScope: "document",
     }),
   ]);
 
-  if (!detailResponse.ok) {
-    return { type: "detail-unavailable", httpStatus: detailResponse.status };
+  switch (detail.type) {
+    case "present":
+      break;
+    case "absent":
+    case "refused":
+    case "unavailable":
+      return {
+        type: "detail-unavailable",
+        page: CZ_NS_RAW_PART.DETAIL,
+        read: detail,
+      };
+    default:
+      detail satisfies never;
+      return panic(`Unhandled cz-ns detail read: ${String(detail)}`);
   }
 
-  const webHtml = await detailResponse.text();
-  const printHtml = printResponse.ok ? await printResponse.text() : "";
-  const decision = buildCzNsDecisionFromPages({ row, webHtml, printHtml });
-  return decision === null
-    ? { type: "unkeyable" }
-    : { type: "built", decision };
+  const webHtml = detail.value;
+  const buildFromPages = (printHtml: string): CzNsBuildResult => {
+    const decision = buildCzNsDecisionFromPages({ row, webHtml, printHtml });
+    return decision === null
+      ? { type: "unkeyable" }
+      : { type: "built", decision };
+  };
+
+  switch (print.type) {
+    case "present":
+      return buildFromPages(print.value);
+    case "absent":
+      return buildFromPages("");
+    case "refused":
+    case "unavailable":
+      return {
+        type: "detail-unavailable",
+        page: CZ_NS_RAW_PART.PRINT,
+        read: print,
+      };
+    default:
+      print satisfies never;
+      return panic(`Unhandled cz-ns print read: ${String(print)}`);
+  }
 };
 
 const CZ_NS_REPARSABLE_CONTENT_TYPES = new Set([
@@ -1134,23 +1183,24 @@ const listCzNsSlicePage = async ({
     `&SearchOrder=${SEARCH_ORDER_VIEW}` +
     `&Start=1&Count=${CZ_NS_LISTING_WINDOW}`;
 
-  const response = await fetchPublisher(url, {
+  const listing = await readPublisherText(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NS,
     signal,
     headers: COMMON_HEADERS,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "source",
   });
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `CZ Supreme Court listing error: ${response.status}`,
+  if (listing.type !== "present") {
+    throw unreadPublisherError({
+      outcome: listing,
+      message: "CZ Supreme Court listing error",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       cursor: slice,
-      httpStatus: response.status,
     });
   }
 
-  const html = await response.text();
+  const html = listing.value;
   const rows = parseListingRows(html);
 
   if (rows.length === 0) {
@@ -1308,6 +1358,58 @@ const CZ_NS_SOURCE_SURFACES = {
   >,
 } as const satisfies SourceSurfaceCensus;
 
+type ReadCzNsListPageOptions = {
+  start: number;
+  signal: AbortSignal | undefined;
+  cursor: string | null;
+};
+
+/** One listing page, read whole up to the shared ceiling; any failure throws. */
+const readCzNsListPage = async ({
+  start,
+  signal,
+  cursor,
+}: ReadCzNsListPageOptions) => {
+  const listUrl =
+    `${BASE_URL}/WebSearch?ReadViewEntries` +
+    `&Count=${PAGE_SIZE}` +
+    `&Start=${start}` +
+    `&OutputFormat=JSON`;
+  const listRead = await readPublisher(listUrl, {
+    fetchStage: "listing",
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    headers: COMMON_HEADERS,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "source",
+  });
+  if (listRead.type !== "present") {
+    throw unreadPublisherError({
+      outcome: listRead,
+      message: "CZ Supreme Court list error",
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      cursor,
+    });
+  }
+  const listBody = await readBodyText(listRead, signal);
+  // An empty body reaches page validation, which rejects it as unreadable.
+  const emptyBody =
+    listBody.type === "unavailable" && listBody.cause.kind === "empty-body";
+  if (listBody.type !== "present" && !emptyBody) {
+    throw unreadPublisherError({
+      outcome: listBody,
+      message: "CZ Supreme Court list error",
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      cursor,
+    });
+  }
+  return {
+    url: listUrl,
+    headers: listRead.value.headers,
+    body: listBody.type === "present" ? listBody.value : "",
+  };
+};
+
 export const czNsAdapter = defineSourceAdapter({
   documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
@@ -1353,18 +1455,27 @@ export const czNsAdapter = defineSourceAdapter({
         `${BASE_URL}/WebSearch?ReadViewEntries` +
         `&Count=1&Start=1&OutputFormat=JSON`;
 
-      const response = await fetchPublisher(url, {
+      const read = await readPublisher(url, {
         fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NS,
         signal,
         headers: COMMON_HEADERS,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        refusalScope: "source",
       });
-      if (!response.ok) {
-        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+      if (read.type !== "present") {
+        return read.type === "unavailable" && read.cause.kind === "thrown"
+          ? { type: "probe-failed", errorTag: errorTag(read.cause.error) }
+          : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
-      const json = await response.json();
+      const text = await readBodyText(read, signal);
+      if (text.type !== "present") {
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
+      }
+      const json: unknown = JSON.parse(text.value);
       if (!isDominoViewResponse(json)) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -1388,34 +1499,13 @@ export const czNsAdapter = defineSourceAdapter({
       try: async () => {
         const start = cursor ? Number.parseInt(cursor, 10) : 1;
 
-        const listUrl =
-          `${BASE_URL}/WebSearch?ReadViewEntries` +
-          `&Count=${PAGE_SIZE}` +
-          `&Start=${start}` +
-          `&OutputFormat=JSON`;
-
-        const listResponse = await fetchPublisher(listUrl, {
-          fetchStage: "listing",
-          adapterKey: ADAPTER_KEYS.CZ_NS,
-          headers: COMMON_HEADERS,
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-        });
-
-        if (!listResponse.ok) {
-          throw new AdapterFetchError({
-            message: `CZ Supreme Court list error: ${listResponse.status}`,
-            adapterKey: ADAPTER_KEYS.CZ_NS,
-            cursor,
-            httpStatus: listResponse.status,
-          });
-        }
+        const listPage = await readCzNsListPage({ start, signal, cursor });
 
         const validatedPage = validatePublisherPage({
           adapterKey: ADAPTER_KEYS.CZ_NS,
           cursor,
-          headers: listResponse.headers,
-          body: await listResponse.text(),
+          headers: listPage.headers,
+          body: listPage.body,
           expectation: {
             kind: "json",
             minBytes: 2,
@@ -1503,10 +1593,18 @@ export const czNsAdapter = defineSourceAdapter({
                 break;
               }
               case "detail-unavailable": {
-                logger.warn("case_law.ingestion.detail_fetch_failed", {
+                // Nothing is stored, so the identity is not held and the
+                // reconciliation's walk of its day builds the entry.
+                refused += 1;
+                const error = unreadPublisherError({
+                  outcome: built.read,
+                  message: `CZ Supreme Court ${built.page} page unread`,
                   adapterKey: ADAPTER_KEYS.CZ_NS,
-                  documentId: unid,
-                  httpStatus: built.httpStatus,
+                  cursor,
+                });
+                observeFailure(classifyFailure(error, "upstream_unavailable"), {
+                  sink: detailReadFailed,
+                  ctx: { adapterKey: ADAPTER_KEYS.CZ_NS, documentId: unid },
                 });
                 break;
               }
@@ -1548,35 +1646,26 @@ export const czNsAdapter = defineSourceAdapter({
                   count: refused,
                 },
                 nextCursor: String(start + i),
-                sourceUrl: listUrl,
+                sourceUrl: listPage.url,
               };
             }
-            // Timeout: distinguish page-level from per-entry
+            // Page-level signal fired: return partial results. A per-entry
+            // timeout is not thrown: the read reports it as unavailable and
+            // the entry is disposed of as a page that did not come back.
             if (
               error instanceof DOMException &&
-              error.name === "TimeoutError"
+              error.name === "TimeoutError" &&
+              signal?.aborted
             ) {
-              // Page-level signal fired: return partial results
-              if (signal?.aborted) {
-                return {
-                  decisions,
-                  itemBuildFailures: {
-                    type: "item_build_failed",
-                    count: refused,
-                  },
-                  nextCursor: String(start + i),
-                  sourceUrl: listUrl,
-                };
-              }
-              // Per-entry timeout: disposed of as a detail page that did not
-              // come back. Nothing is stored, so the identity is not held and
-              // the reconciliation's walk of its day builds the entry.
-              // The publisher did not answer in time, which is transient.
-              observeFailure(classifyFailure(error, "upstream_unavailable"), {
-                sink: detailReadTimedOut,
-                ctx: { adapterKey: ADAPTER_KEYS.CZ_NS, documentId: unid },
-              });
-              continue;
+              return {
+                decisions,
+                itemBuildFailures: {
+                  type: "item_build_failed",
+                  count: refused,
+                },
+                nextCursor: String(start + i),
+                sourceUrl: listPage.url,
+              };
             }
             throw error;
           }
@@ -1596,7 +1685,7 @@ export const czNsAdapter = defineSourceAdapter({
         return {
           decisions,
           nextCursor,
-          sourceUrl: listUrl,
+          sourceUrl: listPage.url,
           itemBuildFailures: { type: "item_build_failed", count: refused },
         };
       },

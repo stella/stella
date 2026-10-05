@@ -62,7 +62,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
-import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
@@ -159,7 +159,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
-  const timeBillingEnabled = isTimeBillingRouteEnabled() && canReadTimeEntries;
+  const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);

@@ -8,6 +8,8 @@ import nodePath from "node:path";
 import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
 
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
+import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -111,6 +113,18 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
+};
+
+export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
+  for (const spec of FLOW_TRANSITION_SPECS_V1) {
+    for (const statement of transitionTriggerSql(spec).split(
+      "--> statement-breakpoint",
+    )) {
+      if (statement.trim()) {
+        await db.execute(sql.raw(statement));
+      }
+    }
+  }
 };
 
 export const createSchemaPglite = async () =>
@@ -297,6 +311,22 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   await installPgliteMigration({
     db,
     migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
+  });
+};
+
+const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261004003000_tree_parent_cycle_guard",
+  "migration.sql",
+);
+
+/** Install the self-referencing tree triggers omitted by declarative schema push. */
+export const installPgliteTreeParentGuards = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH,
   });
 };
 
@@ -571,13 +601,32 @@ const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Install the migration-owned matter-contact capacity guard after schema push. */
+export const installPgliteWorkspaceContactCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125100_workspace_contact_capacity",
+      "migration.sql",
+    ),
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "REVOKE ALL ON FUNCTION",
   "CREATE TRIGGER",
 ] as const;
 
-/** Install membership capacity and ownership guards omitted by schema push. */
+/**
+ * Install membership capacity, ownership and matter-membership reference
+ * guards omitted by schema push.
+ */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -587,6 +636,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261004001000_matter_membership_organization_membership",
         "migration.sql",
       ),
     ),
@@ -619,6 +675,31 @@ export const installPgliteTimeEntryTimerSignals = async (
         source.includes('ON "time_entry_timer_states"'))
     );
   });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the trigger that derives a playbook's document type key from scope. */
+export const installPglitePlaybookDocumentTypeKey = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125200_playbook_document_type_reference",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the playbook document type key function and trigger");
+  }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

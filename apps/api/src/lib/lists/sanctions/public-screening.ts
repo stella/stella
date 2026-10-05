@@ -9,7 +9,6 @@ import {
 } from "./matcher-pool";
 import { loadEditionEntries } from "./screening-index";
 import {
-  SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
   unavailableSanctionsScreening,
 } from "./screening-service";
@@ -36,7 +35,7 @@ export const createPublicSanctionsScreening = ({
       async (session) =>
         await screenSanctionsSubject({
           ...props,
-          matcher: async ({ db, source, edition, query }) => {
+          matcher: async ({ db, source, edition, query, limit }) => {
             if (isSanctionsMatcherCancelled(session.signal)) {
               return null;
             }
@@ -90,7 +89,7 @@ export const createPublicSanctionsScreening = ({
                     },
               query,
               cutoff: DEFAULT_CUTOFF,
-              limit: SANCTIONS_MATCH_LIMIT,
+              limit,
             });
             return reply.status === "screened" ? reply.result : null;
           },

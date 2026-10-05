@@ -140,7 +140,7 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
               await owner`INSERT INTO organization_settings (id, organization_id, practice_jurisdictions) VALUES (${Bun.randomUUIDv7()}, ${tenant.id}, ${JSON.stringify([tenant.jurisdiction])}::text::jsonb)`;
             }
             const { publicSanctionsResponseSchema } =
-              await import("@/api/handlers/sanctions/public-routes");
+              await import("@/api/handlers/sanctions/search-response");
             const { default: api } = await import("@/api/server");
             for (const { source, id } of editions) {
               const warmed = await sharedSanctionsMatcherPool.run(
@@ -221,7 +221,7 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
               expect(response.status).toBe(200);
               const body = await response.json();
               expect([
-                ...Value.Errors(publicSanctionsResponseSchema, body),
+                ...Value.Errors(publicSanctionsResponseSchema[200], body),
               ]).toEqual([]);
               expect(body.status).toBe("possible-match");
               outcomes.push(body);

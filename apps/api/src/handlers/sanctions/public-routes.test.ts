@@ -12,8 +12,10 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
-import type { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import {
+  screenSanctionsSubject,
+  SanctionsSubjectError,
+} from "@/api/lib/lists/sanctions/screening-service";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -348,6 +350,9 @@ describe("anonymous sanctions search", () => {
       expect(screen.mock.calls).toHaveLength(1);
       if (field === "companyId") {
         return;
+      }
+      if (field === "name") {
+        screen.mockImplementationOnce(screenSanctionsSubject);
       }
       const blank = await app.handle(request(subject(" ")));
       // The full person's other name still supplies a usable identity.

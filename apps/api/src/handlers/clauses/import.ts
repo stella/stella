@@ -3,13 +3,9 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  clauseCategories,
-  clauses,
-  clauseVariants,
-  clauseVersions,
-} from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { resultTx } from "@/api/db/safe-db";
+import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -30,6 +26,7 @@ import { deriveClauseSlug, parseClauseTags } from "./clause-csv";
 import { isClauseExportPayload } from "./import-export-schema";
 import { normalizeClauseMetadata } from "./metadata";
 import { buildClauseSearchVector } from "./search-vector";
+import { insertClauseVariants } from "./variant-insert";
 
 const importBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
@@ -222,8 +219,6 @@ export const importHandler = async function* ({
           createdBy: userId,
         },
         variants: variants.map((variant, sortOrder) => ({
-          id: createSafeId<"clauseVariant">(),
-          organizationId,
           clauseId,
           label: variant.label,
           body: variant.body,
@@ -240,7 +235,7 @@ export const importHandler = async function* ({
     });
 
     const result = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
         if (categoriesToInsert.length > 0) {
           await tx.insert(clauseCategories).values(categoriesToInsert);
         }
@@ -250,9 +245,14 @@ export const importHandler = async function* ({
           .insert(clauseVersions)
           .values(prepared.map(({ version }) => version));
 
-        const variants = prepared.flatMap((item) => item.variants);
-        if (variants.length > 0) {
-          await tx.insert(clauseVariants).values(variants);
+        const variantResult = await insertClauseVariants({
+          tx,
+          organizationId,
+          variants: prepared.flatMap((item) => item.variants),
+          recordAuditEvent,
+        });
+        if (variantResult.isErr()) {
+          return variantResult;
         }
 
         await recordAuditEvent(tx, [
@@ -260,7 +260,7 @@ export const importHandler = async function* ({
           ...prepared.map(({ auditEvent }) => auditEvent),
         ]);
 
-        return { count: prepared.length };
+        return Result.ok({ count: prepared.length });
       }),
     );
 
@@ -476,6 +476,7 @@ const config = {
     "capped, and clauses beyond the organization's remaining capacity are " +
     "reported as skipped instead of failing the import.",
   permissions: { clause: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

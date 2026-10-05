@@ -46,7 +46,7 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
   beforeLoad: async ({ context, params }) => {
-    if (!isTimeBillingRouteEnabled()) {
+    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },

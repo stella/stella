@@ -34,19 +34,25 @@ const toUTCDateTime = (date: Temporal.PlainDate): number =>
     timeZone: "UTC",
   }).epochMilliseconds;
 
-const todayISO = (): string => Temporal.Now.plainDateISO("UTC").toString();
-
 /**
  * Returns all days to display in a month grid (6 weeks max).
- * Weeks start on the locale's first weekday.
+ * Weeks start on the locale's first weekday. `today` is the viewer's calendar
+ * day (`appToday()`), never the UTC day.
  */
-export const getMonthDays = (
-  year: number,
-  month: number,
-  firstWeekday: number,
-  weekend: ReadonlySet<number>,
-): CalendarDay[] => {
-  const today = todayISO();
+export const getMonthDays = ({
+  year,
+  month,
+  firstWeekday,
+  weekend,
+  today,
+}: {
+  year: number;
+  /** Zero-based month. */
+  month: number;
+  firstWeekday: number;
+  weekend: ReadonlySet<number>;
+  today: Temporal.PlainDate;
+}): CalendarDay[] => {
   const days: CalendarDay[] = [];
 
   // First day of the month
@@ -65,7 +71,7 @@ export const getMonthDays = (
     days.push({
       date: iso,
       isCurrentMonth: d.month === month + 1,
-      isToday: iso === today,
+      isToday: d.equals(today),
       isWeekend: weekend.has(dayOfWeek),
     });
   }
@@ -76,14 +82,14 @@ export const getMonthDays = (
 /**
  * Returns all days to display in a week view.
  * The week containing `referenceDate`, starting on the locale's
- * first weekday.
+ * first weekday; `today` is the viewer's calendar day.
  */
 export const getWeekDays = (
   referenceDate: Temporal.PlainDate,
   firstWeekday: number,
   weekend: ReadonlySet<number>,
+  today: Temporal.PlainDate,
 ): CalendarDay[] => {
-  const today = todayISO();
   const dow = ((referenceDate.dayOfWeek % 7) - firstWeekday + 7) % 7;
   const weekStart = referenceDate.subtract({ days: dow });
 
@@ -95,7 +101,7 @@ export const getWeekDays = (
     days.push({
       date: iso,
       isCurrentMonth: true,
-      isToday: iso === today,
+      isToday: d.equals(today),
       isWeekend: weekend.has(dayOfWeek),
     });
   }

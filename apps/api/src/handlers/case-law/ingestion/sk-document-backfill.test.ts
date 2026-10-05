@@ -16,6 +16,7 @@ import {
   DOCUMENT_FETCH_FAILURE,
   fetchPdfBytes,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   parkedDocumentPredicate,
   type PdfFetchResult,
@@ -23,8 +24,8 @@ import {
   remainingDocumentPredicate,
   requestedDocumentOrder,
   requestedDocumentPredicate,
-  type SkDocumentFetch,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 const dialect = new PgDialect();
 
@@ -70,12 +71,13 @@ describe("deferred document queue shape", () => {
 const PUBLISHER_URL =
   "https://obcan.justice.sk/content/public/item/6fe03973-7694-432b-9ebd-dfa4104ef742";
 
+/** One download through a gate that answers with what `respond` serves. */
 const download = async (
-  fetchDocument: SkDocumentFetch,
+  respond: () => Promise<Response>,
 ): Promise<PdfFetchResult> =>
   await fetchPdfBytes({
     documentUrl: PUBLISHER_URL,
-    fetchDocument,
+    fetchDocument: async () => readOfResponse(await respond()),
     signal: new AbortController().signal,
   });
 
@@ -151,6 +153,32 @@ describe("one document's download", () => {
     }
   });
 
+  test("an empty 204 is that document's own failure, not an empty document", async () => {
+    const result = await download(
+      async () => await Promise.resolve(new Response(null, { status: 204 })),
+    );
+
+    expect(result).toEqual({
+      type: "failed",
+      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+      detail: "http-204",
+    });
+  });
+
+  test("a URL the gate refuses is nothing to fetch", async () => {
+    const result = await fetchPdfBytes({
+      documentUrl: PUBLISHER_URL,
+      fetchDocument: async () =>
+        await Promise.resolve({
+          type: "refused-target" as const,
+          reason: "off the publisher's hosts",
+        }),
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({ type: "absent" });
+  });
+
   test("not found and gone mean there is nothing to fetch", async () => {
     for (const status of [404, 410]) {
       const result = await download(
@@ -212,6 +240,48 @@ describe("one document's download", () => {
       failure: DOCUMENT_FETCH_FAILURE.NETWORK,
       detail: "TimeoutError",
     });
+  });
+
+  test("a body over the byte ceiling is refused typed, without reading it to the end", async () => {
+    const chunkBytes = 1024 * 1024;
+    const servedBytes = MAX_DOCUMENT_PDF_BYTES + 8 * chunkBytes;
+    let pulledBytes = 0;
+    const oversized = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (pulledBytes >= servedBytes) {
+          controller.close();
+          return;
+        }
+        pulledBytes += chunkBytes;
+        controller.enqueue(new Uint8Array(chunkBytes));
+      },
+    });
+
+    const result = await download(
+      async () => await Promise.resolve(new Response(oversized)),
+    );
+
+    expect(result).toMatchObject({
+      type: "too-large",
+      limitBytes: MAX_DOCUMENT_PDF_BYTES,
+    });
+    expect(
+      result.type === "too-large" ? result.prefix?.byteLength : undefined,
+    ).toBe(1024);
+    expect(pulledBytes).toBeLessThan(servedBytes);
+  });
+
+  test("a body at the byte ceiling is the document", async () => {
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(new Uint8Array(MAX_DOCUMENT_PDF_BYTES)),
+        ),
+    );
+
+    expect(result.type === "document" ? result.bytes.byteLength : 0).toBe(
+      MAX_DOCUMENT_PDF_BYTES,
+    );
   });
 
   test("a body failure that is not the download's own still throws", async () => {

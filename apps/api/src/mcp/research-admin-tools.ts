@@ -61,6 +61,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByValue } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
@@ -697,6 +698,15 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.description("User id to add or remove for the member actions"),
         ),
       ),
+      reassign_to: v.optional(
+        v.pipe(
+          v.string(),
+          v.nonEmpty(),
+          v.description(
+            "Replacement matter member for remove_member; omit to leave tasks unassigned",
+          ),
+        ),
+      ),
       matter_number_pattern: v.optional(
         v.pipe(
           v.string(),
@@ -785,6 +795,12 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ),
       ),
     }),
+    v.partialCheck(
+      [["action"], ["reassign_to"]],
+      ({ action, reassign_to }) =>
+        action === "remove_member" || reassign_to === undefined,
+      "reassign_to is only supported for remove_member",
+    ),
     // Member actions need a matter and a user.
     v.forward(
       v.partialCheck(
@@ -894,6 +910,24 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  accountAccess: "standard",
+  permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
+    "action",
+    {
+      add_member: {
+        operation: "add_member",
+        permissions: { workspace: ["update"] },
+      },
+      remove_member: {
+        operation: "remove_member",
+        permissions: { workspace: ["update"] },
+      },
+      update_org_settings: {
+        operation: "update_org_settings",
+        permissions: { organizationSettings: ["update"] },
+      },
+    },
+  ),
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: {
     type: "input-discriminator",
@@ -944,10 +978,12 @@ const handleRemoveMember = async ({
   context,
   requestedWorkspaceId,
   userId,
+  reassignTo,
 }: {
   context: McpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
+  reassignTo?: string | undefined;
 }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
@@ -965,6 +1001,8 @@ const handleRemoveMember = async ({
       workspaceId,
       userId: brandPersistedUserId(userId),
       actorUserId: context.userId,
+      reassignTo:
+        reassignTo === undefined ? undefined : brandPersistedUserId(reassignTo),
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
     }),
   );
@@ -1003,6 +1041,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
       context,
       requestedWorkspaceId: input.matter_id ?? "",
       userId: input.user_id ?? "",
+      reassignTo: input.reassign_to,
     });
   }
 

@@ -1,10 +1,13 @@
 import { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
-import { taskAssignees } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entities } from "@/api/db/schema";
+import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -12,6 +15,10 @@ import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  lockTaskAssignmentMembers,
+  writeTaskAssignments,
+} from "@/api/lib/tasks/assignment-membership";
 import { includes } from "@/api/lib/type-guards";
 
 const addAssigneeBodySchema = t.Object({
@@ -45,62 +52,49 @@ export const addAssigneeHandler = async function* ({
     );
   }
 
-  const [task, isMember] = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await Promise.all([
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: body.taskId },
-              kind: { eq: "task" },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true, readOnly: true },
-          }),
-          tx.query.workspaceMembers.findFirst({
-            where: {
-              workspaceId: { eq: workspaceId },
-              userId: body.userId,
-            },
-            columns: { id: true },
-          }),
-        ]),
-    ),
-  );
-
-  if (!task) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Task not found" }),
-    );
-  }
-  if (task.readOnly) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Task is read-only" }),
-    );
-  }
-  if (!isMember) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "User is not a member of this workspace",
-      }),
-    );
-  }
-
   yield* Result.await(
-    safeDb(async (tx) => {
-      await tx
-        .insert(taskAssignees)
-        .values({
-          entityId: body.taskId,
-          workspaceId,
-          userId: body.userId,
-          role,
-        })
-        .onConflictDoUpdate({
-          target: [taskAssignees.entityId, taskAssignees.userId],
-          set: { role },
-        });
+    resultTx(safeDb, async (tx) => {
+      const members = await lockTaskAssignmentMembers({
+        tx,
+        workspaceId,
+        userIds: [body.userId],
+      });
+      const tasks = await tx
+        .select({ id: entities.id, readOnly: entities.readOnly })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.id, body.taskId),
+            eq(entities.workspaceId, workspaceId),
+            eq(entities.kind, "task"),
+          ),
+        )
+        .for("update");
+      const task = tasks.at(0);
+      if (!task) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Task not found" }),
+        );
+      }
+      if (task.readOnly) {
+        return Result.err(
+          new HandlerError({ status: 409, message: "Task is read-only" }),
+        );
+      }
+      if (!members.has(body.userId)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this workspace",
+          }),
+        );
+      }
+
+      await writeTaskAssignments({
+        tx,
+        workspaceId,
+        assignments: [{ entityId: body.taskId, userId: body.userId, role }],
+      });
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -113,6 +107,7 @@ export const addAssigneeHandler = async function* ({
           role,
         },
       });
+      return Result.ok(undefined);
     }),
   );
 
@@ -128,6 +123,8 @@ const addAssignee = createSafeHandler(
       "and when the task is read-only. Remove an assignment with " +
       "tasks.assignees.remove.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },

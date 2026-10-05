@@ -19,6 +19,7 @@ const raw = {
   documentType: "invoice",
   pattern: DEFAULT_NUMBER_SERIES_PATTERN,
   padding: 4,
+  sellerProfileId: null,
 } satisfies v.InferInput<typeof schema>;
 const original = {
   id: toSafeId<"numberSeries">("series-main"),
@@ -46,9 +47,24 @@ describe("number series form", () => {
     });
   });
 
-  test("never sends a seller assignment in create requests", () => {
-    const values = v.parse(schema, { ...raw, sellerProfileId: "seller-main" });
-    expect(Object.hasOwn(values, "sellerProfileId")).toBe(false);
+  test("sends a selected seller and omits the organization-wide assignment", () => {
+    expect(
+      v.parse(schema, { ...raw, sellerProfileId: " seller-main " }),
+    ).toEqual({
+      name: "Main invoices",
+      documentType: "invoice",
+      pattern: DEFAULT_NUMBER_SERIES_PATTERN,
+      padding: 4,
+      sellerProfileId: toSafeId<"sellerProfile">("seller-main"),
+    });
+    for (const sellerProfileId of [null, "", "  "]) {
+      expect(
+        Object.hasOwn(
+          v.parse(schema, { ...raw, sellerProfileId }),
+          "sellerProfileId",
+        ),
+      ).toBe(false);
+    }
   });
 
   test("enforces only API field bounds and document types", () => {
@@ -85,6 +101,7 @@ describe("number series edits", () => {
     const next = v.parse(schema, {
       ...raw,
       name: "Renamed invoices",
+      sellerProfileId: original.sellerProfileId,
     });
     expect(numberSeriesPatch({ original, next })).toEqual({
       name: "Renamed invoices",
@@ -95,10 +112,39 @@ describe("number series edits", () => {
   });
 
   test("keeps an existing seller assignment and sends changed padding and pattern", () => {
-    const next = v.parse(schema, { ...raw, padding: 1, pattern: "{YY}-{SEQ}" });
+    const next = v.parse(schema, {
+      ...raw,
+      sellerProfileId: original.sellerProfileId,
+      padding: 1,
+      pattern: "{YY}-{SEQ}",
+    });
     expect(numberSeriesPatch({ original, next })).toEqual({
       padding: 1,
       pattern: "{YY}-{SEQ}",
     });
   });
+});
+
+test("seller edits distinguish unchanged, another seller, and organization-wide scope", () => {
+  const sellerProfileId = toSafeId<"sellerProfile">("seller-other");
+  const other = v.parse(schema, { ...raw, sellerProfileId });
+  expect(numberSeriesPatch({ original, next: other })).toEqual({
+    sellerProfileId,
+  });
+  const all = v.parse(schema, raw);
+  expect(numberSeriesPatch({ original, next: all })).toEqual({
+    sellerProfileId: null,
+  });
+  expect(
+    numberSeriesPatch({
+      original: { ...original, sellerProfileId: null },
+      next: all,
+    }),
+  ).toEqual({});
+  expect(
+    numberSeriesPatch({
+      original: { ...original, sellerProfileId: null },
+      next: other,
+    }),
+  ).toEqual({ sellerProfileId });
 });

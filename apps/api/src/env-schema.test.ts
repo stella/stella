@@ -12,6 +12,21 @@ test("agent client storage format requires explicit enablement", () => {
   expect(v.parse(schema, "true")).toBe(true);
 });
 
+test("feature access grants default to empty and unknown production feature ids reject startup", () => {
+  expect(
+    v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, undefined),
+  ).toEqual({});
+  expect(v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, "{}")).toEqual(
+    {},
+  );
+  expect(
+    v.safeParse(
+      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
+      '{"unknown-feature":[{"type":"member","organizationId":"org-a","email":"member@example.test"}]}',
+    ).success,
+  ).toBe(false);
+});
+
 for (const name of [
   "ACTION_COST_RETENTION_DAYS",
   "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS",
@@ -254,4 +269,47 @@ test("the client address header cannot reuse a header the API owns", () => {
     expect(v.safeParse(schema, name).success).toBe(false);
   }
   expect(v.safeParse(schema, "x-stella-viewer-address").success).toBe(true);
+});
+
+test("inbound mail receiving is configured all-or-none and requires its domain", () => {
+  const transport = [
+    [
+      "INBOUND_MAIL_QUEUE_URL",
+      "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound-mail",
+    ],
+    [
+      "INBOUND_MAIL_TOPIC_ARN",
+      "arn:aws:sns:eu-west-1:123456789012:inbound-mail",
+    ],
+    ["INBOUND_MAIL_BUCKET", "inbound-mail-bucket"],
+    ["INBOUND_MAIL_KEY_PREFIX", "mail/"],
+  ] as const;
+  let subsets: (typeof transport)[number][][] = [[]];
+  for (const entry of transport) {
+    subsets = subsets.flatMap((subset) => [subset, subset.concat([entry])]);
+  }
+  expect(subsets).toHaveLength(2 ** transport.length);
+  for (const subset of subsets) {
+    for (const domain of [undefined, "inbound.example.test"]) {
+      const violation = envApiInvariantViolation({
+        ...environment,
+        ...Object.fromEntries(subset),
+        INBOUND_MAIL_DOMAIN: domain,
+      });
+      expect(violation === null).toBe(
+        subset.length === 0 ||
+          (subset.length === transport.length && domain !== undefined),
+      );
+    }
+  }
+  for (const [name, value] of transport) {
+    expect(v.safeParse(envApiServerSchema[name], value).success).toBe(true);
+  }
+  for (const [name, invalid] of [
+    ["INBOUND_MAIL_QUEUE_URL", "http://sqs.example.test/queue"],
+    ["INBOUND_MAIL_TOPIC_ARN", "arn:aws:sqs:eu-west-1:123456789012:inbound"],
+    ["INBOUND_MAIL_BUCKET", "Inbound_Bucket"],
+  ] as const) {
+    expect(v.safeParse(envApiServerSchema[name], invalid).success).toBe(false);
+  }
 });

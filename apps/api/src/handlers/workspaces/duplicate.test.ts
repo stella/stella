@@ -250,7 +250,20 @@ describe("duplicateWorkspace", () => {
             from: (table: unknown) => {
               expect(table).toBe(member);
               return {
-                where: async () => [{ userId: "user_lead123" }],
+                where: () => ({
+                  orderBy: (column: unknown) => {
+                    // Copied memberships lock in the order removal uses.
+                    expect(column).toBe(member.userId);
+                    return {
+                      limit: () => ({
+                        for: async (strength: string) => {
+                          expect(strength).toBe("key share");
+                          return [{ userId: "user_lead123" }];
+                        },
+                      }),
+                    };
+                  },
+                }),
               };
             },
           };

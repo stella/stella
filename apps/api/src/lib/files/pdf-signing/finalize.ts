@@ -23,6 +23,7 @@ import type { DocumentSource } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -245,6 +246,7 @@ const writeSignedVersion = async (
         entityId: session.entityId,
         fileName,
         mimeType: PDF_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         organizationId: session.organizationId,
         recordAuditEvent,
         safeDb: session.safeDb,

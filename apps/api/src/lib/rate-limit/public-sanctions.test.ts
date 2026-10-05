@@ -10,7 +10,7 @@ import {
 } from "@/api/lib/rate-limit/redis-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { createPublicSanctionsRateLimitOptions } from "./public-sanctions";
+import { createPublicSanctionsRateLimitOptions } from "./public-corpus-rate-limits";
 
 const request = (
   forwardedFor: string,

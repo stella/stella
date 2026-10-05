@@ -5,7 +5,8 @@ import { t } from "elysia";
 import { Temporal } from "@stll/time";
 
 import { legalListSections } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -25,6 +26,8 @@ const config = {
     "position. Refused when the list is not active or already holds its " +
     "maximum number of sections.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

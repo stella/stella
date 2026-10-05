@@ -68,7 +68,7 @@ export type SanctionsScreeningSubject =
       nationalityCodes: readonly CountryCode[];
     };
 
-type SanctionsPossibleMatch = {
+export type SanctionsPossibleMatch = {
   sourceEntryId: string;
   editionId: string;
   /** 0..1, at or above the cutoff. A possible match needs human review. */
@@ -301,6 +301,7 @@ type SanctionsListMatcher = (props: {
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
   query: ScreeningQuery;
+  limit: number;
 }) => Promise<ScreeningResult | null>;
 
 type ScreenListProps = {
@@ -310,6 +311,7 @@ type ScreenListProps = {
   base: ListOutcomeBase;
   indexCache: SanctionsIndexCache;
   matcher: SanctionsListMatcher | undefined;
+  resultMode: "bounded" | "complete";
 };
 
 const screenList = async ({
@@ -319,6 +321,7 @@ const screenList = async ({
   base,
   indexCache,
   matcher,
+  resultMode,
 }: ScreenListProps): Promise<SanctionsListOutcome> => {
   const { edition, lastSuccessfulVerifiedAt } = freshness;
   // Stale or missing data never answers: only a fresh edition can be clear.
@@ -329,9 +332,21 @@ const screenList = async ({
   ) {
     return unavailableList(base, freshness.reason ?? "not-loaded", freshness);
   }
+  const limit =
+    resultMode === "complete"
+      ? Math.max(1, edition.entryCount)
+      : SANCTIONS_MATCH_LIMIT;
   const matched = await Result.tryPromise(async () => {
     if (matcher !== undefined) {
-      return await matcher({ db, source: freshness.source, edition, query });
+      return Result.ok(
+        await matcher({
+          db,
+          source: freshness.source,
+          edition,
+          query,
+          limit,
+        }),
+      );
     }
     const index = await indexCache.get({
       db,
@@ -339,24 +354,30 @@ const screenList = async ({
       edition,
     });
     if (index.isErr()) {
-      return null;
+      return Result.err(index.error);
     }
     const screened = screen(index.value, query, {
       cutoff: DEFAULT_CUTOFF,
-      limit: SANCTIONS_MATCH_LIMIT,
+      limit,
     });
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {
-        return null;
+        return Result.err({ code: "load-failed" as const });
       }
       return panic("A validated sanctions query was rejected");
     }
-    return screened.value;
+    return Result.ok(screened.value);
   });
-  if (matched.isErr() || matched.value === null) {
+  if (matched.isErr()) {
     return unavailableList(base, "load-failed", freshness);
   }
-  const screened = matched.value;
+  if (matched.value.isErr()) {
+    return unavailableList(base, matched.value.error.code, freshness);
+  }
+  if (matched.value.value === null) {
+    return unavailableList(base, "load-failed", freshness);
+  }
+  const screened = matched.value.value;
   const screenedEdition: ScreenedEdition = {
     editionId: edition.id,
     publishedAt: edition.publishedAt,
@@ -397,6 +418,8 @@ type ScreenSanctionsSubjectProps = {
   nameSource?: ScreeningQuery["nameSource"];
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];
+  /** Internal monitoring must diff the complete hit set. */
+  resultMode?: "bounded" | "complete";
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
   matcher?: SanctionsListMatcher;
@@ -413,6 +436,7 @@ export const screenSanctionsSubject = async ({
   nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
+  resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
   matcher,
 }: ScreenSanctionsSubjectProps): Promise<
@@ -468,6 +492,7 @@ export const screenSanctionsSubject = async ({
         }),
         indexCache,
         matcher,
+        resultMode,
       }),
     );
   }
