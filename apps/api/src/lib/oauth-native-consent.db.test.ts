@@ -27,6 +27,7 @@ await mock.module("@better-auth/cimd/node", () => ({
 
 const { getAuth } = await import("@/api/lib/auth");
 const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
+const { AUTH_CLIENT_ADDRESS_HEADER } = await import("@/api/lib/client-ip");
 const { signInHuman } = await import("@/api/tests/helpers/human-session");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
@@ -137,6 +138,12 @@ const nextClientAddress = () => {
   return `198.51.${String(100 + Math.floor(requestCount / 250))}.${String((requestCount % 250) + 1)}`;
 };
 
+const clientAddressHeaders = () => {
+  const address = nextClientAddress();
+  // Direct auth-handler calls supply the address the HTTP boundary resolves.
+  return { "x-forwarded-for": address, [AUTH_CLIENT_ADDRESS_HEADER]: address };
+};
+
 type AuthorizeOptions = {
   browser: Awaited<ReturnType<typeof signInHuman>>;
   clientId: string;
@@ -169,7 +176,7 @@ const createClient = async (scenario: ConsentCase): Promise<string> => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": nextClientAddress(),
+        ...clientAddressHeaders(),
       },
       body: JSON.stringify({
         application_type: scenario.applicationType,
@@ -215,7 +222,7 @@ const authorize = async ({
           ? { "content-type": "application/x-www-form-urlencoded" }
           : {}),
         cookie: browser.cookieHeader(),
-        "x-forwarded-for": nextClientAddress(),
+        ...clientAddressHeaders(),
       },
       ...(method === "POST" ? { body: query.toString() } : {}),
     }),
@@ -235,6 +242,7 @@ const consentAndReadRedirect = async (
         accept: "application/json",
         "content-type": "application/json",
         cookie: browser.cookieHeader(),
+        ...clientAddressHeaders(),
       },
       body: JSON.stringify({
         accept: true,
@@ -310,7 +318,9 @@ describe("OAuth native client consent", () => {
     }
 
     const firstRedirect = await consentAndReadRedirect(browser, firstPage);
-    expect(firstRedirect.searchParams.get("code")).toEqual(expect.any(String));
+    expect(firstRedirect.searchParams.get("code"), firstRedirect.href).toEqual(
+      expect.any(String),
+    );
     expect(await issuedCodes()).toBe(1);
     expect(firstRedirect.origin + firstRedirect.pathname).toBe(
       new URL(scenario.redirectUri).origin +

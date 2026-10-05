@@ -205,13 +205,8 @@ export const grantableScopes = (
   );
 };
 
-/** Mirrors the provider's choice of parameter source for `/oauth2/authorize`. */
-const readsAuthorizationBody = (ctx: {
-  readonly method?: string | undefined;
-}): boolean => {
-  if (ctx.method !== "POST") {
-    return false;
-  }
+/** Consent and login continuations dispatch authorize with explicit settings. */
+const isInitialAuthorization = (ctx: object): boolean => {
   const settings: unknown = Reflect.get(ctx, "authorizeSettings");
   return (
     settings === undefined ||
@@ -219,6 +214,11 @@ const readsAuthorizationBody = (ctx: {
     (isRecord(settings) && settings["isAuthorize"] === true)
   );
 };
+
+/** Mirrors the provider's choice of parameter source for `/oauth2/authorize`. */
+const readsAuthorizationBody = (ctx: {
+  readonly method?: string | undefined;
+}): boolean => ctx.method === "POST" && isInitialAuthorization(ctx);
 
 /** A hook result that leaves the request as it is. */
 const UNCHANGED = { context: {} };
@@ -327,7 +327,9 @@ const createOAuthPolicyMiddleware = ({
       scopes: undefined,
     };
     const grantable = grantableScopes(client, requested, policy).join(" ");
-    const consentPrompt = nativeConsentPrompt(resolved, parameters);
+    const consentPrompt = isInitialAuthorization(ctx)
+      ? nativeConsentPrompt(resolved, parameters)
+      : undefined;
     if (consentPrompt === "none" && ctx.request) {
       noInteractionRequests.add(ctx.request);
     }
