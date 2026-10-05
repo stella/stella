@@ -11,7 +11,10 @@ import type { ParsedList } from "@stll/sanctions";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { createSanctionsMatcherPool } from "./matcher-pool";
+import {
+  createSanctionsMatcherPool,
+  SANCTIONS_MATCHER_CONFIG,
+} from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
@@ -102,6 +105,8 @@ for (const fault of ["hang", "crash"] as const) {
       expect(clock.pending()).toEqual([]);
       const next = await pool.run(
         async (session) => await session.match(request("Acme Trading")),
+        // Recycling starts a cold worker; retain the short fault deadline above.
+        { deadlineMs: SANCTIONS_MATCHER_CONFIG.warmupDeadlineMs },
       );
       expect(next?.status).toBe("screened");
       expect(spawned).toBe(2);
