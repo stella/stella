@@ -163,9 +163,6 @@ describe("API deployment health receipt", () => {
     expect(imageSetupStart).toBeGreaterThanOrEqual(0);
     expect(browserSmokeStart).toBeGreaterThan(imageSetupStart);
     const imageSetup = promoteJob.slice(imageSetupStart, browserSmokeStart);
-    expect(imageSetup).toContain(
-      "if: steps.current.outputs.promoted == 'true'",
-    );
     expect(imageSetup).toContain("uses: ./.github/actions/setup-playwright");
     expect(promoteJob).toContain(
       'run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging',
@@ -198,14 +195,15 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain(
       "Start staging, then dispatch this workflow again.",
     );
-    expect(apiBuild).toContain("needs: staging-health");
+    expect(apiBuild).toContain("needs: [resolve, staging-health]");
     expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
-    expect(webBuild).toContain("needs: staging-health");
+    expect(webBuild).toContain("needs: [resolve, staging-health]");
     expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
-    expect(promoteJob).toContain("Confirm this SHA is still main");
+    expect(promoteJob).toContain("needs: [resolve, build-api, build-web]");
+    expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
     expect(promoteJob).toContain("Run staging web smoke");
     expect(workflow).not.toContain("\n  verify-staging:\n");

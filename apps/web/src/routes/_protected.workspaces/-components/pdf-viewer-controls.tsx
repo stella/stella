@@ -14,6 +14,7 @@ import {
   PrinterIcon,
 } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
+import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
@@ -254,18 +255,16 @@ export const PdfViewerControls = ({
         {showFileActions && (
           <>
             {onEditPages && !isDocx && (
-              <Button
+              <ToolbarIconAction
+                density="toolbar"
                 disabled={totalPages === 0}
+                icon={<FilePenLineIcon className="size-3.5" />}
+                label={t("workspaces.pdf.pageEditor.editPages")}
                 onClick={onEditPages}
-                size="sm"
-                variant="ghost"
-              >
-                <FilePenLineIcon />
-                {t("workspaces.pdf.pageEditor.editPages")}
-              </Button>
+              />
             )}
             {pdfSignTarget !== null && pdfSignTarget !== undefined && (
-              <PdfSignButton presentation="labelled" target={pdfSignTarget} />
+              <PdfSignButton target={pdfSignTarget} />
             )}
             {fileMetadata !== undefined && fieldId.length > 0 && (
               <DownloadSplitButton

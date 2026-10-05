@@ -841,6 +841,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
@@ -1857,6 +1858,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
@@ -2309,6 +2311,8 @@
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
+      "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
@@ -4636,6 +4640,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
@@ -4685,7 +4690,9 @@
       "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
-    "validity": "نافذ من {from} إلى {to}"
+    "validity": "نافذ من {from} إلى {to}",
+    "wordingValidFrom": "الصياغة النافذة منذ {date}",
+    "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
     "create": "إنشاء",
@@ -5454,8 +5461,7 @@
         "signCurrent": "التوقيع باستخدام stella desktop",
         "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
         "signOutdated": "حدّث stella desktop للتوقيع",
-        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop.",
-        "signShort": "توقيع"
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop."
       },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",

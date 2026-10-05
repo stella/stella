@@ -14,22 +14,33 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$repo" ]] || { echo "::error::--repo is required" >&2; exit 2; }
 
-verified_state() {
+# A release commit needs success on both of these, on that exact commit.
+required_contexts='["staging/verified","main/heavy"]'
+
+release_states() {
   # Statuses arrive newest first. A later failure invalidates an earlier success.
   gh api --paginate --slurp "repos/$repo/commits/$1/statuses?per_page=100" \
-    | jq -r '[.[][] | select(.context == "staging/verified")][0].state // "missing"'
+    | jq -r --argjson contexts "$required_contexts" '
+        [.[][]] as $all
+        | $contexts[]
+        | . as $context
+        | "\($context) = \(([$all[] | select(.context == $context)][0].state) // "missing")"'
+}
+
+all_success() {
+  ! grep -qv ' = success$' <<< "$1"
 }
 
 if [[ -z "$sha" ]]; then
   candidates=$(git rev-list origin/main)
   while IFS= read -r candidate; do
-    state=$(verified_state "$candidate")
-    if [[ "$state" == "success" ]]; then
+    states=$(release_states "$candidate")
+    if all_success "$states"; then
       sha="$candidate"
       break
     fi
   done <<< "$candidates"
-  [[ -n "$sha" ]] || { echo "::error::No commit on main carries staging/verified = success" >&2; exit 1; }
+  [[ -n "$sha" ]] || { echo "::error::No commit on main carries success on both staging/verified and main/heavy" >&2; exit 1; }
 fi
 
 if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
@@ -56,9 +67,10 @@ if git show-ref --verify --quiet "refs/tags/$tag"; then
   echo "::error::Release tag $tag already exists" >&2
   exit 1
 fi
-state=$(verified_state "$sha")
-if [[ "$state" != "success" ]]; then
-  echo "::error::Release SHA $sha carries staging/verified = $state; success is required" >&2
+states=$(release_states "$sha")
+if ! all_success "$states"; then
+  missing=$(grep -v ' = success$' <<< "$states" | paste -sd ',' - | sed 's/,/, /g')
+  echo "::error::RELEASE_STATUS_NOT_GREEN: release SHA $sha needs success on staging/verified and main/heavy; it carries $missing" >&2
   exit 1
 fi
 bash "$script_dir/check-release-main-health.sh" "$repo" "$sha"
