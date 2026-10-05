@@ -478,7 +478,7 @@ export const AnnotationToolbar = ({
     const root = scrollContainerRef.current;
     if (activeAnnotationId === null || root === null) {
       setActiveGeometry(null);
-      return;
+      return undefined;
     }
     const updateGeometry = () => {
       const element = root.querySelector(

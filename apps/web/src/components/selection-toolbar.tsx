@@ -46,7 +46,7 @@ export const SelectionToolbar = ({
   const attachBar = (node: HTMLDivElement | null) => {
     onAttach?.(node);
     if (node === null) {
-      return;
+      return undefined;
     }
     const measure = () => {
       const rect = node.getBoundingClientRect();

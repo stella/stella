@@ -146,7 +146,7 @@ export const ChatSelectionToolbar = ({
     const root = rootRef.current;
     if (root === null) {
       setDoc(null);
-      return;
+      return undefined;
     }
     const ownerDoc = root.ownerDocument;
     setDoc(ownerDoc);

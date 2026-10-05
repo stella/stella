@@ -65,9 +65,9 @@ const mountsOf = (target: string): ToolbarMount[] => {
         ts.isIdentifier(node.tagName) &&
         importedNames.has(node.tagName.text)
       ) {
-        let owner: ts.Node | undefined = node.parent;
+        let owner = node.parent;
         let component = "";
-        while (owner !== undefined) {
+        while (!ts.isSourceFile(owner)) {
           if (
             ts.isVariableStatement(owner) &&
             owner.modifiers?.some(
