@@ -5026,7 +5026,12 @@
               "matter_number_pattern",
               "matter_number_padding",
               "prompt_caching_enabled",
-              "document_processing_mode"
+              "document_processing_mode",
+              "time_minimum_unit_minutes",
+              "time_edit_window_days",
+              "time_locked_through_month",
+              "time_narrative_required",
+              "time_zone"
             ],
             "destructive": false
           }
@@ -5034,7 +5039,7 @@
       }
     },
     "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, document processing, and time policy. Manage provider secrets in the dashboard.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
     "inputSchema": {
       "type": "object",
       "required": ["action"],
@@ -5074,12 +5079,12 @@
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching for the organization (update_org_settings)"
+          "description": "Toggle AI prompt caching (update_org_settings)"
         },
         "document_processing_mode": {
           "enum": ["off", "searchable-text"],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction for the organization (update_org_settings)"
+          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
@@ -5107,6 +5112,19 @@
         "time_narrative_required": {
           "type": "boolean",
           "description": "Require a narrative on time entries (update_org_settings)"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
         },
         "confirm": {
           "type": "boolean",
