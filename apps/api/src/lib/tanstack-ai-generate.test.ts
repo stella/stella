@@ -2074,7 +2074,7 @@ describe("provider status recovery preserves failure ownership", () => {
     ).toBe(error);
   });
 
-  test("every foreign failure leaves with an application-owned message and code", () => {
+  test("every foreign model-run failure leaves with an application-owned message and code", () => {
     const SENTINEL = "SENTINEL_ARBITRARY_PROVIDER_TEXT";
     const sentinelText = fc.string().map((text) => `${SENTINEL}${text}`);
     const foreignFailure = fc.oneof(

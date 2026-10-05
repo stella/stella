@@ -139,7 +139,8 @@ describe("provider call error codes", () => {
     const ownCodes = [
       MANAGED_PROVIDER_UNAVAILABLE_CODE,
       INCOMPLETE_STREAM_CODE,
-    ];
+      "max_tokens",
+    ] as const;
     assertProperty(
       "provider call error codes come from a closed set",
       fc.property(
@@ -152,9 +153,8 @@ describe("provider call error codes", () => {
             code,
             evidence: { error: { code: status, message: code } },
           });
-          const expected = ownCodes.some((own) => own === code)
-            ? code
-            : PROVIDER_ERROR_CODE;
+          const expected =
+            ownCodes.find((own) => own === code) ?? PROVIDER_ERROR_CODE;
           expect(error.code).toBe(expected);
           expect(error.message).toBe(PROVIDER_CALL_ERROR_MESSAGE);
           const fallback = {

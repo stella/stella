@@ -1,7 +1,10 @@
 import type { AIErrorKind } from "@stll/api-contract";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
-import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import {
+  INCOMPLETE_STREAM_CODE,
+  TRUNCATED_AT_OUTPUT_CEILING_CODE,
+} from "@/api/lib/chat/provider-stream-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -16,12 +19,14 @@ export const PROVIDER_ERROR_CODE = "provider_error";
 /**
  * The codes a provider call error carries to HTTP bodies and telemetry. A
  * provider SDK `code` is arbitrary text (a gateway or BYOK endpoint chooses
- * it), so only Stella's own codes keep their value; the kind already carries
- * the classification.
+ * it), so only Stella's own codes and the output-ceiling stop, which callers
+ * treat as terminal, keep their value; the kind already carries the
+ * classification.
  */
 const PROVIDER_CALL_ERROR_CODES = [
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   INCOMPLETE_STREAM_CODE,
+  TRUNCATED_AT_OUTPUT_CEILING_CODE,
   PROVIDER_ERROR_CODE,
 ] as const;
 
