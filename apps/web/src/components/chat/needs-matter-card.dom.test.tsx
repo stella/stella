@@ -90,7 +90,7 @@ const mountPicker = (
 test("failed matter reads show retry instead of the empty matter message, then recover", async () => {
   const pending = Promise.withResolvers<NeedsMatterMatter[]>();
   let calls = 0;
-  const view = mountPicker(() => {
+  const view = mountPicker(async () => {
     calls += 1;
     return calls === 1 ? pending.promise : Promise.resolve([matter]);
   });
@@ -108,7 +108,7 @@ test("failed matter reads show retry instead of the empty matter message, then r
 
 test("failed matter refetches keep cached choices and a retry notice", async () => {
   const pending = Promise.withResolvers<NeedsMatterMatter[]>();
-  const view = mountPicker(() => pending.promise, [matter]);
+  const view = mountPicker(async () => pending.promise, [matter]);
   expect(view.getByRole("button", { name: matter.name })).toBeDefined();
   await act(async () => pending.reject(new Error("matter refetch failed")));
   await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
@@ -120,7 +120,7 @@ test("failed matter refetches keep cached choices and a retry notice", async () 
 });
 
 test("a successful zero-matter read shows the empty matter message", async () => {
-  const view = mountPicker(() => Promise.resolve([]));
+  const view = mountPicker(async () => []);
   await waitFor(() =>
     expect(
       view.queryByText(messages.inspector.matterPicker.empty),
@@ -131,7 +131,7 @@ test("a successful zero-matter read shows the empty matter message", async () =>
 
 test("a failed refetch of a cached empty matter list still shows retry", async () => {
   const pending = Promise.withResolvers<NeedsMatterMatter[]>();
-  const view = mountPicker(() => pending.promise, []);
+  const view = mountPicker(async () => pending.promise, []);
   expect(view.getByText(messages.inspector.matterPicker.empty)).toBeDefined();
   await act(async () =>
     pending.reject(new Error("empty matter refetch failed")),

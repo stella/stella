@@ -29,14 +29,7 @@ const memberView = queryView({
 
 describe("matter lead read states", () => {
   test("exposes failed matter and member reads instead of an empty lead", () => {
-    const failed = queryView({
-      status: "error",
-      fetchStatus: "idle",
-      data: undefined,
-      error: readError,
-      isPlaceholderData: false,
-      refetch: retry,
-    });
+    const failed = { type: "error", error: readError, retry } as const;
     expect(
       leadSectionContent({ workspace: failed, members: memberView }),
     ).toEqual(failed);

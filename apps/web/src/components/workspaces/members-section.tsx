@@ -49,40 +49,6 @@ type MembersSectionProps = {
   workspaceId: string;
 };
 
-export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
-  const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceMembersOptions(workspaceId)));
-  const canUpdate = usePermissions({ workspace: ["update"] });
-
-  return (
-    <section>
-      <div
-        className={cn(
-          "flex items-center justify-between gap-2 px-3",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <h3 className="text-muted-foreground text-sm font-medium">
-          {t("common.members")}
-        </h3>
-        {canUpdate && (
-          <AddMemberDialog
-            showTriggerLabel={false}
-            triggerSize="icon-xs"
-            triggerVariant="ghost"
-            workspaceId={workspaceId}
-          />
-        )}
-      </div>
-      <MembersList
-        view={view}
-        canUpdate={canUpdate}
-        workspaceId={workspaceId}
-      />
-    </section>
-  );
-};
-
 type MemberData = NonNullable<
   Awaited<
     ReturnType<
@@ -134,6 +100,40 @@ export const MembersList = ({
       view satisfies never;
       return panic("Unhandled member list state");
   }
+};
+
+export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
+  const t = useTranslations();
+  const view = useQueryView(useQuery(workspaceMembersOptions(workspaceId)));
+  const canUpdate = usePermissions({ workspace: ["update"] });
+
+  return (
+    <section>
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        <h3 className="text-muted-foreground text-sm font-medium">
+          {t("common.members")}
+        </h3>
+        {canUpdate && (
+          <AddMemberDialog
+            showTriggerLabel={false}
+            triggerSize="icon-xs"
+            triggerVariant="ghost"
+            workspaceId={workspaceId}
+          />
+        )}
+      </div>
+      <MembersList
+        view={view}
+        canUpdate={canUpdate}
+        workspaceId={workspaceId}
+      />
+    </section>
+  );
 };
 
 type MemberRowProps = {

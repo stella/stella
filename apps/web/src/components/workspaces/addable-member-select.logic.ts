@@ -4,7 +4,7 @@ import type { QueryView } from "@/lib/query-view.logic";
 
 type OrganizationMember = {
   userId: string;
-  user: { email: string; image?: string | null; name: string };
+  user: { email: string; image?: string | null | undefined; name: string };
 };
 type MemberItem = {
   email: string;
