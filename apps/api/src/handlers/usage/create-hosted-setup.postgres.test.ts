@@ -198,11 +198,9 @@ const readClaims = async (
 const withRolledBackFixture = async (
   fn: (tx: Transaction, fixture: Fixture) => Promise<void>,
 ) => {
-  if (!databaseUrl) {
-    return panic("DATABASE_URL required");
-  }
+  const url = databaseUrl ?? panic("DATABASE_URL required");
   await withHostedEnv(async () => {
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const { db } = openClient();
       await db
         .transaction(async (tx) => {
