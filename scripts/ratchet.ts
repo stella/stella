@@ -2933,6 +2933,9 @@ const RESULT_BOUNDARY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
+const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
+  countUnsignalledSkips(content, { file });
+
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "file",
@@ -2943,7 +2946,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: isExcludedSkipSource,
     perFile: true,
     growth: "shrink-only",
-    count: (content, { file }) => countUnsignalledSkips(content, { file }),
+    count: countUnsignalledSkipMetric,
   },
   {
     scope: "repo",

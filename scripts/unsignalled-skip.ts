@@ -33,6 +33,9 @@ export const isExcludedSkipSource = (file: string): boolean =>
   file.endsWith(".tsx") ||
   /\.generated\./u.test(file);
 
+const parentNode = (node: ts.Node): ts.Node | undefined =>
+  ts.isSourceFile(node) ? undefined : node.parent;
+
 const unwrap = (node: ts.Expression): ts.Expression => {
   if (
     ts.isParenthesizedExpression(node) ||
@@ -131,7 +134,7 @@ const declarationValue = (
   for (
     let scope: ts.Node | undefined = identifier.parent;
     scope;
-    scope = scope.parent
+    scope = parentNode(scope)
   ) {
     if (
       ts.isFunctionLike(scope) &&
@@ -176,7 +179,7 @@ const localFunctionBody = (
   for (
     let scope: ts.Node | undefined = identifier.parent;
     scope;
-    scope = scope.parent
+    scope = parentNode(scope)
   ) {
     if (
       ts.isFunctionLike(scope) &&
@@ -665,9 +668,9 @@ const itemSkipContext = (node: ts.Node): ItemSkipContext => {
   let child: ts.Node = node;
   let failureBranch: ts.Statement | undefined;
   for (
-    let parent = node.parent;
+    let parent = parentNode(node);
     parent;
-    child = parent, parent = parent.parent
+    child = parent, parent = parentNode(parent)
   ) {
     if (ts.isCatchClause(parent)) {
       break;

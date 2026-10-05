@@ -1309,6 +1309,9 @@ jobs:
           git cat-file -e "$base^{commit}"
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
+      - name: Test unsignalled skip detection
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/unsignalled-skip.test.ts
       - name: Ratchet guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
@@ -1316,7 +1319,7 @@ jobs:
         # trees use the current registry, including per-file ceilings.
         # The self-test proves counter and gate behavior before the comparison.
         run: |
-          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts scripts/unsignalled-skip.test.ts
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
