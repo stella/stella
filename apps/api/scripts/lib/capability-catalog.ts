@@ -532,6 +532,7 @@ export type CapabilityDispatchRecord = {
   id: string;
   importPath: string;
   exportName: string | undefined;
+  featureAccess?: { featureId: string; type: "required" | "conditional" };
 };
 
 /**
@@ -681,7 +682,7 @@ type CapabilityDispatchEntry = {
   /** Lazy module import; the endpoint definition is its default (or named) export. */
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
-  exportName?: string;
+  exportName?: string;${records.some((record) => record.featureAccess !== undefined) ? '\n  featureId?: string;\n  featureAccess?: "required" | "conditional";' : ""}
 };
 
 export const CAPABILITY_DISPATCH = {
@@ -707,7 +708,11 @@ export const CAPABILITY_DISPATCH = {
         exportName === undefined
           ? ""
           : `, exportName: ${JSON.stringify(exportName)}`;
-      return `  ${JSON.stringify(id)}: { ${loader}${named} },`;
+      const feature =
+        record.featureAccess === undefined
+          ? ""
+          : `, featureId: ${JSON.stringify(record.featureAccess.featureId)}, featureAccess: ${JSON.stringify(record.featureAccess.type)}`;
+      return `  ${JSON.stringify(id)}: { ${loader}${named}${feature} },`;
     })
     .join("\n");
   const footer = `

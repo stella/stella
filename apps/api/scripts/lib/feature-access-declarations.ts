@@ -69,6 +69,62 @@ const localSourceImport = (specifier: string) =>
   (specifier.startsWith(".") || specifier.startsWith("@/api/")) &&
   (!path.posix.extname(specifier) || /\.(?:ts|tsx|js)$/u.test(specifier));
 
+const unwrapExpression = (node: ts.Expression): ts.Expression =>
+  ts.isAsExpression(node) ||
+  ts.isSatisfiesExpression(node) ||
+  ts.isParenthesizedExpression(node)
+    ? unwrapExpression(node.expression)
+    : node;
+// Registry references describe dispatch; each entry is checked independently.
+const dispatchRegistry = (node: ts.Node) =>
+  ts.isVariableDeclaration(node) &&
+  ts.isIdentifier(node.name) &&
+  (node.name.text === "CAPABILITY_DISPATCH" ||
+    node.name.text === "SCHEDULER_TASKS") &&
+  node.initializer !== undefined &&
+  ts.isObjectLiteralExpression(unwrapExpression(node.initializer));
+const insideDispatchRegistry = (node: ts.Node): boolean => {
+  for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
+    if (dispatchRegistry(parent)) {
+      return true;
+    }
+  }
+  return false;
+};
+const dispatchRegistrationOnly = (ast: ts.SourceFile, name: string) => {
+  let references = 0;
+  let valid = true;
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node) || ts.isTypeNode(node)) {
+      return;
+    }
+    if (ts.isIdentifier(node) && node.text === name) {
+      references += 1;
+      valid &&= insideDispatchRegistry(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return references > 0 && valid;
+};
+const literalProperty = (node: ts.Expression, name: string) => {
+  const value = unwrapExpression(node);
+  if (!ts.isObjectLiteralExpression(value)) {
+    return undefined;
+  }
+  for (const property of value.properties) {
+    if (
+      ts.isPropertyAssignment(property) &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === name &&
+      ts.isStringLiteral(property.initializer)
+    ) {
+      return property.initializer.text;
+    }
+  }
+  return undefined;
+};
+
 const drizzleConstructors = (ast: ts.SourceFile) => {
   const constructors = new Set<string>();
   for (const statement of ast.statements) {
@@ -248,6 +304,17 @@ class DeclarationSourceGraph {
     }
     for (const statement of ast.statements) {
       if (declaresSymbol(statement, name)) {
+        if (ts.isVariableStatement(statement)) {
+          const declaration = statement.declarationList.declarations.find(
+            (item) => ts.isIdentifier(item.name) && item.name.text === name,
+          );
+          if (
+            declaration?.initializer !== undefined &&
+            ts.isStringLiteralLike(unwrapExpression(declaration.initializer))
+          ) {
+            return [];
+          }
+        }
         return [file];
       }
       if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) {
@@ -266,6 +333,14 @@ class DeclarationSourceGraph {
     target: string,
   ): string[] {
     const bindings = statement.importClause?.namedBindings;
+    const defaultName = statement.importClause?.name;
+    if (
+      defaultName !== undefined &&
+      bindings === undefined &&
+      dispatchRegistrationOnly(ast, defaultName.text)
+    ) {
+      return [];
+    }
     if (
       bindings !== undefined &&
       ts.isNamedImports(bindings) &&
@@ -273,7 +348,11 @@ class DeclarationSourceGraph {
     ) {
       const targets: string[] = [];
       for (const binding of bindings.elements) {
-        if (binding.isTypeOnly || registrationOnly(ast, binding.name.text)) {
+        if (
+          binding.isTypeOnly ||
+          registrationOnly(ast, binding.name.text) ||
+          dispatchRegistrationOnly(ast, binding.name.text)
+        ) {
           continue;
         }
         const resolved = this.symbolModules(
@@ -296,6 +375,9 @@ class DeclarationSourceGraph {
   private dynamicTargets(ast: ts.SourceFile): string[] {
     const targets: string[] = [];
     const visit = (node: ts.Node) => {
+      if (dispatchRegistry(node)) {
+        return;
+      }
       if (
         ts.isCallExpression(node) &&
         node.expression.kind === ts.SyntaxKind.ImportKeyword
@@ -485,6 +567,9 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
     if (ownership?.conditionalModules?.includes(module)) {
       required.set(id, "conditional");
     } else if (
+      ownership?.handlerDirectories.some((directory) =>
+        module.startsWith(`${directory.replace(/\/$/u, "")}/`),
+      ) ||
       ownership?.coreModules.includes(module) ||
       ownership?.tableSchemaFiles.includes(module)
     ) {
@@ -552,6 +637,9 @@ const inspectEndpoint = ({
       walk(target);
     }
     const visit = (node: ts.Node) => {
+      if (dispatchRegistry(node)) {
+        return;
+      }
       if (
         ts.isStringLiteralLike(node) ||
         ts.isTemplateHead(node) ||
@@ -587,15 +675,160 @@ const inspectEndpoint = ({
   return violations;
 };
 
+const dispatchEntryEndpoints = (sources: DeclarationOptions["sources"]) => {
+  const entries: DeclarationOptions["endpoints"][number][] = [];
+  const entrySources = new Map(sources);
+  for (const [file, source] of sources) {
+    if (
+      !source.includes("CAPABILITY_DISPATCH") &&
+      !source.includes("SCHEDULER_TASKS")
+    ) {
+      continue;
+    }
+    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node) => {
+      if (
+        !ts.isVariableDeclaration(node) ||
+        !dispatchRegistry(node) ||
+        node.initializer === undefined
+      ) {
+        ts.forEachChild(node, visit);
+        return;
+      }
+      const value = unwrapExpression(node.initializer);
+      if (!ts.isObjectLiteralExpression(value)) {
+        return;
+      }
+      for (const [index, property] of value.properties.entries()) {
+        let initializer: ts.Expression | undefined;
+        if (ts.isSpreadAssignment(property)) {
+          initializer = property.expression;
+        } else if (ts.isPropertyAssignment(property)) {
+          initializer = property.initializer;
+        } else if (ts.isShorthandPropertyAssignment(property)) {
+          initializer = property.name;
+        }
+        if (initializer === undefined) {
+          entries.push({
+            file,
+            config: { featureAccess: "unsupported dispatch entry" },
+          });
+          continue;
+        }
+        const names = new Set<string>();
+        const collect = (child: ts.Node) => {
+          if (ts.isIdentifier(child)) {
+            names.add(child.text);
+          }
+          ts.forEachChild(child, collect);
+        };
+        collect(initializer);
+        const imports = ast.statements
+          .filter(runtimeImport)
+          .flatMap((statement) => {
+            const clause = statement.importClause;
+            const bindings = clause?.namedBindings;
+            if (bindings !== undefined && ts.isNamedImports(bindings)) {
+              const selected = bindings.elements.filter(
+                (binding) =>
+                  !binding.isTypeOnly && names.has(binding.name.text),
+              );
+              return selected.length === 0
+                ? []
+                : [
+                    `import { ${selected.map((binding) => binding.getText(ast)).join(", ")} } from ${statement.moduleSpecifier.getText(ast)};`,
+                  ];
+            }
+            return (clause?.name !== undefined &&
+              names.has(clause.name.text)) ||
+              (bindings !== undefined &&
+                ts.isNamespaceImport(bindings) &&
+                names.has(bindings.name.text))
+              ? [statement.getText(ast)]
+              : [];
+          })
+          .join("\n");
+        const entryFile = `${file}.dispatch-entry-${index}.ts`;
+        entrySources.set(
+          entryFile,
+          `${imports}\nconst entry = ${initializer.getText(ast)};`,
+        );
+        const featureId = literalProperty(initializer, "featureId");
+        const featureAccess =
+          literalProperty(initializer, "featureAccess") ?? "required";
+        entries.push({
+          file: entryFile,
+          config:
+            featureId === undefined
+              ? {}
+              : {
+                  featureAccess: {
+                    type: featureAccess,
+                    featureId,
+                    ...(featureAccess === "conditional"
+                      ? { usesFeature: () => true }
+                      : {}),
+                  },
+                },
+        });
+      }
+    };
+    visit(ast);
+  }
+  return { entries, sources: entrySources };
+};
+
 export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
-  const graph = new DeclarationSourceGraph(sources);
+  const dispatch = dispatchEntryEndpoints(sources);
+  const graph = new DeclarationSourceGraph(dispatch.sources);
+  const tasks = new Map<string, DeclarationOptions["endpoints"][number]>();
+  for (const entry of dispatch.entries) {
+    const ast = graph.sourceFile(entry.file);
+    if (ast === undefined) {
+      continue;
+    }
+    for (const file of graph.dependencies(ast).targets) {
+      if (!file.includes("/scheduler/tasks/")) {
+        continue;
+      }
+      const task = graph.sourceFile(file);
+      let featureId: string | undefined;
+      for (const statement of task?.statements ?? []) {
+        if (!ts.isVariableStatement(statement) || !exported(statement)) {
+          continue;
+        }
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            ts.isIdentifier(declaration.name) &&
+            declaration.name.text === "featureAccess" &&
+            declaration.initializer !== undefined
+          ) {
+            featureId = literalProperty(declaration.initializer, "featureId");
+          }
+        }
+      }
+      tasks.set(file, {
+        file,
+        config:
+          featureId === undefined
+            ? {}
+            : {
+                featureAccess: { type: "required", featureId },
+              },
+      });
+    }
+  }
   const ownership = validateOwnership(registry, graph);
   const violations = ownership.violations;
-  for (const endpoint of endpoints) {
+  for (const endpoint of [
+    ...endpoints,
+    ...tasks.values(),
+    ...dispatch.entries,
+  ]) {
     violations.push(
       ...inspectEndpoint({
         endpoint,

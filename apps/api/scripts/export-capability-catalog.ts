@@ -1246,11 +1246,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
     await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
-  assertFeatureAccessDeclarations({
-    registry: FEATURE_REGISTRY,
-    endpoints,
-    sources: featureSources,
-  });
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1692,6 +1687,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
+      featureAccess: parseFeatureRequirement(endpoint.config["featureAccess"]),
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {
@@ -1702,6 +1698,22 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const endpoint of endpoints) {
     projectEndpoint(endpoint);
   }
+
+  // Validate the projection being emitted, including newly declared features.
+  for (const file of featureSources.keys()) {
+    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+      featureSources.delete(file);
+    }
+  }
+  featureSources.set(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    serializeDispatchModule(dispatchRecords),
+  );
+  assertFeatureAccessDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+  });
 
   // Class guards over the built entries (context-fidelity, file-response,
   // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in
