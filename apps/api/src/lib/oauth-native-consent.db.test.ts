@@ -268,6 +268,18 @@ describe("OAuth native client consent", () => {
     expect(firstPage.pathname).toBe("/consent");
     expect(firstPage.searchParams.has("code")).toBe(false);
     const context = await getAuth().$context;
+    const issuedCodes = () =>
+      context.adapter.count({
+        model: "verification",
+        where: [
+          {
+            field: "value",
+            operator: "contains",
+            value: JSON.stringify(clientId),
+          },
+        ],
+      });
+    expect(await issuedCodes()).toBe(0);
     const storedClient = await context.adapter.findOne<
       SchemaClient<readonly string[]>
     >({
@@ -286,6 +298,7 @@ describe("OAuth native client consent", () => {
 
     const firstRedirect = await consentAndReadRedirect(browser, firstPage);
     expect(firstRedirect.searchParams.get("code")).toEqual(expect.any(String));
+    expect(await issuedCodes()).toBe(1);
     expect(firstRedirect.origin + firstRedirect.pathname).toBe(
       new URL(scenario.redirectUri).origin +
         new URL(scenario.redirectUri).pathname,
@@ -310,6 +323,7 @@ describe("OAuth native client consent", () => {
       method,
       redirectUri: scenario.redirectUri,
     });
+    expect(await issuedCodes()).toBe(requiresFreshConsent ? 1 : 2);
     if (requiresFreshConsent) {
       expect(secondPage.pathname).toBe("/consent");
       expect(secondPage.searchParams.has("code")).toBe(false);
@@ -335,6 +349,7 @@ describe("OAuth native client consent", () => {
       expect(noPromptPage.searchParams.get("error")).toBe(
         "interaction_required",
       );
+      expect(await issuedCodes()).toBe(2);
     } else {
       expect(secondPage.searchParams.get("code")).toEqual(expect.any(String));
       expect(secondPage.pathname).not.toBe("/consent");
