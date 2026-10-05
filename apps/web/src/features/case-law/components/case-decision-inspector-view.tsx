@@ -88,13 +88,14 @@ export const CaseDecisionInspectorView = ({
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast, caseNumberType),
+    surface: "inspector",
+    blocks: visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     country: decision?.country ?? null,
     decisionId,
     decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast, caseNumberType),
+    visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -251,6 +252,7 @@ export const CaseDecisionInspectorView = ({
                   reader opens on them marked, at the passage the row named,
                   and the passage keeps its marker rather than flashing once. */}
                 <DecisionText
+                  surface="inspector"
                   activeMatchIndex={0}
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}

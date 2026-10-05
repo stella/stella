@@ -2,6 +2,12 @@ import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -20,6 +26,7 @@ import type {
 import { AiHeadnotes } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { editorialSupplementBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -82,6 +89,7 @@ const renderDecision = (abstract: string): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         activeMatchIndex={-1}
         decision={textDecision({
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
@@ -97,6 +105,92 @@ const renderDecision = (abstract: string): string =>
       />
     </IntlProvider>,
   );
+
+test("storage-resolved fulltext retains stored provision and decision links without an AST", async () => {
+  const fulltext = "Soud použil § 42 zákona.\n\nSoud odkázal na 2 As 2/2025.";
+  const rootRoute = createRootRoute({
+    component: () => (
+      <DecisionText
+        surface="development"
+        activeMatchIndex={-1}
+        decision={textDecision({ documentAst: null, fulltext })}
+        decisionId="dec-1"
+        searchQuery=""
+        isHydrated
+        citationAnchors={[
+          {
+            id: "case-citation",
+            citationText: "2 As 2/2025",
+            treatment: "neutral",
+            decision: {
+              id: "2c1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+              caseNumber: "2 As 2/2025",
+              country: "CZE",
+              court: "Test court",
+              language: "cs",
+              languageAlternates: [],
+              slug: "2-as-2-2025",
+              decisionDate: "2025-01-01",
+              decisionType: "Judgment",
+            },
+          },
+        ]}
+        provisionAnchors={[
+          {
+            id: "provision-citation",
+            sentenceText: "Soud použil § 42 zákona.",
+            spanStart: 12,
+            reference: {
+              unit: "section",
+              section: 42,
+              sectionSuffix: null,
+              subsection: null,
+              letter: null,
+            },
+            target: {
+              document: {
+                country: "CZE",
+                eli: "/eli/cz/sb/2000/1",
+                id: "01a02a37-1111-7111-8111-111111111111",
+                slug: "1-2000-sb",
+                versionValidFrom: "2000-01-01",
+              },
+              preview: null,
+              payload: {
+                documentId: "01a02a37-1111-7111-8111-111111111111",
+                eli: "/eli/cz/sb/2000/1",
+                jurisdiction: "CZE",
+                anchorId: "par_42",
+                provisionLabel: "§ 42",
+                statuteTitle: "Test statute",
+                versionValidFrom: "2000-01-01",
+                versionCount: 1,
+              },
+            },
+          },
+        ]}
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  const markup = renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  expect(markup).toContain('data-anchor="fulltext:0"');
+  expect(markup).toContain('data-anchor="fulltext:1"');
+  expect(markup).toMatch(/<a[^>]*href="[^"]*par_42"/u);
+  expect(markup).toMatch(/<a[^>]*href="[^"]*2-as-2-2025"/u);
+});
 
 describe("editorial legal text annotations", () => {
   test("every rendered source block has a stable selection anchor", () => {
@@ -127,6 +221,7 @@ describe("a decision whose text did not resolve", () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <QueryClientProvider client={new QueryClient()}>
           <DecisionText
+            surface="development"
             activeMatchIndex={-1}
             decision={textDecision({
               documentAst: null,
@@ -242,6 +337,7 @@ const renderSearchedDecision = ({
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         activeMatchIndex={activeMatchIndex}
         decision={textDecision({ documentAst: searchedAst, language: "en" })}
         decisionId="dec-1"
@@ -298,6 +394,7 @@ const renderTopMatter = ({
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         activeMatchIndex={-1}
         aiHeadnotes={
           analysis === undefined ? null : (

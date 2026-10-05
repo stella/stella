@@ -86,6 +86,7 @@ const render = (node: ReactNode): string =>
 const renderDecision = (judges: readonly DecisionJudge[]): string =>
   render(
     <DecisionText
+      surface="development"
       activeMatchIndex={-1}
       decision={{
         caseNumber: "Pl. ÚS 1/2026",

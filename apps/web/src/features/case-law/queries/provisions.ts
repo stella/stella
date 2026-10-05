@@ -139,7 +139,7 @@ export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
           break;
         }
       }
-      return { items, previews };
+      return { items, previews, nextCursor: cursor };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

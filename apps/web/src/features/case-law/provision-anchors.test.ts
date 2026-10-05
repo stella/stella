@@ -43,7 +43,7 @@ const reference = (
 
 describe("locateProvisionAnchors", () => {
   test("anchors the reference inside the sentence it was read from", () => {
-    const located = locateProvisionAnchors({
+    const { anchorsByPieceId: located } = locateProvisionAnchors({
       blocks,
       provisions: [
         {
@@ -73,7 +73,7 @@ describe("locateProvisionAnchors", () => {
       "b4",
       "4. Soud spatřoval naplnění znaků přečinu obecného ohrožení z nedbalosti podle § 273 odstavec 1 tr. zákoníku.",
     );
-    const located = locateProvisionAnchors({
+    const { anchorsByPieceId: located } = locateProvisionAnchors({
       blocks: [spelledOut],
       provisions: [
         {
@@ -101,7 +101,7 @@ describe("locateProvisionAnchors", () => {
       "b5",
       "5. Súd postupoval podľa § 273 odsek 1 Trestného zákona.",
     );
-    const located = locateProvisionAnchors({
+    const { anchorsByPieceId: located } = locateProvisionAnchors({
       blocks: [slovak],
       provisions: [
         {
@@ -123,20 +123,20 @@ describe("locateProvisionAnchors", () => {
   });
 
   test("distinct occurrences of one provision in a sentence each get an anchor", () => {
-    const located = locateProvisionAnchors({
+    const { anchorsByPieceId: located } = locateProvisionAnchors({
       blocks,
       provisions: [
         {
           id: "a",
           reference: reference(7, "6"),
-          sentenceText: "2. Soud postupoval podle § 7 odst. 6 s. ř. s.; k § 7",
+          sentenceText: blocks[1]?.plainText ?? "",
           spanStart: 20,
           target: null,
         },
         {
           id: "b",
           reference: reference(7, "6"),
-          sentenceText: "2. Soud postupoval podle § 7 odst. 6 s. ř. s.; k § 7",
+          sentenceText: blocks[1]?.plainText ?? "",
           spanStart: 70,
           target: null,
         },
@@ -156,7 +156,7 @@ describe("locateProvisionAnchors", () => {
       "Podle § 60 jiného zákona a podle § 60 odst. 3 s. ř. s. rozhodl soud.";
     const block = paragraph("mixed", text);
     const start = text.indexOf("§ 60 odst. 3");
-    const located = locateProvisionAnchors({
+    const { anchorsByPieceId: located } = locateProvisionAnchors({
       blocks: [block],
       provisions: [
         {
@@ -192,6 +192,100 @@ describe("locateProvisionAnchors", () => {
           },
         ],
       }),
-    ).toEqual({});
+    ).toEqual({
+      anchorsByPieceId: {},
+      failures: [{ id: "a", reason: "sentence-unlocatable" }],
+    });
   });
+});
+
+test("unplaceable references and invalid exact spans remain accounted for", () => {
+  const source = {
+    id: "stored",
+    reference: reference(7),
+    sentenceText: blocks.at(0)?.plainText ?? "",
+    spanStart: 0,
+    target: null,
+  };
+  expect(
+    locateProvisionAnchors({ blocks, provisions: [source] }).failures,
+  ).toEqual([{ id: "stored", reason: "reference-unlocatable" }]);
+  for (const exactSpan of [
+    { blockId: "missing", start: 0, end: 1 },
+    { blockId: "b1", start: -1, end: 1 },
+    { blockId: "b1", start: 0, end: 0 },
+    { blockId: "b1", start: 0, end: Number.MAX_SAFE_INTEGER },
+  ]) {
+    expect(
+      locateProvisionAnchors({ blocks, provisions: [{ ...source, exactSpan }] })
+        .failures,
+    ).toEqual([{ id: "stored", reason: "span-out-of-bounds" }]);
+  }
+  const exactSpan = { blockId: "b1", start: 0, end: 1 };
+  const result = locateProvisionAnchors({
+    blocks,
+    provisions: [
+      { ...source, exactSpan },
+      { ...source, id: "overlap", exactSpan },
+    ],
+  });
+  expect(Object.values(result.anchorsByPieceId).flat()).toHaveLength(1);
+  expect(result.failures).toEqual([{ id: "overlap", reason: "span-overlap" }]);
+});
+
+test("complete context distinguishes shared openings and crosses section breaks", () => {
+  const opening =
+    "Soud po důkladném přezkoumání všech skutečností a vzájemných souvislostí";
+  const sentence = `${opening} použil § 42 odst. 4 zákona.`;
+  const source = {
+    id: "stored",
+    reference: reference(42, "4"),
+    sentenceText: sentence,
+    spanStart: 0,
+    target: null,
+  };
+  const result = locateProvisionAnchors({
+    blocks: [
+      paragraph("other", `${opening} použil § 42 odst. 3 jiného zákona.`),
+      paragraph("start", opening),
+      paragraph("end", "použil § 42 odst. 4 zákona."),
+    ],
+    provisions: [source],
+  });
+  expect(result.failures).toEqual([]);
+  expect(
+    result.anchorsByPieceId.end?.map(({ start, end }) =>
+      "použil § 42 odst. 4 zákona.".slice(start, end),
+    ),
+  ).toEqual(["§ 42 odst. 4"]);
+});
+
+test("missing subdivisions and competing acts cannot select another occurrence", () => {
+  const sentence =
+    "Podle § 42 prvního zákona a § 42 druhého zákona soud rozhodl.";
+  const source = {
+    id: "stored",
+    reference: reference(42),
+    sentenceText: sentence,
+    spanStart: 0,
+    target: null,
+  };
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [source],
+    }).failures,
+  ).toEqual([{ id: "stored", reason: "ambiguous-placement" }]);
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [{ ...source, reference: reference(42, "4") }],
+    }).failures,
+  ).toEqual([{ id: "stored", reason: "reference-unlocatable" }]);
+  expect(
+    locateProvisionAnchors({
+      blocks: [paragraph("text", sentence)],
+      provisions: [{ ...source, occurrence: { ordinal: 1, count: 2 } }],
+    }).anchorsByPieceId.text?.at(0)?.start,
+  ).toBe(sentence.lastIndexOf("§ 42"));
 });
