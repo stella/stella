@@ -221,7 +221,8 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents: file === "ci.yml" ? ["workflow_dispatch"] : [],
+          supersedingEvents:
+            file === "ci.yml" ? ["workflow_dispatch", "push"] : [],
           mode:
             file === "disarm-auto-merge.yml" ? "preserve-events" : "supersede",
         }).map((problem) => `${file}: ${problem}`),

@@ -6,6 +6,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import eventPolicies from "../.github/ci-event-policy.json";
 import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
@@ -178,7 +179,7 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
   );
 });
 
-test("original PR and merge-group job predicates keep their behavior", () => {
+test("heavy event policies exclude pull requests and preserve existing full certification", () => {
   const base = Bun.spawnSync(["git", "merge-base", "origin/main", "HEAD"], {
     cwd: root,
   });
@@ -206,18 +207,33 @@ test("original PR and merge-group job predicates keep their behavior", () => {
         plan["trusted"] = "true";
         plan["suite_depth"] = depth;
         plan["heavy_web_build_required"] = "false";
-        // Only the heavy-only gating must leave ordinary runs unchanged; other
-        // predicates, and jobs later removed, belong to their own changes.
+        // Queue policies intentionally remove PR execution. Existing non-PR
+        // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
           const current = workflow.jobs[job]?.if;
           if (current?.includes("inputs.heavy_only") !== true) {
             continue;
           }
           compared += 1;
+          let expected = selected(
+            body.if ?? "true",
+            context(event, false, plan),
+          );
+          const queueJob = Object.entries(eventPolicies.jobs).some(
+            ([key, policy]) =>
+              key === `ci.yml/${job}` &&
+              (policy === "queue" || policy === "main"),
+          );
+          if (event === "pull_request" && queueJob) {
+            expected = false;
+          }
+          if (job === "route-smoke" && event === "merge_group") {
+            expected = required === "true";
+          }
           expect(
             selected(current, context(event, false, plan)),
             `${event}/${depth}/${required}/${job}`,
-          ).toBe(selected(body.if ?? "true", context(event, false, plan)));
+          ).toBe(expected);
         }
         expect(
           selected(

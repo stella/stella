@@ -1,0 +1,230 @@
+import { expect, test } from "bun:test";
+import { readFileSync, readdirSync } from "node:fs";
+
+import { checkCiEventPolicies } from "./check-ci-event-policy";
+
+const directory = new URL("../.github/workflows/", import.meta.url);
+const workflows = Object.fromEntries(
+  readdirSync(directory)
+    .filter((file) => /\.ya?ml$/u.test(file))
+    .map((file) => [
+      file,
+      Bun.YAML.parse(readFileSync(new URL(file, directory), "utf-8")),
+    ]),
+);
+const policy = JSON.parse(
+  readFileSync(
+    new URL("../.github/ci-event-policy.json", import.meta.url),
+    "utf-8",
+  ),
+);
+
+test("every real workflow job has an event policy and the fast gate follows it", () => {
+  expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
+});
+
+test("new heavy jobs require a policy that excludes every pull request", () => {
+  const workflow = {
+    on: { pull_request: {}, merge_group: {} },
+    jobs: { image: { if: "true", services: { postgres: {} } } },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: { jobs: {}, pending: {} },
+    }),
+  ).toEqual(["fixture.yml/image: missing event policy"]);
+  const declared = { jobs: { "fixture.yml/image": "queue" }, pending: {} };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual(["fixture.yml/image: queue job can run on pull_request"]);
+  workflow.jobs.image.if =
+    "github.event_name != 'pull_request' && needs.plan.outputs.required == 'true'";
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual([]);
+  workflow.jobs.image.if += " || always()";
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual(["fixture.yml/image: queue job can run on pull_request"]);
+});
+
+test("the pending exception names only the untouched test runner owner", () => {
+  expect(
+    checkCiEventPolicies({
+      workflows: {
+        "fixture.yml": { on: { pull_request: {} }, jobs: { image: {} } },
+      },
+      policy: {
+        jobs: { "fixture.yml/image": "pending" },
+        pending: {
+          "fixture.yml/image": {
+            owner: "email-inbound",
+            reason: "event policy moves after the run-tests rework lands",
+          },
+        },
+      },
+    }),
+  ).toEqual(["fixture.yml/image: undeclared pending owner or reason"]);
+});
+
+test("removed jobs cannot leave a policy or pending entry behind", () => {
+  expect(
+    checkCiEventPolicies({
+      workflows: {},
+      policy: {
+        jobs: { "old.yml/image": "queue" },
+        pending: { "old.yml/image": { owner: "other", reason: "old" } },
+      },
+    }),
+  ).toEqual([
+    "old.yml/image: stale event policy",
+    "old.yml/image: stale pending entry",
+  ]);
+});
+
+test("main-push workflows require a group and publishing never cancels a running job", () => {
+  const workflow = {
+    on: { push: { branches: ["main"] } },
+    jobs: { publish: { permissions: { contents: "write" } } },
+  };
+  const declared = {
+    jobs: { "fixture.yml/publish": "main" },
+    pending: {},
+    pushMain: { "fixture.yml": { role: "publish", cancelInProgress: false } },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: declared,
+    }),
+  ).toContain("fixture.yml: main push needs a concurrency group");
+  const concurrency = {
+    group: `\${{ github.workflow }}-\${{ github.ref }}`,
+    "cancel-in-progress": true,
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": { ...workflow, concurrency } },
+      policy: declared,
+    }),
+  ).toContain(
+    "fixture.yml: publishing or deployment must finish its running job",
+  );
+  concurrency["cancel-in-progress"] = false;
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": { ...workflow, concurrency } },
+      policy: declared,
+    }),
+  ).toEqual([]);
+});
+
+test("analysis cancellation is pinned to main and tag-only workflows do not consume its policy", () => {
+  const workflow = {
+    on: { push: { branches: ["main"] } },
+    jobs: { analyze: {} },
+    concurrency: {
+      group: `\${{ github.workflow }}-\${{ github.ref }}`,
+      "cancel-in-progress": `\${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}`,
+    },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: {
+        jobs: { "fixture.yml/analyze": "main" },
+        pending: {},
+        pushMain: {
+          "fixture.yml": { role: "analysis", cancelInProgress: true },
+        },
+      },
+    }),
+  ).toEqual([]);
+  expect(
+    checkCiEventPolicies({
+      workflows: {
+        "fixture.yml": {
+          on: { push: { tags: ["v*"] } },
+          jobs: { publish: {} },
+        },
+      },
+      policy: { jobs: { "fixture.yml/publish": "main" }, pending: {} },
+    }),
+  ).toEqual([]);
+});
+
+test("reusable CI main calls coalesce without cancelling their parent workflow", () => {
+  const jobs = {
+    "ci-result": { needs: [], steps: [{ env: { FAST_REQUIRED: "[]" } }] },
+  };
+  const declared = {
+    jobs: { "ci.yml/ci-result": "pr-fast" },
+    pending: {},
+    pushMain: { "ci.yml": { role: "analysis", cancelInProgress: true } },
+  };
+  const concurrency = {
+    group: `\${{ github.workflow }}-\${{ github.ref }}`,
+    "cancel-in-progress": true,
+  };
+  const workflow = { on: { workflow_call: {} }, jobs, concurrency };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "ci.yml": workflow },
+      policy: declared,
+    }),
+  ).toContain("ci.yml: main push group must identify workflow and branch");
+  concurrency.group = `\${{ github.workflow }}-ci-\${{ github.ref }}`;
+  expect(
+    checkCiEventPolicies({
+      workflows: { "ci.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual([]);
+});
+
+test("advisory fix evidence is an explicit label opt-in rather than an automatic PR suite", () => {
+  const declared = {
+    jobs: {
+      "ci.yml/ci-result": "pr-fast",
+      "ci.yml/fix-tests-on-base": "pr-opt-in",
+    },
+    pending: {},
+  };
+  const proof = { if: "github.event_name == 'pull_request'" };
+  const workflow = {
+    on: { pull_request: {} },
+    jobs: {
+      "ci-result": {
+        needs: ["fix-tests-on-base"],
+        steps: [{ env: { FAST_REQUIRED: "[]" } }],
+      },
+      "fix-tests-on-base": proof,
+    },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "ci.yml": workflow },
+      policy: declared,
+    }),
+  ).toContain(
+    "ci.yml/fix-tests-on-base: advisory proof must require the prove-fix label",
+  );
+  proof.if +=
+    " && contains(github.event.pull_request.labels.*.name, 'prove-fix')";
+  expect(
+    checkCiEventPolicies({
+      workflows: { "ci.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual([]);
+});

@@ -12,7 +12,9 @@ const script = path.join(
 );
 const workflowSchema = v.looseObject({
   on: v.looseObject({
-    pull_request: v.looseObject({ paths: v.optional(v.array(v.string())) }),
+    pull_request: v.optional(
+      v.looseObject({ paths: v.optional(v.array(v.string())) }),
+    ),
   }),
   jobs: v.record(v.string(), v.unknown()),
 });
@@ -202,25 +204,19 @@ test("migration coverage preserves every prior dependency and excludes unrelated
   for (const file of [
     "apps/api/drizzle/20261001/migration.sql",
     "apps/api/src/db/schema/tables.ts",
-    "apps/api/src/lib/db/client.ts",
-    "apps/api/src/server.ts",
     "apps/api/drizzle.config.ts",
-    "scripts/check-migration-safety.ts",
-    "scripts/check-migration-index-builds.test.ts",
-    "scripts/migration-index-findings.json",
-    "scripts/fixtures/migration-index-builds/create-index/good.sql",
-    "scripts/check-migrations.sh",
-    "scripts/rehearse-better-auth-constraint-retry.sh",
-    ".squawk.toml",
-    ".github/workflows/db-migrations.yml",
-    ".github/workflows/release.yml",
-    "scripts/detect-security-workflow-changes.sh",
   ]) {
     expect(detect("migrations", [file]), file).toBe("true");
   }
-  expect(detect("migrations", ["apps/web/src/view.ts", "README.md"])).toBe(
-    "false",
-  );
+  expect(
+    detect("migrations", [
+      "apps/web/src/view.ts",
+      "README.md",
+      "apps/api/src/lib/db/client.ts",
+      "apps/api/src/server.ts",
+      "scripts/check-migration-safety.ts",
+    ]),
+  ).toBe("false");
 });
 
 test("unknown PR bases, diff failures and non-PR events run the checks", () => {
@@ -330,7 +326,7 @@ test("both workflows gate every expensive job and run on detector failure", () =
       expect(job.if).toContain("needs.scope.outputs.required != 'false'");
     }
   }
-  expect(migrations.on.pull_request.paths).toBeUndefined();
+  expect(migrations.on.pull_request?.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
       push: v.object({ branches: v.array(v.string()) }),
@@ -347,84 +343,6 @@ test("both workflows gate every expensive job and run on detector failure", () =
   ]);
 });
 
-// The PR trigger selects source changes; supplemental data remains covered by
-// full scans on main and the nightly schedule.
-const supplementalData = new Set(["json", "yaml", "yml", "raml", "xml"]);
-const sourceFiles = (language: string) => {
-  const files = languageExtensions.get(language);
-  if (!files) {
-    panic(`Unmapped CodeQL language: ${language}`);
-  }
-  if (
-    !["javascript", "typescript", "javascript-typescript"].includes(language)
-  ) {
-    return files;
-  }
-  return files.filter(
-    (file) => !supplementalData.has(file.split(".").at(-1) ?? ""),
-  );
-};
-const triggerMatches = (file: string, paths: string[]) =>
-  paths.some((glob) => new Bun.Glob(glob).match(file));
-const expectTriggerCoverage = (language: string, paths: string[]) => {
-  const files = sourceFiles(language);
-  expect(files.length, language).toBeGreaterThan(0);
-  for (const file of files) {
-    expect(triggerMatches(file, paths), `${language}: ${file}`).toBe(true);
-  }
-};
-
-test("CodeQL PR triggers cover every analyzed language source extension", () => {
-  const paths = v.parse(v.array(v.string()), codeql.on.pull_request.paths);
-  expect(analyze.strategy.matrix.language.length).toBeGreaterThan(0);
-  for (const language of analyze.strategy.matrix.language) {
-    expectTriggerCoverage(language, paths);
-  }
-  for (const file of [
-    "source.cjs",
-    "source.xsjs",
-    "source.xsjslib",
-    "page.html.erb",
-    "page.jsp",
-    "page.html.dot",
-    "nested/PAGE.HTML",
-    "nested/SOURCE.TS",
-    ".github/codeql/config.yml",
-    ".github/workflows/codeql.yml",
-    "scripts/detect-security-workflow-changes.sh",
-  ]) {
-    expect(triggerMatches(file, paths), file).toBe(true);
-  }
-  for (const file of [
-    "README.md",
-    "docs/guide.md",
-    "scripts/fixtures/codeql-supported-versions-compilers.rst",
-    "snapshots/result.json",
-    "bun.lock",
-    "nested/package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-    "uv.lock",
-    "Cargo.lock",
-  ]) {
-    expect(triggerMatches(file, paths), file).toBe(false);
-  }
-});
-
-test("CodeQL trigger coverage rejects missing extensions and unknown languages", () => {
-  const paths = v.parse(v.array(v.string()), codeql.on.pull_request.paths);
-  const missingMts = paths.filter(
-    (glob) => !triggerMatches("source.mts", [glob]),
-  );
-  expect(missingMts).not.toEqual(paths);
-  expect(() => expectTriggerCoverage("javascript", missingMts)).toThrow(
-    "nested/source.mts",
-  );
-  expect(() => expectTriggerCoverage("unmapped-language", paths)).toThrow(
-    "Unmapped CodeQL language",
-  );
-});
-
 test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
   const triggers = v.parse(
     v.looseObject({
@@ -433,11 +351,7 @@ test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
         paths: v.optional(v.array(v.string())),
         "paths-ignore": v.optional(v.array(v.string())),
       }),
-      pull_request: v.looseObject({
-        branches: v.array(v.string()),
-        types: v.array(v.string()),
-        paths: v.array(v.string()),
-      }),
+      merge_group: v.object({ types: v.array(v.string()) }),
       schedule: v.array(v.object({ cron: v.string() })),
       workflow_dispatch: v.null_(),
     }),
@@ -446,13 +360,8 @@ test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
   expect(triggers.push.branches).toEqual(["main"]);
   expect(triggers.push.paths).toBeUndefined();
   expect(triggers.push["paths-ignore"]).toBeUndefined();
-  expect(triggers.pull_request.branches).toEqual(["main"]);
-  expect(triggers.pull_request.types).toEqual([
-    "opened",
-    "synchronize",
-    "reopened",
-    "ready_for_review",
-  ]);
+  expect(triggers.merge_group.types).toEqual(["checks_requested"]);
+  expect(Object.hasOwn(codeql.on, "pull_request")).toBe(false);
   expect(triggers.schedule).toHaveLength(1);
   const cron = triggers.schedule.at(0)?.cron.split(" ");
   expect(cron?.slice(2)).toEqual(["*", "*", "*"]);

@@ -16,12 +16,12 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
+import eventPolicies from "../.github/ci-event-policy.json";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { extractPlanSelector } from "./ci-plan-selector";
-import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
@@ -1103,7 +1103,10 @@ const jobIf = (job: unknown) =>
 
 const FULL_DEPTH_PREDICATE = "needs.ci-plan.outputs.suite_depth == 'full'";
 const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
-  jobIf(body).includes(FULL_DEPTH_PREDICATE) ? [job] : [],
+  jobIf(body).includes(FULL_DEPTH_PREDICATE) ||
+  jobIf(body).includes("github.event_name != 'pull_request' && (")
+    ? [job]
+    : [],
 );
 const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
@@ -1566,15 +1569,15 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
-test("a planned release screenshot check runs and must pass on the release pull request", () => {
+test("a planned release screenshot check certifies the merge group", () => {
   // The planner selects it only for release pull requests and tags, so a
   // full-depth gate would skip it on the pull request every time.
   expect(jobIf(ciJobs["marketing-screenshots"])).toContain(
     "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
   );
-  expect(heavyJobs).not.toContain("marketing-screenshots");
-  expect(fastRequired).toContain("marketing-screenshots");
-  const event = EVENT.pullRequest;
+  expect(heavyJobs).toContain("marketing-screenshots");
+  expect(fastRequired).not.toContain("marketing-screenshots");
+  const event = EVENT.mergeGroup;
   expect(
     evaluateResult({ event, results: { "marketing-screenshots": "skipped" } }),
   ).toBe(1);
@@ -1587,10 +1590,10 @@ test("a planned release screenshot check runs and must pass on the release pull 
   ).toBe(0);
 });
 
-test("path-scoped platform checks run on the pull requests that touch them", () => {
+test("path-scoped platform checks run in the merge group", () => {
   for (const job of ["desktop-clippy", "windows-scripts"]) {
-    expect(fastRequired, job).toContain(job);
-    expect(heavyJobs, job).not.toContain(job);
+    expect(fastRequired, job).not.toContain(job);
+    expect(heavyJobs, job).toContain(job);
     expect(typeof jobScopes[job], job).toBe("string");
   }
 });
@@ -2227,13 +2230,13 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
     );
-    expect(fastRequired).toContain("e2e-production-shard");
+    expect(fastRequired).not.toContain("e2e-production-shard");
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
         results: { "e2e-production-shard": "skipped" },
       }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
@@ -2647,7 +2650,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
   expect(collabPort).not.toBe(valkeyPort);
   expect(services.services["redis"]?.ports).toEqual([`${collabPort}:6379`]);
   expect(services.services["valkey"]?.ports).toEqual([`${valkeyPort}:6379`]);
-  for (const event of [...FULL_DEPTH_EVENTS, EVENT.pullRequest]) {
+  for (const event of FULL_DEPTH_EVENTS) {
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(
         evaluateResult({ event, results: { "service-suites": result } }),
@@ -3038,15 +3041,15 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   }
 });
 
-test("route-relevant pull requests plan the required route smoke job", () => {
+test("route-relevant changes plan the required merge-group smoke", () => {
   const scope = "route_smoke_required";
   const selectedBy = jobIf(ciJobs["route-smoke"]);
   expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
-  expect(selectedBy).toContain("github.event_name == 'pull_request'");
+  expect(selectedBy).toContain("github.event_name == 'merge_group'");
   expect(selectedBy).toContain("needs.web-build.result == 'success'");
-  expect(heavyJobs).not.toContain("route-smoke");
+  expect(heavyJobs).toContain("route-smoke");
   expect(jobScopes["route-smoke"]).toBe(scope);
-  expect(fastRequired).toContain("route-smoke");
+  expect(fastRequired).not.toContain("route-smoke");
   for (const file of [
     "apps/web/src/routes/_authenticated/matters.tsx",
     "apps/web/src/routeTree.gen.ts",
@@ -3070,7 +3073,7 @@ test("route-relevant pull requests plan the required route smoke job", () => {
   }
   expect(runSelector(["docs/example.md"], [scope])).toEqual(["false"]);
   expect(runSelector([], [scope])).toEqual(["false"]);
-  for (const event of [EVENT.mergeGroup, EVENT.workflowDispatch]) {
+  for (const event of [EVENT.workflowDispatch]) {
     expect(
       runSelector(
         ["apps/web/src/routes/new.tsx"],
@@ -3081,7 +3084,7 @@ test("route-relevant pull requests plan the required route smoke job", () => {
       ),
     ).toEqual(["false"]);
   }
-  const event = EVENT.pullRequest;
+  const event = EVENT.mergeGroup;
   expect(evaluateResult({ event, results: { "route-smoke": "skipped" } })).toBe(
     1,
   );
@@ -3182,14 +3185,14 @@ test("an unreadable PR diff requires route smoke while manual and queue runs ret
       );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       expect(readFileSync(output, "utf-8"))
-        .toContain(`route_smoke_required=${event === EVENT.pullRequest}
+        .toContain(`route_smoke_required=${event === EVENT.pullRequest || event === EVENT.mergeGroup}
 `);
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test("service-suite PR scope binds planning, execution, and the fast result gate", () => {
+test("service-suite scopes remain planned while pull requests skip execution", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
   expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
@@ -3257,7 +3260,7 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
         .replaceAll("github.event_name", "'pull_request'"),
-      exitCode: suiteDepth === "full" || selected ? 0 : 1,
+      exitCode: 1,
     })),
   );
   for (const { item, exitCode } of runBashBatch(
@@ -3280,8 +3283,7 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
           results: { "service-suites": result },
           unplannedScopes: selected ? [] : [scope],
         },
-        exitCode:
-          result === "success" || (result === "skipped" && !selected) ? 0 : 1,
+        exitCode: result === "success" || result === "skipped" ? 0 : 1,
       })),
     ),
   );
@@ -3382,7 +3384,7 @@ test("drawn property samples are the inputs fc.assert would run", () => {
   expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
 });
 
-test("image checks run on pull requests that change image inputs and bind the fast result gate", () => {
+test("image scopes remain planned while pull requests skip execution", () => {
   const plan = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
     ciJobs["ci-plan"],
@@ -3431,7 +3433,7 @@ test("image checks run on pull requests that change image inputs and bind the fa
       `needs.ci-plan.outputs.${scope} == 'true'`,
     );
     expect(fastJobScopes[job], job).toBe(scope);
-    expect(fastRequired, job).toContain(job);
+    expect(fastRequired, job).not.toContain(job);
     expect(plan.outputs[scope], job).toBe(
       `\${{ steps.changed-files.outputs.${scope} }}`,
     );
@@ -3463,9 +3465,7 @@ test("image checks run on pull requests that change image inputs and bind the fa
         expect(
           Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
           `${job} ${file} ${suiteDepth}`,
-        ).toBe(
-          broadPlanned === "true" && (suiteDepth === "full" || planned) ? 0 : 1,
-        );
+        ).toBe(1);
       }
       for (const result of ["success", "failure", "skipped"]) {
         expect(
@@ -3475,9 +3475,7 @@ test("image checks run on pull requests that change image inputs and bind the fa
             unplannedScopes: planned ? [] : [scope],
           }),
           `${job} ${file} ${result}`,
-        ).toBe(
-          result === "success" || (result === "skipped" && !planned) ? 0 : 1,
-        );
+        ).toBe(result === "failure" ? 1 : 0);
       }
     }
   }
@@ -3632,12 +3630,18 @@ test("the production service-scope capture rejects crashed or malformed detector
     rmSync(directory, { recursive: true, force: true });
   }
 });
-const queueOnlyJobs = v.parse(
-  v.record(
-    v.string(),
-    v.pipe(v.string(), v.startsWith("queue-only because "), v.minLength(50)),
-  ),
-  queueOnlyReasons,
+const queueOnlyJobs = Object.fromEntries(
+  Object.entries(eventPolicies.jobs)
+    .filter(
+      ([key, policy]) =>
+        policy === "queue" &&
+        key.startsWith("ci.yml/") &&
+        gatedJobs.includes(key.slice("ci.yml/".length)),
+    )
+    .map(([key]) => [
+      key.slice("ci.yml/".length),
+      "queue-only because its declared event policy certifies the merged tree",
+    ]),
 );
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
@@ -3647,12 +3651,23 @@ type DepthContext = {
   depth: SuiteDepth;
   heavyOnly?: boolean;
   queueDepth?: "full" | "thin";
+  proveFix?: boolean;
 };
 const runsAtDepth = (
   condition: string,
-  { event, depth, heavyOnly, queueDepth = "full" }: DepthContext,
+  {
+    event,
+    depth,
+    heavyOnly,
+    queueDepth = "full",
+    proveFix = false,
+  }: DepthContext,
 ) => {
   const expression = condition
+    .replaceAll(
+      "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
+      () => String(proveFix),
+    )
     .replaceAll(/\balways\(\)/gu, "true")
     .replaceAll(/\bcancelled\(\)/gu, "false")
     .replaceAll(
@@ -4072,11 +4087,27 @@ test("network-baseline PR coverage reuses the route-smoke profile and path scope
     "needs.ci-plan.outputs.route_smoke_required == 'true'",
   );
   expect(jobScopes["route-smoke"]).toBe("route_smoke_required");
-  expect(fastRequired).toContain("route-smoke");
+  expect(fastRequired).not.toContain("route-smoke");
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
       results: { "route-smoke": "skipped" },
     }),
-  ).toBe(1);
+  ).toBe(0);
+});
+
+test("the advisory base proof runs only for pull requests opting in with prove-fix", () => {
+  const condition = jobIf(ciJobs["fix-tests-on-base"]);
+  expect(fastRequired).not.toContain("fix-tests-on-base");
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    for (const proveFix of [false, true]) {
+      expect(
+        runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast, proveFix }),
+      ).toBe(event === EVENT.pullRequest && proveFix);
+    }
+  }
 });
