@@ -1584,8 +1584,6 @@ describe("PostHog browser analytics adapter", () => {
       host: "https://posthog.test",
       key: "phc_test",
     });
-    const buildProperties = registerMock.mock.calls.at(0)?.[0];
-    expect(buildProperties).toBeDefined();
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset();
@@ -1593,7 +1591,10 @@ describe("PostHog browser analytics adapter", () => {
     // `reset` clears super-properties; each one is followed by a register.
     expect(registerMock).toHaveBeenCalledTimes(3);
     for (const [properties] of registerMock.mock.calls) {
-      expect(properties).toEqual(buildProperties);
+      expect(Object.keys(properties).toSorted()).toEqual([
+        "app_commit",
+        "app_version",
+      ]);
     }
   });
 
