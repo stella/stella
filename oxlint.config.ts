@@ -5322,11 +5322,15 @@ export default defineConfig({
     {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
-      // helper. Scoped to apps/web, apps/api and the helper's own package,
+      // helper. Scoped to apps/web, apps/api, the repository and API scripts
+      // (whose sorted output feeds committed baselines and CI reports, so it
+      // must not depend on the runner's locale) and the helper's own package,
       // where the one legitimate bare call lives.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "apps/api/src/**/*.ts",
+        "apps/api/scripts/**/*.ts",
+        "scripts/**/*.ts",
         "packages/collation/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
       ],

@@ -8,6 +8,7 @@ import {
   CORRESPONDENCE_SCAN_VERDICTS,
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
+  CORRESPONDENCE_SOURCES,
   type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
   type CorrespondenceOriginalSignature,
@@ -76,10 +77,17 @@ export const correspondence = p.pgTable.withRLS(
       .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
       .notNull(),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
-    intake: p.text("intake", { enum: CORRESPONDENCE_INTAKES }).notNull(),
-    authenticatedSenderAddress: p
-      .text("authenticated_sender_address")
-      .notNull(),
+    source: p
+      .text("source", { enum: CORRESPONDENCE_SOURCES })
+      .notNull()
+      .default("delivery"),
+    // An upload reads its message from this matter file; deleting the file
+    // deletes the record.
+    sourceEntityId: safeUuid<"entity">("source_entity_id"),
+    // Delivery provenance; correspondence_provenance_check binds these
+    // columns to the source.
+    intake: p.text("intake", { enum: CORRESPONDENCE_INTAKES }),
+    authenticatedSenderAddress: p.text("authenticated_sender_address"),
     originalSignature:
       jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
     messageId: p.text("message_id"),
@@ -95,9 +103,9 @@ export const correspondence = p.pgTable.withRLS(
     references: jsonb("references").$type<string[]>().notNull(),
     bodyText: p.text("body_text").notNull(),
     bodyHtml: p.text("body_html"),
-    spf: p.text("spf", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
-    dkim: p.text("dkim", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
-    dmarc: p.text("dmarc", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
+    spf: p.text("spf", { enum: CORRESPONDENCE_AUTH_RESULTS }),
+    dkim: p.text("dkim", { enum: CORRESPONDENCE_AUTH_RESULTS }),
+    dmarc: p.text("dmarc", { enum: CORRESPONDENCE_AUTH_RESULTS }),
     alignedIdentifier: p.text("aligned_identifier"),
     handlingState: p
       .text("handling_state", { enum: CORRESPONDENCE_HANDLING_STATES })
@@ -117,10 +125,20 @@ export const correspondence = p.pgTable.withRLS(
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_source_entity_workspace_fk",
+        columns: [table.sourceEntityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
     p.unique("correspondence_id_ws_unq").on(table.id, table.workspaceId),
     p
       .uniqueIndex("correspondence_ws_dedup_uidx")
       .on(table.workspaceId, table.dedupKey),
+    p
+      .uniqueIndex("correspondence_ws_source_entity_uidx")
+      .on(table.workspaceId, table.sourceEntityId),
     p
       .index("correspondence_ws_received_idx")
       .on(table.workspaceId, table.receivedAt.desc(), table.id.desc()),
@@ -136,8 +154,16 @@ export const correspondence = p.pgTable.withRLS(
       sql`${table.intake} in (${valuesSql(CORRESPONDENCE_INTAKES)})`,
     ),
     p.check(
+      "correspondence_source_check",
+      sql`${table.source} in (${valuesSql(CORRESPONDENCE_SOURCES)})`,
+    ),
+    p.check(
+      "correspondence_provenance_check",
+      sql`((${table.source} = 'delivery' and ${table.intake} is not null and ${table.authenticatedSenderAddress} is not null and ${table.spf} is not null and ${table.dkim} is not null and ${table.dmarc} is not null and ${table.sourceEntityId} is null) or (${table.source} = 'upload' and ${table.intake} is null and ${table.authenticatedSenderAddress} is null and ${table.spf} is null and ${table.dkim} is null and ${table.dmarc} is null and ${table.alignedIdentifier} is null and ${table.sourceEntityId} is not null)) is true`,
+    ),
+    p.check(
       "correspondence_original_signature_check",
-      sql`((${table.intake} = 'direct' and ${table.originalSignature} is null) or (${table.intake} in (${valuesSql(FORWARDED_INTAKES)}) and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or (${table.intake} = 'forwarded_attachment' and ${table.originalSignature}->>'status' = 'verified' and jsonb_typeof(${table.originalSignature}->'domain') = 'string' and length(${table.originalSignature}->>'domain') > 0)) is true`,
+      sql`((${table.intake} = 'direct' and ${table.originalSignature} is null) or (${table.intake} in (${valuesSql(FORWARDED_INTAKES)}) and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or (${table.source} = 'upload' and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or ((${table.intake} = 'forwarded_attachment' or ${table.source} = 'upload') and ${table.originalSignature}->>'status' = 'verified' and jsonb_typeof(${table.originalSignature}->'domain') = 'string' and length(${table.originalSignature}->>'domain') > 0)) is true`,
     ),
     p.check(
       "correspondence_direction_check",
@@ -305,6 +331,9 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     p
       .index("correspondence_attachments_ws_record_idx")
       .on(table.workspaceId, table.correspondenceId),
+    p
+      .index("correspondence_attachments_ws_entity_idx")
+      .on(table.workspaceId, table.entityId),
     p.check(
       "correspondence_attachments_size_check",
       sql`${table.byteSize} >= 0 and ${table.ordinal} >= 0`,

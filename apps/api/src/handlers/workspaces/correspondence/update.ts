@@ -146,6 +146,8 @@ const updateCorrespondence = createSafeHandler(
           });
         }
         const {
+          source,
+          sourceEntityId,
           intake,
           originalSignature,
           authenticatedSenderAddress,
@@ -164,6 +166,8 @@ const updateCorrespondence = createSafeHandler(
           record: {
             ...publicRecord,
             ...readCorrespondenceProvenance({
+              source,
+              sourceEntityId,
               intake,
               originalSignature,
               authenticatedSenderAddress,

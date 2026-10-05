@@ -31,6 +31,8 @@ import { panic, Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -211,7 +213,7 @@ export const diffSummaries = (
         const from = before.files[file] ?? 0;
         return to > from ? [{ file, from, to }] : [];
       })
-      .toSorted((a, b) => a.file.localeCompare(b.file));
+      .toSorted((a, b) => compareCodeUnit(a.file, b.file));
 
     return {
       workspace,

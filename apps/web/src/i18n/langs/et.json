@@ -2158,6 +2158,7 @@
     "markHandled": "Märgi käsitletuks",
     "markNew": "Märgi uueks",
     "noAddress": "Aktiivset e-posti aadressi pole.",
+    "openSourceFile": "Ava e-kirja fail",
     "originalSender": "Algne saatja",
     "originalSenderUnverified": "Algne saatja (esitatud, kontrollimata)",
     "originalSignatureVerified": "Algne allkiri kontrollitud (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Vaheta aadress",
     "sentAt": "Saadetud",
     "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
+    "statedInFile": "Päised (failis esitatud)",
     "states": {
       "handled": "Käsitletud"
     },
     "title": "Kirjavahetus",
-    "unknownApprover": "Tundmatu kinnitaja"
+    "unknownApprover": "Tundmatu kinnitaja",
+    "uploadedBy": "Üles laadinud {name}",
+    "uploadedFile": "Üles laaditud e-kirja fail"
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",

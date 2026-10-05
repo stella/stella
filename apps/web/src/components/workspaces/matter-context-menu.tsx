@@ -499,17 +499,21 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const { isOrganizationPending: orgPending, items: memberItems } =
-    useAddableMembers(workspaceId);
+  const memberQuery = useAddableMembers(workspaceId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  const selectedMember =
+    memberQuery.view.type === "items"
+      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
+      : undefined;
+
   const handleSubmit = () => {
-    if (!selectedUserId) {
+    if (!selectedMember) {
       return;
     }
 
     addMember.mutate(
-      { workspaceId, userId: selectedUserId },
+      { workspaceId, userId: selectedMember.value },
       {
         onSuccess: () => {
           stellaToast.add({
@@ -555,7 +559,7 @@ export const AddMemberDialog = ({
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           <AddableMemberSelect
-            items={memberItems}
+            query={memberQuery}
             onValueChange={setSelectedUserId}
             value={selectedUserId}
           />
@@ -565,7 +569,7 @@ export const AddMemberDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!selectedUserId || addMember.isPending || orgPending}
+            disabled={selectedMember === undefined || addMember.isPending}
             onClick={handleSubmit}
           >
             {t("workspaces.members.addMember")}

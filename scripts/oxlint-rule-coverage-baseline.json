@@ -110,7 +110,6 @@
   "queue-worker-error-sink/queue-worker-error-sink::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-billing-cap-crossings/require-billing-cap-crossings::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
-  "require-cached-collator/require-cached-collator::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-cn-for-classname-composition/require-cn-for-classname-composition::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-complete-compaction-generation/require-complete-compaction-generation::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-contained-handler/no-portal-under-interactive-ancestor::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",

@@ -28,6 +28,8 @@
 import { Result } from "better-result";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 import { lapsedAcceptances } from "./dependency-audit-acceptance";
 
@@ -221,7 +223,7 @@ const gatedAdvisoriesFromAuditResult = ({
       }
     }
   }
-  return [...byId.values()].toSorted((a, b) => a.id.localeCompare(b.id));
+  return [...byId.values()].toSorted((a, b) => compareCodeUnit(a.id, b.id));
 };
 
 // Runs `bun audit --json` in the repo root and returns the distinct gated
