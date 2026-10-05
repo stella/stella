@@ -5,7 +5,6 @@
  */
 
 import {
-  CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
   type CitationResolutionRule,
 } from "@/api/handlers/case-law/citation-resolution-status";
@@ -60,8 +59,7 @@ export const CITATION_AMBIGUITY_SHAPE_DISPOSITION = {
   [CITATION_AMBIGUITY_SHAPE.CROSS_COURT]: { kind: "unruled" },
   [CITATION_AMBIGUITY_SHAPE.UNTYPED]: { kind: "unruled" },
   [CITATION_AMBIGUITY_SHAPE.ONE_FILE_MERITS]: {
-    kind: "ruled",
-    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
+    kind: "unruled",
   },
   [CITATION_AMBIGUITY_SHAPE.ORDERS_ONLY]: { kind: "unruled" },
   [CITATION_AMBIGUITY_SHAPE.MERITS_ONLY]: { kind: "unruled" },

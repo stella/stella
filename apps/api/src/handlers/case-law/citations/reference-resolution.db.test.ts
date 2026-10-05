@@ -18,10 +18,12 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   caseLawCitations,
@@ -41,7 +43,7 @@ import {
 import {
   CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
-  CITATION_RESOLUTION_RULES,
+  ACTIVE_CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_STATUS,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-resolution-status";
@@ -103,7 +105,7 @@ type ReferenceSpec = {
 type Expected =
   | {
       status: typeof CITATION_RESOLUTION_STATUS.RESOLVED;
-      rule: (typeof CITATION_RESOLUTION_RULES)[number];
+      rule: (typeof ACTIVE_CITATION_RESOLUTION_RULES)[number];
       target: string;
     }
   | { status: typeof CITATION_RESOLUTION_STATUS.AMBIGUOUS }
@@ -137,6 +139,73 @@ const US = "Ústavní soud";
 const [nalez, usneseni] = ["nález", "usnesení"];
 
 const cases: Case[] = [
+  {
+    name: "an explicit date excludes the only identity holder",
+    reference: { hints: { decisionDate: "2019-05-05" } },
+    holders: [{ decisionDate: "2019-03-03" }],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "an explicit type excludes the only identity holder",
+    reference: { hints: { decisionType: CITATION_DECISION_TYPE_HINT.ORDER } },
+    holders: [{ decisionType: nalez }],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "an explicit date matches neither decision of one court",
+    reference: {
+      hints: {
+        decisionDate: "2019-06-06",
+        decisionType: CITATION_DECISION_TYPE_HINT.MERITS,
+      },
+    },
+    holders: [
+      { court: US, decisionType: nalez, decisionDate: "2019-03-03" },
+      { court: US, decisionType: usneseni, decisionDate: "2019-05-05" },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "a date and type identify different decisions of one court",
+    reference: {
+      hints: {
+        decisionDate: "2019-05-05",
+        decisionType: CITATION_DECISION_TYPE_HINT.MERITS,
+      },
+    },
+    holders: [
+      { court: US, decisionType: nalez, decisionDate: "2019-03-03" },
+      { court: US, decisionType: usneseni, decisionDate: "2019-05-05" },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "an exact ECLI with a contradictory date cannot choose the docket sibling",
+    reference: {
+      identifierType: DECISION_IDENTIFIER_TYPES.ECLI,
+      normalizedValue: "ECLI:CZ:US:2019:TEST.1",
+      hints: { decisionDate: "2019-05-05" },
+    },
+    holders: [
+      {
+        decisionDate: "2019-03-03",
+        identifiers: [
+          { type: "ecli", normalizedValue: "ECLI:CZ:US:2019:TEST.1" },
+        ],
+      },
+      { decisionDate: "2019-05-05" },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "an unknown ECLI never falls back to the docket",
+    reference: {
+      identifierType: DECISION_IDENTIFIER_TYPES.ECLI,
+      normalizedValue: "ECLI:CZ:US:2019:TEST.2",
+    },
+    holders: [{}, {}],
+    expect: { status: "unmatched", blocked: false },
+  },
   {
     name: "one holder",
     holders: [{ name: "only" }],
@@ -368,7 +437,7 @@ const cases: Case[] = [
     expect: { status: "ambiguous" },
   },
   {
-    name: "the printed sheet on two holders",
+    name: "the sheet and type together identify one holder",
     docket: "1 As 1/2021",
     reference: {
       hints: {
@@ -378,6 +447,7 @@ const cases: Case[] = [
     },
     holders: [
       {
+        name: "merits",
         ecli: "ECLI:CZ:NSS:2021:1.As.1.2021.33",
         decisionType: nalez,
         court: US,
@@ -388,7 +458,7 @@ const cases: Case[] = [
         court: US,
       },
     ],
-    expect: { status: "ambiguous" },
+    expect: { status: "resolved", rule: "type-hint", target: "merits" },
   },
   {
     name: "the printed date on one holder",
@@ -400,7 +470,7 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "decision-date", target: "dated" },
   },
   {
-    name: "the sheet outranks the date",
+    name: "conflicting sheet and date leave the reference ambiguous",
     docket: "1 As 1/2019",
     reference: { hints: { sheetNumber: "7", decisionDate: "2019-05-05" } },
     holders: [
@@ -411,10 +481,10 @@ const cases: Case[] = [
       },
       { decisionDate: "2019-05-05", ecli: "ECLI:CZ:NSS:2019:1.As.1.2019.9" },
     ],
-    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+    expect: { status: "ambiguous" },
   },
   {
-    name: "the printed date on two holders withholds the one-file rule",
+    name: "the printed date on two holders stays ambiguous",
     reference: { hints: { decisionDate: "2019-03-03" } },
     holders: [
       { court: US, decisionType: nalez, decisionDate: "2019-03-03" },
@@ -464,7 +534,7 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "type-hint", target: "judgment" },
   },
   {
-    name: "the printed type on two holders withholds the one-file rule",
+    name: "the printed type on two holders stays ambiguous",
     reference: { hints: { decisionType: CITATION_DECISION_TYPE_HINT.ORDER } },
     holders: [
       { court: US, decisionType: nalez },
@@ -488,7 +558,7 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "court-hint", target: "brno" },
   },
   {
-    name: "a type hint that singles out a holder outranks the court",
+    name: "conflicting type and court leave the reference ambiguous",
     reference: {
       hints: {
         court: "Krajského soudu v Brně",
@@ -503,7 +573,7 @@ const cases: Case[] = [
         decisionType: usneseni,
       },
     ],
-    expect: { status: "resolved", rule: "type-hint", target: "order" },
+    expect: { status: "ambiguous" },
   },
   {
     name: "one file, one merits decision",
@@ -512,7 +582,7 @@ const cases: Case[] = [
       { court: US, decisionType: usneseni },
       { court: US, decisionType: "uznesenie" },
     ],
-    expect: { status: "resolved", rule: "one-file-merits", target: "merits" },
+    expect: { status: "ambiguous" },
   },
   {
     name: "one merits decision across two courts",
@@ -539,7 +609,7 @@ const cases: Case[] = [
         decisionType: usneseni,
       })),
     ],
-    expect: { status: "resolved", rule: "one-file-merits", target: "merits" },
+    expect: { status: "ambiguous" },
   },
   {
     name: "a file at the cap",
@@ -885,6 +955,154 @@ describe("under the column's default collation", () => {
     await matrix.client?.close();
   });
 
+  test("duplicate court numbers require agreeing explicit discriminators in SQL and holders", async () => {
+    let nextIndex = 10_000;
+    await assertProperty(
+      "duplicate court numbers require agreeing explicit discriminators in SQL and holders",
+      fc.asyncProperty(
+        fc.record({
+          year: fc.integer({ min: 1918, max: 2019 }),
+          month: fc.integer({ min: 1, max: 12 }),
+          day: fc.integer({ min: 1, max: 27 }),
+        }),
+        fc.boolean(),
+        async ({ year, month, day }, reversed) => {
+          const firstDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const secondDate = `${year}-${String(month).padStart(2, "0")}-${String(day + 1).padStart(2, "0")}`;
+          const holders: HolderSpec[] = [
+            {
+              name: "merits",
+              court: US,
+              decisionType: nalez,
+              decisionDate: firstDate,
+            },
+            {
+              name: "order",
+              court: US,
+              decisionType: usneseni,
+              decisionDate: secondDate,
+            },
+          ];
+          const generated: Case[] = [
+            { name: "bare file", holders, expect: { status: "ambiguous" } },
+            {
+              name: "date selects merits",
+              holders,
+              reference: { hints: { decisionDate: firstDate } },
+              expect: {
+                status: "resolved",
+                rule: "decision-date",
+                target: "merits",
+              },
+            },
+            {
+              name: "date selects order",
+              holders,
+              reference: { hints: { decisionDate: secondDate } },
+              expect: {
+                status: "resolved",
+                rule: "decision-date",
+                target: "order",
+              },
+            },
+            {
+              name: "type selects order",
+              holders,
+              reference: {
+                hints: { decisionType: CITATION_DECISION_TYPE_HINT.ORDER },
+              },
+              expect: {
+                status: "resolved",
+                rule: "type-hint",
+                target: "order",
+              },
+            },
+            {
+              name: "date and type agree",
+              holders,
+              reference: {
+                hints: {
+                  decisionDate: firstDate,
+                  decisionType: CITATION_DECISION_TYPE_HINT.MERITS,
+                },
+              },
+              expect: {
+                status: "resolved",
+                rule: "decision-date",
+                target: "merits",
+              },
+            },
+            {
+              name: "date and type contradict",
+              holders,
+              reference: {
+                hints: {
+                  decisionDate: firstDate,
+                  decisionType: CITATION_DECISION_TYPE_HINT.ORDER,
+                },
+              },
+              expect: { status: "ambiguous" },
+            },
+            {
+              name: "no matching date",
+              holders,
+              reference: {
+                hints: {
+                  decisionDate: "2020-02-01",
+                  decisionType: CITATION_DECISION_TYPE_HINT.ORDER,
+                },
+              },
+              expect: { status: "ambiguous" },
+            },
+          ];
+          const ecli = `ECLI:CZ:US:${year}:TEST.${nextIndex}.1`;
+          generated.push({
+            name: "ECLI selects the exact holder without its docket sibling",
+            reference: {
+              identifierType: DECISION_IDENTIFIER_TYPES.ECLI,
+              normalizedValue: ecli,
+            },
+            holders: [
+              {
+                name: "merits",
+                court: US,
+                decisionType: nalez,
+                decisionDate: firstDate,
+                ecli,
+                identifiers: [{ type: "ecli", normalizedValue: ecli }],
+              },
+              {
+                name: "order",
+                court: US,
+                decisionType: usneseni,
+                decisionDate: secondDate,
+              },
+            ],
+            expect: {
+              status: "resolved",
+              rule: "unique-key",
+              target: "merits",
+            },
+          });
+          for (const testCase of generated) {
+            await expectOneOutcome(
+              dbOf(matrix),
+              {
+                ...testCase,
+                holders: reversed
+                  ? testCase.holders.toReversed()
+                  : testCase.holders,
+              },
+              nextIndex,
+            );
+            nextIndex += 1;
+          }
+        },
+      ),
+      { numRuns: 12 },
+    );
+  }, 120_000);
+
   test("the collation folds accented capitals", async () => {
     expect(await foldTo(dbOf(matrix), "NÁLEZ")).toEqual({
       collation: null,
@@ -965,7 +1183,7 @@ test("the matrix declares every rule and every outcome", () => {
   );
   expect<string[]>([...declared].toSorted()).toEqual(
     [
-      ...CITATION_RESOLUTION_RULES,
+      ...ACTIVE_CITATION_RESOLUTION_RULES,
       CITATION_RESOLUTION_STATUS.AMBIGUOUS,
       CITATION_RESOLUTION_STATUS.PENDING,
       "unmatched",

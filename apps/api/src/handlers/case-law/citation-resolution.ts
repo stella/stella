@@ -21,47 +21,17 @@
  *   an ambiguous link is worse than none: it puts a wrong edge in the
  *   citation graph and thus a wrong number in the authority ranking. Those
  *   rows are recorded as `ambiguous` for the adjudication tier to pick up.
- * - **The text names the sheet.** The first adjudication rule, and the only
- *   one that reads an identity rather than a word. One docket names a case
- *   file, and a court can rule in it more than once, so the docket alone
- *   leaves those decisions indistinguishable. The court names the one it
- *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" —
- *   which a candidate is known to carry from its recorded sheet or an ECLI
- *   in a sheet scheme (`SQL_READ_SHEET_SOURCES`), read as a lookup reads
- *   them. A sheet known only from a docket spelling is left to a lookup.
- *   When exactly one time-valid candidate answers to it, the link goes
- *   there.
- * - **The text names the date.** The second adjudication rule, for the
- *   citations that print no sheet: "rozsudek … ze dne 17. 2. 2021, č. j. …".
- *   When exactly one candidate carries that date, the link goes there. Two
- *   decisions of one file issued on one day leave the row ambiguous, which is
- *   what it is.
- * - **The text names the type.** The third adjudication rule. A citation is
- *   usually introduced with the decision's type ("nález sp. zn. …",
- *   "usnesením … č. j. …"); the extractor keeps that word as
- *   `cited_decision_type_hint`. When the key has several time-valid holders
- *   and exactly one is of the named type, the link goes there: no inference,
- *   the citing court said so. A hint that names none of them is a word the
- *   corpus cannot use and the next rule applies; one that names several
- *   leaves the row ambiguous, since the next rule would contradict the text.
- * - **The text names the court.** The fourth adjudication rule. Regional
- *   courts number files independently, so `65 A 3/2025` exists at several of
- *   them and the key alone never links a citation of a regional decision.
- *   The citing sentence says which court ("rozsudek Krajského soudu v
- *   Českých Budějovicích ze dne …, č. j. …"); the extractor keeps that
- *   phrase as `cited_court_hint`, and when exactly one time-valid holder
- *   sits at that court the link goes there. Both sides are compared through
- *   one normalization (`courtNameKeySql`), since the phrase is inflected and
- *   the stored name is not.
- * - **One file, one merits decision.** The fifth adjudication rule, and the
- *   one structural exception to uniqueness. A constitutional court keeps one
- *   docket number for a whole file, so the nález on the merits and the
- *   procedural orders issued along the way all canonicalize to the same key.
- *   A citation of that key means the nález: nobody cites an interim order by
- *   the file number alone. When every time-valid candidate sits at one court
- *   and exactly one of them is a merits decision while all the others are
- *   procedural orders, the link goes to the merits decision. Any other mix
- *   (two nálezy, an untyped candidate, a second court) stays ambiguous.
+ * - **Explicit discriminators.** A recorded sheet, date, decision type or
+ *   court can distinguish holders. Every recorded discriminator must agree
+ *   with the target, including when the identity has only one holder. No
+ *   hint can override another. A known ECLI matches its canonical identifier
+ *   directly and never falls back to the docket bridge.
+ * - **Duplicate files.** A bare file number with several holders stays
+ *   ambiguous. A merits decision is not inferred from the file's shape.
+ *   Among agreeing hints, an individually unique sheet, date, type or court
+ *   names the recorded rule in that order. If only their intersection is
+ *   unique, the reference remains ambiguous rather than claiming a rule
+ *   whose own discriminator did not distinguish a holder.
  *
  * The outcome lands in `resolution_status`, not in the nullability of
  * `cited_decision_id`. A null foreign key cannot distinguish "not examined
@@ -70,8 +40,7 @@
  * forever. With the outcome recorded, the pending set burns down.
  *
  * Two structural bounds keep one batch's cost independent of how popular a
- * key is: candidates are read through a `LATERAL (… LIMIT cap)` (a handful is
- * all uniqueness and the one-file rule need to know; a key held by more is
+ * key is: candidates are read through a `LATERAL (… LIMIT cap)` (a key held by more is
  * ambiguous without looking further), and the walk is a strict keyset over
  * `(citing_decision_id, id)`. The citing-side axis is deliberate: citation
  * ids and decision ids are both uuidv7, so walking citations in citing-
@@ -121,8 +90,6 @@ import {
   CITATION_CANDIDATE_SCAN_CAP,
   citationReopenableByKeySql,
   countsByRule,
-  MERITS_DECISION_TYPES,
-  PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -637,6 +604,13 @@ const citationMatchingHoldersSql = ({
  * `batch` supplies the citation's identity columns and its citing decision's
  * country, date and language.
  */
+const compatibleHolderSql = sql`(
+  (b.cited_sheet_number IS NULL OR k.answers_sheet)
+  AND (b.cited_decision_date IS NULL OR k.decision_date = b.cited_decision_date)
+  AND (b.cited_decision_type_hint IS NULL OR ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types))
+  AND (b.cited_court_hint IS NULL OR ${courtNameKeySql(sql.raw("k.court"))} = ${courtNameKeySql(sql.raw("b.cited_court_hint"))})
+)`;
+
 const classificationCtes = (batch: SQL): SQL => sql`
   ${policyCte()},
   ${hintFamilyCte()},
@@ -647,122 +621,26 @@ const classificationCtes = (batch: SQL): SQL => sql`
            pol.resolves_to,
            m.n,
            m.sole_id,
-           m.merits_id,
-           m.hinted_id,
-           m.court_id,
-           m.sheet_id,
-           m.date_id,
+           m.compatible_id,
            j.blocked,
-           -- The text named the sheet the decision sits on, and exactly one
-           -- candidate answers to it. The sheet is part of the decision's
-           -- own published identity rather than a word about it, and it is
-           -- asked before
-           -- every hint. Bounded like the rules below: a count taken on a
-           -- truncated candidate set is a guess.
-           (
-                 m.n > 1
-             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
-             AND b.cited_sheet_number IS NOT NULL
-             AND m.sheet_n = 1
-           ) AS sheet_matched,
-           -- The sentence dated the decision and exactly one candidate
-           -- carries that date. Read after the sheet, which is the more
-           -- specific of the two.
-           (
-                 m.n > 1
-             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
-             AND b.cited_decision_date IS NOT NULL
-             AND m.date_n = 1
-           ) AS date_matched,
-           -- The sheet or the date named several candidates, so it narrowed
-           -- the file without naming a decision in it. Every rule below
-           -- reads a word rather than an identity, and a word that picks a
-           -- candidate the date excluded contradicts the citing court: two
-           -- decisions of one file issued on one day, one of them a nález,
-           -- would otherwise take the link on the one-file rule although the
-           -- text dated the citation to neither. The same withholding the
-           -- type hint already gets when it names several holders.
-           (m.sheet_n > 1 OR m.date_n > 1) AS identity_contradicted,
-           -- The text said which decision it meant, and exactly one
-           -- candidate is of that type: the link goes there, whatever the
-           -- rest of the file looks like. Bounded like the one-file rule,
-           -- and for the same reason: a type counted on a truncated set may
-           -- have a second holder the scan never reached.
-           (
-                 m.n > 1
-             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
-             AND m.hinted_n = 1
-           ) AS hinted,
-           -- The text said which court decided, and exactly one candidate
-           -- sits there: regional courts number files independently, so
-           -- the court is what makes such a docket number a name. Same
-           -- bound as the type rule, and a type hint that already singled
-           -- out a holder takes precedence, since it is the more specific
-           -- word.
-           (
-                 m.n > 1
-             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
-             AND m.hinted_n <> 1
-             AND m.court_n = 1
-           ) AS court_hinted,
-           -- The one-file rule, as a predicate over the bounded candidate
-           -- set: one court, exactly one merits decision, every other
-           -- candidate a procedural order. The strict upper bound is load
-           -- bearing: at the cap the set may be truncated, and a rule judged
-           -- on a partial set is a guess. A hint that names several holders
-           -- withholds the rule too: the text said "usnesení", so linking
-           -- the nález would contradict it. A hint naming none is a word
-           -- the corpus cannot use and the structural rule still applies.
-           (
-                 m.n > 1
-             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
-             AND m.hinted_n <= 1
-             AND m.courts = 1
-             AND m.merits_n = 1
-             AND m.procedural_n = m.n - 1
-           ) AS one_file
+           (m.n = 1 AND m.compatible_n = 1) AS unique_matched,
+           (m.n > 1 AND m.n < ${CITATION_CANDIDATE_SCAN_CAP} AND m.compatible_n = 1 AND m.sheet_n = 1) AS sheet_matched,
+           (m.n > 1 AND m.n < ${CITATION_CANDIDATE_SCAN_CAP} AND m.compatible_n = 1 AND m.date_n = 1) AS date_matched,
+           (m.n > 1 AND m.n < ${CITATION_CANDIDATE_SCAN_CAP} AND m.compatible_n = 1 AND m.hinted_n = 1) AS hinted,
+           (m.n > 1 AND m.n < ${CITATION_CANDIDATE_SCAN_CAP} AND m.compatible_n = 1 AND m.court_n = 1) AS court_hinted,
+           (m.n > 0 AND m.compatible_n = 0) AS identity_contradicted
       FROM batch b
       LEFT JOIN policy pol ON pol.citing_country = b.citing_country
       LEFT JOIN hint_family hf ON hf.hint = b.cited_decision_type_hint
       LEFT JOIN LATERAL (
         SELECT count(*)::int AS n,
                (array_agg(k.id))[1] AS sole_id,
-               count(DISTINCT k.court)::int AS courts,
-               count(*) FILTER (
-                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
-               )::int AS hinted_n,
-               (array_agg(k.id) FILTER (
-                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
-               ))[1] AS hinted_id,
-               count(*) FILTER (
-                 WHERE b.cited_court_hint IS NOT NULL
-                   AND ${courtNameKeySql(sql.raw("k.court"))}
-                     = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
-               )::int AS court_n,
-               (array_agg(k.id) FILTER (
-                 WHERE b.cited_court_hint IS NOT NULL
-                   AND ${courtNameKeySql(sql.raw("k.court"))}
-                     = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
-               ))[1] AS court_id,
+               count(*) FILTER (WHERE ${compatibleHolderSql})::int AS compatible_n,
+               (array_agg(k.id) FILTER (WHERE ${compatibleHolderSql}))[1] AS compatible_id,
                count(*) FILTER (WHERE k.answers_sheet)::int AS sheet_n,
-               (array_agg(k.id) FILTER (WHERE k.answers_sheet))[1] AS sheet_id,
-               count(*) FILTER (
-                 WHERE b.cited_decision_date IS NOT NULL
-                   AND k.decision_date = b.cited_decision_date
-               )::int AS date_n,
-               (array_agg(k.id) FILTER (
-                 WHERE b.cited_decision_date IS NOT NULL
-                   AND k.decision_date = b.cited_decision_date
-               ))[1] AS date_id,
-               count(*) FILTER (
-                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
-               )::int AS merits_n,
-               (array_agg(k.id) FILTER (
-                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
-               ))[1] AS merits_id,
-               count(*) FILTER (
-                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
-               )::int AS procedural_n
+               count(*) FILTER (WHERE b.cited_decision_date IS NOT NULL AND k.decision_date = b.cited_decision_date)::int AS date_n,
+               count(*) FILTER (WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types))::int AS hinted_n,
+               count(*) FILTER (WHERE b.cited_court_hint IS NOT NULL AND ${courtNameKeySql(sql.raw("k.court"))} = ${courtNameKeySql(sql.raw("b.cited_court_hint"))})::int AS court_n
           FROM (
             -- Read once per candidate rather than once per aggregate.
             SELECT holder.*,
@@ -816,18 +694,17 @@ const classificationCtes = (batch: SQL): SQL => sql`
            c.resolves_to,
            c.blocked,
            CASE
-             WHEN c.n = 1 THEN c.sole_id
-             WHEN c.sheet_matched THEN c.sheet_id
-             WHEN c.date_matched THEN c.date_id
+             WHEN c.unique_matched THEN c.sole_id
+             WHEN c.sheet_matched THEN c.compatible_id
+             WHEN c.date_matched THEN c.compatible_id
              WHEN c.identity_contradicted THEN NULL
-             WHEN c.hinted THEN c.hinted_id
-             WHEN c.court_hinted THEN c.court_id
-             WHEN c.one_file THEN c.merits_id
+             WHEN c.hinted THEN c.compatible_id
+             WHEN c.court_hinted THEN c.compatible_id
            END AS decision_id,
            -- The rule is the same chain a third time: a resolved row names
            -- the arm that drew its edge, an unresolved row names none.
            CASE
-             WHEN c.n = 1 THEN ${CITATION_RESOLUTION_RULE.UNIQUE_KEY}::text
+             WHEN c.unique_matched THEN ${CITATION_RESOLUTION_RULE.UNIQUE_KEY}::text
              WHEN c.sheet_matched
                THEN ${CITATION_RESOLUTION_RULE.SHEET_NUMBER}::text
              WHEN c.date_matched
@@ -836,15 +713,13 @@ const classificationCtes = (batch: SQL): SQL => sql`
              WHEN c.hinted THEN ${CITATION_RESOLUTION_RULE.TYPE_HINT}::text
              WHEN c.court_hinted
                THEN ${CITATION_RESOLUTION_RULE.COURT_HINT}::text
-             WHEN c.one_file
-               THEN ${CITATION_RESOLUTION_RULE.ONE_FILE_MERITS}::text
            END AS rule_id,
            CASE
-             WHEN c.n = 1 OR c.sheet_matched OR c.date_matched
+             WHEN c.unique_matched OR c.sheet_matched OR c.date_matched
                THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
              WHEN c.identity_contradicted
                THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
-             WHEN c.hinted OR c.court_hinted OR c.one_file
+             WHEN c.hinted OR c.court_hinted
                THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
              WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
              ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text

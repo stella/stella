@@ -31,8 +31,6 @@ import {
   CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_STATUS,
-  MERITS_DECISION_TYPES,
-  PROCEDURAL_DECISION_TYPES,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { CitationResolutionRule } from "@/api/handlers/case-law/citation-resolution-status";
 import type { DecisionReferenceHints } from "@/api/handlers/case-law/citations/decision-references";
@@ -219,61 +217,48 @@ export const resolveDecisionReference = ({
   );
   const family =
     hint === undefined ? undefined : CITATION_DECISION_TYPE_HINT_FAMILIES[hint];
-  const sheet = candidates.filter(
-    (holder) => hints.sheetNumber !== null && holder.answersPrintedSheet,
-  );
-  const dated = candidates.filter(
+  const compatible = candidates.filter(
     (holder) =>
-      hints.decisionDate !== null && holder.decisionDate === hints.decisionDate,
+      (hints.sheetNumber === null || holder.answersPrintedSheet) &&
+      (hints.decisionDate === null ||
+        holder.decisionDate === hints.decisionDate) &&
+      (hints.decisionType === null ||
+        (family !== undefined && typeIn(family)(holder))) &&
+      (hints.court === null || holder.sitsAtPrintedCourt),
   );
-  const typed = candidates.filter(
-    (holder) => family !== undefined && typeIn(family)(holder),
-  );
-  const seated = candidates.filter(
-    (holder) => hints.court !== null && holder.sitsAtPrintedCourt,
-  );
-  const merits = candidates.filter(typeIn(MERITS_DECISION_TYPES));
-  const procedural = candidates.filter(typeIn(PROCEDURAL_DECISION_TYPES));
-  const courts = new Set(
-    candidates.flatMap((holder) =>
-      holder.court === null ? [] : [holder.court],
-    ),
-  );
-
-  const unique = onlyOf(candidates);
-  if (unique !== undefined) {
+  const unique = onlyOf(compatible);
+  if (unique !== undefined && n === 1) {
     return resolvedTo(unique, CITATION_RESOLUTION_RULE.UNIQUE_KEY);
   }
-  const bySheet = bounded ? onlyOf(sheet) : undefined;
-  if (bySheet !== undefined) {
-    return resolvedTo(bySheet, CITATION_RESOLUTION_RULE.SHEET_NUMBER);
+  if (unique !== undefined && bounded) {
+    if (
+      hints.sheetNumber !== null &&
+      candidates.filter((holder) => holder.answersPrintedSheet).length === 1
+    ) {
+      return resolvedTo(unique, CITATION_RESOLUTION_RULE.SHEET_NUMBER);
+    }
+    if (
+      hints.decisionDate !== null &&
+      candidates.filter((holder) => holder.decisionDate === hints.decisionDate)
+        .length === 1
+    ) {
+      return resolvedTo(unique, CITATION_RESOLUTION_RULE.DECISION_DATE);
+    }
+    if (
+      family !== undefined &&
+      candidates.filter(typeIn(family)).length === 1
+    ) {
+      return resolvedTo(unique, CITATION_RESOLUTION_RULE.TYPE_HINT);
+    }
+    if (
+      hints.court !== null &&
+      candidates.filter((holder) => holder.sitsAtPrintedCourt).length === 1
+    ) {
+      return resolvedTo(unique, CITATION_RESOLUTION_RULE.COURT_HINT);
+    }
   }
-  const byDate = bounded ? onlyOf(dated) : undefined;
-  if (byDate !== undefined) {
-    return resolvedTo(byDate, CITATION_RESOLUTION_RULE.DECISION_DATE);
-  }
-  // The sheet or the date narrowed the file to several decisions; a word
-  // that picked one of them would contradict the identity the text printed.
-  if (sheet.length > 1 || dated.length > 1) {
+  if (n > 0 && compatible.length === 0) {
     return { status: CITATION_RESOLUTION_STATUS.AMBIGUOUS };
-  }
-  const byType = bounded ? onlyOf(typed) : undefined;
-  if (byType !== undefined) {
-    return resolvedTo(byType, CITATION_RESOLUTION_RULE.TYPE_HINT);
-  }
-  const byCourt = bounded ? onlyOf(seated) : undefined;
-  if (byCourt !== undefined) {
-    return resolvedTo(byCourt, CITATION_RESOLUTION_RULE.COURT_HINT);
-  }
-  const merit = onlyOf(merits);
-  if (
-    bounded &&
-    merit !== undefined &&
-    typed.length <= 1 &&
-    courts.size === 1 &&
-    procedural.length === n - 1
-  ) {
-    return resolvedTo(merit, CITATION_RESOLUTION_RULE.ONE_FILE_MERITS);
   }
   if (n > 1) {
     return { status: CITATION_RESOLUTION_STATUS.AMBIGUOUS };

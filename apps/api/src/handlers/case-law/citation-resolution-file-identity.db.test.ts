@@ -216,10 +216,10 @@ test("the sheet a text names picks the decision out of its case file", async () 
   const counts = await resolveCitationsForDecision(asTx(), citing);
 
   expect(counts.resolvedByRule).toMatchObject({
-    [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: 2,
+    [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: 1,
     [CITATION_RESOLUTION_RULE.DECISION_DATE]: 1,
   });
-  expect(counts.ambiguous).toBe(5);
+  expect(counts.ambiguous).toBe(6);
 
   // The sheet is the last segment of the decision's ECLI.
   expect(await rowOf(bySheetCitation)).toEqual(
@@ -229,10 +229,8 @@ test("the sheet a text names picks the decision out of its case file", async () 
   // only a lookup reads (through the jurisdiction's grammar), so the resolver
   // leaves the citation ambiguous rather than link on a reading it lacks.
   expect(await rowOf(byIdentifierSheetCitation)).toEqual(AMBIGUOUS);
-  // A sheet is more specific than a date, so it decides where both are named.
-  expect(await rowOf(sheetOverDateCitation)).toEqual(
-    resolved(sheet33, CITATION_RESOLUTION_RULE.SHEET_NUMBER),
-  );
+  // Explicit sheet and date must identify the same holder.
+  expect(await rowOf(sheetOverDateCitation)).toEqual(AMBIGUOUS);
 });
 
 test("a date decides where no sheet was printed", async () => {

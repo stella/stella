@@ -42,7 +42,8 @@ export const CITATION_RESOLUTION_STATUS = {
   /** No candidate survived. A decision published later can revive it. */
   UNMATCHED: "unmatched",
   /**
-   * More than one candidate survived. Left unlinked on purpose: an arbitrary
+   * Multiple candidates survive, or explicit hints contradict the identity.
+   * Left unlinked on purpose: an arbitrary
    * pick puts a wrong edge in the citation graph, which is worse than none.
    */
   AMBIGUOUS: "ambiguous",
@@ -82,9 +83,15 @@ export const CITATION_RESOLUTION_RULE = {
   TYPE_HINT: "type-hint",
   /** Several holders; the text named the court, and one holder sits there. */
   COURT_HINT: "court-hint",
-  /** Several holders in one file; the single merits decision took the link. */
+  /** Historical rule retained for persisted audit rows; new references never use it. */
   ONE_FILE_MERITS: "one-file-merits",
 } as const satisfies ConstantMap<CitationResolutionRule>;
+
+/** Rules available to new resolutions; the full list also reads historical rows. */
+export const ACTIVE_CITATION_RESOLUTION_RULES =
+  CITATION_RESOLUTION_RULES.filter(
+    (rule) => rule !== CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
+  );
 
 // Listed by name rather than looped so the return type proves every rule has
 // a counter; a rule added to the list without a line here fails typecheck.
@@ -111,24 +118,13 @@ export const countsByRule = (
   ),
 });
 
-/**
- * The decision types the one-file rule tells apart, as the adapters store
- * them: lowercase, in the court's own language. Only courts whose types fall
- * into these two sets can satisfy the rule; a court that files under
- * `rozsudek`, `judgment` or leaves the type empty never matches, which is the
- * jurisdiction safety of the rule rather than a list of court names.
- *
- * `nález` is the merits decision of both constitutional courts the corpus
- * holds (CZE Ústavní soud, SVK Ústavný súd SR); their procedural orders are
- * `usnesení` and `uznesenie`.
- */
+/** Constitutional decision types retained for file-shape fixtures and historical rules. */
 export const MERITS_DECISION_TYPES = ["nález"] as const;
 export const PROCEDURAL_DECISION_TYPES = ["usnesení", "uznesenie"] as const;
 
 /**
- * How many candidates the resolver reads per key before declaring the key too
- * crowded to adjudicate. Uniqueness needs two; the one-file rule needs every
- * candidate, and a constitutional file rarely carries more than a few orders.
+ * How many candidates the resolver reads before declaring a key too crowded
+ * to adjudicate. Explicit hints need the complete candidate set.
  * A key that reaches the cap is ambiguous without looking further, so the
  * lookup cost per citation is this constant, whatever the corpus holds.
  */

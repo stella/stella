@@ -27,17 +27,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-/**
- * The one-file rule: a constitutional court keeps one docket number for a
- * whole file, so the nález and the procedural orders around it share a
- * citation key. Each case below is a shape the rule must decide one way and
- * no other, and the last one is the rule's door back into settled rows.
- *
- * Mutation: with the `one_file` arm removed from the statement, the first test
- * fails (the row stays `ambiguous`) and every negative case still passes, so
- * the negatives alone would not notice the rule being absent; they guard its
- * edges, the first guards its existence.
- */
+/** Duplicate file numbers stay ambiguous until an explicit hint names a holder. */
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -370,16 +360,16 @@ const byRule = (counts: {
       })[rule] ?? 0,
   );
 
-test("a key held by one nález and its procedural orders resolves to the nález", async () => {
+test("a bare key held by one merits decision and its orders stays ambiguous", async () => {
   const counts = await resolveCitationsForDecision(asTx(), citing);
   expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
-    1,
+    0,
   );
 
   expect(await rowOf(oneFileCitation)).toEqual({
-    cited: fileNalez,
-    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
-    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+    cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
 
@@ -408,8 +398,7 @@ test("a nález and an order at different courts stay ambiguous", async () => {
 });
 
 test("a key with as many holders as the resolver reads stays ambiguous", async () => {
-  // The fixture is exactly one nález plus orders at one court — the shape
-  // the rule accepts — so only the cap can be what keeps it ambiguous.
+  // A complete file without a discriminator stays ambiguous at the cap too.
   const holders = await db
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
@@ -438,7 +427,7 @@ test("a citation older than the nález never takes it", async () => {
   });
 });
 
-test("the Slovak spelling of the file structure resolves the same way", async () => {
+test("the Slovak file structure also leaves a bare key ambiguous", async () => {
   const skCiting = createSafeId<"caseLawDecision">();
   await db.insert(caseLawDecisions).values(
     decision(skCiting, {
@@ -459,18 +448,17 @@ test("the Slovak spelling of the file structure resolves the same way", async ()
 
   const counts = await resolveCitationsForDecision(asTx(), skCiting);
   expect(counts.resolvedByRule[CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]).toBe(
-    1,
+    0,
   );
   expect(await rowOf(skCitation)).toEqual({
-    cited: skNalez,
-    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
-    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+    cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
 
 test("re-adjudication reopens settled ambiguous rows and is idempotent", async () => {
-  // Settle the one-file citation as the old resolver would have: ambiguous,
-  // as if the rule had not existed when the walk passed.
+  // Reopening an already ambiguous file must preserve its typed outcome.
   await db
     .update(caseLawCitations)
     .set({
@@ -501,37 +489,33 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
   };
 
   const first = await drain();
-  // Four rows are ambiguous by design and one by the stale verdict: the rule
-  // flips the stale one and confirms the rest.
+  // Re-adjudication preserves every file lacking an explicit discriminator.
   expect(first).toEqual({
-    scanned: 5,
-    resolved: 1,
-    oneFileMerits: 1,
-    ambiguous: 4,
+    scanned: 6,
+    resolved: 0,
+    oneFileMerits: 0,
+    ambiguous: 6,
   });
   expect(await rowOf(oneFileCitation)).toEqual({
-    cited: fileNalez,
-    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
-    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+    cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 
   const second = await drain();
   expect(second).toEqual({
-    scanned: 4,
+    scanned: 6,
     resolved: 0,
     oneFileMerits: 0,
-    ambiguous: 4,
+    ambiguous: 6,
   });
 });
 
 test("a hint names the order or the nález of a pair, whichever the text said", async () => {
   const counts = await resolveCitationsForDecision(asTx(), hintCiting);
-  // The two pair citations and the no-match fallback are adjudicated; the
-  // two-orders and twin cases are not.
-  expect(counts.resolvedByRule).toEqual(
-    byRule({ typeHint: 2, oneFileMerits: 1 }),
-  );
-  expect(counts.ambiguous).toBe(2);
+  // Only the two explicit type matches link; three references stay ambiguous.
+  expect(counts.resolvedByRule).toEqual(byRule({ typeHint: 2 }));
+  expect(counts.ambiguous).toBe(3);
 
   expect(await rowOf(hintOrderCitation)).toEqual({
     cited: pairOrder,
@@ -545,9 +529,8 @@ test("a hint names the order or the nález of a pair, whichever the text said", 
   });
 });
 
-test("a hint that several holders satisfy leaves the row ambiguous, one-file rule withheld", async () => {
-  // Without the hint this key resolves to its nález (first test); the text
-  // said "usnesení" and two orders fit, so no rule may pick the nález.
+test("a hint that several holders satisfy leaves the row ambiguous", async () => {
+  // Two orders fit the explicit hint, so neither receives the link.
   expect(await rowOf(hintTwoOrdersCitation)).toEqual({
     cited: null,
     rule: null,
@@ -560,11 +543,11 @@ test("a hint that several holders satisfy leaves the row ambiguous, one-file rul
   });
 });
 
-test("a hint no holder satisfies falls back to the one-file rule", async () => {
+test("a hint no holder satisfies stays ambiguous", async () => {
   expect(await rowOf(hintNoneCitation)).toEqual({
-    cited: pairNalez,
-    rule: CITATION_RESOLUTION_RULE.ONE_FILE_MERITS,
-    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+    cited: null,
+    rule: null,
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
 });
 
