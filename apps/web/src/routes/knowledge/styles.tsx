@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -461,6 +462,13 @@ const StyleSetFormDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup>
+        <DialogFormState
+          dirty={name !== (styleSet?.name ?? "") || file !== null}
+          onDiscard={() => {
+            setName(styleSet?.name ?? "");
+            setFile(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {styleSet ? t("styleSets.renameTitle") : t("styleSets.importTitle")}

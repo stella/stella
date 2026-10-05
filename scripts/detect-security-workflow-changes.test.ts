@@ -333,12 +333,10 @@ test("both workflows gate every expensive job and run on detector failure", () =
   expect(migrations.on.pull_request.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
-      push: v.object({ branches: v.array(v.string()) }),
       schedule: v.array(v.object({ cron: v.string() })),
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toContain("main");
   expect(triggers.schedule).toHaveLength(1);
   expect(triggers.schedule.at(0)?.cron.split(" ").slice(2)).toEqual([
     "*",
@@ -425,14 +423,10 @@ test("CodeQL trigger coverage rejects missing extensions and unknown languages",
   );
 });
 
-test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
+test("CodeQL scans nightly, manually and on release pull requests only", () => {
+  expect(Object.keys(codeql.on)).not.toContain("push");
   const triggers = v.parse(
     v.looseObject({
-      push: v.looseObject({
-        branches: v.array(v.string()),
-        paths: v.optional(v.array(v.string())),
-        "paths-ignore": v.optional(v.array(v.string())),
-      }),
       pull_request: v.looseObject({
         branches: v.array(v.string()),
         types: v.array(v.string()),
@@ -443,9 +437,16 @@ test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toEqual(["main"]);
-  expect(triggers.push.paths).toBeUndefined();
-  expect(triggers.push["paths-ignore"]).toBeUndefined();
+  const scope = v.parse(
+    v.looseObject({ if: v.string() }),
+    codeql.jobs["scope"],
+  );
+  expect(scope.if).toContain(
+    "startsWith(github.event.pull_request.head.ref, 'chore/release-')",
+  );
+  expect(scope.if).toContain(
+    "startsWith(github.event.pull_request.head.ref, 'changeset-release/')",
+  );
   expect(triggers.pull_request.branches).toEqual(["main"]);
   expect(triggers.pull_request.types).toEqual([
     "opened",
