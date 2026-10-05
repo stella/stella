@@ -111,7 +111,10 @@ import {
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -2415,6 +2418,55 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("an output that violates the tool's contract is logged as a defect", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: {
+        court: [],
+        // A bucket field the output contract does not declare.
+        year: [{ count: 1, label: null, value: "2024", undeclared: true }],
+        decisionType: [],
+        source: [],
+        language: [],
+      },
+      hits: [],
+      nextCursor: null,
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      queryUsed: "contract",
+      warnings: [],
+    });
+    const logs = installRecordingLogger();
+    try {
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["contract"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: { code: "internal_error" },
+      });
+      expect(
+        logs.at("ERROR").map(({ message, attributes }) => ({
+          message,
+          tool: attributes?.["tool"],
+          grade: attributes?.["failure.grade"],
+          reason: attributes?.["failure.reason"],
+        })),
+      ).toEqual([
+        {
+          message: "mcp.output_contract_violated",
+          tool: "search_case_law",
+          grade: "defect",
+          reason: "response_invalid",
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
 
   test("search_case_law returns the same payload in anonymized mode", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
