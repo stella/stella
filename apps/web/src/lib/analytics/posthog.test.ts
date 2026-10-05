@@ -86,8 +86,12 @@ void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
 
-const { createPostHogAnalytics, sanitizeFrame, UNKNOWN_FRAME_FUNCTION } =
-  await import("./posthog");
+const {
+  createPostHogAnalytics,
+  isNoiseException,
+  sanitizeFrame,
+  UNKNOWN_FRAME_FUNCTION,
+} = await import("./posthog");
 const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
@@ -272,6 +276,115 @@ describe("PostHog browser analytics adapter", () => {
         }),
       ).toBeNull();
     }
+  });
+
+  const exceptionEvent = (
+    entry: Record<string, unknown>,
+    properties: Record<string, unknown> = {},
+  ) => ({
+    event: WEB_ANALYTICS_EVENTS.exception,
+    properties: { ...properties, $exception_list: [entry] },
+  });
+
+  test.each([
+    ["no desktop app", { type: "DesktopBridgeUnavailableError", value: "x" }],
+    [
+      "public law source down",
+      { type: "PublicLawUnavailableError", value: "x" },
+    ],
+    ["signed-out session", { type: "AuthClientError", value: "x" }],
+    [
+      "a React removeChild race",
+      {
+        type: "NotFoundError",
+        value:
+          "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+      },
+    ],
+    [
+      "a React insertBefore race",
+      {
+        type: "Error",
+        value: "Failed to execute 'insertBefore' on 'Node': x",
+      },
+    ],
+    [
+      "a dropped fetch (Chromium)",
+      { type: "TypeError", value: "Failed to fetch" },
+    ],
+    ["a dropped fetch (Safari)", { type: "TypeError", value: "Load failed" }],
+    [
+      "a dropped fetch (Firefox)",
+      {
+        type: "TypeError",
+        value: "NetworkError when attempting to fetch resource.",
+      },
+    ],
+    [
+      "an extension frame",
+      {
+        type: "TypeError",
+        value: "x is undefined",
+        stacktrace: {
+          frames: [
+            { filename: "https://my.stll.app/assets/app.js" },
+            { filename: "chrome-extension://abcdef/content.js" },
+          ],
+        },
+      },
+    ],
+  ])("drops %s as noise", (_label, entry) => {
+    expect(isNoiseException(exceptionEvent(entry))).toBe(true);
+  });
+
+  test.each([401, 403, 404])("drops an expected %i API answer", (status) => {
+    expect(
+      isNoiseException(
+        exceptionEvent(
+          { type: "ApiError", value: "x" },
+          { error_status: status },
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    "ai_config_provider_validation_failed",
+    "chat_continuation_rejected",
+  ])("drops the expected API outcome %s", (code) => {
+    expect(
+      isNoiseException(
+        exceptionEvent(
+          { type: "ApiError", value: "x" },
+          { error_status: 422, error_code: code },
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    ["a server error", { type: "ApiError", value: "x" }, { error_status: 500 }],
+    ["another 4xx", { type: "ApiError", value: "x" }, { error_status: 409 }],
+    [
+      "a 404 a viewer boundary caught",
+      { type: "ClientTelemetryError", value: "x" },
+      { error_status: 404 },
+    ],
+    [
+      "a TypeError of ours",
+      { type: "TypeError", value: "x is not a function" },
+      {},
+    ],
+    [
+      "a fetch failure with more context",
+      {
+        type: "TypeError",
+        value: "Failed to fetch dynamically imported module: /a.js",
+      },
+      {},
+    ],
+  ])("keeps %s", (_label, entry, properties) => {
+    expect(isNoiseException(exceptionEvent(entry, properties))).toBe(false);
   });
 
   test("identifies a DOM exception by its error name", () => {
@@ -1598,16 +1711,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_list: [{ type: "ApiError", value: "Not Found" }],
-        error_status: 404,
-        error_code: "not_found",
+        $exception_list: [{ type: "ApiError", value: "Conflict" }],
+        error_status: 409,
+        error_code: "conflict",
       },
     });
     expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
-      "ApiError||||404:not_found",
+      "ApiError||||409:conflict",
     );
-    expect(sanitized?.properties?.["error_status"]).toBe(404);
-    expect(sanitized?.properties?.["error_code"]).toBe("not_found");
+    expect(sanitized?.properties?.["error_status"]).toBe(409);
+    expect(sanitized?.properties?.["error_code"]).toBe("conflict");
 
     // A free-text code or an out-of-range status never passes through.
     const rejected = initOptions?.before_send({
