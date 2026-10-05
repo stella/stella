@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.8.3
+
+### Patch Changes
+
+- [#4740](https://github.com/stella/stella/pull/4740) [`9e0a30e`](https://github.com/stella/stella/commit/9e0a30e18c91fcae5d6f13695a312c2cb54d09e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Seller profile, number series and VAT rate capabilities follow the time billing feature flag.
+
 ## 3.8.2
 
 ### Patch Changes
