@@ -12,6 +12,7 @@
 import { panic } from "better-result";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 
 import type {
   CapabilityFileInput,
@@ -512,7 +513,7 @@ export const findInlineCapabilityMismatches = ({
       mismatches.push({ id, inlineCount, allowed });
     }
   }
-  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => compareCodeUnit(a.id, b.id));
 };
 
 /** Module-alias import specifier for a handler file: `apps/api/src/handlers/time-entries/create.ts` -> `@/api/handlers/time-entries/create`. */
@@ -787,7 +788,7 @@ export const scanContextFidelity = ({
   const staleWaivers = [...waivedIds]
     .filter((id) => !tripped.has(id))
     .toSorted();
-  violations.sort((a, b) => a.id.localeCompare(b.id));
+  violations.sort((a, b) => compareCodeUnit(a.id, b.id));
   return { violations, staleWaivers };
 };
 
@@ -926,7 +927,8 @@ export const scanBinarySchemaFields = (
     }
   }
   fields.sort(
-    (a, b) => a.part.localeCompare(b.part) || a.field.localeCompare(b.field),
+    (a, b) =>
+      compareCodeUnit(a.part, b.part) || compareCodeUnit(a.field, b.field),
   );
   return { fields, unnameableParts };
 };
@@ -1507,7 +1509,7 @@ export const scanRouteHookGuards = ({
     .toSorted();
   violations.sort(
     (a, b) =>
-      a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
+      compareCodeUnit(a.id, b.id) || compareCodeUnit(a.routeFile, b.routeFile),
   );
   return { violations, childRouteMounts, staleWaivers };
 };
@@ -1747,7 +1749,7 @@ const renderDomainSection = ({
   cliCommandPathById: ReadonlyMap<string, readonly string[]>;
 }): string => {
   const rows = entries
-    .toSorted((a, b) => a.id.localeCompare(b.id))
+    .toSorted((a, b) => compareCodeUnit(a.id, b.id))
     .map(
       (entry) =>
         `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${renderScopeCell(entry)} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,
@@ -1769,7 +1771,7 @@ const renderWaivedInternalSection = (
   internalWaiverCounts: Readonly<Record<string, number>>,
 ): string => {
   const counts = Object.entries(internalWaiverCounts).toSorted(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnit(a, b),
   );
   const rows = counts.map(([reason, count]) => `| ${reason} | ${count} |`);
   return `## Waived internal handlers
@@ -1812,7 +1814,7 @@ export const serializeCoverageDoc = ({
     byDomain.set(domain, bucket);
   }
   const domainSections = [...byDomain.keys()]
-    .toSorted((a, b) => a.localeCompare(b))
+    .toSorted(compareCodeUnit)
     .map((domain) =>
       renderDomainSection({
         domain,
