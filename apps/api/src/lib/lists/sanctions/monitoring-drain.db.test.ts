@@ -94,6 +94,9 @@ const scopedFor =
       return await run(productionTransaction(tx));
     });
 const scopedDb = scopedFor(orgId);
+const drainSuccessfully = async (
+  options: Parameters<typeof drainSanctionsContactMarks>[0],
+) => (await drainSanctionsContactMarks(options)).unwrap();
 const requestSanctionsMonitoringRefresh = async (
   tx: Transaction,
   options: Parameters<typeof prepareSanctionsMonitoringRefresh>[0],
@@ -283,18 +286,20 @@ test(
         return value;
       });
     const now = futureNow();
-    expect(
-      await rejectionOf(
-        drainSanctionsContactMarks({
-          db: abortAfterClaim,
-          organizationId: orgId,
-          now,
-          signal: controller.signal,
-        }),
-      ),
-    ).toMatchObject({ message: "synthetic drain crash" });
+    const failedDrain = await drainSanctionsContactMarks({
+      db: abortAfterClaim,
+      organizationId: orgId,
+      now,
+      signal: controller.signal,
+    });
+    expect(failedDrain.isErr()).toBe(true);
+    if (failedDrain.isErr()) {
+      expect(errorMessages(failedDrain.error)).toContain(
+        "synthetic drain crash",
+      );
+    }
     expect(await markFor(contact.id)).toBeDefined();
-    await drainSanctionsContactMarks({
+    await drainSuccessfully({
       db: scopedDb,
       organizationId: orgId,
       now: new Date(now.getTime() + 1),
@@ -332,14 +337,14 @@ test(
       }
       return value;
     };
-    await drainSanctionsContactMarks({
+    await drainSuccessfully({
       db: editAfterClaim,
       organizationId: orgId,
       now: futureNow(),
       signal: new AbortController().signal,
     });
     expect(await markFor(contact.id)).toBeDefined();
-    await drainSanctionsContactMarks({
+    await drainSuccessfully({
       db: scopedDb,
       organizationId: orgId,
       now: futureNow(),
@@ -371,7 +376,7 @@ test(
             .where(eq(auditLogs.organizationId, organizationId)),
       );
     const drain = async () =>
-      await drainSanctionsContactMarks({
+      await drainSuccessfully({
         db: scoped,
         organizationId,
         now,
@@ -408,9 +413,18 @@ test(
     await client.exec(`CREATE FUNCTION reject_drain_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id = 'system:sanctions-monitoring-drain' THEN RAISE EXCEPTION 'synthetic drain audit failure'; END IF; RETURN NEW; END $$;
     CREATE TRIGGER reject_drain_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION reject_drain_audit();`);
     try {
-      expect(errorMessages(await rejectionOf(drain()))).toContain(
-        "synthetic drain audit failure",
-      );
+      const failedDrain = await drainSanctionsContactMarks({
+        db: scoped,
+        organizationId,
+        now,
+        signal: new AbortController().signal,
+      });
+      expect(failedDrain.isErr()).toBe(true);
+      if (failedDrain.isErr()) {
+        expect(errorMessages(failedDrain.error)).toContain(
+          "synthetic drain audit failure",
+        );
+      }
       expect(await audits()).toHaveLength(0);
       expect(await markFor(contact.id)).toMatchObject({
         generation: queuedMark.generation,
@@ -693,7 +707,7 @@ const expiredWorkerRace = async (mode: "activation" | "stale") => {
       if (mode === "activation") {
         await emptyEdition();
       }
-      await drainSanctionsContactMarks({
+      await drainSuccessfully({
         db: tenant,
         organizationId,
         now: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
@@ -1195,7 +1209,7 @@ test(
         }
       }
       const drain = async () =>
-        await drainSanctionsContactMarks({
+        await drainSuccessfully({
           db: scoped,
           organizationId,
           now,
@@ -1275,7 +1289,7 @@ test(
       );
       const replayNow = futureNow();
       for (let batch = 0; batch < 2; batch += 1) {
-        await drainSanctionsContactMarks({
+        await drainSuccessfully({
           db: scoped,
           organizationId,
           now: replayNow,
@@ -1374,7 +1388,7 @@ test(
           )
         ).at(0) ?? panic("Source census contact missing");
       const drain = async (attemptAt: Date) =>
-        await drainSanctionsContactMarks({
+        await drainSuccessfully({
           db: scoped,
           organizationId,
           now: attemptAt,
@@ -1385,6 +1399,10 @@ test(
           coverage: await tx.select().from(sanctionsContactScreenings),
           events: await tx.select().from(sanctionsScreeningEvents),
           marks: await tx.select().from(sanctionsContactMarks),
+          audits: await tx
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
         }));
       await drain(futureNow());
       const previous = await census();
@@ -1465,7 +1483,25 @@ test(
             "synthetic later source failure",
           );
         }
-        expect(await census()).toEqual(beforeAttempt);
+        const afterFailure = await census();
+        expect(afterFailure.coverage).toEqual(beforeAttempt.coverage);
+        expect(afterFailure.events).toEqual(beforeAttempt.events);
+        expect(afterFailure.marks).toHaveLength(beforeAttempt.marks.length);
+        expect(afterFailure.marks.at(0)).toMatchObject({
+          generation: beforeAttempt.marks.at(0)?.generation,
+          scheduledAt: beforeAttempt.marks.at(0)?.scheduledAt,
+          attemptCount: 1,
+        });
+        expect(
+          afterFailure.marks.at(0)?.nextAttemptAt.getTime(),
+        ).toBeGreaterThan(attemptNow.getTime());
+        expect(afterFailure.audits).toHaveLength(
+          beforeAttempt.audits.length + 1,
+        );
+        expect(afterFailure.audits.at(-1)?.metadata).toMatchObject({
+          kind: "sanctions-monitoring-drain-attempt-failed",
+          attempted: 1,
+        });
       } finally {
         await client.exec(
           "DROP TRIGGER later_source_coverage_failure ON sanctions_contact_screenings; DROP FUNCTION reject_later_source_coverage();",
@@ -1681,7 +1717,7 @@ test(
         )
       ).at(0) ?? panic("Invalid recovery contact missing");
     const drain = async () =>
-      await drainSanctionsContactMarks({
+      await drainSuccessfully({
         db: scoped,
         organizationId,
         now: futureNow(),

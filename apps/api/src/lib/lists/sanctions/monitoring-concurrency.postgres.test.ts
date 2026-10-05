@@ -11,6 +11,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   contacts,
   organizationSettings,
+  sanctionsContactMarks,
   sanctionsContactMatches,
   sanctionsContactScreenings,
   sanctionsEditions,
@@ -25,11 +26,13 @@ import {
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
+import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import {
   monitoringFingerprint,
   monitoringSubject,
 } from "@/api/lib/lists/sanctions/monitoring-input";
+import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
@@ -68,7 +71,10 @@ const blockersFor = async (db: GatedTestDb, pid: number) => {
 
 type InstallGateOptions = {
   db: GatedTestDb;
-  table: "sanctions_contact_matches" | "sanctions_monitoring_backfills";
+  table:
+    | "sanctions_contact_matches"
+    | "sanctions_contact_screenings"
+    | "sanctions_monitoring_backfills";
   suffix: string;
 };
 
@@ -456,6 +462,306 @@ if (!databaseUrl || !runPostgresTests) {
         await controlDb
           .delete(sanctionsEntryPayloads)
           .where(eq(sanctionsEntryPayloads.contentHash, hash));
+      }
+    });
+  }, 120_000);
+
+  test("contact edits and opt-out serialize with a tenant contact drain", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db: drainDb } = openClient({
+        connection: { statement_timeout: 20_000 },
+      });
+      const { db: editDb } = openClient({
+        connection: { statement_timeout: 20_000 },
+      });
+      const { db: controlDb } = openClient();
+      const organizationId = mintAuthProviderId<"organization">();
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const gate = BigInt(`0x${suffix.slice(-15)}`);
+      const removeGate = await installGate({
+        db: controlDb,
+        table: "sanctions_contact_screenings",
+        suffix,
+      });
+      const controllers = new AbortController();
+      const running: Promise<unknown>[] = [];
+      let gateHeld = false;
+      let editedContactId: typeof contacts.$inferSelect.id | undefined;
+      let drainFirstEditedContactId:
+        | typeof contacts.$inferSelect.id
+        | undefined;
+      let optedOutContactId: typeof contacts.$inferSelect.id | undefined;
+      try {
+        await controlDb.insert(organization).values({
+          id: organizationId,
+          name: "Monitoring drain lock order",
+          slug: `monitoring-drain-lock-${suffix}`,
+          createdAt: new Date(),
+        });
+        const created = await controlDb
+          .insert(contacts)
+          .values([
+            {
+              organizationId,
+              type: "person",
+              displayName: "Edit first subject",
+            },
+            {
+              organizationId,
+              type: "person",
+              displayName: "Drain first edit subject",
+            },
+            {
+              organizationId,
+              type: "person",
+              displayName: "Opt-out subject",
+            },
+          ])
+          .returning();
+        editedContactId = created.at(0)?.id;
+        drainFirstEditedContactId = created.at(1)?.id;
+        optedOutContactId = created.at(2)?.id;
+        if (
+          editedContactId === undefined ||
+          drainFirstEditedContactId === undefined ||
+          optedOutContactId === undefined
+        ) {
+          panic("Monitoring drain lock-order contacts missing");
+        }
+        const editedId = editedContactId;
+        const drainFirstEditId = drainFirstEditedContactId;
+        const optedOutId = optedOutContactId;
+        await controlDb
+          .update(sanctionsContactMarks)
+          .set({ scheduledAt: new Date(Date.now() + 60 * 60_000) })
+          .where(
+            inArray(sanctionsContactMarks.contactId, [
+              drainFirstEditId,
+              optedOutId,
+            ]),
+          );
+
+        const scopedDrainDb = scopedFor({ db: drainDb, organizationId });
+        const drain = async () =>
+          (
+            await drainSanctionsContactMarks({
+              db: scopedDrainDb,
+              organizationId,
+              now: new Date(),
+              signal: controllers.signal,
+            })
+          ).unwrap();
+
+        const editStarted = Promise.withResolvers<undefined>();
+        const releaseEdit = Promise.withResolvers<undefined>();
+        const editPid = await backendPid(editDb);
+        const drainPid = await backendPid(drainDb);
+        const editFirst = editDb.transaction(async (tx) => {
+          await tx
+            .update(contacts)
+            .set({ displayName: "Edit wins before drain" })
+            .where(eq(contacts.id, editedId));
+          editStarted.resolve(undefined);
+          await releaseEdit.promise;
+        });
+        running.push(editFirst);
+        void editFirst.catch(editStarted.reject);
+        await editStarted.promise;
+        const drainAfterEdit = drain();
+        running.push(drainAfterEdit);
+        expect(await blockersFor(controlDb, drainPid)).toContain(editPid);
+        releaseEdit.resolve(undefined);
+        await editFirst;
+        await drainAfterEdit;
+        expect(
+          await controlDb
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.contactId, editedId)),
+        ).toEqual([]);
+        const editedScreenings = await controlDb
+          .select()
+          .from(sanctionsContactScreenings)
+          .where(eq(sanctionsContactScreenings.contactId, editedId));
+        const editedContact =
+          (
+            await controlDb
+              .select()
+              .from(contacts)
+              .where(eq(contacts.id, editedId))
+          ).at(0) ?? panic("Edited monitoring contact missing");
+        expect(editedScreenings).toHaveLength(sanctionsSourceIds().length);
+        expect(
+          editedScreenings.every(
+            ({ status, contactFingerprint }) =>
+              status !== "excluded" &&
+              contactFingerprint === monitoringFingerprint(editedContact),
+          ),
+        ).toBe(true);
+
+        await controlDb
+          .update(sanctionsContactMarks)
+          .set({ scheduledAt: new Date(Date.now() - 1000) })
+          .where(eq(sanctionsContactMarks.contactId, drainFirstEditId));
+        await drainDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
+        );
+        await controlDb.execute(
+          sql`SELECT pg_advisory_lock(${String(gate)}::bigint)`,
+        );
+        gateHeld = true;
+        const blockedDrain = drain();
+        running.push(blockedDrain);
+        expect(await blockersFor(controlDb, drainPid)).toContain(
+          await backendPid(controlDb),
+        );
+        const reverseEditStarted = Promise.withResolvers<undefined>();
+        const releaseReverseEdit = Promise.withResolvers<undefined>();
+        const reverseEditPid = await backendPid(editDb);
+        const reverseEdit = editDb.transaction(async (tx) => {
+          await tx
+            .update(contacts)
+            .set({ displayName: "Drain wins before edit" })
+            .where(eq(contacts.id, drainFirstEditId));
+          reverseEditStarted.resolve(undefined);
+          await releaseReverseEdit.promise;
+        });
+        running.push(reverseEdit);
+        void reverseEdit.catch(reverseEditStarted.reject);
+        expect(await blockersFor(controlDb, reverseEditPid)).toContain(
+          drainPid,
+        );
+        await controlDb.execute(
+          sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
+        );
+        gateHeld = false;
+        await blockedDrain;
+        await reverseEditStarted.promise;
+        releaseReverseEdit.resolve(undefined);
+        await reverseEdit;
+        await drainDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, '', false)`,
+        );
+        const pendingEdit =
+          (
+            await controlDb
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, drainFirstEditId))
+          ).at(0) ?? panic("Edit did not queue a fresh monitoring generation");
+        expect(pendingEdit.generation).toBe(1n);
+        await drain();
+        expect(
+          await controlDb
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.contactId, drainFirstEditId)),
+        ).toEqual([]);
+        const refreshedEditScreenings = await controlDb
+          .select()
+          .from(sanctionsContactScreenings)
+          .where(eq(sanctionsContactScreenings.contactId, drainFirstEditId));
+        const drainFirstEditedContact =
+          (
+            await controlDb
+              .select()
+              .from(contacts)
+              .where(eq(contacts.id, drainFirstEditId))
+          ).at(0) ?? panic("Drain-first edited contact missing");
+        expect(refreshedEditScreenings).toHaveLength(
+          sanctionsSourceIds().length,
+        );
+        expect(
+          refreshedEditScreenings.every(
+            ({ contactFingerprint }) =>
+              contactFingerprint ===
+              monitoringFingerprint(drainFirstEditedContact),
+          ),
+        ).toBe(true);
+
+        await controlDb
+          .update(sanctionsContactMarks)
+          .set({ scheduledAt: new Date(Date.now() - 1000) })
+          .where(eq(sanctionsContactMarks.contactId, optedOutId));
+        await drainDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
+        );
+        await controlDb.execute(
+          sql`SELECT pg_advisory_lock(${String(gate)}::bigint)`,
+        );
+        gateHeld = true;
+        const blockedOptOutDrain = drain();
+        running.push(blockedOptOutDrain);
+        expect(await blockersFor(controlDb, drainPid)).toContain(
+          await backendPid(controlDb),
+        );
+        const optOutPid = await backendPid(editDb);
+        const optOut = editDb.transaction(async (tx) => {
+          await lockSanctionsMonitoring(
+            asTestRaw<Transaction>(tx),
+            organizationId,
+          );
+          await tx
+            .update(contacts)
+            .set({
+              displayName: "Drain first, opt-out second",
+              sanctionsMonitoringMode: "excluded",
+            })
+            .where(eq(contacts.id, optedOutId));
+        });
+        running.push(optOut);
+        expect(await blockersFor(controlDb, optOutPid)).toContain(drainPid);
+        await controlDb.execute(
+          sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
+        );
+        gateHeld = false;
+        await blockedOptOutDrain;
+        await optOut;
+        await drainDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, '', false)`,
+        );
+        const pendingOptOut =
+          (
+            await controlDb
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, optedOutId))
+          ).at(0) ??
+          panic("Opt-out did not queue a fresh monitoring generation");
+        expect(pendingOptOut.generation).toBe(1n);
+        await drain();
+        expect(
+          await controlDb
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.contactId, optedOutId)),
+        ).toEqual([]);
+        const optedOutScreenings = await controlDb
+          .select()
+          .from(sanctionsContactScreenings)
+          .where(eq(sanctionsContactScreenings.contactId, optedOutId));
+        expect(optedOutScreenings).toHaveLength(sanctionsSourceIds().length);
+        expect(
+          optedOutScreenings.every(
+            ({ status, reason }) =>
+              status === "excluded" && reason === "contact-excluded",
+          ),
+        ).toBe(true);
+      } finally {
+        if (gateHeld) {
+          await controlDb.execute(
+            sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
+          );
+        }
+        await drainDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, '', false)`,
+        );
+        controllers.abort();
+        await Promise.allSettled(running);
+        await removeGate();
+        await controlDb
+          .delete(organization)
+          .where(eq(organization.id, organizationId));
       }
     });
   }, 120_000);

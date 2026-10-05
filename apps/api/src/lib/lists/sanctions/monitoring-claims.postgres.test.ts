@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -17,6 +17,12 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
 const BLOCK_OBSERVATION_ATTEMPTS = 200;
 const CLAIM_INSPECTED = "Monitoring contact claim inspected";
+const errorSummary = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  return `${error.name}: ${error.message} ${"cause" in error ? errorSummary(error.cause) : ""}`;
+};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("monitoring contact claims on PostgreSQL", () => {
@@ -140,15 +146,12 @@ if (!databaseUrl || !runPostgresTests) {
             controller.signal.throwIfAborted();
             return drained;
           });
-        const draining = Result.tryPromise(
-          async () =>
-            await drainSanctionsContactMarks({
-              db: scopedDb,
-              organizationId,
-              now,
-              signal: controller.signal,
-            }),
-        );
+        const draining = drainSanctionsContactMarks({
+          db: scopedDb,
+          organizationId,
+          now,
+          signal: controller.signal,
+        });
         running.push(draining);
         observe.resolve(undefined);
         await observed.promise;
@@ -158,11 +161,8 @@ if (!databaseUrl || !runPostgresTests) {
             "Expected contact drain to stop before its transaction commits",
           );
         }
-        expect(result.error.cause).toBeInstanceOf(DOMException);
-        expect(result.error.cause).toMatchObject({
-          name: "AbortError",
-          message: CLAIM_INSPECTED,
-        });
+        expect(errorSummary(result.error)).toContain("AbortError");
+        expect(errorSummary(result.error)).toContain(CLAIM_INSPECTED);
         const marks = await workerDb
           .select()
           .from(sanctionsContactMarks)

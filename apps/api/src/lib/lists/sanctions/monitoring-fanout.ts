@@ -12,10 +12,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
-import { transitionMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
+import { resetMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 const ORGANIZATION_FANOUT_BATCH_SIZE = 100;
@@ -95,17 +96,7 @@ const fanOutEditionPage = async ({
           },
         })
         .returning();
-      await Promise.all(
-        jobs.map(
-          async (job) =>
-            await transitionMonitoringBackfill({
-              tx,
-              job,
-              to: "pending",
-              set: {},
-            }),
-        ),
-      );
+      await resetMonitoringBackfills(tx, jobs);
     }
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     await transitionBatch({
@@ -185,17 +176,7 @@ const consumeOrganizationRequest = async (
           },
         })
         .returning();
-      await Promise.all(
-        jobs.map(
-          async (job) =>
-            await transitionMonitoringBackfill({
-              tx,
-              job,
-              to: "pending",
-              set: {},
-            }),
-        ),
-      );
+      await resetMonitoringBackfills(tx, jobs);
     }
     await tx
       .delete(sanctionsOrganizationMarks)
@@ -259,23 +240,29 @@ const queueFreshnessTransitions = async (
           current.freshnessStatus !== status)
       );
     });
-    await Promise.all(
-      changed.map(
-        async ({ source, status }) =>
-          await transitionBatch({
-            tx,
-            spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
-            ids: [source],
-            options: {
-              from: ["pending", "complete"],
-              to: "pending",
-              set: { freshnessStatus: status, cursorOrganizationId: null },
-            },
-            recordTransitionAuditEvent: (_auditTx, transitioned) =>
-              recordTransitionAuditEvent(transitioned.length),
-          }),
-      ),
-    );
+    if (changed.length > 0) {
+      await transitionBatch({
+        tx,
+        spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+        ids: changed.map(({ source }) => source),
+        options: {
+          from: ["pending", "complete"],
+          to: "pending",
+          set: {
+            freshnessStatus: sqlCaseFragment({
+              operand: sql`${sanctionsEditionFanouts.sourceId}`,
+              branches: changed.map(
+                ({ source, status }) => sql`WHEN ${source} THEN ${status}`,
+              ),
+              fallback: sql`NULL`,
+            }),
+            cursorOrganizationId: null,
+          },
+        },
+        recordTransitionAuditEvent: (_auditTx, transitioned) =>
+          recordTransitionAuditEvent(transitioned.length),
+      });
+    }
     // SET LOCAL survives a successful savepoint; nested scheduler calls retain their owner role.
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
     return changed.length;

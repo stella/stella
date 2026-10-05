@@ -43,12 +43,28 @@ export const sanctionsContactMarks = p.pgTable(
     contactId: safeUuid<"contact">("contact_id").notNull(),
     generation: p.bigint({ mode: "bigint" }).notNull().default(1n),
     scheduledAt: timestamptz("scheduled_at").notNull().defaultNow(),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at")
+      .notNull()
+      .default(sql`TIMESTAMPTZ '1970-01-01 00:00:00+00'`),
   },
   (table) => [
     p.primaryKey({ columns: [table.organizationId, table.contactId] }),
     p
       .index("sanctions_contact_marks_due_idx")
       .on(table.scheduledAt, table.organizationId, table.contactId),
+    p
+      .index("sanctions_contact_marks_retry_idx")
+      .on(
+        table.nextAttemptAt,
+        table.scheduledAt,
+        table.organizationId,
+        table.contactId,
+      ),
+    p.check(
+      "sanctions_contact_marks_attempt_count_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
     p.check(
       "sanctions_contact_marks_generation_check",
       sql`${table.generation} > 0`,

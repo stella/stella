@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { MATCHER_WORKLOAD_REPORT_COUNT } from "./test-fixtures/monitoring-corpus";
 
-// Five database-free child lifetimes peaked at 500.9 MiB; 575 MiB leaves 74.1 MiB headroom.
-const MATCHER_MEMORY_BUDGET_BYTES = 575 * 1024 * 1024;
+// Worst correct peak: Darwin 500.9 MiB (Linux 421.0); mutant 593.2. Their midpoint leaves 46 MiB on either side.
+const MATCHER_MEMORY_BUDGET_BYTES = 547 * 1024 * 1024;
 const WORKLOAD_TIMEOUT_MS = 300_000;
 
 test(
