@@ -139,7 +139,8 @@
     "handoffFailed": "Dokument se nepodařilo otevřít",
     "handoffUpdateNow": "Aktualizovat nyní",
     "handoffConnectAccount": "Připojit účet",
-    "handoffRetry": "Zkusit znovu"
+    "handoffRetry": "Zkusit znovu",
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte"
   },
   "settings": {
     "about": "O aplikaci",

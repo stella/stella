@@ -480,8 +480,11 @@ mod tests {
   }
   #[test]
   fn protocol_matches_api_contract() {
-    let source =
-      include_str!("../../../../packages/api-contract/src/desktop-handoff.ts");
+    let source = std::fs::read_to_string(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/../../../packages/api-contract/src/desktop-handoff.ts"
+    ))
+    .expect("desktop handoff API contract");
     let declaration = |name: &str| {
       source
         .lines()

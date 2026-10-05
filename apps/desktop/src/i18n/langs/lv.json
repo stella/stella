@@ -139,7 +139,8 @@
     "handoffFailed": "Neizdevās atvērt dokumentu",
     "handoffUpdateNow": "Atjaunināt tagad",
     "handoffConnectAccount": "Savienot kontu",
-    "handoffRetry": "Mēģināt vēlreiz"
+    "handoffRetry": "Mēģināt vēlreiz",
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu"
   },
   "settings": {
     "about": "Par",

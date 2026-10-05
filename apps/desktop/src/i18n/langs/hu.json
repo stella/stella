@@ -139,7 +139,8 @@
     "handoffFailed": "Nem sikerült megnyitni a dokumentumot",
     "handoffUpdateNow": "Frissítés most",
     "handoffConnectAccount": "Fiók csatlakoztatása",
-    "handoffRetry": "Újrapróbálkozás"
+    "handoffRetry": "Újrapróbálkozás",
+    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt"
   },
   "settings": {
     "about": "Névjegy",

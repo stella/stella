@@ -139,7 +139,8 @@
     "handoffFailed": "Impossible d’ouvrir le document",
     "handoffUpdateNow": "Mettre à jour",
     "handoffConnectAccount": "Connecter le compte",
-    "handoffRetry": "Réessayer"
+    "handoffRetry": "Réessayer",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner"
   },
   "settings": {
     "about": "À propos",
