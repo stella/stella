@@ -329,6 +329,7 @@
           "type": "string",
           "maxLength": 64,
           "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
             "country": {

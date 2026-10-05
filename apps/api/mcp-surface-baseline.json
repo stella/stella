@@ -3,13 +3,13 @@
     "anonymized": 1005,
     "default": 1606,
     "documents": 888,
-    "law": 1188
+    "law": 1248
   },
   "tools": {
     "case_law_coverage": {
-      "anonymized": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527},
-      "default": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527},
-      "law": {"title": 22, "description": 245, "inputSchema": 437, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1527}
+      "anonymized": {"title": 22, "description": 245, "inputSchema": 451, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1541},
+      "default": {"title": 22, "description": 245, "inputSchema": 451, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1541},
+      "law": {"title": 22, "description": 245, "inputSchema": 451, "outputSchema": 621, "annotations": 100, "payloadUtf8Bytes": 1541}
     },
     "check_counterparty": {
       "default": {"title": 18, "description": 809, "inputSchema": 3772, "outputSchema": 3998, "annotations": 95, "payloadUtf8Bytes": 8798}
