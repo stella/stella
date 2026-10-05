@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -115,6 +116,13 @@ export const ClauseImportDialog = ({
   return (
     <Dialog onOpenChange={handleClose} open={open}>
       <DialogPopup className="sm:max-w-md">
+        <DialogFormState
+          dirty={file !== null && result === null}
+          onDiscard={() => {
+            setFile(null);
+            setPreviewCount(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("common.import")}</DialogTitle>
         </DialogHeader>

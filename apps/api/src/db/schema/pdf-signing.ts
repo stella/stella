@@ -1,3 +1,5 @@
+import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
+
 import {
   jsonb,
   p,
@@ -36,6 +38,7 @@ const PDF_SIGNING_SESSION_STATUSES = [
  * browser can say what happened rather than "signing failed".
  */
 export const PDF_SIGNING_SESSION_CLOSE_REASONS = [
+  ...DESKTOP_HANDOFF_FAILURE_REASONS,
   "user_cancelled",
   "base_version_diverged",
   "digest_mismatch",

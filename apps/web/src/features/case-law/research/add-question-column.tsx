@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -16,6 +17,7 @@ import {
 } from "@stll/ui/menu";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
+import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
@@ -25,6 +27,7 @@ import type {
   QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
 import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-question-column-limit";
+import { detachedUserAction } from "@/lib/errors/user-toast";
 
 /**
  * What pressing the add-question control does here, or null where there is no
@@ -92,7 +95,24 @@ export const AddQuestionColumn = ({
   surface,
   triggerVariant,
 }: AddQuestionColumnProps) => {
+  const t = useTranslations();
   const ensureAccount = useRequireAccount();
+  const navigate = useNavigate();
+  const currentHref = useRouterState({
+    select: (state) => state.location.href,
+  });
+  const chooseOrganization = () => {
+    detachedUserAction(
+      navigate({
+        to: "/auth/organization",
+        search: { redirectTo: currentHref },
+      }),
+      {
+        context: "case-law-questions.choose-organization",
+        failureMessage: t("errors.actionFailed"),
+      },
+    );
+  };
   const action = questionColumnAddAction(surface);
 
   if (action === null) {
@@ -105,6 +125,7 @@ export const AddQuestionColumn = ({
         <BulkAddColumns
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: action.surface.suggestion,
             onCreated: action.surface.onAddToSearch,
           }}
@@ -125,11 +146,22 @@ export const AddQuestionColumn = ({
           // opens on the next visit, with an organization behind it.
           open={false}
           onOpenChange={(open) => {
-            if (open) {
-              ensureAccount();
+            if (!open) {
+              return;
+            }
+            // A visitor is asked to sign in; a member without an active
+            // organization has nowhere for a question to live yet, so the
+            // press goes where one is chosen and comes back here. Either way
+            // the press answers.
+            if (ensureAccount() === ACCOUNT_GATE_OUTCOME.allowed) {
+              chooseOrganization();
             }
           }}
-          target={{ kind: "organisation", suggestion: action.suggestion }}
+          target={{
+            kind: "organisation",
+            mode: { type: "add" },
+            suggestion: action.suggestion,
+          }}
           triggerVariant={triggerVariant}
         />
       );
@@ -202,6 +234,7 @@ const PickQuestionColumn = ({
           open
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: surface.suggestion,
             onCreated: surface.onAddToSearch,
           }}

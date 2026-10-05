@@ -19,6 +19,7 @@ import {
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPopup,
@@ -236,6 +237,12 @@ export const SavedTimeNarratives = ({
         open={name !== null}
       >
         <DialogPopup>
+          <DialogFormState
+            dirty={name !== null && name !== ""}
+            onDiscard={() => {
+              setName(null);
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
           </DialogHeader>
