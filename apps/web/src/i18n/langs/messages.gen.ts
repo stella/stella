@@ -1498,6 +1498,7 @@ type Messages = {
     "noResults": "No clauses yet";
     "noVariants": "No variants";
     "outdatedVersion": "Update available";
+    "overrideNotRenderedWarning": "The override for clause {clauseName} was not used: its slot does not appear in this document.";
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";

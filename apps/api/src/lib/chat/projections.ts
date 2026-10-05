@@ -2523,6 +2523,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   fields: v.array(
     v.strictObject({
       path: v.string(),
+      visibleWhen: v.nullable(v.string()),
       label: v.optional(v.string()),
       input_type: v.string(),
       required: v.boolean(),
@@ -2583,6 +2584,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
     v.strictObject({
       path: v.string(),
       itemFieldPaths: v.array(v.string()),
+      itemAliases: v.array(v.string()),
     }),
   ),
   // Authoring warnings about the DOCX markers: a closed code, the marker or

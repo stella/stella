@@ -8,6 +8,7 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  visibleItemFields,
   savedFillNotices,
 } from "./template-form.logic";
 
@@ -267,5 +268,57 @@ describe("download clause diagnostics", () => {
     expect(
       readClauseWarnings(new Headers({ "X-Clause-Warnings": encoded })).isErr(),
     ).toBe(true);
+  });
+});
+
+describe("per-item field visibility", () => {
+  const persons: ResolvedField = {
+    path: "persons",
+    kind: "array",
+    count: 1,
+    itemAliases: ["p"],
+    itemFields: [
+      { path: "vip", kind: "boolean", count: 1 },
+      { path: "name", kind: "string", count: 1 },
+      { path: "title", kind: "string", count: 1, visibleWhen: "p.vip" },
+      { path: "salutation", kind: "string", count: 1, visibleWhen: "vip" },
+      { path: "closing", kind: "string", count: 1, visibleWhen: "loop.last" },
+      { path: "fee", kind: "string", count: 1, visibleWhen: "show_fees" },
+    ],
+  };
+  const visible = (values: Record<string, unknown>, index: number) =>
+    visibleItemFields({
+      field: persons,
+      index,
+      itemCount: 2,
+      values,
+      conditions: [],
+    }).map((sub) => sub.path);
+
+  test("each item asks only for the fields its own branch renders", () => {
+    const values = {
+      "persons[0].vip": true,
+      "persons[1].vip": false,
+      show_fees: true,
+    };
+    expect(visible(values, 0)).toEqual([
+      "vip",
+      "name",
+      "title",
+      "salutation",
+      "fee",
+    ]);
+    expect(visible(values, 1)).toEqual(["vip", "name", "closing", "fee"]);
+  });
+
+  test("a condition on the document's values applies to every item", () => {
+    expect(visible({ show_fees: false }, 0)).toEqual(["vip", "name"]);
+  });
+
+  test("an item's own field is read before a document field of the same name", () => {
+    expect(visible({ vip: true, "persons[0].vip": false }, 0)).not.toContain(
+      "salutation",
+    );
+    expect(visible({ vip: true }, 0)).toContain("salutation");
   });
 });
