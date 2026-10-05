@@ -1843,7 +1843,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Invariants the ownership table cannot state itself, such as
         # allowlists kept equal to their source lists.
-        run: bun test scripts/ownership.test.ts
+        run: bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts
 
       - name: Queue authority
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

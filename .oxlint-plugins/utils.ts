@@ -861,11 +861,28 @@ const MUTATION_METHODS: ReadonlySet<string> = new Set([
   "delete",
 ]);
 
-const isDatabaseHandleName = (name: string): boolean =>
+export const isDatabaseHandleName = (name: string): boolean =>
   name === "tx" ||
   name === "db" ||
   name === "trx" ||
   /[a-z](?:Tx|Db)$/u.test(name);
+
+// Shared by schema-only import validation and the write rules. Schema-only
+// modules reject these operations regardless of a receiver's local alias.
+export const isDatabaseOperationMethod = (name: string): boolean =>
+  MUTATION_METHODS.has(name) ||
+  [
+    "select",
+    "selectDistinct",
+    "selectDistinctOn",
+    "query",
+    "execute",
+    "transaction",
+    "findFirst",
+    "findMany",
+    "unsafe",
+    "begin",
+  ].includes(name);
 
 const GET_DB_CALL = /^get[A-Za-z]*Db$/u;
 const TRANSACTION_TYPE = /(?:^|[a-z])(?:Transaction|Tx)$|^(?:Db|DbOrTx)$/u;

@@ -60,6 +60,7 @@ import {
   countRootConnectionShapes,
   countRootConnectionTypeImports,
 } from "./root-connection-shapes";
+import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -2928,6 +2929,22 @@ const RESULT_BOUNDARY_METRICS = [
 ] as const satisfies readonly RatchetMetric[];
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "repo",
+    id: "schema-introspection-files",
+    description:
+      "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
+    perFile: true,
+    count: (context) => {
+      const paths = schemaIntrospectionPaths(
+        readSource(context, "scripts/ownership.ts"),
+      );
+      return {
+        count: paths.length,
+        files: Object.fromEntries(paths.map((file) => [file, 1])),
+      };
+    },
+  },
   {
     scope: "file",
     id: "direct-status-writes",
