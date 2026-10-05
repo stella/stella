@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -17,6 +18,8 @@ import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import {
   InspectorFindBar,
@@ -49,6 +52,7 @@ import {
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
@@ -60,6 +64,11 @@ const LazyStatuteCompareView = lazy(async () => {
   const module =
     await import("@/features/statutes/components/statute-compare-view");
   return { default: module.StatuteCompareView };
+});
+
+const LazyAuthenticatedStatuteChat = lazy(async () => {
+  const module = await import("./-authenticated-statute-chat");
+  return { default: module.AuthenticatedStatuteChat };
 });
 
 type OutlineJumpState = {
@@ -100,6 +109,49 @@ type PublicStatuteViewerProps = PublicStatuteRouteData & {
 };
 
 /**
+ * The chat over the wording. Without a version in force there is nothing to
+ * bind it to; a signed-in reader loads the full chat lazily behind the gated
+ * composer, everyone else gets the public one.
+ */
+const StatuteReaderChat = ({
+  activeLegal,
+  children,
+  signedIn,
+}: {
+  activeLegal: ActiveLegalDocument | null;
+  children: ReactNode;
+  signedIn: boolean;
+}) => {
+  if (activeLegal === null) {
+    return children;
+  }
+  if (!signedIn) {
+    return (
+      <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+        {children}
+      </LegalReaderAIChat>
+    );
+  }
+  return (
+    <Suspense
+      fallback={
+        <FileViewerWithAI
+          activeLegal={activeLegal}
+          className="h-full"
+          overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.gated}
+        >
+          {children}
+        </FileViewerWithAI>
+      }
+    >
+      <LazyAuthenticatedStatuteChat activeLegal={activeLegal}>
+        {children}
+      </LazyAuthenticatedStatuteChat>
+    </Suspense>
+  );
+};
+
+/**
  * The public statute reader. It renders whichever consolidation the route
  * resolved; picking another version or another day is a navigation, because
  * every consolidation has its own address.
@@ -114,6 +166,7 @@ export const PublicStatuteViewer = ({
   windowGap,
   work,
 }: PublicStatuteViewerProps) => {
+  const user = useMaybeAuthenticatedUser();
   const t = useTranslations();
   const navigate = useNavigate();
   const asOfLabelId = useId();
@@ -328,6 +381,12 @@ export const PublicStatuteViewer = ({
     </div>
   );
 
+  const readerWithChat = (
+    <StatuteReaderChat activeLegal={activeLegal} signedIn={user !== null}>
+      {readerBody}
+    </StatuteReaderChat>
+  );
+
   return (
     <main className="relative flex min-h-0 flex-1 flex-col" ref={panelRef}>
       <ChromeHeaderActions>
@@ -442,13 +501,7 @@ export const PublicStatuteViewer = ({
           decision, bound to this consolidation and so to its one
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
-            {activeLegal === null ? (
-              readerBody
-            ) : (
-              <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
-                {readerBody}
-              </LegalReaderAIChat>
-            )}
+            {readerWithChat}
           </div>
         </>
       )}
