@@ -207,6 +207,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
   ]),
+  fixtureRuleOverride("require-caller-feature-access.fixture.tsx", [
+    "require-caller-feature-access/require-caller-feature-access",
+  ]),
   fixtureRuleOverride("no-raw-deployment-feature-read.fixture.ts", [
     "no-raw-deployment-feature-read/no-raw-deployment-feature-read",
   ]),
@@ -1463,6 +1466,7 @@ export default defineConfig({
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
+    "./.oxlint-plugins/require-caller-feature-access.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
@@ -4068,6 +4072,10 @@ export default defineConfig({
         "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads":
           "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: { "require-caller-feature-access/require-caller-feature-access": "error" },
     },
     {
       // Outside the API, apps and packages read their own env modules; a

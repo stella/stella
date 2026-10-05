@@ -7,6 +7,7 @@ import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/cont
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -130,6 +131,22 @@ test("organization settings expose registry-derived enabled or hidden statuses w
       },
     });
     const projected = projectOrganizationSettingsRow(null, snapshot);
+    for (const featureId of Object.keys(registry)) {
+      for (const kind of ["capabilities", "tools", "resources"] as const) {
+        expect(
+          isMcpDescriptorFeatureEnabled({
+            context: {
+              organizationId,
+              userId: "user_test",
+              featureAccessSnapshot: snapshot,
+            },
+            kind,
+            id: "fixture",
+            featureId,
+          }),
+        ).toBe(result.capabilities[featureId]?.status === "enabled");
+      }
+    }
     expect(Object.keys(projected.capabilities)).toEqual(Object.keys(registry));
     expect(JSON.stringify(projected.capabilities)).not.toContain("proof");
     expect(JSON.stringify(projected.capabilities)).not.toContain(
