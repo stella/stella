@@ -224,6 +224,21 @@ const COURT_NOT_STATED = "(nezadán)";
 const COURT_CODE_NONE = "NONE";
 
 /**
+ * The Ministry of Justice's own decisions, under both spellings the API uses:
+ * it states `MINISTERY_OF_JUSTICE_*` and `MINISTRY_OF_JUSTICE_*` alike, so
+ * each instrument is named once and keyed under both.
+ */
+const ministryOfJusticeMembers = (
+  czechByInstrument: Readonly<Record<string, string>>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(czechByInstrument).flatMap(([instrument, czech]) => [
+      [`MINISTRY_OF_JUSTICE_${instrument}`, czech],
+      [`MINISTERY_OF_JUSTICE_${instrument}`, czech],
+    ]),
+  );
+
+/**
  * The decision types this API accepts, in the publisher's own Czech.
  *
  * `ORDER_T` is the value the API answers to; a plain `ORDER` is rejected with
@@ -232,9 +247,6 @@ const COURT_CODE_NONE = "NONE";
  * heading is synthesized from, so the mapping is the whole difference between
  * a document that opens with its own title and one that does not.
  *
- * `MINISTERY_OF_JUSTICE_DECISION` is spelled as the API spells it: the key is
- * the publisher's member, so correcting it would stop the entry matching.
- *
  * Read through {@link mapDecisionType}, which reports a member this map has
  * never seen instead of lowercasing it into the corpus unnoticed.
  */
@@ -242,14 +254,21 @@ const DECISION_TYPE_MAP: Readonly<Record<string, string>> = {
   JUDGEMENT: "rozsudek",
   RESOLUTION: "usnesení",
   ORDER_T: "trestní příkaz",
-  MINISTERY_OF_JUSTICE_DECISION: "rozhodnutí ministerstva spravedlnosti",
+  ...ministryOfJusticeMembers({
+    DECISION: "rozhodnutí ministerstva spravedlnosti",
+    ORDER: "příkaz ministerstva spravedlnosti",
+    RESOLUTION: "usnesení ministerstva spravedlnosti",
+  }),
 };
+
+/** The member the API states for a document whose type it did not record. */
+const DECISION_TYPE_NOT_STATED = "NONE";
 
 const mapDecisionType = (
   type: string | undefined,
   caseNumber: string,
 ): string | undefined => {
-  if (!type) {
+  if (!type || type === DECISION_TYPE_NOT_STATED) {
     return undefined;
   }
   const mapped = DECISION_TYPE_MAP[type];
