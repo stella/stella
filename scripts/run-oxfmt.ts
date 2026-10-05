@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { requireFormatterEnvironment } from "./check-format-environment";
 
 const FORMATTER_CONFIG = path.resolve(import.meta.dir, "../.oxfmtrc.json");
@@ -23,9 +24,4 @@ const result = Bun.spawnSync(
   },
 );
 
-if (result.signalCode !== undefined) {
-  console.error(`Oxfmt terminated by ${result.signalCode}.`);
-  process.exit(1);
-}
-
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));

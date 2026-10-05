@@ -34,6 +34,7 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { deriveBlockId } from "@stll/folio-core/server";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import {
   billingCodes,
@@ -6792,7 +6793,8 @@ if (import.meta.main) {
       stderr: "inherit",
       stdout: "inherit",
     });
-    process.exit(await child.exited);
+    await child.exited;
+    process.exit(childExitStatus(child));
   }
 
   console.log(

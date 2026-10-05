@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.8.2
+
+### Patch Changes
+
+- [#4737](https://github.com/stella/stella/pull/4737) [`0dff393`](https://github.com/stella/stella/commit/0dff393483053ad01e658230d3435be0be46ad10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update member removal options and task filters.
+
 ## 3.8.1
 
 ### Patch Changes
