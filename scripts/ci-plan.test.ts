@@ -3968,7 +3968,7 @@ test("parity treats absent or false heavy-only input as ordinary event execution
         ),
       ).toBe(heavyOnly === true);
       expect(runsAtDepth(jobIf(ciJobs["heavy-web-build"]), context)).toBe(
-        heavyOnly === true,
+        heavyOnly === true && event !== EVENT.pullRequest,
       );
     }
   }
