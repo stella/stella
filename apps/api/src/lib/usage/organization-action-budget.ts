@@ -9,7 +9,11 @@ import {
   ACTION_SERVICE_CREDENTIALS,
   type ActionServiceCredentials,
 } from "@/api/lib/rate-limit/action-kinds";
-import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  PER_KIND_PERIOD_SCOPE,
+  type ActionPeriodPolicy,
+  type ActionPeriodScope,
+} from "@/api/lib/rate-limit/action-period-budget";
 import {
   readFreeTier,
   type FreeTier,
@@ -85,15 +89,23 @@ type OrganizationActionBudget =
   | {
       status: "resolved";
       policy: ActionPeriodPolicy;
+      scope: ActionPeriodScope;
       serviceDeadlineMs: number | null;
     }
   | { status: "not_enabled" }
   | { status: "unavailable" };
 
+/** The free floor's one period count, shared by every counted kind. */
+export const FREE_TIER_PERIOD_SCOPE = {
+  type: "pooled",
+  poolKey: "free",
+} as const satisfies ActionPeriodScope;
+
 type AccessBudgetLimit =
   | {
       status: "limited";
       limit: number | undefined;
+      scope: ActionPeriodScope;
       serviceDeadlineMs: number | null;
     }
   | { status: "not_enabled" }
@@ -109,26 +121,30 @@ const accessBudgetLimit = ({
       return {
         status: "limited",
         limit: access.serviceActionsPerPeriod,
+        scope: PER_KIND_PERIOD_SCOPE,
         serviceDeadlineMs: access.deadline.getTime(),
       };
     case "evaluation":
       return {
         status: "limited",
         limit: evaluationActions,
+        scope: PER_KIND_PERIOD_SCOPE,
         serviceDeadlineMs: access.endsAt.getTime(),
       };
     // The free floor never expires; it ends only when the organization
-    // regains paid access.
+    // regains paid access. Its budget is one count across every kind.
     case "free":
       return {
         status: "limited",
         limit: access.serviceActionsPerPeriod,
+        scope: FREE_TIER_PERIOD_SCOPE,
         serviceDeadlineMs: null,
       };
     case "self_managed_keys":
       return {
         status: "limited",
         limit: selfManagedActions,
+        scope: PER_KIND_PERIOD_SCOPE,
         serviceDeadlineMs: null,
       };
     case "ended":
@@ -156,7 +172,7 @@ export const resolveOrganizationActionBudget = (
       return panic("Unhandled organization budget limit");
   }
   const { periodMs } = options;
-  const { limit, serviceDeadlineMs } = resolved;
+  const { limit, scope, serviceDeadlineMs } = resolved;
   if (
     periodMs === undefined ||
     !Number.isSafeInteger(periodMs) ||
@@ -167,7 +183,12 @@ export const resolveOrganizationActionBudget = (
   ) {
     return { status: "unavailable" };
   }
-  return { status: "resolved", policy: { periodMs, limit }, serviceDeadlineMs };
+  return {
+    status: "resolved",
+    policy: { periodMs, limit },
+    scope,
+    serviceDeadlineMs,
+  };
 };
 
 /**

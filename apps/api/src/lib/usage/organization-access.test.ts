@@ -9,6 +9,7 @@ import {
   ACTION_SERVICE_CREDENTIALS,
   type ActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
+import type { ActionPeriodScope } from "@/api/lib/rate-limit/action-period-budget";
 import {
   CONFIGURED_ACCESS_STATE,
   CONFIGURED_ACCESS_STATUSES,
@@ -244,16 +245,33 @@ const INSTANCE_MODELS_BY_ACCESS = {
   unavailable: false,
 } as const satisfies Record<OrganizationAccessType, boolean>;
 
+// Free is one count across every kind; every other standing counts per kind.
 const BUDGET_BY_ACCESS = {
-  paid: { status: "resolved", limit: PAID_ACTIONS },
-  evaluation: { status: "resolved", limit: CONFIG.evaluationActions },
-  free: { status: "resolved", limit: FREE_ACTIONS },
-  self_managed_keys: { status: "resolved", limit: CONFIG.selfManagedActions },
+  paid: {
+    status: "resolved",
+    limit: PAID_ACTIONS,
+    scope: { type: "per_kind" },
+  },
+  evaluation: {
+    status: "resolved",
+    limit: CONFIG.evaluationActions,
+    scope: { type: "per_kind" },
+  },
+  free: {
+    status: "resolved",
+    limit: FREE_ACTIONS,
+    scope: { type: "pooled", poolKey: "free" },
+  },
+  self_managed_keys: {
+    status: "resolved",
+    limit: CONFIG.selfManagedActions,
+    scope: { type: "per_kind" },
+  },
   ended: { status: "not_enabled" },
   unavailable: { status: "unavailable" },
 } as const satisfies Record<
   OrganizationAccessType,
-  | { status: "resolved"; limit: number }
+  | { status: "resolved"; limit: number; scope: ActionPeriodScope }
   | { status: "not_enabled" | "unavailable" }
 >;
 
@@ -290,6 +308,7 @@ describe("organization access resolution", () => {
               periodMs: CONFIG.periodMs,
               limit: expectedBudget.limit,
             });
+            expect(budget.scope).toEqual(expectedBudget.scope);
             // Only time-boxed standings carry a service deadline.
             expect(budget.serviceDeadlineMs === null).toBe(
               expected === "free" || expected === "self_managed_keys",
