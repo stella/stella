@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -101,12 +100,16 @@ test("each varchar boundary counts Postgres characters without truncation", () =
     for (const character of ["a", "𐐀"]) {
       const exact = character.repeat(CITATION_STORAGE_WIDTHS[field]);
       const over = `${exact}${character}`;
-      expect(assertCitationStorageField(field, exact)).toBe(exact);
-      expect(assertCitationStorageField(field, null)).toBeNull();
+      expect(assertCitationStorageField(field, exact).unwrap()).toBe(exact);
+      expect(assertCitationStorageField(field, null).unwrap()).toBeNull();
       expect(fitsCitationStorageField(field, over)).toBe(false);
-      expect(() => assertCitationStorageField(field, over)).toThrow(
-        CitationStorageFieldError,
-      );
+      const refused = assertCitationStorageField(field, over);
+      expect(refused.isErr()).toBe(true);
+      if (refused.isErr()) {
+        expect(refused.error).toBeInstanceOf(CitationStorageFieldError);
+        expect(refused.error.field).toBe(field);
+        expect(refused.error.maximum).toBe(CITATION_STORAGE_WIDTHS[field]);
+      }
     }
   }
 });
@@ -123,32 +126,28 @@ test("citation row projection either fits every column or refuses before SQL", (
         identifier: text(300),
       }),
       ({ printed, key, hint, identifier }) => {
-        const row = Result.try({
-          try: () =>
-            citationRowOf(decisionId, {
-              verdict: null,
-              reference: {
-                index: 0,
-                printed,
-                citationKey: key,
-                identifiers: [
-                  {
-                    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                    normalizedValue: identifier,
-                  },
-                ],
-                kind: CITATION_KIND.PRECEDENT,
-                hints: {
-                  court: hint,
-                  decisionType: null,
-                  sheetNumber: null,
-                  decisionDate: null,
-                },
-                sectionIndex: null,
-                polarityMentions: null,
+        const row = citationRowOf(decisionId, {
+          verdict: null,
+          reference: {
+            index: 0,
+            printed,
+            citationKey: key,
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                normalizedValue: identifier,
               },
-            }),
-          catch: (error: unknown) => error,
+            ],
+            kind: CITATION_KIND.PRECEDENT,
+            hints: {
+              court: hint,
+              decisionType: null,
+              sheetNumber: null,
+              decisionDate: null,
+            },
+            sectionIndex: null,
+            polarityMentions: null,
+          },
         });
         const fits =
           Array.from(printed).length <= CITATION_STORAGE_WIDTHS.text &&
@@ -220,11 +219,8 @@ test("each citation row field is checked independently at its schema boundary", 
   ] as const) {
     for (const character of ["a", "𐐀"]) {
       const exact = character.repeat(CITATION_STORAGE_WIDTHS[field]);
-      expect(project({ [input]: exact })[column]).toBe(exact);
-      const refused = Result.try({
-        try: () => project({ [input]: exact + character }),
-        catch: (error: unknown) => error,
-      });
+      expect(project({ [input]: exact }).unwrap()[column]).toBe(exact);
+      const refused = project({ [input]: exact + character });
       expect(refused.isErr()).toBe(true);
       if (refused.isOk()) {
         throw new Error("Expected citation field refusal");

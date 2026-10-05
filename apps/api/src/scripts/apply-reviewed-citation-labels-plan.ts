@@ -292,10 +292,13 @@ const upsertReviewsStatement = (
   INSERT INTO case_law_citation_reviews AS r
     (id, citing_decision_id, citation_key, polarity, review_ref)
   VALUES ${sql.join(
-    labels.map(
-      (label) =>
-        sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${assertCitationStorageField("key", label.citationKey)}, ${label.polarity}, ${label.reviewRef})`,
-    ),
+    labels.map((label) => {
+      const checked = assertCitationStorageField("key", label.citationKey);
+      if (checked.isErr()) {
+        throw checked.error;
+      }
+      return sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${checked.value}, ${label.polarity}, ${label.reviewRef})`;
+    }),
     sql`, `,
   )}
   ON CONFLICT (citing_decision_id, citation_key) DO UPDATE
