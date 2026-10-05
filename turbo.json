@@ -693,7 +693,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/.github/ci-event-policy.json",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",

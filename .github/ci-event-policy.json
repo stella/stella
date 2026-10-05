@@ -100,7 +100,7 @@
     "ci.yml/ci-plan": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
-    "ci.yml/ci-checks-generated": "queue",
+    "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
     "ci.yml/ci-tests": "pending",
@@ -158,7 +158,7 @@
     },
     "network-baseline-record.yml": {
       "role": "analysis",
-      "cancelInProgress": true
+      "cancelInProgress": false
     },
     "publish-npm.yml": {
       "role": "publish",

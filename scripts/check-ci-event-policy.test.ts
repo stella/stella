@@ -25,6 +25,37 @@ test("every real workflow job has an event policy and the fast gate follows it",
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
 });
 
+test("repeating a fast check cannot replace another declared check", () => {
+  const workflow = structuredClone(workflows["ci.yml"]);
+  const parsed = v.parse(workflowSchema, workflow);
+  const gate = parsed.jobs["ci-result"]?.steps?.find(
+    (step) => step.env?.["FAST_REQUIRED"],
+  );
+  if (!gate?.env) {
+    panic("Missing fast-required fixture");
+  }
+  const required = v.parse(
+    v.array(v.string()),
+    JSON.parse(v.parse(v.string(), gate.env["FAST_REQUIRED"])),
+  );
+  expect(required.length).toBeGreaterThan(1);
+  const first = required.at(0);
+  if (first === undefined) {
+    panic("Missing first fast-required fixture");
+  }
+  gate.env["FAST_REQUIRED"] = JSON.stringify(
+    required.map((id, index) => (index === 1 ? first : id)),
+  );
+  expect(
+    checkCiEventPolicies({
+      workflows: { ...workflows, "ci.yml": parsed },
+      policy,
+    }),
+  ).toContain(
+    "ci.yml: FAST_REQUIRED must equal declared PR checks and the named pending job",
+  );
+});
+
 test("new heavy jobs require a policy that excludes every pull request", () => {
   const workflow = {
     on: { pull_request: {}, merge_group: {} },

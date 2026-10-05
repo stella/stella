@@ -1010,12 +1010,10 @@ jobs:
   ci-checks-generated:
     needs: ci-plan
     if: >-
-      github.event_name != 'pull_request' && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
-      )
       )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
@@ -2256,7 +2254,7 @@ jobs:
       # Both scripts import `better-result`, so they need the dependency
       # install above, which is itself conditional.
       - name: Verify CI job event policies
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun scripts/check-ci-event-policy.ts
           bun test scripts/check-ci-event-policy.test.ts
@@ -3474,6 +3472,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           persist-credentials: false
 
       - name: Setup Bun
@@ -4949,7 +4948,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.

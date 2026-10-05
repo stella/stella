@@ -393,6 +393,7 @@ export const checkCiEventPolicies = ({
     );
     if (
       actual.length !== expected.length ||
+      new Set(actual).size !== actual.length ||
       actual.some((id) => !expected.includes(id))
     ) {
       problems.push(
