@@ -364,7 +364,8 @@ const settleEcliIdentityTx = async (
       return panic(`Unhandled ECLI candidates: ${String(candidates)}`);
   }
   const adopted = await findIdentityRowTx(tx, candidates.decisionId);
-  if (adopted === undefined || adopted.sourceDocumentId === null) {
+  const previousSourceDocumentId = adopted?.sourceDocumentId ?? undefined;
+  if (adopted === undefined || previousSourceDocumentId === undefined) {
     // The candidate read above is locked and keyed; losing either is not a
     // state this transaction can reach.
     return panic("ECLI identity candidate lost its publisher id");
@@ -374,7 +375,7 @@ const settleEcliIdentityTx = async (
     ecliIdentity: {
       type: "adopted",
       sourceDocumentId,
-      previousSourceDocumentId: adopted.sourceDocumentId,
+      previousSourceDocumentId,
     } satisfies EcliIdentityMatch,
   };
 };
