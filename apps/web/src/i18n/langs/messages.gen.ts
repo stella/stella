@@ -810,6 +810,34 @@ type Messages = {
       "unavailable": "Coverage figures are unavailable right now.";
     };
     "decisionNotFound": "Decision not found";
+    "decisionTypes": {
+      "administrative_decision": "Administrative decision";
+      "binding_excise_information": "Binding excise information";
+      "binding_rate_information": "Binding VAT rate information";
+      "court_direction": "Procedural direction";
+      "decision": "Decision";
+      "finding": "Finding";
+      "general_tax_ruling": "General tax ruling";
+      "individual_tax_ruling": "Individual tax ruling";
+      "judgment": "Judgment";
+      "leave_refused": "Rejected for lack of a significant point of law";
+      "merits_decision": "Decision on the merits";
+      "ministry_of_justice_decision": "Decision of the Ministry of Justice";
+      "minutes_extract": "Extract from the minutes";
+      "opinion": "Opinion";
+      "order": "Order";
+      "other": "Other";
+      "payment_order": "Payment order";
+      "penal_order": "Penal order";
+      "principle_decision": "Decision of principle";
+      "protective_opinion": "Protective opinion";
+      "resolution": "Resolution";
+      "signalling_decision": "Signalling decision";
+      "statement_of_reasons": "Statement of reasons";
+      "tax_explanations": "Tax explanations";
+      "top_up_tax_opinion": "Top-up tax opinion";
+      "uniformity_decision": "Uniformity decision";
+    };
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
       "remove": "Remove filter {filter}";
