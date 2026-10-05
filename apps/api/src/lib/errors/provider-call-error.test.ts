@@ -142,7 +142,7 @@ describe("provider call error codes", () => {
       "max_tokens",
     ] as const;
     assertProperty(
-      "provider call error codes come from a closed set",
+      "keep the application's own codes and name every other value provider_error",
       fc.property(
         fc.oneof(fc.string(), fc.constantFrom(...ownCodes)),
         fc.constantFrom(400, 429, 500, 502, 503),

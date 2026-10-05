@@ -43,8 +43,8 @@ import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { applicationErrorMessage } from "@/api/lib/errors/error-tag";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
+import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
@@ -121,11 +121,7 @@ const unwrapOrFlowStepError = <T>(
   return result.value;
 };
 
-/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
-export class FlowStepError extends TaggedError("FlowStepError")<{
-  message: string;
-  cause?: unknown;
-}> {}
+export { FlowStepError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * The completion notice for a run a reviewer finished could not be filed.

@@ -193,6 +193,12 @@ export class HandlerError<
   }
 }
 
+/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
+export class FlowStepError extends TaggedError("FlowStepError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export class DatabaseError extends TaggedError("DatabaseError")<{
   code?: string | undefined;
   message: string;
