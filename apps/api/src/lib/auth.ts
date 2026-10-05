@@ -1206,15 +1206,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         });
         if (Result.isError(teardown)) {
           captureError(teardown.error, { organizationId });
-          if (teardown.error instanceof OrganizationStorageTeardownBoundError) {
-            throw new APIError("BAD_REQUEST", {
-              error: "organization_storage_too_large",
-              message: teardown.error.message,
-            });
-          }
-          throw new APIError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to delete the organization's stored files",
-          });
+          throw teardown.error instanceof OrganizationStorageTeardownBoundError
+            ? new APIError("BAD_REQUEST", {
+                error: "organization_storage_too_large",
+                message: teardown.error.message,
+              })
+            : new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to delete the organization's stored files",
+              });
         }
 
         if (teardown.value.type === "subscription_renews") {
