@@ -235,13 +235,23 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         return [`job '${name}': Bun install cache saves must be main-only`];
       }
       const path = typeof inputs["path"] === "string" ? inputs["path"] : "";
-      const bunStore = path
-        .split(/\r?\n/u)
-        .some((entry) =>
-          /(?:^|[\\/])\.bun(?:[\\/]install(?:[\\/]cache(?:[\\/].*)?)?)?[\\/]*$/u.test(
-            entry.trim(),
-          ),
-        );
+      const bunStore = path.split(/\r?\n/u).some((entry) => {
+        const segments = entry.trim().split(/[\\/]/u).filter(Boolean);
+        return segments.some((segment, index) => {
+          if (segment !== ".bun") {
+            return false;
+          }
+          if (index === segments.length - 1) {
+            return true;
+          }
+          if (segments.at(index + 1) !== "install") {
+            return false;
+          }
+          return (
+            index === segments.length - 2 || segments.at(index + 2) === "cache"
+          );
+        });
+      });
       if (bunStore && uses.startsWith("actions/cache@")) {
         return [`job '${name}': split Bun cache restore from main-only save`];
       }

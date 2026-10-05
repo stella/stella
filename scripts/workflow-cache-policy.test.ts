@@ -129,6 +129,7 @@ test("Bun install cache restore remains available but saves require the exact ma
     "~/.bun/install/",
     "~\\.bun\\install",
     "~/.bun/install/cache",
+    "~/.bun/install/cache/package/archive",
     "~\\.bun\\install\\cache",
     "other/cache\n~/.bun/install/cache",
   ]) {
@@ -161,6 +162,17 @@ test("Bun install cache restore remains available but saves require the exact ma
         },
       }),
     ).toEqual(["job 'fixture': split Bun cache restore from main-only save"]);
+  }
+  for (const path of ["~/.bun/bin", "~/.bun/install/other", "~/.bun-other"]) {
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          fixture: {
+            steps: [{ uses: "actions/cache@fixture", with: { path } }],
+          },
+        },
+      }),
+    ).toEqual([]);
   }
 });
 
