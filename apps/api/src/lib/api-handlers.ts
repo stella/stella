@@ -1252,6 +1252,7 @@ const createSafeScopedHandler = <
                       params: ctx.params,
                       query: ctx.query,
                       organizationId: ctx.session.activeOrganizationId,
+                      userId: ctx.user.id,
                       scopedDb: ctx.scopedDb,
                       safeDb: ctx.safeDb,
                       ...(hasWorkspaceId(ctx)

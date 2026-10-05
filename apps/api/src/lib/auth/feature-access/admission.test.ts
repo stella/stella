@@ -189,6 +189,7 @@ describe("feature access safe-handler admission", () => {
 
   test("conditional metadata failures use the shared handler error response", async () => {
     let executions = 0;
+    let observedUserId: unknown;
     const endpoint = createSafeRootHandler(
       {
         accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -197,7 +198,8 @@ describe("feature access safe-handler admission", () => {
         featureAccess: {
           type: "conditional",
           featureId: requiredFeatureId,
-          usesFeature: async () => {
+          usesFeature: async ({ userId }) => {
+            observedUserId = userId;
             throw new DatabaseError({ message: "Fixture metadata failure" });
           },
           projectInputSchema: (schemas) => schemas,
@@ -219,6 +221,7 @@ describe("feature access safe-handler admission", () => {
       code: 500,
       response: { message: "Internal server error" },
     });
+    expect(observedUserId).toBe("user_1");
     expect(executions).toBe(0);
   });
 
