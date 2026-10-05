@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,8 +10,13 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import {
+  rehydrateLegislationCandidates,
+  readLegislationCandidateRows,
+  legislationCandidateRowsStatement,
+} from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -20,10 +26,6 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
-import {
-  setLogSinkForTesting,
-  type LogRecord,
-} from "@/api/lib/observability/logger";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -58,6 +60,10 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 let client: PGlite;
 let legislationDb: LegislationReadDb;
+let reads = 0;
+beforeEach(() => {
+  reads = 0;
+});
 
 const candidatesOf = (...ids: string[]) => ids.map((id) => ({ id, score: 1 }));
 
@@ -67,13 +73,15 @@ beforeAll(
     const db = drizzle({ client });
     legislationDb = async <T>(
       fn: (tx: LegislationReadTransaction) => Promise<T>,
-    ) =>
-      await withPublicLawReaderRole(db, async (roleTx) => {
+    ) => {
+      reads += 1;
+      return await withPublicLawReaderRole(db, async (roleTx) => {
         // SAFETY: the role transaction supplies the select surface the reads use.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
         const tx = roleTx as unknown as LegislationReadTransaction;
         return await fn(tx);
       });
+    };
 
     await db
       .insert(legislationSources)
@@ -266,38 +274,69 @@ test("a withdrawn version is dropped while its erase is still pending", async ()
 });
 
 test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
-  const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => {
-    records.push(record);
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"legislationDocument">();
+  const result = await rehydrateLegislationCandidates({
+    body: { query: "smlouva" },
+    legislationDb,
+    hitDispositions,
+    generation: PROJECTED_GENERATION,
+    candidates: candidatesOf(
+      projectedId,
+      queuedId,
+      movedId,
+      unheldId,
+      withdrawnId,
+      missingId,
+    ),
   });
-  try {
-    const missingId = createSafeId<"legislationDocument">();
-    const result = await rehydrateLegislationCandidates({
+  expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  expect([...result.context.byId.keys()]).toEqual([projectedId]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 4,
+    drift: 1,
+  });
+  expect(reads).toBe(1);
+});
+
+test("the legislation read separates eligible content from id-only dispositions", async () => {
+  const missingId = createSafeId<"legislationDocument">();
+  await legislationDb(async (tx) => {
+    const options = {
       body: { query: "smlouva" },
-      legislationDb,
       generation: PROJECTED_GENERATION,
-      candidates: candidatesOf(
-        projectedId,
-        queuedId,
-        movedId,
-        unheldId,
-        withdrawnId,
-        missingId,
-      ),
-    });
-    expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
-    const observations = records.filter(
-      (record) => record.message === "corpus.search.hit_dispositions",
+      ids: [projectedId, withdrawnId, queuedId, missingId],
+    };
+    const read = await readLegislationCandidateRows(tx, options);
+    expect(read.rows.map((row) => row.id)).toEqual([projectedId]);
+    expect(read.dispositions).toEqual(
+      expect.arrayContaining([
+        { id: withdrawnId, type: "excluded" },
+        { id: queuedId, type: "excluded" },
+        { id: missingId, type: "drift" },
+      ]),
     );
-    expect(observations).toHaveLength(1);
-    expect(observations.at(0)?.attributes).toMatchObject({
-      stage: "rehydration",
-      family: "legislation",
-      excluded: 4,
-      drift: 1,
-      malformed: 0,
+    expect(read.dispositions).toHaveLength(3);
+    expect(JSON.stringify(read)).not.toContain("Withdrawn act");
+    const records = await legislationCandidateRowsStatement(tx, {
+      ...options,
+      ids: [withdrawnId, queuedId],
     });
-  } finally {
-    setLogSinkForTesting(null);
-  }
+    expect(records).toHaveLength(2);
+    expect(records).toEqual(
+      expect.arrayContaining([
+        { id: withdrawnId, row: null },
+        { id: queuedId, row: null },
+      ]),
+    );
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const statement = legislationCandidateRowsStatement(tx, options);
+    const plan = JSON.stringify(
+      await tx.execute(sql`EXPLAIN (COSTS OFF) ${statement.getSQL()}`),
+    );
+    expect(plan).toMatch(
+      /Index(?: Only)? Scan using legislation_documents_pkey|Bitmap Index Scan on legislation_documents_pkey/u,
+    );
+  });
 });

@@ -3,6 +3,11 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import {
+  createCorpusHitDispositionCounter,
+  reportCorpusHitDispositions,
+  type CorpusHitDispositionCounter,
+} from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
   corpusIndexLexicalScore,
@@ -10,6 +15,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
+import { LIMITS } from "@/api/lib/limits";
 import {
   installRecordingLogger,
   type RecordingLogger,
@@ -69,7 +75,11 @@ const stubHits = (
   );
 };
 
-const readDispositionPage = async (mode: Mode, limit = 40) =>
+const readDispositionPage = async (
+  mode: Mode,
+  limit = 40,
+  hitDispositions?: CorpusHitDispositionCounter,
+) =>
   await readCorpusIndexSearchPage({
     observer: "unobserved",
     cluster: "q09",
@@ -78,6 +88,7 @@ const readDispositionPage = async (mode: Mode, limit = 40) =>
     limit,
     order: RELEVANCE_ORDER,
     parsedCursor: null,
+    hitDispositions,
     scanTransport:
       mode === "native"
         ? { type: "native" }
@@ -138,9 +149,11 @@ test.each(modes)(
     const records = logs.records.filter(
       ({ message }) => message === "corpus.search.hit_dispositions",
     );
-    expect(records.map(({ attributes }) => attributes)).toEqual([
-      expect.objectContaining({ stage: mode, malformed: 2 }),
-      expect.objectContaining({ stage: "highlight", malformed: 1 }),
+    expect(records).toEqual([
+      expect.objectContaining({
+        severityText: "INFO",
+        attributes: { malformed: 3, excluded: 0, drift: 0 },
+      }),
     ]);
     expect(JSON.stringify(records)).not.toContain("doc-b");
     expect(JSON.stringify(records)).not.toContain("text:fixture");
@@ -159,7 +172,59 @@ test("a native scan with only malformed hits reports the omission on an empty pa
     ),
   ).toEqual([
     expect.objectContaining({
-      attributes: expect.objectContaining({ stage: "native", malformed: 3 }),
+      severityText: "INFO",
+      attributes: { malformed: 3, excluded: 0, drift: 0 },
+    }),
+  ]);
+});
+
+test("a multi-round page emits one aggregate after highlighting", async () => {
+  const malformed = LIMITS.corpusIndexSearchCandidateLimit + 1;
+  const validHit = { document_id: "doc-a", text: "best a" };
+  stubHits(
+    [
+      ...Array.from({ length: malformed }, () => ({ document_id: 7 })),
+      validHit,
+    ],
+    [validHit],
+  );
+  const page = await readDispositionPage("native");
+  expect(page.scan.rounds).toBeGreaterThan(1);
+  expect(page.snippetById.get("doc-a")).toBe("best a");
+  expect(logs.records).toEqual([
+    expect.objectContaining({
+      message: "corpus.search.hit_dispositions",
+      severityText: "INFO",
+      attributes: { malformed, excluded: 0, drift: 0 },
+    }),
+  ]);
+});
+
+test("a caller-owned counter combines all pages and canonical read counts without intermediate logs", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  hitDispositions.record({ excluded: 2, drift: 1 });
+  stubHits(
+    [{ document_id: 7 }, { document_id: "doc-a", text: "best a" }],
+    [{ document_id: "doc-a", text: "best a" }],
+  );
+  await readDispositionPage("native", 40, hitDispositions);
+  hitDispositions.record({ excluded: 3 });
+  await readDispositionPage("scored", 40, hitDispositions);
+  expect(logs.records).toEqual([]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 2,
+    excluded: 5,
+    drift: 1,
+  });
+  reportCorpusHitDispositions({
+    family: "case_law",
+    counts: hitDispositions.snapshot(),
+  });
+  expect(logs.records).toEqual([
+    expect.objectContaining({
+      message: "corpus.search.hit_dispositions",
+      severityText: "INFO",
+      attributes: { family: "case_law", malformed: 2, excluded: 5, drift: 1 },
     }),
   ]);
 });

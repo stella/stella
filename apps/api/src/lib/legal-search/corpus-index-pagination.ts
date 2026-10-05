@@ -10,7 +10,11 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { classifyCorpusHit } from "@/api/lib/legal-search/corpus-hit-disposition";
-import { reportCorpusHitDispositions } from "@/api/lib/legal-search/corpus-hit-telemetry";
+import {
+  createCorpusHitDispositionCounter,
+  reportCorpusHitDispositions,
+  type CorpusHitDispositionCounter,
+} from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
   CorpusIndexError,
   CorpusIndexHit,
@@ -128,6 +132,8 @@ const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
 ] as const;
 
 type CorpusIndexSearchPageInput<TContext> = {
+  /** Caller-owned counters join this page's counts to the request's existing observation. */
+  hitDispositions?: CorpusHitDispositionCounter | undefined;
   observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
@@ -176,6 +182,11 @@ type CorpusIndexSearchPageInput<TContext> = {
     candidates: readonly ScoredCandidate[],
   ) => Promise<CorpusIndexRanking<TContext>>;
 };
+
+type ObservedCorpusIndexSearchPageInput<TContext> =
+  CorpusIndexSearchPageInput<TContext> & {
+    hitDispositions: CorpusHitDispositionCounter;
+  };
 
 type CorpusIndexSearchPageResult<TContext> = {
   pageRanked: RankedHit[];
@@ -318,6 +329,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 };
 
 type ReadPageSnippetsOptions = {
+  hitDispositions: CorpusHitDispositionCounter;
   observer: RegistryRequestObservation;
   clauses: readonly string[];
   cluster: QuickwitCluster;
@@ -347,6 +359,7 @@ type PageSnippets = {
  * snippet, matching how the scan chose the document's passage.
  */
 const readPageSnippets = async ({
+  hitDispositions,
   observer,
   clauses,
   cluster,
@@ -400,7 +413,7 @@ const readPageSnippets = async ({
         panic("Unhandled corpus hit disposition");
     }
   }
-  reportCorpusHitDispositions({ stage: "highlight", malformed });
+  hitDispositions.record({ malformed });
   return { indexMs, rounds: 1, snippetById };
 };
 
@@ -742,6 +755,7 @@ const resolveCorpusSearchCursor = ({
 };
 
 const readPositionSearchPage = async <TContext>({
+  hitDispositions,
   observer,
   cluster,
   indexId,
@@ -756,7 +770,7 @@ const readPositionSearchPage = async <TContext>({
   extractSnippet,
   rankCandidates,
   unseenScoreUpperBound,
-}: CorpusIndexSearchPageInput<TContext>): Promise<
+}: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   CorpusIndexSearchPageResult<TContext>
 > => {
   const candidates: ScoredCandidate[] = [];
@@ -893,7 +907,7 @@ const readPositionSearchPage = async <TContext>({
       }
     }
 
-    reportCorpusHitDispositions({ stage: scanTransport.type, malformed });
+    hitDispositions.record({ malformed });
     malformed = 0;
     startOffset += hits.length;
     scanned += hits.length;
@@ -936,6 +950,7 @@ const readPositionSearchPage = async <TContext>({
   });
 
   const snippets = await readPageSnippets({
+    hitDispositions,
     observer,
     clauses: pageRanked.flatMap((hit) => {
       const clause = passageClauseById.get(hit.id);
@@ -1016,9 +1031,10 @@ const bm25TopScore = (hits: readonly ScoredPassage[]): number | null => {
 
 /** A bounded candidate universe, replayed whole before grouping and paging. */
 const readBm25SearchPage = async <TContext>(
-  options: CorpusIndexSearchPageInput<TContext>,
+  options: ObservedCorpusIndexSearchPageInput<TContext>,
 ): Promise<CorpusIndexSearchPageResult<TContext>> => {
   const {
+    hitDispositions,
     observer,
     cluster,
     indexId,
@@ -1124,7 +1140,7 @@ const readBm25SearchPage = async <TContext>(
         panic("Unhandled corpus hit disposition");
     }
   }
-  reportCorpusHitDispositions({ stage: "bm25", malformed });
+  hitDispositions.record({ malformed });
   const ranking = await rankCandidates(candidates);
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(0, limit);
@@ -1145,6 +1161,7 @@ const readBm25SearchPage = async <TContext>(
         )
       : null;
   const snippets = await readPageSnippets({
+    hitDispositions,
     observer,
     clauses: pageRanked.flatMap((hit) => {
       const clause = passageClauseById.get(hit.id);
@@ -1184,8 +1201,8 @@ const readBm25SearchPage = async <TContext>(
   };
 };
 
-export const readCorpusIndexSearchPage = async <TContext>(
-  options: CorpusIndexSearchPageInput<TContext>,
+const readObservedCorpusIndexSearchPage = async <TContext>(
+  options: ObservedCorpusIndexSearchPageInput<TContext>,
 ): Promise<CorpusIndexSearchPageResult<TContext>> => {
   const cursorMode = options.parsedCursor?.rankingMode;
   if (
@@ -1220,4 +1237,19 @@ export const readCorpusIndexSearchPage = async <TContext>(
       mode satisfies never;
       return panic("Unknown corpus ranking mode");
   }
+};
+
+export const readCorpusIndexSearchPage = async <TContext>(
+  options: CorpusIndexSearchPageInput<TContext>,
+): Promise<CorpusIndexSearchPageResult<TContext>> => {
+  const hitDispositions =
+    options.hitDispositions ?? createCorpusHitDispositionCounter();
+  const page = await readObservedCorpusIndexSearchPage({
+    ...options,
+    hitDispositions,
+  });
+  if (options.hitDispositions === undefined) {
+    reportCorpusHitDispositions({ counts: hitDispositions.snapshot() });
+  }
+  return page;
 };

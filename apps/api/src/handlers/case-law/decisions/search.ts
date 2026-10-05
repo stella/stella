@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
@@ -136,6 +136,10 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  createCorpusHitDispositionCounter,
+  type CorpusHitDispositionCounter,
+} from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -175,7 +179,10 @@ import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
-import { eligibleCorpusRows } from "@/api/lib/legal-search/corpus-rehydration-disposition";
+import {
+  partitionCorpusRehydration,
+  recordCorpusRehydrationDispositions,
+} from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
   type CorpusSearchCursor,
   decodeCorpusSearchCursor,
@@ -1179,7 +1186,7 @@ const extractCorpusSnippet = (
 };
 
 type DecisionRowsQueryOptions = {
-  filters: SQL[];
+  body: CaseLawSearchRowFilterBody;
   generation: string;
   ids: SafeId<"caseLawDecision">[];
 };
@@ -1192,14 +1199,13 @@ type DecisionRowsQueryOptions = {
  * language versions of one judgment. SQL evaluates eligibility for every
  * candidate so rehydration can account for exclusions before ranking.
  */
-export const candidateDecisionRowsQuery = (
+export const candidateDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { filters, generation, ids }: DecisionRowsQueryOptions,
-) =>
-  tx
+  { body, generation, ids }: DecisionRowsQueryOptions,
+) => {
+  const eligibleRows = tx
     .select({
       id: caseLawDecisions.id,
-      eligible: sql<boolean>`coalesce(${and(...filters)}, false)`,
       citationAuthority: caseLawDecisions.citationAuthority,
       // The court's rank is a blend signal; the country scopes the pattern
       // match that resolves it, since court names repeat across borders.
@@ -1208,34 +1214,61 @@ export const candidateDecisionRowsQuery = (
       // A directory court is ranked by its id, not by its name.
       courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
-      canRecur: sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
+      canRecur:
+        sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
         SELECT 1 FROM ${caseLawDecisions} sibling
         WHERE sibling.language_group_key = ${caseLawDecisions.languageGroupKey}
           AND sibling.id <> ${caseLawDecisions.id}
-      ) END`,
+      ) END`.as("can_recur"),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(inArray(caseLawDecisions.id, ids));
+    .where(
+      and(
+        inArray(caseLawDecisions.id, ids),
+        ...caseLawSearchRowFilters(body, generation),
+      ),
+    )
+    // Bounds the content branch and keeps its subplans behind eligibility.
+    .limit(ids.length)
+    .as("eligible_candidates");
+  return tx
+    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
+    .from(caseLawDecisions)
+    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
+    .where(inArray(caseLawDecisions.id, ids))
+    .limit(ids.length);
+};
+
+export const candidateDecisionRowsQuery = async (
+  tx: CaseLawPublicReadTransaction,
+  options: DecisionRowsQueryOptions,
+) =>
+  partitionCorpusRehydration({
+    ids: options.ids,
+    records: await candidateDecisionRowsStatement(tx, options),
+  });
 
 type CandidateDecisionRow = Awaited<
   ReturnType<typeof candidateDecisionRowsQuery>
->[number];
+>["rows"][number];
 
 /**
  * Everything a result card shows, read only for the ids the page emits. The
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
  */
-export const pageDecisionRowsQuery = (
+export const pageDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { filters, ids }: DecisionRowsQueryOptions,
-) =>
-  tx
+  { body, generation, ids }: DecisionRowsQueryOptions,
+) => {
+  const columns = publicDecisionRowColumns();
+  const eligibleRows = tx
     .select({
-      ...publicDecisionRowColumns(),
-      eligible: sql<boolean>`coalesce(${and(...filters)}, false)`,
+      ...columns,
+      headnote: columns.headnote.as("headnote"),
+      keywords: columns.keywords.as("keywords"),
       // The hit carries every identifier the publisher supplied; a list row
       // does not, so this one column is the search's own.
       identifiers: sql<unknown>`coalesce((
@@ -1248,15 +1281,39 @@ export const pageDecisionRowsQuery = (
         )
         FROM ${caseLawDecisionIdentifiers} identifier
         WHERE identifier.decision_id = ${caseLawDecisions.id}
-      ), '[]'::jsonb)`,
+      ), '[]'::jsonb)`.as("identifiers"),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(inArray(caseLawDecisions.id, ids));
+    .where(
+      and(
+        inArray(caseLawDecisions.id, ids),
+        ...caseLawSearchRowFilters(body, generation),
+      ),
+    )
+    // Bounds the content branch and keeps its subplans behind eligibility.
+    .limit(ids.length)
+    .as("eligible_page");
+  return tx
+    .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
+    .from(caseLawDecisions)
+    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
+    .where(inArray(caseLawDecisions.id, ids))
+    .limit(ids.length);
+};
+
+export const pageDecisionRowsQuery = async (
+  tx: CaseLawPublicReadTransaction,
+  options: DecisionRowsQueryOptions,
+) =>
+  partitionCorpusRehydration({
+    ids: options.ids,
+    records: await pageDecisionRowsStatement(tx, options),
+  });
 
 type PageDecisionRow = Awaited<
   ReturnType<typeof pageDecisionRowsQuery>
->[number];
+>["rows"][number];
 
 /**
  * What one request has read so far: a row, or null for an id the current
@@ -1352,6 +1409,7 @@ type ReadCaseLawPageDecisionRowsOptions = {
   /** The ids the page emits, after ranking and the language-group fold. */
   ids: readonly string[];
   timeDbRead?: TimeDbRead | undefined;
+  hitDispositions?: CorpusHitDispositionCounter | undefined;
 };
 
 /**
@@ -1365,28 +1423,25 @@ export const readCaseLawPageDecisionRows = async ({
   generation,
   ids,
   timeDbRead = untimedDbRead,
+  hitDispositions = createCorpusHitDispositionCounter(),
 }: ReadCaseLawPageDecisionRowsOptions): Promise<
   Map<string, PageDecisionRow>
 > => {
   if (ids.length === 0) {
     return new Map();
   }
-  const rows = await timeDbRead(
+  const read = await timeDbRead(
     async () =>
       await caseLawDb((tx) =>
         pageDecisionRowsQuery(tx, {
-          filters: caseLawSearchRowFilters(body, generation),
+          body,
           generation,
           ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
         }),
       ),
   );
-  return new Map(
-    eligibleCorpusRows({ family: "case_law", ids, rows }).map((row) => [
-      String(row.id),
-      row,
-    ]),
-  );
+  recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
+  return new Map(read.rows.map((row) => [String(row.id), row]));
 };
 
 type RehydrateCaseLawCandidatesOptions = {
@@ -1403,6 +1458,7 @@ type RehydrateCaseLawCandidatesOptions = {
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
   timeDbRead?: TimeDbRead | undefined;
+  hitDispositions?: CorpusHitDispositionCounter | undefined;
   excludedGroups?: ReadonlySet<string> | undefined;
 };
 
@@ -1503,28 +1559,30 @@ export const rehydrateCaseLawCandidates = async ({
   generation,
   hydrated = new Map(),
   timeDbRead = untimedDbRead,
+  hitDispositions = createCorpusHitDispositionCounter(),
   excludedGroups = new Set(),
 }: RehydrateCaseLawCandidatesOptions) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
     .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
-  const rows =
+  const read =
     ids.length === 0
-      ? []
+      ? { rows: [], dispositions: [] }
       : await timeDbRead(
           async () =>
             await caseLawDb((tx) =>
               candidateDecisionRowsQuery(tx, {
-                filters: caseLawSearchRowFilters(body, generation),
+                body,
                 generation,
                 ids,
               }),
             ),
         );
+  recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
   for (const id of ids) {
     hydrated.set(id, null);
   }
-  for (const row of eligibleCorpusRows({ family: "case_law", ids, rows })) {
+  for (const row of read.rows) {
     hydrated.set(String(row.id), row);
   }
 
@@ -2024,6 +2082,7 @@ export const searchCorpusIndexDecisions = async ({
   // where it opens its transaction, because the ranking, folding and
   // collapsing around it are not database time.
   const dbTimer = createCaseLawSearchDbTimer();
+  const hitDispositions = createCorpusHitDispositionCounter();
   // Shared by the identity path and the scan, so `hydrated.size` counts the
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
@@ -2046,6 +2105,7 @@ export const searchCorpusIndexDecisions = async ({
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
     reportCaseLawSearchCompleted({
       candidatesHydrated: hydrated.size,
+      hitDispositions: hitDispositions.snapshot(),
       country: body.country,
       db: dbTimer.timing(),
       facetMs,
@@ -2100,6 +2160,7 @@ export const searchCorpusIndexDecisions = async ({
     pageRanked: readonly RankedHit[],
   ): Promise<Map<string, PageDecisionRow>> => {
     const rows = await readCaseLawPageDecisionRows({
+      hitDispositions,
       body,
       caseLawDb,
       generation,
@@ -2140,6 +2201,7 @@ export const searchCorpusIndexDecisions = async ({
       (identityRole === "answer" || parsedCursor === null)
     ) {
       const identityRanking = await rehydrateCaseLawCandidates({
+        hitDispositions,
         // Always the blended order here, whatever the request asked for: the
         // identity read has no order of its own to preserve, so the unblended
         // branch would hand back whatever order Postgres returned the ids in.
@@ -2277,6 +2339,7 @@ export const searchCorpusIndexDecisions = async ({
 
   const concurrentStartedAt = performance.now();
   const pageRead = readCorpusIndexSearchPage({
+    hitDispositions,
     observer,
     cluster: serving.cluster,
     indexId,
@@ -2303,6 +2366,7 @@ export const searchCorpusIndexDecisions = async ({
     unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
     rankCandidates: async (candidates) =>
       await rehydrateCaseLawCandidates({
+        hitDispositions,
         body,
         candidates,
         caseLawDb,

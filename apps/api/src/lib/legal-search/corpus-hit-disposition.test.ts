@@ -10,11 +10,10 @@ const readIdentity = (hit: CorpusIndexHit) => {
   return typeof id === "string" && isUuid(id) ? id : null;
 };
 
-test("corpus identities distinguish absent fields from invalid values", () => {
+test("corpus identities classify absent fields and invalid values as malformed", () => {
   for (const hit of [{}, { document_id: null }]) {
     expect(classifyCorpusHit(hit, readIdentity)).toEqual({
       type: "malformed",
-      reason: "missing_document_id",
     });
   }
   for (const documentId of ["", "unstructured-id", 7, false, {}]) {
@@ -22,7 +21,6 @@ test("corpus identities distinguish absent fields from invalid values", () => {
       classifyCorpusHit({ document_id: documentId }, readIdentity),
     ).toEqual({
       type: "malformed",
-      reason: "invalid_document_id",
     });
   }
   const id = "00000000-0000-4000-8000-000000000001";
@@ -40,6 +38,5 @@ test("the identity reader remains authoritative for the selected corpus", () => 
   });
   expect(classifyCorpusHit(hit, () => null)).toEqual({
     type: "malformed",
-    reason: "invalid_document_id",
   });
 });

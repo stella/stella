@@ -154,9 +154,9 @@ describe.serial("confine-owner function-call rows", () => {
 describe.serial("corpus hit ownership rows", () => {
   const source = [
     "extractId(hit);",
-    'import { candidateDecisionRowsQuery } from "@/api/handlers/case-law/decisions/search";',
-    'import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";',
-    'import { pageDecisionRowsQuery } from "@/api/handlers/case-law/decisions/search";',
+    'import { candidateDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
+    'import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";',
+    'import { pageDecisionRowsStatement } from "@/api/handlers/case-law/decisions/search";',
     "",
   ].join("\n");
   const ruleOptions = { entries: OWNERSHIP };

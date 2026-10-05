@@ -32,7 +32,9 @@
 // form, in files under one of its `within` prefixes; the method name alone is
 // too common to confine repository-wide. A `function-call` row matches a direct
 // call of the named identifier in its scoped paths, including optional calls
-// and value-preserving TypeScript wrappers. A value reached through an alias, a
+// and value-preserving TypeScript wrappers. This kind compares identifier names,
+// not bindings: renaming the function or its callback binding is unrecognized.
+// A value reached through an alias, a
 // re-export of a local binding, or a computed member access is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
