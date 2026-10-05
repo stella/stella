@@ -1857,6 +1857,7 @@
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
+    "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
     "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",
@@ -5422,6 +5423,7 @@
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecta stella desktop a tu cuenta",
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",

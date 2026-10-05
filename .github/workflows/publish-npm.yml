@@ -94,9 +94,7 @@ on:
         type: string
 
 concurrency:
-  # One group across every trigger so publishes to the same registry
-  # serialize instead of racing each other.
-  group: publish-npm
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

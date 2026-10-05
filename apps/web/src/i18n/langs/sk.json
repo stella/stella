@@ -1857,6 +1857,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
     "unverifiedCitationHint": "Túto citáciu sa nepodarilo priradiť k zdrojovému dokumentu.",
@@ -5422,6 +5423,7 @@
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",

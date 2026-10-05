@@ -1857,6 +1857,7 @@
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
     "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
@@ -5422,6 +5423,7 @@
         "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Savienojiet stella desktop ar savu kontu",
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
