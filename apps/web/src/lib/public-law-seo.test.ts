@@ -140,12 +140,12 @@ describe("public law SEO", () => {
       },
       {
         rel: "alternate",
-        hreflang: "en",
+        hrefLang: "en",
         href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
       },
       {
         rel: "alternate",
-        hreflang: "fr",
+        hrefLang: "fr",
         href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/fr",
       },
     ]);
