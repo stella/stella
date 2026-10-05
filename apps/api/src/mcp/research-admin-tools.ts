@@ -37,6 +37,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -957,7 +958,11 @@ const handleAddMember = async ({
   context: McpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<
+    v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>
+  >
+> => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -995,7 +1000,11 @@ const handleRemoveMember = async ({
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<
+    v.InferInput<typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION>
+  >
+> => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }

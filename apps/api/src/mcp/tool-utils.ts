@@ -46,12 +46,14 @@ import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
   InternalToolErrorResult,
   InternalToolResult,
   InternalToolSuccess,
+  McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 
@@ -406,12 +408,57 @@ export const confirmProp = (
     description,
   }) as const;
 
-export const toolDataResult = <TData>(
-  data: TData,
+/**
+ * A tool's successful output. `TData` is read from the return context (the
+ * handler's declared output), and `data` may carry no property that type
+ * lacks: a strict output schema would reject it after the handler succeeded.
+ */
+export const toolDataResult = <TData, TActual extends TData = TData>(
+  data: CheckedOutput<TActual, TData>,
 ): InternalToolSuccess<TData> => ({
   status: "success",
   data,
 });
+
+/**
+ * Output for a surface without a declared output type (gateway families,
+ * capability passthrough), which nothing validates against a Stella schema.
+ */
+export const untypedToolDataResult = (data: unknown): InternalToolSuccess => ({
+  status: "success",
+  data,
+});
+
+type StructuredEgressPlan<TPayload> = Extract<
+  McpEgressPlan<TPayload>,
+  { egress: "structured" }
+>;
+
+type StructuredEgressPlanOptions<TPayload, TActual> = Omit<
+  StructuredEgressPlan<TPayload>,
+  "egress" | "payload"
+> & { payload: CheckedOutput<TActual, TPayload> };
+
+/** `toolDataResult` for a payload the egress pipeline finalizes. */
+export const structuredEgressPlan = <
+  TPayload,
+  TActual extends TPayload = TPayload,
+>({
+  payload,
+  ...plan
+}: StructuredEgressPlanOptions<
+  TPayload,
+  TActual
+>): StructuredEgressPlan<TPayload> => ({
+  egress: "structured",
+  payload,
+  ...plan,
+});
+
+/** `untypedToolDataResult` for a payload the egress pipeline finalizes. */
+export const untypedStructuredEgressPlan = (
+  plan: Omit<StructuredEgressPlan<unknown>, "egress">,
+): StructuredEgressPlan<unknown> => ({ egress: "structured", ...plan });
 
 // TypeScript's JSON.stringify overload for `unknown` claims it always returns
 // a string, but the runtime returns undefined for unsupported root values.
@@ -500,7 +547,7 @@ export const serializeToolResult = (
  */
 export const serializeMcpData = (data: unknown): CallToolResult => {
   const { structuredContent: _upstream, ...result } = serializeToolResult(
-    toolDataResult(data),
+    untypedToolDataResult(data),
   );
   return result;
 };

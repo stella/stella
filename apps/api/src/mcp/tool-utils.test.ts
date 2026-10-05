@@ -25,6 +25,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
@@ -312,7 +313,7 @@ describe("serializeToolResult", () => {
       v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      toolDataResult({
+      untypedToolDataResult({
         nextStep: "Choose a file.",
         undeclared: true,
         entityId: "doc_1",
