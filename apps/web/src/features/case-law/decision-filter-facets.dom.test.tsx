@@ -88,7 +88,7 @@ for (const fails of [false, true]) {
   test(`loader starts facets after search ${fails ? "failure" : "success"} without awaiting the facet response`, async () => {
     const search = Promise.withResolvers<object>();
     const response = Promise.withResolvers<Response>();
-    const requests = installTransport(() => response.promise);
+    const requests = installTransport(async () => await response.promise);
     const client = makeClient();
     const value = { decisionIds: ["decision"] };
     const failure = new APIError({
@@ -124,11 +124,13 @@ for (const fails of [false, true]) {
       client.getQueryState(decisionFacetsOptions("CZ").queryKey)?.fetchStatus,
     ).toBe("fetching");
     response.resolve(Response.json(facets));
-    await waitFor(() =>
-      expect(client.getQueryData(decisionFacetsOptions("CZ").queryKey)).toEqual(
-        facets,
-      ),
-    );
+    await waitFor(() => {
+      expect(
+        client
+          .getQueryCache()
+          .find({ queryKey: decisionFacetsOptions("CZ").queryKey })?.state.data,
+      ).toEqual(facets);
+    });
   });
 }
 
@@ -191,7 +193,7 @@ const panelFor = (
   client.setQueryDefaults(
     ["fixture-search", props.country, props.page, props.sort],
     {
-      queryFn: () => search,
+      queryFn: async () => await search,
     },
   );
   return (
@@ -234,7 +236,7 @@ for (const fails of [false, true]) {
         JSON.stringify(facets),
       ),
     );
-    expect(view.getByTestId("facets").dataset.searchStatus).toBe(
+    expect(view.getByTestId("facets").dataset["searchStatus"]).toBe(
       !fails ? "success" : "error",
     );
     expect(requests).toHaveLength(1);
@@ -271,7 +273,9 @@ test("warm facets survive panel mount and page/sort navigation without another f
       );
     });
     await waitFor(() =>
-      expect(view.getByTestId("facets").dataset.searchStatus).toBe("success"),
+      expect(view.getByTestId("facets").dataset["searchStatus"]).toBe(
+        "success",
+      ),
     );
     expect(view.getByTestId("facets").textContent).toBe(JSON.stringify(facets));
     expect(client.getQueryCache().find({ queryKey: key, exact: true })).toBe(
@@ -290,7 +294,7 @@ test("warm facets survive panel mount and page/sort navigation without another f
 
 test("a new country waits for its own search despite previous result placeholder data", async () => {
   const response = Promise.withResolvers<Response>();
-  const requests = installTransport(() => response.promise);
+  const requests = installTransport(async () => await response.promise);
   const client = makeClient();
   client.setQueryData(decisionFacetsOptions("CZ").queryKey, facets);
   client.setQueryData(["fixture-search", "CZ", 1, "relevance"], {
@@ -324,7 +328,7 @@ test("a new country waits for its own search despite previous result placeholder
   });
   await waitFor(() => expect(requests).toHaveLength(1));
   assertFacetRequest(requests.at(0), "DE");
-  expect(view.getByTestId("facets").dataset.placeholder).toBe("true");
+  expect(view.getByTestId("facets").dataset["placeholder"]).toBe("true");
   response.resolve(
     Response.json({
       country: [],

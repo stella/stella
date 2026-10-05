@@ -23,12 +23,12 @@ type PrefetchDecisionFacetsAfterSearchOptions<T> = {
 };
 
 /** Facets use the same admission slot as search, but never hold up the route. */
-export const prefetchDecisionFacetsAfterSearch = <T>({
+export const prefetchDecisionFacetsAfterSearch = async <T>({
   country,
   queryClient,
   search,
 }: PrefetchDecisionFacetsAfterSearchOptions<T>): Promise<T> =>
-  search.finally(() => {
+  await search.finally(() => {
     detached(
       prefetchRouteQuery(
         queryClient,
