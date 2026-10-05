@@ -105,195 +105,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/buildCzNsDecision",
-    "kind": "numeric-timeout",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/buildCzNsDecision",
-    "kind": "total-timeout-body",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/fetchPage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/fetchPage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/getTotalCount",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/listCzNsSlicePage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts",
-    "function": "module/listCzNsSlicePage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/executeSearch",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/executeSearch",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchDecisionContent",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchDecisionContent",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchResultPage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchResultPage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchRichDocument",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/fetchRichDocument",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/getTotalCount",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/initSession",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/initSession",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/readDetailPage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts",
-    "function": "module/readDetailPage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/fetchCzRegionalAffectingDocs",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/fetchCzRegionalAffectingDocs",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/fetchListPage",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/getTotalCount",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
     "function": "module/createNalusFetch/request",
     "kind": "numeric-timeout",
@@ -1715,6 +1526,55 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/cancelMemberDesktopSessions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/cancelMemberFlowRuns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberContactAssignments",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberObligationOwners",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberTaskAssignments",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberTimeEntryApprovals",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/closeMemberExchanges",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
     "file": "apps/api/src/lib/memory/compaction-transcript.ts",
     "function": "module/loadCompactionTranscript",
     "kind": "constant-limit",
@@ -1860,13 +1720,6 @@
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/tasks/create-task-entity.ts",
-    "function": "module/createTaskEntityHandler",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/lib/usage/assignment-capacity.ts",

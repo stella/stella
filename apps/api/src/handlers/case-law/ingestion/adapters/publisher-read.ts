@@ -78,6 +78,7 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
+// parser-output-unchanged: a type-only change to the read options; no parsed record changes.
 /**
  * An intersection, not `Omit`: `Omit` over the timeout union collapses it, and
  * the intersection narrows `refusalMode` all the same.
