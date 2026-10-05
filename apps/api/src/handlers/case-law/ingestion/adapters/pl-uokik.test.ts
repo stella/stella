@@ -14,6 +14,7 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 
+import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -51,6 +52,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -268,7 +270,11 @@ const parkedYesterday = (cursor: string): string =>
   });
 
 /** A made-up dated row, as the view states one, for rows the register adds. */
-const syntheticEntry = (unid: string, printed: string): Entry => ({
+const syntheticEntry = (
+  unid: string,
+  printed: string,
+  number = "DKK-999/2026",
+): Entry => ({
   "@position": "1",
   "@unid": unid,
   "@noteid": "1",
@@ -278,7 +284,7 @@ const syntheticEntry = (unid: string, printed: string): Entry => ({
       "@columnnumber": "0",
       "@name": "$7",
       text: {
-        "0": `[<B>Numer decyzji: </B>DKK-999/2026<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
+        "0": `[<B>Numer decyzji: </B>${number}<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
       },
     },
   ],
@@ -414,6 +420,57 @@ describe("a decision", () => {
     expect(decision.caseNumber === NUMBERLESS).toBe(true);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
+  });
+
+  test("numbers at the storage boundary retain exact text or the exact document identity", async () => {
+    const page = await pageOf(FILELESS);
+    const width = CITATION_STORAGE_WIDTHS.caseNumber;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const number = token.repeat(length);
+        const entry = syntheticEntry(FILELESS, "22.09.2026", number);
+        for (const detail of [
+          undefined,
+          page.replaceAll("DIH-4/2009", () => number),
+        ]) {
+          const decision = decisionOf(await buildFrom(entry, detail));
+          expect(decision.sourceDocumentId).toBe(FILELESS);
+          expect(decision.caseNumber).toBe(length > width ? FILELESS : number);
+          expect(decision.caseNumberIsPlaceholder === true).toBe(
+            length > width,
+          );
+          expect(decision.metadata["caseNumberFallbackReason"]).toBe(
+            length > width ? "overlong-number" : undefined,
+          );
+          expect(decision.metadata["decisionNumber"]).toBe(number);
+          if (length > width || token === "𐐀") {
+            expect(decision.identifiers).toBeUndefined();
+          }
+          expect(decision.metadata["identifierStorageReason"]).toBe(
+            length <= width && token === "𐐀"
+              ? "unrepresentable-identifier"
+              : undefined,
+          );
+          expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
+        }
+      }
+    }
+    const registerLine = Array.from(
+      { length: width },
+      (_, index) => `DKK-${index}/2026`,
+    ).join("; ");
+    const decision = decisionOf(
+      await buildFrom(
+        syntheticEntry(FILELESS, "22.09.2026", registerLine),
+        undefined,
+      ),
+    );
+    expect(decision.caseNumber).toBe(FILELESS);
+    expect(decision.caseNumberIsPlaceholder).toBe(true);
+    expect(decision.metadata["decisionNumberAsListed"]).toBe(registerLine);
+    expect(decision.metadata["caseNumberFallbackReason"]).toBe(
+      "overlong-number",
+    );
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {

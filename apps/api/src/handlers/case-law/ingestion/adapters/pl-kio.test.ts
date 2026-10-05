@@ -9,6 +9,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -29,6 +30,7 @@ import {
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -357,6 +359,42 @@ describe("building a ruling from its three pages", () => {
       decision.metadata["challengedAuthority"] ===
         "Prezes Urzędu Zamówień Publicznych",
     ).toBe(true);
+  });
+
+  test("issuing bodies at the storage boundary retain exact text or the listing-only row", async () => {
+    const page = await fixtureText("pl-kio-detail-30308.html");
+    const width = CITATION_STORAGE_WIDTHS.court;
+    for (const token of ["x", "é", "😀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const court = token.repeat(length);
+        for (const detailHtml of [
+          undefined,
+          page.replace(
+            /(<label aria-label="Organ wydający">[\s\S]*?<br[^>]*>)[\s\S]*?(<\/p>)/u,
+            (_match, start: string, end: string) => `${start}${court}${end}`,
+          ),
+        ]) {
+          const outcome = assemblePlKioDecision({
+            item: { id: "30308", signature: "KIO 2845/25", court },
+            detailHtml,
+            documentHtml: undefined,
+          });
+          const decision = built(outcome);
+          expect(decision.sourceDocumentId).toBe("30308");
+          expect(decision.court).toBe(length > width ? "" : court);
+          expect(decision.isListingOnly === true).toBe(
+            detailHtml === undefined || length > width,
+          );
+          expect(decision.metadata["quarantineReason"]).toBe(
+            length > width ? "court-too-long" : undefined,
+          );
+          expect(decision.metadata["courtAsStated"]).toBe(
+            length > width ? court : undefined,
+          );
+          expect(sanitizeResult(decision).court).toBe(decision.court);
+        }
+      }
+    }
   });
 
   test("a record the database no longer serves leaves a listing-only row", () => {

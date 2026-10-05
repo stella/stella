@@ -11,6 +11,7 @@ import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
+import { assertCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -121,19 +122,25 @@ export const planDecisionCitations = async ({
 type CitationRow = typeof caseLawCitations.$inferInsert;
 
 /** The row a reference is stored as, before it is settled. */
-const citationRowOf = (
+export const citationRowOf = (
   citingDecisionId: SafeId<"caseLawDecision">,
   { reference, verdict }: ReadReference,
 ): CitationRow => {
   const [identifier] = reference.identifiers;
   return {
     citingDecisionId,
-    citationText: reference.printed,
-    citationKey: reference.citationKey,
+    citationText: assertCitationStorageField("text", reference.printed),
+    citationKey: assertCitationStorageField("key", reference.citationKey),
     identifierType: identifier.type,
-    normalizedIdentifierValue: identifier.normalizedValue,
+    normalizedIdentifierValue: assertCitationStorageField(
+      "normalizedIdentifier",
+      identifier.normalizedValue,
+    ),
     citedDecisionTypeHint: reference.hints.decisionType,
-    citedCourtHint: reference.hints.court,
+    citedCourtHint: assertCitationStorageField(
+      "courtHint",
+      reference.hints.court,
+    ),
     citedSheetNumber: reference.hints.sheetNumber,
     citedDecisionDate: reference.hints.decisionDate,
     kind: reference.kind,

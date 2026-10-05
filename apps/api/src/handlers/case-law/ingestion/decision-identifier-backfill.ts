@@ -23,6 +23,7 @@ import {
   effectiveCitationIdentifierValueSql,
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import { assertCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
@@ -546,7 +547,7 @@ const projectCitationPage = async (
   const projected = sql.join(
     rows.map((row) => {
       const { type, normalizedValue } = citationProjection(row);
-      return sql`(${row.id}::uuid, ${type}::varchar, ${normalizedValue}::varchar)`;
+      return sql`(${row.id}::uuid, ${type}::varchar, ${assertCitationStorageField("normalizedIdentifier", normalizedValue)}::varchar)`;
     }),
     sql`, `,
   );
