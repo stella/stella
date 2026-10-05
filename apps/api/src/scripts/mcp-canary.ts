@@ -14,7 +14,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { Temporal } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
   MCP_DISCOVERY_PATH,
@@ -309,12 +309,12 @@ export const createJsonRpcRequest = ({
 
 class CanaryTargetError extends TaggedError("CanaryTargetError")<{
   message: string;
-}>() {}
+}> {}
 
 type DeploymentFetcherOptions = {
   baseUrl: string;
-  edgeHeaderName?: string;
-  edgeHeaderValue?: string;
+  edgeHeaderName?: string | undefined;
+  edgeHeaderValue?: string | undefined;
 };
 
 // Redirects are never followed: neither bearer keys nor the staging edge
@@ -662,7 +662,7 @@ type AuthorizeResponseOptions = {
   response: Response;
   endpoint: string;
   name: string;
-  frontendUrl?: string;
+  frontendUrl?: string | undefined;
 };
 export const evaluateAuthorize = ({
   response,
@@ -711,7 +711,7 @@ export const evaluateRegistration = ({
 type OAuthJourneyOptions = {
   baseUrl: string;
   mode: "frequent" | "full";
-  frontendUrl?: string;
+  frontendUrl?: string | undefined;
 };
 export const runOAuthJourneys = async (
   { baseUrl, mode, frontendUrl }: OAuthJourneyOptions,
@@ -880,7 +880,7 @@ const notApplicable = (name: string, detail: string): ProbeResult => ({
 
 const STAGING_KEY_NAME = "MCP staging canary";
 const STAGING_KEY_PERMISSIONS = { workspace: ["read"] };
-const EXPIRY_ALERT_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
+const EXPIRY_ALERT_WINDOW_MS = 15 * DAY_IN_MS;
 
 export const evaluateCredentialExpiry = ({
   status,
@@ -1070,7 +1070,10 @@ export const runDesktopProbe = async (
   return results;
 };
 
-type StagingJourneyOptions = { baseUrl: string; smokeSecret?: string };
+type StagingJourneyOptions = {
+  baseUrl: string;
+  smokeSecret?: string | undefined;
+};
 export const runStagingCredentialJourneys = async (
   { baseUrl, smokeSecret }: StagingJourneyOptions,
   fetcher: CanaryFetcher = deploymentFetcher,

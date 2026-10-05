@@ -463,7 +463,7 @@ describe("authorization server probes", () => {
 
 describe("OAuth client journeys", () => {
   const fakeOAuth = () => {
-    const requests: { url: URL; init?: RequestInit }[] = [];
+    const requests: { url: URL; init: Parameters<CanaryFetcher>[1] }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
       const requestUrl = new URL(input instanceof Request ? input.url : input);
       requests.push({ url: requestUrl, init });
@@ -771,7 +771,12 @@ describe("staging credential journeys", () => {
     let redeemCount = 0;
     const fetcher: CanaryFetcher = async (input, init) => {
       const request =
-        input instanceof Request ? input : new Request(input, init);
+        input instanceof Request
+          ? input
+          : new Request(input.toString(), {
+              ...init,
+              signal: init.signal ?? null,
+            });
       const url = new URL(request.url);
       const body = await request.clone().text();
       const headers = new Headers(request.headers);
@@ -818,13 +823,26 @@ describe("staging credential journeys", () => {
       }
       if (url.pathname === "/mcp") {
         const rpc = JSON.parse(body);
-        const result =
-          rpc.method === "initialize"
-            ? { protocolVersion: "2025-11-25", serverInfo: { name: "stella" } }
-            : rpc.method === "tools/list"
-              ? { tools: [{ name: "search_case_law" }] }
-              : { content: [{ type: "text", text: "ok" }] };
-        return Response.json({ jsonrpc: "2.0", result });
+        switch (rpc.method) {
+          case "initialize":
+            return Response.json({
+              jsonrpc: "2.0",
+              result: {
+                protocolVersion: "2025-11-25",
+                serverInfo: { name: "stella" },
+              },
+            });
+          case "tools/list":
+            return Response.json({
+              jsonrpc: "2.0",
+              result: { tools: [{ name: "search_case_law" }] },
+            });
+          default:
+            return Response.json({
+              jsonrpc: "2.0",
+              result: { content: [{ type: "text", text: "ok" }] },
+            });
+        }
       }
       return new Response(null, { status: 404 });
     };
@@ -977,7 +995,7 @@ describe("canary credential expiry", () => {
 
 describe("deployment fetch boundary", () => {
   test("injects the edge credential and always makes redirects manual", async () => {
-    let captured: RequestInit | undefined;
+    let captured: Parameters<CanaryFetcher>[1] | undefined;
     const fetcher: CanaryFetcher = async (_input, init) => {
       captured = init;
       return new Response(null, {
@@ -996,6 +1014,7 @@ describe("deployment fetch boundary", () => {
     const response = await deploymentFetch("https://api.example/path", {
       headers: { authorization: "Bearer canary" },
       redirect: "follow",
+      timeout: { type: "idle", ms: 1000 },
     });
     expect(response.status).toBe(302);
     expect(captured?.redirect).toBe("manual");
@@ -1015,7 +1034,9 @@ describe("deployment fetch boundary", () => {
       fetcher,
     );
     const rejection = await rejectionOf(
-      deploymentFetch("https://foreign.example/path", {}),
+      deploymentFetch("https://foreign.example/path", {
+        timeout: { type: "idle", ms: 1000 },
+      }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
     expect(rejection).toMatchObject({
