@@ -154,8 +154,8 @@ const propertyName = (node: ts.PropertyName) => {
 };
 
 const ownerOf = (node: ts.Node): string => {
-  let parent: ts.Node | undefined = node;
-  while (parent) {
+  let parent = node;
+  while (!ts.isSourceFile(parent)) {
     if (ts.isFunctionDeclaration(parent) && parent.name) {
       return parent.name.text;
     }
@@ -359,8 +359,7 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected =
         /WITH v\(id, key\) AS \(VALUES \$\{values\}\)[\s\S]*SET citation_key = v\.key/u;
     } else if (writer.id.includes(":upsertReviewsStatement:")) {
-      expected =
-        /\$\{assertCitationStorageField\(\s*"key",\s*label\.citationKey\s*,?\s*\)\}/u;
+      expected = /\$\{checked\.value\}/u;
     } else {
       expected =
         /WITH projected\(id, type, normalized_value\) AS \(VALUES \$\{projected\}\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
@@ -477,16 +476,21 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     ],
   );
   requireProducer(`${pipeline}citations.ts`, "citationRowOf", [
-    /citationText:\s*assertCitationStorageField\(\s*"text",\s*reference\.printed\s*,?\s*\)/u,
-    /citationKey:\s*assertCitationStorageField\(\s*"key",\s*reference\.citationKey\s*,?\s*\)/u,
-    /citedCourtHint:\s*assertCitationStorageField\(\s*"courtHint",\s*reference\.hints\.court\s*,?\s*\)/u,
-    /normalizedIdentifierValue:\s*assertCitationStorageField\(\s*"normalizedIdentifier",\s*identifier\.normalizedValue\s*,?\s*\)/u,
+    /const citationText = yield\* assertCitationStorageField\(\s*"text",\s*reference\.printed\s*,?\s*\)/u,
+    /const citationKey = yield\* assertCitationStorageField\(\s*"key",\s*reference\.citationKey\s*,?\s*\)/u,
+    /const citedCourtHint = yield\* assertCitationStorageField\(\s*"courtHint",\s*reference\.hints\.court\s*,?\s*\)/u,
+    /const normalizedIdentifierValue = yield\* assertCitationStorageField\(\s*"normalizedIdentifier",\s*identifier\.normalizedValue\s*,?\s*\)/u,
+  ]);
+  requireProducer(`${pipeline}citations.ts`, "planDecisionCitations", [
+    /return citationRowsOf\(plan\)\.map\(\(\) => plan\)/u,
   ]);
   requireProducer(`${pipeline}citations.ts`, "citationRowsOf", [
     /references\.map\(\(reference\)\s*=>\s*citationRowOf\(citingDecisionId,\s*reference\)\)/u,
   ]);
   requireProducer(`${pipeline}citations.ts`, "writeDecisionCitations", [
-    /const rows = citationRowsOf\(citations\)/u,
+    /const projected = citationRowsOf\(citations\)/u,
+    /if \(projected\.isErr\(\)\) \{\s*abortTransaction\(projected\.error\)/u,
+    /const rows = projected\.value/u,
     /\.values\(settled\)/u,
   ]);
   requireProducer(`${pipeline}decision-row.ts`, "insertedRowValues", [
@@ -503,7 +507,9 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     "src/scripts/apply-reviewed-citation-labels-plan.ts",
     "upsertReviewsStatement",
     [
-      /\$\{assertCitationStorageField\(\s*"key",\s*label\.citationKey\s*,?\s*\)\}/u,
+      /const checked = assertCitationStorageField\(\s*"key",\s*label\.citationKey\s*,?\s*\)/u,
+      /if \(checked\.isErr\(\)\) \{\s*throw checked\.error/u,
+      /\$\{checked\.value\}/u,
     ],
   );
   for (const [file, name] of [
@@ -519,7 +525,9 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     "src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "projectCitationPage",
     [
-      /\$\{assertCitationStorageField\(\s*"normalizedIdentifier",\s*normalizedValue\s*,?\s*\)\}/u,
+      /const checked = assertCitationStorageField\(\s*"normalizedIdentifier",\s*normalizedValue\s*,?\s*\)/u,
+      /if \(checked\.isErr\(\)\) \{\s*abortTransaction\(checked\.error\)/u,
+      /\$\{checked\.value\}/u,
     ],
   );
   return problems;

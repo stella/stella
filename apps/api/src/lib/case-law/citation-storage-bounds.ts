@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { getColumns } from "drizzle-orm";
 
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
@@ -60,17 +60,15 @@ export const assertCitationStorageField = <T extends string | null | undefined>(
   value: T,
 ) => {
   const maximum = CITATION_STORAGE_WIDTHS[field];
-  if (
-    value !== null &&
-    value !== undefined &&
-    !fitsCitationStorageField(field, value)
-  ) {
-    throw new CitationStorageFieldError({
-      message: `Citation field ${field} exceeds its storage width`,
-      field,
-      length: Array.from(value).length,
-      maximum,
-    });
+  if (typeof value === "string" && !fitsCitationStorageField(field, value)) {
+    return Result.err(
+      new CitationStorageFieldError({
+        message: `Citation field ${field} exceeds its storage width`,
+        field,
+        length: Array.from(value).length,
+        maximum,
+      }),
+    );
   }
-  return value;
+  return Result.ok(value);
 };

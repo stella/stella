@@ -1,8 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
@@ -63,6 +64,60 @@ export const annotationOnlyCitationPlan = (): CitationPlan => ({
   disposition: "annotation-only",
 });
 
+type CitationRow = typeof caseLawCitations.$inferInsert;
+
+/** The row a reference is stored as, before it is settled. */
+export const citationRowOf = (
+  citingDecisionId: SafeId<"caseLawDecision">,
+  { reference, verdict }: ReadReference,
+) =>
+  Result.gen(function* () {
+    const [identifier] = reference.identifiers;
+    const citationText = yield* assertCitationStorageField(
+      "text",
+      reference.printed,
+    );
+    const citationKey = yield* assertCitationStorageField(
+      "key",
+      reference.citationKey,
+    );
+    const normalizedIdentifierValue = yield* assertCitationStorageField(
+      "normalizedIdentifier",
+      identifier.normalizedValue,
+    );
+    const citedCourtHint = yield* assertCitationStorageField(
+      "courtHint",
+      reference.hints.court,
+    );
+    return Result.ok({
+      citingDecisionId,
+      citationText,
+      citationKey,
+      identifierType: identifier.type,
+      normalizedIdentifierValue,
+      citedDecisionTypeHint: reference.hints.decisionType,
+      citedCourtHint,
+      citedSheetNumber: reference.hints.sheetNumber,
+      citedDecisionDate: reference.hints.decisionDate,
+      kind: reference.kind,
+      sectionIndex: reference.sectionIndex,
+      polarity: verdict?.polarity ?? null,
+      polarityRuleId: verdict?.ruleId ?? null,
+    } satisfies CitationRow);
+  });
+
+/**
+ * The rows a decision's references are stored as, before they are settled:
+ * the whole of what the storage keeps of a reference and its rule verdict.
+ */
+export const citationRowsOf = ({
+  citingDecisionId,
+  references,
+}: LegacyGraphCitationPlan) =>
+  Result.all(
+    references.map((reference) => citationRowOf(citingDecisionId, reference)),
+  );
+
 /**
  * Every reference of one decision (see `deriveDecisionReferences`: what each
  * names and what it is doing) and, where it invokes authority, how the citing
@@ -95,7 +150,7 @@ export const planDecisionCitations = async ({
   proceduralKeys,
   scopedDb,
   sections,
-}: PlanDecisionCitationsOptions): Promise<LegacyGraphCitationPlan> => {
+}: PlanDecisionCitationsOptions) => {
   const { references } = deriveDecisionReferences({
     citingDecisionId,
     citations,
@@ -103,10 +158,14 @@ export const planDecisionCitations = async ({
     sections,
   });
   if (references.length === 0) {
-    return { disposition: "legacy-graph", citingDecisionId, references: [] };
+    return Result.ok({
+      disposition: "legacy-graph",
+      citingDecisionId,
+      references: [],
+    } as const);
   }
   const rules = await loadRules(language, scopedDb, polarityRules);
-  return {
+  const plan = {
     disposition: "legacy-graph",
     citingDecisionId,
     references: references.map((reference) => ({
@@ -116,49 +175,9 @@ export const planDecisionCitations = async ({
           ? null
           : selectCitationPolarity(rules, reference.polarityMentions),
     })),
-  };
+  } as const satisfies LegacyGraphCitationPlan;
+  return citationRowsOf(plan).map(() => plan);
 };
-
-type CitationRow = typeof caseLawCitations.$inferInsert;
-
-/** The row a reference is stored as, before it is settled. */
-export const citationRowOf = (
-  citingDecisionId: SafeId<"caseLawDecision">,
-  { reference, verdict }: ReadReference,
-): CitationRow => {
-  const [identifier] = reference.identifiers;
-  return {
-    citingDecisionId,
-    citationText: assertCitationStorageField("text", reference.printed),
-    citationKey: assertCitationStorageField("key", reference.citationKey),
-    identifierType: identifier.type,
-    normalizedIdentifierValue: assertCitationStorageField(
-      "normalizedIdentifier",
-      identifier.normalizedValue,
-    ),
-    citedDecisionTypeHint: reference.hints.decisionType,
-    citedCourtHint: assertCitationStorageField(
-      "courtHint",
-      reference.hints.court,
-    ),
-    citedSheetNumber: reference.hints.sheetNumber,
-    citedDecisionDate: reference.hints.decisionDate,
-    kind: reference.kind,
-    sectionIndex: reference.sectionIndex,
-    polarity: verdict?.polarity ?? null,
-    polarityRuleId: verdict?.ruleId ?? null,
-  };
-};
-
-/**
- * The rows a decision's references are stored as, before they are settled:
- * the whole of what the storage keeps of a reference and its rule verdict.
- */
-export const citationRowsOf = ({
-  citingDecisionId,
-  references,
-}: LegacyGraphCitationPlan): CitationRow[] =>
-  references.map((reference) => citationRowOf(citingDecisionId, reference));
 
 /** Each rule that labelled one of these citations, and how many it labelled. */
 const polarityMatchesByRule = (
@@ -316,7 +335,11 @@ export const writeDecisionCitations = async (
     stored: boolean;
   },
 ): Promise<void> => {
-  const rows = citationRowsOf(citations);
+  const projected = citationRowsOf(citations);
+  if (projected.isErr()) {
+    abortTransaction(projected.error);
+  }
+  const rows = projected.value;
   const unmatched = new Map<string, SafeId<"caseLawCitation">[]>();
   if (stored) {
     // Read as text, so the comparison sees the values as the writer spells

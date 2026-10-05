@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import fc from "fast-check";
@@ -71,32 +70,28 @@ if (!databaseUrl || !enabled) {
           }),
           async ({ printed, hint, identifier, keyInput }) => {
             const key = citationKeyOf(keyInput);
-            const projected = Result.try({
-              try: () =>
-                citationRowOf(decisionId, {
-                  verdict: null,
-                  reference: {
-                    index: 0,
-                    printed,
-                    citationKey: key,
-                    identifiers: [
-                      {
-                        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                        normalizedValue: identifier,
-                      },
-                    ],
-                    kind: CITATION_KIND.PRECEDENT,
-                    hints: {
-                      court: hint,
-                      decisionType: null,
-                      sheetNumber: null,
-                      decisionDate: null,
-                    },
-                    sectionIndex: null,
-                    polarityMentions: null,
+            const projected = citationRowOf(decisionId, {
+              verdict: null,
+              reference: {
+                index: 0,
+                printed,
+                citationKey: key,
+                identifiers: [
+                  {
+                    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                    normalizedValue: identifier,
                   },
-                }),
-              catch: (error: unknown) => error,
+                ],
+                kind: CITATION_KIND.PRECEDENT,
+                hints: {
+                  court: hint,
+                  decisionType: null,
+                  sheetNumber: null,
+                  decisionDate: null,
+                },
+                sectionIndex: null,
+                polarityMentions: null,
+              },
             });
             const fits =
               Array.from(printed).length <= CITATION_STORAGE_WIDTHS.text &&
