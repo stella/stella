@@ -841,6 +841,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
@@ -2310,6 +2311,8 @@
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
+      "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
@@ -4637,6 +4640,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "currentWording": "Kehtiv sõnastus",
     "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
@@ -4686,7 +4690,9 @@
       "unknown": "Olek ebaselge"
     },
     "title": "Õigusaktid",
-    "validity": "Kehtib {from} kuni {to}"
+    "validity": "Kehtib {from} kuni {to}",
+    "wordingValidFrom": "Sõnastus kehtib alates {date}",
+    "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
     "create": "Loo",
@@ -5455,8 +5461,7 @@
         "signCurrent": "Allkirjasta stella desktopiga",
         "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
         "signOutdated": "Uuenda stella desktop, et allkirjastada",
-        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
-        "signShort": "Allkirjasta"
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis."
       },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",

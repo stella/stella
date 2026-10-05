@@ -2441,13 +2441,65 @@ describe("OpenAI-compatible MCP tools", () => {
     },
   );
 
-  test("an output that violates the tool's contract is logged as a defect", async () => {
+  test("an output with an undeclared key is stripped, returned, and logged as a defect", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
         court: [],
         // A bucket field the output contract does not declare.
         year: [{ count: 1, label: null, value: "2024", undeclared: true }],
+        decisionType: [],
+        source: [],
+        language: [],
+      },
+      hits: [],
+      nextCursor: null,
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      queryUsed: "contract",
+      warnings: [],
+    });
+    const logs = installRecordingLogger();
+    try {
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["contract"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(parseToolPayload(result)).toMatchObject({
+        facets: { year: [{ count: 1, label: null, value: "2024" }] },
+      });
+      expect(JSON.stringify(result)).not.toContain("undeclared");
+      expect(
+        logs.at("ERROR").map(({ message, attributes }) => ({
+          message,
+          defect: attributes?.["defect"],
+          paths: attributes?.["paths"],
+          source: attributes?.["source"],
+          tool: attributes?.["tool"],
+        })),
+      ).toEqual([
+        {
+          message: "tool_output.contract_degraded",
+          defect: "undeclared_fields",
+          paths: "facets.year[].undeclared",
+          source: "mcp",
+          tool: "search_case_law",
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("an output that violates a declared field of the tool's contract is logged as a defect", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: {
+        court: [],
+        // A declared bucket field with the wrong type.
+        year: [{ count: "one", label: null, value: "2024" }],
         decisionType: [],
         source: [],
         language: [],
