@@ -167,7 +167,7 @@
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.27",
-    "@expo/router-server": "57.0.10",
+    "@expo/router-server": "57.0.11",
     "@expo/ui": "57.0.21",
     "@stll/folio-core": "0.55.0",
     "adm-zip": "0.6.1",
