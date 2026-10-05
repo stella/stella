@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   assertCorpusEngineTestCoverage,
+  CORPUS_ENGINE_GATE,
   CORPUS_ENGINE_REPORT_CHECK,
   CORPUS_ENGINE_TEST_FILES,
   executeCorpusSuite,
@@ -267,20 +268,16 @@ test("each suite and each run own distinct output, data, report and container na
 test("coverage enumerates the real sources and detects added and removed gated files", async () => {
   await assertCorpusEngineTestCoverage(apiRoot);
   const fixture = mkdtempSync(path.join(tmpdir(), "corpus-coverage-"));
+  // This is generated fixture source, not a gate on this always-running suite.
+  const gatedSource = `const enabled = process.env[${JSON.stringify(CORPUS_ENGINE_GATE)}] === "true";`;
   try {
     for (const file of CORPUS_ENGINE_TEST_FILES) {
       mkdirSync(path.dirname(path.join(fixture, file)), { recursive: true });
-      writeFileSync(
-        path.join(fixture, file),
-        'const enabled = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";',
-      );
+      writeFileSync(path.join(fixture, file), gatedSource);
     }
     await assertCorpusEngineTestCoverage(fixture);
     const extra = "src/new-corpus-engine.test.ts";
-    writeFileSync(
-      path.join(fixture, extra),
-      'const enabled = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";',
-    );
+    writeFileSync(path.join(fixture, extra), gatedSource);
     expect(
       await rejectionOf(assertCorpusEngineTestCoverage(fixture)),
     ).toMatchObject({

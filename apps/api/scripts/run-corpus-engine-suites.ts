@@ -10,7 +10,7 @@ import { discoverGatedTestFiles } from "./run-gated-tests";
 import { TEST_BATCH_KIND } from "./test-batch-plan";
 import { runInLanes } from "./test-lanes";
 
-const ENGINE_GATE = "STELLA_RUN_CORPUS_ENGINE_TESTS";
+export const CORPUS_ENGINE_GATE = "STELLA_RUN_CORPUS_ENGINE_TESTS";
 const TEMPLATE_CONTAINER = "corpus-engine";
 // Two PGlite schema builders can overlap with the longest engine-only suite.
 const ENGINE_TEST_LANES = 3;
@@ -29,7 +29,7 @@ export const CORPUS_ENGINE_TEST_FILES = [
 export const assertCorpusEngineTestCoverage = async (apiRoot: string) => {
   const discovered = await discoverGatedTestFiles({
     apiRoot,
-    gate: ENGINE_GATE,
+    gate: CORPUS_ENGINE_GATE,
     testFileGlob: "src/**/*.test.ts",
   });
   const listed = new Set<string>(CORPUS_ENGINE_TEST_FILES);
@@ -146,7 +146,7 @@ const runCommand = async ({
     cmd: command,
     cwd,
     env: environment,
-    signal,
+    ...(signal === undefined ? {} : { signal }),
     timeout: timeoutMs,
     killSignal: "SIGKILL",
     stdin: "ignore",
@@ -239,7 +239,7 @@ export const executeCorpusSuite = async ({
     ]);
     const environment = {
       ...process.env,
-      [ENGINE_GATE]: "true",
+      [CORPUS_ENGINE_GATE]: "true",
       STELLA_RUN_POSTGRES_TESTS: undefined,
       STELLA_CORPUS_ENGINE_TEST_ENDPOINT: endpoint,
       PGLITE_TEST_SNAPSHOT: undefined,
