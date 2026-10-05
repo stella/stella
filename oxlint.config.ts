@@ -918,6 +918,18 @@ export default defineConfig({
       { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
+    // A `let`, `const` or class read before its declaration runs throws in
+    // the temporal dead zone. A function declaration is hoisted, so calling
+    // one declared further down is not a defect.
+    "eslint/no-use-before-define": [
+      "error",
+      {
+        functions: false,
+        classes: true,
+        variables: true,
+        allowNamedExports: false,
+      },
+    ],
     // Preset style rules, decided by cost: each fires far more often than
     // its fix is worth, so it stays off.
     // Route files, React components and generated modules follow their
@@ -1246,11 +1258,10 @@ export default defineConfig({
     "unicorn/no-await-expression-member": "off",
     // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
-    // `oxc/no-map-spread` stays off as the core preset declares (an entry
-    // here would restate it and fail the liveness test): its fix mutates the
-    // mapped items and contradicts no-computed-key-record-assignment, so
-    // object spread is the one record copy. scripts/oxlint-rule-decisions.test.ts
-    // holds it off.
+    // Restates the core preset: the fix mutates the mapped items and
+    // contradicts no-computed-key-record-assignment, so object spread is the
+    // one record copy. scripts/oxlint-rule-decisions.test.ts holds it off.
+    "oxc/no-map-spread": "off",
 
     // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
