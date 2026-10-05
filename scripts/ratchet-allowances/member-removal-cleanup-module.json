@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The member removal module is the single owner of matter, organization and account cleanup of a departing member's assignments, approvals, exchanges and locks."
+}

@@ -1,8 +1,17 @@
 import {
+  desktopEditSessions,
+  pdfSigningSessions,
+  workObligations,
+} from "@/api/db/schema";
+import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
 import type { StatusTable } from "@/api/lib/db/status-tables.gen";
+import {
+  defineKeyedTransitions,
+  defineTransitions,
+} from "@/api/lib/db/transitions";
 import type { TransitionSpec } from "@/api/lib/db/transitions";
 
 // Each table chooses an ownership category explicitly; new status tables must
@@ -38,6 +47,52 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
+  desktopEditSessions,
+  {
+    open: ["finalized", "cancelled", "expired"],
+    finalized: [],
+    cancelled: [],
+    expired: [],
+  },
+  { terminal: ["finalized", "cancelled", "expired"] },
+);
+
+const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
+  pdfSigningSessions,
+  { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
+  { terminal: ["finalized", "cancelled"] },
+);
+
+const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
+  table: workObligations,
+  key: "entityId",
+  edges: {
+    unassigned: [
+      "awaiting_acknowledgement",
+      "active",
+      "completed",
+      "cancelled",
+    ],
+    awaiting_acknowledgement: [
+      "unassigned",
+      "active",
+      "completed",
+      "cancelled",
+    ],
+    active: [
+      "unassigned",
+      "awaiting_acknowledgement",
+      "completed",
+      "cancelled",
+    ],
+    completed: ["unassigned", "awaiting_acknowledgement", "active"],
+    cancelled: ["unassigned", "awaiting_acknowledgement", "active"],
+  },
+  // Closed obligations can reopen according to their current ownership state.
+  options: { terminal: [] },
+});
 
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
@@ -78,7 +133,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionIntents: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
-  desktopEditSessions: { unmanaged: UNMANAGED_REASONS.collaboration },
+  desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -114,7 +169,7 @@ export const TRANSITIONS = {
   organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  pdfSigningSessions: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
@@ -142,7 +197,7 @@ export const TRANSITIONS = {
   timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
   timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },
   usageEntitlements: { unmanaged: UNMANAGED_REASONS.externalEntitlement },
-  workObligations: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  workObligations: WORK_OBLIGATION_TRANSITIONS,
   workspaces: { unmanaged: UNMANAGED_REASONS.userWorkflow },
 } as const satisfies Record<
   StatusTable,

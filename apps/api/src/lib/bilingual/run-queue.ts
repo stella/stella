@@ -125,7 +125,7 @@ export const enqueueBilingualRun = async (
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
-export const reconcileStuckBilingualRuns = async (
+const reconcileStuckBilingualRuns = async (
   db: Pick<typeof rootDb, "update">,
 ): Promise<number> => {
   const runningCutoff = new Date(
@@ -307,7 +307,7 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 // Execution
 // ----------------------------------------------------------------------------
 
-export type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
+type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
 const brandActor = (data: BilingualRunJobData): RunActor =>

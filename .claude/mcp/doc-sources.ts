@@ -175,6 +175,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
+      "@aws-sdk/client-sqs",
       "@aws-sdk/client-sts",
       "@aws-sdk/s3-request-presigner",
       "@smithy/fetch-http-handler",

@@ -60,8 +60,8 @@ const originalOrganizationMember = (
     .where(eq(member.id, ids.memberA1org))
     .limit(1)
 ).at(0);
-const originalMatterMember = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA1 } },
+const originalMatterMembers = await testDb.query.workspaceMembers.findMany({
+  where: { userId: { eq: ids.userA1 } },
 });
 const originalSettings = (
   await testDb
@@ -70,7 +70,11 @@ const originalSettings = (
     .where(eq(organizationSettings.organizationId, ids.orgA))
     .limit(1)
 ).at(0);
-if (!originalOrganizationMember || !originalMatterMember || !originalSettings) {
+if (
+  !originalOrganizationMember ||
+  originalMatterMembers.length === 0 ||
+  !originalSettings
+) {
   panic("Memory extractor fixture is incomplete");
 }
 
@@ -259,7 +263,7 @@ afterEach(async () => {
     .onConflictDoNothing();
   await testDb
     .insert(workspaceMembers)
-    .values(originalMatterMember)
+    .values(originalMatterMembers)
     .onConflictDoNothing();
 });
 
