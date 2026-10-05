@@ -755,7 +755,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
@@ -966,7 +973,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Parser versions must advance whenever an adapter's parser inputs change.
   # This guard reads Git history and needs no dependency installation.
@@ -1008,7 +1022,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
@@ -1165,7 +1186,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   ci-checks-policy:
     needs: ci-plan
@@ -1379,7 +1407,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   ci-checks-rest:
     needs: ci-plan
@@ -2320,7 +2355,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # The `test` task, split into shards that run in parallel. Each shard filters
   # the same scope the serial run computed (scripts/test-scope.ts) down to the
@@ -2657,7 +2699,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   code-quality-api:
     needs: ci-plan
@@ -2733,7 +2782,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   code-quality-web:
     needs: ci-plan
@@ -2812,7 +2868,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   code-quality-rest:
     needs: ci-plan
@@ -2938,7 +3001,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # API suites that need real services, at full depth or on scoped PRs. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
@@ -3096,7 +3166,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
@@ -3204,7 +3281,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   release-typecheck:
     needs: ci-plan
@@ -3245,7 +3329,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # A fix's tests must fail without the fix. On a fix pull request that
   # changes an apps/api test, this puts the base source back under the pull
@@ -3470,7 +3561,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Vite web build. Same rationale as landing-build below: the
   # required code-quality and test checks don't exercise the
@@ -3578,7 +3676,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # The prod-deps boot smoke above runs inside a full checkout, where
   # workspace sources exist and can mask the runner image's filesystem
@@ -3658,7 +3763,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Expo/Metro bundle smoke. TypeScript and lint do not exercise Babel,
   # autolinking, or platform-specific module resolution, so keep one path-
@@ -3702,7 +3814,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Astro landing build. The required checks run code quality and tests,
   # but no `astro build`, so plugin/runtime
@@ -3747,7 +3866,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Browser checks use isolated parallel runners: broad production shards,
   # a small Vite dependency canary, and the built landing-page suite. The
@@ -4022,7 +4148,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   stack-redaction-browsers:
     needs: ci-plan
@@ -4065,7 +4198,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   e2e-vite-canary:
     needs: ci-plan
@@ -4248,7 +4388,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   e2e-landing:
     needs: ci-plan
@@ -4332,7 +4479,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Release candidates compare the captured PNGs before shipping, on the
   # release pull request itself (fast depth) as well as its merge group. These
@@ -4370,7 +4524,6 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  # The remote action is pinned so cancellation also works before checkout.
   # Reusable workflow callers cannot have steps. Cancel immediately after
   # this call fails, without a runner waiting or polling for its result.
   marketing-screenshots-cancel:
@@ -4382,7 +4535,14 @@ jobs:
       actions: write
     steps:
       - name: Cancel failed merge-group run
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # One HTML report from the browser suites' blob reports, when a suite
   # failed. Diagnostic only: ci-result evaluates the suites themselves, so
@@ -4436,7 +4596,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Build the final API image and rehearse it at every depth. The image build
   # runs the runtime-asset stage on the runner filesystem; the smoke then
@@ -4551,7 +4718,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   legal-atlas-image:
     needs: ci-plan
@@ -4607,7 +4781,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
@@ -4650,7 +4831,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
@@ -4798,7 +4986,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   dependency-malware:
     needs: ci-plan
@@ -4838,7 +5033,14 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
@@ -5138,4 +5340,11 @@ jobs:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
-        uses: stella/stella/.github/actions/cancel-merge-group@a3d8d6844ccc84ee02f6f418b8e055d5aea1725d
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });

@@ -604,6 +604,15 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
+const CANONICAL_CANCEL_STEP = {
+  name: "Cancel failed merge-group run",
+  uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+  with: {
+    retries: 0,
+    script:
+      "await github.rest.actions.cancelWorkflowRun({\n  ...context.repo,\n  run_id: context.runId,\n});\n",
+  },
+} as const;
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const CANCELLATION_EXCEPTIONS = new Set([
   "ci-tests",
@@ -656,16 +665,10 @@ test("every eligible CI job cancels a failed merge group in its final step with 
       continue;
     }
     const tail = body.steps?.at(-1);
-    expect(tail?.name, id).toBe("Cancel failed merge-group run");
-    expect(tail?.if, id).toBe(
-      "failure() && github.event_name == 'merge_group'",
-    );
-    expect(tail?.uses, id).toMatch(
-      /^stella\/stella\/\.github\/actions\/cancel-merge-group@[a-f0-9]{40}$/u,
-    );
-    expect(tail?.run, id).toBeUndefined();
-    expect(tail?.shell, id).toBeUndefined();
-    expect(tail?.env, id).toBeUndefined();
+    expect(tail, id).toEqual({
+      ...CANONICAL_CANCEL_STEP,
+      if: "failure() && github.event_name == 'merge_group'",
+    });
   }
   const permissions = v.parse(
     v.object({ permissions: v.record(v.string(), v.string()) }),
@@ -694,36 +697,14 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   }
 });
 
-test("all failure tails and screenshot cancellation share an immutable same-run composite action", async () => {
-  const first = regularCancellationJobs().at(0);
-  if (!first) {
-    throw new TypeError("Missing eligible cancellation job");
-  }
-  const reference = v.parse(
-    v.string(),
-    v.parse(cancellationJobSchema, first[1]).steps?.at(-1)?.uses,
-  );
-  expect(reference).toMatch(
-    /^stella\/stella\/\.github\/actions\/cancel-merge-group@[a-f0-9]{40}$/u,
-  );
-  for (const [id, value] of regularCancellationJobs()) {
-    expect(v.parse(cancellationJobSchema, value).steps?.at(-1)?.uses, id).toBe(
-      reference,
-    );
-  }
+test("all failure tails and screenshot cancellation use the canonical same-run API step", async () => {
   const helper = v.parse(
     v.looseObject({
       needs: v.string(),
       if: v.string(),
       "timeout-minutes": v.number(),
       permissions: v.record(v.string(), v.string()),
-      steps: v.array(
-        v.looseObject({
-          uses: v.string(),
-          run: v.optional(v.string()),
-          if: v.optional(v.string()),
-        }),
-      ),
+      steps: v.array(v.unknown()),
     }),
     ciJobs[CANCEL_REUSABLE_JOB],
   );
@@ -731,37 +712,8 @@ test("all failure tails and screenshot cancellation share an immutable same-run 
   expect(helper.if).toBe("failure() && github.event_name == 'merge_group'");
   expect(helper["timeout-minutes"]).toBe(1);
   expect(helper.permissions).toEqual({ actions: "write" });
-  expect(helper.steps).toHaveLength(1);
-  expect(helper.steps.at(0)?.uses).toBe(reference);
-  expect(helper.steps.at(0)?.run).toBeUndefined();
-  const actionPath = ".github/actions/cancel-merge-group/action.yml";
-  const actionSource = readFileSync(
-    new URL(`../${actionPath}`, import.meta.url),
-    "utf-8",
-  );
-  const action = v.parse(
-    v.object({
-      runs: v.object({
-        using: v.literal("composite"),
-        steps: v.array(
-          v.object({
-            uses: v.string(),
-            with: v.object({ retries: v.number(), script: v.string() }),
-          }),
-        ),
-      }),
-    }),
-    Bun.YAML.parse(actionSource),
-  );
-  expect(action.runs.steps).toHaveLength(1);
-  const cancel = action.runs.steps.at(0);
-  if (!cancel) {
-    throw new TypeError("Missing composite cancellation API action");
-  }
-  expect(cancel.uses).toBe(
-    "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
-  );
-  expect(cancel.with.retries).toBe(0);
+  expect(helper.steps).toEqual([CANONICAL_CANCEL_STEP]);
+  const cancel = CANONICAL_CANCEL_STEP;
   for (const event of [
     "pull_request",
     "push",

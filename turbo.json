@@ -693,7 +693,6 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/.github/actions/cancel-merge-group/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
