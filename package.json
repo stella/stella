@@ -264,10 +264,10 @@
   },
   "catalogs": {
     "react19": {
-      "@types/react": "^19.2.17",
-      "@types/react-dom": "^19.2.7",
-      "react": "^19.2.8",
-      "react-dom": "^19.2.8"
+      "@types/react": "^19.3.0",
+      "@types/react-dom": "^19.3.0",
+      "react": "^19.3.0",
+      "react-dom": "^19.3.0"
     }
   },
   "patchedDependencies": {
