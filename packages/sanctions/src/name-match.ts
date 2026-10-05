@@ -82,7 +82,8 @@ type Vocabulary = {
   /** Per string, its length in code points and its number of distinct bigrams. */
   lengths: number[];
   gramCounts: number[];
-  characterCounts: Map<string, number>[];
+  /** Alternating Unicode code point and count pairs, one compact histogram per spelling. */
+  characterCounts: Uint32Array[];
   ids: Map<string, number>;
   bigrams: Map<string, number[]>;
   /** Aliases that contain the string as a token. */
@@ -99,6 +100,7 @@ type LookupScratch = {
   generation: number;
   touched: number[];
   candidates: number[];
+  queryCounts: Map<number, number>;
 };
 
 const MAX_LOOKUP_GENERATION = 0xff_ff_ff_ff;
@@ -112,6 +114,7 @@ const nextLookupScratch = (vocabulary: Vocabulary): LookupScratch => {
       generation: 0,
       touched: [],
       candidates: [],
+      queryCounts: new Map(),
     };
     vocabulary.lookupScratch = scratch;
   }
@@ -177,12 +180,30 @@ const bigrams = (text: string): Set<string> => {
 
 const gramKey = (length: number, gram: string) => `${length}:${gram}`;
 
-const characterCounts = (text: string): Map<string, number> => {
-  const counts = new Map<string, number>();
+const characterHistogram = (
+  text: string,
+  counts = new Map<number, number>(),
+): Map<number, number> => {
+  counts.clear();
   for (const character of text) {
-    counts.set(character, (counts.get(character) ?? 0) + 1);
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) {
+      panic("Missing code point in character histogram");
+    }
+    counts.set(codePoint, (counts.get(codePoint) ?? 0) + 1);
   }
   return counts;
+};
+
+const compactCharacterCounts = (text: string): Uint32Array => {
+  const sortedCounts = [...characterHistogram(text)].toSorted(
+    ([left], [right]) => left - right,
+  );
+  const pairs: number[] = [];
+  for (const [codePoint, count] of sortedCounts) {
+    pairs.push(codePoint, count);
+  }
+  return Uint32Array.from(pairs);
 };
 
 const intern = (vocabulary: Vocabulary, text: string): number => {
@@ -196,7 +217,7 @@ const intern = (vocabulary: Vocabulary, text: string): number => {
   vocabulary.strings.push(text);
   vocabulary.lengths.push(length);
   vocabulary.gramCounts.push(grams.size);
-  vocabulary.characterCounts.push(characterCounts(text));
+  vocabulary.characterCounts.push(compactCharacterCounts(text));
   vocabulary.ids.set(text, id);
   vocabulary.postings.push([]);
   vocabulary.joinPostings.push([]);
@@ -221,8 +242,15 @@ const post = (lists: number[][], ids: readonly number[], alias: number) => {
 export const buildNameIndex = (
   entries: readonly SanctionsEntry[],
 ): NameIndex => {
+  const canShareVocabularies = entries.every(({ names, entityType }) =>
+    names.every(({ name }) =>
+      nameReading(name, entityType).tokens.every(
+        ({ raw, folded }) => raw === folded,
+      ),
+    ),
+  );
   const folded = emptyVocabulary();
-  const raw = emptyVocabulary();
+  const raw = canShareVocabularies ? folded : emptyVocabulary();
   const aliases: IndexedAlias[] = [];
   const entryCounts = new Map<number, number>();
 
@@ -275,17 +303,21 @@ export const buildNameIndex = (
       };
       byKey.set(key, alias);
       post(folded.postings, alias.folded, aliases.length);
-      post(raw.postings, alias.raw, aliases.length);
+      if (raw !== folded) {
+        post(raw.postings, alias.raw, aliases.length);
+      }
       post(
         folded.joinPostings,
         alias.joins.map((join) => join.folded),
         aliases.length,
       );
-      post(
-        raw.joinPostings,
-        alias.joins.map((join) => join.raw),
-        aliases.length,
-      );
+      if (raw !== folded) {
+        post(
+          raw.joinPostings,
+          alias.joins.map((join) => join.raw),
+          aliases.length,
+        );
+      }
       for (const id of alias.folded) {
         entryTokens.add(id);
       }
@@ -319,9 +351,33 @@ export const buildNameIndex = (
  * string within budget k shares at least max(bigrams) - 3k of them.
  */
 type CharacterDistanceOptions = {
-  query: ReadonlyMap<string, number>;
-  candidate: ReadonlyMap<string, number>;
+  query: ReadonlyMap<number, number>;
+  candidate: Uint32Array;
   lengthDifference: number;
+};
+
+const indexedCharacterCount = (
+  counts: Uint32Array,
+  codePoint: number,
+): number => {
+  let lower = 0;
+  let upper = counts.length / 2;
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    const indexedCodePoint =
+      counts.at(middle * 2) ?? panic("Missing indexed character code point");
+    if (indexedCodePoint === codePoint) {
+      return (
+        counts.at(middle * 2 + 1) ?? panic("Missing indexed character count")
+      );
+    }
+    if (indexedCodePoint < codePoint) {
+      lower = middle + 1;
+    } else {
+      upper = middle;
+    }
+  }
+  return 0;
 };
 
 // Transpositions preserve counts; other edits repair at most one deficit per side.
@@ -331,8 +387,8 @@ const characterDistanceLowerBound = ({
   lengthDifference,
 }: CharacterDistanceOptions): number => {
   let missing = 0;
-  for (const [character, count] of query) {
-    missing += Math.max(0, count - (candidate.get(character) ?? 0));
+  for (const [codePoint, count] of query) {
+    missing += Math.max(0, count - indexedCharacterCount(candidate, codePoint));
   }
   return Math.max(missing, lengthDifference + missing);
 };
@@ -361,8 +417,8 @@ const similarStrings = ({
     return similar;
   }
   const grams = bigrams(text);
-  const counts = characterCounts(text);
   const scratch = nextLookupScratch(vocabulary);
+  const counts = characterHistogram(text, scratch.queryCounts);
   const generation = scratch.generation;
   const { counts: sharedCounts, generations, touched, candidates } = scratch;
   touched.length = 0;
@@ -484,6 +540,9 @@ const unit = ({
   });
   if (screeningWorkExhausted(work)) {
     return undefined;
+  }
+  if (index.raw === index.folded && token.raw === token.folded) {
+    return { positions, folded, raw: folded };
   }
   const raw = similarStrings({ vocabulary: index.raw, text: token.raw, work });
   if (screeningWorkExhausted(work)) {
