@@ -147,6 +147,7 @@ export const ProvisionsCited = ({
 
             return (
               <WorkReferences
+                decisionAsOf={decisionAsOf}
                 group={group}
                 key={group.key}
                 publisherInconsistent={
@@ -182,11 +183,13 @@ export const ProvisionsCited = ({
 };
 
 const WorkReferences = ({
+  decisionAsOf,
   group,
   publisherInconsistent,
   renderPart,
   statute,
 }: {
+  decisionAsOf: string | null;
   group: WorkGroup;
   /**
    * Whether the publisher's own inconsistent dates leave the cited date
@@ -202,7 +205,10 @@ const WorkReferences = ({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
-      referencesOutsideVersion(statute, group.provisions),
+      referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: group.provisions,
+      }),
   });
 
   /**
@@ -219,24 +225,18 @@ const WorkReferences = ({
     if (statute === undefined) {
       return null;
     }
-    if (
-      provisionVersionAsOf(provision, null) === null &&
-      provision.versionBasis.type !== "inferred"
-    ) {
+    const asOf = provisionVersionAsOf(provision, decisionAsOf);
+    if (asOf === null) {
       return null;
-    }
-
-    if (provision.versionValidFrom === null) {
-      return statute;
     }
 
     // The wording in force is the inferred version for most references,
     // which is why the versions read is not started for them.
-    if (versionCoversDate(statute, provision.versionValidFrom)) {
+    if (versionCoversDate(statute, asOf)) {
       return statute;
     }
 
-    return pickVersionAt(optionalArray(versions), provision.versionValidFrom);
+    return pickVersionAt(optionalArray(versions), asOf);
   };
 
   return (

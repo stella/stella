@@ -197,7 +197,10 @@ export const useDecisionProvisionAnchors = ({
     const statute = statuteByWork.get(key);
     if (
       statute === undefined ||
-      !referencesOutsideVersion(statute, work.rows)
+      !referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: work.rows,
+      })
     ) {
       continue;
     }

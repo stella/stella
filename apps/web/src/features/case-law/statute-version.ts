@@ -6,6 +6,7 @@
 
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 
 export type StatuteVersionWindow = LegislationExpressionEligibility & {
   /** Opens the window; null for a work kept as a single unversioned text. */
@@ -39,6 +40,11 @@ export const pickVersionAt = <TVersion extends StatuteVersionWindow>(
 ): TVersion | null =>
   versions.find((version) => versionCoversDate(version, date)) ?? null;
 
+type ReferencesOutsideVersionOptions = {
+  decisionAsOf: string | null;
+  references: readonly Parameters<typeof provisionVersionAsOf>[0][];
+};
+
 /**
  * Whether a work's other consolidations have to be read: some reference
  * selects a version the resolved consolidation does not cover. A reference to
@@ -47,10 +53,9 @@ export const pickVersionAt = <TVersion extends StatuteVersionWindow>(
  */
 export const referencesOutsideVersion = (
   version: StatuteVersionWindow,
-  references: readonly { versionValidFrom: string | null }[],
+  { decisionAsOf, references }: ReferencesOutsideVersionOptions,
 ): boolean =>
-  references.some(
-    (reference) =>
-      reference.versionValidFrom !== null &&
-      !versionCoversDate(version, reference.versionValidFrom),
-  );
+  references.some((reference) => {
+    const asOf = provisionVersionAsOf(reference, decisionAsOf);
+    return asOf !== null && !versionCoversDate(version, asOf);
+  });

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -35,11 +36,9 @@ test("every registered profile requires an explicit version grammar", () => {
       ].toSorted(),
     ).toEqual([...STATED_DATE_RELATIONS].toSorted());
     expect(profile.versionGrammar.amendmentPrefixes.length).toBeGreaterThan(0);
-    expect(
-      [...new Set(Object.values(profile.versionGrammar.monthNames))].toSorted(
-        (a, b) => a - b,
-      ),
-    ).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+    expect(new Set(Object.values(profile.versionGrammar.monthNames)).size).toBe(
+      12,
+    );
   }
 });
 
@@ -54,10 +53,10 @@ test("version dates preserve calendar values relations and exact evidence in eve
       ({ year, month, day }, space, before, named) => {
         for (const profile of profiles) {
           for (const statement of profile.versionGrammar.dateStatements) {
-            const monthName = Object.entries(
-              profile.versionGrammar.monthNames,
-            ).find(([, value]) => value === month)?.[0];
-            expect(monthName).toBeDefined();
+            const monthName =
+              Object.entries(profile.versionGrammar.monthNames).find(
+                ([, value]) => value === month,
+              )?.[0] ?? panic("Profile month spelling is absent");
             for (const printedDate of [
               `${day}.${month}.${year}`,
               named
@@ -187,8 +186,9 @@ test("invalid and unrelated dates never select a version in every profile", () =
 
 test("version dates validate leap days and distinguish competing statements", () => {
   for (const profile of profiles) {
-    const lead = profile.versionGrammar.dateStatements.at(0)?.prefix;
-    expect(lead).toBeDefined();
+    const lead =
+      profile.versionGrammar.dateStatements.at(0)?.prefix ??
+      panic("Profile date statement is absent");
     expect(
       parseProvisionAppliedVersion(`${lead} 29.2.2000`, profile).type,
     ).toBe("stated_date");

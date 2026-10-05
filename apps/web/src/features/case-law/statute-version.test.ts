@@ -7,6 +7,7 @@ import type {
 
 import {
   pickVersionAt,
+  referencesOutsideVersion,
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 
@@ -126,4 +127,60 @@ describe("pickVersionAt", () => {
   test("answers nothing when the corpus holds no versions at all", () => {
     expect(pickVersionAt([], "2015-06-01")).toBeNull();
   });
+});
+
+test("mixed provision bases read versions for their own effective dates in either order", () => {
+  const stated = {
+    versionBasis: {
+      type: "stated_date",
+      relation: "on",
+      date: "2014-01-01",
+      evidence: { kind: "stated_date", start: 0, end: 10 },
+      expression: null,
+    },
+    versionValidFrom: "2014-01-01",
+  } as const;
+  const inferred = {
+    versionBasis: { type: "inferred", kind: "decision_date" },
+    versionValidFrom: null,
+  } as const;
+  const resolved = version("2014-01-01", "2016-01-01");
+  for (const references of [
+    [stated, inferred],
+    [inferred, stated],
+  ]) {
+    expect(
+      referencesOutsideVersion(resolved, {
+        decisionAsOf: "2020-01-01",
+        references,
+      }),
+    ).toBe(true);
+  }
+  expect(
+    referencesOutsideVersion(resolved, {
+      decisionAsOf: "2015-01-01",
+      references: [stated, inferred],
+    }),
+  ).toBe(false);
+});
+
+test("unselected provision bases never request a consolidation from stored dates", () => {
+  const references = [
+    { versionBasis: { type: "not_stated" }, versionValidFrom: "2000-01-01" },
+    {
+      versionBasis: {
+        type: "stated_version",
+        amendmentWorkIdentifier: "89/2012",
+        evidence: { kind: "stated_version", start: 0, end: 10 },
+        expression: null,
+      },
+      versionValidFrom: "2000-01-01",
+    },
+  ] as const;
+  expect(
+    referencesOutsideVersion(version("2014-01-01", null), {
+      decisionAsOf: "2020-01-01",
+      references,
+    }),
+  ).toBe(false);
 });

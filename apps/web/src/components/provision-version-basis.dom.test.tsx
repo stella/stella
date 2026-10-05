@@ -17,6 +17,7 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
   await import("@/features/case-law/components/case-viewer/provisions-cited");
 const { CitingDecisionItem } =
@@ -66,6 +67,14 @@ for (const [locale, messages, year] of [
   ["en", en, "2014"],
   ["ar", ar, "٢٠١٤"],
 ] as const) {
+  const formattingLocale = buildFormattingLocale({
+    lang: locale,
+    region: "",
+    regionalFormat: "auto",
+    calendar: "auto",
+    numberingSystem: "auto",
+    weekStart: "auto",
+  });
   const cases = [
     {
       basis: DECISION_DATE_VERSION_BASIS,
@@ -193,7 +202,10 @@ for (const [locale, messages, year] of [
             messages={messages}
             timeZone="Europe/Prague"
           >
-            <FormattingProvider locale={locale} timeZone="Europe/Prague">
+            <FormattingProvider
+              locale={formattingLocale}
+              timeZone="Europe/Prague"
+            >
               <router.RouterProvider router={appRouter} />
             </FormattingProvider>
           </IntlProvider>
@@ -210,8 +222,9 @@ for (const [locale, messages, year] of [
       expect(
         ui.getAllByText(
           (_, element) =>
-            element?.classList.contains("text-2xs") === true &&
-            element.textContent?.includes(label) === true,
+            element !== null &&
+            element.classList.contains("text-2xs") &&
+            element.textContent.includes(label),
         ),
       ).toHaveLength(2);
       expect(

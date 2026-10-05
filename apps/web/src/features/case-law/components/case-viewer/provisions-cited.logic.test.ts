@@ -227,7 +227,7 @@ test("provision grouping preserves temporal identities and per-mention evidence 
               evidence: { kind: "stated_version", start: 40, end: 70 },
             },
           }),
-        ];
+        ] as const;
         const permuted = order.map(
           (index) => rows.at(index) ?? panic("Permutation index is absent"),
         );
@@ -242,7 +242,7 @@ test("provision grouping preserves temporal identities and per-mention evidence 
           amendment?.occurrences
             .toSorted((left, right) => left.spanStart - right.spanStart)
             .map(({ versionBasis }) => versionBasis),
-        ).toEqual([rows.at(1)?.versionBasis, rows.at(3)?.versionBasis]);
+        ).toEqual([rows[1].versionBasis, rows[3].versionBasis]);
       },
     ),
   );
