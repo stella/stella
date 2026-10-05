@@ -31,6 +31,8 @@ import {
   formatQueuePlacementFailure,
   isReleasePullRequest,
   latestEjection,
+  MERGE_BAR_REPOSITORIES,
+  type MergeBarRepository,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
@@ -1864,6 +1866,44 @@ describe("green result freshness", () => {
       cwd: REPO_ROOT,
     });
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
+  });
+
+  // The ci-result gate shape of every repository merge-bar lands: its real
+  // workflow, a fixture of its gate step, or null when it has no CI workflow.
+  const FOLIO_GATE_WORKFLOW = `
+jobs:
+  ci-plan:
+    outputs:
+      code_required: \${{ steps.plan.outputs.code }}
+  typecheck: {}
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          JOB_SCOPES: '{"typecheck": "code_required"}'
+`;
+  const GATE_WORKFLOWS = {
+    "stella/stella": readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
+    "stella/folio": FOLIO_GATE_WORKFLOW,
+    "stella/stella-infra": null,
+  } as const satisfies Record<MergeBarRepository, string | null>;
+
+  test.each(Object.keys(MERGE_BAR_REPOSITORIES).map((repo) => [repo]))(
+    "%s's gate shape reads without panicking",
+    (repo) => {
+      const workflow = GATE_WORKFLOWS[readMergeBarRepository(repo)];
+      if (workflow === null) {
+        return;
+      }
+      expect(() => readFastRequiredJobs(workflow)).not.toThrow();
+    },
+  );
+
+  test("a gate without a fast-required list has no fast jobs to recheck", () => {
+    expect(readFastRequiredJobs(FOLIO_GATE_WORKFLOW)).toBeNull();
   });
 
   test("fast scopes override regular scopes, including null and absent scopes", () => {
