@@ -841,6 +841,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Rubrum",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
@@ -4637,6 +4638,7 @@
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
+    "currentWording": "Aktueller Wortlaut",
     "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
@@ -4686,7 +4688,9 @@
       "unknown": "Status unklar"
     },
     "title": "Rechtsvorschriften",
-    "validity": "Gültig von {from} bis {to}"
+    "validity": "Gültig von {from} bis {to}",
+    "wordingValidFrom": "Wortlaut in Kraft seit {date}",
+    "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
     "create": "Erstellen",

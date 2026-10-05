@@ -841,6 +841,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
@@ -4637,6 +4638,7 @@
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
     "compareWithVersion": "Porovnať so znením {version}",
+    "currentWording": "Aktuálne znenie",
     "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
     "diffInserted": "Vložené:",
     "diffRemoved": "Vypustené:",
@@ -4686,7 +4688,9 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právne predpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "wordingValidFrom": "Znenie účinné od {date}",
+    "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
     "create": "Vytvoriť",

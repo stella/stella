@@ -844,6 +844,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
     };
@@ -4640,6 +4641,7 @@ type Messages = {
     "compareVersionMissing": "The version to compare with is not in this act's history.";
     "compareWholeAct": "Compare the whole act";
     "compareWithVersion": "Compare with {version}";
+    "currentWording": "Current wording";
     "description": "Public database of consolidated statutes, indexable by act and version.";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
@@ -4690,6 +4692,8 @@ type Messages = {
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
+    "wordingValidFrom": "Wording in force since {date}";
+    "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
     "create": "Create";
