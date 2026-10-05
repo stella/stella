@@ -385,7 +385,7 @@ test(
         signal: new AbortController().signal,
       });
 
-    expect(await drain()).toEqual({ claimed: 0, terminal: 0 });
+    expect(await drain()).toEqual({ claimed: 0, terminal: 0, hasMore: false });
     expect(await audits()).toHaveLength(0);
 
     const contact = await scoped(
@@ -447,7 +447,7 @@ test(
       );
     }
 
-    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1, hasMore: false });
     expect(await markFor(contact.id)).toBeUndefined();
     const events = await audits();
     expect(events).toHaveLength(1);
@@ -1217,8 +1217,16 @@ test(
           now,
           signal: new AbortController().signal,
         });
-      expect(await drain()).toEqual({ claimed: 100, terminal: 100 });
-      expect(await drain()).toEqual({ claimed: 4, terminal: 4 });
+      expect(await drain()).toEqual({
+        claimed: 100,
+        terminal: 100,
+        hasMore: true,
+      });
+      expect(await drain()).toEqual({
+        claimed: 4,
+        terminal: 4,
+        hasMore: false,
+      });
       const census = async () =>
         await scoped(async (tx) => ({
           matches: await tx.select().from(sanctionsContactMatches),
@@ -1513,7 +1521,7 @@ test(
         await drain(
           new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
         ),
-      ).toEqual({ claimed: 1, terminal: 1 });
+      ).toEqual({ claimed: 1, terminal: 1, hasMore: false });
       const finished = await census();
       expect(finished.marks).toEqual([]);
       expect(
@@ -1537,7 +1545,7 @@ test(
         await drain(
           new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS + 2),
         ),
-      ).toEqual({ claimed: 0, terminal: 0 });
+      ).toEqual({ claimed: 0, terminal: 0, hasMore: false });
       expect(await census()).toEqual(finished);
     } finally {
       for (const source of oldSources) {
@@ -1725,7 +1733,7 @@ test(
         now: futureNow(),
         signal: new AbortController().signal,
       });
-    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1, hasMore: false });
     const priorMatches = await scoped(
       async (tx) => await tx.select().from(sanctionsContactMatches),
     );
@@ -1770,7 +1778,7 @@ test(
           ])
           .returning(),
     );
-    expect(await drain()).toEqual({ claimed: 3, terminal: 3 });
+    expect(await drain()).toEqual({ claimed: 3, terminal: 3, hasMore: false });
     const matching =
       neighbors.find(({ displayName }) => displayName === "Kwame Nkrumah") ??
       panic("Matching neighbor missing");
@@ -1828,7 +1836,7 @@ test(
           contactId === clear.id && sourceId === "eu",
       )?.status,
     ).toBe("clear");
-    expect(await drain()).toEqual({ claimed: 0, terminal: 0 });
+    expect(await drain()).toEqual({ claimed: 0, terminal: 0, hasMore: false });
     expect(await snapshot()).toEqual(state);
   },
   TIMEOUT,

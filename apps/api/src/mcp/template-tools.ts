@@ -36,7 +36,7 @@ import {
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
-import type { FieldMeta } from "@/api/lib/docx/types";
+import { CLAUSE_RESOLUTIONS, type FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -1117,6 +1117,17 @@ const TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA = v.strictObject({
   message: v.string(),
   paragraphIndex: v.pipe(v.number(), v.integer()),
   source: v.optional(v.unknown()),
+  // Set when the error sits in a clause body the fill rendered: the slot, and
+  // which stored clause version resolved into it.
+  clause: v.optional(
+    v.strictObject({
+      slotKey: v.string(),
+      resolution: v.optional(v.picklist(CLAUSE_RESOLUTIONS)),
+      version: v.optional(v.pipe(v.number(), v.integer())),
+      id: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }),
+  ),
 });
 
 const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([

@@ -1,13 +1,17 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { reviewSanctionsMatch } from "@/api/lib/lists/sanctions/monitoring-review";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export default createSafeRootHandler(
   {
+    realtime: organizationResourceSetUpdates(RESOURCE_TYPE.CONTACT),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     description:
       "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's reviewTarget, then supply disposition and reason. A stale reviewTarget is rejected; read the contact again before retrying. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",

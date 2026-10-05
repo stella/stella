@@ -1845,6 +1845,10 @@ jobs:
         # allowlists kept equal to their source lists.
         run: bun test scripts/ownership.test.ts
 
+      - name: Schema introspection invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/schema-introspection.test.ts
+
       - name: Queue authority
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every BullMQ queue declares whose authority its jobs run under

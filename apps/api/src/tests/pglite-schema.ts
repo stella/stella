@@ -712,6 +712,7 @@ export const installPgliteSanctionsMonitoringTriggers = async (
   const statements = [
     "20261003122900_sanctions_monitoring_marks",
     "20261003123000_sanctions_monitoring_backfills",
+    "20261004120300_sanctions_drain_retry",
   ]
     .flatMap((migration) =>
       readMigrationStatements(

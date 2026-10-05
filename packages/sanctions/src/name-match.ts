@@ -430,11 +430,11 @@ const similarStrings = ({
           return similar;
         }
         if (generations[id] !== generation) {
-          generations.fill(generation, id, id + 1);
-          sharedCounts.fill(0, id, id + 1);
+          generations[id] = generation;
+          sharedCounts[id] = 0;
           touched.push(id);
         }
-        sharedCounts.fill((sharedCounts[id] ?? 0) + 1, id, id + 1);
+        sharedCounts[id] = (sharedCounts[id] ?? 0) + 1;
       }
     }
   }
