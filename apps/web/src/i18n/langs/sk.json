@@ -2158,6 +2158,7 @@
     "markHandled": "Označiť ako vybavené",
     "markNew": "Označiť ako nové",
     "noAddress": "Nie je aktívna žiadna e-mailová adresa.",
+    "openSourceFile": "Otvoriť súbor e-mailu",
     "originalSender": "Pôvodný odosielateľ",
     "originalSenderUnverified": "Pôvodný odosielateľ (uvedený, neoverený)",
     "originalSignatureVerified": "Pôvodný podpis overený (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Zmeniť adresu",
     "sentAt": "Odoslané dňa",
     "sharedMailboxFiler": "Zdieľaná schránka {address}, schválil(a) {approver}",
+    "statedInFile": "Hlavičky (ako sú uvedené v súbore)",
     "states": {
       "handled": "Vybavené"
     },
     "title": "Korešpondencia",
-    "unknownApprover": "Neznámy schvaľovateľ"
+    "unknownApprover": "Neznámy schvaľovateľ",
+    "uploadedBy": "Nahral(a) {name}",
+    "uploadedFile": "Nahraný súbor e-mailu"
   },
   "docxReview": {
     "acceptAll": "Prijať všetky",
