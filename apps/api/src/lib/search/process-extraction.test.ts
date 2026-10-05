@@ -107,14 +107,12 @@ const restoreManualOcrRunAfterProjectionLossMock = mock(
     >[0],
   ) => undefined,
 );
-const fileEmailCorrespondenceMock = mock(
+const enqueueUploadedMailMock = mock(
   async (
-    ..._args: Parameters<
-      ExecuteNativeExtractionDependencies["fileEmailCorrespondence"]
-    >
-  ): ReturnType<
-    ExecuteNativeExtractionDependencies["fileEmailCorrespondence"]
-  > => Result.ok({ status: "skipped", reason: "not_email" }),
+    _input: Parameters<
+      ExecuteNativeExtractionDependencies["enqueueUploadedMail"]
+    >[0],
+  ) => undefined,
 );
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
@@ -159,8 +157,8 @@ const persistProjectionSpy = mock(
 );
 
 const executeDependencies = {
+  enqueueUploadedMail: enqueueUploadedMailMock,
   extractText: extractFileTextResultMock,
-  fileEmailCorrespondence: fileEmailCorrespondenceMock,
   persistProjection: persistProjectionSpy,
   recordLanguage: recordLanguageMock,
   requestAutomaticOcr: requestAutomaticDocumentOcrMock,
@@ -275,10 +273,8 @@ beforeEach(() => {
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   recordLanguageMock.mockClear();
-  fileEmailCorrespondenceMock.mockReset();
-  fileEmailCorrespondenceMock.mockImplementation(async () =>
-    Result.ok({ status: "skipped", reason: "not_email" }),
-  );
+  enqueueUploadedMailMock.mockReset();
+  enqueueUploadedMailMock.mockImplementation(async () => undefined);
   persistProjectionSpy.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
@@ -877,12 +873,25 @@ describe("the extraction's database", () => {
     expect(outcome).toBe("source_cancelled");
     expect(persistProjectionSpy).toHaveBeenCalledTimes(1);
     expect(recordLanguageMock).not.toHaveBeenCalled();
-    expect(fileEmailCorrespondenceMock).not.toHaveBeenCalled();
+    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 
-  test("files an email document as correspondence on the same connection", async () => {
+  test("hands only an email document to the correspondence job", async () => {
+    seedSource("pdf");
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
+  });
+
+  test("hands an email document to the correspondence job by file", async () => {
     seedSource("eml");
     const emailContent = {
       ...fileContent,
@@ -897,22 +906,24 @@ describe("the extraction's database", () => {
     });
 
     expect(outcome).toBe("persisted");
-    const [call] = fileEmailCorrespondenceMock.mock.calls;
-    const input = call?.[0];
-    expect(input?.file).toEqual({
-      sourceFileId: fileContent.id,
-      storageMimeType: EML_MIME_TYPE,
-      mimeType: EML_MIME_TYPE,
-    });
-    expect(input?.scope).toEqual({ organizationId, workspaceId, entityId });
-    expect(input?.database).toBe(extractionDatabase);
-    expect(new TextDecoder().decode(input?.bytes)).toBe(SOURCE_BYTES);
+    expect(enqueueUploadedMailMock.mock.calls).toEqual([
+      [
+        {
+          file: {
+            sourceFileId: fileContent.id,
+            storageMimeType: EML_MIME_TYPE,
+            mimeType: EML_MIME_TYPE,
+          },
+          scope: { organizationId, workspaceId, entityId },
+        },
+      ],
+    ]);
   });
 
-  test("a failed correspondence step leaves the document indexed", async () => {
+  test("a failed hand-off leaves the document indexed", async () => {
     seedSource("eml");
-    fileEmailCorrespondenceMock.mockImplementationOnce(async () => {
-      throw new Error("correspondence store unavailable");
+    enqueueUploadedMailMock.mockImplementationOnce(async () => {
+      throw new Error("queue unavailable");
     });
 
     const outcome = await executeNativeExtraction({
@@ -926,6 +937,6 @@ describe("the extraction's database", () => {
     });
 
     expect(outcome).toBe("persisted");
-    expect(fileEmailCorrespondenceMock).toHaveBeenCalledTimes(1);
+    expect(enqueueUploadedMailMock).toHaveBeenCalledTimes(1);
   });
 });

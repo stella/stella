@@ -104,12 +104,14 @@ or tokens.
 
 An `.eml` or `.msg` file stored in a matter also becomes correspondence linked
 to that file, so one item appears in both Files and Correspondence. The native
-extraction run every new file version reaches files it, so every upload
-transport is covered; the record is written after the file's text projection,
-and extraction never fails on this step. A permanent refusal is a logged skip.
-An unavailable database hands the file to the `uploaded-mail-correspondence`
-queue, keyed by the file; its job rereads the stored object and retries with
-backoff, and only an exhausted job or a failed hand-off reaches telemetry.
+extraction run every new file version reaches hands the file to the
+`uploaded-mail-correspondence` queue after its text projection, so every upload
+transport is covered and extraction never fails on this step. The job is keyed
+by the file and runs in the API's workers: the document-processing worker
+enqueues through `upload-enqueue.ts` alone, keeping the filing code and the API
+environment out of its import graph. The job rereads the stored object; a
+permanent refusal is a logged skip, an unavailable database retries with
+backoff, and only an exhausted job or a failed hand-off is captured.
 
 - `parseEmailFile` reads the file as one message under the inbound limits: the
   same normalization as delivered mail, with an adapter for Outlook's MAPI

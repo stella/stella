@@ -8,6 +8,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -38,12 +39,13 @@ import {
   correspondenceFromMessage,
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
-import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
-import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
 import {
-  fileUploadedMailOrRetry,
-  processUploadedMailJob,
-} from "@/api/lib/uploaded-mail-correspondence-queue";
+  fileUploadedMail,
+  UploadedMailUnavailableError,
+} from "@/api/lib/email/inbound/upload";
+import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
+import { processUploadedMailJob } from "@/api/lib/email/inbound/upload-queue";
+import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
 import {
   openGatedTestDatabase,
   type GatedTestDb,
@@ -560,23 +562,13 @@ if (!databaseUrl || !runPostgresTests) {
           scope.userId,
         );
       const queued: Parameters<typeof processUploadedMailJob>[0]["data"][] = [];
-      const handedOff = await fileUploadedMailOrRetry({
-        bytes: emlFile(GOLDEN_MESSAGE),
+      await enqueueUploadedMailFiling({
         file: {
           sourceFileId: "file_1",
           storageMimeType: EML_MIME_TYPE,
           mimeType: EML_MIME_TYPE,
         },
         scope: { organizationId, workspaceId, entityId },
-        database: db,
-        fileMail: async (options) =>
-          await fileUploadedMail({
-            ...options,
-            scopedDbForUploader: () => async () => {
-              throw new Error("connection reset");
-            },
-            verifyOriginal: unverifiedOriginal,
-          }),
         queue: {
           add: async (_name, data) => {
             queued.push(data);
@@ -584,16 +576,13 @@ if (!databaseUrl || !runPostgresTests) {
           getJob: async () => undefined,
         },
       });
-      expect(handedOff.isOk() && handedOff.value).toEqual({
-        status: "retry_scheduled",
-      });
-      expect(await records()).toHaveLength(0);
-
       const [job] = queued;
       if (job === undefined) {
-        throw new Error("expected a retry job");
+        throw new Error("expected a filing job");
       }
-      const retry = async () =>
+      const attempt = async (
+        uploaderDb: NonNullable<typeof scopedDbForUploader>,
+      ) =>
         await processUploadedMailJob({
           data: job,
           database: db,
@@ -605,10 +594,21 @@ if (!databaseUrl || !runPostgresTests) {
           fileMail: async (options) =>
             await fileUploadedMail({
               ...options,
-              scopedDbForUploader,
+              scopedDbForUploader: uploaderDb,
               verifyOriginal: unverifiedOriginal,
             }),
         });
+
+      expect(
+        await rejectionOf(
+          attempt(() => async () => {
+            throw new Error("connection reset");
+          }),
+        ),
+      ).toBeInstanceOf(UploadedMailUnavailableError);
+      expect(await records()).toHaveLength(0);
+
+      const retry = async () => await attempt(scopedDbForUploader);
       expect(await retry()).toMatchObject({ status: "filed" });
       expect(await retry()).toMatchObject({ status: "duplicate" });
       expect(await records()).toMatchObject([

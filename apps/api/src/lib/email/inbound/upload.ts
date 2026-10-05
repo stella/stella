@@ -92,7 +92,7 @@ type FileUploadedMailOptions = {
   bytes: ArrayBuffer;
   mimeType: string;
   scope: UploadedMailScope;
-  /** The processing worker's connection; it reads only the file's uploader. */
+  /** The filing job's connection; it reads only the file's uploader. */
   database: {
     transaction: <T>(work: (tx: Transaction) => Promise<T>) => Promise<T>;
   };

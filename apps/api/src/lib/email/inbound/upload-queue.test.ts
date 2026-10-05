@@ -9,11 +9,12 @@ import {
   UploadedMailUnavailableError,
   type fileUploadedMail,
 } from "@/api/lib/email/inbound/upload";
+import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import {
-  fileUploadedMailOrRetry,
   processUploadedMailJob,
   reportUploadedMailJobFailure,
-} from "@/api/lib/uploaded-mail-correspondence-queue";
+} from "@/api/lib/email/inbound/upload-queue";
+import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -70,22 +71,11 @@ const fakeQueue = () => {
   };
 };
 
-describe("uploaded mail filing from the extraction run", () => {
-  test("an unavailable database hands the file to one retry job per file", async () => {
+describe("uploaded mail hand-off from the extraction run", () => {
+  test("a replayed extraction run collapses onto one job per file", async () => {
     const { jobs, queue } = fakeQueue();
-    const fileMail = mock<typeof fileUploadedMail>(async () => unavailable());
     for (let run = 0; run < 2; run += 1) {
-      const outcome = await fileUploadedMailOrRetry({
-        bytes,
-        file,
-        scope,
-        database,
-        fileMail,
-        queue,
-      });
-      expect(outcome.isOk() && outcome.value).toEqual({
-        status: "retry_scheduled",
-      });
+      await enqueueUploadedMailFiling({ file, scope, queue });
     }
     expect([...jobs.values()]).toEqual([
       expect.objectContaining({
@@ -94,44 +84,9 @@ describe("uploaded mail filing from the extraction run", () => {
       }),
     ]);
   });
-
-  test("a permanent refusal is a terminal skip that schedules nothing", async () => {
-    const { jobs, queue } = fakeQueue();
-    const outcome = await fileUploadedMailOrRetry({
-      bytes,
-      file,
-      scope,
-      database,
-      fileMail: async () =>
-        Result.ok({ status: "skipped", reason: "no_matter_access" }),
-      queue,
-    });
-    expect(outcome.isOk() && outcome.value).toEqual({
-      status: "skipped",
-      reason: "no_matter_access",
-    });
-    expect(jobs.size).toBe(0);
-  });
-
-  test("a failed hand-off is returned for telemetry, never thrown", async () => {
-    const outcome = await fileUploadedMailOrRetry({
-      bytes,
-      file,
-      scope,
-      database,
-      fileMail: async () => unavailable(),
-      queue: {
-        add: async () => {
-          throw new Error("queue unavailable");
-        },
-        getJob: async () => undefined,
-      },
-    });
-    expect(outcome.isErr()).toBe(true);
-  });
 });
 
-describe("uploaded mail retry job", () => {
+describe("uploaded mail filing job", () => {
   const data = { ...scope, ...file };
   const readFile = async () =>
     testScannedFile({ bytes, mimeType: EML_MIME_TYPE });
@@ -149,6 +104,18 @@ describe("uploaded mail retry job", () => {
     ).toBeInstanceOf(UploadedMailUnavailableError);
   });
 
+  test("a permanent refusal is a terminal skip", async () => {
+    expect(
+      await processUploadedMailJob({
+        data,
+        database,
+        readFile,
+        fileMail: async () =>
+          Result.ok({ status: "skipped", reason: "no_matter_access" }),
+      }),
+    ).toEqual({ status: "skipped", reason: "no_matter_access" });
+  });
+
   test("an attempt files the stored file under the job's scope", async () => {
     const fileMail = mock<typeof fileUploadedMail>(async () => filed());
     expect(
@@ -160,24 +127,27 @@ describe("uploaded mail retry job", () => {
     });
   });
 
-  test("only an exhausted job reaches telemetry", () => {
-    const capture = mock(() => {});
+  test("every failed attempt is observed and only an exhausted job escalates", () => {
+    const observe = mock<typeof observeFailure>(() => {});
     const error = new Error("still unavailable");
     const job = (attemptsMade: number) => ({
       attemptsMade,
       opts: { attempts: 6 },
       data: { entityId: scope.entityId },
     });
-    expect(reportUploadedMailJobFailure({ job: job(1), error, capture })).toBe(
+    expect(reportUploadedMailJobFailure({ job: job(1), error, observe })).toBe(
       "retrying",
     );
-    expect(reportUploadedMailJobFailure({ job: job(5), error, capture })).toBe(
+    expect(reportUploadedMailJobFailure({ job: job(5), error, observe })).toBe(
       "retrying",
     );
-    expect(capture).not.toHaveBeenCalled();
-    expect(reportUploadedMailJobFailure({ job: job(6), error, capture })).toBe(
+    expect(reportUploadedMailJobFailure({ job: job(6), error, observe })).toBe(
       "exhausted",
     );
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(observe.mock.calls.map(([, { escalation }]) => escalation)).toEqual([
+      undefined,
+      undefined,
+      "sustained",
+    ]);
   });
 });

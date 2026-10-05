@@ -177,7 +177,7 @@ export const QUEUE_AUTHORITY = {
   },
   "uploaded-mail-correspondence": {
     authority: "org-automation",
-    worker: "apps/api/src/lib/uploaded-mail-correspondence-queue.ts",
+    worker: "apps/api/src/lib/email/inbound/upload-queue.ts",
     reason:
       "Retries filing a stored email file as correspondence; the filing transaction rechecks the uploader's current matter access.",
   },
