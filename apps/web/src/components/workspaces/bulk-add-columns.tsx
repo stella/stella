@@ -35,13 +35,18 @@ import { stellaToast } from "@stll/ui/toast";
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import Tooltip from "@/components/tooltip";
 import {
+  columnDialogCopy,
+  columnDialogLimitReached,
   columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
   settleColumnWrites,
 } from "@/components/workspaces/bulk-add-columns.logic";
-import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
+import type {
+  ColumnDialogMode,
+  Draft,
+} from "@/components/workspaces/bulk-add-columns.logic";
 import { usePropertiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import {
@@ -70,7 +75,6 @@ import {
 } from "@/features/case-law/research/queries";
 import { questionEditDiscardsAnswers } from "@/features/case-law/research/question-columns.logic";
 import type {
-  QuestionColumn,
   QuestionColumnInput,
   QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
@@ -138,11 +142,10 @@ type AddColumnsTarget =
   | {
       kind: "organisation";
       /**
-       * The question being reworded, when the dialog was opened from a
-       * column's own menu. One card then, seeded from the question, saved back
-       * over it — the composer is the same one a new question is written in.
+       * Editing seeds one card from the column and saves over it; adding
+       * composes new questions in the same form.
        */
-      editing?: QuestionColumn | undefined;
+      mode: ColumnDialogMode;
       /** The search the questions are asked of; grounds the suggestion. */
       suggestion: QuestionSuggestionScope;
       /**
@@ -284,7 +287,7 @@ const BulkBody = ({ target, onClose }: BulkBodyProps) => {
   if (target.kind === "organisation") {
     return (
       <QuestionColumnsBody
-        {...(target.editing === undefined ? {} : { editing: target.editing })}
+        mode={target.mode}
         onClose={onClose}
         {...(target.onCreated === undefined
           ? {}
@@ -312,7 +315,7 @@ const useAddColumnsLimit = (target: AddColumnsTarget): boolean => {
 
   return target.kind === "workspace"
     ? workspaceLimitReached
-    : organisationLimitReached;
+    : columnDialogLimitReached(target.mode, organisationLimitReached);
 };
 
 type DraftHandlers = {
@@ -362,6 +365,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
   footerExtra?: React.ReactNode;
   isPending: boolean;
@@ -378,17 +382,19 @@ const BulkColumnsForm = ({
   children,
   footerExtra,
   isPending,
+  mode,
   onAddDraft,
   onSubmit,
 }: BulkColumnsFormProps) => {
   const t = useTranslations();
+  const copy = columnDialogCopy(mode);
 
   return (
     <>
       <DialogFormState dirty={dirty} />
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
         <DialogTitle className="flex-1 text-base leading-tight font-semibold">
-          {t("workspaces.properties.bulk.title")}
+          {t(copy.title)}
         </DialogTitle>
       </header>
 
@@ -420,7 +426,7 @@ const BulkColumnsForm = ({
             onClick={onSubmit}
             size="sm"
           >
-            {t("workspaces.properties.bulk.title")}
+            {t(copy.primary)}
           </Button>
         </div>
       </DialogFooter>
@@ -602,6 +608,7 @@ const PropertyColumnsBody = ({
           </div>
         ) : undefined
       }
+      mode={{ type: "add" }}
       isPending={batch.isPending}
       onAddDraft={addDraft}
       onSubmit={() => {
@@ -634,12 +641,12 @@ const NO_DEFAULT_FILE_IDS: string[] = [];
  * kind of answer, and a select's options.
  */
 const QuestionColumnsBody = ({
-  editing,
+  mode,
   onClose,
   onCreated,
   suggestion,
 }: ColumnsBodyProps & {
-  editing?: QuestionColumn | undefined;
+  mode: ColumnDialogMode;
   onCreated?: ((columnIds: readonly string[]) => void) | undefined;
   suggestion: QuestionSuggestionScope;
 }) => {
@@ -649,7 +656,7 @@ const QuestionColumnsBody = ({
   const { addDraft, drafts, handlersFor, isDirty, validDrafts } =
     useColumnDrafts(
       NO_DEFAULT_FILE_IDS,
-      editing === undefined ? undefined : questionDraft(editing),
+      mode.type === "edit" ? questionDraft(mode.column) : undefined,
     );
 
   const save = useMutation({
@@ -662,8 +669,8 @@ const QuestionColumnsBody = ({
       // read back before the failure is reported.
       const settled = await settleColumnWrites({
         writes: inputs.map((input, index) => async () => {
-          if (editing !== undefined) {
-            await updateQuestionColumn({ ...input, columnId: editing.id });
+          if (mode.type === "edit") {
+            await updateQuestionColumn({ ...input, columnId: mode.column.id });
             return;
           }
           createdIds[index] = (await createQuestionColumn(input)).id;
@@ -690,9 +697,9 @@ const QuestionColumnsBody = ({
   }));
   const firstInput = inputs.at(0);
   const discardsAnswers =
-    editing !== undefined &&
+    mode.type === "edit" &&
     firstInput !== undefined &&
-    questionEditDiscardsAnswers({ draft: firstInput, stored: editing });
+    questionEditDiscardsAnswers({ draft: firstInput, stored: mode.column });
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -717,8 +724,9 @@ const QuestionColumnsBody = ({
             ),
           }
         : {})}
+      mode={mode}
       isPending={save.isPending}
-      {...(editing === undefined ? { onAddDraft: addDraft } : {})}
+      {...(mode.type === "add" ? { onAddDraft: addDraft } : {})}
       onSubmit={() => {
         detached(handleSubmit(), "bulk-add-columns.submit");
       }}

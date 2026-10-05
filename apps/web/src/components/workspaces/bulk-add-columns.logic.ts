@@ -18,7 +18,34 @@ import type {
   QuestionColumn,
   QuestionColumnContent,
 } from "@/features/case-law/research/question-columns.logic";
+import type { TranslationKey } from "@/i18n/types";
 import type { SelectPropertyOption } from "@/lib/types";
+
+export type ColumnDialogMode =
+  | { type: "add" }
+  | { type: "edit"; column: QuestionColumn };
+
+const COLUMN_DIALOG_COPY = {
+  add: {
+    title: "workspaces.properties.bulk.title",
+    primary: "workspaces.properties.bulk.title",
+  },
+  edit: {
+    title: "workspaces.properties.editColumn",
+    primary: "common.save",
+  },
+} as const satisfies Record<
+  ColumnDialogMode["type"],
+  { title: TranslationKey; primary: TranslationKey }
+>;
+
+export const columnDialogCopy = (mode: ColumnDialogMode) =>
+  COLUMN_DIALOG_COPY[mode.type];
+
+export const columnDialogLimitReached = (
+  mode: ColumnDialogMode,
+  countLimitReached: boolean,
+) => mode.type === "add" && countLimitReached;
 
 type DraftTool = "ai-model" | "manual-input";
 
