@@ -46,6 +46,7 @@ const provision = (
   workSource: "number",
   workYear: 1961,
   versionValidFrom: null,
+  versionBasis: { type: "inferred", kind: "decision_date" },
   previewKey: null,
   spanRole: null,
   printPieceId: null,
