@@ -250,6 +250,8 @@ import { useQueryView } from "@/lib/use-query-view";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
+import { PlaybookQuerySection } from "./playbook-query-section";
+
 type PlaybookFacetProps = {
   entityId: string;
   fileFieldId: string;
@@ -360,10 +362,10 @@ export const PlaybookFacet = ({
   // Which version of the document is on screen now. The tab's facet bar reads
   // the same query for its version badge, so a restored run learns whether it
   // still describes the current document without a request of its own.
-  const { data: versions } = useQuery(
+  const versionsQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
-  const currentEntityVersionId = versions?.currentVersionId ?? null;
+  const versions = useQueryView(versionsQuery);
 
   const playbooks = usePlaybookPickerItems(user.activeOrganizationId);
 
@@ -774,38 +776,50 @@ export const PlaybookFacet = ({
       <>
         {sizeConfirmDialog}
         {historyFeedback}
-        <ReviewRunPanel
-          chatSection={chatSectionWith(null)}
-          currentEntityVersionId={currentEntityVersionId}
-          editorAvailable={editorAvailable}
-          editorRef={targetEditorRef}
-          entityId={entityId}
-          queueControls={queueControls}
-          history={{
-            mode: historyRunId === null ? "tracked" : "history",
-            onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
-            onSelect: (runId) =>
-              viewHistoricalRun(entityId, fileFieldId, runId),
-            runs,
-            shownRunId,
-          }}
-          onAcceptSuggestion={acceptSuggestion}
-          onAddCounterpartyNote={addCounterpartyNote}
-          onOpenReferenceCitation={openReferenceCitation}
-          onRejectSuggestion={rejectSuggestion}
-          onRetry={(basis) => {
-            detached(retryRun(basis), "playbook-facet.retry-run");
-          }}
-          onReviewAgain={() => resetSession(entityId, fileFieldId)}
-          onScrollToBlock={scrollToBlock}
-          organizationId={user.activeOrganizationId}
-          paneSwap={paneSwap}
-          runId={shownRunId}
-          suggestions={suggestions}
-          targetFileFieldId={fileFieldId}
-          versions={versions?.versions ?? EMPTY_VERSIONS}
-          workspaceId={workspaceId}
-        />
+        <PlaybookQuerySection
+          view={versions}
+          pending={
+            <ReviewResultsSkeleton
+              cardCount={reviewSkeletonCardCount({ runs, runId: shownRunId })}
+            />
+          }
+          empty={null}
+        >
+          {(answer) => (
+            <ReviewRunPanel
+              chatSection={chatSectionWith(null)}
+              currentEntityVersionId={answer.currentVersionId}
+              editorAvailable={editorAvailable}
+              editorRef={targetEditorRef}
+              entityId={entityId}
+              queueControls={queueControls}
+              history={{
+                mode: historyRunId === null ? "tracked" : "history",
+                onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
+                onSelect: (runId) =>
+                  viewHistoricalRun(entityId, fileFieldId, runId),
+                runs,
+                shownRunId,
+              }}
+              onAcceptSuggestion={acceptSuggestion}
+              onAddCounterpartyNote={addCounterpartyNote}
+              onOpenReferenceCitation={openReferenceCitation}
+              onRejectSuggestion={rejectSuggestion}
+              onRetry={(basis) => {
+                detached(retryRun(basis), "playbook-facet.retry-run");
+              }}
+              onReviewAgain={() => resetSession(entityId, fileFieldId)}
+              onScrollToBlock={scrollToBlock}
+              organizationId={user.activeOrganizationId}
+              paneSwap={paneSwap}
+              runId={shownRunId}
+              suggestions={suggestions}
+              targetFileFieldId={fileFieldId}
+              versions={answer.versions}
+              workspaceId={workspaceId}
+            />
+          )}
+        </PlaybookQuerySection>
       </>
     );
   }
@@ -852,7 +866,6 @@ export const PlaybookFacet = ({
 // Stable empty reads: a `?? []` inside a store selector would hand Zustand a
 // fresh array on every call and re-render forever.
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
-const EMPTY_VERSIONS: readonly EntityVersion[] = [];
 const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
 /** The sides are absent while the detection query is pending or has failed —
  *  which is not the same as a document with no parties, but reads the same
@@ -1508,9 +1521,11 @@ const Launcher = ({
   // The document's own sides, read before a reference is even chosen: the
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
-  const { data: partiesAnswer, isPending: partiesPending } = useQuery(
-    documentReviewPartiesOptions({ workspaceId, ...target }),
-  );
+  const partiesQuery = useQuery({
+    ...documentReviewPartiesOptions({ workspaceId, ...target }),
+    select: (answer) => answer.parties,
+  });
+  const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {
     ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
@@ -1547,15 +1562,25 @@ const Launcher = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {partiesPending ? (
-          <PerspectivePickerSkeleton />
-        ) : (
-          <PerspectivePicker
-            onSelect={onPerspectiveChange}
-            parties={partiesAnswer?.parties ?? EMPTY_PARTIES}
-            value={perspective}
-          />
-        )}
+        <PlaybookQuerySection
+          view={parties}
+          pending={<PerspectivePickerSkeleton />}
+          empty={
+            <PerspectivePicker
+              onSelect={onPerspectiveChange}
+              parties={EMPTY_PARTIES}
+              value={perspective}
+            />
+          }
+        >
+          {(items) => (
+            <PerspectivePicker
+              onSelect={onPerspectiveChange}
+              parties={items}
+              value={perspective}
+            />
+          )}
+        </PlaybookQuerySection>
         <PlaybookPicker
           onSelect={setSelectedPlaybookId}
           playbooks={playbooks}
