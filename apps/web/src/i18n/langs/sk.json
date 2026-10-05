@@ -946,7 +946,8 @@
       "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
-      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
     }
   },
   "catalogue": {
@@ -5421,6 +5422,7 @@
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",

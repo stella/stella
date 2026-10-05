@@ -229,7 +229,9 @@ export const CitedDecisionLink = ({
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger render={link}>{children}</PopoverTrigger>
+      <PopoverTrigger nativeButton={false} role="link" render={link}>
+        {children}
+      </PopoverTrigger>
       {/* Panel, not Popup: Base UI renders popup children inside its own
           viewport, so a content stack has to be laid out below that. */}
       <PopoverPanel

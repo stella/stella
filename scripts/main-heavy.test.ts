@@ -78,7 +78,7 @@ const mainWorkflow = {
   ...parsedMain,
   jobs: v.parse(
     v.object({
-      validate: callerJobSchema,
+      validate: jobSchema,
       suites: callerJobSchema,
       status: callerJobSchema,
     }),
@@ -89,53 +89,47 @@ const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
 
-const assertTriggerBehavior = (validationCondition: string) => {
+const assertTriggerBehavior = (validationCondition?: string) => {
   const cases = [
-    { event: "push", message: "fix: ordinary change", runs: false },
-    {
-      event: "push",
-      message: "fix: ordinary change\nchore: release v1.2.3",
-      runs: false,
-    },
-    {
-      event: "push",
-      message: "chore: release v1.2.3\n\nRelease notes",
-      runs: true,
-    },
-    { event: "schedule", message: "", runs: true },
-    { event: "workflow_dispatch", message: "", runs: true },
+    { event: "push", message: "fix: ordinary change" },
+    { event: "push", message: "fix: ordinary change\nchore: release v1.2.3" },
+    { event: "push", message: "chore: release v1.2.3\n\nRelease notes" },
+    { event: "schedule", message: "" },
+    { event: "workflow_dispatch", message: "" },
   ];
-  for (const { event, message, runs } of cases) {
-    const context = {
-      github: { event_name: event, event: { head_commit: { message } } },
-      vars: { MERGE_QUEUE_DEPTH: "" },
-      startsWith: (value: string, prefix: string) =>
-        value.toLowerCase().startsWith(prefix.toLowerCase()),
-      always: () => true,
-    };
-    const validates = new Script(
-      `Boolean(${validationCondition})`,
-    ).runInNewContext(context);
-    expect(validates, `${event}: ${message}`).toBe(runs);
-    expect(mainWorkflow.jobs.suites.needs).toBe("validate");
-    const needs = { validate: { result: validates ? "success" : "skipped" } };
-    expect(
-      new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
-        ...context,
-        needs,
-      }),
-    ).toBe(runs);
-    const publishes = new Script(
-      `Boolean(${mainWorkflow.jobs.status.if})`,
-    ).runInNewContext({
-      ...context,
-      needs,
-    });
-    expect(publishes, `${event} status`).toBe(runs);
+  for (const depth of ["", "fast", "full"]) {
+    for (const { event, message } of cases) {
+      const context = {
+        github: { event_name: event, event: { head_commit: { message } } },
+        vars: { MERGE_QUEUE_DEPTH: depth },
+        startsWith: (value: string, prefix: string) =>
+          value.toLowerCase().startsWith(prefix.toLowerCase()),
+        always: () => true,
+      };
+      const validates = new Script(
+        `Boolean(${validationCondition ?? "true"})`,
+      ).runInNewContext(context);
+      expect(validates, `${event}: ${message} depth=${depth}`).toBe(true);
+      expect(mainWorkflow.jobs.suites.needs).toBe("validate");
+      const needs = { validate: { result: validates ? "success" : "skipped" } };
+      expect(
+        new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
+          ...context,
+          needs,
+        }),
+      ).toBe(true);
+      expect(
+        new Script(`Boolean(${mainWorkflow.jobs.status.if})`).runInNewContext({
+          ...context,
+          needs,
+        }),
+        `${event} status`,
+      ).toBe(true);
+    }
   }
 };
 
-test("nightly, release pushes and dispatches run suites; ordinary pushes skip suites and status", () => {
+test("every main push, nightly and dispatch runs heavy suites at every queue depth", () => {
   expect(mainTriggers.schedule).toHaveLength(1);
   const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
   expect(cron?.slice(1)).toEqual(["2", "*", "*", "*"]);
@@ -148,32 +142,31 @@ test("nightly, release pushes and dispatches run suites; ordinary pushes skip su
   assertTriggerBehavior(mainWorkflow.jobs.validate.if);
 });
 
-test("dropping the release filter breaks the trigger contract", () => {
-  expect(() => assertTriggerBehavior("true")).toThrow(
-    "push: fix: ordinary change",
-  );
+test("restoring a queue-depth or release-only skip fails the trigger contract", () => {
+  for (const condition of [
+    "github.event_name != 'push' || vars.MERGE_QUEUE_DEPTH != 'full'",
+    "github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')",
+  ]) {
+    expect(() => assertTriggerBehavior(condition)).toThrow(
+      "push: fix: ordinary change",
+    );
+  }
 });
 
-test("every main-heavy job has a job-level condition that skips ordinary pushes", () => {
-  for (const [name, job] of Object.entries(mainWorkflow.jobs)) {
-    expect(typeof job.if, name).toBe("string");
+test("validation always runs while suites require its success and status reports its failures", () => {
+  expect(mainWorkflow.jobs.validate.if).toBeUndefined();
+  for (const result of ["success", "failure", "cancelled", "skipped"]) {
+    const context = { always: () => true, needs: { validate: { result } } };
     expect(
-      new Script(`Boolean(${job.if})`).runInNewContext({
-        vars: { MERGE_QUEUE_DEPTH: "" },
-        github: {
-          event_name: "push",
-          event: { head_commit: { message: "fix: ordinary change" } },
-        },
-        startsWith: (value: string, prefix: string) =>
-          value.toLowerCase().startsWith(prefix.toLowerCase()),
-        always: () => true,
-        needs: {
-          validate: { result: "skipped" },
-          suites: { result: "skipped" },
-        },
-      }),
-      name,
-    ).toBe(false);
+      new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext(
+        context,
+      ),
+    ).toBe(result === "success");
+    expect(
+      new Script(`Boolean(${mainWorkflow.jobs.status.if})`).runInNewContext(
+        context,
+      ),
+    ).toBe(result !== "skipped");
   }
 });
 
@@ -188,9 +181,10 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
     type: "string",
   });
 
-  expect(mainWorkflow.concurrency.group).toContain("inputs.sha");
-  expect(mainWorkflow.concurrency.group).toContain("github.sha");
-  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBe(false);
+  expect(mainWorkflow.concurrency.group).toBe(
+    `\${{ github.workflow }}-\${{ github.ref }}`,
+  );
+  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBe(true);
 
   const suites = mainWorkflow.jobs.suites;
   expect(suites.uses).toBe("./.github/workflows/ci.yml");
