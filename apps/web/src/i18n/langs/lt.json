@@ -2295,6 +2295,8 @@
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
+      "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
+      "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",

@@ -2295,6 +2295,8 @@
       "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
       "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
       "forbidden": "No tienes permiso para hacer esto.",
+      "hostedCheckoutOpen": "Ya hay un pago abierto para esta organización. Complételo o inicie uno nuevo cuando caduque.",
+      "hostedSubscriptionLive": "Esta organización ya tiene una suscripción. Cámbiela en «Gestionar uso alojado».",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",

@@ -2295,6 +2295,8 @@
       "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "hostedCheckoutOpen": "Ennél a szervezetnél már van megnyitott fizetési folyamat. Fejezze be, vagy indítson újat, miután lejárt.",
+      "hostedSubscriptionLive": "Ennek a szervezetnek már van előfizetése. Módosítsa a „Hosztolt használat kezelése” részben.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
