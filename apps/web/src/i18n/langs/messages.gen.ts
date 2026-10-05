@@ -1877,15 +1877,23 @@ type Messages = {
     "zoomOut": "Zoom out";
   };
   "consent": {
+    "actingAs": "{clientName} will work as you in {organizationName}";
     "allow": "Allow";
-    "appIdentity": "App identity";
+    "canChange": "Can change";
+    "canRead": "Can read";
     "completeSetup": "Complete setup";
+    "connectTitle": "Connect {clientName} to stella";
+    "connectedTitle": "Connected to {clientName}";
+    "connectionDuration": "Stays connected until you disconnect it in Settings › Connections";
     "defaultClientName": "An application";
-    "description": "{clientName} wants to access your stella workspace";
+    "destinationDetails": "Redirect details";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
-    "permissions": "This will allow the application to:";
-    "redirectDestination": "Redirect destination";
+    "otherPermissions": "Other permissions";
+    "publishedBy": "Published by <host>{publisherHost}</host>";
+    "returnToAgent": "Return to your agent to continue.";
+    "returnsLocally": "Returns you to {clientName} on this computer";
+    "returnsTo": "Returns you to {clientName}";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1906,8 +1914,11 @@ type Messages = {
     "scopeSkills": "Use your saved stella skills";
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
+    "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
+    "unverifiedExplanation": "stella has not verified who publishes this app.";
+    "useAnotherAccount": "Use another account";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
