@@ -4,6 +4,7 @@ import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
 type DeclarationOptions = {
@@ -771,12 +772,18 @@ const inspectEndpoint = ({
         message: `featureAccess ${id} conditional tables require the shared policy module`,
       });
     }
-    if (declaration.id !== id) {
+    if (
+      declaration.id === undefined ||
+      !featurePrerequisiteClosure(registry, declaration.id).has(id)
+    ) {
       violations.push({
         file,
         message: `source ownership requires featureAccess ${id}`,
       });
-    } else if (!types.has(declaration.type) || types.size > 1) {
+    } else if (
+      declaration.id === id &&
+      (!types.has(declaration.type) || types.size > 1)
+    ) {
       violations.push({
         file,
         message: `featureAccess ${id} must match source ownership (${[...types].toSorted().join(", ")})`,

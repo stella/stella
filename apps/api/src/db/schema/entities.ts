@@ -201,7 +201,7 @@ export const entities = p.pgTable(
       .index("entities_agenda_ical_uid_idx")
       .on(table.workspaceId, table.externalICalUid)
       .where(isNotNull(table.externalICalUid)),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -303,7 +303,10 @@ export const taskAssignees = p.pgTable(
     p
       .uniqueIndex("task_assignees_entity_user_uidx")
       .on(table.entityId, table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -344,7 +347,13 @@ export const entityLinks = p.pgTable(
       "entity_links_no_self_ref_check",
       sql`${table.sourceEntityId} != ${table.targetEntityId}`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, "entities"],
+        [table.targetEntityId, "entities"],
+      ]),
+    }),
   ],
 );
 
@@ -427,7 +436,10 @@ export const entityVersions = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("entity_versions_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -470,7 +482,13 @@ export const entityVersionAiSummaries = p.pgTable(
         name: "entity_version_ai_summaries_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("entity_version_ai_summaries"),
+    ...wsOrganizationPolicies("entity_version_ai_summaries", {
+      columns: table,
+      references: new Map([
+        [table.entityVersionId, "entity_versions"],
+        [table.entityId, "entities"],
+      ]),
+    }),
   ],
 );
 
@@ -585,7 +603,14 @@ export const desktopEditSessions = p.pgTable(
         foreignColumns: [properties.id, properties.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.baseVersionId, "entity_versions"],
+        [table.finalizedVersionId, "entity_versions"],
+        [table.entityId, "entities"],
+      ]),
+    }),
   ],
 );
 
@@ -650,7 +675,10 @@ export const desktopEditHandoffs = p.pgTable(
         foreignColumns: [properties.id, properties.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -794,7 +822,14 @@ export const folioCollabRooms = p.pgTable(
       ],
       name: "folio_collab_rooms_source_version_entity_workspace_fk",
     }),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, "entities"],
+        [table.baseVersionId, "entity_versions"],
+        [table.sourceVersionId, "entity_versions"],
+      ]),
+    }),
   ],
 );
 
@@ -838,7 +873,7 @@ export const folioCollabRoomTokens = p.pgTable(
       "folio_collab_room_tokens_generation_check",
       sql`${table.generation} >= 0`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -887,7 +922,10 @@ export const folioCollabContributions = p.pgTable(
         name: "folio_collab_contributions_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.sinceVersionId, "entity_versions"]]),
+    }),
   ],
 );
 
@@ -937,7 +975,10 @@ export const folioCollabPublications = p.pgTable(
         name: "folio_collab_publications_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityVersionId, "entity_versions"]]),
+    }),
   ],
 );
 
@@ -1127,7 +1168,7 @@ export const pendingUploads = p.pgTable(
         name: "pending_uploads_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("pending_uploads"),
+    ...wsOrganizationPolicies("pending_uploads", { columns: table }),
   ],
 );
 
@@ -1363,7 +1404,10 @@ export const fields = p.pgTable(
       .onDelete("cascade"),
     p.index("fields_workspace_id_idx").on(table.workspaceId),
     p.unique("fields_id_ws_unq").on(table.id, table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityVersionId, "entity_versions"]]),
+    }),
   ],
 );
 
@@ -1399,7 +1443,10 @@ export const cellMetadata = p.pgTable(
       .onDelete("cascade"),
     p.index("cell_metadata_workspace_id_idx").on(table.workspaceId),
     p.index("cell_metadata_entity_version_id_idx").on(table.entityVersionId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityVersionId, "entity_versions"]]),
+    }),
   ],
 );
 
@@ -1425,7 +1472,10 @@ export const justifications = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("justifications_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.fieldId, "fields"]]),
+    }),
   ],
 );
 

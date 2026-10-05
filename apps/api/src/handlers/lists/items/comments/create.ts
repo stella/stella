@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   fanOutCrossUserNotifications,
   resolveMentionTargets,
@@ -24,6 +25,7 @@ const bodySchema = t.Object({
   body: t.String({ minLength: 1, maxLength: 10_000 }),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a comment to one list item. The comment is stored against the item " +
     "and shows up in its activity trail.",

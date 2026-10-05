@@ -158,6 +158,13 @@ export const officeFileEvidence = p.pgTable(
         AND ${table.errorCode} IN (${unavailableCodeSql})
       )`,
     ),
-    ...wsOrganizationPolicies("office_file_evidence"),
+    ...wsOrganizationPolicies("office_file_evidence", {
+      columns: table,
+      references: new Map([
+        [table.entityVersionId, "entity_versions"],
+        [table.entityId, "entities"],
+        [table.fieldId, "fields"],
+      ]),
+    }),
   ],
 );

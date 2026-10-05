@@ -34,6 +34,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -1277,15 +1278,40 @@ const createSafeScopedHandler = <
         }
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
-        }
-      }
+    const visible = await Result.tryPromise(
+      async () =>
+        await resourcesAreVisible({
+          inputs: [
+            { schema: config.body, value: ctx.body },
+            { schema: config.params, value: ctx.params },
+            { schema: config.query, value: ctx.query },
+          ],
+          scopedDb: ctx.scopedDb,
+          ...(hasWorkspaceId(ctx) ? { workspaceId: ctx.workspaceId } : {}),
+        }),
+    );
+    if (visible.isErr()) {
+      return await runSafeHandler({
+        ctx,
+        contentDelivery: config.contentDelivery,
+        async *handler() {
+          return yield* Result.await(
+            Promise.resolve(Result.err(visible.error)),
+          );
+        },
+      });
+    }
+    if (!visible.value) {
+      return toSafeStatusResponse(404, { message: "Not found" });
+    }
+
+    if (requiresStandardAccount(config.accountAccess)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });      }
       // A handler that declares AI usage must not run when this request could
       // not read the org's stored config, or the org is barred from the
       // instance provider: `ctx.orgAIConfig` is null there, and resolving a

@@ -9,6 +9,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { includes } from "@/api/lib/type-guards";
 
@@ -20,6 +21,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Rename a list, change its description, or move it between active and " +
     "archived. Only the fields you pass are written, an unrecognized status " +

@@ -32,6 +32,7 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
+import { resolveScopedFeatureIds } from "./scoped-feature-access";
 
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
@@ -131,6 +132,11 @@ const runScopedTransaction = async <
   const wsIds = `{${workspaceIds.join(",")}}`;
 
   return await database.transaction(async (tx: TTransaction) => {
+    const featureIds = await resolveScopedFeatureIds({
+      tx,
+      organizationId,
+      userId,
+    });
     if (userId === null) {
       // A service actor has no membership-derived authority. Resolve its
       // explicit workspace IDs against the tenant before changing the role.
@@ -151,7 +157,8 @@ const runScopedTransaction = async <
         set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
         set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
         set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
-        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true)`,
+        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true),
+        set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)`,
     );
 
     return await fn(tx);

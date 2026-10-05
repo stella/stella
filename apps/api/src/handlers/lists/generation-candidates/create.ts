@@ -18,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
@@ -63,6 +64,7 @@ const bodySchema = t.Object({
   }),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Submit the candidates a generation run produced: per candidate a name, " +
     "description, item type, status, priority, due date, suggested " +

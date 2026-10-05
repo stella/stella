@@ -1,6 +1,7 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
@@ -108,7 +109,7 @@ export const documentCounters = p.pgTable(
   },
   (table) => [
     p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -395,6 +396,7 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(table, new Map([[table.entityId, "entities"]])),
     // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
     // identifier limit and was silently truncated in the catalog until
     // 20260813110000 renamed it.

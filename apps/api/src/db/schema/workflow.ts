@@ -265,7 +265,13 @@ export const workObligations = p.pgTable(
         table.entityId,
       )
       .where(isNotNull(table.hardDeadlineDate)),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, "entities"],
+        [table.entityId, "entities"],
+      ]),
+    }),
   ],
 );
 

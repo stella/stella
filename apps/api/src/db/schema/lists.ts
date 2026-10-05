@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { timestamptz } from "@/api/db/columns";
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 
 import {
@@ -163,7 +164,7 @@ export const legalLists = p.pgTable(
     p
       .index("legal_lists_workspace_status_created_idx")
       .on(table.workspaceId, table.status, table.createdAt, table.id),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -192,7 +193,7 @@ export const legalListSections = p.pgTable(
     p
       .index("legal_list_sections_list_position_idx")
       .on(table.workspaceId, table.listId, table.position, table.id),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -228,7 +229,7 @@ export const legalListColumns = p.pgTable(
     p
       .index("legal_list_columns_list_position_idx")
       .on(table.workspaceId, table.listId, table.position, table.id),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -296,7 +297,10 @@ export const legalListItems = p.pgTable(
       "legal_list_items_review_status_check",
       sql`${table.reviewStatus} in (${sql.join(LEGAL_LIST_ITEM_REVIEW_STATUS_SQL_VALUES, sql`, `)})`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -371,7 +375,7 @@ export const legalListFactDetails = p.pgTable(
       "legal_list_fact_details_occurred_on_check",
       sql`(${table.occurredOn} is null) = (${table.occurredOnPrecision} is null) and (${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} in (${sql.join(FACT_DATE_PRECISION_SQL_VALUES, sql`, `)}))`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -405,6 +409,13 @@ export const legalListItemSources = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.sourceEntityVersionId, "entity_versions"],
+        [table.sourceEntityId, "entities"],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_item_sources_item_fk",
@@ -513,7 +524,7 @@ export const legalListGenerationRuns = p.pgTable(
       "legal_list_generation_runs_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_STATUS_SQL_VALUES, sql`, `)})`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -531,6 +542,13 @@ export const legalListGenerationSources = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.sourceEntityVersionId, "entity_versions"],
+        [table.sourceEntityId, "entities"],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_generation_sources_run_fk",
@@ -681,7 +699,10 @@ export const legalListGenerationCandidates = p.pgTable(
       "legal_list_generation_candidates_accepted_entity_scope_check",
       sql`(${table.acceptedEntityId} is null and ${table.acceptedEntityWorkspaceId} is null) or (${table.acceptedEntityId} is not null and ${table.acceptedEntityWorkspaceId} = ${table.workspaceId})`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([[table.acceptedEntityId, "entities"]]),
+    }),
   ],
 );
 
@@ -703,6 +724,13 @@ export const legalListGenerationCandidateSources = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.sourceEntityVersionId, "entity_versions"],
+        [table.sourceEntityId, "entities"],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_candidate_sources_candidate_fk",
@@ -809,7 +837,7 @@ export const legalListItemComments = p.pgTable(
     p
       .index("legal_list_item_comments_item_created_idx")
       .on(table.workspaceId, table.itemEntityId, table.createdAt, table.id),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

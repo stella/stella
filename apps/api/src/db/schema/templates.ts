@@ -431,7 +431,9 @@ export const templatePersistenceRequests = p.pgTable(
         name: "template_persistence_requests_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("template_persistence_requests"),
+    ...wsOrganizationPolicies("template_persistence_requests", {
+      columns: table,
+    }),
   ],
 );
 
@@ -547,7 +549,10 @@ export const searchDocuments = p.pgTable(
         name: "search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("search_documents"),
+    ...wsOrganizationPolicies("search_documents", {
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -703,7 +708,7 @@ export const workspaceSearchDocuments = p.pgTable(
         name: "workspace_search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("workspace_search_documents"),
+    ...wsOrganizationPolicies("workspace_search_documents", { columns: table }),
   ],
 );
 
@@ -902,6 +907,13 @@ export const extractedContent = p.pgTable(
         AND ${table.ocrPayloadIv} IS NOT NULL
       )`,
     ),
-    ...wsOrganizationPolicies("extracted_content"),
+    ...wsOrganizationPolicies("extracted_content", {
+      columns: table,
+      references: new Map([
+        [table.sourceEntityVersionId, "entity_versions"],
+        [table.sourceFieldId, "fields"],
+        [table.entityId, "entities"],
+      ]),
+    }),
   ],
 );

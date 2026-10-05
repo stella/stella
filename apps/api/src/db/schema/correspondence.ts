@@ -198,7 +198,10 @@ export const correspondence = p.pgTable.withRLS(
       using: sql`${currentUserOwnsCorrespondence} and ${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
       withCheck: sql`${currentUserOwnsCorrespondence} and ${table.assigneeId} is null and ${offboardingScopeCheck}`,
     }),
-    ...wsOrganizationPolicies("correspondence"),
+    ...wsOrganizationPolicies("correspondence", {
+      columns: table,
+      references: new Map([[table.sourceEntityId, "entities"]]),
+    }),
   ],
 );
 
@@ -282,7 +285,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
-    ...wsOrganizationPolicies("correspondence_filers"),
+    ...wsOrganizationPolicies("correspondence_filers", { columns: table }),
   ],
 );
 
@@ -342,7 +345,10 @@ export const correspondenceAttachments = p.pgTable.withRLS(
       "correspondence_attachments_scan_check",
       sql`${table.scanVerdict} in (${valuesSql(CORRESPONDENCE_SCAN_VERDICTS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_attachments"),
+    ...wsOrganizationPolicies("correspondence_attachments", {
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -383,7 +389,7 @@ export const matterInboundAddresses = p.pgTable.withRLS(
     p
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
-    ...wsOrganizationPolicies("matter_inbound_addresses"),
+    ...wsOrganizationPolicies("matter_inbound_addresses", { columns: table }),
   ],
 );
 
@@ -497,7 +503,9 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
-    ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
+    ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
+      columns: table,
+    }),
   ],
 );
 
@@ -526,6 +534,6 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_drop_logs"),
+    ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
   ],
 );

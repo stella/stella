@@ -24,6 +24,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
@@ -34,6 +35,7 @@ const bodySchema = t.Object({
   sectionId: t.Optional(tSafeId("legalListSection")),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Accept one candidate from a generation run: create the item it proposes " +
     "as a task in the matter, optionally in a named section, and copy the " +

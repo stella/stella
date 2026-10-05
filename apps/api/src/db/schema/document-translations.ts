@@ -151,7 +151,10 @@ export const documentTranslationRuns = p.pgTable(
         name: "document_translation_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_translation_runs"),
+    ...wsOrganizationPolicies("document_translation_runs", {
+      columns: table,
+      references: new Map([[table.entityId, "entities"]]),
+    }),
   ],
 );
 
@@ -210,6 +213,6 @@ export const documentTranslationUnits = p.pgTable(
         name: "document_translation_units_run_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_translation_units"),
+    ...wsOrganizationPolicies("document_translation_units", { columns: table }),
   ],
 );

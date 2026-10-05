@@ -20,6 +20,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -39,6 +40,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's items in list order with cursor pagination. Each item " +
     "carries its name, item type, task status, priority, due date, section, " +

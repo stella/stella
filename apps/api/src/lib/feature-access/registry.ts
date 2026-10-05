@@ -1,5 +1,8 @@
+import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
+
 type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
+  prerequisites?: readonly string[];
   ownership?: {
     handlerDirectories: readonly string[];
     tableSchemaFiles: readonly string[];
@@ -11,11 +14,22 @@ type FeatureDefinition = {
 
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
+export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
+
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 
-export const FEATURE_REGISTRY = {
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [LEGAL_LISTS_FEATURE_ID]: {
+    enrolment: "invitation",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/lists"],
+      tableSchemaFiles: [],
+      coreModules: [],
+    },
+  },
   [LIST_VERIFICATION_FEATURE_ID]: {
     enrolment: "invitation",
+    prerequisites: [LEGAL_LISTS_FEATURE_ID],
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
@@ -40,6 +54,6 @@ export const FEATURE_REGISTRY = {
       ],
     },
   },
-} as const satisfies FeatureRegistry;
+} as const satisfies FeatureRegistry);
 
 export type FeatureId = keyof typeof FEATURE_REGISTRY;

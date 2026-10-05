@@ -153,7 +153,9 @@ export const legalListVerificationRuns = p.pgTable(
         name: "legal_list_verification_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("legal_list_verification_runs"),
+    ...wsOrganizationPolicies("legal_list_verification_runs", {
+      columns: table,
+    }),
   ],
 );
 
@@ -197,7 +199,7 @@ export const legalListVerificationBlocks = p.pgTable(
       sql`(${table.kind} = 'docx-block' AND ${table.pageNumber} IS NULL)
         OR (${table.kind} = 'pdf-page' AND ${table.pageNumber} > 0)`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -291,7 +293,7 @@ export const legalListClaims = p.pgTable(
       "legal_list_claims_position_check",
       sql`${table.position} >= 0 AND ${table.position} < ${sql.raw(String(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX))}`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

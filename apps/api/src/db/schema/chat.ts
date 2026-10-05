@@ -2,6 +2,7 @@ import type { StreamChunk } from "@tanstack/ai";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   CHAT_TURN_CANCELLATION_REASONS,
   CHAT_TURN_FAILURE_CODES,
@@ -669,6 +670,13 @@ export const fileChatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, "entities"],
+        [table.fieldId, "fields"],
+      ]),
+    ),
     p
       .uniqueIndex("file_chat_threads_scope_uidx")
       .on(

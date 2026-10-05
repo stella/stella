@@ -223,7 +223,14 @@ export const pdfSigningSessions = p.pgTable(
         name: "pdf_signing_sessions_finalized_version_fk",
       })
       .onDelete("set null"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.baseVersionId, "entity_versions"],
+        [table.entityId, "entities"],
+        [table.finalizedVersionId, "entity_versions"],
+      ]),
+    }),
     // Row security is forced on this table (see its migration), so the
     // owner login gets only what it still does: the token lookups in the
     // migration read a session as the owner, and account deletion removes a
