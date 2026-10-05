@@ -25,6 +25,8 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
   id: correspondence.id,
   direction: correspondence.direction,
   channel: correspondence.channel,
+  source: correspondence.source,
+  sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
   authenticatedSenderAddress: correspondence.authenticatedSenderAddress,
   originalSignature: correspondence.originalSignature,
@@ -73,7 +75,7 @@ const MAX_FILERS_PER_RECORD = 10_000;
 
 const config = {
   description:
-    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
+    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -170,6 +172,8 @@ const getCorrespondence = createSafeHandler(
           );
         }
         const {
+          source,
+          sourceEntityId,
           intake,
           originalSignature,
           authenticatedSenderAddress,
@@ -183,6 +187,8 @@ const getCorrespondence = createSafeHandler(
           record: {
             ...record,
             ...readCorrespondenceProvenance({
+              source,
+              sourceEntityId,
               intake,
               originalSignature,
               authenticatedSenderAddress,

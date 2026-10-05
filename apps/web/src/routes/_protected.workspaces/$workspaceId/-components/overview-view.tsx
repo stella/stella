@@ -79,6 +79,7 @@ import {
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -90,6 +91,8 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
+
+import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
   workspaceId: string;
@@ -334,29 +337,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
-  const { data: timeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntrySummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(weekStart),
-        toISODate(weekEnd),
+  const timeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntrySummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(weekStart),
+          toISODate(weekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled && !canReviewTimeEntries,
-  });
+      enabled: timeBillingEnabled && !canReviewTimeEntries,
+    }),
+  );
 
-  const { data: teamTimeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntryTeamSummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(weekStart),
-        toISODate(weekEnd),
+  const teamTimeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntryTeamSummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(weekStart),
+          toISODate(weekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled && canReviewTimeEntries,
-  });
+      enabled: timeBillingEnabled && canReviewTimeEntries,
+    }),
+  );
 
   // Previous week for trend comparison
   const prevWeekStart = useMemo(
@@ -368,23 +375,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [weekStart],
   );
 
-  const { data: previousTimeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntrySummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(prevWeekStart),
-        toISODate(prevWeekEnd),
+  const previousTimeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntrySummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(prevWeekStart),
+          toISODate(prevWeekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled,
-  });
+      enabled: timeBillingEnabled,
+    }),
+  );
 
+  const currentTimeView = canReviewTimeEntries
+    ? teamTimeSummaryView
+    : timeSummaryView;
+  const teamTimeSummary =
+    teamTimeSummaryView.type === "items"
+      ? teamTimeSummaryView.items
+      : undefined;
   const totalHoursThisWeek =
-    (teamTimeSummary
-      ? teamTimeSummary.viewerTotalMinutes
-      : (timeSummary?.totalMinutes ?? 0)) / 60;
-  const prevWeekHours = (previousTimeSummary?.totalMinutes ?? 0) / 60;
+    currentTimeView.type === "items"
+      ? ("viewerTotalMinutes" in currentTimeView.items
+          ? currentTimeView.items.viewerTotalMinutes
+          : currentTimeView.items.totalMinutes) / 60
+      : null;
 
   const teamHeatmap = useMemo(() => {
     if (!teamTimeSummary) {
@@ -490,16 +507,31 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           <StatCard
             icon={<ClockIcon className="size-4" />}
             label={t("workspaces.overview.timeThisWeek")}
-            onClick={() => {
-              detached(
-                navigate({
-                  to: "/workspaces/$workspaceId/timesheets",
-                  params: { workspaceId },
-                }),
-                "overview-view.navigate",
-              );
-            }}
-            value={formatHours(totalHoursThisWeek)}
+            {...(currentTimeView.type === "items" &&
+            currentTimeView.refetchError === undefined
+              ? {
+                  onClick: () => {
+                    detached(
+                      navigate({
+                        to: "/workspaces/$workspaceId/timesheets",
+                        params: { workspaceId },
+                      }),
+                      "overview-view.navigate",
+                    );
+                  },
+                }
+              : {})}
+            value={
+              canReviewTimeEntries ? (
+                <OverviewTimeRead view={teamTimeSummaryView}>
+                  {(summary) => formatHours(summary.viewerTotalMinutes / 60)}
+                </OverviewTimeRead>
+              ) : (
+                <OverviewTimeRead view={timeSummaryView}>
+                  {(summary) => formatHours(summary.totalMinutes / 60)}
+                </OverviewTimeRead>
+              )
+            }
           />
         )}
         {workflowsEnabled && (
@@ -749,149 +781,157 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               }}
               title={t("workspaces.overview.timeAndTeam")}
             />
-            <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
-              <div
-                className={cn(
-                  TEAM_HEATMAP_GRID_CLASS,
-                  "min-h-12 border-b py-2",
-                )}
-              >
-                <span />
-                {Array.from({ length: 7 }, (_, i) => (
-                  <span
-                    className="text-muted-foreground text-3xs text-center"
-                    key={i}
+            <OverviewTimeRead view={teamTimeSummaryView}>
+              {() => (
+                <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
+                  <div
+                    className={cn(
+                      TEAM_HEATMAP_GRID_CLASS,
+                      "min-h-12 border-b py-2",
+                    )}
                   >
-                    {getLocaleDayLabel(i, firstWeekday)}
-                  </span>
-                ))}
-                <span className="hidden sm:block" />
-              </div>
-              <div className="divide-y">
-                {(() => {
-                  const maxDaily = Math.max(
-                    ...teamHeatmap.flatMap((member) => member.daily),
-                    0,
-                  );
-                  return teamHeatmap.map((member) => {
-                    const total = member.daily.reduce(
-                      (sum, hours) => sum + hours,
-                      0,
-                    );
-
-                    return (
-                      <div
-                        className={cn(
-                          TEAM_HEATMAP_GRID_CLASS,
-                          "min-h-14 py-2.5",
-                        )}
-                        key={member.userId}
+                    <span />
+                    {Array.from({ length: 7 }, (_, i) => (
+                      <span
+                        className="text-muted-foreground text-3xs text-center"
+                        key={i}
                       >
-                        <UserIdentity
-                          avatarClassName="size-5 shrink-0 text-[0.5rem]"
-                          image={member.image}
-                          name={member.name}
-                          nameClassName="text-sm font-normal"
-                        />
-                        {member.daily.map((hours, dayIdx) => {
-                          const dayLabel = getLocaleDayLabel(
-                            dayIdx,
-                            firstWeekday,
-                          );
-                          const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                          const cell = (
-                            <div
-                              className={cn(
-                                "bg-primary/10 size-5 rounded-sm transition-transform",
-                                hours > 0 && "hover:scale-110",
-                              )}
-                              style={
-                                hours > 0
-                                  ? {
-                                      backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
-                                    }
-                                  : undefined
-                              }
+                        {getLocaleDayLabel(i, firstWeekday)}
+                      </span>
+                    ))}
+                    <span className="hidden sm:block" />
+                  </div>
+                  <div className="divide-y">
+                    {(() => {
+                      const maxDaily = Math.max(
+                        ...teamHeatmap.flatMap((member) => member.daily),
+                        0,
+                      );
+                      return teamHeatmap.map((member) => {
+                        const total = member.daily.reduce(
+                          (sum, hours) => sum + hours,
+                          0,
+                        );
+
+                        return (
+                          <div
+                            className={cn(
+                              TEAM_HEATMAP_GRID_CLASS,
+                              "min-h-14 py-2.5",
+                            )}
+                            key={member.userId}
+                          >
+                            <UserIdentity
+                              avatarClassName="size-5 shrink-0 text-[0.5rem]"
+                              image={member.image}
+                              name={member.name}
+                              nameClassName="text-sm font-normal"
                             />
-                          );
-
-                          if (hours === 0) {
-                            return (
-                              <div
-                                className="flex size-6 items-center justify-center sm:size-7"
-                                // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
-                                key={dayIdx}
-                              >
-                                {cell}
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div
-                              className="flex size-6 items-center justify-center sm:size-7"
-                              // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
-                              key={dayIdx}
-                            >
-                              <Popover>
-                                <TooltipRoot>
-                                  <PopoverTrigger
-                                    render={
-                                      <TooltipTrigger
-                                        render={
-                                          <button
-                                            aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
-                                            className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
-                                            type="button"
-                                          />
+                            {member.daily.map((hours, dayIdx) => {
+                              const dayLabel = getLocaleDayLabel(
+                                dayIdx,
+                                firstWeekday,
+                              );
+                              const opacity =
+                                maxDaily > 0 ? hours / maxDaily : 0;
+                              const cell = (
+                                <div
+                                  className={cn(
+                                    "bg-primary/10 size-5 rounded-sm transition-transform",
+                                    hours > 0 && "hover:scale-110",
+                                  )}
+                                  style={
+                                    hours > 0
+                                      ? {
+                                          backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
                                         }
-                                      />
-                                    }
+                                      : undefined
+                                  }
+                                />
+                              );
+
+                              if (hours === 0) {
+                                return (
+                                  <div
+                                    className="flex size-6 items-center justify-center sm:size-7"
+                                    // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                    key={dayIdx}
                                   >
                                     {cell}
-                                  </PopoverTrigger>
-                                  <TooltipPopup>
-                                    {formatHours(hours)}
-                                  </TooltipPopup>
-                                </TooltipRoot>
-                                <PopoverPopup className="w-56" sideOffset={8}>
-                                  <p className="text-muted-foreground p-2 text-xs font-medium">
-                                    {member.name} · {dayLabel} ·{" "}
-                                    {formatHours(hours)}
-                                  </p>
-                                </PopoverPopup>
-                              </Popover>
-                            </div>
-                          );
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  className="flex size-6 items-center justify-center sm:size-7"
+                                  // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                  key={dayIdx}
+                                >
+                                  <Popover>
+                                    <TooltipRoot>
+                                      <PopoverTrigger
+                                        render={
+                                          <TooltipTrigger
+                                            render={
+                                              <button
+                                                aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
+                                                className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
+                                                type="button"
+                                              />
+                                            }
+                                          />
+                                        }
+                                      >
+                                        {cell}
+                                      </PopoverTrigger>
+                                      <TooltipPopup>
+                                        {formatHours(hours)}
+                                      </TooltipPopup>
+                                    </TooltipRoot>
+                                    <PopoverPopup
+                                      className="w-56"
+                                      sideOffset={8}
+                                    >
+                                      <p className="text-muted-foreground p-2 text-xs font-medium">
+                                        {member.name} · {dayLabel} ·{" "}
+                                        {formatHours(hours)}
+                                      </p>
+                                    </PopoverPopup>
+                                  </Popover>
+                                </div>
+                              );
+                            })}
+                            <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
+                              {total > 0 ? formatHours(total) : ""}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="border-t px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground text-xs">
+                        {t("workspaces.overview.totalThisWeek")}
+                      </span>
+                      <span className="text-sm font-medium tabular-nums">
+                        {totalTeamHoursThisWeek > 0
+                          ? formatHours(totalTeamHoursThisWeek)
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">
+                        {t("workspaces.overview.membersCount", {
+                          count: teamHeatmap.length,
                         })}
-                        <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
-                          {total > 0 ? formatHours(total) : ""}
-                        </span>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-              <div className="border-t px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground text-xs">
-                    {t("workspaces.overview.totalThisWeek")}
-                  </span>
-                  <span className="text-sm font-medium tabular-nums">
-                    {totalTeamHoursThisWeek > 0
-                      ? formatHours(totalTeamHoursThisWeek)
-                      : ""}
-                  </span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span className="text-muted-foreground text-xs">
-                    {t("workspaces.overview.membersCount", {
-                      count: teamHeatmap.length,
-                    })}
-                  </span>
-                </div>
-              </div>
-            </div>
+              )}
+            </OverviewTimeRead>
           </section>
         ) : (
           /* Personal time */
@@ -921,29 +961,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   <p className="text-muted-foreground text-xs">
                     {t("workspaces.overview.totalThisWeek")}
                   </p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums">
-                    {formatHours(totalHoursThisWeek)}
-                  </p>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">
+                    <OverviewTimeRead view={timeSummaryView}>
+                      {(summary) => formatHours(summary.totalMinutes / 60)}
+                    </OverviewTimeRead>
+                  </div>
                 </div>
-                {prevWeekHours > 0 && totalHoursThisWeek !== prevWeekHours && (
-                  <span
-                    className={cn(
-                      "text-xs font-medium",
-                      totalHoursThisWeek > prevWeekHours
-                        ? "text-success"
-                        : "text-destructive",
-                    )}
-                  >
-                    {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
-                    {Math.round(
-                      Math.abs(
-                        ((totalHoursThisWeek - prevWeekHours) / prevWeekHours) *
-                          100,
-                      ),
-                    )}
-                    %
-                  </span>
-                )}
+                <OverviewTimeTrend
+                  currentHours={totalHoursThisWeek}
+                  view={previousTimeSummaryView}
+                />
               </div>
             </section>
           )
@@ -1003,7 +1030,7 @@ const OverviewSectionHeader = ({
 type StatCardProps = {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   sublabel?: string | undefined;
   onClick?: () => void;
 };
@@ -1015,7 +1042,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
         {icon}
         {label}
       </div>
-      <span className="text-xl font-semibold tabular-nums">{value}</span>
+      <div className="text-xl font-semibold tabular-nums">{value}</div>
       {sublabel && (
         <span className="text-muted-foreground truncate text-xs">
           {sublabel}

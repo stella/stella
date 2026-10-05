@@ -40,6 +40,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 
@@ -314,7 +316,7 @@ export const scanExternalIdentity = (
         ? [...tableMembersOf(file), ...writerMembersOf(file)]
         : writerMembersOf(file),
     )
-    .toSorted((left, right) => left.key.localeCompare(right.key));
+    .toSorted((left, right) => compareCodeUnit(left.key, right.key));
 
 const gitFiles = (pathspecs: readonly string[]): string[] => {
   const listed = Bun.spawnSync(["git", "ls-files", "--", ...pathspecs], {
@@ -448,7 +450,7 @@ const reasoned = (
 ): Record<string, string> =>
   Object.fromEntries(
     rows
-      .toSorted((left, right) => left.key.localeCompare(right.key))
+      .toSorted((left, right) => compareCodeUnit(left.key, right.key))
       .map(({ key, reason }) => [key, previous[key] ?? reason]),
   );
 

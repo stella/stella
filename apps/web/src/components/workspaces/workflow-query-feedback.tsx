@@ -20,7 +20,17 @@ export const WorkflowQueryFeedback = ({
   switch (view.type) {
     case "pending":
     case "empty":
-      return null;
+      return display === "menu" ? (
+        <MenuItem disabled>
+          <span className="text-muted-foreground text-xs">
+            {t("flows.loading")}
+          </span>
+        </MenuItem>
+      ) : (
+        <span className="text-muted-foreground text-xs" role="status">
+          {t("flows.loading")}
+        </span>
+      );
     case "items":
       if (view.refetchError === undefined) {
         return null;

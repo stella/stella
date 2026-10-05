@@ -119,6 +119,7 @@ if (!databaseUrl || !runPostgresTests) {
             const parsed = {
               channel: "email",
               direction: "in",
+              source: "delivery",
               intake: "direct",
               originalSignature: null,
               authenticatedSender: {

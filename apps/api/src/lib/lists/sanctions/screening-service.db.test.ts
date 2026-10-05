@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
+import { Worker } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
@@ -33,6 +34,10 @@ import {
 } from "@/api/lib/lists/sanctions/source-config";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+import { createSanctionsMatcherPool } from "./matcher-pool";
+import { createPublicSanctionsScreening } from "./public-screening";
+import { loadEditionEntries } from "./screening-index";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -733,3 +738,123 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test.each(["hang", "crash"])(
+  "public worker %s never answers clear and recovers",
+  async (fault) => {
+    const warmupFinished = Promise.withResolvers<undefined>();
+    let spawned = 0;
+    const pool = createSanctionsMatcherPool({
+      deadlineMs: 200,
+      createWorker: () => {
+        spawned += 1;
+        return spawned === 1
+          ? new Worker(
+              new URL("test-fixtures/matcher-fault-worker.ts", import.meta.url),
+              { workerData: fault },
+            )
+          : new Worker(new URL("sanctions-matcher-worker.ts", import.meta.url));
+      },
+    });
+    const publicScreen = createPublicSanctionsScreening({
+      pool: {
+        ...pool,
+        run: async (work, options) => {
+          const outcome = await pool.run(work, options);
+          if (options?.onSettled !== undefined) {
+            warmupFinished.resolve(undefined);
+          }
+          return outcome;
+        },
+      },
+    });
+    const props = {
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "A Completely Distant Name",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+    } as const;
+    try {
+      const first = (await publicScreen(props)).unwrap();
+      expect(first.status).toBe("unavailable");
+      expect(first.lists.every((list) => list.status === "unavailable")).toBe(
+        true,
+      );
+      // Recovery is observed after its real background rebuild, independent of worker startup speed.
+      await warmupFinished.promise;
+      const next = (await publicScreen(props)).unwrap();
+      expect(next.status).toBe("clear");
+      expect(spawned).toBe(2);
+    } finally {
+      await pool.close();
+    }
+  },
+);
+
+test("repeated public deadlines bound unfinished cold loads until held reads settle", async () => {
+  const pool = createSanctionsMatcherPool({ size: 2, deadlineMs: 30 });
+  const held = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  let startedLoads = 0;
+  let unfinished = 0;
+  let peak = 0;
+  let pagesAfterCancellation = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    loadEntries: async (options) => {
+      startedLoads += 1;
+      unfinished += 1;
+      peak = Math.max(peak, unfinished);
+      started.resolve(undefined);
+      await held.promise;
+      const entries = await loadEditionEntries({
+        ...options,
+        db: async (read) => {
+          if (options.signal?.aborted) {
+            pagesAfterCancellation += 1;
+          }
+          return await options.db(read);
+        },
+      });
+      unfinished -= 1;
+      return entries;
+    },
+  });
+  const props = {
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Synthetic Company",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+  } as const;
+  try {
+    const first = publicScreen(props);
+    await started.promise;
+    expect((await first).unwrap().status).toBe("unavailable");
+    for (const _attempt of Array.from({ length: 6 })) {
+      expect((await publicScreen(props)).unwrap().status).toBe("unavailable");
+    }
+    // Both leases may share the same edition read; neither deadline releases it.
+    expect(startedLoads).toBe(1);
+    expect(unfinished).toBe(1);
+    expect(peak).toBe(1);
+    held.resolve(undefined);
+    await pool.close();
+    // Let the underlying operation (not just the deadline result) settle.
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(unfinished).toBe(0);
+    expect(pagesAfterCancellation).toBe(0);
+  } finally {
+    held.resolve(undefined);
+    await pool.close();
+  }
+});

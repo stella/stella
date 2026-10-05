@@ -9,6 +9,7 @@
         "@changesets/cli": "^3.0.3",
         "@oxlint/plugins": "catalog:",
         "@shadcn/lint": "catalog:",
+        "@stll/collation": "workspace:*",
         "@stll/oxlint-config": "0.7.0",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:^0.0.0",
@@ -697,7 +698,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.8.3",
+      "version": "3.8.4",
       "bin": {
         "stella": "./dist/cli.js",
       },

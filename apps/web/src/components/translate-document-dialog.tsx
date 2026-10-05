@@ -111,13 +111,17 @@ export const TranslateDocumentDialog = (
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: availability } = useQuery(
-    deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
-  );
   const { lastTarget, rememberTarget } = useLastTranslationTarget();
 
   const [triggerOpen, setTriggerOpen] = useState(false);
   const open = props.mode === "controlled" ? props.open : triggerOpen;
+  const {
+    data: availability,
+    error: availabilityError,
+    isFetching: isFetchingAvailability,
+  } = useQuery(
+    deepLAvailabilityOptions({ organizationId: activeOrganizationId, open }),
+  );
   const setDialogOpen = (nextOpen: boolean) => {
     if (props.mode === "controlled") {
       props.onOpenChange(nextOpen);
@@ -167,7 +171,17 @@ export const TranslateDocumentDialog = (
   const terminalNotifiedRunRef = useRef<string | null>(null);
   const pollingErrorRunRef = useRef<string | null>(null);
   const preparationErrorRef = useRef<unknown>(null);
+  const availabilityErrorRef = useRef<unknown>(null);
 
+  let availabilityDescription = t("translate.dialog.notConfigured");
+  if (isFetchingAvailability) {
+    availabilityDescription = t("common.loading");
+  } else if (availabilityError !== null) {
+    availabilityDescription = userErrorFromThrown(
+      availabilityError,
+      t("errors.actionFailed"),
+    );
+  }
   const canUseDeepL = availability?.configured === true;
   const choice = activeTranslationChoice({
     selected: selectedChoice,
@@ -226,6 +240,19 @@ export const TranslateDocumentDialog = (
   });
 
   useExternalSyncEffect(() => {
+    if (
+      availabilityError !== null &&
+      availabilityErrorRef.current !== availabilityError
+    ) {
+      availabilityErrorRef.current = availabilityError;
+      analytics.captureError(availabilityError);
+      notifyUserError(availabilityError, t("translate.error.title"), {
+        description: userErrorFromThrown(
+          availabilityError,
+          t("errors.actionFailed"),
+        ),
+      });
+    }
     if (
       preparationQuery.error !== null &&
       preparationErrorRef.current !== preparationQuery.error
@@ -291,6 +318,7 @@ export const TranslateDocumentDialog = (
     }
   }, [
     analytics,
+    availabilityError,
     entityId,
     openOutput,
     preparationQuery.error,
@@ -379,20 +407,18 @@ export const TranslateDocumentDialog = (
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
   const progress =
     run && run.total > 0 ? Math.min(1, run.completed / run.total) : 0;
-  const canStart = canStartDocumentTranslation({
-    canUseDeepL,
-    isDeepL,
-    isLoadingRun,
-    isRunning,
-    isStarting,
-    hasCommentPolicy: commentPolicy !== null,
-    hasPreparedAiVersion: preparationQuery.data !== undefined,
-    requiresCommentPolicy: commentsFound,
-  });
-
-  if (!canTranslateDocument({ canUseDeepL, isDocx })) {
-    return null;
-  }
+  const canStart =
+    canTranslateDocument({ canUseDeepL, isDocx }) &&
+    canStartDocumentTranslation({
+      canUseDeepL,
+      isDeepL,
+      isLoadingRun,
+      isRunning,
+      isStarting,
+      hasCommentPolicy: commentPolicy !== null,
+      hasPreparedAiVersion: preparationQuery.data !== undefined,
+      requiresCommentPolicy: commentsFound,
+    });
 
   return (
     <Dialog
@@ -510,7 +536,7 @@ export const TranslateDocumentDialog = (
                 />
                 {!canUseDeepL ? (
                   <p className="text-muted-foreground text-xs">
-                    {t("translate.dialog.notConfigured")}
+                    {availabilityDescription}
                   </p>
                 ) : null}
               </fieldset>
