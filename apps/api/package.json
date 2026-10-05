@@ -189,7 +189,7 @@
     "@anthropic-ai/sdk": "0.97.1",
     "@aws-sdk/client-bedrock-runtime": "^3.1138.0",
     "@electric-sql/pglite": "^0.5.8",
-    "@mistralai/mistralai": "2.2.0",
+    "@mistralai/mistralai": "2.7.0",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@standard-schema/spec": "^1.1.0",
