@@ -841,6 +841,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "expandProvisions": "Expandir dispositivos",
       "headMatter": "Cabeçalho",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",
+    "currentWording": "Redação atual",
     "description": "Base pública de normas consolidadas, indexáveis por norma e versão.",
     "diffInserted": "Inserido:",
     "diffRemoved": "Suprimido:",
@@ -4685,7 +4687,9 @@
       "unknown": "Situação incerta"
     },
     "title": "Legislação",
-    "validity": "Vigente de {from} a {to}"
+    "validity": "Vigente de {from} a {to}",
+    "wordingValidFrom": "Redação em vigor desde {date}",
+    "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
     "create": "Criar",

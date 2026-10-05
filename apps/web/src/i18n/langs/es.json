@@ -841,6 +841,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
@@ -4685,7 +4687,9 @@
       "unknown": "Estado incierto"
     },
     "title": "Legislación",
-    "validity": "Vigente del {from} al {to}"
+    "validity": "Vigente del {from} al {to}",
+    "wordingValidFrom": "Redacción vigente desde {date}",
+    "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {
     "create": "Crear",

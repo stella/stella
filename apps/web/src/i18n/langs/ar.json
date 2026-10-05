@@ -841,6 +841,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
@@ -4685,7 +4687,9 @@
       "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
-    "validity": "نافذ من {from} إلى {to}"
+    "validity": "نافذ من {from} إلى {to}",
+    "wordingValidFrom": "الصياغة النافذة منذ {date}",
+    "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
     "create": "إنشاء",

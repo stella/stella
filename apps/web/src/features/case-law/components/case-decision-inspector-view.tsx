@@ -8,7 +8,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { InfoIcon } from "@stll/ui/icons";
+import { BookTextIcon, InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -27,6 +27,7 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderProvisionMode } from "@/components/legal-reader/use-reader-provision-mode";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
@@ -74,6 +75,7 @@ export const CaseDecisionInspectorView = ({
   const t = useTranslations();
   const { payload } = tab;
   const textScale = useReaderTextScale();
+  const provisions = useReaderProvisionMode();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const {
@@ -155,6 +157,17 @@ export const CaseDecisionInspectorView = ({
           <>
             {decision !== undefined && (
               <>
+                <Button
+                  aria-label={t("caseLaw.reader.expandProvisions")}
+                  aria-pressed={provisions.expandProvisions}
+                  data-pressed={provisions.expandProvisions ? "" : undefined}
+                  onClick={provisions.toggle}
+                  size="icon-xs"
+                  tooltip={t("caseLaw.reader.expandProvisions")}
+                  variant="ghost"
+                >
+                  <BookTextIcon aria-hidden="true" className="size-3.5" />
+                </Button>
                 <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
                 <DecisionInfoPopover
                   decisionType={decision.decisionType}
@@ -256,6 +269,7 @@ export const CaseDecisionInspectorView = ({
                   citationAnchors={citationAnchors}
                   decision={decision}
                   decisionId={decisionId}
+                  expandProvisions={provisions.expandProvisions}
                   landingAnchorId={payload.anchorId}
                   notesByAnchorId={notesByAnchorId}
                   onAnnotationActivate={annotations.setActiveAnnotationId}

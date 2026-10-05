@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
 import { OutlineRail } from "@stll/ui/outline-rail";
@@ -19,6 +19,7 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { useReaderProvisionMode } from "@/components/legal-reader/use-reader-provision-mode";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
@@ -60,6 +61,7 @@ import { useDecisionStatuteCitationAnchors } from "@/features/case-law/component
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
+import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
@@ -149,6 +151,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, initialSearchQuery } = props;
   const t = useTranslations();
+  const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
@@ -424,6 +427,19 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <ChromeHeaderActions>
+        <Button
+          aria-label={t("caseLaw.reader.expandProvisions")}
+          aria-pressed={provisions.expandProvisions}
+          data-pressed={provisions.expandProvisions ? "" : undefined}
+          onClick={provisions.toggle}
+          size="icon-sm"
+          tooltip={t("caseLaw.reader.expandProvisions")}
+          variant="ghost"
+        >
+          <BookTextIcon aria-hidden="true" className="size-4" />
+        </Button>
+      </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
@@ -653,6 +669,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     citationAnchors={citationAnchors}
                     decision={decision}
                     decisionId={decisionId}
+                    expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
                     onMatchCountChange={setMatchCount}

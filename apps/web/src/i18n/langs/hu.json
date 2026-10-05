@@ -841,6 +841,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
@@ -4685,7 +4687,9 @@
       "unknown": "Állapota nem egyértelmű"
     },
     "title": "Jogszabályok",
-    "validity": "Hatályos {from} és {to} között"
+    "validity": "Hatályos {from} és {to} között",
+    "wordingValidFrom": "A szöveg {date} óta hatályos",
+    "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },
   "styleSets": {
     "create": "Létrehozás",

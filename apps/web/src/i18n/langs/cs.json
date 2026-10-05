@@ -841,6 +841,7 @@
       "subsection": "odst. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozbalit ustanovení",
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "Verze k porovnání v historii tohoto předpisu není.",
     "compareWholeAct": "Porovnat celý předpis",
     "compareWithVersion": "Porovnat se zněním {version}",
+    "currentWording": "Aktuální znění",
     "description": "Veřejná databáze konsolidovaných právních předpisů, indexovatelných podle předpisu a jeho znění.",
     "diffInserted": "Vloženo:",
     "diffRemoved": "Vypuštěno:",
@@ -4685,7 +4687,9 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právní předpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "wordingValidFrom": "Znění účinné od {date}",
+    "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
     "create": "Vytvořit",

@@ -841,6 +841,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "currentWording": "Kehtiv sõnastus",
     "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
@@ -4685,7 +4687,9 @@
       "unknown": "Olek ebaselge"
     },
     "title": "Õigusaktid",
-    "validity": "Kehtib {from} kuni {to}"
+    "validity": "Kehtib {from} kuni {to}",
+    "wordingValidFrom": "Sõnastus kehtib alates {date}",
+    "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
     "create": "Loo",

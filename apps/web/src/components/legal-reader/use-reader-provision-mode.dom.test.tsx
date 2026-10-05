@@ -1,0 +1,143 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { QueryClient } from "@tanstack/react-query";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
+
+GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+
+const { act, cleanup, fireEvent, render } =
+  await import("@testing-library/react");
+const { renderToString } = await import("react-dom/server");
+const { useReaderProvisionMode } =
+  await import("@/components/legal-reader/use-reader-provision-mode");
+const { READER_PROVISION_MODE_STORAGE_KEY } =
+  await import("@/components/legal-reader/reader-provision-mode.logic");
+const { installUserScopedStorage, releaseUserStorage, userStorageKey } =
+  await import("@/lib/account/user-scoped-storage");
+const { rootKeys } = await import("@/lib/auth-queries");
+
+afterEach(() => {
+  cleanup();
+  releaseUserStorage();
+  localStorage.clear();
+  sessionStorage.clear();
+});
+
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
+
+const Reader = ({ label }: { label: string }) => {
+  const mode = useReaderProvisionMode();
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={mode.expandProvisions}
+      onClick={mode.toggle}
+      type="button"
+    >
+      {mode.expandProvisions ? "expanded" : "collapsed"}
+    </button>
+  );
+};
+
+describe("remembered provision reading mode", () => {
+  test("starts collapsed on the server and with no stored choice", () => {
+    expect(renderToString(<Reader label="server" />)).toContain(
+      'aria-pressed="false"',
+    );
+    const reader = render(<Reader label="reader" />);
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  test("keeps server markup collapsed while the client restores a stored choice", () => {
+    localStorage.setItem(
+      userStorageKey(READER_PROVISION_MODE_STORAGE_KEY),
+      '"expanded"',
+    );
+    expect(renderToString(<Reader label="server" />)).toContain(
+      'aria-pressed="false"',
+    );
+    const reader = render(<Reader label="reader" />);
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  test("a choice is shared by mounted readers and survives a remount", () => {
+    const readers = render(
+      <>
+        <Reader label="page" />
+        <Reader label="inspector" />
+      </>,
+    );
+    fireEvent.click(readers.getByRole("button", { name: "page" }));
+    expect(
+      readers
+        .getByRole("button", { name: "inspector" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      localStorage.getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
+    ).toBe('"expanded"');
+    readers.unmount();
+    const remounted = render(<Reader label="next decision" />);
+    expect(remounted.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    fireEvent.click(remounted.getByRole("button"));
+    expect(
+      localStorage.getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
+    ).toBe('"collapsed"');
+  });
+
+  test("reads only valid stored modes and follows another tab's changes", () => {
+    const key = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
+    localStorage.setItem(key, '"unexpected"');
+    const reader = render(<Reader label="reader" />);
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    act(() => {
+      localStorage.setItem(key, '"expanded"');
+      window.dispatchEvent(
+        new StorageEvent("storage", { key, storageArea: localStorage }),
+      );
+    });
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  test("account changes use separate keys and clear the departing owner's choice", () => {
+    const client = new QueryClient();
+    const uninstall = installUserScopedStorage(client);
+    const reader = render(<Reader label="reader" />);
+    fireEvent.click(reader.getByRole("button"));
+    const visitorKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
+    act(() =>
+      client.setQueryData(rootKeys.session, { user: { id: "account-a" } }),
+    );
+    const accountAKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
+    expect(accountAKey).not.toBe(visitorKey);
+    expect(localStorage.getItem(visitorKey)).toBeNull();
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    fireEvent.click(reader.getByRole("button"));
+    expect(localStorage.getItem(accountAKey)).toBe('"expanded"');
+    act(() =>
+      client.setQueryData(rootKeys.session, { user: { id: "account-b" } }),
+    );
+    expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
+      accountAKey,
+    );
+    expect(localStorage.getItem(accountAKey)).toBeNull();
+    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    uninstall();
+    client.clear();
+  });
+});

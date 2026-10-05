@@ -841,6 +841,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
@@ -4636,6 +4637,7 @@
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
     "compareWithVersion": "Palyginti su redakcija {version}",
+    "currentWording": "Galiojanti redakcija",
     "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
     "diffInserted": "Įterpta:",
     "diffRemoved": "Išbraukta:",
@@ -4685,7 +4687,9 @@
       "unknown": "Būsena neaiški"
     },
     "title": "Teisės aktai",
-    "validity": "Galioja nuo {from} iki {to}"
+    "validity": "Galioja nuo {from} iki {to}",
+    "wordingValidFrom": "Redakcija galioja nuo {date}",
+    "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
     "create": "Kurti",
