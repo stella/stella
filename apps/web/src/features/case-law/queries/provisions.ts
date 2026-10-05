@@ -5,7 +5,10 @@ import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/le
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import {
+  PUBLIC_LAW_READ_RETRY,
+  unwrapPublicLawEden,
+} from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -82,6 +85,7 @@ type DecisionProvisionsPage = Awaited<
 /** The provisions a decision applies, in the order its text states them. */
 export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   infiniteQueryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionProvisionKeys.forDecision(decisionId),
     queryFn: async ({ client, pageParam, signal }) => {
       // Read here rather than through fetchDecisionProvisionsPage: a conflict
@@ -120,6 +124,7 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
  */
 export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: [...decisionProvisionKeys.forDecision(decisionId), "linking"],
     queryFn: async ({ signal }) => {
       const items: DecisionProvisionsPage["items"] = [];
@@ -233,6 +238,7 @@ export const statutesResolveOptions = (works: readonly CitedWorkAtDate[]) => {
     .map(([, work]) => work);
 
   return queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionProvisionKeys.statutesResolve(sorted),
     queryFn: async ({ signal }) => {
       const chunks: CitedWorkAtDate[][] = [];
@@ -264,6 +270,7 @@ export const statutesResolveOptions = (works: readonly CitedWorkAtDate[]) => {
  */
 export const statuteVersionsOptions = (documentId: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: decisionProvisionKeys.statuteVersions(documentId),
     queryFn: async ({ signal }) => {
       const response = await api.law

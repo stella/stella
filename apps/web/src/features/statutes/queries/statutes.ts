@@ -15,7 +15,11 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
+import {
+  PUBLIC_LAW_READ_RETRY,
+  isPublicLawMiss,
+  unwrapPublicLawEden,
+} from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -138,6 +142,7 @@ export const statutesInfiniteOptions = (
   pageSize: PublicLawPageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
 ) =>
   infiniteQueryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.list({ ...filters, pageSize }),
     queryFn: async ({ pageParam, signal }) =>
       await readStatutesPage({
@@ -186,6 +191,7 @@ export type StatuteSearchHit = Awaited<
 
 export const statuteSearchInfiniteOptions = (filters: StatuteSearchFilters) =>
   infiniteQueryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: [...statuteKeys.all, "full-text", filters],
     queryFn: async ({ pageParam, signal }) =>
       await readStatuteSearchPage({ cursor: pageParam, filters, signal }),
@@ -200,6 +206,7 @@ export const statuteSearchInfiniteOptions = (filters: StatuteSearchFilters) =>
  */
 export const statuteFacetsOptions = (country: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.facets(country),
     queryFn: async ({ signal }) => {
       const response = await api.law.statutes.facets.get({
@@ -220,6 +227,7 @@ export const statuteFacetsOptions = (country: string) =>
  */
 export const legislationShelfOptions = (country: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.shelf(country),
     queryFn: async ({ signal }) => {
       const response = await api.law.statutes.shelf.get({
@@ -249,6 +257,7 @@ export type PublicStatute = Awaited<ReturnType<typeof readStatute>>;
 
 export const statuteOptions = (documentId: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.byId(documentId),
     queryFn: async ({ signal }) => await readStatute(documentId, signal),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
@@ -262,6 +271,7 @@ export const statuteOptions = (documentId: string) =>
  */
 export const publicStatuteOptions = (documentId: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.publicById(documentId),
     queryFn: async ({ signal }) => {
       const response = await api.law
@@ -304,6 +314,7 @@ const windowGapBodySchema = v.object({
  */
 export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.bySlug(
       asOf === undefined ? { country, slug } : { asOf, country, slug },
     ),
@@ -408,6 +419,7 @@ export type PublicStatuteVersion = StatuteVersionsPage["items"][number];
 /** Every consolidated version of the work, newest window first. */
 export const statuteVersionsOptions = (documentId: string) =>
   queryOptions({
+    ...PUBLIC_LAW_READ_RETRY,
     queryKey: statuteKeys.versions(documentId),
     queryFn: async ({ signal }) =>
       await readStatuteVersionsFrom({

@@ -3,7 +3,7 @@ import { TaggedError } from "better-result";
 import { parseApiErrorValue } from "@stll/api-contract";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest, toAPIError } from "@/lib/errors/api";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
 const PUBLIC_LAW_DISABLED_MARKER = "Not Found";
@@ -18,13 +18,31 @@ const PUBLIC_LAW_AREA = "public-law";
 export const SEARCH_UNAVAILABLE_STATUS = 503;
 
 /**
+ * What the API answers when the public corpus is at its concurrency limit:
+ * the request was admitted nowhere, so asking again shortly is the fix, the
+ * same as an unreachable index.
+ */
+const CORPUS_BUSY_STATUS = 429;
+
+/**
  * Whether a failed public-law read is the search backend being unreachable
- * rather than a real answer. Read from the typed error's status, never from
- * its message, so the surface that degrades cannot drift from what the API
- * grades as retryable.
+ * or busy rather than a real answer. Read from the typed error's status,
+ * never from its message, so the surface that degrades cannot drift from
+ * what the API grades as retryable.
  */
 export const isSearchUnavailableError = (error: unknown): boolean =>
-  APIError.is(error) && error.status === SEARCH_UNAVAILABLE_STATUS;
+  APIError.is(error) &&
+  (error.status === SEARCH_UNAVAILABLE_STATUS ||
+    error.status === CORPUS_BUSY_STATUS);
+
+/**
+ * The retry every public-law read shares. Route loaders fetch without
+ * retries by default, so a busy or unreachable corpus would otherwise reach
+ * the route's error boundary on the first refusal.
+ */
+export const PUBLIC_LAW_READ_RETRY = {
+  retry: shouldRetryAPIRequest,
+} as const;
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.
