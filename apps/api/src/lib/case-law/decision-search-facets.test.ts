@@ -263,6 +263,23 @@ test("two stored spellings of one type collapse into one canonical bucket with t
   ]);
 });
 
+test("stored casings, joined lists and docket numbers collapse safely into canonical buckets", () => {
+  expect(
+    foldStatedDecisionTypeBuckets([
+      bucket("uznesenie", 100),
+      bucket("Uznesenie", 20),
+      bucket("uznesenie,uznesenie", 7),
+      bucket("nález,nález", 3),
+      bucket("uznesenie,nález", 2),
+      bucket("63 az 17/2026 - 28", 1),
+    ]),
+  ).toEqual([
+    { value: "order", label: null, count: 127 },
+    { value: "finding", label: null, count: 3 },
+    { value: "other", label: null, count: 3 },
+  ]);
+});
+
 test("the type facet is cut to its limit after the fold, not before", () => {
   // A full list of other kinds, each outranking either spelling of `order`
   // alone: cutting spellings before folding would drop `order`, whose two

@@ -10,7 +10,7 @@ import { foldToAscii } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
-  STATED_DECISION_TYPES,
+  KINDED_DECISION_TYPES,
   statedDecisionTypesOf,
 } from "@/api/lib/case-law/decision-type-key";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -1003,7 +1003,7 @@ export const corpusDecisionTypeClause = (requested: string): string => {
           .map((spelling) => `document_type:${quoteCorpusValue(spelling)}`)
           .join(" OR ")})`;
       if (filter.kind === DECISION_TYPE_KIND_OTHER) {
-        return `(document_type:* AND NOT ${spellings(STATED_DECISION_TYPES)})`;
+        return `(document_type:* AND NOT ${spellings(KINDED_DECISION_TYPES)})`;
       }
       return spellings(statedDecisionTypesOf(filter.kind));
     }

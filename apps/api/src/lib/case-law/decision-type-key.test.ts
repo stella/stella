@@ -10,6 +10,8 @@ import {
   decisionTypeKey,
   decisionTypeKind,
   isDocketShapedDecisionType,
+  KINDED_DECISION_TYPES,
+  readDecisionType,
   STATED_DECISION_TYPE_KINDS,
   statedDecisionTypesOf,
 } from "@/api/lib/case-law/decision-type-key";
@@ -88,6 +90,63 @@ test("a docket number is recognised as one, and no stated type looks like a dock
   for (const stated of Object.keys(STATED_DECISION_TYPE_KINDS)) {
     expect(isDocketShapedDecisionType(stated)).toBe(false);
   }
+});
+
+test("odd stored values from production read as their kind or, with a reason, the catch-all", () => {
+  const expected = {
+    "rozs.": "judgment",
+    "rozs.část.": "judgment",
+    "tr.příkaz": "penal_order",
+    ministery_of_justice_order: "ministry_of_justice_decision",
+    ministry_of_justice_resolution: "ministry_of_justice_decision",
+    "Rozsudok pre zmeškanie": "judgment",
+    "Trestný rozkaz": "penal_order",
+    Uznesenie: "order",
+    "opatrenie bez poučenia": "court_direction",
+    "elvi határozat": "principle_decision",
+    "wyciąg z protokołu": "minutes_extract",
+    none: "other",
+    jinak: "other",
+    "rozs.uzn": "other",
+    // A comma inside a listed type is not a joined list.
+    "průzkum, rozbor a jiné materiály": "other",
+  } as const;
+  for (const [stated, kind] of Object.entries(expected)) {
+    expect(decisionTypeKind(stated)).toBe(kind);
+  }
+  expect(readDecisionType("průzkum, rozbor a jiné materiály").type).toBe(
+    "mapped",
+  );
+});
+
+test("a docket number stored as the type is the catch-all, never a type of its own", () => {
+  expect(readDecisionType("63 az 17/2026 - 28")).toEqual({ type: "docket" });
+  expect(decisionTypeKind("8 af 24/2025 - 50")).toBe(DECISION_TYPE_KIND_OTHER);
+  expect(decisionTypeFilter("8 af 24/2025 - 50")).toEqual({
+    type: "kind",
+    kind: DECISION_TYPE_KIND_OTHER,
+  });
+});
+
+test("a joined list is split and deduplicated: one kind is that kind, several are the catch-all", () => {
+  expect(readDecisionType("nález,nález")).toEqual({
+    type: "joined",
+    kind: "finding",
+  });
+  expect(decisionTypeKind("uznesenie,uznesenie,uznesenie")).toBe("order");
+  expect(decisionTypeKind(" Uznesenie , uznesenie ")).toBe("order");
+  expect(decisionTypeKind("uznesenie,nález")).toBe(DECISION_TYPE_KIND_OTHER);
+  expect(decisionTypeKind("uznesenie,zzz")).toBe(DECISION_TYPE_KIND_OTHER);
+});
+
+test("a kind's spellings include every stored casing and joined list, exactly as stored", () => {
+  const order = statedDecisionTypesOf("order");
+  for (const stored of ["Uznesenie", "uznesenie", "uznesenie,uznesenie"]) {
+    expect(order).toContain(stored);
+  }
+  expect(order).not.toContain("uznesenie,nález");
+  expect(KINDED_DECISION_TYPES).not.toContain("jinak");
+  expect(KINDED_DECISION_TYPES).not.toContain("63 az 17/2026 - 28");
 });
 
 test("a filter by kind, by any spelling of it, or by its abbreviation selects the same kind", () => {

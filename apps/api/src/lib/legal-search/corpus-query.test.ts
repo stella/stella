@@ -258,10 +258,18 @@ test("a type filter names every stored spelling of its kind, so an abbreviation 
     /^\(document_type:"[^"]+"( OR document_type:"[^"]+")+\)$/u,
   );
 
-  // The catch-all is a stated type none of the kinds' spellings is.
+  // The raw field is exact, so every stored casing and joined list is named.
+  for (const stored of ["Uznesenie", "uznesenie,uznesenie"]) {
+    expect(order).toContain(`document_type:${quoteCorpusValue(stored)}`);
+  }
+
+  // The catch-all is a stated type none of the kinds' spellings is: what is
+  // read as `other` (a docket, `jinak`) stays out of the exclusion.
   const other = corpusDecisionTypeClause("other");
   expect(other.startsWith("(document_type:* AND NOT (")).toBe(true);
   expect(other).toContain(`document_type:${quoteCorpusValue("usn.")}`);
+  expect(other).not.toContain(quoteCorpusValue("jinak"));
+  expect(other).not.toContain(quoteCorpusValue("63 az 17/2026 - 28"));
 
   // A value no kind claims is matched as stated.
   expect(corpusDecisionTypeClause("jiné")).toBe('document_type:"jiné"');

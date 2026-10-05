@@ -111,7 +111,17 @@ test("the type facet folds stated spellings into one kind, and filtering by it r
     "usnesení",
     "rozsudek",
     "zzz-nepojmenovaný-typ",
+    // Stored casings, a joined list and a docket number, as production has.
+    "Uznesenie",
+    "uznesenie,uznesenie",
+    "63 az 17/2026 - 28",
   ];
+  const ORDER_STATED = new Set([
+    "usnesení",
+    "usn.",
+    "Uznesenie",
+    "uznesenie,uznesenie",
+  ]);
   const decisions = stated.map((decisionType, index) => ({
     id: createSafeId<"caseLawDecision">(),
     sourceId,
@@ -165,18 +175,18 @@ test("the type facet folds stated spellings into one kind, and filtering by it r
   expect(
     facet.rows.map((row) => [String(row["value"]), Number(row["count"])]),
   ).toEqual([
-    ["order", 3],
+    ["order", 5],
+    ["other", 2],
     ["judgment", 1],
-    ["other", 1],
   ]);
 
-  const orderIds = idsWhere((type) => type.startsWith("usn"));
-  expect(orderIds.length).toBe(3);
+  const orderIds = idsWhere((type) => ORDER_STATED.has(type));
+  expect(orderIds.length).toBe(5);
   for (const requested of ["order", "usnesení", "Usn."]) {
     expect(await hitIds(requested)).toEqual(orderIds);
   }
   expect(await hitIds("other")).toEqual(
-    idsWhere((type) => type.startsWith("zzz")),
+    idsWhere((type) => type.startsWith("zzz") || type.startsWith("63 ")),
   );
   await client.close();
 }, 60_000);
