@@ -207,6 +207,7 @@ export class TestProcessSupervisor {
       // stop grace expires, pipe draining must not hold the runner forever.
       entry.cancelStreams();
     }
+    this.active.clear();
   }
 
   dispose(): void {
@@ -358,6 +359,7 @@ export class TestProcessSupervisor {
       throw error;
     } finally {
       clearTimeout(watchdog);
+      // A stopped leader may exit before its descendants, which still need escalation.
       if (!this.signal.aborted) {
         this.active.delete(id);
       }

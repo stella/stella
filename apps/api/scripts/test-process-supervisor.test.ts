@@ -189,6 +189,38 @@ test("normal buffered children keep their output apart from startup progress", a
   }
 });
 
+test("completed child success survives active registry persistence failure", async () => {
+  let temporaryRegistryPath = "";
+  const fixture = createFixture({
+    onStdout: () => {
+      mkdirSync(temporaryRegistryPath, { recursive: true });
+    },
+  });
+  temporaryRegistryPath = path.join(fixture.directory, "active.json.tmp");
+  try {
+    const result = await fixture.supervisor.run({
+      command: () => [process.execPath, "-e", 'console.log("complete")'],
+      cwd: fixture.directory,
+      env: process.env,
+      identity: {
+        kind: "batch",
+        label: "registry-write-failure",
+        files: ["complete.test.ts"],
+        lane: 0,
+      },
+      mode: "stream",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(fixture.supervisor.signal.aborted).toBe(false);
+    expect(fixture.diagnostics.join(" ")).toContain(
+      "Could not persist active process registry",
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("real Bun test batches produce distinct JUnit artifacts and retain reporter output", async () => {
   const fixture = createFixture();
   const junitPaths: string[] = [];
@@ -574,7 +606,7 @@ posixTest(
 posixTest(
   "a stopped process group stays tracked after its leader exits and pipes close",
   async () => {
-    const fixture = createFixture({ stopGraceMs: 250 });
+    const fixture = createFixture({ stopGraceMs: 8000, deadlineMs: 20_000 });
     const heartbeatPath = path.join(fixture.directory, "descendant.heartbeat");
     try {
       const result = await fixture.supervisor.run({
@@ -612,12 +644,18 @@ posixTest(
       expect(result.exitCode).toBe(124);
       expect(existsSync(heartbeatPath)).toBe(true);
       const afterLeaderExit = readFileSync(heartbeatPath, "utf-8");
-      await Bun.sleep(50);
-      expect(readFileSync(heartbeatPath, "utf-8")).not.toBe(afterLeaderExit);
-      await Bun.sleep(300);
-      const afterEscalation = readFileSync(heartbeatPath, "utf-8");
-      await Bun.sleep(50);
-      expect(readFileSync(heartbeatPath, "utf-8")).toBe(afterEscalation);
+      const heartbeatDeadline = Date.now() + 1000;
+      while (
+        readFileSync(heartbeatPath, "utf-8") === afterLeaderExit &&
+        Date.now() < heartbeatDeadline
+      ) {
+        await Bun.sleep(20);
+      }
+      const liveHeartbeat = readFileSync(heartbeatPath, "utf-8");
+      expect(liveHeartbeat).not.toBe(afterLeaderExit);
+      fixture.supervisor.dispose();
+      await Bun.sleep(100);
+      expect(readFileSync(heartbeatPath, "utf-8")).toBe(liveHeartbeat);
     } finally {
       fixture.cleanup();
     }

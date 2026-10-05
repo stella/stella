@@ -439,7 +439,6 @@ export const acquireCachedSnapshot = async ({
         try {
           valid = await validate(finalPath);
         } catch {
-          assertNotAborted(signal);
           // Treat an unreadable entry exactly like a corrupt one.
         }
         assertNotAborted(signal);
