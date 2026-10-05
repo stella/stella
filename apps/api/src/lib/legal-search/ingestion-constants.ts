@@ -50,7 +50,7 @@ export type ImportSourceKey =
  */
 export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: 9,
-  [ADAPTER_KEYS.CZ_NS]: 14,
+  [ADAPTER_KEYS.CZ_NS]: 15,
   [ADAPTER_KEYS.CZ_NSS]: 15,
   [ADAPTER_KEYS.CZ_US]: 13,
   [ADAPTER_KEYS.SK_COURTS]: 12,

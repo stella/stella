@@ -9,11 +9,27 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
+import {
+  CANONICAL_CANCEL_STEP,
+  isCanonicalFailureCancellation,
+} from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 
-const jobSchema = v.looseObject({
-  steps: v.array(v.looseObject({ name: v.string() })),
-});
+const jobSchema = v.pipe(
+  v.looseObject({
+    permissions: v.optional(v.record(v.string(), v.string())),
+    steps: v.array(v.looseObject({ name: v.string() })),
+  }),
+  v.transform((job) => {
+    if (!isCanonicalFailureCancellation(job.steps.at(-1))) {
+      return job;
+    }
+    expect(job.permissions?.["actions"]).toBe("write");
+    const permissions = { ...job.permissions };
+    delete permissions["actions"];
+    return { ...job, permissions, steps: job.steps.slice(0, -1) };
+  }),
+);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -306,6 +322,46 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     BASE_SHA: `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
+});
+
+test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
+  const guard = { name: "Guard", run: "bun check" };
+  const cancellation = {
+    ...CANONICAL_CANCEL_STEP,
+    if: "failure() && github.event_name == 'merge_group'",
+  };
+  const base = { permissions: { contents: "read" }, steps: [guard] };
+  const job = {
+    permissions: { contents: "read", actions: "write" },
+    steps: [guard, cancellation],
+  };
+  expect(v.parse(jobSchema, job)).toEqual(base);
+  for (const changed of [
+    { ...cancellation, if: "failure()" },
+    { ...cancellation, uses: "actions/github-script@main" },
+    { ...cancellation, with: { ...cancellation.with, retries: 1 } },
+    { ...cancellation, with: { ...cancellation.with, script: "exit 0" } },
+    { ...cancellation, "continue-on-error": true },
+  ]) {
+    expect(v.parse(jobSchema, { ...job, steps: [guard, changed] })).not.toEqual(
+      base,
+    );
+  }
+  expect(
+    v.parse(jobSchema, { ...job, steps: [cancellation, guard] }),
+  ).not.toEqual(base);
+  expect(() =>
+    v.parse(jobSchema, {
+      ...job,
+      permissions: { contents: "read", actions: "read" },
+    }),
+  ).toThrow("toBe");
+  expect(
+    v.parse(jobSchema, {
+      ...job,
+      permissions: { ...job.permissions, contents: "write" },
+    }),
+  ).not.toEqual(base);
 });
 
 test("parallel CI checks preserve every merge-base check exactly once", () => {

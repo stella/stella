@@ -132,7 +132,15 @@
     "takeoverSubtitle": "Redagavimas bus tęsiamas nuo paskutinio išsaugoto kontrolinio taško.",
     "takeoverTitle": "{requester} nori perimti redagavimą",
     "takeoverWindowTitle": "Perėmimo prašymas",
-    "webOrigin": "Žiniatinklio kilmė"
+    "webOrigin": "Žiniatinklio kilmė",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Atnaujinkite Stella Desktop",
+    "handoffAccountRequired": "Susiekite Stella Desktop su savo paskyra",
+    "handoffFailed": "Nepavyko atverti dokumento",
+    "handoffUpdateNow": "Atnaujinti dabar",
+    "handoffConnectAccount": "Susieti paskyrą",
+    "handoffRetry": "Bandyti dar kartą",
+    "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte"
   },
   "settings": {
     "about": "Apie",
