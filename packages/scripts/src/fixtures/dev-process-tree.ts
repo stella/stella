@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { writeFileSync } from "node:fs";
+import { connect } from "node:net";
 
 const [mode, readyPath, termMode] = process.argv.slice(2);
 if (!readyPath) {
@@ -14,10 +14,9 @@ if (mode === "grandchild") {
     hostname: "127.0.0.1",
     fetch: () => new Response("ready"),
   });
-  writeFileSync(
-    readyPath,
-    JSON.stringify({ pid: process.pid, port: server.port }),
-  );
+  const ready = connect(readyPath, () => {
+    ready.end(JSON.stringify({ pid: process.pid, port: server.port }));
+  });
 } else if (mode === "leader" || mode === "child") {
   Bun.spawn(
     [
