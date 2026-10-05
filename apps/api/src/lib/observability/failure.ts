@@ -185,6 +185,7 @@ export const HANDLER_CLIENT_STATUS_REASON = {
   409: "conflict",
   413: "request_invalid",
   422: "request_invalid",
+  426: "precondition_required",
   428: "precondition_required",
   429: "rate_limited",
 } as const satisfies Record<HandlerClientStatus, FailureReason>;

@@ -5422,6 +5422,7 @@
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Conecta stella desktop a tu cuenta",
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
