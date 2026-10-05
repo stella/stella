@@ -336,6 +336,7 @@ const answerDecision = async (
     modelRole: "fast",
     organizationId: input.organizationId,
     orgAIConfig: input.orgAIConfig,
+    modelTier: input.admission.modelTier,
     properties: {
       decision_id: decisionId,
       jurisdiction: decision.country,
@@ -362,6 +363,7 @@ const answerDecision = async (
         {
           dataClass: "customer",
           organizationId: input.organizationId,
+          modelTier: input.admission.modelTier,
         },
       );
       const output = await generateTanStackObjectForRole({

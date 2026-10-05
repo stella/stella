@@ -1,15 +1,19 @@
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
+  BYOK_DEFAULT_MODELS,
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
+  DEFAULT_MODELS,
   getModelReasoningEfforts,
   MODEL_ROLES,
   shouldEmitTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -22,6 +26,7 @@ import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
@@ -48,6 +53,7 @@ env.USE_MOCK_AI = false;
 
 const {
   clearByokAdapterCache,
+  getTanStackTextModelInfoById,
   getTanStackTextModelInfoForRole,
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -352,6 +358,7 @@ describe("TanStack text model resolution", () => {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
+          modelTier: MANAGED_MODEL_TIER.standard,
         }),
       ).toThrow("Managed AI is not available");
 
@@ -401,6 +408,7 @@ describe("TanStack text model resolution", () => {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
+          modelTier: MANAGED_MODEL_TIER.standard,
         }),
       ).toThrow('Managed AI is not available for provider "mistral"');
 
@@ -419,6 +427,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       },
     );
 
@@ -440,6 +449,7 @@ describe("TanStack text model resolution", () => {
         role: "chat",
         dataClass: "public_corpus",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       }),
     ).toThrow(
       'Model "gpt-unrated-experiment" is not available on this deployment.',
@@ -455,6 +465,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: null,
+        modelTier: MANAGED_MODEL_TIER.standard,
       },
     );
 
@@ -480,6 +491,7 @@ describe("TanStack text model resolution", () => {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: null,
+          modelTier: MANAGED_MODEL_TIER.standard,
         },
       );
 
@@ -496,6 +508,7 @@ describe("TanStack text model resolution", () => {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(model).toMatchObject({
@@ -515,6 +528,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       });
     } catch (error) {
       handlerError = error;
@@ -553,6 +567,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       });
     } catch (error) {
       handlerError = error;
@@ -609,6 +624,7 @@ describe("TanStack text model resolution", () => {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(modelAcceptsStreamingToolUse(model)).toBe(true);
@@ -622,6 +638,7 @@ describe("TanStack text model resolution", () => {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(model).toMatchObject({
@@ -646,6 +663,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       });
       const validPng = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/ltyVPwAAAABJRU5ErkJggg==",
@@ -747,6 +765,7 @@ describe("TanStack text model resolution", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       });
       let fetchCalls = 0;
       const originalFetch = globalThis.fetch;
@@ -808,6 +827,7 @@ describe("TanStack text model resolution", () => {
       dataClass: "customer",
       managedAIResidency: "eu",
       organizationId: orgId,
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(model).toMatchObject({
@@ -905,7 +925,11 @@ describe("TanStack text model resolution", () => {
     const modelInfo = getTanStackTextModelInfoForRole(
       "chat",
       orgConfigForProvider("openrouter"),
-      { dataClass: "customer", organizationId: orgId },
+      {
+        dataClass: "customer",
+        organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
+      },
     );
 
     expect(modelInfo).toEqual({
@@ -1245,6 +1269,7 @@ describe("who answers while the local mock is on", () => {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
+        modelTier: MANAGED_MODEL_TIER.standard,
       });
       return {
         adapter: isMockTextAdapter(model.adapter) ? "mock" : model.adapter.name,
@@ -1296,6 +1321,7 @@ describe("who answers while the local mock is on", () => {
           dataClass: "customer",
           managedAIResidency: "eu",
           organizationId: orgId,
+          modelTier: MANAGED_MODEL_TIER.standard,
         }),
       ).toThrow(HandlerError);
     } finally {
@@ -1340,4 +1366,155 @@ const orgConfigForProvider = (
     pdf: { provider, modelId: "model-pdf" },
   },
   decision: null,
+});
+
+describe("managed model tier", () => {
+  const MANAGED_CUSTOMER = {
+    dataClass: "customer",
+    managedAIResidency: "eu",
+    organizationId: orgId,
+  } as const;
+  // The organization's own key: each role on its own catalog model, so a
+  // role served by the wrong model shows.
+  const OWN_KEY_CONFIG: OrgAIConfig = {
+    providers: [{ provider: "openai", apiKey: "test-org-provider-key" }],
+    overrideModels: {
+      fast: { provider: "openai", modelId: BYOK_DEFAULT_MODELS.openai.fast },
+      chat: { provider: "openai", modelId: BYOK_DEFAULT_MODELS.openai.chat },
+      reasoning: {
+        provider: "openai",
+        modelId: BYOK_DEFAULT_MODELS.openai.reasoning,
+      },
+      pdf: { provider: "openai", modelId: BYOK_DEFAULT_MODELS.openai.pdf },
+    },
+    decision: null,
+  };
+
+  const withManagedOpenRouter = (run: () => void) => {
+    const originalProvider = env.AI_PROVIDER;
+    env.AI_PROVIDER = "openrouter";
+    try {
+      run();
+    } finally {
+      env.AI_PROVIDER = originalProvider;
+    }
+  };
+
+  test("the fast tier serves every catalog role on the managed fast model", () => {
+    withManagedOpenRouter(() => {
+      const fastModelId = DEFAULT_MODELS.openrouter.fast;
+      // The standard tier keeps per-role models, so the fast tier is visible.
+      expect(
+        MODEL_ROLES.some(
+          (role) => DEFAULT_MODELS.openrouter[role] !== fastModelId,
+        ),
+      ).toBe(true);
+      for (const role of MODEL_ROLES) {
+        expect(
+          getTanStackTextModelForRole(role, null, {
+            ...MANAGED_CUSTOMER,
+            modelTier: MANAGED_MODEL_TIER.fast,
+          }),
+        ).toMatchObject({
+          keySource: "instance",
+          provider: "openrouter",
+          modelId: fastModelId,
+        });
+        expect(
+          getTanStackTextModelForRole(role, null, {
+            ...MANAGED_CUSTOMER,
+            modelTier: MANAGED_MODEL_TIER.standard,
+          }).modelId,
+        ).toBe(DEFAULT_MODELS.openrouter[role]);
+      }
+    });
+  });
+
+  test("the fast tier serves a managed per-turn selection on the fast model", () => {
+    withManagedOpenRouter(() => {
+      const selection = `openrouter::${DEFAULT_MODELS.openrouter.chat}`;
+      expect(
+        getTanStackTextModelById(selection, null, {
+          ...MANAGED_CUSTOMER,
+          role: "chat",
+          modelTier: MANAGED_MODEL_TIER.fast,
+        }).modelId,
+      ).toBe(DEFAULT_MODELS.openrouter.fast);
+      expect(
+        getTanStackTextModelById(selection, null, {
+          ...MANAGED_CUSTOMER,
+          role: "chat",
+          modelTier: MANAGED_MODEL_TIER.standard,
+        }).modelId,
+      ).toBe(DEFAULT_MODELS.openrouter.chat);
+    });
+  });
+
+  test("a role resolves its tier's managed model, or the organization's own model under its key", () => {
+    withManagedOpenRouter(() => {
+      assertProperty(
+        "a role resolves its tier's managed model, or the organization's own model under its key",
+        fc.property(
+          fc.constantFrom(...MODEL_ROLES),
+          fc.constantFrom(...Object.values(MANAGED_MODEL_TIER)),
+          fc.constantFrom("managed", "own_key"),
+          fc.option(fc.constantFrom(...MODEL_ROLES), { nil: undefined }),
+          (role, modelTier, credentials, selectedRole) => {
+            const orgConfig = credentials === "own_key" ? OWN_KEY_CONFIG : null;
+            const ownKey = credentials === "own_key";
+            let selectedModelId: string | undefined;
+            if (selectedRole !== undefined) {
+              selectedModelId = ownKey
+                ? OWN_KEY_CONFIG.overrideModels[selectedRole].modelId
+                : `openrouter::${DEFAULT_MODELS.openrouter[selectedRole]}`;
+            }
+            // Oracle: the own key serves what the organization configured or
+            // selected; the fast tier serves the fast model; the standard
+            // tier serves the selection, else the role's model.
+            const managedModelId =
+              modelTier === MANAGED_MODEL_TIER.fast
+                ? DEFAULT_MODELS.openrouter.fast
+                : DEFAULT_MODELS.openrouter[selectedRole ?? role];
+            const expectedModelId = ownKey
+              ? (selectedModelId ?? OWN_KEY_CONFIG.overrideModels[role].modelId)
+              : managedModelId;
+            const dispatched =
+              selectedModelId === undefined
+                ? getTanStackTextModelForRole(role, orgConfig, {
+                    ...MANAGED_CUSTOMER,
+                    modelTier,
+                  })
+                : getTanStackTextModelById(selectedModelId, orgConfig, {
+                    ...MANAGED_CUSTOMER,
+                    role,
+                    modelTier,
+                  });
+            expect(dispatched.modelId).toBe(expectedModelId);
+            expect(dispatched.keySource).toBe(
+              credentials === "own_key" ? "byok" : "instance",
+            );
+            // Metering and analytics resolve the model dispatch serves.
+            const info =
+              selectedModelId === undefined
+                ? getTanStackTextModelInfoForRole(role, orgConfig, {
+                    dataClass: "customer",
+                    organizationId: orgId,
+                    modelTier,
+                  })
+                : getTanStackTextModelInfoById(
+                    selectedModelId,
+                    orgConfig,
+                    role,
+                    { dataClass: "customer", modelTier },
+                  );
+            expect(info).toMatchObject({
+              modelId: dispatched.modelId,
+              keySource: dispatched.keySource,
+              provider: dispatched.provider,
+            });
+          },
+        ),
+      );
+    });
+  });
 });

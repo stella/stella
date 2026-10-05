@@ -1361,6 +1361,7 @@ export const initDocumentTranslationRunWorker = ({
         actionKind: "document-translation.background",
         organizationId: actor.organizationId,
         userId: actor.userId,
+        organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
         run: async (_signal, admission) =>

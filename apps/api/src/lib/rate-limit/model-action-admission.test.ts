@@ -11,6 +11,7 @@ import {
   ORGANIZATION_MODEL_CREDENTIALS,
   type OrganizationActionState,
 } from "@/api/lib/usage/organization-action-budget";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { withActionAdmission } from "./action-admission";
@@ -294,6 +295,7 @@ describe("scheduled background work", () => {
   test("takes a background slot and hands its run the background proof", async () => {
     const redis = countingRedis();
     const outcome = await runScheduledBackgroundWork({
+      organizationStateDb: testOrganizationStateDb,
       actionKind: "chat.background",
       organizationId,
       userId,

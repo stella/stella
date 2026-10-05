@@ -110,6 +110,7 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
@@ -1119,6 +1120,7 @@ const runAdmittedFiniteHandler = async function* <
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           actionKind,
+          organizationStateDb: ctx.scopedDb,
           signal,
           run: async (modelAdmission) => {
             const admitted = Object.assign(ctx, {
@@ -1425,6 +1427,9 @@ export const resolveMeteringContext = ({
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    // Unit metering and the free tier never run together
+    // (`freeTierInvariantViolation`), so a metered organization is standard.
+    modelTier: MANAGED_MODEL_TIER.standard,
   });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({

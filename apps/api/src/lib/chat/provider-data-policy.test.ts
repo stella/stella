@@ -39,6 +39,7 @@ import {
   getTanStackTextModelInfoForRole,
   resolveTanStackAIProviderSupport,
 } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import {
   findTranscriptProblems,
   providerWireFormatOf,
@@ -293,6 +294,7 @@ describe("provider request policy", () => {
           const info = getTanStackTextModelInfoForRole("chat", null, {
             organizationId: null,
             dataClass,
+            modelTier: MANAGED_MODEL_TIER.standard,
           });
           expect(info).toMatchObject({
             keySource: "instance",
@@ -301,14 +303,21 @@ describe("provider request policy", () => {
           });
           const selection = `${provider}::${info.modelId}`;
           expect(
-            getTanStackTextModelInfoById(selection, null, "chat", dataClass),
+            getTanStackTextModelInfoById(selection, null, "chat", {
+              dataClass,
+              modelTier: MANAGED_MODEL_TIER.standard,
+            }),
           ).toMatchObject(info);
           for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
             const policy =
               dataClass === "customer"
                 ? { dataClass, managedAIResidency }
                 : { dataClass };
-            const options = { organizationId: null, ...policy };
+            const options = {
+              organizationId: null,
+              modelTier: MANAGED_MODEL_TIER.standard,
+              ...policy,
+            };
             if (!available) {
               expect(() =>
                 getTanStackTextModelForRole("chat", null, options),
@@ -560,7 +569,7 @@ describe("provider request policy", () => {
                   `openrouter::${modelId}`,
                   null,
                   "chat",
-                  dataClass,
+                  { dataClass, modelTier: MANAGED_MODEL_TIER.standard },
                 ),
             ]) {
               const selection = Result.try({
@@ -581,6 +590,7 @@ describe("provider request policy", () => {
                   organizationId: null,
                   role: "chat",
                   ...policy,
+                  modelTier: MANAGED_MODEL_TIER.standard,
                 }),
               catch: (error) => error,
             });

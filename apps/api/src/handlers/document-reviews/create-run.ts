@@ -21,6 +21,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
+  configuredModelAdmission,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -94,6 +95,7 @@ const createDocumentReviewRun = createSafeHandler(
   async function* ({
     body,
     memberRole,
+    modelAdmission,
     orgAIConfig,
     orgAIConfigStatus,
     recordAuditEvent,
@@ -300,6 +302,7 @@ const createDocumentReviewRun = createSafeHandler(
     const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
       dataClass: "customer",
       organizationId,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
     });
     const inputBytes =
       selection.value.target.fileSizeBytes +

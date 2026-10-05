@@ -26,6 +26,7 @@ import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationSettings,
+  usagePolicies,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -36,8 +37,10 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import {
   FREE_TIER_OFF,
   resolveOrganizationAccess,
@@ -45,6 +48,7 @@ import {
 import {
   allowsInstanceModels,
   endOrganizationEvaluation,
+  readManagedModelTier,
   recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
 } from "@/api/lib/usage/organization-access-state";
@@ -427,6 +431,69 @@ describe("the stored shape", () => {
     );
 
     expect(rows).toEqual([{ organizationId: selfManagedOrgId }]);
+  });
+});
+
+describe("managed model tier", () => {
+  const freeTierBefore = env.FEATURE_FREE_TIER;
+  const freePolicyKey = `free_${Bun.randomUUIDv7()}`;
+
+  beforeAll(async () => {
+    await testDb.insert(usagePolicies).values({
+      id: createSafeId<"usagePolicy">(),
+      policyKey: freePolicyKey,
+      displayName: "Free fixture",
+      kind: "free",
+      monthlyUsageUnits: 0,
+      maxMembers: 1,
+      storageBytesPerAssignment: 1_073_741_824n,
+      serviceActionsPerPeriod: 3,
+    });
+  });
+
+  afterEach(() => {
+    env.FEATURE_FREE_TIER = freeTierBefore;
+  });
+
+  afterAll(async () => {
+    await testDb
+      .delete(usagePolicies)
+      .where(eq(usagePolicies.policyKey, freePolicyKey));
+  });
+
+  const tierOf = async (organizationId: SafeId<"organization">) =>
+    await readManagedModelTier(requestScope(organizationId), organizationId);
+
+  test("the free floor resolves the fast tier through the organization's own scope", async () => {
+    env.FEATURE_FREE_TIER = true;
+    await withAccessStateEnforced(async () => {
+      // The lapsed evaluation stands on the free floor.
+      expect(await tierOf(expiredOrgId)).toBe(MANAGED_MODEL_TIER.fast);
+      expect(await tierOf(evaluatingOrgId)).toBe(MANAGED_MODEL_TIER.standard);
+      expect(await tierOf(selfManagedOrgId)).toBe(MANAGED_MODEL_TIER.standard);
+      // A minted proof carries the tier admission read for its organization.
+      const modelTier = await admitModelDispatch({
+        organizationId: expiredOrgId,
+        actionKind: "chat.send",
+        organizationStateDb: requestScope(expiredOrgId),
+        signal: new AbortController().signal,
+        run: async (admission) => await Promise.resolve(admission.modelTier),
+      });
+      expect(modelTier).toBe(MANAGED_MODEL_TIER.fast);
+    });
+  });
+
+  test("without the free tier every organization is standard", async () => {
+    env.FEATURE_FREE_TIER = false;
+    await withAccessStateEnforced(async () => {
+      for (const organizationId of [
+        expiredOrgId,
+        evaluatingOrgId,
+        selfManagedOrgId,
+      ]) {
+        expect(await tierOf(organizationId)).toBe(MANAGED_MODEL_TIER.standard);
+      }
+    });
   });
 });
 

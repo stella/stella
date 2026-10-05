@@ -209,6 +209,7 @@ import {
   safeTokenUsageFromTerminalChunk,
   tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
@@ -1028,6 +1029,7 @@ const resolveFallbackTextModel = async ({
 type CreateChatAttemptAnalyticsProps = {
   feature: string;
   modelRole: ModelRole;
+  modelTier: ManagedModelTier;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCacheSurface?: PromptCacheMetricSurface | undefined;
@@ -1044,6 +1046,7 @@ type CreateChatAttemptAnalyticsProps = {
 const createChatAttemptAnalytics = ({
   feature,
   modelRole,
+  modelTier,
   organizationId,
   orgAIConfig,
   promptCacheSurface,
@@ -1069,6 +1072,7 @@ const createChatAttemptAnalytics = ({
     feature,
     modelRole,
     orgAIConfig,
+    modelTier,
     properties: {
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
@@ -1342,6 +1346,7 @@ const runChatAttempt = async function* ({
   const analytics = createChatAttemptAnalytics({
     feature,
     modelRole: role,
+    modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
     // The turn's own model calls; compaction below builds another prompt.
@@ -1356,6 +1361,7 @@ const runChatAttempt = async function* ({
   const compactionAnalytics = createChatAttemptAnalytics({
     feature: compactionFeature,
     modelRole: role,
+    modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
     safeDb,

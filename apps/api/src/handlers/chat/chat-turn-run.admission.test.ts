@@ -14,7 +14,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import type { withTimeout } from "@/api/lib/with-timeout";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -641,6 +644,7 @@ describe("chat run admission follows owned settlement", () => {
       },
     };
     const acquired = await startExecutionAdmission({
+      organizationStateDb: testOrganizationStateDb,
       mode: "action",
       periodIdentity: {
         actionKind: "chat.send",

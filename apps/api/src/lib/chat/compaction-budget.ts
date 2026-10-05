@@ -18,6 +18,10 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 
 export type ChatCompactionBudget = {
   triggerTokens: number;
@@ -34,6 +38,7 @@ type ResolveChatCompactionBudgetOptions = {
   chatModelOverride?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  modelTier: ManagedModelTier;
 };
 
 /**
@@ -64,8 +69,13 @@ const resolveChatModelId = ({
   chatModelOverride,
   orgAIConfig,
   organizationId,
+  modelTier,
 }: ResolveChatCompactionBudgetOptions): string | undefined => {
-  if (chatModelOverride) {
+  // On the managed fast tier a selection is served by the fast model (see
+  // `getTanStackTextModelById`), so the budget follows the role default.
+  const servesSelection =
+    orgAIConfig !== null || modelTier === MANAGED_MODEL_TIER.standard;
+  if (chatModelOverride && servesSelection) {
     return (
       decodeChatModelSelection(chatModelOverride)?.modelId ?? chatModelOverride
     );
@@ -75,6 +85,7 @@ const resolveChatModelId = ({
     return getTanStackTextModelInfoForRole("chat", orgAIConfig, {
       dataClass: "customer",
       organizationId,
+      modelTier,
     }).modelId;
   } catch {
     // Boundary: `getTanStackTextModelInfoForRole` throws for an

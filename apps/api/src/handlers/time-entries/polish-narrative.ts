@@ -111,6 +111,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       feature: "time_entries.polish_narrative",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

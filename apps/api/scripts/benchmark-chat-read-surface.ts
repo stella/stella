@@ -317,6 +317,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     const info = getTanStackTextModelInfoForRole("fast", null, {
       dataClass: "public_corpus",
       organizationId: null,
+      modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
     });
     const model = await resolveTanStackTextModel({
       modelId: overrideModel,
@@ -336,6 +337,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
   const info = getTanStackTextModelInfoForRole("fast", null, {
     dataClass: "public_corpus",
     organizationId: null,
+    modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
   });
   const model = await resolveTanStackTextModel({
     role: "fast",

@@ -16,6 +16,7 @@ import {
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
 } from "@/api/lib/chat-model-selection";
+import { readManagedModelTier } from "@/api/lib/usage/organization-access-state";
 
 const config = {
   // Any org member picking a chat model needs to see the catalog; the
@@ -28,13 +29,17 @@ const config = {
 
 const getModelOptions = createSafeRootHandler(
   config,
-  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
-  async function* ({ orgAIConfig, session }) {
+  // oxlint-disable-next-line require-yield -- safe handlers must remain async generators for Result.gen error capture.
+  async function* ({ orgAIConfig, scopedDb, session }) {
     return Result.ok({
       options: getConfiguredChatModelOptions(orgAIConfig),
       defaultValue: getDefaultChatModelValue({
         orgAIConfig,
         organizationId: session.activeOrganizationId,
+        modelTier: await readManagedModelTier(
+          scopedDb,
+          session.activeOrganizationId,
+        ),
       }),
       benchmarkOptions: getChatModelBenchmarkOptions(orgAIConfig),
       benchmarkMetadata: {

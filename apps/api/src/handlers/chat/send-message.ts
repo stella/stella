@@ -669,6 +669,7 @@ export class ChatSendLifecycle {
     )({
       organizationId,
       userId: this.options.userId,
+      organizationStateDb: this.options.scopedDb,
       mode: "concurrency-only",
       actionKind: "chat.send",
     });
@@ -2927,6 +2928,7 @@ export const createSendMessage = (
             await markChatCompactionDue({
               chatModelOverride,
               messages: messagesAfterAssistantPersist,
+              modelTier: modelAdmission.modelTier,
               organizationId: session.activeOrganizationId,
               orgAIConfig,
               reasoningEffort: chatReasoningEffort,
@@ -2950,6 +2952,7 @@ export const createSendMessage = (
                 promptCachingEnabled,
                 recordAuditEvent,
                 safeDb,
+                organizationStateDb: scopedDb,
                 threadId: body.threadId,
                 threadWorkspaceId: workspaceId,
                 userId: user.id,

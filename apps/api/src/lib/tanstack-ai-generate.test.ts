@@ -52,6 +52,7 @@ import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
 } from "@/api/lib/tanstack-ai-schema";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1455,6 +1456,7 @@ describe("model dispatch within its admitted action", () => {
     const caught = await admitModelDispatch({
       organizationId,
       actionKind: "document-reviews.background",
+      organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
       run: async (admission) =>
         await generateTextForTestModel({ ...dispatchOptions, admission }),
@@ -1477,6 +1479,7 @@ describe("model dispatch within its admitted action", () => {
     const escaped = await admitModelDispatch({
       organizationId,
       actionKind: "templates.fill",
+      organizationStateDb: testOrganizationStateDb,
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission),
     });

@@ -86,6 +86,7 @@ const proposePositionsStream = createSafeHandler(
       startExecutionAdmission({
         organizationId,
         userId: user.id,
+        organizationStateDb: scopedDb,
         mode: "concurrency-only",
         actionKind: PROPOSE_POSITIONS_ACTION_KIND,
       }),

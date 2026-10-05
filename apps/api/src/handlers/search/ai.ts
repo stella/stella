@@ -400,6 +400,7 @@ export const refineSearchQuery = async ({
     feature: "search.refine",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });
@@ -525,6 +526,7 @@ export const summarizeSearchResults = async ({
     feature: "search.summary",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       result_count: String(contextsResult.length),

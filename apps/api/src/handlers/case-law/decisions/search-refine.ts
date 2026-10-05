@@ -118,6 +118,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       feature: "case-law.search.refine",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });

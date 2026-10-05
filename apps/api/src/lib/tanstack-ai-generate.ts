@@ -1179,7 +1179,7 @@ export const resolveTanStackTextModel = async (
   // organization the model serves.
   assertModelDispatchScope(options);
   const {
-    admission: _admission,
+    admission: { modelTier },
     modelId,
     organizationId,
     orgAIConfig,
@@ -1197,14 +1197,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(
-          modelId,
-          orgAIConfig,
-          role,
-          policy.dataClass,
-        )
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, role, {
+          dataClass: policy.dataClass,
+          modelTier,
+        })
       : getTanStackTextModelInfoForRole(role, orgAIConfig, {
           organizationId,
+          modelTier,
           ...policy,
         });
     if (info.provider === "openrouter") {
@@ -1238,12 +1237,14 @@ export const resolveTanStackTextModel = async (
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         role,
         organizationId,
+        modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
     : getTanStackTextModelForRole(role, orgAIConfig, {
         organizationId,
+        modelTier,
         managedOpenRouterCredential,
         ...policy,
       });

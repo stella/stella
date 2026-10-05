@@ -6,6 +6,7 @@ import {
   type ModelDispatchScope,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
+import type { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 declare const org: SafeId<"organization">;
 declare const proof: ModelDispatchAdmission;
@@ -49,3 +50,19 @@ void admitModelAction(async ({ admission }) => {
   ({ organizationId: org, admission }) satisfies ModelDispatchScope;
   return await Promise.resolve(admission.actionKind);
 });
+
+// The managed model tier rides on the proof: admission reads it when minting,
+// and the dispatching code never chooses it.
+const forgedTier = { ...forged, modelTier: "fast" } as const;
+// @ts-expect-error a proof with a chosen tier is still not minted by admission
+({ organizationId: org, admission: forgedTier }) satisfies ModelDispatchScope;
+
+// Every resolution of a role's model states the tier it resolves at.
+type InfoOptions = Parameters<typeof getTanStackTextModelInfoForRole>[2];
+({
+  dataClass: "customer",
+  organizationId: org,
+  modelTier: proof.modelTier,
+}) satisfies InfoOptions;
+// @ts-expect-error a role's managed model cannot be resolved without a tier
+({ dataClass: "customer", organizationId: org }) satisfies InfoOptions;

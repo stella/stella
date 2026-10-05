@@ -669,7 +669,11 @@ const executeRun = async ({
         model: getTanStackTextModelInfoForRole(
           VERIFICATION_MODEL_ROLE,
           orgAIConfig,
-          { dataClass: "customer", organizationId: actor.organizationId },
+          {
+            dataClass: "customer",
+            organizationId: actor.organizationId,
+            modelTier: admission.modelTier,
+          },
         ),
         promptCachingEnabled,
       });
@@ -912,6 +916,7 @@ export const initListVerificationRunWorker = () => {
         actionKind: "list-verification.background",
         organizationId: actor.organizationId,
         userId: actor.userId,
+        organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
         run: async (_signal, admission) =>

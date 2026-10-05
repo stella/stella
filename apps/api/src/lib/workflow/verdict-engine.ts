@@ -386,6 +386,7 @@ export const gradeTierMatch = async ({
     feature: "playbook.verdict",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
+    modelTier: admission.modelTier,
     properties: {
       entity_version_id: entityVersionId,
       organization_id: organizationId,
@@ -520,6 +521,7 @@ export const gradeTierMatches = async ({
     feature: "playbook.verdict",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
+    modelTier: admission.modelTier,
     properties: {
       entity_version_id: entityVersionId,
       item_count: pending.length,

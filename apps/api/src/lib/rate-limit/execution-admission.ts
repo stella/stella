@@ -49,6 +49,8 @@ const executionAdmissionError = (error: unknown) => {
 type StartExecutionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  /** The organization's scope, read for the execution's managed model tier. */
+  organizationStateDb: ScopedDb;
   /** Overrides the deployment flag `withActionAdmission` reads. */
   enabled?: boolean;
   admit?: typeof withActionAdmission;
@@ -68,6 +70,7 @@ type StartExecutionAdmissionOptions = {
 export const startExecutionAdmission = async ({
   organizationId,
   userId,
+  organizationStateDb,
   enabled,
   admit = withActionAdmission,
   mode,
@@ -89,9 +92,11 @@ export const startExecutionAdmission = async ({
     userId,
     ...(mode === "action" ? { mode, periodIdentity } : { mode }),
     run: async (signal, control) =>
+      // Minted while still acquiring: a failed tier read refuses the execution.
       await admitModelDispatch({
         organizationId,
         actionKind: mode === "action" ? periodIdentity.actionKind : actionKind,
+        organizationStateDb,
         signal,
         run: async (modelAdmission) => {
           state.status = "executing";
@@ -104,7 +109,7 @@ export const startExecutionAdmission = async ({
             Result.ok({
               signal,
               modelAdmission,
-              reservePeriod: async (identity, organizationStateDb) => {
+              reservePeriod: async (identity, reservationDb) => {
                 const expectedKind =
                   mode === "action" ? periodIdentity.actionKind : actionKind;
                 if (identity.actionKind !== expectedKind) {
@@ -112,7 +117,7 @@ export const startExecutionAdmission = async ({
                 }
                 const reserved = await control.reservePeriod(
                   identity,
-                  organizationStateDb,
+                  reservationDb,
                 );
                 return Result.isError(reserved)
                   ? Result.err(executionAdmissionError(reserved.error))

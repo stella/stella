@@ -16,6 +16,7 @@ import {
   streamChatChunks,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
@@ -147,6 +148,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       distinctId: "user_123",
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       properties: { workspace_id: "workspace_safe", unsafe: "drop" },
       traceId: "trace_complete",
     });
@@ -242,6 +244,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       feature: "case-law.analysis",
       organizationId: orgId,
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       properties: { jurisdiction: "CZE" },
       traceId: "trace_grouped",
     });
@@ -314,6 +317,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "chat.stream",
       modelRole: "chat",
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_usage",
       usageMetering: {
         actionType: "chat",
@@ -405,6 +409,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       feature: "chat.stream",
       modelRole: "chat",
       orgAIConfig: createAnthropicOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_anthropic_warm_cache",
       usageMetering: {
         actionType: "chat",
@@ -467,6 +472,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       feature: "chat.stream",
       modelRole: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_poisoned_usage",
       usageMetering: {
         actionType: "chat",
@@ -549,6 +555,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       feature: "chat.stream",
       modelRole: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       selectedModelId: "openai::gpt-5.6",
       traceId: "trace_selected_model",
       usageMetering: {
@@ -642,6 +649,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "chat.stream",
       modelRole: "chat",
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_fallback_usage",
       usageMetering: {
         actionType: "chat",
@@ -687,6 +695,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_error",
     });
     const error = new Error("provider failed");
@@ -740,6 +749,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         dataClass: "public_corpus",
         analytics,
         feature: "chat.suggested-prompts",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_missing_model",
       });
       const deferred: Promise<unknown>[] = [];
@@ -792,6 +802,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         },
         feature: "signals.deadline-scout",
         orgAIConfig: createOpenAIOrgAIConfig(),
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_failure_metadata",
       });
       const truncated = createMiddlewareContext({ runId: "truncated" });
@@ -890,6 +901,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       },
       feature: "signals.deadline-scout",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_sdk_truncation",
     });
     const adapter = {
@@ -1002,6 +1014,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "chat.suggested_prompts",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_provider_unavailable",
       }).captureError({ status: 503 });
       createTanStackAIAnalyticsCallbacks({
@@ -1012,6 +1025,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "chat.suggested_prompts",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_unknown",
       }).captureError(new Error("boom"));
 
@@ -1073,6 +1087,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       },
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_failed_call",
       usageMetering: {
         actionType: "chat",
@@ -1161,6 +1176,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_iterations",
     });
     // A tool-calling turn: two model calls, each reporting its own usage;
@@ -1244,6 +1260,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           dataClass: "customer",
           feature: "chat.stream",
           orgAIConfig: createAnthropicOrgAIConfig(),
+          modelTier: MANAGED_MODEL_TIER.standard,
           promptCacheSurface,
           traceId: "trace_prompt_cache",
         });
@@ -1311,6 +1328,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "templates.fill",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_shared",
     });
     const runA = createMiddlewareContext({ runId: "run_a" });
@@ -1401,6 +1419,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_interrupted",
     });
     const ctx = createMiddlewareContext();
@@ -1448,6 +1467,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "templates.suggestFields",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_byok_role",
       }).captureError(error);
 
@@ -1503,6 +1523,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           dataClass: "public_corpus",
           analytics: silentAnalytics,
           feature: "templates.suggestFields",
+          modelTier: MANAGED_MODEL_TIER.standard,
           traceId: "trace_anticipated",
         }).captureError(error);
       }
@@ -1513,6 +1534,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         dataClass: "public_corpus",
         analytics: silentAnalytics,
         feature: "templates.suggestFields",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_defect",
       }).captureError(new Error("boom"));
 
@@ -1550,6 +1572,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "search.refine",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_provider_status",
       }).captureError(error);
 
@@ -1582,6 +1605,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "search.refine",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_no_provider_status",
       }).captureError(error);
 
@@ -1617,6 +1641,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           identifyOrganizationGroup: () => undefined,
         },
         feature: "search.refine",
+        modelTier: MANAGED_MODEL_TIER.standard,
         traceId: "trace_shadow_grade",
       }).captureError(error);
 

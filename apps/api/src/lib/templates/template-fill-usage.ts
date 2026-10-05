@@ -214,6 +214,7 @@ export const buildTemplateFillAiWiring = ({
               feature,
               modelRole: "fast",
               orgAIConfig: config.orgAIConfig,
+              modelTier: admission.modelTier,
               properties: { organization_id: organizationId },
               traceId: Bun.randomUUIDv7(),
             }),

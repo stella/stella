@@ -87,6 +87,7 @@ const autocompleteStream = createSafeRootHandler(
       startExecutionAdmission({
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        organizationStateDb: scopedDb,
         mode: "concurrency-only",
         actionKind: AUTOCOMPLETE_ACTION_KIND,
       }),
