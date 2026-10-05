@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nicht gespeichert",
-      "failedTitle": "Ihre Änderung wurde nicht gespeichert",
-      "saved": "Gespeichert",
-      "saving": "Wird gespeichert …"
+      "failedTitle": "Ihre Änderung wurde nicht gespeichert"
     },
     "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
     "states": {
@@ -1878,6 +1876,8 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert …",
     "scopeThisPage": "(diese Seite)",
     "scrollToBottom": "Nach unten scrollen",
     "scrollToTop": "Nach oben scrollen",
@@ -3567,6 +3567,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "autosave": {
+        "failed": "Speichern fehlgeschlagen",
+        "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
+        "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3652,6 +3657,7 @@
       "optionsLabel": "Optionen",
       "outline": "Gliederung",
       "positionOfTotal": "Standpunkt {index} von {total}",
+      "positionRemoved": "Standpunkt entfernt",
       "positions": "Standpunkte",
       "recent": "Zuletzt verwendet",
       "recommended": "Empfohlene Vorlagen",

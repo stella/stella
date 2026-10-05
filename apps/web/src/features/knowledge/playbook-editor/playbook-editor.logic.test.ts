@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { stableStringify } from "@stll/stable-stringify";
 
 import type {
   DetailSeedGate,
@@ -15,13 +16,18 @@ import type {
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
   buildPlaybookSavePayload,
+  canAutosave,
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
   detailSeedGate,
+  draftToAdopt,
+  invalidPositionIds,
   latchedSeedGate,
+  rebasePlaybookDraft,
   refetchSupersededDetail,
   resolveDetailSeed,
+  resolvePaneSaveStatus,
   resolvePlaybookScrollTop,
   resolvePositionSources,
   resolveServerFollow,
@@ -615,5 +621,283 @@ describe("Following the server's newer version", () => {
         return follow.type === (isDirty ? "behind" : "reseed");
       }),
     );
+  });
+});
+
+describe("An untouched blank position", () => {
+  const filled: Position = { ...newExtractPosition(), issue: "Audit rights" };
+  const draftWith = (positions: Position[]): PlaybookDraft => ({
+    name: "DPA",
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions,
+  });
+
+  test("is left out of the save, the dirty check and the validity check", () => {
+    for (const blank of [newGradedPosition(), newExtractPosition()]) {
+      const baseline = createPlaybookBaseline(draftWith([filled]));
+      const withBlank = draftWith([filled, blank]);
+      expect(buildPlaybookSavePayload(withBlank).positions.items).toHaveLength(
+        1,
+      );
+      expect(hasPlaybookDraftChanges({ baseline, current: withBlank })).toBe(
+        false,
+      );
+      expect(invalidPositionIds([filled, blank])).toEqual([]);
+    }
+  });
+
+  test("joins the draft once typed in", () => {
+    const typed: Position = { ...newExtractPosition(), issue: "T" };
+    const baseline = createPlaybookBaseline(draftWith([filled]));
+    expect(
+      hasPlaybookDraftChanges({
+        baseline,
+        current: draftWith([filled, typed]),
+      }),
+    ).toBe(true);
+    // A graded position with an issue but no standard still needs content.
+    const graded: Position = { ...newGradedPosition(), issue: "Cap" };
+    expect(invalidPositionIds([filled, graded])).toEqual([graded.sourceId]);
+  });
+});
+
+describe("Rebasing the user's edits on a newer server version", () => {
+  const position = (sourceId: string, issue: string): Position => ({
+    ...newExtractPosition(),
+    sourceId,
+    issue,
+  });
+  const draftOf = (
+    positions: Position[],
+    name = "Playbook",
+  ): PlaybookDraft => ({
+    name,
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions,
+  });
+
+  type Edit = "keep" | "edit" | "remove";
+  const BASE_IDS = ["b0", "b1", "b2", "b3", "b4", "b5"];
+  const edit = fc.constantFrom<Edit>("keep", "edit", "remove");
+  const edits = fc.tuple(...BASE_IDS.map(() => edit));
+  const added = fc.constantFrom(0, 1, 2);
+  // A baseline, then the user's and the server's independent edits to it.
+  const scenario = fc
+    .record({
+      baseIds: fc.subarray(BASE_IDS),
+      localEdits: edits,
+      serverEdits: edits,
+      localAdded: added,
+      serverAdded: added,
+      localShuffle: fc.boolean(),
+      localName: fc.boolean(),
+      serverName: fc.boolean(),
+    })
+    .map((input) => {
+      const base = input.baseIds.map((id) => position(id, `base ${id}`));
+      const apply = (
+        side: "local" | "server",
+        sideEdits: readonly Edit[],
+        addedCount: number,
+      ) => {
+        const kept: Position[] = [];
+        for (const [index, item] of base.entries()) {
+          const change = sideEdits[index];
+          if (change === "edit") {
+            kept.push({ ...item, issue: `${item.issue} (${side})` });
+          } else if (change === "keep") {
+            kept.push(item);
+          }
+        }
+        for (let index = 0; index < addedCount; index += 1) {
+          kept.splice(
+            index % (kept.length + 1),
+            0,
+            position(`${side}-new-${index}`, `${side} new ${index}`),
+          );
+        }
+        return kept;
+      };
+      const localPositions = apply("local", input.localEdits, input.localAdded);
+      return {
+        baseline: draftOf(base),
+        local: draftOf(
+          input.localShuffle ? localPositions.toReversed() : localPositions,
+          input.localName ? "Renamed by user" : "Playbook",
+        ),
+        server: draftOf(
+          apply("server", input.serverEdits, input.serverAdded),
+          input.serverName ? "Renamed by model" : "Playbook",
+        ),
+      };
+    });
+
+  test("without edits the result is the server's version", () => {
+    assertProperty(
+      "without edits the result is the server's version",
+      fc.property(
+        scenario,
+        ({ baseline, server }) =>
+          stableStringify(
+            rebasePlaybookDraft({ baseline, local: baseline, server }),
+          ) === stableStringify(server),
+      ),
+    );
+  });
+
+  test("without a server change the result is the user's draft", () => {
+    assertProperty(
+      "without a server change the result is the user's draft",
+      fc.property(
+        scenario,
+        ({ baseline, local }) =>
+          stableStringify(
+            rebasePlaybookDraft({ baseline, local, server: baseline }),
+          ) === stableStringify(local),
+      ),
+    );
+  });
+
+  test("every position the user added or changed survives as they left it", () => {
+    assertProperty(
+      "every position the user added or changed survives as they left it",
+      fc.property(scenario, ({ baseline, local, server }) => {
+        const result = rebasePlaybookDraft({ baseline, local, server });
+        const baseIssues = new Map(
+          baseline.positions.map((item) => [item.sourceId, item.issue]),
+        );
+        return local.positions
+          .filter((item) => baseIssues.get(item.sourceId) !== item.issue)
+          .every((item) =>
+            result.positions.some(
+              (kept) =>
+                kept.sourceId === item.sourceId && kept.issue === item.issue,
+            ),
+          );
+      }),
+    );
+  });
+
+  test("a position the user removed stays removed", () => {
+    const a = position("a", "A");
+    const b = position("b", "B");
+    const result = rebasePlaybookDraft({
+      baseline: draftOf([a, b]),
+      local: draftOf([a]),
+      server: draftOf([a, b, position("c", "C")]),
+    });
+    expect(result.positions.map(({ sourceId }) => sourceId)).toEqual([
+      "a",
+      "c",
+    ]);
+  });
+
+  test("the model's new position and the user's rename both survive", () => {
+    const a = position("a", "A");
+    const result = rebasePlaybookDraft({
+      baseline: draftOf([a]),
+      local: draftOf([a], "Supplier DPAs"),
+      server: draftOf([a, position("m", "Audit rights")]),
+    });
+    expect(result.name).toBe("Supplier DPAs");
+    expect(result.positions.map(({ issue }) => issue)).toEqual([
+      "A",
+      "Audit rights",
+    ]);
+  });
+});
+
+describe("The pane's save status", () => {
+  const clean = { nameMissing: false, invalidPositions: 0 };
+
+  test("never reads as saved while edits are not persisted", () => {
+    expect(
+      resolvePaneSaveStatus({ isDirty: true, request: "idle", ...clean }),
+    ).toEqual({ type: "saving" });
+    expect(
+      resolvePaneSaveStatus({ isDirty: true, request: "failed", ...clean }),
+    ).toEqual({ type: "failed" });
+    expect(
+      resolvePaneSaveStatus({
+        isDirty: true,
+        request: "idle",
+        nameMissing: false,
+        invalidPositions: 2,
+      }),
+    ).toEqual({
+      type: "needs-attention",
+      nameMissing: false,
+      invalidPositions: 2,
+    });
+  });
+
+  test("reads as saved once the draft matches the server", () => {
+    expect(
+      resolvePaneSaveStatus({ isDirty: false, request: "idle", ...clean }),
+    ).toEqual({ type: "saved" });
+    expect(
+      resolvePaneSaveStatus({ isDirty: false, request: "in-flight", ...clean }),
+    ).toEqual({ type: "saving" });
+  });
+});
+
+describe("Which hosts follow and save on their own", () => {
+  const draft = (name: string): PlaybookDraft => ({
+    name,
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions: [],
+  });
+  const baseline = draft("Base");
+  const local = draft("Mine");
+  const server = draft("Theirs");
+
+  test("a form with edits rebases in the pane and keeps them on the page", () => {
+    const behind = { type: "behind" } as const;
+    expect(
+      draftToAdopt({
+        follow: behind,
+        whenBehind: "keep",
+        baseline,
+        local,
+        server,
+      }),
+    ).toBeNull();
+    expect(
+      draftToAdopt({
+        follow: behind,
+        whenBehind: "rebase",
+        baseline,
+        local,
+        server,
+      })?.name,
+    ).toBe("Mine");
+    expect(
+      draftToAdopt({
+        follow: { type: "reseed" },
+        whenBehind: "keep",
+        baseline,
+        local: baseline,
+        server,
+      }),
+    ).toBe(server);
+  });
+
+  test("only the pane autosaves, and only a draft the user may update", () => {
+    const pane = { host: "pane", exists: true, canUpdate: true } as const;
+    expect(canAutosave({ ...pane, status: "draft" })).toBe(true);
+    expect(canAutosave({ ...pane, status: "approved" })).toBe(false);
+    expect(canAutosave({ ...pane, status: "draft", canUpdate: false })).toBe(
+      false,
+    );
+    expect(canAutosave({ ...pane, status: "draft", host: "page" })).toBe(false);
   });
 });

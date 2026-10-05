@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "No guardado",
-      "failedTitle": "No se guardó su cambio",
-      "saved": "Guardado",
-      "saving": "Guardando…"
+      "failedTitle": "No se guardó su cambio"
     },
     "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
     "states": {
@@ -1878,6 +1876,8 @@
     "saveAndLeave": "Guardar y salir",
     "saveAsPdf": "Guardar como PDF",
     "saveChanges": "Guardar cambios",
+    "saved": "Guardado",
+    "saving": "Guardando…",
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Ir abajo",
     "scrollToTop": "Ir arriba",
@@ -3567,6 +3567,11 @@
       "askContentLabel": "Tipo de respuesta",
       "askQuestionLabel": "Pregunta",
       "askQuestionPlaceholder": "¿Qué debemos leer de cada documento? Déjalo vacío para introducirlo manualmente.",
+      "autosave": {
+        "failed": "No se pudo guardar",
+        "nameMissing": "Sin guardar: añade un nombre",
+        "positionsNeedAttention": "Sin guardar: {count, plural, one {# posición requiere} other {# posiciones requieren}} atención"
+      },
       "check": "Usar una regla exacta en lugar de IA",
       "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",
       "checkKind": {
@@ -3652,6 +3657,7 @@
       "optionsLabel": "Opciones",
       "outline": "Esquema",
       "positionOfTotal": "Posición {index} de {total}",
+      "positionRemoved": "Posición eliminada",
       "positions": "Posiciones",
       "recent": "Usados recientemente",
       "recommended": "Plantillas recomendadas",

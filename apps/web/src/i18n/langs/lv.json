@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nav saglabāts",
-      "failedTitle": "Jūsu izmaiņas netika saglabātas",
-      "saved": "Saglabāts",
-      "saving": "Saglabā…"
+      "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
     "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
@@ -1878,6 +1876,8 @@
     "saveAndLeave": "Saglabāt un iziet",
     "saveAsPdf": "Saglabāt kā PDF",
     "saveChanges": "Saglabāt izmaiņas",
+    "saved": "Saglabāts",
+    "saving": "Saglabā…",
     "scopeThisPage": "(šī lapa)",
     "scrollToBottom": "Ritināt uz leju",
     "scrollToTop": "Ritināt uz augšu",
@@ -3567,6 +3567,11 @@
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
+      "autosave": {
+        "failed": "Neizdevās saglabāt",
+        "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
+        "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
+      },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
@@ -3652,6 +3657,7 @@
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
       "positionOfTotal": "Pozīcija {index} no {total}",
+      "positionRemoved": "Pozīcija noņemta",
       "positions": "Pozīcijas",
       "recent": "Nesen izmantotie",
       "recommended": "Ieteicamie sākuma ceļveži",

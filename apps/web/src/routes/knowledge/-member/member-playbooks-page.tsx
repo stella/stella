@@ -4,7 +4,10 @@ import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { guideAnchor } from "@/features/guides/guide-anchor";
+import {
+  guideAnchor,
+  guideReverseBlocked,
+} from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
   memberKnowledgeActions,
@@ -26,6 +29,17 @@ import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
 type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
 
 const playbooksRouteApi = getRouteApi("/knowledge/playbooks");
+
+// The playbooks tour runs on this page, so the page hands the editor its
+// targets; the inspector pane hosts the same editor without them.
+const PLAYBOOK_EDITOR_TOUR_ANCHORS = {
+  back: (isDirty: boolean) => ({
+    ...guideAnchor(GUIDE_ANCHORS.playbooksBack),
+    ...guideReverseBlocked(isDirty),
+  }),
+  basics: guideAnchor(GUIDE_ANCHORS.playbooksBasics),
+  addPosition: guideAnchor(GUIDE_ANCHORS.playbooksAddPosition),
+};
 
 /** The organization's playbooks and their editor: the member side of the
  *  playbooks section. */
@@ -161,8 +175,12 @@ export function MemberPlaybooksPage({
   if (view.kind === "editor") {
     return (
       <PlaybookEditor
-        onBack={handleBackToList}
-        onSaved={handleBackToList}
+        host={{
+          type: "page",
+          onBack: handleBackToList,
+          onSaved: handleBackToList,
+          tourAnchors: PLAYBOOK_EDITOR_TOUR_ANCHORS,
+        }}
         organizationId={activeOrganizationId}
         playbookId={view.playbookId}
       />

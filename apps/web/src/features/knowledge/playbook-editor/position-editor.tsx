@@ -220,6 +220,8 @@ type PositionEditorProps = {
   onRemove: () => void;
   onDuplicate: () => void;
   onConvertMode: () => void;
+  /** Focus moved from inside the card to somewhere outside it. */
+  onFocusLeave: () => void;
   onReorder: (draggedSourceId: string, targetSourceId: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -242,6 +244,7 @@ export const PositionEditor = ({
   onRemove,
   onDuplicate,
   onConvertMode,
+  onFocusLeave,
   onReorder,
   onMoveUp,
   onMoveDown,
@@ -255,6 +258,27 @@ export const PositionEditor = ({
     position.issue.trim() || t("knowledge.playbooks.untitledPosition");
   const bodyId = `position-body-${sourceId}`;
   const handleReorder = useLatestCallback(onReorder);
+  const handleFocusLeave = useLatestCallback(onFocusLeave);
+
+  useExternalSyncEffect(() => {
+    if (!cardRef) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    cardRef.addEventListener(
+      "focusout",
+      (event) => {
+        if (
+          !(event.relatedTarget instanceof Node) ||
+          !cardRef.contains(event.relatedTarget)
+        ) {
+          handleFocusLeave();
+        }
+      },
+      { signal: controller.signal },
+    );
+    return () => controller.abort();
+  }, [cardRef, handleFocusLeave]);
 
   useExternalSyncEffect(() => {
     if (!cardRef || !gripRef) {
