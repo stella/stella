@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
   TEXT_ABSENCE_REASONS,
+  type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -185,7 +188,7 @@ describe("decision text fields", () => {
     );
   });
 
-  test("stores declared fields separately from ordinary metadata", () => {
+  test("stores every absent field reason beside ordinary metadata", () => {
     const stored = storeDecisionTextFields({
       metadata: { sourceReference: "fixture-reference" },
       textFields: {
@@ -196,11 +199,43 @@ describe("decision text fields", () => {
 
     expect(stored).toEqual({
       sourceReference: "fixture-reference",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "headnote", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "legalSentence", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "summary", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+      ],
       abstract: "Published abstract",
+    });
+  });
+
+  test("stores no absence sidecar when every text field is present", () => {
+    const textFields = {
+      abstract: presentTextField("Published abstract"),
+      headnote: presentTextField("Published headnote"),
+      legalSentence: presentTextField("Published sentence"),
+      summary: presentTextField("Published summary"),
+    };
+
+    const stored = storeDecisionTextFields({
+      metadata: { sourceReference: "fixture-reference" },
+      textFields,
+    });
+
+    expect(stored).toEqual({
+      sourceReference: "fixture-reference",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      abstract: "Published abstract",
+      headnote: "Published headnote",
+      legalSentence: "Published sentence",
+      summary: "Published summary",
     });
     expect(Object.hasOwn(stored, DECISION_TEXT_ABSENCE_METADATA_KEY)).toBe(
       false,
     );
+    expect(readDecisionTextMetadata(stored).textFields).toEqual(textFields);
   });
 
   test("rejects every protected field hidden in ordinary metadata", () => {
@@ -216,27 +251,68 @@ describe("decision text fields", () => {
     }
   });
 
-  test("round trips every absence reason for every decision text field", () => {
-    for (const key of DECISION_TEXT_FIELD_KEYS) {
+  test("stores every text state mask and round trips its exact stored form", () => {
+    const presentText = {
+      abstract: "Abstract first line\nsecond  line",
+      headnote: "Headnote first line\nsecond  line",
+      legalSentence: "Sentence first line\nsecond  line",
+      summary: "Summary first line\nsecond  line",
+    } satisfies Record<DecisionTextFieldKey, string>;
+    const isAbsent = (mask: number, field: DecisionTextFieldKey): boolean => {
+      const index = DECISION_TEXT_FIELD_KEYS.indexOf(field);
+      return Math.floor(mask / 2 ** index) % 2 === 1;
+    };
+
+    for (let mask = 0; mask < 2 ** DECISION_TEXT_FIELD_KEYS.length; mask += 1) {
       for (const reason of TEXT_ABSENCE_REASONS) {
         const textFields = {
-          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-          [key]: absentTextField(reason),
+          abstract: isAbsent(mask, "abstract")
+            ? absentTextField(reason)
+            : presentTextField(presentText.abstract),
+          headnote: isAbsent(mask, "headnote")
+            ? absentTextField(reason)
+            : presentTextField(presentText.headnote),
+          legalSentence: isAbsent(mask, "legalSentence")
+            ? absentTextField(reason)
+            : presentTextField(presentText.legalSentence),
+          summary: isAbsent(mask, "summary")
+            ? absentTextField(reason)
+            : presentTextField(presentText.summary),
         };
+        const expectedAbsent = DECISION_TEXT_FIELD_KEYS.filter((field) =>
+          isAbsent(mask, field),
+        ).map((field) => ({ field, reason }));
+        const expectedPresent = Object.fromEntries(
+          DECISION_TEXT_FIELD_KEYS.filter(
+            (field) => !isAbsent(mask, field),
+          ).map((field) => [field, presentText[field]]),
+        );
         const stored = storeDecisionTextFields({
           metadata: { sourceReference: "fixture-reference" },
           textFields,
         });
+        const expectedStored = {
+          sourceReference: "fixture-reference",
+          [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+            DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+          ...expectedPresent,
+          ...(expectedAbsent.length === 0
+            ? {}
+            : { [DECISION_TEXT_ABSENCE_METADATA_KEY]: expectedAbsent }),
+        };
+        const split = splitStoredDecisionTextMetadata(stored);
 
-        expect(readDecisionTextMetadata(stored)).toEqual({
+        expect(stored).toEqual(expectedStored);
+        expect(split).toEqual({
           metadata: { sourceReference: "fixture-reference" },
           textFields,
         });
-        expect(stored[DECISION_TEXT_ABSENCE_METADATA_KEY]).toEqual(
-          reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
-            ? undefined
-            : [{ field: key, reason }],
-        );
+        expect(
+          storeDecisionTextFields({
+            metadata: split.metadata,
+            textFields: split.textFields,
+          }),
+        ).toEqual(stored);
       }
     }
   });
@@ -260,6 +336,13 @@ describe("decision text fields", () => {
         },
       }),
     ).toEqual({
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "headnote", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "legalSentence", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "summary", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+      ],
       abstract: "Stored abstract",
       sourceReference: "new-reference",
     });
@@ -289,11 +372,16 @@ describe("decision text fields", () => {
         textFields,
       }),
     ).toEqual({
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
       [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
         {
           field: "abstract",
           reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
         },
+        { field: "headnote", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "legalSentence", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "summary", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
       ],
       sourceReference: "new-reference",
     });
@@ -315,6 +403,26 @@ describe("decision text fields", () => {
         summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       },
     });
+  });
+
+  test("legacy nullable fields without a sidecar entry still read as not published", () => {
+    for (const field of DECISION_TEXT_FIELD_KEYS) {
+      for (const value of [null, undefined]) {
+        for (const sidecar of [undefined, []]) {
+          const metadata = {
+            [field]: value,
+            ...(sidecar === undefined
+              ? {}
+              : {
+                  [DECISION_TEXT_ABSENCE_METADATA_KEY]: sidecar,
+                }),
+          };
+          expect(readDecisionTextMetadata(metadata).textFields).toEqual(
+            absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          );
+        }
+      }
+    }
   });
 
   test("splits stored text before replaying an ingestion result", () => {
@@ -345,6 +453,9 @@ describe("decision text fields", () => {
           unexpected: true,
         },
       ],
+      [{ field: "unknown", reason: "unknown_reason" }],
+      [{ field: "abstract", reason: "unknown_reason" }],
+      [{ field: "abstract", reason: 42 }],
       [
         { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
         {
@@ -395,8 +506,13 @@ describe("decision text fields", () => {
     });
 
     expect(preserved).toEqual({
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
       [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
         { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+        { field: "headnote", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "legalSentence", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "summary", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
       ],
       abstract: "Restricted text",
       sourceReference: "new-reference",
@@ -434,6 +550,13 @@ describe("decision text fields", () => {
         textFields,
       }),
     ).toEqual({
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "headnote", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "legalSentence", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+        { field: "summary", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+      ],
       abstract: "Current abstract",
       sourceReference: "new-reference",
     });

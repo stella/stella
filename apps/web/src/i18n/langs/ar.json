@@ -54,6 +54,17 @@
       "polish": "تحسين الصياغة"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
+    "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
+    "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
+    "runColumnPage": "تشغيل العمود (هذه الصفحة)",
+    "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
+    "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
+    "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
@@ -6004,7 +6015,6 @@
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
-      "rerunColumn": "إعادة تشغيل العمود",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",
       "scopeFile": "الملف الحالي",

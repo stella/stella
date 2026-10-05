@@ -54,6 +54,17 @@
       "polish": "Patobulinti formuluotę"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
+    "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
+    "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
+    "runColumnPage": "Vykdyti stulpelį (šiame puslapyje)",
+    "runPageRows": "Vykdyti {count, plural, one {# šio puslapio eilutei} few {# šio puslapio eilutėms} many {# šio puslapio eilutės} other {# šio puslapio eilučių}}",
+    "runRemainingPage": "Vykdyti likusius (šiame puslapyje)",
+    "runSelectedRows": "Vykdyti {count, plural, one {# pasirinktai eilutei} few {# pasirinktoms eilutėms} many {# pasirinktos eilutės} other {# pasirinktų eilučių}}",
+    "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
+  },
   "appearance": {
     "calendar": "Kalendorius",
     "calendarGregorian": "Grigaliaus",
@@ -6004,7 +6015,6 @@
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "DI skaito iš",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
-      "rerunColumn": "Paleisti stulpelį iš naujo",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Formatas",
       "scopeFile": "Dabartinis failas",

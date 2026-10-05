@@ -57,6 +57,17 @@ type Messages = {
       "polish": "Polish the writing";
     };
   };
+  "aiColumns": {
+    "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.";
+    "refusedBudget": "Not run: answer budget unavailable";
+    "rerunAllPage": "Rerun all (this page)";
+    "rerunColumnPage": "Rerun column (this page)";
+    "runColumnPage": "Run column (this page)";
+    "runPageRows": "Run for {count, plural, one {# row on this page} other {# rows on this page}}";
+    "runRemainingPage": "Run remaining (this page)";
+    "runSelectedRows": "Run for {count, plural, one {# selected row} other {# selected rows}}";
+    "selectedRun": "Run AI columns for {count, plural, one {# row} other {# rows}}";
+  };
   "appearance": {
     "calendar": "Calendar";
     "calendarGregorian": "Gregorian";
@@ -6007,7 +6018,6 @@ type Messages = {
       "previewUnsupported": "Preview unsupported for this document type.";
       "readingFrom": "AI reads from";
       "referencesItself": "Property references itself through other properties";
-      "rerunColumn": "Rerun column";
       "resultType": "Result type";
       "returnsLabel": "Format";
       "scopeFile": "Current file";
