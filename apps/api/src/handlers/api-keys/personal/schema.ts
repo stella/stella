@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import { machineApiKeyNameSchema } from "@/api/handlers/api-keys/mint";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -38,3 +39,14 @@ export const personalApiKeyListQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 50 })),
   cursor: t.Optional(tPaginationCursor()),
 });
+
+type PersonalAudience = (typeof PERSONAL_API_KEY_AUDIENCES)[number];
+type SchemaAudience = NonNullable<
+  Static<typeof personalApiKeyBodySchema>["audience"]
+>;
+true satisfies Exclude<PersonalAudience, SchemaAudience> extends never
+  ? true
+  : never;
+true satisfies Exclude<SchemaAudience, PersonalAudience> extends never
+  ? true
+  : never;

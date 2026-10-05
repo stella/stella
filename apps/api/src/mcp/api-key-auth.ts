@@ -12,13 +12,13 @@ import {
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import { readPersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-lifecycle";
+import { personalApiKeyPermissionsAllowed } from "@/api/lib/machine-api-keys/personal-policy";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import { readPersonalApiKeyPolicy } from "@/api/lib/personal-api-key-lifecycle";
-import { personalApiKeyPermissionsAllowed } from "@/api/lib/personal-api-key-policy";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -129,25 +129,18 @@ export const resolveMachineApiKeySession = async (
     throw rejectCredential();
   }
 
-  let personalKeyAllowed = true;
-  if (metadata.output.kind === API_KEY_KIND.personal) {
-    const { organizationId } = brandActorSessionIdentity({
-      organizationId: metadata.output.organizationId,
-      userId: key.referenceId,
-    });
-    if (
-      !personalApiKeyPermissionsAllowed(storedPermissions.output) ||
+  const { organizationId, scopes } = metadata.output;
+  const userId = key.referenceId;
+  const identity = brandActorSessionIdentity({ organizationId, userId });
+  const personalPolicy =
+    metadata.output.kind === API_KEY_KIND.personal &&
+    (!personalApiKeyPermissionsAllowed(storedPermissions.output) ||
       key.expiresAt === null ||
       key.expiresAt.getTime() - key.createdAt.getTime() >
         API_KEY_POLICY.personal.maxDays * DAY_IN_MS ||
-      (await resolvePersonalPolicy(organizationId)) !== "enabled"
-    ) {
-      personalKeyAllowed = false;
-    }
-  }
-
-  const { organizationId, scopes } = metadata.output;
-  const userId = key.referenceId;
+      (await resolvePersonalPolicy(identity.organizationId)) !== "enabled")
+      ? "denied"
+      : "allowed";
 
   // The live membership check. `resolveMcpSessionContext` runs this again for
   // the session it builds; doing it here as well is what lets the permission
@@ -157,12 +150,10 @@ export const resolveMachineApiKeySession = async (
   // Branding happens here, at the same boundary `resolveMcpSessionContext` uses:
   // these two ids arrive as plain strings (one parsed out of a metadata column,
   // one read off the key row) and only become ownership ids once they cross it.
-  const authorization = await resolveAuthorization(
-    brandActorSessionIdentity({ organizationId, userId }),
-  );
+  const authorization = await resolveAuthorization(identity);
 
   if (
-    !personalKeyAllowed ||
+    personalPolicy === "denied" ||
     !authorization ||
     !isMemberRole(authorization.role)
   ) {

@@ -1,9 +1,9 @@
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { generateRandomString } from "better-auth/crypto";
 import { panic, Result } from "better-result";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 
-import { apikey, member, organization } from "@/api/db/auth-schema";
+import { apikey, member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
@@ -37,7 +37,11 @@ import {
   machineApiKeyColumns,
   machineApiKeyCursor,
 } from "@/api/lib/machine-api-key-queries";
-import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
+import {
+  apiKeyKindScope,
+  machineApiKeyOrganizationScope,
+} from "@/api/lib/machine-api-key-scope";
+import { personalApiKeyPermissions } from "@/api/lib/machine-api-keys/personal-policy";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createCursorPage } from "@/api/lib/pagination";
 import {
@@ -45,12 +49,11 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { personalApiKeyPermissions } from "@/api/lib/personal-api-key-policy";
 
 const personalScope = (organizationId: SafeId<"organization">) =>
   and(
     machineApiKeyOrganizationScope(organizationId),
-    sql`(${apikey.metadata}::text::jsonb ->> 'kind') = 'personal'`,
+    apiKeyKindScope(API_KEY_KIND.personal),
   );
 const keyNotFound = () =>
   new HandlerError({ status: 404, message: "API key not found" });
@@ -125,9 +128,9 @@ export const readPersonalApiKeyPolicy = async (
 
 type MintPersonalKeyOptions = MutationOptions & {
   name: string;
-  scopes?: PersonalApiKeyScope[];
-  expiresInDays?: number;
-  audience?: (typeof PERSONAL_API_KEY_AUDIENCES)[number];
+  scopes?: PersonalApiKeyScope[] | undefined;
+  expiresInDays?: number | undefined;
+  audience?: (typeof PERSONAL_API_KEY_AUDIENCES)[number] | undefined;
   permissionCeiling?: Record<string, string[]>;
 };
 
@@ -320,7 +323,7 @@ export const revokePersonalApiKey = async (
   });
 
 export const rotatePersonalApiKey = async (
-  options: KeyOptions & { expiresInDays?: number },
+  options: KeyOptions & { expiresInDays?: number | undefined },
 ) =>
   mutatePersonalKeys(options, async ({ tx, memberRole }) => {
     const key = await loadPersonalKey(tx, { ...options, access: "own" });
@@ -398,7 +401,7 @@ export const updatePersonalApiKeyPolicy = async (
 
 type ListPersonalKeysOptions = Principal & {
   access: "own" | "organization";
-  cursor?: string;
+  cursor?: string | undefined;
   limit: number;
 };
 export const listPersonalApiKeys = async (
@@ -409,7 +412,10 @@ export const listPersonalApiKeys = async (
     options.cursor === undefined
       ? null
       : machineApiKeyCursor.decode(options.cursor);
-  if (options.cursor !== undefined && cursor === null) {
+  if (
+    options.cursor !== undefined &&
+    (cursor === null || cursor.timestamp.precision !== "microseconds")
+  ) {
     return abortTransaction(
       new HandlerError({ status: 400, message: "Invalid API key cursor" }),
     );
@@ -417,9 +423,18 @@ export const listPersonalApiKeys = async (
   const rows = await database
     .select({
       ...machineApiKeyColumns,
+      ownerName: user.name,
       createdAtCursor: machineApiKeyCursor.cursorValue.as("created_at_cursor"),
     })
     .from(apikey)
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, apikey.referenceId),
+        eq(member.organizationId, options.organizationId),
+      ),
+    )
+    .leftJoin(user, eq(user.id, member.userId))
     .where(
       and(
         personalScope(options.organizationId),
@@ -456,7 +471,7 @@ export const listPersonalApiKeys = async (
     },
     items: page.items.map((row) => {
       const summary = toMachineApiKeySummary(row);
-      if (!summary) {
+      if (!summary || summary.kind !== API_KEY_KIND.personal) {
         panic("Personal key metadata must parse through the owning schema");
       }
       return {
@@ -464,6 +479,7 @@ export const listPersonalApiKeys = async (
         name: summary.name,
         kind: summary.kind,
         ownerUserId: summary.ownerUserId,
+        ownerName: row.ownerName,
         scopes: summary.scopes,
         audience: summary.audience,
         enabled: summary.enabled,

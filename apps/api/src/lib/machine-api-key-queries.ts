@@ -5,7 +5,11 @@ import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
-import { machineApiKeyOrganizationScope as organizationScope } from "@/api/lib/machine-api-key-scope";
+import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
+import {
+  apiKeyKindScope,
+  machineApiKeyOrganizationScope as organizationScope,
+} from "@/api/lib/machine-api-key-scope";
 
 /**
  * Organization-scoped reads of the machine-key table.
@@ -131,7 +135,13 @@ export const readOrganizationMachineApiKeyPage = async (
           machineApiKeyCursor.cursorValue.as("created_at_cursor"),
       })
       .from(apikey)
-      .where(and(organizationScope(organizationId), eq(apikey.id, cursor.id)))
+      .where(
+        and(
+          organizationScope(organizationId),
+          apiKeyKindScope(API_KEY_KIND.machine),
+          eq(apikey.id, cursor.id),
+        ),
+      )
       .limit(1);
     if (boundary === undefined) {
       return [];
@@ -153,6 +163,7 @@ export const readOrganizationMachineApiKeyPage = async (
     .where(
       and(
         organizationScope(organizationId),
+        apiKeyKindScope(API_KEY_KIND.machine),
         exactCursor === null
           ? undefined
           : machineApiKeyCursor.keysetAfter({

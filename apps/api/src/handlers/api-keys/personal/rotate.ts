@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { rotatePersonalApiKey } from "@/api/lib/personal-api-key-lifecycle";
+import { rotatePersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 import {
   personalApiKeyExpirySchema,
@@ -25,7 +25,8 @@ export default createSafeRootHandler(
   async function* ({ session, user, body, recordAuditEvent }) {
     const key = yield* Result.await(
       rotatePersonalApiKey({
-        ...body,
+        keyId: body.keyId,
+        expiresInDays: body.expiresInDays,
         organizationId: session.activeOrganizationId,
         userId: user.id,
         recordAuditEvent,

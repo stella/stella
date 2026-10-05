@@ -8,19 +8,20 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   API_KEY_KIND,
+  PERSONAL_API_KEY_DEFAULT_SCOPES,
   PERSONAL_API_KEY_SCOPES,
   machineApiKeyMetadataSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import {
+  personalApiKeyPermissions,
+  personalApiKeyPermissionsAllowed,
+} from "@/api/lib/machine-api-keys/personal-policy";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import {
-  personalApiKeyPermissions,
-  personalApiKeyPermissionsAllowed,
-} from "@/api/lib/personal-api-key-policy";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
@@ -72,6 +73,51 @@ const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
 });
 
 describe("personal API key authority", () => {
+  test.each(
+    PERSONAL_API_KEY_SCOPES.filter(
+      (scope) =>
+        !PERSONAL_API_KEY_DEFAULT_SCOPES.some(
+          (defaultScope) => defaultScope === scope,
+        ),
+    ),
+  )("explicit scope %s retains positive write authority", async (scope) => {
+    const permissions = personalApiKeyPermissions(sessionMemberRole("member"), [
+      scope,
+    ]);
+    const parsed = parseMachineApiKeyPermissions(permissions);
+    expect(parsed.type).toBe("valid");
+    if (parsed.type !== "valid") {
+      return;
+    }
+    expect(
+      Object.values(permissions)
+        .flat()
+        .some((action) => action !== "read"),
+    ).toBe(true);
+    const session = await resolveMachineApiKeySession("stella_mk_fixture", {
+      verifyApiKey: async () => {
+        const verified = verification(permissions);
+        verified.key.metadata.scopes = [scope];
+        return verified;
+      },
+      resolveAuthorization: authorizeAs("member"),
+      resolvePersonalPolicy: async () => "enabled",
+    });
+    expect(session.credential?.type).toBe("machine_api_key");
+    if (session.credential?.type !== "machine_api_key") {
+      return;
+    }
+    expect(session.credential.permissions).toEqual(parsed.permissions);
+    expect(
+      hasMemberPermission(
+        mcpMemberAuthority({
+          memberRole: "member",
+          credentialPermissions: session.credential.permissions,
+        }),
+        parsed.permissions,
+      ),
+    ).toBe(true);
+  });
   test(
     "personal keys never exceed the owner's current role",
     async () => {
@@ -119,6 +165,8 @@ describe("personal API key authority", () => {
             if (credential?.type !== "machine_api_key") {
               return;
             }
+            expect(credential.permissions).toEqual(parsed.permissions);
+            expect(outcome.value.scopes).toEqual(scopes);
             const authority = mcpMemberAuthority({
               memberRole: currentRole,
               credentialPermissions: credential.permissions,

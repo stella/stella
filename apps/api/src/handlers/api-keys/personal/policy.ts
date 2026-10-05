@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
-import { updatePersonalApiKeyPolicy } from "@/api/lib/personal-api-key-lifecycle";
+import { updatePersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 const config = {
   permissions: { organizationSettings: ["update"] },

@@ -135,6 +135,53 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "personal-api-key-lifecycle",
+    capability: "Managing member-owned credentials in the denied auth table",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
+    summary:
+      "Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/api-keys/personal/create.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/rotate.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/policy.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason:
+            "Checks organization policy before accepting a personal credential.",
+        },
+      ],
+    },
+  },
+
+  {
     id: "public-sanctions-reader-binding",
     capability:
       "Binding the public sanctions reader to the scoped connection pool",
@@ -1594,7 +1641,7 @@ const OWNERSHIP_DECLARATIONS = [
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
         {
-          path: "apps/api/src/lib/personal-api-key-lifecycle.ts",
+          path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
           reason:
             "Builds the key owner authority from a locked live membership before minting.",
         },

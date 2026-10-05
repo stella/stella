@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createPersonalApiKey } from "@/api/lib/personal-api-key-lifecycle";
+import { createPersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 import { personalApiKeyBodySchema } from "./schema";
 
@@ -18,7 +18,10 @@ export default createSafeRootHandler(
   async function* ({ session, user, body, recordAuditEvent }) {
     const key = yield* Result.await(
       createPersonalApiKey({
-        ...body,
+        name: body.name,
+        scopes: body.scopes,
+        audience: body.audience,
+        expiresInDays: body.expiresInDays,
         organizationId: session.activeOrganizationId,
         userId: user.id,
         recordAuditEvent,

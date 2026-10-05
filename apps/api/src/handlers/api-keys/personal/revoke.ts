@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { revokePersonalApiKey } from "@/api/lib/personal-api-key-lifecycle";
+import { revokePersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 import { personalApiKeyIdBodySchema } from "./schema";
 
