@@ -369,7 +369,8 @@ const withScopePolicy = (
           : null;
       })();
       if (ctx.request) {
-        const clients = requests.get(ctx.request) ?? new Map();
+        const clients = requests.get(ctx.request) ??
+          new Map<string, ReturnType<ClientDiscovery["resolve"]>>();
         clients.set(clientId, resolution);
         requests.set(ctx.request, clients);
       }

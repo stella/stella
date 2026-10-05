@@ -214,7 +214,7 @@ const authorize = async ({
   });
   const endpoint = getAuthEndpointUrl("oauth2/authorize");
   const response = await getAuth().handler(
-    new Request(method === "GET" ? `${endpoint}?${query}` : endpoint, {
+    new Request(method === "GET" ? `${endpoint}?${query.toString()}` : endpoint, {
       method,
       headers: {
         accept: "application/json",
@@ -289,8 +289,8 @@ describe("OAuth native client consent", () => {
     expect(firstPage.pathname).toBe("/consent");
     expect(firstPage.searchParams.has("code")).toBe(false);
     const context = await getAuth().$context;
-    const issuedCodes = () =>
-      context.adapter.count({
+    const issuedCodes = async () =>
+      await context.adapter.count({
         model: "verification",
         where: [
           {
