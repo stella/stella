@@ -6,8 +6,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { IntlProvider } from "use-intl";
+import { IntlProvider, useTranslations } from "use-intl";
 
+import { DialogProvider } from "@stll/ui/dialog";
 import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
@@ -29,6 +30,20 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+
+const DialogTranslations = ({ children }: PropsWithChildren) => {
+  const t = useTranslations();
+  return (
+    <DialogProvider
+      labels={{
+        close: t("common.close"),
+        unsavedChanges: t("common.unsavedChangesEscape"),
+      }}
+    >
+      {children}
+    </DialogProvider>
+  );
+};
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
@@ -114,7 +129,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       timeZone={timeZone}
     >
       <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
-        {children}
+        <DialogTranslations>{children}</DialogTranslations>
       </FormattingProvider>
     </IntlProvider>
   );

@@ -3,12 +3,18 @@ import { parseArgs } from "node:util";
 
 import { env } from "@/api/env";
 
-import { runSeedReport } from "./seed-usage-policies-runner";
+import {
+  runSeedReport,
+  USAGE_POLICY_SEED_MODES,
+} from "./seed-usage-policies-runner";
 
 const run = async () => {
   const { values } = parseArgs({
     args: process.argv.slice(2),
-    options: { results: { type: "string" } },
+    options: {
+      results: { type: "string" },
+      "dry-run": { type: "boolean", default: false },
+    },
     allowPositionals: false,
   });
   const resultsPath =
@@ -17,6 +23,9 @@ const run = async () => {
   const report = await runSeedReport({
     input: env.STELLA_USAGE_POLICY_SEEDS,
     resultsPath,
+    mode: values["dry-run"]
+      ? USAGE_POLICY_SEED_MODES.dryRun
+      : USAGE_POLICY_SEED_MODES.apply,
     openDb: async () => {
       const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");
       return openMaintenanceDb({ readOnly: false });

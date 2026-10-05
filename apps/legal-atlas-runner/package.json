@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@stll/api": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/time": "workspace:*",

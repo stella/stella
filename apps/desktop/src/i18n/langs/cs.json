@@ -132,7 +132,8 @@
     "takeoverSubtitle": "Bude pokračovat od vašeho posledního uloženého kontrolního bodu.",
     "takeoverTitle": "{requester} chce převzít úpravy",
     "takeoverWindowTitle": "Žádost o převzetí",
-    "webOrigin": "Původ webu"
+    "webOrigin": "Původ webu",
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte"
   },
   "settings": {
     "about": "O aplikaci",

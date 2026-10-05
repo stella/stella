@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -624,6 +625,13 @@ function ProfilePageBody() {
         }}
       >
         <DialogPopup>
+          <DialogFormState
+            dirty={otpCode !== "" || Object.keys(reassignments).length > 0}
+            onDiscard={() => {
+              setOtpCode("");
+              setReassignments({});
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>{dialogDescription}</DialogDescription>

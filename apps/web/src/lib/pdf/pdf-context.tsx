@@ -14,6 +14,9 @@ import { createStore, useStore } from "zustand";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getTranslator } from "@/i18n/translator";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   allocateEntityOverlayId,
   deleteCachedAnonymization,
@@ -22,13 +25,10 @@ import {
   setCachedAnonymization,
 } from "@/lib/pdf/anonymization-cache";
 import {
-  getEntitySpans,
+  locateOverlayEntities,
   rebuildFileAnonymization,
 } from "@/lib/pdf/anonymization-helpers";
-import type {
-  EntityOverlay,
-  FileAnonymization,
-} from "@/lib/pdf/anonymization-types";
+import type { FileAnonymization } from "@/lib/pdf/anonymization-types";
 import {
   DEFAULT_PAGE_BUFFER_SIZE,
   SCROLL_AREA_VIEWPORT_SELECTOR,
@@ -284,29 +284,21 @@ const createPDFStore = ({
         return 0;
       }
 
-      const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const regex = new RegExp(escaped, "giu");
-      const newEntities: EntityOverlay[] = [];
-      let match: RegExpExecArray | null;
-
-      while ((match = regex.exec(file.extractedText)) !== null) {
-        const idx = match.index;
-        const matchLen = match[0].length;
-
-        const spans = getEntitySpans({
-          charSpans: file.charSpans,
-          entityStart: idx,
-          entityEnd: idx + matchLen,
-        });
-        if (spans.length > 0) {
-          newEntities.push({
-            id: allocateEntityOverlayId(),
-            label,
-            text: file.extractedText.slice(idx, idx + matchLen),
-            spans,
-          });
-        }
+      // Matched and positioned exactly as detected terms are, so a term the
+      // reader adds is covered by the same boxes the export masks.
+      const located = locateOverlayEntities({
+        extraction: file.extraction,
+        term: searchText,
+        label,
+        allocateId: allocateEntityOverlayId,
+        seenRanges: new Set(),
+      });
+      if (located.isErr()) {
+        getAnalytics().captureError(located.error);
+        notifyUserError(located.error, getTranslator()("errors.actionFailed"));
+        return 0;
       }
+      const newEntities = located.value;
 
       if (newEntities.length === 0) {
         return 0;

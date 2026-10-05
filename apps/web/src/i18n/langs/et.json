@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Küsimus ja kõik selle vastused kustutatakse kogu teie organisatsiooni jaoks, igast otsingust ja kõigilt liikmetelt. Kui soovite selle eemaldada ainult sellest otsingust, valige „Eemalda sellest otsingust“.",
       "editQuestionHint": "Sõnastuse, vastuse tüübi või selle valikute muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
+      "newQuestionColumn": "Uus",
       "nothingToRun": "Igal lahtril on juba vastus",
+      "questionAdded": "„{question}“ lisati tabelisse",
       "questionPlaceholder": "nt Kas kohus pidas ülesütlemist kehtivaks?",
       "removeFromSearch": "Eemalda sellest otsingust",
       "runAll": "Vasta kõigile",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
-      "textUnavailable": "Selle lahendi teksti ei ole saadaval"
+      "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)"
     }
   },
   "catalogue": {
@@ -1854,6 +1857,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
@@ -1874,15 +1878,23 @@
     "zoomOut": "Suumi välja"
   },
   "consent": {
+    "actingAs": "{clientName} tegutseb sinu nimel organisatsioonis {organizationName}",
     "allow": "Luba",
-    "appIdentity": "Rakenduse identiteet",
+    "canChange": "Saab muuta",
+    "canRead": "Saab lugeda",
     "completeSetup": "Lõpeta seadistamine",
+    "connectTitle": "Ühenda {clientName} stellaga",
+    "connectedTitle": "Ühendatud rakendusega {clientName}",
+    "connectionDuration": "Ühendus jääb avatuks, kuni katkestad selle jaotises Seaded › Ühendused",
     "defaultClientName": "Rakendus",
-    "description": "{clientName} soovib pääseda ligi teie stella tööruumile",
+    "destinationDetails": "Ümbersuunamise üksikasjad",
     "error": "Midagi läks valesti. Palun proovige uuesti.",
     "missingJurisdictions": "Teie stella organisatsioon ei ole veel oma praktika jurisdiktsioone seadistanud. Mõned jurisdiktsioonipõhised tööriistad ei ole saadaval enne, kui seadistamise lõpetate.",
-    "permissions": "See lubab rakendusel:",
-    "redirectDestination": "Ümbersuunamise sihtkoht",
+    "otherPermissions": "Muud õigused",
+    "publishedBy": "Avaldaja: <host>{publisherHost}</host>",
+    "returnToAgent": "Jätkamiseks mine tagasi oma agendi juurde.",
+    "returnsLocally": "Sind suunatakse selles arvutis tagasi rakendusse {clientName}",
+    "returnsTo": "Sind suunatakse tagasi rakendusse {clientName}",
     "scopeAdminRead": "Lugeda oma organisatsiooni auditilogi",
     "scopeAdminWrite": "Hallata organisatsiooni liikmeid ja seadeid",
     "scopeBillingWrite": "Luua, muuta ja kustutada teie ajakirjeid",
@@ -1903,8 +1915,11 @@
     "scopeSkills": "Teie salvestatud stella oskuste kasutamine",
     "scopeTemplates": "Dokumendimallide loend, täitmine ja loomine",
     "scopeTemplatesAnonymized": "Loendada, täita ja luua teie dokumendimallide anonüümitud versioone",
+    "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
     "title": "Anna juurdepääs",
-    "unverifiedApp": "Kinnitamata rakendus"
+    "unverifiedApp": "Kinnitamata rakendus",
+    "unverifiedExplanation": "stella pole kontrollinud, kes selle rakenduse avaldab.",
+    "useAnotherAccount": "Kasuta teist kontot"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -5412,6 +5427,7 @@
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",
@@ -5434,6 +5450,18 @@
         "updateRequiredDescription": "stella desktop vajab värskendust. See värskendub automaatselt, kui aktiivsed töölauamuudatused on lõpetatud; proovige pärast taaskäivitumist uuesti.",
         "updateRequiredTitle": "Värskendage stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Juba paigaldatud? Ühenda",
+        "connect": "Ühenda stella desktop",
+        "editNone": "Laadi alla stella desktop, et seda faili muuta",
+        "editOutdated": "Uuenda stella desktop, et muuta",
+        "editReason": "Arvutis muutmine avab faili stella desktopi kaudu sinu arvuti rakenduses.",
+        "signCurrent": "Allkirjasta stella desktopiga",
+        "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
+        "signOutdated": "Uuenda stella desktop, et allkirjastada",
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
+        "signShort": "Allkirjasta"
+      },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadExtractedText": "Eraldatud tekst (.txt)",
@@ -5447,7 +5475,6 @@
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "pdfSigning": {
-        "action": "Allkirjasta töölauarakenduses",
         "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
         "cancelledCertificateDescription": "Valitud sertifikaati ei saa allkirjastamiseks kasutada. Vali sertifikaat, mis lubab digiallkirja.",
         "cancelledCertifiedDescription": "See PDF on sertifitseeritud ja sertifitseerimine ei luba rohkem allkirju lisada.",
