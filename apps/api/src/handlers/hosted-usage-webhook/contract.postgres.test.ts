@@ -31,6 +31,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
+  type RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -981,6 +982,254 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
           logs.restore();
           analytics.restore();
         }
+      });
+    });
+  }
+});
+
+// Operator alerting matches this exact message; renaming it silences the alarm.
+const SECOND_LIVE_SUBSCRIPTION_EVENT =
+  "usage_provider.webhook.second_live_subscription";
+
+const secondLiveSubscriptionSignals = (logs: RecordingLogger) =>
+  logs.records.filter(
+    ({ message }) => message === SECOND_LIVE_SUBSCRIPTION_EVENT,
+  );
+
+// Oracle: the provider status that creates each local status, and whether a
+// further subscription for the organization is an operator signal there.
+const firstSubscriptionByLocalStatus = {
+  trialing: { providerStatus: "trialing", signal: "silent" },
+  active: { providerStatus: "active", signal: "emitted" },
+  past_due: { providerStatus: "past_due", signal: "emitted" },
+  cancelled: { providerStatus: "canceled", signal: "silent" },
+  paused: { providerStatus: "paused", signal: "emitted" },
+} as const satisfies Record<
+  UsageEntitlementStatus,
+  { providerStatus: PolarEntitlementStatus; signal: "emitted" | "silent" }
+>;
+
+const SECOND_CREATED_AT = "2026-06-02T00:00:00Z";
+
+const withRecordedLogs = async (
+  fn: (logs: RecordingLogger) => Promise<void>,
+) => {
+  const logs = installRecordingLogger();
+  try {
+    await fn(logs);
+  } finally {
+    logs.restore();
+  }
+};
+
+describe.skipIf(!runPostgresTests)("second live subscription signal", () => {
+  for (const localStatus of USAGE_ENTITLEMENT_STATUSES) {
+    for (const customer of ["same_customer", "new_customer"] as const) {
+      const { providerStatus, signal } =
+        firstSubscriptionByLocalStatus[localStatus];
+      test(`${localStatus} entitlement receiving another subscription (${customer}) is ${signal}`, async () => {
+        await withFixture(async (tx, fixture) => {
+          await withRecordedLogs(async (logs) => {
+            const first = { ...fixture.data, status: providerStatus };
+            await deliver({ tx, type: "subscription.created", data: first });
+            expect(
+              (await readState(tx, fixture.organizationId)).entitlements.at(0)
+                ?.status,
+            ).toBe(localStatus);
+            expect(secondLiveSubscriptionSignals(logs)).toHaveLength(0);
+
+            const second = {
+              ...fixture.data,
+              id: `entitlement_${Bun.randomUUIDv7()}`,
+              customer_id:
+                customer === "same_customer"
+                  ? fixture.data.customer_id
+                  : `account_${Bun.randomUUIDv7()}`,
+              created_at: SECOND_CREATED_AT,
+              modified_at: SECOND_CREATED_AT,
+            };
+            const eventId = await deliver({
+              tx,
+              type: "subscription.created",
+              data: second,
+            });
+            expect(secondLiveSubscriptionSignals(logs)).toEqual(
+              signal === "emitted"
+                ? [
+                    {
+                      severityText: "ERROR",
+                      message: SECOND_LIVE_SUBSCRIPTION_EVENT,
+                      attributes: {
+                        organizationId: fixture.organizationId,
+                        liveSubscriptionId: first.id,
+                        incomingSubscriptionId: second.id,
+                      },
+                    },
+                  ]
+                : [],
+            );
+            // The signal leaves the entitlement to the replacement rule.
+            const after = await readState(tx, fixture.organizationId);
+            expect(after.entitlements).toHaveLength(1);
+            expect(after.entitlements.at(0)).toMatchObject({
+              hostedEntitlementExternalId: second.id,
+              hostedAccountRef: second.customer_id,
+              status: "active",
+            });
+            expect(
+              await tx
+                .select({ result: hostedUsageWebhookEvents.result })
+                .from(hostedUsageWebhookEvents)
+                .where(eq(hostedUsageWebhookEvents.eventId, eventId)),
+            ).toEqual([{ result: "ok" }]);
+
+            const signalled = secondLiveSubscriptionSignals(logs).length;
+            await deliver({
+              tx,
+              type: "subscription.updated",
+              data: { ...second, modified_at: "2026-06-03T00:00:00Z" },
+            });
+            expect(secondLiveSubscriptionSignals(logs)).toHaveLength(signalled);
+          });
+        });
+      });
+    }
+  }
+
+  test("further events for the mapped subscription are silent", async () => {
+    await withFixture(async (tx, fixture) => {
+      await withRecordedLogs(async (logs) => {
+        await deliver({ tx, type: "subscription.created", data: fixture.data });
+        await deliver({
+          tx,
+          type: "subscription.updated",
+          data: { ...fixture.data, modified_at: "2026-06-02T00:00:00Z" },
+        });
+        expect(secondLiveSubscriptionSignals(logs)).toHaveLength(0);
+      });
+    });
+  });
+
+  test("a terminal event for another subscription is silent", async () => {
+    await withFixture(async (tx, fixture) => {
+      await withRecordedLogs(async (logs) => {
+        await deliver({ tx, type: "subscription.created", data: fixture.data });
+        const before = await readState(tx, fixture.organizationId);
+        await deliver({
+          tx,
+          type: "subscription.created",
+          data: {
+            ...fixture.data,
+            id: `entitlement_${Bun.randomUUIDv7()}`,
+            status: "canceled",
+            created_at: SECOND_CREATED_AT,
+            modified_at: SECOND_CREATED_AT,
+          },
+        });
+        expect(secondLiveSubscriptionSignals(logs)).toHaveLength(0);
+        expect(
+          (await readState(tx, fixture.organizationId)).entitlements,
+        ).toEqual(before.entitlements);
+      });
+    });
+  });
+
+  test("an older live subscription reappearing after replacement signals", async () => {
+    await withFixture(async (tx, fixture) => {
+      await withRecordedLogs(async (logs) => {
+        await deliver({ tx, type: "subscription.created", data: fixture.data });
+        const second = {
+          ...fixture.data,
+          id: `entitlement_${Bun.randomUUIDv7()}`,
+          created_at: SECOND_CREATED_AT,
+          modified_at: SECOND_CREATED_AT,
+        };
+        await deliver({ tx, type: "subscription.created", data: second });
+        const replaced = await readState(tx, fixture.organizationId);
+        await deliver({
+          tx,
+          type: "subscription.updated",
+          data: { ...fixture.data, modified_at: "2026-06-03T00:00:00Z" },
+        });
+        expect(
+          secondLiveSubscriptionSignals(logs).map(
+            ({ attributes }) => attributes,
+          ),
+        ).toEqual([
+          {
+            organizationId: fixture.organizationId,
+            liveSubscriptionId: fixture.data.id,
+            incomingSubscriptionId: second.id,
+          },
+          {
+            organizationId: fixture.organizationId,
+            liveSubscriptionId: second.id,
+            incomingSubscriptionId: fixture.data.id,
+          },
+        ]);
+        expect(
+          (await readState(tx, fixture.organizationId)).entitlements,
+        ).toEqual(replaced.entitlements);
+      });
+    });
+  });
+
+  for (const { status, signal } of [
+    { status: "active", signal: "emitted" },
+    { status: "canceled", signal: "silent" },
+  ] as const) {
+    test(`a ${status} subscription naming another organization's live account is ${signal}`, async () => {
+      await withFixture(async (tx, fixture) => {
+        await withRecordedLogs(async (logs) => {
+          const other = await seedFixture(tx);
+          await deliver({
+            tx,
+            type: "subscription.created",
+            data: fixture.data,
+          });
+          await deliver({ tx, type: "subscription.created", data: other.data });
+          const before = {
+            own: await readState(tx, fixture.organizationId),
+            other: await readState(tx, other.organizationId),
+          };
+          const eventId = await deliver({
+            tx,
+            type: "subscription.updated",
+            data: {
+              ...fixture.data,
+              status,
+              customer_id: other.data.customer_id,
+              modified_at: "2026-06-02T00:00:00Z",
+            },
+          });
+          expect(
+            secondLiveSubscriptionSignals(logs).map(
+              ({ attributes }) => attributes,
+            ),
+          ).toEqual(
+            signal === "emitted"
+              ? [
+                  {
+                    organizationId: other.organizationId,
+                    liveSubscriptionId: other.data.id,
+                    incomingSubscriptionId: fixture.data.id,
+                  },
+                ]
+              : [],
+          );
+          expect(
+            (await readState(tx, fixture.organizationId)).entitlements,
+          ).toEqual(before.own.entitlements);
+          expect(
+            (await readState(tx, other.organizationId)).entitlements,
+          ).toEqual(before.other.entitlements);
+          expect(
+            await tx
+              .select({ result: hostedUsageWebhookEvents.result })
+              .from(hostedUsageWebhookEvents)
+              .where(eq(hostedUsageWebhookEvents.eventId, eventId)),
+          ).toEqual([{ result: "ignored" }]);
+        });
       });
     });
   }
