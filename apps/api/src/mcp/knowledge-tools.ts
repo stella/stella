@@ -1821,9 +1821,9 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
   const reader = { organizationId, userId: context.userId };
-  const loadOrgSettings = () =>
-    context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-    context.scopedDb((tx) => loadOrgSettingsForAuth(tx, reader));
+  const loadOrgSettings = async () =>
+    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+      context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
 
   if (input.playbook_id === undefined) {
     if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
