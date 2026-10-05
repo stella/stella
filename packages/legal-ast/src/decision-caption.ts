@@ -71,9 +71,14 @@ const phrase = (words: string): string => {
   return written === capitals ? written : `(?:${capitals}|${written})`;
 };
 
+const graphemes = new Intl.Segmenter("cs", { granularity: "grapheme" });
+
 /** A one-word title in capitals, also letter-spaced: `U S N E S E N Í`. */
 const title = (word: string): string => {
-  const letters = [...word.toLocaleUpperCase("cs")].map(escapeRegExp);
+  const letters = Array.from(
+    graphemes.segment(word.toLocaleUpperCase("cs")),
+    ({ segment }) => escapeRegExp(segment),
+  );
   return `(?:${letters.join("")}|${letters.join(" ")}|${escapeRegExp(word)})`;
 };
 
