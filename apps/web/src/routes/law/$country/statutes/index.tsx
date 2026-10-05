@@ -89,6 +89,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
 import {
   createStatuteListFilters,
@@ -375,7 +376,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
                 search={{ q: query }}
                 onClick={openStatute.onLinkClick({
                   ...hit,
-                  id: hit.documentId,
+                  id: toSafeId<"legislationDocument">(hit.documentId),
                   versionValidFrom: null,
                 })}
               >

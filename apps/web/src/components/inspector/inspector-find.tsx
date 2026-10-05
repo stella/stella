@@ -480,7 +480,11 @@ const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
   const results = buildSearchResults({ pieces, query });
   const ranges: Range[] = [];
   for (const textPiece of pieces) {
-    for (const match of results.rangesByPieceId[textPiece.id] ?? []) {
+    const pieceRanges = results.rangesByPieceId[textPiece.id];
+    if (pieceRanges === undefined) {
+      continue;
+    }
+    for (const match of pieceRanges) {
       const start = textPiece.nodes.find(
         (segment) => match.start >= segment.start && match.start < segment.end,
       );
