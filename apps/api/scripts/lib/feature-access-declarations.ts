@@ -84,7 +84,9 @@ const dispatchRegistry = (node: ts.Node) =>
   node.initializer !== undefined &&
   ts.isObjectLiteralExpression(unwrapExpression(node.initializer));
 const insideDispatchRegistry = (node: ts.Node): boolean => {
-  for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
+  let parent = node;
+  while (!ts.isSourceFile(parent)) {
+    parent = parent.parent;
     if (dispatchRegistry(parent)) {
       return true;
     }
