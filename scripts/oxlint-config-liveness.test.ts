@@ -4,10 +4,10 @@
 // A glob that matches nothing (a renamed file, a literal `[.]` read as a
 // character class) fails silently: the override applies to no file and the
 // lint still passes. The same holds for a path in a rule option such as
-// `allowedFiles`, and for a scope that switches off a rule no earlier scope
+// `allowedFiles`, and for an override that switches off a rule no earlier scope
 // enabled for any of its files. Each is dead configuration that reads as a
-// decision, so this test fails on all three. A base entry may restate a
-// preset's "off" only with its reason on the same or the preceding line.
+// decision, so this test fails on all three. A reasoned base entry may restate
+// a preset's "off" or explicitly leave a new built-in rule off.
 
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -142,7 +142,7 @@ test(
 );
 
 test(
-  "every off switches off a rule an earlier scope enables",
+  "every off disables an earlier scope or records a reasoned base decision",
   () => {
     const rules = builtinRules();
     const canonical = ruleCanonicalizer(rules);
