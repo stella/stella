@@ -239,7 +239,7 @@ describe("readPublishablePackages", () => {
         ).text(),
       ),
     );
-    const byDirectory = new Map(
+    const byDirectory = new Map<string, string>(
       ALL_PACKAGE_ORDER.map((directory, index) => [
         directory,
         manifests[index],

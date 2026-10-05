@@ -153,7 +153,7 @@ export const readPublishablePackages = ({
 }: {
   /** Raw package.json text for packages/<directory>, or undefined if absent. */
   readonly readManifest: (directory: string) => string | undefined;
-  readonly only?: readonly string[];
+  readonly only?: readonly string[] | undefined;
 }): PublishablePackage[] => {
   const known: readonly string[] = ALL_PACKAGE_ORDER;
   const unknown = (only ?? []).filter((name) => !known.includes(name));
