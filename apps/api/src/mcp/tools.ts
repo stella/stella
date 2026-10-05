@@ -34,6 +34,7 @@ import {
   withInputNotes,
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
+import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -309,6 +310,7 @@ type McpToolCallArgs = {
   context: McpRequestContext;
   mode?: McpMode;
   toolName: string;
+  dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
 };
 const unknownToolResult = (toolName: string) =>
   structuredErrorResult({
@@ -322,9 +324,12 @@ const callGatewayTool = async ({
   context,
   mode = "default",
   toolName,
+  dependencies,
 }: McpToolCallArgs): Promise<CallToolResult | undefined> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
-  const gatewayResult = await dispatchGatewayToolCall({
+  const gatewayResult = await (
+    dependencies?.dispatchGatewayToolCall ?? dispatchGatewayToolCall
+  )({
     args,
     context,
     mode,
@@ -358,11 +363,12 @@ const callGatewayTool = async ({
   return undefined;
 };
 
-export const handleMcpToolCall = async ({
+const dispatchMcpToolCall = async ({
   args,
   context,
   mode = "default",
   toolName,
+  dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const unavailableResult = featureUnavailableToolResult({
@@ -379,6 +385,7 @@ export const handleMcpToolCall = async ({
     context,
     mode,
     toolName,
+    ...(dependencies === undefined ? {} : { dependencies }),
   });
   if (gatewayResult !== undefined) {
     return gatewayResult;
@@ -624,3 +631,24 @@ const internalErrorResult = ({
     ),
   );
 };
+
+export const handleMcpToolCall = async ({
+  args,
+  context,
+  mode = "default",
+  toolName,
+  dependencies,
+}: McpToolCallArgs): Promise<CallToolResult> =>
+  await observeMcpToolCall({
+    context,
+    mode,
+    toolName,
+    run: async () =>
+      await dispatchMcpToolCall({
+        args,
+        context,
+        mode,
+        toolName,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      }),
+  });
