@@ -2575,6 +2575,10 @@
     "seconds": 0.632887,
     "source": "estimated"
   },
+  "src/handlers/entities/desktop-handoff-release-contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/entities/duplicate.test.ts": {
     "seconds": 3.747795,
     "source": "estimated"
@@ -4141,6 +4145,10 @@
   },
   "src/lib/bullmq-requeue.valkey.test.ts": {
     "seconds": 0.086277,
+    "source": "estimated"
+  },
+  "src/lib/business-registries/desktop/handoff-auth.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/business-registries/desktop/link-grants.test.ts": {
@@ -7421,6 +7429,10 @@
   },
   "src/lib/time-entry-offboarding.db.test.ts": {
     "seconds": 5.076393,
+    "source": "estimated"
+  },
+  "src/lib/type-guards.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/uploads/entity-create.test.ts": {
