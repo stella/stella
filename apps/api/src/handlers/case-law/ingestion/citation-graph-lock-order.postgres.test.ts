@@ -40,6 +40,7 @@ import {
   type CaseLawCorpusDependencies,
 } from "./pipeline/dependencies";
 import { DECISION_REFRESH, DECISION_ROW_WRITE_STATUS } from "./pipeline/types";
+import type { DecisionRowWriteStatus } from "./pipeline/types";
 import { absorbStandaloneSupplementRow } from "./supplement-absorption";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -108,6 +109,46 @@ if (!databaseUrl || !enabled) {
             sql`CREATE TABLE ${schema}.${sql.identifier(name)} (LIKE public.${sql.identifier(name)} INCLUDING ALL)`,
           );
         }
+        const identifierPrimaryKey = async (namespace: string) => {
+          const constraints = await db
+            .select({
+              name: sql<string>`c.conname`,
+              columns: sql<
+                string[]
+              >`array_agg(a.attname::text ORDER BY pk_key.ordinality)`,
+            })
+            .from(sql`pg_constraint AS c
+              JOIN pg_class AS t ON t.oid = c.conrelid
+              JOIN pg_namespace AS n ON n.oid = t.relnamespace
+              CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS pk_key(attnum, ordinality)
+              JOIN pg_attribute AS a ON a.attrelid = t.oid AND a.attnum = pk_key.attnum`)
+            .where(sql`n.nspname = ${namespace}
+              AND t.relname = 'case_law_decision_identifiers' AND c.contype = 'p'`)
+            .groupBy(sql`c.conname`);
+          expect(constraints).toHaveLength(1);
+          const [constraint] = constraints;
+          if (constraint === undefined) {
+            throw new Error("Identifier fixture requires its primary key");
+          }
+          expect(constraint.columns).toEqual([
+            "decision_id",
+            "type",
+            "normalized_value",
+          ]);
+          return constraint;
+        };
+        const productionPrimaryKey = await identifierPrimaryKey("public");
+        expect(productionPrimaryKey.name).toBe(
+          "case_law_decision_identifiers_pk",
+        );
+        const clonedPrimaryKey = await identifierPrimaryKey(schemaName);
+        // LIKE copies the key with a generated name. Production conflict
+        // clauses name it explicitly, so retain the key and align its name.
+        await db.execute(sql`ALTER TABLE ${schema}.case_law_decision_identifiers
+          RENAME CONSTRAINT ${sql.identifier(clonedPrimaryKey.name)} TO ${sql.identifier(productionPrimaryKey.name)}`);
+        expect(await identifierPrimaryKey(schemaName)).toEqual(
+          productionPrimaryKey,
+        );
         await db.execute(
           sql`ALTER TABLE ${schema}.case_law_citations ADD FOREIGN KEY (citing_decision_id) REFERENCES ${schema}.case_law_decisions(id), ADD FOREIGN KEY (cited_decision_id) REFERENCES ${schema}.case_law_decisions(id)`,
         );
@@ -341,11 +382,13 @@ if (!databaseUrl || !enabled) {
                         if (written.isErr()) {
                           throw written.error;
                         }
-                        expect([
-                          DECISION_ROW_WRITE_STATUS.APPLIED,
-                          DECISION_ROW_WRITE_STATUS.WINNER_SETTLED,
-                          DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD,
-                        ]).toContain(written.value);
+                        const allowedStatuses: readonly DecisionRowWriteStatus[] =
+                          [
+                            DECISION_ROW_WRITE_STATUS.APPLIED,
+                            DECISION_ROW_WRITE_STATUS.WINNER_SETTLED,
+                            DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD,
+                          ];
+                        expect(allowedStatuses).toContain(written.value);
                       },
                     },
                   ],
