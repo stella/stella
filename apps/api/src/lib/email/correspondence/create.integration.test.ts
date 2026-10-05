@@ -5,7 +5,7 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { readFileSync } from "node:fs";
 
 import type {
-  CorrespondenceProvenance,
+  CorrespondenceDeliveryProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import { compareCodeUnit } from "@stll/collation";
@@ -113,9 +113,10 @@ const directProvenance = {
     dmarc: "pass",
     alignedIdentifier: "example.test",
   },
-} satisfies CorrespondenceProvenance;
+} satisfies CorrespondenceDeliveryProvenance;
 
-const parsedMessage = (provenance: CorrespondenceProvenance) =>
+// Every message filed here is delivered mail; uploads have their own suite.
+const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",

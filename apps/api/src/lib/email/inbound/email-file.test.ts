@@ -215,7 +215,7 @@ describe("attachment policy by source", () => {
 describe("email file normalization invariants", () => {
   test("both formats normalize the same stated fields to the same values", async () => {
     await assertProperty(
-      "inbound email files: both formats normalize stated fields identically",
+      "both formats normalize the same stated fields to the same values",
       fc.asyncProperty(statedMessage, async (message) => {
         const { eml, msg } = await parseBoth(message);
         if (eml.isErr() || msg.isErr()) {
@@ -236,7 +236,7 @@ describe("email file normalization invariants", () => {
 
   test("both formats enforce the attachment count limit", async () => {
     await assertProperty(
-      "inbound email files: both formats enforce the attachment count limit",
+      "both formats enforce the attachment count limit",
       fc.asyncProperty(
         fc.integer({ min: 0, max: INBOUND_MAIL_LIMITS.attachmentCount + 3 }),
         fc.constantFrom(...EMAIL_FILE_FORMATS),
@@ -268,7 +268,7 @@ describe("email file normalization invariants", () => {
 
   test("both formats enforce the recipient limit", async () => {
     await assertProperty(
-      "inbound email files: both formats enforce the recipient limit",
+      "both formats enforce the recipient limit",
       fc.asyncProperty(
         fc.integer({
           min: INBOUND_MAIL_LIMITS.recipients - 2,
