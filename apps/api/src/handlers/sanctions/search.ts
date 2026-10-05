@@ -18,14 +18,11 @@ import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanct
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { sanctionsPublicReadDb } from "@/api/lib/lists/sanctions/public-read-owner";
+import { screenPublicSanctionsSubject } from "@/api/lib/lists/sanctions/public-screening";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import {
-  screenSanctionsSubject,
-  SANCTIONS_SUBJECT_ERROR_MESSAGES,
-} from "@/api/lib/lists/sanctions/screening-service";
+import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
+  screenSanctionsSubject,
   SanctionsScreening,
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
@@ -114,7 +111,6 @@ export type PublicSanctionsSearchOptions = {
   db?: SanctionsPublicReadDb;
   screen?: typeof screenSanctionsSubject;
   now?: Date;
-  indexCache?: SanctionsIndexCache;
 };
 
 const screeningUnavailable = () =>
@@ -141,16 +137,11 @@ type PublicSanctionsSearchResult =
 // CPU admission is per API process, shared by all mounted public handlers.
 let activePublicScreenings = 0;
 
-// Restricted-reader failures must not poison signed-in checks. Processes that
-// serve both paths may hold two indexes per source to keep their loads isolated.
-const publicSanctionsIndexCache = createSanctionsIndexCache();
-
 /** Anonymous name screening: no practice jurisdictions, so every list is informational. */
 export const createPublicSanctionsSearchHandler = ({
   db = sanctionsPublicReadDb,
-  screen = screenSanctionsSubject,
+  screen = screenPublicSanctionsSubject,
   now,
-  indexCache = publicSanctionsIndexCache,
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
@@ -202,7 +193,6 @@ export const createPublicSanctionsSearchHandler = ({
                 subject,
                 practiceJurisdictions: [],
                 now,
-                indexCache,
               }),
             catch: screeningUnavailable,
           }),

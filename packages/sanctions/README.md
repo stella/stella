@@ -98,7 +98,13 @@ unavailable, never clear. Index construction remains cached separately.
 The shared API service yields to the event loop between list screenings;
 anonymous screenings additionally allow at most two active requests per API
 process and reject excess work before database reads. The work budget is a
-backstop, not a wall-clock deadline.
+backstop, not a wall-clock deadline. Public matching uses a bounded worker-thread
+pool (one worker by default, at most two), with indexes built and cached in the
+worker. Its 250 ms total screening deadline includes queueing and database reads;
+expiry or a worker crash reports unavailable and recycles the worker. Large cold
+editions are rebuilt without identity input in a bounded 10-second background
+lease after expiry. Edition changes replace the worker cache on the next check.
+The product path retains its existing cache and work-budget behavior.
 
 ## Evaluation
 
