@@ -570,3 +570,57 @@ posixTest(
   },
   10_000,
 );
+
+posixTest(
+  "a stopped process group stays tracked after its leader exits and pipes close",
+  async () => {
+    const fixture = createFixture({ stopGraceMs: 250 });
+    const heartbeatPath = path.join(fixture.directory, "descendant.heartbeat");
+    try {
+      const result = await fixture.supervisor.run({
+        command: () => [
+          process.execPath,
+          "-e",
+          `
+          const descendant = ${JSON.stringify(`
+            import { writeFileSync } from "node:fs";
+            process.on("SIGTERM", () => undefined);
+            const heartbeat = () => writeFileSync(${JSON.stringify(heartbeatPath)}, String(Date.now()));
+            heartbeat();
+            setInterval(heartbeat, 20);
+          `)};
+          Bun.spawn({
+            cmd: [process.execPath, "-e", descendant],
+            stdin: "ignore",
+            stdout: "ignore",
+            stderr: "ignore",
+          });
+          setInterval(() => {}, 1000);
+        `,
+        ],
+        cwd: fixture.directory,
+        env: process.env,
+        identity: {
+          kind: "snapshot",
+          label: "closed-pipe-descendant",
+          files: ["scripts/build-pglite-snapshot.ts"],
+          lane: 0,
+        },
+        mode: "buffered",
+      });
+
+      expect(result.exitCode).toBe(124);
+      expect(existsSync(heartbeatPath)).toBe(true);
+      const afterLeaderExit = readFileSync(heartbeatPath, "utf-8");
+      await Bun.sleep(50);
+      expect(readFileSync(heartbeatPath, "utf-8")).not.toBe(afterLeaderExit);
+      await Bun.sleep(300);
+      const afterEscalation = readFileSync(heartbeatPath, "utf-8");
+      await Bun.sleep(50);
+      expect(readFileSync(heartbeatPath, "utf-8")).toBe(afterEscalation);
+    } finally {
+      fixture.cleanup();
+    }
+  },
+  10_000,
+);

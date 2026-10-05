@@ -16,6 +16,7 @@ import path from "node:path";
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
+  snapshotDigest,
   snapshotInputPaths,
   snapshotKey,
   SnapshotBuildError,
@@ -267,6 +268,99 @@ test("abort stops a cache-lock wait promptly", async () => {
   } finally {
     clearTimeout(abort);
   }
+});
+
+test("abort during cached snapshot validation preserves the archive and digest", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const key = "a".repeat(64);
+  mkdirSync(cacheDir);
+  const finalPath = path.join(cacheDir, `${key}.tar`);
+  const digestPath = path.join(cacheDir, `${key}.sha256`);
+  writeFileSync(finalPath, "valid cached snapshot");
+  const digest = await snapshotDigest(finalPath);
+  writeFileSync(digestPath, digest);
+  const controller = new AbortController();
+  let startValidation: () => void = () => {
+    throw new Error("Validation did not start");
+  };
+  let finishValidation: (valid: boolean) => void = () => {
+    throw new Error("Validation did not start");
+  };
+  const validationStarted = new Promise<void>((resolve) => {
+    startValidation = resolve;
+  });
+  const validation = new Promise<boolean>((resolve) => {
+    finishValidation = resolve;
+  });
+  const pending = acquireCachedSnapshot({
+    cacheDir,
+    key,
+    build: async () => {
+      throw new Error("A valid cached snapshot must not be rebuilt");
+    },
+    validate: async () => {
+      startValidation();
+      return await validation;
+    },
+    signal: controller.signal,
+  });
+  await validationStarted;
+  controller.abort();
+  finishValidation(false);
+  const rejection = await pending.then(
+    () => {
+      throw new Error("Expected snapshot acquisition to reject");
+    },
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBeInstanceOf(SnapshotBuildError);
+  expect(readFileSync(finalPath, "utf-8")).toBe("valid cached snapshot");
+  expect(readFileSync(digestPath, "utf-8")).toBe(digest);
+});
+
+test("abort during built snapshot validation propagates", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const key = "b".repeat(64);
+  const controller = new AbortController();
+  let finishValidation: () => void = () => {
+    throw new Error("Validation did not start");
+  };
+  let startValidation: () => void = () => {
+    throw new Error("Validation did not start");
+  };
+  const validationStarted = new Promise<void>((resolve) => {
+    startValidation = resolve;
+  });
+  const validation = new Promise<void>((resolve) => {
+    finishValidation = resolve;
+  });
+  const pending = acquireCachedSnapshot({
+    cacheDir,
+    key,
+    build: async (filePath) => {
+      writeFileSync(filePath, "new snapshot");
+    },
+    validate: async () => {
+      startValidation();
+      await validation;
+      throw new Error("snapshot validation interrupted");
+    },
+    signal: controller.signal,
+  });
+  await validationStarted;
+  controller.abort();
+  finishValidation();
+  const rejection = await pending.then(
+    () => {
+      throw new Error("Expected snapshot acquisition to reject");
+    },
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBeInstanceOf(SnapshotBuildError);
 });
 
 test("dead-owner lock is taken over", async () => {

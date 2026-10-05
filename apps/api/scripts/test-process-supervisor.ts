@@ -210,6 +210,7 @@ export class TestProcessSupervisor {
   }
 
   dispose(): void {
+    this.kill();
     clearTimeout(this.deadline);
     clearTimeout(this.escalation);
   }
@@ -348,10 +349,6 @@ export class TestProcessSupervisor {
         usage: child.resourceUsage(),
         output: `${outputState.truncated ? "[API batch output truncated; see rolling raw logs]\n" : ""}${parts.join("").trimEnd()}`,
       };
-      // Persist the completed state before reporting success. A persistence
-      // failure takes the same stop-and-reap boundary as a collector failure.
-      this.active.delete(id);
-      this.writeRegistry("active.json");
       return result;
     } catch (error) {
       // This is the child-process boundary: a pipe, disk or progress callback
@@ -361,7 +358,9 @@ export class TestProcessSupervisor {
       throw error;
     } finally {
       clearTimeout(watchdog);
-      this.active.delete(id);
+      if (!this.signal.aborted) {
+        this.active.delete(id);
+      }
       const saved = Result.try({
         try: () => this.writeRegistry("active.json"),
         catch: operationError,

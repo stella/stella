@@ -439,8 +439,10 @@ export const acquireCachedSnapshot = async ({
         try {
           valid = await validate(finalPath);
         } catch {
+          assertNotAborted(signal);
           // Treat an unreadable entry exactly like a corrupt one.
         }
+        assertNotAborted(signal);
         if (!valid) {
           rmSync(finalPath);
           rmSync(path.join(cacheDir, `${key}.sha256`), { force: true });
@@ -469,7 +471,15 @@ export const acquireCachedSnapshot = async ({
         rmSync(temporaryPath, { force: true });
         rmSync(temporaryDigestPath, { force: true });
       }
-      if (!(await validate(finalPath))) {
+      let valid: boolean;
+      try {
+        valid = await validate(finalPath);
+      } catch (error) {
+        assertNotAborted(signal);
+        throw error;
+      }
+      assertNotAborted(signal);
+      if (!valid) {
         return {
           status: "fallback",
           reason: "built snapshot is unreadable or corrupt",
