@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.8.6
+
+### Patch Changes
+
+- [#4833](https://github.com/stella/stella/pull/4833) [`77d7e1b`](https://github.com/stella/stella/commit/77d7e1b1fc217617d9bd396b2fdd487322eb2ba0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the MCP client dependency.
+
 ## 3.8.5
 
 ### Patch Changes

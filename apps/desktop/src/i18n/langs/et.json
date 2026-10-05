@@ -132,7 +132,8 @@
     "takeoverSubtitle": "Ta jätkab teie viimasest salvestatud kontrollpunktist.",
     "takeoverTitle": "{requester} soovib redigeerimise üle võtta",
     "takeoverWindowTitle": "Ülevõtmistaotlus",
-    "webOrigin": "Veebi päritolu"
+    "webOrigin": "Veebi päritolu",
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc"
   },
   "settings": {
     "about": "Teave",

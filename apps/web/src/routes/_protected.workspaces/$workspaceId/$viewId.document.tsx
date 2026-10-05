@@ -66,6 +66,7 @@ import { getEntityFileDownloadRenditions } from "@/components/inspector/file-dow
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -768,6 +769,22 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  const pdfSignTarget = resolvePdfSignTarget({
+    canUpdateEntity,
+    entityId,
+    file:
+      activeFileContent === null
+        ? null
+        : {
+            fieldId,
+            mimeType: activeFileContent.mimeType,
+            propertyId: activeFileField?.propertyId,
+          },
+    // `entity.fields` holds the current version only; an older version
+    // arrives through the field-file lookup instead.
+    isCurrentVersion: activeFileField !== undefined,
+    workspaceId,
+  });
   const downloadRenditions = getEntityFileDownloadRenditions({
     entityData: entity,
     fieldId,
@@ -941,6 +958,7 @@ function RouteComponentInner({
                       ? () => setIsPDFPageOrganizerOpen(true)
                       : undefined
                   }
+                  pdfSignTarget={pdfSignTarget}
                   workspaceId={workspaceId}
                 />
               </div>

@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
+import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import {
   caseLawDecisions,
@@ -157,7 +158,10 @@ const provisionPage = ({
   publishedProjectionDigest,
 }: ProvisionPageOptions) => ({
   ...createCursorPage({
-    rows,
+    rows: rows.map((row) => ({
+      ...row,
+      versionBasis: DECISION_DATE_VERSION_BASIS,
+    })),
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([generation, item.spanStart, item.anchor]),
