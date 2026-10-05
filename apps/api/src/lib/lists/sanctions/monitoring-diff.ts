@@ -298,7 +298,7 @@ const loadMonitoringDiff = async ({
           .where(
             and(
               eq(sanctionsEditionEntries.editionId, editionId),
-              sql`${sanctionsEditionEntries.sourceEntryId} = ANY(${sql.param(hitIds)}::text[])`,
+              inArray(sanctionsEditionEntries.sourceEntryId, hitIds),
             ),
           )
           .limit(hitIds.length);
