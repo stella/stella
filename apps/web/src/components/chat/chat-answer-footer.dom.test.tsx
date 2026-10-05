@@ -10,6 +10,7 @@ import type { ChatSourceDocument } from "@/lib/api-contract";
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] ??= "https://api.example.test";
+const { act } = await import("react");
 const { cleanup, render } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -24,7 +25,16 @@ const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 
-afterEach(cleanup);
+const queryClients: InstanceType<typeof QueryClient>[] = [];
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    for (const queryClient of queryClients) {
+      queryClient.clear();
+    }
+    queryClients.length = 0;
+  });
+});
 afterAll(async () => {
   await GlobalRegistrator.unregister();
   if (previousApiUrl === undefined) {
@@ -34,10 +44,12 @@ afterAll(async () => {
   }
 });
 
-const renderWithProviders = (children: ReactNode) =>
-  render(
+const renderWithProviders = (children: ReactNode) => {
+  const queryClient = new QueryClient();
+  queryClients.push(queryClient);
+  return render(
     <ChatThreadTestRouter>
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
@@ -60,6 +72,7 @@ const renderWithProviders = (children: ReactNode) =>
       </QueryClientProvider>
     </ChatThreadTestRouter>,
   );
+};
 
 const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
   const message = {
@@ -86,7 +99,7 @@ const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
   );
 };
 
-test("assistant footer places actions before a divider and wrapping citations", () => {
+test("assistant footer places actions before a divider and wrapping citations", async () => {
   const view = renderAssistant([
     {
       entityId: "decision-1",
@@ -96,6 +109,7 @@ test("assistant footer places actions before a divider and wrapping citations", 
       workspaceId: "workspace-1",
     },
   ]);
+  await act(async () => {});
   const footer = view.container.querySelector("[data-chat-answer-footer]");
   if (footer === null) {
     throw new Error("Expected an assistant answer footer");
@@ -127,8 +141,9 @@ test("assistant footer places actions before a divider and wrapping citations", 
   expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
 
-test("assistant footer omits the divider when there are no citations", () => {
+test("assistant footer omits the divider when there are no citations", async () => {
   const view = renderAssistant();
+  await act(async () => {});
   expect(
     view.container.querySelector("[data-chat-answer-citations-divider]"),
   ).toBeNull();

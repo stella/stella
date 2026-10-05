@@ -4,65 +4,19 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { toSafeId } from "@stll/api-contract/safe-id";
-
 import type { FileTab } from "../../src/components/inspector/file-tab";
-import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
+import {
+  dockedChatFileThreadPage,
+  dockedChatMessagePage,
+  dockedChatSuggestedPrompts,
+  dockedChatTemplateThread,
+  dockedChatTitle,
+} from "./docked-chat-history";
 import { createUploadedDocumentRoute } from "./document";
 import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
 
-type WebApiRoutes = WebRoutes["v1"];
-
-type MessagePage =
-  WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200];
-type FileThreadPage =
-  WebApiRoutes["chat"]["workspaces"][":workspaceId"]["file-thread"]["get"]["response"][200];
-const THREAD_ID = toSafeId<"chatThread">(
-  "019a0000-0000-7000-8000-000000000001",
-);
-const fixtureTime = new Date().toISOString();
-const messagePage = {
-  activeTurnId: null,
-  attachedFiles: { fileCount: 0, files: [] },
-  forkProvenance: { type: "none" },
-  messages: [
-    {
-      id: toSafeId<"chatMessage">("019a0000-0000-7000-8000-000000000002"),
-      role: "assistant",
-      createdAt: fixtureTime,
-      parts: [{ type: "text", content: "Saved geometry test answer." }],
-    },
-  ],
-  olderCursor: null,
-  contextMatterIds: [],
-  lastActivityAt: fixtureTime,
-  threadRevision: null,
-  threadExists: true,
-  usedAnonymization: false,
-  webSearchAvailable: false,
-  webSearchEnabled: false,
-  model: null,
-  reasoningEffort: null,
-  context: {
-    estimatedTokens: 0,
-    triggerTokens: 0,
-    cacheStableTokens: 0,
-    summarizedMessageCount: 0,
-    breakdown: {
-      promptTokens: 0,
-      toolTokens: 0,
-      summaryTokens: 0,
-      attachmentTokens: 0,
-      conversationTokens: 0,
-    },
-  },
-} satisfies MessagePage;
-const fileThreadPage = {
-  ...messagePage,
-  threadId: THREAD_ID,
-} satisfies FileThreadPage;
 const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
   session: v.object({ activeOrganizationId: v.string() }),
@@ -153,29 +107,20 @@ export const installDockedChatHistory = async (page: Page) => {
   await page.route(
     /\/v1\/chat\/workspaces\/[^/]+\/file-thread(?:\?|$)/u,
     async (route) => {
-      await route.fulfill({ json: fileThreadPage });
+      await route.fulfill({ json: dockedChatFileThreadPage });
     },
   );
   await page.route("**/v1/chat/template-thread", async (route) => {
-    const response = {
-      threadId: THREAD_ID,
-    } satisfies WebApiRoutes["chat"]["template-thread"]["post"]["response"][200];
-    await route.fulfill({ json: response });
+    await route.fulfill({ json: dockedChatTemplateThread });
   });
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-    await route.fulfill({ json: messagePage });
+    await route.fulfill({ json: dockedChatMessagePage });
   });
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
-    const response = {
-      prompts: [],
-    } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["suggested-prompts"]["post"]["response"][200];
-    await route.fulfill({ json: response });
+    await route.fulfill({ json: dockedChatSuggestedPrompts });
   });
   await page.route("**/v1/chat/threads/*/title*", async (route) => {
-    const response = {
-      title: "Geometry fixture",
-    } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["title"]["get"]["response"][200];
-    await route.fulfill({ json: response });
+    await route.fulfill({ json: dockedChatTitle });
   });
 };
 

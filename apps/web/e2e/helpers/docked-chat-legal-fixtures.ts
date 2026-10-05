@@ -2,147 +2,35 @@ import type { Page } from "@playwright/test";
 import { panic } from "better-result";
 
 import {
+  type CaseLawDecisionRouteInput,
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import { toSafeId } from "@stll/api-contract/safe-id";
 import {
   createStatutePath,
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import { E2E_API_ORIGIN } from "./api";
+import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
 
-type WebApiRoutes = WebRoutes["v1"];
-type PublicCaseLawDecision =
-  WebApiRoutes["case"]["decisions"][":decisionId"]["get"]["response"][200];
-type PublicStatute =
-  WebApiRoutes["law"]["statutes"][":documentId"]["get"]["response"][200];
+const {
+  decision,
+  bilingualDecision,
+  bilingualCzechDecision,
+  statute,
+  olderStatute,
+  noProvisions,
+  noCitations,
+  noLeadingCitations,
+  citationSummary,
+  versions,
+} = dockedChatLegalPayloads;
 
-const absentText = { reason: "not_published", type: "absent" } as const;
-const decision = {
-  caseNumber: "SYN 1/2026",
-  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-  citationsFrom: [],
-  citationsNextCursor: null,
-  citationsTo: [],
-  country: "CZE",
-  court: "Synthetic court",
-  courtAbbreviation: null,
-  courtTier: "other",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  decisionDate: "2026-01-01",
-  decisionType: "Judgment",
-  documentAst: null,
-  documentAstSource: null,
-  projectionDigest: null,
-  hasDocument: true,
-  documentPending: false,
-  documentReadFailed: false,
-  documentUnavailable: false,
-  documentUrl: null,
-  ecli: null,
-  fulltext:
-    "Synthetic decision text for docked composer geometry.\n\nThe court considered the contract and resolved the claim.",
-  headnote: absentText,
-  id: toSafeId<"caseLawDecision">("019a0000-0000-7000-8000-000000000101"),
-  identifiers: [
-    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "SYN 1/2026" },
-  ],
-  judges: [],
-  language: "cs",
-  languageAlternates: [],
-  languageGroupKey: null,
-  metadata: {},
-  resolution: { type: "direct" },
-  sections: null,
-  slug: "synthetic-dock-decision",
-  source: {
-    adapterKey: "synthetic",
-    allowsDerivedAi: true,
-    id: toSafeId<"caseLawSource">("019a0000-0000-7000-8000-000000000102"),
-    name: "Synthetic fixture source",
-  },
-  sourceAttributionUrl: null,
-  sourceUrl: null,
-  textFields: {
-    abstract: absentText,
-    headnote: absentText,
-    legalSentence: absentText,
-    summary: absentText,
-  },
-  updatedAt: "2026-01-01T00:00:00.000Z",
-} satisfies PublicCaseLawDecision;
-
-const languageAlternates = ["cs", "en"].map((language, index) => ({
-  caseNumber: "SYN 2/2026",
-  country: decision.country,
-  court: decision.court,
-  decisionDate: decision.decisionDate,
-  hasDocument: true,
-  id:
-    index === 0
-      ? "019a0000-0000-7000-8000-000000000103"
-      : "019a0000-0000-7000-8000-000000000104",
-  language,
-  slug: "synthetic-dock-bilingual-decision",
-})) satisfies PublicCaseLawDecision["languageAlternates"];
-const bilingualDecision = {
-  ...decision,
-  caseNumber: "SYN 2/2026",
-  id: toSafeId<"caseLawDecision">("019a0000-0000-7000-8000-000000000104"),
-  identifiers: [
-    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "SYN 2/2026" },
-  ],
-  language: "en",
-  languageAlternates,
-  languageGroupKey: "synthetic-dock-bilingual",
-  slug: "synthetic-dock-bilingual-decision",
-} satisfies PublicCaseLawDecision;
-const bilingualCzechDecision = {
-  ...bilingualDecision,
-  id: toSafeId<"caseLawDecision">("019a0000-0000-7000-8000-000000000103"),
-  language: "cs",
-} satisfies PublicCaseLawDecision;
-
-const statute = {
-  expressionKind: "consolidation",
-  windowDisposition: "effective",
-  windowDispositionBasis: null,
-  allowsDerivedAi: true,
-  citationCaseCount: null,
-  country: "CZE",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  documentAst: null,
-  documentType: "act",
-  documentUrl: null,
-  effectiveDate: "2024-01-01",
-  eli: "/eli/cz/sb/2024/999",
-  fulltext:
-    "Synthetic statute text for docked composer geometry.\n\nSection 1. This fixture governs the sample contract.",
-  id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000105"),
-  language: "cs",
-  sections: null,
-  slug: "999-2024-sb-synthetic-dock-statute",
-  sourceUrl: null,
-  status: "current",
-  title: "999/2024 Sb., Synthetic dock statute",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  versionValidFrom: "2024-01-01",
-  versionValidTo: null,
-} satisfies PublicStatute;
-const olderStatute = {
-  ...statute,
-  effectiveDate: "2020-01-01",
-  id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000107"),
-  status: "superseded",
-  versionValidFrom: "2020-01-01",
-  versionValidTo: "2023-12-31",
-} satisfies PublicStatute;
-
-const decisionParams = (value: PublicCaseLawDecision) =>
+type DecisionFixtureIdentity = Omit<CaseLawDecisionRouteInput, "decisionId"> & {
+  id: string;
+};
+const decisionParams = (value: DecisionFixtureIdentity) =>
   createCaseLawDecisionRouteParams({
     caseNumber: value.caseNumber,
     country: value.country,
@@ -238,64 +126,6 @@ export const dockedLegalPath = (template: string): string => {
     }
   });
 };
-
-type DecisionReads = WebApiRoutes["case"]["decisions"][":decisionId"];
-const noProvisions = {
-  status: { type: "current" },
-  generation: "synthetic-dock",
-  publishedProjectionDigest: null,
-  nextCursor: null,
-  limit: 100,
-  items: [],
-  previews: [],
-} satisfies DecisionReads["provisions"]["get"]["response"][200];
-const noCitations = {
-  nextCursor: null,
-  limit: 50,
-  items: [],
-} satisfies DecisionReads["citations"]["get"]["response"][200];
-const noLeadingCitations = {
-  items: [],
-} satisfies DecisionReads["citations"]["leading"]["get"]["response"][200];
-const treatmentCounts = {
-  negative: 0,
-  neutral: 0,
-  positive: 0,
-  supportive: 0,
-  mixed: 0,
-  unclassified: 0,
-};
-const citationSummary = {
-  incoming: treatmentCounts,
-  outgoing: treatmentCounts,
-  capped: { incoming: false, outgoing: false },
-  incomingByYear: [],
-} satisfies DecisionReads["citations"]["summary"]["get"]["response"][200];
-const {
-  citationCaseCount: _citationCaseCount,
-  documentAst: _documentAst,
-  fulltext: _fulltext,
-  sections: _sections,
-  createdAt: _createdAt,
-  updatedAt: _updatedAt,
-  ...version
-} = statute;
-const versions = {
-  items: [
-    { ...version, isDefault: true },
-    {
-      ...version,
-      id: olderStatute.id,
-      status: olderStatute.status,
-      effectiveDate: olderStatute.effectiveDate,
-      versionValidFrom: olderStatute.versionValidFrom,
-      versionValidTo: olderStatute.versionValidTo,
-      isDefault: false,
-    },
-  ],
-  nextCursor: null,
-  limit: 200,
-} satisfies WebApiRoutes["law"]["statutes"][":documentId"]["versions"]["get"]["response"][200];
 
 /** Exact HTTP reads only: the real route, reader, runtime and composer mount. */
 export const installDockedLegalFixtures = async (page: Page) => {
