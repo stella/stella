@@ -459,6 +459,32 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("a created session reaches the caller when the claim update fails", async () => {
+      await withRolledBackFixture(async (tx, fixture) => {
+        const provider = installFakeProvider(sessionResponse);
+        try {
+          const scoped = scopedSafeDb(tx, fixture);
+          // Database work after the provider call fails, so only the claim
+          // update is affected.
+          const failingAfterProvider: SafeDb = async (run, retry) =>
+            provider.calls() === 0
+              ? await scoped(run, retry)
+              : await scoped(async () => {
+                  throw new Error("claim update unavailable");
+                });
+          expect(
+            await startCheckout({ fixture, safeDb: failingAfterProvider }),
+          ).toEqual({
+            hostedSessionId: "checkout_1",
+            url: "https://buy.provider.test/1",
+          });
+          expect(provider.calls()).toBe(1);
+        } finally {
+          provider.restore();
+        }
+      });
+    });
+
     test("a failed provider call releases the claim for the next start", async () => {
       await withRolledBackFixture(async (tx, fixture) => {
         const provider = installFakeProvider((call) =>

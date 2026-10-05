@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -452,20 +453,25 @@ const createHostedSetup = createSafeRootHandler(
       },
     });
     if (dbResult.claimId !== null) {
-      yield* Result.await(
-        settleHostedCheckoutClaim({
-          safeDb,
+      const settled = await settleHostedCheckoutClaim({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        claimId: dbResult.claimId,
+        recordAuditEvent,
+        session: Result.isOk(sessionResult)
+          ? {
+              id: sessionResult.value.id,
+              expiresAt: sessionResult.value.expiresAt,
+            }
+          : null,
+      });
+      // The provider outcome is already decided: a created session still
+      // reaches the caller, and an unsettled claim lapses at its own expiry.
+      if (Result.isError(settled)) {
+        captureError(settled.error, {
           organizationId: session.activeOrganizationId,
-          claimId: dbResult.claimId,
-          recordAuditEvent,
-          session: Result.isOk(sessionResult)
-            ? {
-                id: sessionResult.value.id,
-                expiresAt: sessionResult.value.expiresAt,
-              }
-            : null,
-        }),
-      );
+        });
+      }
     }
     if (Result.isError(sessionResult)) {
       return Result.err(
