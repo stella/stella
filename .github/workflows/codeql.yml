@@ -38,10 +38,12 @@ on:
     - cron: "37 2 * * *"
   workflow_dispatch:
 
-# Newer runs for the same branch or pull request supersede older scans.
+# A newer push to the same pull request supersedes its scan. Pushes to main,
+# scheduled scans and manual runs each get a group of their own, so they
+# always finish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
