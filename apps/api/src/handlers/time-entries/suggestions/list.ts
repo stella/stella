@@ -26,6 +26,7 @@ const listTimeSuggestions = createSafeHandler(
       "time-entries.suggestions.dismiss.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

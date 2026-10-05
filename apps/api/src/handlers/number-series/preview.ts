@@ -16,6 +16,7 @@ const config = {
     "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

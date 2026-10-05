@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { savedTimeNarratives } from "@/api/db/schema";
+import { user as authUser } from "@/api/db/auth-schema";
+import { savedTimeNarratives, featureEnrolments } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -36,6 +37,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userA2]));
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {

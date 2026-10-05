@@ -16,6 +16,7 @@ const config = {
     "profile becomes the default; later profiles can be made default explicitly.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createSellerProfileBody,
 } satisfies HandlerConfig;

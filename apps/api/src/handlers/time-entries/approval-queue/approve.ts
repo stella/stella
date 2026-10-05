@@ -12,6 +12,7 @@ const approveTimeEntries = createSafeRootHandler(
       "Approve up to 200 time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",

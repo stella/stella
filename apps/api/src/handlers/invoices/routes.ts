@@ -13,6 +13,7 @@ import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
@@ -24,6 +25,7 @@ export const invoicesRoute = new Elysia({
       isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
     ),
   )
+  .use(featureAccessGate("time-billing"))
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({

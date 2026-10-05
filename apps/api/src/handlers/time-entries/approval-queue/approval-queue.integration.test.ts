@@ -14,6 +14,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -22,6 +23,7 @@ import {
   timeEntries,
   timeTimers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -66,6 +68,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userA2, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 
 const cleanup = async () => {

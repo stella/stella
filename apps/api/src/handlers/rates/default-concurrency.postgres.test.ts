@@ -9,6 +9,7 @@ import {
   rateTables,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -89,6 +90,11 @@ if (!databaseUrl || !runPostgres) {
           userId,
           role: "owner",
           createdAt: new Date(),
+        });
+        await firstDb.insert(featureEnrolments).values({
+          organizationId,
+          userId,
+          featureId: "time-billing",
         });
         await firstDb.insert(workspaces).values({
           id: workspaceId,

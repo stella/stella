@@ -92,6 +92,7 @@ const listApprovalQueue = createSafeRootHandler(
       "List draft time entries awaiting the signed-in user's approval, including internal work and accessible client matters. Owners/admins also see drafts without an assigned approver. Optionally filter work dates (from/to, YYYY-MM-DD), timekeeper (member), and matter. Returns logged durationMinutes separately from adjusted billedMinutes and the last return comment. Follow nextCursor for the next bounded page.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

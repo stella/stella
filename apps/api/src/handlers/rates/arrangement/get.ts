@@ -49,6 +49,7 @@ const readBillingArrangement = createSafeHandler(
       "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
     permissions: { rate: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

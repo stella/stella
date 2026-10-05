@@ -115,6 +115,7 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   compileWireSchema,
   createWireSchemaValidator,
@@ -1068,6 +1069,19 @@ const COUNTRY_INPUT_GUIDANCE = agentInputNormalizationGuidance({
   country: { spelling: "alpha-3" },
 });
 
+const createBillingContext = (
+  options: Parameters<typeof createContext>[0] = {},
+) => {
+  const context = createContext(options);
+  return {
+    ...context,
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      userId: context.userId,
+      organizationId: context.organizationId,
+    }),
+  };
+};
+
 describe("OpenAI-compatible MCP tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -1423,7 +1437,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // The anonymized surface is the registry minus excluded (write / dynamic
     // gateway) tools: every read/search/reference tool, in registry order.
     expect(
-      (await listMcpTools(createContext(), "anonymized")).map(
+      (await listMcpTools(createBillingContext(), "anonymized")).map(
         (tool) => tool.name,
       ),
     ).toEqual([
@@ -8774,7 +8788,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const result = await handleMcpToolCall({
       args: { matter_id: WORKSPACE_ID },
-      context: createContext({
+      context: createBillingContext({
         scopedDb: createSelectListScopedDb([
           {
             id: TIME_ENTRY_ID,
@@ -8837,7 +8851,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("save_time_entry rejects an update with no changes", async () => {
     const result = await handleMcpToolCall({
       args: { time_entry_id: TIME_ENTRY_ID },
-      context: createContext(),
+      context: createBillingContext(),
       toolName: "save_time_entry",
     });
 
@@ -8883,7 +8897,7 @@ describe("OpenAI-compatible MCP tools", () => {
     await withBillingFlags(
       { featureTimeBilling: false, featureUsage: true, localDevOpen: false },
       async () => {
-        const toolNames = (await listMcpTools(createContext())).map(
+        const toolNames = (await listMcpTools(createBillingContext())).map(
           (tool) => tool.name,
         );
 
@@ -8899,7 +8913,7 @@ describe("OpenAI-compatible MCP tools", () => {
     await withBillingFlags(
       { featureTimeBilling: true, featureUsage: true, localDevOpen: false },
       async () => {
-        const toolNames = (await listMcpTools(createContext())).map(
+        const toolNames = (await listMcpTools(createBillingContext())).map(
           (tool) => tool.name,
         );
 
@@ -8926,7 +8940,7 @@ describe("OpenAI-compatible MCP tools", () => {
             currency: "EUR",
             narrative: "Call with client",
           },
-          context: createContext({ recordAuditEvent }),
+          context: createBillingContext({ recordAuditEvent }),
           toolName: "save_time_entry",
         });
 
@@ -8949,7 +8963,7 @@ describe("OpenAI-compatible MCP tools", () => {
     await withBillingFlags(
       { featureTimeBilling: true, featureUsage: false, localDevOpen: false },
       async () => {
-        const toolNames = (await listMcpTools(createContext())).map(
+        const toolNames = (await listMcpTools(createBillingContext())).map(
           (tool) => tool.name,
         );
         expect(toolNames).toContain("list_time_entries");
@@ -8957,7 +8971,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
         const result = await handleMcpToolCall({
           args: {},
-          context: createContext(),
+          context: createBillingContext(),
           toolName: "get_usage",
         });
         expectErrorEnvelope(result, {
@@ -8971,7 +8985,7 @@ describe("OpenAI-compatible MCP tools", () => {
     await withBillingFlags(
       { featureTimeBilling: true, featureUsage: true, localDevOpen: false },
       async () => {
-        const toolNames = (await listMcpTools(createContext())).map(
+        const toolNames = (await listMcpTools(createBillingContext())).map(
           (tool) => tool.name,
         );
         expect(toolNames).toContain("get_usage");

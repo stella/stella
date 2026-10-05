@@ -28,6 +28,7 @@ const config = {
     "on how many codes it may hold.",
   permissions: { billingCode: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: billingCodeRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createBillingCodeBodySchema,

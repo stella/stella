@@ -25,6 +25,7 @@ const deleteRateEntry = createSafeHandler(
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

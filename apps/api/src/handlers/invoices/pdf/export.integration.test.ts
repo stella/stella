@@ -1,10 +1,16 @@
 import { PDF } from "@libpdf/core";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
-import { invoiceLines, invoices, INVOICE_STATUS } from "@/api/db/schema";
+import { user as authUser } from "@/api/db/auth-schema";
+import {
+  invoiceLines,
+  invoices,
+  INVOICE_STATUS,
+  featureEnrolments,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
@@ -25,6 +31,26 @@ let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 const invoiceId = createSafeId<"invoice">();
 beforeAll(async () => {
   fixture = await getRlsFixture();
+
+  await fixture.testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [fixture.ids.userA1, fixture.ids.userB1]));
+  await fixture.testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: fixture.ids.orgA,
+        userId: fixture.ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: fixture.ids.orgB,
+        userId: fixture.ids.userB1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
   await fixture.testDb.insert(invoices).values({
     id: invoiceId,
     organizationId: fixture.ids.orgA,

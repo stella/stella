@@ -268,6 +268,7 @@ const deleteTimeEntryById = createSafeHandler(
       "invoice is reverted. Returns whether the entry was hard-deleted.",
     permissions: { timeEntry: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,

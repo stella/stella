@@ -43,6 +43,7 @@ const config = {
     "as a draft.",
   permissions: { expense: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createExpenseBodySchema,

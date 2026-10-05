@@ -42,6 +42,7 @@ const readInvoices = createSafeHandler(
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "list_invoices" },
     access: "read",
     query: readInvoicesQuerySchema,

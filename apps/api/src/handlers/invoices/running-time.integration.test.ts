@@ -11,6 +11,7 @@ import {
 } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -23,6 +24,7 @@ import {
   timeTimers,
   workspaces,
   workspaceMembers,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -56,6 +58,26 @@ const auditEvents: AuditEvent[] = [];
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA2, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
   await db.insert(workspaceMembers).values({
     id: createSafeId<"workspaceMember">(),
     workspaceId: ids.wsA1,

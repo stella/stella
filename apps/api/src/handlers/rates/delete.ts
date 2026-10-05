@@ -22,6 +22,7 @@ const deleteRateTable = createSafeHandler(
       "keep the rate they were billed at.",
     permissions: { rate: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

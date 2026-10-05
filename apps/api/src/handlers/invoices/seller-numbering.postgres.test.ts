@@ -12,6 +12,7 @@ import {
   sellerProfiles,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import transitionInvoice from "@/api/handlers/invoices/transition";
@@ -64,6 +65,7 @@ if (!databaseUrl || !runPostgres) {
         id: userId,
         name: "Invoice numbering",
         email: `${userId}@example.test`,
+        emailVerified: true,
       });
       await db.insert(organization).values({
         id: orgId,
@@ -77,6 +79,11 @@ if (!databaseUrl || !runPostgres) {
         userId,
         role: "owner",
         createdAt: new Date(),
+      });
+      await db.insert(featureEnrolments).values({
+        organizationId: orgId,
+        userId,
+        featureId: "time-billing",
       });
       await db.insert(workspaces).values({
         id: wsId,

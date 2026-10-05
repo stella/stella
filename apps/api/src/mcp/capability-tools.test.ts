@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
@@ -198,6 +199,32 @@ const createContext = ({
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
+    // Capability behavior fixtures represent a verified, enrolled caller.
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map([
+        [
+          "time-billing",
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId: "time-billing",
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments: [
+              {
+                featureId: "time-billing",
+                organizationId: "org_1",
+                userId: "user_1",
+              },
+            ],
+          }),
+        ],
+      ]),
+    }),
   };
 };
 
@@ -2541,6 +2568,7 @@ describe("invoke_capability deployment feature gate", () => {
     expect(
       await featureOmittedCapabilityIds(
         (feature) => feature === undefined || !disabledFeatures.has(feature),
+        createContext(),
       ),
     ).toEqual(hidden);
   });
@@ -2740,6 +2768,19 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       organizationId,
       userId,
       decisions: new Map([
+        [
+          "time-billing",
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId: "time-billing",
+            organizationId,
+            userId,
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments: [{ featureId: "time-billing", organizationId, userId }],
+          }),
+        ],
         [
           featureId,
           decideFeatureAccess({

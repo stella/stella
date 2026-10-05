@@ -1532,6 +1532,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ timeEntry: ["read"] }).success,
     name: "list_time_entries",
@@ -1577,6 +1578,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     name: "save_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1601,6 +1603,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     name: "delete_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1623,6 +1626,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ rate: ["read"] }).success,
     name: "resolve_rate",
@@ -1660,6 +1664,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
+    featureId: "time-billing",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ workspace: ["read"] }).success,
     name: "list_invoices",

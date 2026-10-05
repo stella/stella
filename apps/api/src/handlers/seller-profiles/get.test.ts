@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 
 import getSellerProfile from "./get";
 
@@ -34,18 +35,20 @@ describe("seller profile reads", () => {
           ),
         ),
     );
-    const context = asTestRaw<GetContext>({
-      params: { sellerProfileId: profileId },
-      request: new Request(
-        `https://example.test/v1/seller-profiles/${profileId}`,
-      ),
-      route: "/v1/seller-profiles/:sellerProfileId",
-      safeDb,
-      session: { activeOrganizationId: organizationId },
-      memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent: async () => {},
-    });
+    const context = withTimeBillingEnrolment(
+      asTestRaw<GetContext>({
+        params: { sellerProfileId: profileId },
+        request: new Request(
+          `https://example.test/v1/seller-profiles/${profileId}`,
+        ),
+        route: "/v1/seller-profiles/:sellerProfileId",
+        safeDb,
+        session: { activeOrganizationId: organizationId },
+        memberRole: sessionMemberRole("owner"),
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent: async () => {},
+      }),
+    );
 
     const result = await getSellerProfile.handler(context);
 

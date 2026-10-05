@@ -3,7 +3,6 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
-  loadFeatureAccessSnapshot,
   resolveFeatureAccess,
   resolveFeatureAccessSnapshot,
 } from "@/api/lib/auth/feature-access/context";
@@ -24,27 +23,14 @@ const grants = {
   "fixture-two": [{ type: "organization", organizationId: "org-a" }],
 } as const;
 
-test("the empty production registry skips the feature snapshot transaction", async () => {
-  const database = createScopedDbMock({});
-  const result = await loadFeatureAccessSnapshot({
-    safeDb: database.safeDb,
-    organizationId,
-    userId: "user-a",
-  });
-  expect(result.isOk()).toBe(true);
-  if (result.isOk()) {
-    expect(result.value.organizationId).toBe(organizationId);
-    expect(result.value.userId).toBe("user-a");
-    expect(result.value.decisions.size).toBe(0);
-  }
-  expect(database.getCallCount()).toBe(0);
-});
-
 test("feature snapshots batch current identity across every registered feature", async () => {
   let queries = 0;
   const database = createScopedDbMock({
     select: () => {
       queries += 1;
+      if (queries === 2) {
+        return { from: () => ({ where: () => ({ limit: async () => [] }) }) };
+      }
       return {
         from: () => ({
           innerJoin: () => ({
@@ -74,7 +60,7 @@ test("feature snapshots batch current identity across every registered feature",
         grants,
       }),
   );
-  expect(queries).toBe(1);
+  expect(queries).toBe(2);
   expect([...snapshot.decisions.keys()]).toEqual(Object.keys(registry));
   expect(snapshot.decisions.get("fixture-one")?.status).toBe("enabled");
   expect(snapshot.decisions.get("fixture-two")?.status).toBe("enabled");

@@ -27,6 +27,7 @@ const createRateTable = createSafeHandler(
       "themselves with rates.entries.create.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

@@ -147,6 +147,7 @@ const config = {
     "accessible entries for the date, independently of pagination. Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
   permissions: { timeEntry: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

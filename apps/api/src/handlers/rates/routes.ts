@@ -13,6 +13,7 @@ import readRateTables from "@/api/handlers/rates/list";
 import resolveRate from "@/api/handlers/rates/resolve";
 import updateRateTable from "@/api/handlers/rates/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
@@ -24,6 +25,7 @@ export const ratesRoute = new Elysia({
       isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
     ),
   )
+  .use(featureAccessGate("time-billing"))
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({

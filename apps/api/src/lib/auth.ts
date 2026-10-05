@@ -2671,22 +2671,37 @@ const validateAuthResolutionCache = new WeakMap<
   Promise<ValidateAuthResolution>
 >();
 
+/** Share the request's authorization with gates that must run before validation. */
+export const resolveRequestAuth = ({
+  params,
+  query,
+  request,
+  server,
+  set,
+}: Pick<Context, "params" | "query" | "request" | "server" | "set">) =>
+  memoizePerRequest(
+    validateAuthResolutionCache,
+    request,
+    async () =>
+      await resolveValidateAuth({
+        request,
+        server,
+        initialWorkspaceId: readInitialWorkspaceId(params, query),
+        responseHeaders: set.headers,
+      }),
+  );
+
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     detail: { [TENANT_ACTION_DETAIL]: true },
     async resolve({ params, query, status, request, server, set }) {
-      const initialWorkspaceId = readInitialWorkspaceId(params, query);
-      const result = await memoizePerRequest(
-        validateAuthResolutionCache,
+      const result = await resolveRequestAuth({
+        params,
+        query,
         request,
-        async () =>
-          await resolveValidateAuth({
-            request,
-            server,
-            initialWorkspaceId,
-            responseHeaders: set.headers,
-          }),
-      );
+        server,
+        set,
+      });
 
       if (!result.ok) {
         return status(result.statusCode);

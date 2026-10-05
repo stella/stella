@@ -10,8 +10,8 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
-import { timeDailyTargets } from "@/api/db/schema";
+import { user as authUser, member } from "@/api/db/auth-schema";
+import { timeDailyTargets, featureEnrolments } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { dailyTargetBody } from "@/api/lib/billing/daily-target";
@@ -46,6 +46,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 beforeEach(cleanup);
 afterAll(async () => {

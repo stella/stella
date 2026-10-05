@@ -34,6 +34,7 @@ const updateRateTable = createSafeHandler(
       "recorded on time entries are not rewritten.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",

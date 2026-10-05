@@ -65,6 +65,7 @@ const config = {
     "with cursor pagination. Bank details are included for billing setup.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

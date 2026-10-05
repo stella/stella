@@ -34,6 +34,7 @@ const config = {
     "and by whether the code is still active.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",
