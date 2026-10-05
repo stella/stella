@@ -23,6 +23,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -2033,13 +2034,20 @@ let analytics: RecordingAnalytics | null = null;
 const recordedExceptions = () =>
   (analytics ?? panic("recording analytics is not installed")).exceptions();
 
+// Production serves the public-law pages, so every corpus result carries an
+// `appUrl`; a decision or statute without a slug is addressed by its id there.
+let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+
 afterEach(() => {
   analytics?.restore();
   analytics = null;
+  env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
+  previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+  env.FEATURE_PUBLIC_LAW = true;
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
