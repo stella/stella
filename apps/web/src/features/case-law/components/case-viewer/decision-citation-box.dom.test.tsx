@@ -81,7 +81,7 @@ const mount = () => {
     const options = decisionCitationsInfiniteOptions(decisionId, direction);
     client.setQueryData(options.queryKey, {
       pageParams: [null],
-      pages: [{ items: [], nextCursor: null }],
+      pages: [{ items: [], nextCursor: null, limit: 20 }],
     });
   }
   const provisions = decisionProvisionsInfiniteOptions(decisionId);
@@ -145,7 +145,7 @@ const mount = () => {
           <DecisionCitationBox
             decision={{
               caseNumber: "1 C 1/2020",
-              caseNumberType: "case_number",
+              caseNumberType: "case-number",
               country: "CZ",
               court: "Supreme Court",
               decisionDate: "2020-01-01",

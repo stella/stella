@@ -82,8 +82,8 @@ for (const [locale, messages] of Object.entries({ en: english, ar: arabic })) {
     const content = testDocument.createElement("article");
     const parentAnchor = testDocument.createElement("p");
     const childAnchor = testDocument.createElement("p");
-    parentAnchor.dataset.anchor = "annotation-start";
-    childAnchor.dataset.anchor = "child-start";
+    parentAnchor.dataset["anchor"] = "annotation-start";
+    childAnchor.dataset["anchor"] = "child-start";
     content.append(parentAnchor, childAnchor);
     viewport.append(content);
     viewport.scrollTop = 37;
@@ -168,7 +168,7 @@ test("outline scrolling ignores missing anchors and missing viewport or content"
   const content = testDocument.createElement("article");
   const viewport = testDocument.createElement("div");
   const externalAnchor = testDocument.createElement("p");
-  externalAnchor.dataset.anchor = "outside-reader";
+  externalAnchor.dataset["anchor"] = "outside-reader";
   testDocument.body.append(externalAnchor);
   const scrolls: (number | ScrollToOptions | undefined)[] = [];
   viewport.scrollTo = (options) => {

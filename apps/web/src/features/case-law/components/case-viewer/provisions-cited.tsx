@@ -113,6 +113,64 @@ export const ProvisionsCited = ({
     return null;
   }
 
+  const content = open ? (
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        expanded === undefined && "px-3 pb-3",
+      )}
+    >
+      {isError && (
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "case-law.provisions-retry");
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {groups.map((group) => {
+        const citedWork = citedWorkByGroup.get(group.key);
+        return (
+          <WorkReferences
+            group={group}
+            key={group.key}
+            publisherInconsistent={
+              citedWork !== undefined &&
+              inconsistentWorks.has(citedWorkAtDateKey(citedWork))
+            }
+            renderPart={renderPart}
+            statute={
+              citedWork === undefined
+                ? undefined
+                : statuteByWork.get(citedWorkAtDateKey(citedWork))
+            }
+          />
+        );
+      })}
+      {hasNextPage && (
+        <Button
+          className="w-fit"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "case-law.provisions-more");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.loadMore")}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
   if (expanded !== undefined) {
     if (!open) {
       return null;
@@ -122,56 +180,7 @@ export const ProvisionsCited = ({
         <h3 className="text-foreground-strong-muted text-xs font-medium">
           {t("caseLaw.viewer.provisionsCited")}
         </h3>
-        <div className="flex flex-col gap-3">
-          {isError && (
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "case-law.provisions-retry");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {groups.map((group) => {
-            const citedWork = citedWorkByGroup.get(group.key);
-            return (
-              <WorkReferences
-                group={group}
-                key={group.key}
-                publisherInconsistent={
-                  citedWork !== undefined &&
-                  inconsistentWorks.has(citedWorkAtDateKey(citedWork))
-                }
-                renderPart={renderPart}
-                statute={
-                  citedWork === undefined
-                    ? undefined
-                    : statuteByWork.get(citedWorkAtDateKey(citedWork))
-                }
-              />
-            );
-          })}
-          {hasNextPage && (
-            <Button
-              className="w-fit"
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "case-law.provisions-more");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.loadMore")}
-            </Button>
-          )}
-        </div>
+        {content}
       </section>
     );
   }
@@ -189,59 +198,7 @@ export const ProvisionsCited = ({
         />
         {t("caseLaw.viewer.provisionsCited")}
       </button>
-      {open && (
-        <div className="flex flex-col gap-3 px-3 pb-3">
-          {isError && (
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "case-law.provisions-retry");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {groups.map((group) => {
-            const citedWork = citedWorkByGroup.get(group.key);
-
-            return (
-              <WorkReferences
-                group={group}
-                key={group.key}
-                publisherInconsistent={
-                  citedWork !== undefined &&
-                  inconsistentWorks.has(citedWorkAtDateKey(citedWork))
-                }
-                renderPart={renderPart}
-                statute={
-                  citedWork === undefined
-                    ? undefined
-                    : statuteByWork.get(citedWorkAtDateKey(citedWork))
-                }
-              />
-            );
-          })}
-          {hasNextPage && (
-            <Button
-              className="w-fit"
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "case-law.provisions-more");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.loadMore")}
-            </Button>
-          )}
-        </div>
-      )}
+      {content}
     </section>
   );
 };

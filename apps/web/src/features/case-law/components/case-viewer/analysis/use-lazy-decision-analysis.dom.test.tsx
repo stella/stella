@@ -5,6 +5,11 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
+import type {
+  DecisionAnalysisKey,
+  AnalysisQueryResult,
+} from "@/features/case-law/queries/decision-analysis";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode } = await import("react");
 const { QueryClient, QueryClientProvider } =
@@ -46,8 +51,8 @@ const user = {
 };
 const key = {
   decisionId: "00000000-0000-4000-8000-000000000001",
-  decisionUpdatedAt: new Date("2026-01-01T00:00:00Z"),
-};
+  decisionUpdatedAt: "2026-01-01T00:00:00Z",
+} satisfies DecisionAnalysisKey;
 const eligible = {
   ...key,
   documentReady: true,
@@ -165,10 +170,14 @@ describe("shared lazy decision analysis", () => {
       Response.json({ status: "done", analysis }),
     );
     const client = clientWithAvailability();
-    client.setQueryData(decisionAnalysisOptions(key).queryKey, {
-      kind: "done",
-      analysis,
-    });
+    client.setQueryData(
+      decisionAnalysisOptions(key).queryKey,
+      () =>
+        ({
+          kind: "done",
+          analysis,
+        }) satisfies AnalysisQueryResult,
+    );
     const mounted = renderHook((options) => useLazyDecisionAnalysis(options), {
       initialProps: eligible,
       wrapper: wrapperFor({ client }),
@@ -177,7 +186,7 @@ describe("shared lazy decision analysis", () => {
     expect(requests.length).toBe(0);
     mounted.rerender({
       ...eligible,
-      decisionUpdatedAt: new Date("2026-01-02T00:00:00Z"),
+      decisionUpdatedAt: "2026-01-02T00:00:00Z",
     });
     await waitFor(() => expect(requests.length).toBe(1));
     await waitFor(() =>
