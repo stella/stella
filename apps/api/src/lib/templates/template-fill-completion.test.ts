@@ -3,7 +3,10 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
+import {
+  clauseDirectiveWarningSchema,
+  type ClauseDirectiveWarning,
+} from "@/api/lib/clauses/clause-directives";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type { TemplateStructureError } from "@/api/lib/docx/types";
@@ -49,7 +52,7 @@ const undecidedConditionArbitrary: fc.Arbitrary<UndecidedAiCondition> =
   });
 
 const clauseWarningArbitrary: fc.Arbitrary<ClauseDirectiveWarning> = fc.record({
-  code: fc.constant("CLAUSE_LEGACY_DIRECTIVES"),
+  code: fc.constantFrom(...clauseDirectiveWarningSchema.entries.code.options),
   clauseName: fc.string({ minLength: 1 }),
   version: fc.option(fc.integer({ min: 1, max: 50 }), { nil: null }),
   message: fc.string({ minLength: 1 }),

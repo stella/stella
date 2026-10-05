@@ -1033,6 +1033,38 @@ describe("describeStoredTemplate array shape", () => {
     }
   });
 
+  test("describes the branch condition and loop alias for each item field", async () => {
+    const file = await makeDocx(
+      WRAP(
+        P("{% for p in persons %}") +
+          P("{% if p.vip %}") +
+          P("Dear {{ p.title | required }}") +
+          P("{% endif %}") +
+          P("{% endfor %}"),
+      ),
+    );
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+      const result = await describeStoredTemplate({
+        templateId,
+        organizationId,
+        scopedDb: stubDescribeScopedDb(),
+      });
+      if ("error" in result) {
+        panic(result.error);
+      }
+      expect(result.arrays).toMatchObject([
+        { path: "persons", itemAliases: ["p"] },
+      ]);
+      expect(
+        result.fields.find(({ path }) => path === "persons.title"),
+      ).toMatchObject({ required: true, visibleWhen: "p.vip" });
+    } finally {
+      fakeS3.stop();
+    }
+  });
+
   test("includes an object-item loop whose sole item field happens to be named `value`", async () => {
     // {{entries.value}} is genuinely ambiguous from marker text alone: it is
     // both the primitive-loop convention (values.entries an array of
@@ -1065,7 +1097,7 @@ describe("describeStoredTemplate array shape", () => {
         throw new Error(`unexpected error: ${result.error}`);
       }
       expect(result.arrays).toEqual([
-        { path: "entries", itemFieldPaths: ["value"] },
+        { path: "entries", itemAliases: ["entry"], itemFieldPaths: ["value"] },
       ]);
     } finally {
       fakeS3.stop();
@@ -2457,7 +2489,9 @@ describe("clause slot requiredness follows rendering", () => {
         alias: "p",
         path: "persons",
       });
-      expect(manifest.fields.map(({ path }) => path)).toContain("p.company");
+      expect(manifest.fields.map(({ path }) => path)).toContain(
+        mode === "block" ? "persons.company" : "p.company",
+      );
       const queries: string[] = [];
       const result = await fillTemplateDocx({
         source,
@@ -2604,7 +2638,9 @@ describe("clause slot requiredness follows rendering", () => {
           );
           const visible = persons.filter(({ show }) => show);
           if (visible.some(({ name }) => name === "")) {
-            expect(result).toEqual(nameRejection("p.name"));
+            expect(result).toEqual(
+              nameRejection(mode === "block" ? "persons.name" : "p.name"),
+            );
             return;
           }
           expect((await filledTexts(result)).join("")).toBe(
@@ -2675,7 +2711,7 @@ describe("clause slot requiredness follows rendering", () => {
           { persons },
           { templateBody: loopTemplate },
         ),
-      ).toEqual(nameRejection("p.name"));
+      ).toEqual(nameRejection("persons.name"));
     },
   );
 
@@ -2877,6 +2913,58 @@ const requiredTreeBody = (
     }
   });
 
+/**
+ * The model of what a fill must reject: every required field a marker renders
+ * for these values and leaves empty. A branch the values prune renders
+ * nothing; a loop renders its body once per row, under that row.
+ */
+const renderedMissingRequired = (
+  nodes: RequiredTree[],
+  required: ReadonlySet<string>,
+  {
+    fields,
+    c,
+    rows,
+  }: {
+    fields: Partial<Record<"f1" | "f2", string>>;
+    c: boolean;
+    rows: readonly Partial<Record<"name", string>>[];
+  },
+): string[] => {
+  const missing = new Set<string>();
+  const blank = (value: string | undefined) =>
+    value === undefined || value.trim() === "";
+  const walk = (level: readonly RequiredTree[]): void => {
+    for (const node of level) {
+      switch (node.kind) {
+        case "text":
+          break;
+        case "field":
+          if (required.has(node.path) && blank(fields[node.path])) {
+            missing.add(node.path);
+          }
+          break;
+        case "condition":
+          walk(c ? node.yes : node.no);
+          break;
+        case "loop":
+          for (const row of rows) {
+            if (required.has("row.name") && blank(row.name)) {
+              missing.add("rows.name");
+            }
+            walk(node.children);
+          }
+          break;
+        default:
+          node satisfies never;
+          throw new TypeError("Unhandled generated required tree");
+      }
+    }
+  };
+  walk(nodes);
+  return [...missing].toSorted(compareCodeUnit);
+};
+
 const fillOutcome = async (
   result: Awaited<ReturnType<typeof fillLinkedClause>>,
 ) => {
@@ -2925,7 +3013,626 @@ test("a clause body and the equivalent template body fill to the same text and r
           }),
         );
         expect(viaClause).toEqual(viaTemplate);
+        expect("missing" in viaTemplate ? viaTemplate.missing : []).toEqual(
+          renderedMissingRequired(tree, new Set(requiredPaths), {
+            fields,
+            c,
+            rows,
+          }),
+        );
       },
     ),
   );
+});
+
+describe("template fields are required where they render", () => {
+  const rejection = (...paths: string[]) => ({
+    requiredFieldsRejection: paths.map((path) => ({
+      path,
+      label: null,
+      inputType: "text",
+      options: null,
+    })),
+  });
+  const fillBody = async (body: string, values: TemplateData) =>
+    fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file: await makeDocx(WRAP(body)),
+      },
+      values,
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+    });
+  const branch =
+    P("{% if show %}") + P("Party {{ name | required }}") + P("{% endif %}");
+
+  test("a field in a branch the values prune requires nothing", async () => {
+    expect(
+      await filledTexts(await fillBody(branch + P("Tail"), { show: false })),
+    ).toEqual(["Tail"]);
+    expect(await fillBody(branch, { show: true })).toEqual(rejection("name"));
+    expect(
+      await filledTexts(await fillBody(branch, { show: true, name: "Acme" })),
+    ).toEqual(["Party Acme"]);
+  });
+
+  test("else and inline branches prune a field like a block branch", async () => {
+    const elseBranch =
+      P("{% if show %}") +
+      P("Shown") +
+      P("{% else %}") +
+      P("Party {{ name | required }}") +
+      P("{% endif %}");
+    expect(
+      await filledTexts(await fillBody(elseBranch, { show: true })),
+    ).toEqual(["Shown"]);
+    expect(await fillBody(elseBranch, { show: false })).toEqual(
+      rejection("name"),
+    );
+
+    const inline = P("Lead {% if show %}{{ name | required }}{% endif %}");
+    expect(await filledTexts(await fillBody(inline, { show: false }))).toEqual([
+      "Lead ",
+    ]);
+    expect(await fillBody(inline, { show: true })).toEqual(rejection("name"));
+  });
+
+  test("header markers are required where the header renders them", async () => {
+    const fillWithHeader = async (header: string, values: TemplateData) => {
+      const zip = await JSZip.loadAsync((await makeDocx(WRAP(branch))).bytes);
+      zip.file(
+        "word/header1.xml",
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${header}</w:hdr>`,
+      );
+      return fillTemplateDocx({
+        source: {
+          name: "Terms",
+          fileName: "terms.docx",
+          file: testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+        },
+        values,
+        scopedDb: stubScopedDb(),
+        organizationId,
+        requiredFields: "enforce",
+        useRecording: "caller",
+      });
+    };
+    expect(
+      await fillWithHeader(P("Ref {{ ref | required }}"), { show: false }),
+    ).toEqual(rejection("ref"));
+    expect(
+      await fillWithHeader(
+        P("Ref {% if show %}{{ ref | required }}{% endif %}"),
+        { show: false },
+      ),
+    ).not.toHaveProperty("requiredFieldsRejection");
+    expect(
+      await fillWithHeader(
+        P("Ref {% if show %}{{ ref | required }}{% endif %}"),
+        { show: true, name: "Acme" },
+      ),
+    ).toEqual(rejection("ref"));
+  });
+
+  test("sibling inline loops bind a reused alias to each array", async () => {
+    const body = P(
+      "{% for p in persons %}{% if p.vip %}{{ p.name | required }}{% endif %}{% endfor %}" +
+        "{% for p in buyers %}{% if p.vip %}{{ p.name | required }}{% endif %}{% endfor %}",
+    );
+    expect(
+      await fillBody(body, {
+        persons: [{ vip: false }],
+        buyers: [{ vip: true }],
+      }),
+    ).toEqual(rejection("buyers.name"));
+    expect(
+      await filledTexts(
+        await fillBody(body, {
+          persons: [{ vip: false }],
+          buyers: [{ vip: true, name: "Ann" }],
+        }),
+      ),
+    ).toEqual(["Ann"]);
+  });
+
+  test("a field rendered anywhere else stays required", async () => {
+    expect(
+      await fillBody(P("Signed by {{ name }}") + branch, { show: false }),
+    ).toEqual(rejection("name"));
+  });
+
+  const perItem =
+    P("{% for p in persons %}") +
+    P("{% if p.vip %}") +
+    P("Dear {{ p.title | required }}") +
+    P("{% endif %}") +
+    P("{% endfor %}");
+
+  test("an item field is required in exactly the items that render it", async () => {
+    expect(
+      await filledTexts(
+        await fillBody(perItem, {
+          persons: [{ vip: true, title: "Dr" }, { vip: false }],
+        }),
+      ),
+    ).toEqual(["Dear Dr"]);
+    for (const persons of [
+      [{ vip: false }, { vip: true }],
+      [{ vip: true, title: " " }],
+      [{ vip: true }, { vip: true, title: "Dr" }],
+    ]) {
+      expect(await fillBody(perItem, { persons })).toEqual(
+        rejection("persons.title"),
+      );
+    }
+    expect(
+      await filledTexts(await fillBody(perItem + P("Tail"), { persons: [] })),
+    ).toEqual(["Tail"]);
+  });
+
+  test("a nested loop requires its item fields per inner item", async () => {
+    const nested =
+      P("{% for p in persons %}") +
+      P("{% for c in p.children %}") +
+      P("{% if c.adult %}") +
+      P("Id {{ c.id | required }}") +
+      P("{% endif %}") +
+      P("{% endfor %}") +
+      P("{% endfor %}");
+    expect(
+      await filledTexts(
+        await fillBody(nested, {
+          persons: [{ children: [{ adult: false }, { adult: true, id: "X" }] }],
+        }),
+      ),
+    ).toEqual(["Id X"]);
+    expect(
+      await fillBody(nested, {
+        persons: [
+          { children: [{ adult: false }] },
+          { children: [{ adult: true }] },
+        ],
+      }),
+    ).toEqual(rejection("persons.children.id"));
+  });
+
+  test("an inline loop requires fields only in items whose branch renders", async () => {
+    const body = P(
+      "{% for p in persons %}{% if p.vip %}Dear {{ p.title | required }};{% endif %}{% endfor %}",
+    );
+    expect(
+      await filledTexts(
+        await fillBody(body, {
+          persons: [{ vip: true, title: "Dr" }, { vip: false }],
+        }),
+      ),
+    ).toEqual(["Dear Dr;"]);
+    expect(
+      await fillBody(body, { persons: [{ vip: false }, { vip: true }] }),
+    ).toEqual(rejection("persons.title"));
+    expect(
+      await filledTexts(
+        await fillBody(body + P("Tail"), { persons: [{ vip: false }] }),
+      ),
+    ).toEqual(["", "Tail"]);
+  });
+
+  test("an inline loop that renders requires its item field in every row", async () => {
+    const inlineLoop = P(
+      "{% for p in persons %}{{ p.name | required }} {% endfor %}",
+    );
+    expect(
+      await fillBody(inlineLoop, { persons: [{ name: "Ann" }, {}] }),
+    ).toEqual(rejection("persons.name"));
+    expect(
+      await filledTexts(
+        await fillBody(inlineLoop, { persons: [{ name: "Ann" }] }),
+      ),
+    ).toEqual(["Ann "]);
+  });
+
+  /** A branch an AI decision settles: the submitted values alone cannot say
+   *  whether its field renders. */
+  const fillAiGated = async ({
+    fieldInYesBranch,
+    decided,
+    values = {},
+    unconditional = "",
+  }: {
+    fieldInYesBranch: boolean;
+    decided: boolean;
+    values?: TemplateData;
+    unconditional?: string;
+  }) => {
+    let collaboratorCalls = 0;
+    const field = P("Consumer {{ name | required }}");
+    const other = P("Business terms");
+    const file = await authorConditionTags(
+      await makeDocx(
+        WRAP(
+          unconditional +
+            P("{% if is_consumer %}") +
+            (fieldInYesBranch ? field : other) +
+            P("{% else %}") +
+            (fieldInYesBranch ? other : field) +
+            P("{% endif %}"),
+        ),
+      ),
+      [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    );
+    const result = await fillTemplateDocx({
+      source: { name: "Terms", fileName: "terms.docx", file },
+      values,
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      aiCollaborators: async () => {
+        collaboratorCalls += 1;
+        return {
+          decideAiCondition: async () => ({
+            decidedBy: "generative_model",
+            value: decided,
+          }),
+        };
+      },
+    });
+    return { result, collaboratorCalls };
+  };
+
+  test.each([
+    { fieldInYesBranch: true, decided: true, renders: true },
+    { fieldInYesBranch: true, decided: false, renders: false },
+    { fieldInYesBranch: false, decided: true, renders: false },
+    { fieldInYesBranch: false, decided: false, renders: true },
+  ])(
+    "a field gated by an AI decision is required exactly when the decision renders it (%j)",
+    async ({ fieldInYesBranch, decided, renders }) => {
+      const { result } = await fillAiGated({ fieldInYesBranch, decided });
+      if (renders) {
+        expect(result).toEqual(rejection("name"));
+        const { result: filled } = await fillAiGated({
+          fieldInYesBranch,
+          decided,
+          values: { name: "Acme" },
+        });
+        expect(await filledTexts(filled)).toEqual(["Consumer Acme"]);
+      } else {
+        expect(await filledTexts(result)).toEqual(["Business terms"]);
+      }
+    },
+  );
+
+  test("a field that renders whatever the values is gated before any AI work", async () => {
+    const { result, collaboratorCalls } = await fillAiGated({
+      fieldInYesBranch: true,
+      decided: true,
+      values: { name: "Acme" },
+      unconditional: P("Ref {{ reference | required }}"),
+    });
+    expect(result).toEqual(rejection("reference"));
+    expect(collaboratorCalls).toBe(0);
+  });
+
+  test("a field whose rendering the values settle is gated before any AI work", async () => {
+    let collaboratorCalls = 0;
+    const file = await authorFieldMarkers(
+      await makeDocx(WRAP(P("{{ summary }}") + branch)),
+      [{ path: "summary", inputType: "text", aiPrompt: "Summarize." }],
+    );
+    const result = await fillTemplateDocx({
+      source: { name: "Terms", fileName: "terms.docx", file },
+      values: { show: true },
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      aiCollaborators: async () => {
+        collaboratorCalls += 1;
+        return {};
+      },
+    });
+    expect(result).toEqual(rejection("name"));
+    expect(collaboratorCalls).toBe(0);
+  });
+});
+
+describe("clause slots the fill prunes", () => {
+  const prunedSlot =
+    P("{% if show %}") +
+    P('{{ clause("Terms") }}') +
+    P("{% endif %}") +
+    P("Tail");
+  const malformed: ClauseBody = [
+    clauseDirective("{% if x %}"),
+    { text: "Unclosed" },
+  ];
+
+  test("a stored legacy clause raises its warning only where its slot renders", async () => {
+    const pruned = await fillLinkedClause(
+      malformed,
+      { show: false },
+      {
+        templateBody: prunedSlot,
+      },
+    );
+    expect(await filledTexts(pruned)).toEqual(["Tail"]);
+    if (!("file" in pruned)) {
+      panic("expected filled document");
+    }
+    expect(pruned.clauseWarnings).toEqual([]);
+
+    const rendered = await fillLinkedClause(
+      malformed,
+      { show: true },
+      {
+        templateBody: prunedSlot,
+      },
+    );
+    if (!("file" in rendered)) {
+      panic("expected filled document");
+    }
+    expect(rendered.clauseWarnings).toMatchObject([
+      { code: "CLAUSE_LEGACY_DIRECTIVES", slotKey: "@clause:Terms" },
+    ]);
+  });
+
+  const prunedCases = [
+    {
+      name: "a pruned branch",
+      templateBody: prunedSlot,
+      values: { show: false },
+    },
+    {
+      name: "an empty loop",
+      templateBody:
+        P("{% for p in persons %}") +
+        P('{{ clause("Terms") }}') +
+        P("{% endfor %}") +
+        P("Tail"),
+      values: { persons: [] },
+    },
+  ] satisfies { name: string; templateBody: string; values: TemplateData }[];
+  test.each(prunedCases)(
+    "an invalid override in $name is a warning, not a refusal",
+    async ({ templateBody, values }) => {
+      const result = await fillLinkedClause([{ text: "Stored" }], values, {
+        templateBody,
+        override: malformed,
+      });
+      expect(await filledTexts(result)).toEqual(["Tail"]);
+      if (!("file" in result)) {
+        panic("expected filled document");
+      }
+      expect(result.clauseWarnings).toEqual([
+        expect.objectContaining({
+          code: "CLAUSE_OVERRIDE_NOT_RENDERED",
+          slotKey: "@clause:Terms",
+          version: null,
+          issues: [expect.objectContaining({ path: expect.any(String) })],
+        }),
+      ]);
+    },
+  );
+
+  test("an invalid override refuses the fill where its slot renders", async () => {
+    const result = await fillLinkedClause(
+      [{ text: "Stored" }],
+      { show: true },
+      {
+        templateBody: prunedSlot,
+        override: malformed,
+      },
+    );
+    if (!("error" in result)) {
+      panic("expected clause rejection");
+    }
+    expect(result.storedTemplateError?.code).toBe("clause_directives_invalid");
+  });
+
+  /** A slot an AI decision keeps or prunes, after the submitted values
+   *  are read. */
+  const fillAiGatedOverride = async (decided: boolean) =>
+    fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file: await authorConditionTags(
+          await makeDocx(
+            WRAP(
+              P("{% if is_consumer %}") +
+                P('{{ clause("Terms") }}') +
+                P("{% endif %}") +
+                P("Tail"),
+            ),
+          ),
+          [
+            {
+              path: "is_consumer",
+              label: "Consumer contract",
+              inputType: "boolean",
+              aiPrompt: "Is this a consumer contract?",
+            },
+          ],
+        ),
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values: {},
+      scopedDb: stubScopedDb([{ text: "Stored" }]),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      clauseOverrides: { "@clause:Terms": malformed },
+      aiCollaborators: async () => ({
+        decideAiCondition: async () => ({
+          decidedBy: "generative_model",
+          value: decided,
+        }),
+      }),
+    });
+
+  test("an invalid override behind an AI decision is judged by the decision", async () => {
+    const pruned = await fillAiGatedOverride(false);
+    if (!("file" in pruned)) {
+      panic("expected filled document");
+    }
+    expect(pruned.clauseWarnings).toMatchObject([
+      { code: "CLAUSE_OVERRIDE_NOT_RENDERED" },
+    ]);
+    const rendered = await fillAiGatedOverride(true);
+    if (!("error" in rendered)) {
+      panic("expected clause rejection");
+    }
+    expect(rendered.storedTemplateError?.code).toBe(
+      "clause_directives_invalid",
+    );
+  });
+});
+
+describe("a clause in a template loop", () => {
+  const loopTemplate =
+    P("{% for p in persons %}") +
+    P('{{ clause("Terms") }}') +
+    P("{% endfor %}");
+  const counted: ClauseBody = [
+    { text: "{{ loop.index }}/{{ loop.length }} {{ p.name }}" },
+    clauseDirective("{% for t in tags %}"),
+    { text: "{{ loop.index }}:{{ t.label }}" },
+    clauseDirective("{% endfor %}"),
+  ];
+
+  const countedCases = [
+    { name: "linked", body: counted, override: undefined },
+    { name: "override", body: [{ text: "Stored" }], override: counted },
+  ] satisfies {
+    name: string;
+    body: ClauseBody;
+    override: ClauseBody | undefined;
+  }[];
+  test.each(countedCases)(
+    "a $name clause prints the iteration's loop counters, and its own loop's inside it",
+    async ({ body, override }) => {
+      const result = await fillLinkedClause(
+        body,
+        {
+          persons: [{ name: "Ann" }, { name: "Bob" }],
+          tags: [{ label: "x" }, { label: "y" }],
+        },
+        { templateBody: loopTemplate, override },
+      );
+      expect(await filledTexts(result)).toEqual([
+        "1/2 Ann",
+        "1:x",
+        "2:y",
+        "2/2 Bob",
+        "1:x",
+        "2:y",
+      ]);
+    },
+  );
+});
+
+describe("discovery exposes where each field renders", () => {
+  const discover = async (templateBody: string, body?: ClauseBody) => {
+    const { discovered } = await discoverTemplateSource({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file: await makeDocx(WRAP(templateBody)),
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      scopedDb: stubScopedDb(body),
+      organizationId,
+    });
+    return discovered.fields;
+  };
+
+  test("an item field in a per-item branch carries the branch, read through the loop alias", async () => {
+    const fields = await discover(
+      P("{% for p in persons %}") +
+        P("{% if p.vip %}") +
+        P("Dear {{ p.title }}") +
+        P("{% endif %}") +
+        P("{{ p.name }} {{ fee }}") +
+        P("{% if p.vip %}") +
+        P("{{ vat }}") +
+        P("{% endif %}") +
+        P("{% endfor %}"),
+    );
+    expect(fields.find((field) => field.path === "persons")).toMatchObject({
+      itemAliases: ["p"],
+      itemFields: expect.arrayContaining([
+        expect.objectContaining({ path: "title", visibleWhen: "p.vip" }),
+        { path: "name", kind: "string", count: 1 },
+      ]),
+    });
+    // A document-level field inside a loop renders when any item renders it,
+    // which no condition over the document's values says.
+    expect(fields.find((field) => field.path === "vat")).not.toHaveProperty(
+      "visibleWhen",
+    );
+  });
+
+  test("a clause field carries its slot's branch", async () => {
+    const fields = await discover(
+      P("{% if show %}") + P('{{ clause("Terms") }}') + P("{% endif %}"),
+      [
+        { text: "Party {{ name }}" },
+        clauseDirective("{% if vip %}"),
+        { text: "Title {{ title }}" },
+        clauseDirective("{% endif %}"),
+      ],
+    );
+    expect(fields.find((field) => field.path === "name")).toMatchObject({
+      visibleWhen: "show",
+    });
+    expect(fields.find((field) => field.path === "title")).toMatchObject({
+      visibleWhen: "show and vip",
+    });
+  });
+
+  test("a clause field in a template loop is an item field of the loop's array", async () => {
+    const fields = await discover(
+      P("{% for p in persons %}") +
+        P('{{ clause("Terms") }}') +
+        P("{% endfor %}"),
+      [{ text: "Party {{ p.name }}" }],
+    );
+    expect(fields.map((field) => field.path)).not.toContain("p");
+    expect(fields.map((field) => field.path)).not.toContain("p.name");
+    expect(fields.find((field) => field.path === "persons")).toMatchObject({
+      itemFields: [expect.objectContaining({ path: "name" })],
+    });
+  });
+});
+
+test("template fills surface malformed paragraph markers as a typed refusal", async () => {
+  const file = await makeDocx(
+    WRAP("<w:p><w:t>{{ name | required }}</w:t></w:p>"),
+  );
+  const result = await fillTemplateDocx({
+    source: { name: "Paragraph", fileName: "paragraph.docx", file },
+    values: { name: "Ann" },
+    scopedDb: stubScopedDb(),
+    organizationId,
+    requiredFields: "enforce",
+  });
+  expect("storedTemplateError" in result).toBe(true);
+  if (!("storedTemplateError" in result)) {
+    throw new TypeError("Expected a typed template refusal");
+  }
+  expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
+  expect(result.storedTemplateError.status).toBe(422);
+  expect(result.storedTemplateError.retryable).toBe(false);
 });

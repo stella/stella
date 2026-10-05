@@ -1495,6 +1495,7 @@
     "noResults": "Ainda não há cláusulas",
     "noVariants": "Sem variantes",
     "outdatedVersion": "Atualização disponível",
+    "overrideNotRenderedWarning": "A substituição da cláusula {clauseName} não foi usada: o espaço dela não aparece neste documento.",
     "renameSlot": "Renomear slot",
     "renameSlotInvalid": "Os nomes dos slots devem ser únicos e não podem conter espaços, dois-pontos ou chaves.",
     "restoreVersion": "Restaurar esta versão",

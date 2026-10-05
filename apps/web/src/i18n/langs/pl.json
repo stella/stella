@@ -1495,6 +1495,7 @@
     "noResults": "Brak klauzul",
     "noVariants": "Brak wariantów",
     "outdatedVersion": "Dostępna aktualizacja",
+    "overrideNotRenderedWarning": "Zastąpienie klauzuli {clauseName} nie zostało użyte: jej miejsce nie występuje w tym dokumencie.",
     "renameSlot": "Zmień nazwę slotu",
     "renameSlotInvalid": "Nazwy slotów muszą być unikalne i nie mogą zawierać spacji, dwukropków ani nawiasów klamrowych.",
     "restoreVersion": "Przywróć tę wersję",

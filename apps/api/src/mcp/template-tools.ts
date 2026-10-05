@@ -437,6 +437,7 @@ const toTemplateDetailPayload = (
     ...toTemplateFieldWireInput(field),
     input_type: field.inputType,
     required: field.required,
+    visibleWhen: field.visibleWhen,
   }));
   return {
     ...payload,
