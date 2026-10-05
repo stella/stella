@@ -5,7 +5,6 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
-import { createAppQueryClient } from "@/lib/app-query-client";
 import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
 import {
   isPublicLawMiss,
@@ -13,6 +12,7 @@ import {
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
+import { createAppQueryClient } from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {

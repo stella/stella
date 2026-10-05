@@ -8,7 +8,7 @@ import nodePath from "node:path";
 // in app code would silently drop those defaults. Test harnesses build their
 // own clients on purpose. Found by scanning, so a new client cannot hide.
 const SOURCE = nodePath.resolve(import.meta.dir, "..");
-const OWNER = "lib/app-query-client.ts";
+const OWNER = "lib/react-query.ts";
 const CONSTRUCTION = /\bnew QueryClient\(/u;
 const HARNESS = /from "@testing-library\//u;
 

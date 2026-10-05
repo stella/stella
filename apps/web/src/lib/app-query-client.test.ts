@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { createAppQueryClient } from "@/lib/app-query-client";
 import { APIError } from "@/lib/errors/api";
+import { createAppQueryClient } from "@/lib/react-query";
 
 const busy = () => new APIError({ status: 429, message: "Too many requests" });
 

@@ -19,8 +19,8 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
-import { createAppQueryClient } from "@/lib/app-query-client";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
