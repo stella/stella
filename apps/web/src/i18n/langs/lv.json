@@ -2158,6 +2158,7 @@
     "markHandled": "Atzīmēt kā izskatītu",
     "markNew": "Atzīmēt kā jaunu",
     "noAddress": "Nav aktīvas e-pasta adreses.",
+    "openSourceFile": "Atvērt e-pasta failu",
     "originalSender": "Sākotnējais sūtītājs",
     "originalSenderUnverified": "Sākotnējais sūtītājs (norādīts, nav pārbaudīts)",
     "originalSignatureVerified": "Sākotnējais paraksts pārbaudīts (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Mainīt adresi",
     "sentAt": "Nosūtīts",
     "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "statedInFile": "Galvenes (pēc faila norādītā)",
     "states": {
       "handled": "Izskatīts"
     },
     "title": "Sarakste",
-    "unknownApprover": "Nezināms apstiprinātājs"
+    "unknownApprover": "Nezināms apstiprinātājs",
+    "uploadedBy": "Augšupielādēja {name}",
+    "uploadedFile": "Augšupielādēts e-pasta fails"
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "Laiku rēķinā iekļauj šī minūšu skaita daudzkārtņos.",
         "narrativeRequired": "Pieprasīt aprakstu",
         "title": "Laika uzskaites noteikumi"
+      },
+      "timeZone": {
+        "description": "Bloķētie mēneši, rēķinu datumi un termiņā veicamais darbs seko šīs laika joslas kalendārajai dienai. Kamēr neviena nav izvēlēta, to nosaka galvenā jurisdikcija: Europe/Prague Čehijai un Slovākijai, citos gadījumos UTC.",
+        "followJurisdiction": "Atbilstoši galvenajai jurisdikcijai",
+        "followingJurisdiction": "Atbilstoši galvenajai jurisdikcijai ({timeZone})",
+        "title": "Laika josla",
+        "updated": "Laika josla atjaunināta"
       },
       "usage": "Lietojums",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",

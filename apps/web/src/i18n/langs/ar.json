@@ -2158,6 +2158,7 @@
     "markHandled": "تحديد كمُعالج",
     "markNew": "تحديد كجديد",
     "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",
+    "openSourceFile": "فتح ملف البريد الإلكتروني",
     "originalSender": "المرسل الأصلي",
     "originalSenderUnverified": "المرسل الأصلي (كما ورد، غير متحقق منه)",
     "originalSignatureVerified": "تم التحقق من التوقيع الأصلي (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "تغيير العنوان",
     "sentAt": "أُرسل في",
     "sharedMailboxFiler": "صندوق بريد مشترك {address}، وافق عليه {approver}",
+    "statedInFile": "الترويسات (كما وردت في الملف)",
     "states": {
       "handled": "مُعالج"
     },
     "title": "المراسلات",
-    "unknownApprover": "موافق غير معروف"
+    "unknownApprover": "موافق غير معروف",
+    "uploadedBy": "رُفِع بواسطة {name}",
+    "uploadedFile": "ملف بريد إلكتروني مرفوع"
   },
   "docxReview": {
     "acceptAll": "قبول الكل",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "تتم فوترة الوقت بمضاعفات هذا العدد من الدقائق.",
         "narrativeRequired": "اشتراط بيان",
         "title": "سياسة تسجيل الوقت"
+      },
+      "timeZone": {
+        "description": "تتبع الأشهر المقفلة وتواريخ الفواتير والأعمال المستحقة اليوم التقويمي في هذه المنطقة الزمنية. وإلى أن يتم اختيار منطقة، تُحدَّد وفق الولاية القضائية الرئيسية: Europe/Prague لتشيكيا وسلوفاكيا، وUTC في غير ذلك.",
+        "followJurisdiction": "اتباع الولاية القضائية الرئيسية",
+        "followingJurisdiction": "اتباع الولاية القضائية الرئيسية ({timeZone})",
+        "title": "المنطقة الزمنية",
+        "updated": "تم تحديث المنطقة الزمنية"
       },
       "usage": "الاستخدام",
       "usageDescription": "حدود الاستخدام وحالة الاستحقاق لهذه المؤسسة",

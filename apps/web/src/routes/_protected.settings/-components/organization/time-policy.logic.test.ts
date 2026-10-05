@@ -1,6 +1,9 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import { APIError } from "@/lib/errors/api";
@@ -163,7 +166,11 @@ describe("time policy form normalization", () => {
     editWindow: "Invalid edit window",
     lockedMonth: "Invalid locked month",
   };
-  const schema = timePolicyFormSchema(TODAY, messages);
+  const schema = timePolicyFormSchema({
+    timeZone: "UTC",
+    messages,
+    at: TODAY.toZonedDateTime({ timeZone: "UTC" }).toInstant(),
+  });
   const raw = {
     timeMinimumUnitMinutes: original.timeMinimumUnitMinutes,
     timeEditWindowDays: "0",
@@ -216,4 +223,71 @@ describe("time policy form normalization", () => {
       ).toThrow(messages.editWindow);
     }
   });
+});
+
+// Every zone this runtime knows; the property picks a wall-clock moment in the
+// first two hours of a month there, so the expected organization day is the
+// chosen date by construction rather than by recomputing it.
+const RUNTIME_ZONES = Intl.supportedValuesOf("timeZone");
+const FIRST_YEAR = 1995;
+const LAST_YEAR = 2039;
+const MONTHS_IN_YEAR = 12;
+const LAST_EARLY_MINUTE = 119;
+
+describe("time policy form (properties)", () => {
+  test(
+    "offers a lock month once the organization's day has left it",
+    () => {
+      assertProperty(
+        "offers a lock month once the organization's day has left it",
+        fc.property(
+          fc.constantFrom(...RUNTIME_ZONES),
+          fc.integer({ min: FIRST_YEAR, max: LAST_YEAR }),
+          fc.integer({ min: 1, max: MONTHS_IN_YEAR }),
+          fc.integer({ min: 0, max: LAST_EARLY_MINUTE }),
+          fc.boolean(),
+          (zone, year, month, minuteOfDay, previous) => {
+            const today = Temporal.PlainDate.from({ year, month, day: 1 });
+            const wallClock = Temporal.PlainTime.from({
+              hour: Math.floor(minuteOfDay / 60),
+              minute: minuteOfDay % 60,
+            });
+            const local = Result.try(() =>
+              today
+                .toPlainDateTime(wallClock)
+                .toZonedDateTime(zone, { disambiguation: "reject" }),
+            );
+            // A wall time a DST gap skips names no instant.
+            fc.pre(Result.isOk(local));
+            if (Result.isError(local)) {
+              return;
+            }
+            const lockMonth = previous ? today.subtract({ months: 1 }) : today;
+            const lastDay = lockMonth.with({ day: lockMonth.daysInMonth });
+            const parsed = v.safeParse(
+              timePolicyFormSchema({
+                timeZone: zone,
+                at: local.value.toInstant(),
+                messages: {
+                  minimumUnit: "unit",
+                  editWindow: "window",
+                  lockedMonth: "month",
+                },
+              }),
+              {
+                timeMinimumUnitMinutes: 6,
+                timeEditWindowDays: "0",
+                timeLockedThroughMonth: lockMonth.toString().slice(0, 7),
+                timeNarrativeRequired: false,
+              },
+            );
+            expect(parsed.success).toBe(
+              Temporal.PlainDate.compare(lastDay, today) < 0,
+            );
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(20_000),
+  );
 });

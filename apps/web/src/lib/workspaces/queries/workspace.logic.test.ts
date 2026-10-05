@@ -14,11 +14,16 @@ test("disables workflow actions until the status is known", () => {
   ).toBe(true);
 });
 
-test("uses the known workflow status even after a failed refetch", () => {
+test("uses a successfully read workflow status", () => {
   for (const running of [true, false]) {
     expect(
       workflowActionsDisabled({ type: "items", items: running, retry }),
     ).toBe(running);
+  }
+});
+
+test("disables workflow actions after any failed status refetch", () => {
+  for (const running of [true, false]) {
     expect(
       workflowActionsDisabled({
         type: "items",
@@ -26,6 +31,6 @@ test("uses the known workflow status even after a failed refetch", () => {
         retry,
         refetchError: readError,
       }),
-    ).toBe(running);
+    ).toBe(true);
   }
 });

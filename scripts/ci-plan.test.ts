@@ -13,6 +13,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
@@ -1807,6 +1808,23 @@ printf "%s\\n" "$package_checks_required"`,
   return new TextDecoder().decode(process.stdout).trim();
 };
 
+test("transfer read guard runs for API-only pull request changes", () => {
+  const guard = jobSteps(ciJobs["ci-checks-rest"]).find(
+    ({ name }) => name === "Transfer timeout and fixed read guard",
+  );
+  expect(guard?.if).toContain("steps.install.outcome == 'success'");
+  expect(guard?.if).toContain(
+    "(needs.ci-plan.outputs.package_checks_required == 'true')",
+  );
+  expect(guard?.run).toContain("scripts/transfer-read-guard.test.ts");
+  expect(guard?.run).toContain("bun scripts/transfer-read-guard.ts");
+  expect(packageChecksPlan(["apps/api/src/handlers/files/get.ts"])).toBe(
+    "true",
+  );
+  expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(fastRequired).toContain("ci-checks-rest");
+});
+
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(packageScopeStart).toBeLessThan(selectorStart);
@@ -1880,7 +1898,7 @@ test("CI rehearses every released API platform with the shared release smoke con
       runner,
       platform,
     }))
-    .toSorted((a, b) => a.platform.localeCompare(b.platform));
+    .toSorted((a, b) => compareCodeUnit(a.platform, b.platform));
   expect(releasePlatforms.length).toBeGreaterThan(0);
   expect(
     v.parse(
@@ -1907,7 +1925,7 @@ test("CI rehearses every released API platform with the shared release smoke con
     v.parse(v.array(MatrixEntry), JSON.parse(dispatchPlatforms ?? "")),
   ]) {
     expect(
-      platforms.toSorted((a, b) => a.platform.localeCompare(b.platform)),
+      platforms.toSorted((a, b) => compareCodeUnit(a.platform, b.platform)),
     ).toEqual(releasePlatforms);
   }
   const ciCommands = smokeCommands(apiImageJob);
@@ -2994,15 +3012,13 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
-  expect(
-    suites.map(({ name }) => name).toSorted((a, b) => a.localeCompare(b)),
-  ).toEqual(
+  expect(suites.map(({ name }) => name).toSorted(compareCodeUnit)).toEqual(
     [
       "Test desktop browser interactions",
       "Test extension browser boundary",
       "Test UI browser interactions",
       "Test UI playground visuals",
-    ].toSorted((a, b) => a.localeCompare(b)),
+    ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
     const legs = browser.strategy.matrix.suite.filter((leg) =>

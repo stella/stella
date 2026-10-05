@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -42,6 +44,8 @@ const createContext = (
   recordAuditEvent: async () => {},
   safeDb: toSafeDbMock(throwingScopedDb),
   scopedDb: throwingScopedDb,
+  // The MCP transport holds a permit for every request (`context.ts`).
+  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
   userId: toSafeId<"user">("user_1"),
   userEmail: "standard@example.test",
 });
@@ -217,6 +221,22 @@ describe("search_boe_legislation feature gating", () => {
       context: createContext("owner"),
     });
     expect(errorMessage(result)).toBe("block_id requires law_id");
+  });
+
+  test("refuses a context without a third-party outbound permit before any BOE fetch", async () => {
+    const searchConsolidatedLegislation = mock(async () =>
+      panic("The BOE must not be asked without a permit"),
+    );
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
+      args: { query: "arrendamiento" },
+      context: {
+        ...createContext("owner"),
+        thirdPartyOutboundPermit: undefined,
+        testDependencies: { searchConsolidatedLegislation },
+      },
+    });
+    expect(errorText(result)).toContain('"code":"permission_denied"');
+    expect(searchConsolidatedLegislation).not.toHaveBeenCalled();
   });
 
   test("requires at least one search filter in search mode", async () => {

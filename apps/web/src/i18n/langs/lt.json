@@ -2158,6 +2158,7 @@
     "markHandled": "Pažymėti kaip sutvarkytą",
     "markNew": "Pažymėti kaip naują",
     "noAddress": "Aktyvaus el. pašto adreso nėra.",
+    "openSourceFile": "Atidaryti el. laiško failą",
     "originalSender": "Pradinis siuntėjas",
     "originalSenderUnverified": "Pradinis siuntėjas (nurodytas, nepatvirtintas)",
     "originalSignatureVerified": "Pradinis parašas patvirtintas (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Pakeisti adresą",
     "sentAt": "Išsiųsta",
     "sharedMailboxFiler": "Bendra pašto dėžutė {address}, patvirtino {approver}",
+    "statedInFile": "Antraštės (pagal failą)",
     "states": {
       "handled": "Sutvarkyta"
     },
     "title": "Korespondencija",
-    "unknownApprover": "Nežinomas tvirtintojas"
+    "unknownApprover": "Nežinomas tvirtintojas",
+    "uploadedBy": "Įkėlė {name}",
+    "uploadedFile": "Įkeltas el. laiško failas"
   },
   "docxReview": {
     "acceptAll": "Priimti visus",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "Laikas apmokestinamas šio minučių skaičiaus kartotiniais.",
         "narrativeRequired": "Reikalauti aprašo",
         "title": "Laiko apskaitos taisyklės"
+      },
+      "timeZone": {
+        "description": "Užrakinti mėnesiai, sąskaitų datos ir terminuoti darbai vadovaujasi šios laiko juostos kalendorine diena. Kol jokia nepasirinkta, ji nustatoma pagal pagrindinę jurisdikciją: Europe/Prague Čekijai ir Slovakijai, kitais atvejais UTC.",
+        "followJurisdiction": "Pagal pagrindinę jurisdikciją",
+        "followingJurisdiction": "Pagal pagrindinę jurisdikciją ({timeZone})",
+        "title": "Laiko juosta",
+        "updated": "Laiko juosta atnaujinta"
       },
       "usage": "Naudojimas",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",

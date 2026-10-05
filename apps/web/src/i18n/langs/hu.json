@@ -2158,6 +2158,7 @@
     "markHandled": "Megjelölés elintézettként",
     "markNew": "Megjelölés újként",
     "noAddress": "Nincs aktív e-mail-cím.",
+    "openSourceFile": "E-mail-fájl megnyitása",
     "originalSender": "Eredeti feladó",
     "originalSenderUnverified": "Eredeti feladó (közölt, nem ellenőrzött)",
     "originalSignatureVerified": "Eredeti aláírás ellenőrizve (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Cím cseréje",
     "sentAt": "Elküldve",
     "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "statedInFile": "Fejlécek (a fájl szerint)",
     "states": {
       "handled": "Elintézett"
     },
     "title": "Levelezés",
-    "unknownApprover": "Ismeretlen jóváhagyó"
+    "unknownApprover": "Ismeretlen jóváhagyó",
+    "uploadedBy": "Feltöltötte: {name}",
+    "uploadedFile": "Feltöltött e-mail-fájl"
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "Az idő elszámolása ennyi perc többszöröseiben történik.",
         "narrativeRequired": "Szöveges leírás megkövetelése",
         "title": "Időelszámolási szabályok"
+      },
+      "timeZone": {
+        "description": "A zárolt hónapok, a számlák dátuma és az esedékes munka ennek az időzónának a naptári napját követi. Amíg nincs kiválasztva, az elsődleges joghatóság határozza meg: Csehországban és Szlovákiában Europe/Prague, egyébként UTC.",
+        "followJurisdiction": "Az elsődleges joghatóság szerint",
+        "followingJurisdiction": "Az elsődleges joghatóság szerint ({timeZone})",
+        "title": "Időzóna",
+        "updated": "Időzóna frissítve"
       },
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",

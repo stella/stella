@@ -491,6 +491,19 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "deepl-availability",
+    capability: "Reading translation provider availability on demand",
+    owner: ["apps/web/src/components/translate-document-dialog.tsx"],
+    summary:
+      "The translation dialog starts availability reads only while open. Its shared query factory requires an explicit open state, keys the cache by organization, and lets an in-flight read complete across toolbar remounts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/lib/deepl/queries"],
+      names: ["deepLAvailabilityOptions"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
@@ -827,7 +840,9 @@ export const OWNERSHIP = [
       "is still a member of them, so it is built only for writes and lookups an " +
       "earlier check already proved. A run a member queued goes through " +
       "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
-      "and field readers (`ContentReadDb`) refuse.",
+      "and field readers (`ContentReadDb`) refuse. " +
+      "`createRootOrganizationBackgroundDb` validates the organization id and " +
+      "binds background work to that organization with no user or stored workspace ids.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/root-scoped-db"],
@@ -853,6 +868,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/email/inbound/runtime.ts",
           reason: "Files inbound mail into the matter its routing resolved.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload.ts",
+          reason:
+            "Files an email file as its uploader, whose matter access the filing transaction rechecks.",
         },
         {
           path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
@@ -1017,6 +1037,11 @@ export const OWNERSHIP = [
             "Queue transport: worker owns its dedicated blocking connection.",
         },
         {
+          path: "apps/api/src/lib/email/inbound/upload-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
           path: "apps/api/src/lib/document-review/run-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
@@ -1143,6 +1168,31 @@ export const OWNERSHIP = [
     summary:
       "Cursor query fields come from `tPaginationCursor`, so the byte cap is " +
       "one named constant rather than a literal repeated per route.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "bounded-export-read",
+    capability: "Reading a complete set within an export row cap",
+    owner: ["apps/api/src/lib/db/read-bounded.ts"],
+    summary:
+      "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
+      "complete rows or an explicit overflow result without a partial set. " +
+      "This owner handles expected export ceilings; `boundedAll` instead " +
+      "panics when a write-path cardinality invariant is violated. " +
+      "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
+      "enforces their shrink-only migration baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "fetch-transfer-timeout",
+    capability: "Applying response header and body idle deadlines",
+    owner: ["packages/fetch/src/index.ts"],
+    summary:
+      "`@stll/fetch` requires a header or idle timeout policy for new callers " +
+      "and composes caller cancellation. Idle deadlines cover pending body reads; " +
+      "header deadlines stop at the response. Deprecated numeric callers and " +
+      "raw total deadlines on body reads are enumerated by " +
+      "`scripts/transfer-read-guard.ts` with a shrink-only baseline.",
     enforcement: { kind: "none" },
   },
   {

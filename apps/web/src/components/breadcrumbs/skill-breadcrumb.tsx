@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
+import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
 import { classifyToolEntry } from "@/lib/knowledge/tool-entry";
+import { useQueryView } from "@/lib/use-query-view";
 
 const toolEntryRoute = getRouteApi("/knowledge/tools_/$entry");
 
@@ -20,14 +22,22 @@ export const SkillBreadcrumb = () => {
         : null,
   });
   const isSkill = classifyToolEntry(entry) === "skill";
-  const { data: skill } = useQuery({
+  const skillQuery = useQuery({
     ...skillDetailOptions(activeOrganizationId, userId, entry),
     enabled: isSkill,
   });
+  const skillView = useQueryView(skillQuery);
+  const skill = skillView.type === "items" ? skillView.items : undefined;
 
+  if (isSkill && skillView.type !== "items") {
+    return <BreadcrumbQueryContent view={skillView} />;
+  }
   return (
-    <BreadcrumbLink to="/knowledge/tools/$entry">
-      {toolName ?? skill?.name ?? entry}
-    </BreadcrumbLink>
+    <>
+      {isSkill && <BreadcrumbQueryContent view={skillView} />}
+      <BreadcrumbLink to="/knowledge/tools/$entry">
+        {toolName ?? skill?.name ?? entry}
+      </BreadcrumbLink>
+    </>
   );
 };

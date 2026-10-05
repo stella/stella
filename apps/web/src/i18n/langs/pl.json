@@ -2158,6 +2158,7 @@
     "markHandled": "Oznacz jako obsłużone",
     "markNew": "Oznacz jako nowe",
     "noAddress": "Brak aktywnego adresu e-mail.",
+    "openSourceFile": "Otwórz plik wiadomości",
     "originalSender": "Pierwotny nadawca",
     "originalSenderUnverified": "Pierwotny nadawca (podany, niezweryfikowany)",
     "originalSignatureVerified": "Pierwotny podpis zweryfikowany (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Zmień adres",
     "sentAt": "Wysłano",
     "sharedMailboxFiler": "Wspólna skrzynka {address}, zatwierdzona przez {approver}",
+    "statedInFile": "Nagłówki (według pliku)",
     "states": {
       "handled": "Obsłużone"
     },
     "title": "Korespondencja",
-    "unknownApprover": "Nieznany zatwierdzający"
+    "unknownApprover": "Nieznany zatwierdzający",
+    "uploadedBy": "Przesłane przez {name}",
+    "uploadedFile": "Przesłany plik wiadomości e-mail"
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "Czas jest rozliczany w wielokrotnościach tej liczby minut.",
         "narrativeRequired": "Wymagaj opisu",
         "title": "Zasady ewidencji czasu"
+      },
+      "timeZone": {
+        "description": "Zablokowane miesiące, daty faktur i zadania z terminem są liczone według dnia kalendarzowego w tej strefie czasowej. Dopóki żadna nie zostanie wybrana, wynika z głównej jurysdykcji: Europe/Prague dla Czech i Słowacji, w pozostałych przypadkach UTC.",
+        "followJurisdiction": "Zgodnie z główną jurysdykcją",
+        "followingJurisdiction": "Zgodnie z główną jurysdykcją ({timeZone})",
+        "title": "Strefa czasowa",
+        "updated": "Strefa czasowa została zaktualizowana"
       },
       "usage": "Użycie",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",

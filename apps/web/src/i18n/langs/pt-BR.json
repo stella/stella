@@ -2158,6 +2158,7 @@
     "markHandled": "Marcar como resolvido",
     "markNew": "Marcar como novo",
     "noAddress": "Nenhum endereço de e-mail está ativo.",
+    "openSourceFile": "Abrir arquivo de e-mail",
     "originalSender": "Remetente original",
     "originalSenderUnverified": "Remetente original (informado, não verificado)",
     "originalSignatureVerified": "Assinatura original verificada (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Trocar endereço",
     "sentAt": "Enviado em",
     "sharedMailboxFiler": "Caixa compartilhada {address}, aprovada por {approver}",
+    "statedInFile": "Cabeçalhos (conforme o arquivo)",
     "states": {
       "handled": "Resolvido"
     },
     "title": "Correspondência",
-    "unknownApprover": "Aprovador desconhecido"
+    "unknownApprover": "Aprovador desconhecido",
+    "uploadedBy": "Enviado por {name}",
+    "uploadedFile": "Arquivo de e-mail enviado"
   },
   "docxReview": {
     "acceptAll": "Aceitar tudo",
@@ -4511,6 +4515,13 @@
         "minimumUnitHelp": "O tempo é faturado em múltiplos deste número de minutos.",
         "narrativeRequired": "Exigir uma narrativa",
         "title": "Política de registro de tempo"
+      },
+      "timeZone": {
+        "description": "Meses bloqueados, datas de fatura e trabalho com prazo seguem o dia do calendário neste fuso horário. Enquanto nenhum for escolhido, ele segue a jurisdição principal: Europe/Prague para a Tchéquia e a Eslováquia, UTC nos demais casos.",
+        "followJurisdiction": "Seguir a jurisdição principal",
+        "followingJurisdiction": "Seguir a jurisdição principal ({timeZone})",
+        "title": "Fuso horário",
+        "updated": "Fuso horário atualizado"
       },
       "usage": "Uso",
       "usageDescription": "Limites de uso e estado da habilitação desta organização",

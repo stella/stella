@@ -4,6 +4,8 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import JSZip from "jszip";
 
+import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
@@ -105,6 +107,13 @@ const restoreManualOcrRunAfterProjectionLossMock = mock(
     >[0],
   ) => undefined,
 );
+const enqueueUploadedMailMock = mock(
+  async (
+    _input: Parameters<
+      ExecuteNativeExtractionDependencies["enqueueUploadedMail"]
+    >[0],
+  ) => undefined,
+);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
@@ -148,6 +157,7 @@ const persistProjectionSpy = mock(
 );
 
 const executeDependencies = {
+  enqueueUploadedMail: enqueueUploadedMailMock,
   extractText: extractFileTextResultMock,
   persistProjection: persistProjectionSpy,
   recordLanguage: recordLanguageMock,
@@ -263,6 +273,8 @@ beforeEach(() => {
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   recordLanguageMock.mockClear();
+  enqueueUploadedMailMock.mockReset();
+  enqueueUploadedMailMock.mockImplementation(async () => undefined);
   persistProjectionSpy.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
@@ -861,7 +873,70 @@ describe("the extraction's database", () => {
     expect(outcome).toBe("source_cancelled");
     expect(persistProjectionSpy).toHaveBeenCalledTimes(1);
     expect(recordLanguageMock).not.toHaveBeenCalled();
+    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
+  });
+
+  test("hands only an email document to the correspondence job", async () => {
+    seedSource("pdf");
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
+  });
+
+  test("hands an email document to the correspondence job by file", async () => {
+    seedSource("eml");
+    const emailContent = {
+      ...fileContent,
+      fileName: "letter.eml",
+      mimeType: EML_MIME_TYPE,
+    } satisfies FieldContent;
+
+    const outcome = await executeNativeExtraction({
+      fileField: emailContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock.mock.calls).toEqual([
+      [
+        {
+          file: {
+            sourceFileId: fileContent.id,
+            storageMimeType: EML_MIME_TYPE,
+            mimeType: EML_MIME_TYPE,
+          },
+          scope: { organizationId, workspaceId, entityId },
+        },
+      ],
+    ]);
+  });
+
+  test("a failed hand-off leaves the document indexed", async () => {
+    seedSource("eml");
+    enqueueUploadedMailMock.mockImplementationOnce(async () => {
+      throw new Error("queue unavailable");
+    });
+
+    const outcome = await executeNativeExtraction({
+      fileField: {
+        ...fileContent,
+        fileName: "letter.eml",
+        mimeType: EML_MIME_TYPE,
+      },
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock).toHaveBeenCalledTimes(1);
   });
 });

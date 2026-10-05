@@ -46,8 +46,7 @@ const renderWithProviders = (children: ReactNode) =>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ChatMattersContext
             value={{
-              createDocumentMatters: [],
-              isLoadingCreateDocumentMatters: false,
+              createDocumentMattersView: { type: "empty" },
             }}
           >
             <ChatApprovalContext

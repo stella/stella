@@ -509,6 +509,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("result-boundary.fixture.ts", [
     "result-boundary/no-throw-outside-boundary",
     "result-boundary/no-try-catch-outside-boundary",
+    "result-boundary/no-rejected-result-error",
   ]),
 ];
 
@@ -5261,6 +5262,16 @@ export default defineConfig({
       },
     },
     {
+      // better-result boundary lint, part 1b: `Promise.reject(result.error)`
+      // is a throw by another name. The web app has no other site, so the ban
+      // covers all of it rather than only the zero-violation directories; a
+      // TanStack query or mutation function unwraps with `readQueryResult`.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "result-boundary/no-rejected-result-error": "error",
+      },
+    },
+    {
       // better-result boundary lint, part 2: the boundary carve-out.
       //
       // These modules legitimately throw or catch: framework route mounts,
@@ -5276,6 +5287,7 @@ export default defineConfig({
       rules: {
         "result-boundary/no-throw-outside-boundary": "off",
         "result-boundary/no-try-catch-outside-boundary": "off",
+        "result-boundary/no-rejected-result-error": "off",
       },
     },
     {
@@ -5322,11 +5334,15 @@ export default defineConfig({
     {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
-      // helper. Scoped to apps/web, apps/api and the helper's own package,
+      // helper. Scoped to apps/web, apps/api, the repository and API scripts
+      // (whose sorted output feeds committed baselines and CI reports, so it
+      // must not depend on the runner's locale) and the helper's own package,
       // where the one legitimate bare call lives.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "apps/api/src/**/*.ts",
+        "apps/api/scripts/**/*.ts",
+        "scripts/**/*.ts",
         "packages/collation/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
       ],

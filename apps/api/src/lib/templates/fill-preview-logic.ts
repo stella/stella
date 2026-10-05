@@ -7,6 +7,7 @@ import type { Result as ResultType } from "better-result";
 import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
@@ -92,6 +93,7 @@ export const fillPreviewLogic = async ({
     values: parsed,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     // Live preview: the values are typically still in progress (the person is
     // mid-typing in the fill form), so partial values are explicitly allowed
     // here — the one deliberate exception to the required-fields gate every

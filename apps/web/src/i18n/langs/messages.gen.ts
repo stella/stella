@@ -2161,6 +2161,7 @@ type Messages = {
     "markHandled": "Mark handled";
     "markNew": "Mark new";
     "noAddress": "No email address is active.";
+    "openSourceFile": "Open email file";
     "originalSender": "Original sender";
     "originalSenderUnverified": "Original sender (as stated, not verified)";
     "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
@@ -2169,11 +2170,14 @@ type Messages = {
     "rotateAddress": "Rotate address";
     "sentAt": "Sent on";
     "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "statedInFile": "Headers (as stated in the file)";
     "states": {
       "handled": "Handled";
     };
     "title": "Correspondence";
     "unknownApprover": "Unknown approver";
+    "uploadedBy": "Uploaded by {name}";
+    "uploadedFile": "Uploaded email file";
   };
   "docxReview": {
     "acceptAll": "Accept all";
@@ -4514,6 +4518,13 @@ type Messages = {
         "minimumUnitHelp": "Time is billed in multiples of this many minutes.";
         "narrativeRequired": "Require a narrative";
         "title": "Time policy";
+      };
+      "timeZone": {
+        "description": "Locked months, invoice dates and due work follow the calendar day in this time zone. Until one is chosen, it follows the primary jurisdiction: Europe/Prague for Czechia and Slovakia, UTC otherwise.";
+        "followJurisdiction": "Follow the primary jurisdiction";
+        "followingJurisdiction": "Follow the primary jurisdiction ({timeZone})";
+        "title": "Time zone";
+        "updated": "Time zone updated";
       };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
