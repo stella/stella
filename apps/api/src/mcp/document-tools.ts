@@ -54,6 +54,7 @@ import {
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -145,6 +146,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -534,6 +536,8 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
     "presigned, checksum-verified, scanned, and audited file-version pipeline.",
   inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
   scope: "stella:documents_write",
@@ -560,6 +564,8 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
     "reference; do not use when the host already supplied an attached file.",
   inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",
@@ -1297,7 +1303,7 @@ const loadDocumentProcessingStates = async ({
       return {
         status: "unsupported",
         sourceVersionId: current.currentVersionId,
-        reason: "Encrypted document content cannot be extracted.",
+        reason: ENCRYPTED_CONTENT_MESSAGE,
       };
     }
     if (!extractionCanBecomeAvailable) {
@@ -2494,6 +2500,13 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "any",
+      alternatives: [{ entity: ["create"] }, { entity: ["update"] }],
+      reason:
+        "entity_id selects rename, move or version metadata; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
     scope: "stella:documents_write",
@@ -2520,6 +2533,14 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteDocumentArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: selectOperationByPresence("version_id", {
+      present: {
+        operation: "delete_version",
+        permissions: { entity: ["update"] },
+      },
+      absent: { operation: "delete", permissions: { entity: ["delete"] } },
+    }),
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_document",
@@ -2572,6 +2593,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: FIELD_VALUE_WRITE_PERMISSIONS },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",
     scope: "stella:documents_write",

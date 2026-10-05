@@ -42,9 +42,9 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyAuthClientError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
+import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
-  aiConfigKeys,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { afterOnboardingNavigation } from "@/lib/redirect";
@@ -416,18 +416,7 @@ export const OnboardingWizard = () => {
                   orgConfigured: true,
                 }),
             );
-            await Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: aiConfigKeys.byOrganization({
-                  organizationId: orgData.id,
-                }),
-              }),
-              queryClient.invalidateQueries({
-                queryKey: aiConfigKeys.availability({
-                  organizationId: orgData.id,
-                }),
-              }),
-            ]);
+            await invalidateAIConfigurationCaches(queryClient, orgData.id);
           }
         }
 

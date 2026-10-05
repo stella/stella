@@ -19,7 +19,8 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,6 +65,8 @@ const config = {
   permissions: {
     entity: ["update"],
   },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: fieldRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

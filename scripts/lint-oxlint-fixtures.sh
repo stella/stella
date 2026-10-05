@@ -14,6 +14,11 @@ set -euo pipefail
 
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
 bun scripts/check-swallowed-item-error-ledger.ts
+bun scripts/check-contract-domain-ledger.ts --self-test
+bun scripts/check-contract-domain-ledger.ts
+bun scripts/calendar-day-ledger.ts --self-test
+bun scripts/calendar-day-ledger.ts
+bun scripts/fill-diagnostics-ledger.ts --self-test
 
 # Plugin sources have to load under Node's ESM resolver, not only Bun's.
 #

@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -32,14 +30,6 @@ import readVerifications from "@/api/handlers/lists/verifications/list";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const legalListRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.LEGAL_LIST,
-);
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .use(
@@ -48,7 +38,6 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
     ),
   )
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
   .get("/", readLists.handler, {
@@ -57,72 +46,58 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   })
   .put("/", createList.handler, {
     body: createList.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createList.config.permissions,
   })
   .patch("/", updateList.handler, {
     body: updateList.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateList.config.permissions,
   })
   .post("/sections", createSection.handler, {
     body: createSection.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createSection.config.permissions,
   })
   .post("/columns", createColumn.handler, {
     body: createColumn.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createColumn.config.permissions,
   })
   .post("/generations", createGeneration.handler, {
     body: createGeneration.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createGeneration.config.permissions,
   })
   .post("/generation-candidates", submitGenerationCandidates.handler, {
     body: submitGenerationCandidates.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: submitGenerationCandidates.config.permissions,
   })
   .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
     body: acceptGenerationCandidate.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: acceptGenerationCandidate.config.permissions,
   })
   .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
     body: rejectGenerationCandidate.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: rejectGenerationCandidate.config.permissions,
   })
   .post("/item-sources", createItemSource.handler, {
     body: createItemSource.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemSource.config.permissions,
   })
   .post("/item-comments", createItemComment.handler, {
     body: createItemComment.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemComment.config.permissions,
   })
   .post("/item-reviews", reviewItem.handler, {
     body: reviewItem.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: reviewItem.config.permissions,
   })
   .patch("/item-sources", verifyItemSource.handler, {
     body: verifyItemSource.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: verifyItemSource.config.permissions,
   })
   .patch("/items", updateItem.handler, {
     body: updateItem.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateItem.config.permissions,
   })
   .put("/item-fact-details", updateFactDetails.handler, {
     body: updateFactDetails.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateFactDetails.config.permissions,
   })
   .post("/claim-reviews", createClaimReview.handler, {

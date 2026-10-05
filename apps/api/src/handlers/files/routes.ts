@@ -20,7 +20,7 @@ import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
@@ -30,7 +30,9 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 export const readFileEndpoint = createSafeHandler(
   {
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     query: t.Object({
@@ -70,7 +72,12 @@ export const readFileEndpoint = createSafeHandler(
 
 export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Returns parsed email preview data rather than a file grant.",
+    },
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -101,7 +108,8 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
 
 export const printPdfEndpoint = createSafeHandler(
   {
-    accountAccess: "standard",
+    accountAccess: ACCOUNT_ACCESS.standard,
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -133,7 +141,8 @@ export const printPdfEndpoint = createSafeHandler(
 
 export const stampedDownloadEndpoint = createSafeHandler(
   {
-    accountAccess: "standard",
+    accountAccess: ACCOUNT_ACCESS.standard,
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -168,7 +177,12 @@ export const stampedDownloadEndpoint = createSafeHandler(
 
 export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Returns document metadata rather than file bytes.",
+    },
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -232,7 +246,12 @@ const AUTHORED_PROPERTY_BODY = {
 
 export const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Updates document metadata without delivering a file.",
+    },
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
     // A partial patch: only the named properties change, and an empty string
@@ -273,7 +292,8 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
 
 export const scrubbedDownloadEndpoint = createSafeHandler(
   {
-    accountAccess: "standard",
+    accountAccess: ACCOUNT_ACCESS.standard,
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
@@ -305,7 +325,8 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 
 export const ocrExportEndpoint = createSafeHandler(
   {
-    accountAccess: "standard",
+    accountAccess: ACCOUNT_ACCESS.standard,
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",

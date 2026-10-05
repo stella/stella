@@ -19,14 +19,21 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import {
+  detectFileEncryption,
+  serverBuiltFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const writeFileVersionMock = mock();
@@ -175,6 +182,7 @@ const baseInput = {
   buffer: Buffer.from("filled docx"),
   fileName: "filled.docx",
   mimeType: DOCX_MIME_TYPE,
+  encryption: serverBuiltFileEncryption(),
   source: null,
   writePolicy: { type: "replace-current-file" as const },
   dependencies,
@@ -359,6 +367,44 @@ describe("createEntityVersionFromBuffer", () => {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.ENTITY, id: "entity_1" },
     });
+  });
+
+  test("records the detected encryption of the new bytes on the version and its derivatives", async () => {
+    writeFileVersionMock.mockImplementation(async (input) => {
+      const result = {
+        status: "ok" as const,
+        entityVersionId: input.entityVersionId,
+        fieldId: input.fieldId,
+        filePropertyId: toSafeId<"property">("property_1"),
+        versionNumber: 2,
+      };
+      await input.afterWrite(result);
+      return result;
+    });
+    const pdf = new Uint8Array(await createEncryptedPdf()).slice().buffer;
+    const detection = await detectFileEncryption({
+      mimeType: PDF_MIME_TYPE,
+      scanned: testScannedFile({ bytes: pdf, mimeType: PDF_MIME_TYPE }),
+    });
+    expect(detection.status).toBe("known");
+
+    const result = await createEntityVersionFromBuffer({
+      ...baseInput,
+      buffer: new Uint8Array(pdf),
+      fileName: "protected.pdf",
+      mimeType: PDF_MIME_TYPE,
+      encryption: detection.encryption,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    const written = writeFileVersionMock.mock.calls.at(0)?.[0];
+    expect(written?.encryption.encrypted).toBe(true);
+    expect(pdfDerivativeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ encrypted: true }),
+    );
+    expect(thumbnailDerivativeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ encrypted: true }),
+    );
   });
 
   test("stores a stamped DOCX without its reference despite a generic MIME", async () => {

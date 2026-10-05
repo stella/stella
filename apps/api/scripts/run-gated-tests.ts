@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
 import {
@@ -89,7 +91,8 @@ export const runGatedTests = async ({
       stdout: "inherit",
       stderr: "inherit",
     });
-    const generationStatus = await generationProcess.exited;
+    await generationProcess.exited;
+    const generationStatus = childExitStatus(generationProcess);
     if (generationStatus !== 0) {
       return generationStatus;
     }
@@ -121,5 +124,6 @@ export const runGatedTests = async ({
     stderr: "inherit",
   });
 
-  return await testProcess.exited;
+  await testProcess.exited;
+  return childExitStatus(testProcess);
 };

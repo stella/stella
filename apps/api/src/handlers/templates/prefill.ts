@@ -15,7 +15,7 @@ import type {
 } from "@/api/handlers/templates/prefill-fields";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -167,6 +167,11 @@ const extractFieldValues = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Suggest values for one stored template's fields from source material: " +
     "an uploaded DOCX or PDF, pasted text, or the stored extracted text of " +
@@ -176,6 +181,7 @@ const config = {
     "dates are anchored to your calendar day rather than the server's. " +
     "Consumes AI usage.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

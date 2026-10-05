@@ -219,6 +219,11 @@ export const templateClauses = p.pgTable(
 
 // -- Template Fills (analytics) --
 
+/** A recorded fill's completion decision: `partial` when any of its
+ *  diagnostics is blocking. Typed here only; the column has no CHECK. */
+export const TEMPLATE_FILL_STATUSES = ["success", "partial"] as const;
+export type TemplateFillStatus = (typeof TEMPLATE_FILL_STATUSES)[number];
+
 export const templateFills = p.pgTable(
   "template_fills",
   {
@@ -235,7 +240,7 @@ export const templateFills = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
     format: p.text().notNull(),
-    status: p.text().notNull(),
+    status: p.text("status", { enum: TEMPLATE_FILL_STATUSES }).notNull(),
     unmatchedCount: p.integer("unmatched_count").notNull().default(0),
     unusedCount: p.integer("unused_count").notNull().default(0),
     structureErrors: jsonb("structure_errors").$type<

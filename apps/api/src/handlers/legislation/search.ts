@@ -9,7 +9,6 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
   SEARCH_PAGINATION_COMPLETE,
   type SearchPaginationOutcome,
@@ -28,7 +27,7 @@ import {
   type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
@@ -103,6 +102,7 @@ import type {
 } from "@/api/lib/legal-search/legislation-work-names";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -135,7 +135,7 @@ type SearchLegislationDependencies = {
   provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
   countryAdmission?: {
-    unavailable: typeof publicCountryUnavailable;
+    unavailable: typeof publicLawCountryUnavailable;
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
@@ -1177,10 +1177,11 @@ export const searchLegislationHandler = async (
     body.jurisdiction === undefined
       ? null
       : (
-          dependencies.countryAdmission?.unavailable ?? publicCountryUnavailable
+          dependencies.countryAdmission?.unavailable ??
+          publicLawCountryUnavailable
         )(body.jurisdiction);
   if (unavailable !== null) {
-    return status(503, unavailable);
+    return unavailable;
   }
   // source_id and the cursor id reach Postgres as UUID comparisons in the
   // pg-fts path; reject malformed values at the boundary so a bad filter
@@ -1310,6 +1311,7 @@ const config = {
     "legislation.boe.search to query the Spanish BOE service directly " +
     "instead.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "search_legislation" },
   access: "read",
   body: searchLegislationBodySchema,

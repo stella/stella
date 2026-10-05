@@ -78,17 +78,21 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    const setupPin =
-      /stella\/\.github\/actions\/setup-bun-cached@(?<sha>[0-9a-f]{40})/u.exec(
-        workflow,
-      )?.groups?.["sha"];
     const releasePin =
       /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
         workflow,
       )?.groups?.["sha"];
 
-    expect(setupPin).toBeDefined();
-    expect(releasePin).toBe(setupPin);
+    expect(releasePin).toBeDefined();
+    // What the pack job builds is published, so it restores no shared cache.
+    expect(workflow).not.toContain("setup-bun-cached");
+    expect(workflow).not.toMatch(/actions\/cache(\/save)?@|rust-cache@/u);
+    const setups =
+      workflow.match(/oven-sh\/setup-bun@[^\n]*\n(?: {8,}.*\n)*/gu) ?? [];
+    expect(setups.length).toBeGreaterThan(0);
+    for (const setup of setups) {
+      expect(setup).toContain("no-cache: true");
+    }
   });
 
   test("staging checks share their access configuration", async () => {
@@ -256,7 +260,11 @@ describe("API deployment health receipt", () => {
       '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
     );
     expect(staging).toContain('"VITE_SEO_INDEXABLE": "false"');
-    expect(production).not.toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED"');
+    expect(production).toContain('"VITE_PUBLIC_KNOWLEDGE_ENABLED": "true"');
+    expect(production).toContain(
+      '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
+    );
+    expect(production).not.toContain('"VITE_SEO_INDEXABLE"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {

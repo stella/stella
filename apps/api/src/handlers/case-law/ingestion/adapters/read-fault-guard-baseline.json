@@ -1,0 +1,28 @@
+{
+  "comment": "Current read-fault exceptions: adapters whose fixture drives no publisher read, and stage x fault pairs whose failed read builds a different decision. New rows fail, rows that no longer occur must be removed, and scripts/failure-as-empty-baseline.ts rejects added rows. Regenerate with READ_FAULT_BASELINE=write bun run test src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts (from apps/api).",
+  "rows": {
+    "at-asylgh::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-bks::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-bvwg::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-courts::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-findok::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-lvwg::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-ubas::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-umse::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-uvs::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-verg::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-vfgh::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "at-vwgh::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "eu-ecj::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "hu-bhgy::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-courts::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-kio::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-kis::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-ncourt::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-nsa::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-sn::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-tk::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-uodo::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
+    "pl-uokik::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven."
+  }
+}

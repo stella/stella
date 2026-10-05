@@ -10,8 +10,9 @@ import {
   mcpOAuthState,
   mcpUserConnections,
 } from "@/api/db/schema";
+import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -51,6 +52,8 @@ const routeParams = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
 } satisfies HandlerConfig;

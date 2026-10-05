@@ -8,7 +8,10 @@ import {
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+} from "@/api/lib/api-handlers";
 import { tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
@@ -17,7 +20,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-export const publicStatuteSearchQuerySchema = t.Object(
+const publicStatuteSearchQuerySchema = t.Object(
   {
     ...t.Omit(searchLegislationBodySchema, ["jurisdiction", "limit"])
       .properties,
@@ -31,6 +34,7 @@ export const publicStatuteSearchQuerySchema = t.Object(
 export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
   createSafeBoundedPublicHandler(
     {
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       cache: { kind: "none" },
       query: publicStatuteSearchQuerySchema,
@@ -44,7 +48,7 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
         Result.tryPromise(async () => {
           switch (countryRead.kind) {
             case "unavailable":
-              return status(503, countryRead.response);
+              return countryRead.answer;
             case "unreadable":
               return status(400, { message: countryRead.message });
             case "read":

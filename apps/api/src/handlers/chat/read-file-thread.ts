@@ -12,7 +12,7 @@ import {
   loadWebSearchAvailable,
 } from "@/api/handlers/chat/file-thread-shared";
 import type { FileThreadMessagePage } from "@/api/handlers/chat/file-thread-shared";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -40,10 +40,16 @@ const readFileThreadQuerySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns thread metadata for a file without delivering its stored bytes.",
+  },
   // `chat` has no separate read permission; ["create"] is the established
   // chat-access permission every chat read endpoint declares (get-threads,
   // get-messages).
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   query: readFileThreadQuerySchema,
 } satisfies WorkspaceHandlerConfig;

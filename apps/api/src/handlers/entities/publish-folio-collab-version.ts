@@ -18,7 +18,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -44,6 +44,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -67,6 +68,9 @@ import {
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+/** A collaboration room publishes the DOCX its editors produced. */
+const PUBLISHED_FILE_ENCRYPTION = officeFileEncryption(DOCX_MIME_TYPE);
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
@@ -403,11 +407,14 @@ const storePublicationSource = async ({
   const written = !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: bytes,
-            key: source.key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: bytes,
+              key: source.key,
+            },
+            { type: "cleanup-intent", intent: source.cleanupIntentId },
+          ),
         catch: (cause) => cause,
       })
     : Result.mapError(
@@ -416,11 +423,14 @@ const storePublicationSource = async ({
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: bytes,
-              key: source.key,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: bytes,
+                key: source.key,
+              },
+              { type: "cleanup-intent", intent: source.cleanupIntentId },
+            ),
         }),
         (cause): unknown => cause,
       );
@@ -765,6 +775,7 @@ const publishCheckpointInTransaction = async ({
     fileId: source.fileId,
     fileName: checkpointRoom.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: PUBLISHED_FILE_ENCRYPTION,
     organizationId,
     recordAuditEvent,
     scanWarnings: checkpointRoom.checkpointScanWarnings ?? undefined,
@@ -834,7 +845,7 @@ const startPublicationFollowUps = async ({
     captureError(error, { entityId: publication.entityId });
   });
   enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
+    encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
     entityId: publication.entityId,
     fieldId: publication.fieldId,
     mimeType: DOCX_MIME_TYPE,
@@ -910,8 +921,13 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "session_token_exchange" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({

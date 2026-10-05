@@ -1,6 +1,13 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
+export {
+  currencyCodeSchema,
+  CURRENCY_CODE_LENGTH,
+  CURRENCY_CODE_PATTERN,
+} from "./currency-code";
+
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type {
   AgendaItemKind,
@@ -87,7 +94,10 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
-export { CLAUSE_WARNINGS_HEADER } from "./template-fill-headers";
+export {
+  CLAUSE_WARNINGS_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
+} from "./template-fill-headers";
 export {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_KIND,
@@ -288,7 +298,9 @@ export {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
+  ENCRYPTED_CONTENT_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
+  MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "./error";
@@ -486,6 +498,7 @@ export {
 export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
 export {
   CHAT_DECISION_HREF_TEMPLATE,
+  CHAT_MENTION_UUID_HREF_PATTERN,
   CHAT_RESOURCE_HREF_PREFIX,
   CHAT_RESOURCE_LINK_DISPOSITION,
   CHAT_USER_HREF_TEMPLATE,

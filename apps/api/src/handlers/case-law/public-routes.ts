@@ -78,6 +78,7 @@ import {
   sitemapShardsResponseSchema,
 } from "@/api/handlers/case-law/public-response-schemas";
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
@@ -88,16 +89,20 @@ import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
+  withPublicCountryUnavailable,
 } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const listDecisions = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      listDecisionsResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        listDecisionsResponseSchema,
+      ),
     ),
     query: listDecisionsQuerySchema,
   },
@@ -127,10 +132,13 @@ const listDecisions = createSafeBoundedPublicHandler(
 
 export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      citationCountsSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        citationCountsSuccessResponseSchema,
+      ),
     ),
     query: statuteCitationCountsQuerySchema,
   },
@@ -149,10 +157,13 @@ export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
 
 const listDecisionFacets = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      decisionFacetsResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        decisionFacetsResponseSchema,
+      ),
     ),
     query: listDecisionFacetsQuerySchema,
   },
@@ -169,10 +180,13 @@ const listDecisionFacets = createSafeBoundedPublicHandler(
 
 const listLatestDecisions = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      latestDecisionsResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        latestDecisionsResponseSchema,
+      ),
     ),
     query: listLatestDecisionsQuerySchema,
   },
@@ -192,10 +206,13 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
 
 const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      corpusStatusResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        corpusStatusResponseSchema,
+      ),
     ),
     query: readCaseLawCorpusStatusQuerySchema,
   },
@@ -213,6 +230,7 @@ const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
 
 const readDecision = createSafePublicSubjectFollowUpHandler({
   config: {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "read_case_law_decision" },
     cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
@@ -239,10 +257,11 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   config: {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
-    response: readDecisionResponseSchema,
+    response: withPublicCountryUnavailable(readDecisionResponseSchema),
     query: t.Composite([
       readDecisionQuerySchema,
       t.Object({
@@ -304,6 +323,7 @@ const projectDecisionProvisionPage = async (
  */
 const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   config: {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     response: safePublicHandlerResponseSchemasWithStatusText(
@@ -327,10 +347,13 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
 /** Decisions citing a provision. */
 const listCitingDecisions = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      citingDecisionsSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        citingDecisionsSuccessResponseSchema,
+      ),
     ),
     query: listCitingDecisionsQuerySchema,
   },
@@ -350,6 +373,7 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
 
 const searchDecisions = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search_case_law" },
     cache: { kind: "none" },
     body: searchDecisionsBodySchema,
@@ -373,10 +397,13 @@ const searchDecisions = createSafeBoundedPublicHandler(
 
 const listSitemapShardDecisions = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      sitemapDecisionsResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        sitemapDecisionsResponseSchema,
+      ),
     ),
     query: sitemapShardDecisionsQuerySchema,
   },
@@ -413,6 +440,7 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
 
 const listSitemapShards = createSafeBoundedPublicHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     response: safePublicHandlerResponseSchemasWithStatusText(

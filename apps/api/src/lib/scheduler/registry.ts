@@ -97,6 +97,10 @@ import {
   redactHostedUsageWebhookEvents,
 } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import {
+  RECEIVE_INBOUND_MAIL_TASK,
+  receiveInboundMail,
+} from "@/api/lib/scheduler/tasks/inbound-mail-receive";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -165,6 +169,10 @@ import {
   reconcileStyleSetPackageCleanups,
 } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import {
+  PURGE_SYSTEM_AUDIT_RUNS_TASK,
+  purgeSystemAuditRunsTask,
+} from "@/api/lib/scheduler/tasks/system-audit-retention";
+import {
   CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
@@ -194,6 +202,7 @@ const SCHEDULER_TASKS = {
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
   [BACKFILL_SANCTIONS_MONITORING_TASK]: backfillSanctionsMonitoringTask,
   [DRAIN_SANCTIONS_MONITORING_TASK]: drainSanctionsMonitoringTask,
+  [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
@@ -218,6 +227,7 @@ const SCHEDULER_TASKS = {
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
+  [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

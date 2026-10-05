@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,6 +14,7 @@ const config = {
   // sibling read endpoints (get-messages, get-threads) gate on `create`, so
   // this by-id title read follows the same convention.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({

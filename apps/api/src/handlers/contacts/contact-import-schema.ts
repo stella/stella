@@ -15,8 +15,8 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/handlers/contacts/person-details";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
