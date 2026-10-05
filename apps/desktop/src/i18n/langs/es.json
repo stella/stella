@@ -133,6 +133,13 @@
     "takeoverTitle": "{requester} quiere tomar el control de la edición",
     "takeoverWindowTitle": "Solicitud de control",
     "webOrigin": "Origen web",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Actualiza Stella Desktop",
+    "handoffAccountRequired": "Conecta Stella Desktop a tu cuenta",
+    "handoffFailed": "No se pudo abrir el documento",
+    "handoffUpdateNow": "Actualizar ahora",
+    "handoffConnectAccount": "Conectar cuenta",
+    "handoffRetry": "Reintentar",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos"
   },
   "settings": {
