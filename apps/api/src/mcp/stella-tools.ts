@@ -991,7 +991,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: `${SEARCH_CASE_LAW_TEXTS.description} \`url\` is the primary reader link; \`source_url\` is the secondary publisher source.`,
+    description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1023,9 +1023,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "`url` is the primary reader link; `source_url` is the secondary publisher source. Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Answered from identity columns, not ranked " +
-      "text: a hit is the decision named, not one citing it. Each " +
+      "Resolve case references to decisions: docket numbers as the courts " +
+      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable reference, not always a docket), court, date and " +
@@ -1034,7 +1033,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "call instead; `lookup_failed`: the read did not complete; retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers.",
+      "read_case_law_decision for the text and typed identifiers. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1087,7 +1087,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "`url` is the primary reader link; `source_url` is the secondary publisher source. Read decisions by `decision_ids[]`, answered in input order. Batch ids " +
+      "Read decisions by `decision_ids[]`, answered in input order. Batch ids " +
       "share the text budget; `max_chars` sizes one id’s text window. Static " +
       "details appear only on the cursor-less window. A single id also gets " +
       "up to 100 outline headings or numbered paragraphs: pass an outline " +
@@ -1095,7 +1095,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "on any window; [] returns text and identity only. Text and unfinished " +
       "citation lists are paged: pass nextCursor with that one id. Citation " +
       "ids carry neither treatment nor surrounding text; for those call " +
-      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
+      "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1126,7 +1127,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "`url` is the primary reader link; `source_url` is the secondary publisher source. How the decisions citing one stood to it, or what it cited. One page, " +
+      "Read how citing decisions stood to one, or what it cited. One page, " +
       "each citation with a polarity and an excerpt of its paragraph. " +
       "`cited_by` returns the decisions that cite this one, `cites` the ones " +
       "it cites; neither means agreement. " +
@@ -1137,9 +1138,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Example: { decision_id: " +
-      "'<uuid>', direction: " +
-      "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
+      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",

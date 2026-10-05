@@ -338,14 +338,15 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. Search the stella legislation corpus within one country: consolidated " +
+      "Search the stella legislation corpus within one country: consolidated " +
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
       "YYYY-MM-DD). No facets are returned and `total` is not counted, so " +
       "page with the returned nextCursor instead of reasoning about a result " +
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +
-      "text, the outline of anchors and the consolidated versions.",
+      "text, the outline of anchors and the consolidated versions. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: searchLegislationArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -375,7 +376,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "`url` is the primary reader link; `source_url` is the secondary publisher source. Read one statute by ELI as it stood on a date: `as_of` picks the " +
+      "Read one statute by ELI as it stood on a date: `as_of` picks the " +
       "consolidation in force that day, and omitting it reads the text in " +
       "force today. Returns that consolidation's metadata and validity " +
       "window, `versions` (the newest page of the work's consolidations), " +
@@ -383,7 +384,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "takes) and its plain text. Long text comes back in windows; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
       "AI use of its wording still answers with metadata, versions and " +
-      "outline, and `textWithheldReason` in place of the text.",
+      "outline, and `textWithheldReason` in place of the text. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
@@ -402,7 +404,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. Read named provisions of one or more statutes in one call: each " +
+      "Read named provisions of one or more statutes in one call: each " +
       "`items[]` entry is { eli, anchor } plus an optional as_of and " +
       "language. An anchor is the publisher's own (par_1729, " +
       "par_1729-odst_1) and read_statute's `outline` lists them. Every entry " +
@@ -412,7 +414,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "the publisher's own dates are inconsistent), " +
       "`provision_not_found` (that consolidation has no such anchor) and " +
       "`text_withheld` (the source bars AI use of its wording) each carry a " +
-      "message. Prefer one batched call over one call per provision.",
+      "message. Prefer one batched call over one call per provision. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readStatuteProvisionsArgsSchema,
     // Each entry is answered on its own, so an ELI no spelling rescues is that
     // entry's `not_found`, not a refusal of the whole batch.
@@ -438,12 +441,13 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Citation links: url is the primary stella reader link when served, otherwise the publisher link; source_url is the secondary publisher source. How one provision's wording changed: its text in each consolidation " +
+      "Read one provision's wording in each consolidation " +
       "of the work, newest validity window first, so two wordings can be " +
       "compared without downloading whole statutes. Takes the work's `eli` and " +
       "an `anchor` from read_statute's outline. A consolidation that does " +
       "not carry the anchor is left out of `items`. Pass the returned " +
-      "nextCursor back as cursor for older windows.",
+      "nextCursor back as cursor for older windows. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",

@@ -174,7 +174,6 @@
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:",
     "unified": "^11.0.5",
     "vite": "catalog:"
   },

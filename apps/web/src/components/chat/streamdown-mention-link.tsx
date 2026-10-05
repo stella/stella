@@ -118,6 +118,49 @@ type StreamdownMentionLinkProps =
     workspaceId?: string | undefined;
   };
 
+const ReferenceCitationLink = ({
+  href,
+  children,
+  interactive,
+  workspaceId,
+}: StreamdownMentionLinkProps & { href: string }) => {
+  const parsed = referenceFromHref(href, getPlainText(children) ?? "", {
+    renderWorkspaceId: workspaceId,
+  });
+  const decision =
+    parsed?.type === "reference" && parsed.reference.type === "decision"
+      ? parsed.reference
+      : null;
+  const ref = decision?.locator.type === "ref" ? decision.locator.ref : null;
+  const source = useExternalSourceStore((state) =>
+    ref === null ? undefined : state.getDecisionSource(ref),
+  );
+  const fallback = (
+    <MarkdownReferenceChip
+      href={href}
+      interactive={interactive}
+      workspaceId={workspaceId}
+    >
+      {children}
+    </MarkdownReferenceChip>
+  );
+  if (source === undefined) {
+    return fallback;
+  }
+  return (
+    <LegalCitationLink
+      appearance="inline"
+      anchorId={decision?.anchorId ?? undefined}
+      fallback={fallback}
+      interactive={interactive}
+      source={source}
+      workspaceId={workspaceId}
+    >
+      {children}
+    </LegalCitationLink>
+  );
+};
+
 export const StreamdownMentionLink = ({
   href,
   children,
@@ -222,49 +265,6 @@ export const StreamdownMentionLink = ({
     >
       {children}
     </a>
-  );
-};
-
-const ReferenceCitationLink = ({
-  href,
-  children,
-  interactive,
-  workspaceId,
-}: StreamdownMentionLinkProps & { href: string }) => {
-  const parsed = referenceFromHref(href, getPlainText(children) ?? "", {
-    renderWorkspaceId: workspaceId,
-  });
-  const decision =
-    parsed?.type === "reference" && parsed.reference.type === "decision"
-      ? parsed.reference
-      : null;
-  const ref = decision?.locator.type === "ref" ? decision.locator.ref : null;
-  const source = useExternalSourceStore((state) =>
-    ref === null ? undefined : state.getDecisionSource(ref),
-  );
-  const fallback = (
-    <MarkdownReferenceChip
-      href={href}
-      interactive={interactive}
-      workspaceId={workspaceId}
-    >
-      {children}
-    </MarkdownReferenceChip>
-  );
-  if (source === undefined) {
-    return fallback;
-  }
-  return (
-    <LegalCitationLink
-      appearance="inline"
-      anchorId={decision?.anchorId ?? undefined}
-      fallback={fallback}
-      interactive={interactive}
-      source={source}
-      workspaceId={workspaceId}
-    >
-      {children}
-    </LegalCitationLink>
   );
 };
 
