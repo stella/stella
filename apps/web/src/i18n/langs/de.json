@@ -5430,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung erfolgt automatisch, sobald aktive Desktop-Bearbeitungen abgeschlossen sind; versuchen Sie es nach dem Neustart erneut.",
         "updateRequiredTitle": "stella desktop aktualisieren"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Bereits installiert? Verbinden",
+        "connect": "stella desktop verbinden",
+        "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
+        "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
+        "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
+        "signCurrent": "Mit stella desktop signieren",
+        "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
+        "signOutdated": "stella desktop aktualisieren, um zu signieren",
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
+        "signShort": "Signieren"
+      },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
       "downloadExtractedText": "Extrahierter Text (.txt)",
@@ -5443,7 +5455,6 @@
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
-        "action": "Im Desktop signieren",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
         "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
         "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",

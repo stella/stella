@@ -5430,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop needs an update. It will update automatically when active desktop edits are finished; try again after it restarts.",
         "updateRequiredTitle": "Update stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Already installed? Connect it",
+        "connect": "Connect stella desktop",
+        "editNone": "Download stella desktop to edit this file",
+        "editOutdated": "Update stella desktop to edit",
+        "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.",
+        "signCurrent": "Sign with stella desktop",
+        "signNone": "Download stella desktop to sign this PDF",
+        "signOutdated": "Update stella desktop to sign",
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.",
+        "signShort": "Sign"
+      },
       "downloadAs": "Download as…",
       "downloadAsZip": "Download as ZIP",
       "downloadExtractedText": "Extracted text (.txt)",
@@ -5443,7 +5455,6 @@
       "ocrQueueFailed": "Couldn't queue text recognition",
       "ocrQueued": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
-        "action": "Sign with desktop app",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.",
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.",

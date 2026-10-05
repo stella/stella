@@ -5430,6 +5430,18 @@
         "updateRequiredDescription": "يحتاج تطبيق stella لسطح المكتب إلى تحديث. سيتم تحديثه تلقائيًا عند انتهاء عمليات التحرير النشطة على سطح المكتب؛ حاول مرة أخرى بعد إعادة تشغيله.",
         "updateRequiredTitle": "تحديث تطبيق stella لسطح المكتب"
       },
+      "desktopGate": {
+        "alreadyInstalled": "هل هو مثبّت بالفعل؟ اربطه",
+        "connect": "ربط stella desktop",
+        "editNone": "نزّل stella desktop لتعديل هذا الملف",
+        "editOutdated": "حدّث stella desktop للتعديل",
+        "editReason": "يفتح التعديل على الحاسوب الملف في تطبيق على حاسوبك عبر stella desktop.",
+        "signCurrent": "التوقيع باستخدام stella desktop",
+        "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
+        "signOutdated": "حدّث stella desktop للتوقيع",
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop.",
+        "signShort": "توقيع"
+      },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",
       "downloadExtractedText": "النص المستخرج (.txt)",
@@ -5443,7 +5455,6 @@
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "pdfSigning": {
-        "action": "التوقيع في تطبيق سطح المكتب",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
         "cancelledCertificateDescription": "لا يمكن استخدام الشهادة المختارة للتوقيع. اختر شهادة تسمح بالتوقيع الرقمي.",
         "cancelledCertifiedDescription": "ملف PDF هذا مُصدَّق، ولا يسمح تصديقه بإضافة توقيعات أخرى.",
