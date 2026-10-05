@@ -11,6 +11,8 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   hostedCheckoutClaims,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   USAGE_ENTITLEMENT_STATUSES,
   usageEntitlements,
   usagePolicies,
@@ -434,6 +436,28 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("an organization in its evaluation period starts a checkout", async () => {
+      await withRolledBackFixture(async (tx, fixture) => {
+        await tx.insert(organizationAccessStates).values({
+          organizationId: fixture.organizationId,
+          state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+          evaluationStartedAt: sql`now()`,
+          evaluationEndsAt: sql`now() + interval '14 days'`,
+        });
+        const provider = installFakeProvider(sessionResponse);
+        try {
+          const response = await startCheckout({
+            fixture,
+            safeDb: scopedSafeDb(tx, fixture),
+          });
+          expect(startedSession(response)).not.toBeNull();
+          expect(provider.calls()).toBe(1);
+        } finally {
+          provider.restore();
+        }
+      });
+    });
+
     test("a failed provider call releases the claim for the next start", async () => {
       await withRolledBackFixture(async (tx, fixture) => {
         const provider = installFakeProvider((call) =>
@@ -479,6 +503,16 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    // Independent oracle: trials and ended subscriptions upgrade through
+    // checkout; paid subscriptions change through hosted management.
+    const CHECKOUT_EXPECTATION_BY_STATUS = {
+      trialing: "starts",
+      active: "refused",
+      past_due: "refused",
+      cancelled: "starts",
+      paused: "refused",
+    } as const satisfies Record<UsageEntitlementStatus, "starts" | "refused">;
+
     test.each(USAGE_ENTITLEMENT_STATUSES)(
       "an existing %s subscription decides whether a new one may start",
       async (status) => {
@@ -490,7 +524,7 @@ if (!databaseUrl || !runPostgresTests) {
               fixture,
               safeDb: scopedSafeDb(tx, fixture),
             });
-            if (status === "cancelled") {
+            if (CHECKOUT_EXPECTATION_BY_STATUS[status] === "starts") {
               expect(startedSession(response)).not.toBeNull();
               expect(provider.calls()).toBe(1);
               return;

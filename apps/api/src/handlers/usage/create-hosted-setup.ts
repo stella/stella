@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   hostedCheckoutClaims,
+  USAGE_ENTITLEMENT_STATUSES,
   usageEntitlements,
   usagePolicies,
 } from "@/api/db/schema";
@@ -56,10 +57,19 @@ const hostedExternalAccountRef = (
 // Covers the provider call; a created session's own expiry replaces it.
 const HOSTED_CHECKOUT_CLAIM_TTL_SECONDS = 60 * 60;
 const HOSTED_CHECKOUT_AUDIT_FIELD = "hostedCheckout";
-// Only a terminated subscription admits a new one; every other status,
-// including one this build does not know, still has a provider subscription.
-const ENDED_SUBSCRIPTION_STATUS =
-  "cancelled" as const satisfies UsageEntitlementStatus;
+// A paid subscription (active, past_due, paused) is changed through hosted
+// management, not bought again; a trial or an ended subscription upgrades
+// through checkout.
+const CHECKOUT_DISPOSITION_BY_STATUS = {
+  trialing: "admits",
+  active: "blocks",
+  past_due: "blocks",
+  cancelled: "admits",
+  paused: "blocks",
+} as const satisfies Record<UsageEntitlementStatus, "admits" | "blocks">;
+const CHECKOUT_BLOCKING_STATUSES = USAGE_ENTITLEMENT_STATUSES.filter(
+  (status) => CHECKOUT_DISPOSITION_BY_STATUS[status] === "blocks",
+);
 
 type ClaimHostedCheckoutOptions = {
   tx: Transaction;
@@ -109,7 +119,7 @@ const claimHostedCheckout = async ({
     .where(
       and(
         eq(usageEntitlements.organizationId, organizationId),
-        ne(usageEntitlements.status, ENDED_SUBSCRIPTION_STATUS),
+        inArray(usageEntitlements.status, CHECKOUT_BLOCKING_STATUSES),
       ),
     )
     .limit(1);
@@ -263,7 +273,7 @@ const prepareCheckoutStart = async ({
   if (
     policy.kind === "subscription" &&
     entitlement !== undefined &&
-    entitlement.status !== ENDED_SUBSCRIPTION_STATUS
+    CHECKOUT_DISPOSITION_BY_STATUS[entitlement.status] === "blocks"
   ) {
     return { kind: "subscription_live" as const };
   }
