@@ -6,7 +6,10 @@ import { useTranslations } from "use-intl";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  hasBlockInlines,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
@@ -19,7 +22,10 @@ import {
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import { CitedProvisionLink } from "@/components/legal-reader/cited-provision-link";
+import {
+  CitedProvisionExpansion,
+  CitedProvisionLink,
+} from "@/components/legal-reader/cited-provision-link";
 import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
 import {
   BlockRenderer,
@@ -31,9 +37,11 @@ import {
   buildDocumentAstSearchPieces,
   buildFulltextSearchPieces,
   firstMatchIndexInPassage,
+  inlinesToPlainText,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import {
   holdLanding,
   readerBlockByAnchor,
@@ -137,6 +145,7 @@ type DecisionTextProps = {
   onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
+  expandProvisions?: boolean | undefined;
   searchQuery: string;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
   /** Work citations, including references with no provision locator. */
@@ -438,7 +447,7 @@ const DecisionTopMatterSections = ({
   return (
     // The text is read like the decision it belongs to: the article's serif,
     // size and line-height, inherited. Only the labels are chrome.
-    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4">
+    <ReaderInsetBox className="mb-8">
       {legalSentence !== null && (
         <HeadnoteBlock
           defaultOpen
@@ -478,7 +487,7 @@ const DecisionTopMatterSections = ({
         </HeadnoteBlock>
       )}
       {aiHeadnotes}
-    </div>
+    </ReaderInsetBox>
   );
 };
 
@@ -531,7 +540,7 @@ const buildAnchorsByPieceId = ({
   citations: readonly CitationAnchorSource[];
   provisions: readonly DecisionProvisionAnchor[];
   statutes: readonly DecisionStatuteCitationAnchor[];
-}): Record<string, TextAnchor[]> => {
+}) => {
   const citationSpans = locateCitationSpans({ blocks, citations });
   const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
@@ -696,7 +705,42 @@ const buildAnchorsByPieceId = ({
       .flatMap((mark) => splitAroundLinks(mark, links));
     anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
   }
-  return anchorsByPieceId;
+  const provisionsByAnchorId = new Map<string, ReactNode>();
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
+    }
+    const acceptedKeys = new Set(
+      optionalArray(anchorsByPieceId[block.id]).map(
+        ({ key, start, end }) => `${key}:${String(start)}:${String(end)}`,
+      ),
+    );
+    const spans = optionalArray(provisionSpans[block.id])
+      .filter((span) =>
+        acceptedKeys.has(
+          `provision:${span.source.id}:${String(span.start)}:${String(span.end)}`,
+        ),
+      )
+      .toSorted((left, right) => left.start - right.start);
+    if (spans.length === 0) {
+      continue;
+    }
+    provisionsByAnchorId.set(
+      block.anchorId,
+      spans.map((span) => (
+        <CitedProvisionExpansion
+          key={`${span.source.id}:${String(span.start)}`}
+          label={inlinesToPlainText(block.inlines).slice(span.start, span.end)}
+          provision={span.source.target}
+          version={{
+            type: "consolidation",
+            validFrom: span.source.target.document.versionValidFrom,
+          }}
+        />
+      )),
+    );
+  }
+  return { anchorsByPieceId, provisionsByAnchorId };
 };
 
 /**
@@ -910,6 +954,7 @@ export const DecisionText = ({
   decisionId,
   landingAnchorId,
   notesByAnchorId,
+  expandProvisions = false,
   onAnnotationActivate,
   onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
@@ -1092,13 +1137,26 @@ export const DecisionText = ({
 
   // Inline links for every visible block, wherever it is drawn: the top
   // matter and the document below share one map.
-  const anchorsByPieceId = buildAnchorsByPieceId({
+  const { anchorsByPieceId, provisionsByAnchorId } = buildAnchorsByPieceId({
     annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
     blocks: visibleBlocks,
     citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
     provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
     statutes: hydrated ? statuteCitationAnchors : NO_STATUTE_CITATION_ANCHORS,
   });
+
+  const supplementsByAnchorId = new Map(notesByAnchorId);
+  if (expandProvisions) {
+    for (const [anchorId, cards] of provisionsByAnchorId) {
+      supplementsByAnchorId.set(
+        anchorId,
+        <>
+          {cards}
+          {notesByAnchorId?.get(anchorId)}
+        </>,
+      );
+    }
+  }
 
   // One return, so the attribution line cannot be forgotten on the branch
   // somebody adds next: it is required wherever a decision is rendered,
@@ -1149,7 +1207,7 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
-            notesByAnchorId={notesByAnchorId}
+            notesByAnchorId={supplementsByAnchorId}
             rangesByPieceId={searchResults.rangesByPieceId}
             topMatter={topMatter}
           />
@@ -1162,7 +1220,7 @@ export const DecisionText = ({
             dissent,
             footnotes,
             landingAnchorId,
-            notesByAnchorId,
+            notesByAnchorId: supplementsByAnchorId,
             rangesByPieceId: searchResults.rangesByPieceId,
             sectionMap,
             wrappedRuns,
@@ -1201,7 +1259,7 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
-            notesByAnchorId={notesByAnchorId}
+            notesByAnchorId={supplementsByAnchorId}
             rangesByPieceId={searchResults.rangesByPieceId}
             topMatter={topMatter}
           />
@@ -1243,7 +1301,7 @@ export const DecisionText = ({
           }
           footnotes={footnotes}
           key={decisionId}
-          notesByAnchorId={notesByAnchorId}
+          notesByAnchorId={supplementsByAnchorId}
           rangesByPieceId={searchResults.rangesByPieceId}
           topMatter={topMatter}
         />
