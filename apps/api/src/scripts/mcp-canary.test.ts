@@ -621,17 +621,21 @@ describe("desktop handoff probes", () => {
       const headers = new Headers(init.headers);
       const body = String(init.body ?? "");
       requests.push({ path: url.pathname, headers, body });
-      if (url.pathname === "/api/auth/get-session") return sessionResponse();
-      if (url.pathname.endsWith("/grant"))
+      if (url.pathname === "/api/auth/get-session") {
+        return sessionResponse();
+      }
+      if (url.pathname.endsWith("/grant")) {
         return new Response(null, { status: 204 });
+      }
       if (url.pathname.endsWith("/redeem-link")) {
         redeemCount += 1;
         return redeemCount === 1
           ? Response.json({ status: "credential", key: "new-desktop-key" })
           : Response.json({ status: "connected", identity });
       }
-      if (url.pathname.endsWith("/request"))
+      if (url.pathname.endsWith("/request")) {
         return Response.json({ revoked: true });
+      }
       return new Response(null, { status: 404 });
     };
     const results = await runDesktopProbe(
@@ -668,11 +672,14 @@ describe("desktop handoff probes", () => {
         const url = new URL(input instanceof Request ? input.url : input);
         const headers = new Headers(init.headers);
         requests.push({ path: url.pathname, headers });
-        if (url.pathname === "/api/auth/get-session") return sessionResponse();
+        if (url.pathname === "/api/auth/get-session") {
+          return sessionResponse();
+        }
         if (url.pathname.endsWith("/grant")) {
           grantCount += 1;
-          if (failure === "second grant throws" && grantCount === 2)
+          if (failure === "second grant throws" && grantCount === 2) {
             throw new TypeError("synthetic grant failure");
+          }
           return new Response(null, { status: 204 });
         }
         if (url.pathname.endsWith("/redeem-link")) {
@@ -684,11 +691,13 @@ describe("desktop handoff probes", () => {
                 : { status: "credential", key: "new-desktop-key" },
             );
           }
-          if (failure === "second redeem throws")
+          if (failure === "second redeem throws") {
             throw new TypeError("synthetic redeem failure");
+          }
         }
-        if (url.pathname.endsWith("/request"))
+        if (url.pathname.endsWith("/request")) {
           return Response.json({ revoked: true });
+        }
         return Response.json({ status: "connected", identity });
       };
       const results = await runDesktopProbe(
@@ -710,8 +719,12 @@ describe("desktop handoff probes", () => {
     const fetcher: CanaryFetcher = async (input) => {
       const path = new URL(input instanceof Request ? input.url : input)
         .pathname;
-      if (path === "/api/auth/get-session") return sessionResponse();
-      if (path.endsWith("/grant")) return new Response(null, { status: 204 });
+      if (path === "/api/auth/get-session") {
+        return sessionResponse();
+      }
+      if (path.endsWith("/grant")) {
+        return new Response(null, { status: 204 });
+      }
       if (path.endsWith("/redeem-link")) {
         redemption += 1;
         return redemption === 1
@@ -768,30 +781,36 @@ describe("staging credential journeys", () => {
         headers,
         body,
       });
-      if (url.pathname === "/v1/smoke/session")
+      if (url.pathname === "/v1/smoke/session") {
         return Response.json({
           cookieName: "session",
           cookieValue: "staging-session",
         });
-      if (url.pathname === "/v1/api-keys/")
+      }
+      if (url.pathname === "/v1/api-keys/") {
         return Response.json({ id: "mcp-key-id", key: "mcp-token" });
-      if (url.pathname === "/api/auth/get-session")
+      }
+      if (url.pathname === "/api/auth/get-session") {
         return Response.json({
           user: { id: identity.userId },
           session: { activeOrganizationId: identity.organizationId },
         });
-      if (url.pathname.endsWith("/grant"))
+      }
+      if (url.pathname.endsWith("/grant")) {
         return new Response(null, { status: 204 });
+      }
       if (url.pathname.endsWith("/redeem-link")) {
         redeemCount += 1;
         return redeemCount === 1
           ? Response.json({ status: "credential", key: "desktop-token" })
           : Response.json({ status: "connected", identity });
       }
-      if (url.pathname === "/v1/desktop-registry/request")
+      if (url.pathname === "/v1/desktop-registry/request") {
         return Response.json({ revoked: true });
-      if (url.pathname === "/v1/api-keys/revoke")
+      }
+      if (url.pathname === "/v1/api-keys/revoke") {
         return Response.json({ id: "mcp-key-id", revoked: true });
+      }
       if (url.pathname === "/mcp" && request.method === "GET") {
         return new Response(new ReadableStream<Uint8Array>({}), {
           headers: { "content-type": "text/event-stream" },
@@ -852,12 +871,15 @@ describe("staging credential journeys", () => {
     const fetcher: CanaryFetcher = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
       requests.push({ path: url.pathname, body: String(init.body ?? "") });
-      if (url.pathname === "/v1/smoke/session")
+      if (url.pathname === "/v1/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
-      if (url.pathname === "/v1/api-keys/")
+      }
+      if (url.pathname === "/v1/api-keys/") {
         return Response.json({ id: "partial-id" });
-      if (url.pathname === "/v1/api-keys/revoke")
+      }
+      if (url.pathname === "/v1/api-keys/revoke") {
         return Response.json({ id: "partial-id", revoked: true });
+      }
       return new Response(null, { status: 500 });
     };
     const results = await runStagingCredentialJourneys(
@@ -880,14 +902,18 @@ describe("staging credential journeys", () => {
     const fetcher: CanaryFetcher = async (input) => {
       const path = new URL(input instanceof Request ? input.url : input)
         .pathname;
-      if (path === "/v1/smoke/session")
+      if (path === "/v1/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
-      if (path === "/v1/api-keys/")
+      }
+      if (path === "/v1/api-keys/") {
         return Response.json({ id: "key-id", key: "token" });
-      if (path === "/v1/api-keys/revoke")
+      }
+      if (path === "/v1/api-keys/revoke") {
         return Response.json({ revoked: false }, { status: 500 });
-      if (path === "/mcp" && input instanceof URL)
+      }
+      if (path === "/mcp" && input instanceof URL) {
         return new Response(null, { status: 404 });
+      }
       return new Response(null, { status: 404 });
     };
     const results = await runStagingCredentialJourneys(
@@ -991,7 +1017,7 @@ describe("deployment fetch boundary", () => {
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {}),
     );
-    expect(rejection).toBeInstanceOf(TypeError);
+    expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
     expect(rejection).toMatchObject({
       message: expect.stringContaining("configured origin"),
     });

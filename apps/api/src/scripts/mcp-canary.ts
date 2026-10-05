@@ -358,7 +358,7 @@ const postJsonRpc = async (
 ): Promise<ProbeResponse> =>
   await readProbeResponse(
     await fetcher(createJsonRpcRequest(call), {
-      timeoutMs: PROBE_TIMEOUT_MS,
+      timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
     }),
   );
 
@@ -370,7 +370,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
           await deploymentFetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -389,7 +389,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
               "content-type": "application/json",
             },
             method: "POST",
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -461,7 +461,7 @@ export const runAuthenticatedStreamProbe = async (
       authorization: `Bearer ${token}`,
     },
     method: "GET",
-    timeoutMs: PROBE_TIMEOUT_MS,
+    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
   });
   const headerResult = evaluateStreamAvailability({
     contentType: response.headers.get("content-type"),
@@ -725,7 +725,7 @@ export const runOAuthJourneys = async (
     await runNamedProbe("authorization server discovery", async () => {
       const resource = await readProbeResponse(
         await fetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
-          timeoutMs: PROBE_TIMEOUT_MS,
+          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
         }),
       );
       const discovery = evaluateDiscovery(resource);
@@ -745,7 +745,9 @@ export const runOAuthJourneys = async (
         issuerUrl.origin,
       );
       const metadata = await readProbeResponse(
-        await fetcher(metadataUrl, { timeoutMs: PROBE_TIMEOUT_MS }),
+        await fetcher(metadataUrl, {
+          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        }),
       );
       const evaluation = evaluateAuthorizationMetadata(metadata);
       if (
@@ -771,7 +773,7 @@ export const runOAuthJourneys = async (
           await fetcher(registrationEndpoint, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               client_name: CANARY_CLIENT_NAME,
               redirect_uris: LOOPBACK_REDIRECTS,
@@ -822,7 +824,7 @@ export const runOAuthJourneys = async (
           const response = await fetcher(url, {
             method: "GET",
             redirect: "manual",
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
           });
           const result = evaluateAuthorize({
             response,
@@ -889,16 +891,20 @@ export const evaluateCredentialExpiry = ({
   const schema = v.object({
     expiresAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
   });
-  if (status !== 200 || !v.is(schema, body))
+  if (status !== 200 || !v.is(schema, body)) {
     return failed(name, "could not inspect the current machine key expiry");
-  if (body.expiresAt === null) return passed(name, "credential has no expiry");
+  }
+  if (body.expiresAt === null) {
+    return passed(name, "credential has no expiry");
+  }
   const remainingMs =
     Temporal.Instant.from(body.expiresAt).epochMilliseconds - nowMs;
-  if (remainingMs <= EXPIRY_ALERT_WINDOW_MS)
+  if (remainingMs <= EXPIRY_ALERT_WINDOW_MS) {
     return failed(
       name,
       "key expires within 15 days: rotate MCP_CANARY_TOKEN (14-day notice plus scheduling margin)",
     );
+  }
   return passed(name, "credential expiry is more than 15 days away");
 };
 
@@ -910,7 +916,7 @@ export const runCredentialExpiryProbe = async (
     ...(await readProbeResponse(
       await fetcher(new URL("/v1/api-keys/current", baseUrl), {
         headers: { authorization: `Bearer ${token}` },
-        timeoutMs: PROBE_TIMEOUT_MS,
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
       }),
     )),
     nowMs: Temporal.Now.instant().epochMilliseconds,
@@ -929,7 +935,7 @@ export const runDesktopProbe = async (
         const sessionResponse = await readProbeResponse(
           await fetcher(new URL("/api/auth/get-session", baseUrl), {
             headers: { cookie: sessionCookie },
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
           }),
         );
         const schema = v.object({
@@ -941,11 +947,12 @@ export const runDesktopProbe = async (
         if (
           sessionResponse.status !== 200 ||
           !v.is(schema, sessionResponse.body)
-        )
+        ) {
           return failed(
             "desktop handoff redeem",
             "smoke browser session did not return an account identity",
           );
+        }
         const identity = {
           userId: sessionResponse.body.user.id,
           organizationId: sessionResponse.body.session.activeOrganizationId,
@@ -967,11 +974,13 @@ export const runDesktopProbe = async (
                   .update(verifier)
                   .digest("hex"),
               }),
-              timeoutMs: PROBE_TIMEOUT_MS,
+              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             },
           );
           await grant.body?.cancel();
-          if (!grant.ok) return { body: undefined, status: grant.status };
+          if (!grant.ok) {
+            return { body: undefined, status: grant.status };
+          }
           return await readProbeResponse(
             await fetcher(
               new URL("/v1/desktop-registry/redeem-link", baseUrl),
@@ -988,7 +997,7 @@ export const runDesktopProbe = async (
                   expectedUserId: identity.userId,
                   expectedOrganizationId: identity.organizationId,
                 }),
-                timeoutMs: PROBE_TIMEOUT_MS,
+                timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
               },
             ),
           );
@@ -998,17 +1007,19 @@ export const runDesktopProbe = async (
         // malformed success responses still trigger credential cleanup.
         if (
           v.is(v.object({ key: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
-        )
+        ) {
           desktopKey = minted.body.key;
+        }
         if (
           minted.status !== 200 ||
           !desktopKey ||
           !v.is(v.object({ status: v.literal("credential") }), minted.body)
-        )
+        ) {
           return failed(
             "desktop handoff redeem",
             "could not mint a desktop credential from the smoke browser session",
           );
+        }
         return evaluateDesktopRedeem({
           ...(await redeemHandoff(desktopKey)),
           identity,
@@ -1029,17 +1040,18 @@ export const runDesktopProbe = async (
                 "content-type": "application/json",
               },
               body: JSON.stringify({ type: "revoke" }),
-              timeoutMs: PROBE_TIMEOUT_MS,
+              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             }),
           );
           if (
             response.status !== 200 ||
             !v.is(v.object({ revoked: v.literal(true) }), response.body)
-          )
+          ) {
             return failed(
               "desktop credential cleanup",
               "could not revoke the per-run desktop credential",
             );
+          }
           return passed(
             "desktop credential cleanup",
             "per-run desktop key revoked",
@@ -1064,7 +1076,7 @@ export const runStagingCredentialJourneys = async (
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> => {
   const bootstrapName = "staging credential bootstrap";
-  if (!smokeSecret)
+  if (!smokeSecret) {
     return [
       skipped(
         bootstrapName,
@@ -1075,6 +1087,7 @@ export const runStagingCredentialJourneys = async (
       ),
       skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
     ];
+  }
   const results: ProbeResult[] = [];
   let sessionCookie: string | undefined;
   let keyId: string | undefined;
@@ -1086,7 +1099,7 @@ export const runStagingCredentialJourneys = async (
           await fetcher(new URL("/v1/smoke/session", baseUrl), {
             method: "POST",
             headers: { "x-smoke-secret": smokeSecret },
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
           }),
         );
         if (
@@ -1098,11 +1111,12 @@ export const runStagingCredentialJourneys = async (
             }),
             smoke.body,
           )
-        )
+        ) {
           return failed(
             bootstrapName,
             "could not mint the staging browser session",
           );
+        }
         sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
         const minted = await readProbeResponse(
           await fetcher(new URL("/v1/api-keys/", baseUrl), {
@@ -1111,7 +1125,7 @@ export const runStagingCredentialJourneys = async (
               cookie: sessionCookie,
               "content-type": "application/json",
             },
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               name: STAGING_KEY_NAME,
               scopes: CANARY_SCOPE.split(" "),
@@ -1123,8 +1137,9 @@ export const runStagingCredentialJourneys = async (
         );
         if (
           v.is(v.object({ id: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
-        )
+        ) {
           keyId = minted.body.id;
+        }
         if (
           minted.status !== 200 ||
           !v.is(
@@ -1132,11 +1147,12 @@ export const runStagingCredentialJourneys = async (
             minted.body,
           ) ||
           !keyId
-        )
+        ) {
           return failed(
             bootstrapName,
             "could not mint the per-run MCP machine key",
           );
+        }
         token = minted.body.key;
         return passed(
           bootstrapName,
@@ -1145,34 +1161,36 @@ export const runStagingCredentialJourneys = async (
       }),
     );
     const mintedToken = token;
-    if (mintedToken)
+    if (mintedToken) {
       results.push(
         ...(await runAuthenticatedProbes(
           { baseUrl, token: mintedToken },
           fetcher,
         )),
       );
-    else
+    } else {
       results.push(
         ...AUTHENTICATED_PROBES.map(({ name }) =>
           skipped(name, "staging credential bootstrap failed"),
         ),
       );
+    }
     const browserCookie = sessionCookie;
-    if (browserCookie)
+    if (browserCookie) {
       results.push(
         ...(await runDesktopProbe(
           { baseUrl, sessionCookie: browserCookie },
           fetcher,
         )),
       );
-    else
+    } else {
       results.push(
         skipped(
           "desktop handoff redeem",
           "staging smoke browser session unavailable",
         ),
       );
+    }
   } finally {
     const idToRevoke = keyId;
     const browserCookie = sessionCookie;
@@ -1186,7 +1204,7 @@ export const runStagingCredentialJourneys = async (
                 cookie: browserCookie,
                 "content-type": "application/json",
               },
-              timeoutMs: PROBE_TIMEOUT_MS,
+              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
               body: JSON.stringify({ keyId: idToRevoke }),
             }),
           );
@@ -1196,21 +1214,23 @@ export const runStagingCredentialJourneys = async (
               v.object({ id: v.literal(idToRevoke), revoked: v.literal(true) }),
               response.body,
             )
-          )
+          ) {
             return failed(
               "MCP credential cleanup",
               "could not revoke the per-run MCP credential",
             );
+          }
           return passed("MCP credential cleanup", "per-run MCP key revoked");
         }),
       );
-    } else
+    } else {
       results.push(
         notApplicable(
           "MCP credential cleanup",
           "no MCP credential id was returned",
         ),
       );
+    }
   }
   return results;
 };

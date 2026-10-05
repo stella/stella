@@ -62,7 +62,6 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/agent-auth/confirm.ts",
   "apps/api/src/handlers/ai-config/validate-provider.ts",
   "apps/api/src/handlers/api-keys/create.ts",
-  "apps/api/src/handlers/api-keys/current.ts",
   "apps/api/src/handlers/api-keys/list.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
   "apps/api/src/handlers/api-keys/rotate.ts",
