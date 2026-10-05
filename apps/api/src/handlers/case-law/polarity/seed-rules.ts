@@ -43,8 +43,7 @@ export const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
  * uses its span, so a party's treatment cannot govern a later court sentence.
  * Docket abbreviations and dates are allowed inside the submission.
  */
-const PARTY_SUBMISSION_TEXT =
-  "(?:(?!,\\s*(?:(?:avšak|ale|nicméně)\\s+)?(?:soud|súd|senát)\\s+)(?:\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|\\p{L}+)\\s*\\d{4}|(?:Pl|[IVXLCDM]+)\\.\\s*ÚS|[^.!?;\\n]|\\.(?=\\s*(?:\\d|zn\\.|j\\.))))*";
+const PARTY_SUBMISSION_TEXT = `(?:(?!,\\s*(?:(?:avšak|ale|nicméně)\\s+)?${WORDS_BETWEEN}(?:soud|súd|senát)\\s+)(?:\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|\\p{L}+)\\s*\\d{4}|(?:Pl|[IVXLCDM]+)\\.\\s*ÚS|[^.!?;\\n]|\\.(?=\\s*(?:\\d|zn\\.|j\\.))))*`;
 
 /**
  * The bodies whose departure from a decision is a doctrinal act. A velký

@@ -190,12 +190,32 @@ test("every seeded reported-submission capture is a neutral rule with a finite b
 });
 
 test("a reported submission ends before an independent court clause", () => {
-  expect(
-    selectCitationPolarity(
-      csRules,
-      "stěžovatel tvrdí, že rozsudek nelze aplikovat, avšak soud konstatuje, že nález nadále neobstojí",
-    )?.polarity,
-  ).toBe("negative");
+  for (const court of [
+    "soud",
+    "krajský soud",
+    "Nejvyšší soud",
+    "Nejvyšší správní soud",
+    "dovolací soud",
+    "senát",
+    "tříčlenný senát",
+  ]) {
+    for (const contrast of ["avšak", "ale", "nicméně"]) {
+      expect(
+        selectCitationPolarity(
+          csRules,
+          `stěžovatel tvrdí, že rozsudek nelze aplikovat (sp. zn. 1 Cdo 1/2020), ${contrast} ${court} konstatuje, že nález nadále neobstojí`,
+        )?.polarity,
+      ).toBe("negative");
+    }
+  }
+  for (const court of ["súd", "krajský súd", "najvyšší súd", "senát"]) {
+    expect(
+      selectCitationPolarity(
+        skRules,
+        `sťažovateľ tvrdí, že na rozdiel od rozhodnutia platí iný záver, avšak ${court} konštatuje, že prekonáva rozhodnutie`,
+      )?.polarity,
+    ).toBe("negative");
+  }
 });
 
 test("citation abbreviations and dates stay inside the reported submission", () => {
