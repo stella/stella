@@ -1,8 +1,9 @@
 import { panic, TaggedError } from "better-result";
+import { getColumns } from "drizzle-orm";
 
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 
-const columnWidth = ({ length }: { length: number | undefined }) => {
+const columnWidth = (length: number | undefined) => {
   if (length === undefined || length <= 0) {
     return panic("Citation storage requires an explicit column width");
   }
@@ -13,22 +14,24 @@ const columnWidth = ({ length }: { length: number | undefined }) => {
 // parser or writer runs, after the schema's declarations have initialized.
 export const CITATION_STORAGE_WIDTHS = {
   get key() {
-    return columnWidth(caseLawCitations.citationKey);
+    return columnWidth(getColumns(caseLawCitations).citationKey.length);
   },
   get text() {
-    return columnWidth(caseLawCitations.citationText);
+    return columnWidth(getColumns(caseLawCitations).citationText.length);
   },
   get courtHint() {
-    return columnWidth(caseLawCitations.citedCourtHint);
+    return columnWidth(getColumns(caseLawCitations).citedCourtHint.length);
   },
   get normalizedIdentifier() {
-    return columnWidth(caseLawCitations.normalizedIdentifierValue);
+    return columnWidth(
+      getColumns(caseLawCitations).normalizedIdentifierValue.length,
+    );
   },
   get caseNumber() {
-    return columnWidth(caseLawDecisions.caseNumber);
+    return columnWidth(getColumns(caseLawDecisions).caseNumber.length);
   },
   get court() {
-    return columnWidth(caseLawDecisions.court);
+    return columnWidth(getColumns(caseLawDecisions).court.length);
   },
 } as const;
 
