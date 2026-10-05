@@ -904,6 +904,13 @@ test(
     });
     expect((await eu()).freshnessStatus).toBe("unavailable");
     expect((await eu()).cursorOrganizationId).toBeNull();
+    await queueSanctionsMonitoringBackfills({
+      runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
+      db: systemDb,
+      now,
+    });
+    expect((await eu()).freshnessStatus).toBe("fresh");
+    expect((await eu()).cursorOrganizationId).toBeNull();
     const denied = await Result.tryPromise(
       async () =>
         await scopedFor(organizationId)(

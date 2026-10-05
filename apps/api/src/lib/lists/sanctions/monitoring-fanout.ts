@@ -11,13 +11,16 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
-import { transitionBatch } from "@/api/lib/db/transitions";
+import {
+  permitsLifecycleMove,
+  transitionLifecycleBatch,
+} from "@/api/lib/db/transitions";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { resetMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 const ORGANIZATION_FANOUT_BATCH_SIZE = 100;
@@ -106,23 +109,38 @@ const fanOutEditionPage = async ({
       await resetMonitoringBackfills(tx, jobs);
     }
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-    await transitionBatch({
+    const freshnessMove = {
+      from: [fanout.freshnessStatus],
+      to: fanout.freshnessStatus,
+    };
+    if (
+      !permitsLifecycleMove(
+        SANCTIONS_EDITION_FANOUT_TRANSITIONS.graphs.freshnessStatus,
+        freshnessMove,
+      )
+    ) {
+      panic("Fanout progress must preserve its freshness state");
+    }
+    await transitionLifecycleBatch({
       tx,
       spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
       ids: [fanout.sourceId],
-      options: {
-        from: ["pending"],
-        to: page.nextCursor !== null ? "pending" : "complete",
-        set: {
-          cursorOrganizationId:
-            organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
+      moves: {
+        status: {
+          from: ["pending"],
+          to: page.nextCursor !== null ? "pending" : "complete",
         },
+        freshnessStatus: freshnessMove,
       },
-      recordTransitionAuditEvent: async (auditTx, rows) => {
+      set: {
+        cursorOrganizationId:
+          organizations.at(-1)?.id ?? fanout.cursorOrganizationId,
+      },
+      recordTransitionAuditEvent: async (auditTx, { ids }) => {
         await auditTx.execute(
           sql`SELECT set_config('role', ${owner.role}, true)`,
         );
-        await recordTransitionAuditEvent(auditTx, rows.length, orgs.length);
+        await recordTransitionAuditEvent(auditTx, ids.length, orgs.length);
       },
     });
     await tx.execute(sql`SELECT set_config('role', ${owner.role}, true)`);
@@ -247,26 +265,43 @@ const queueFreshnessTransitions = async (
       );
     });
     if (changed.length > 0) {
-      await transitionBatch({
+      const changesByFreshness = {
+        fresh: changed.filter(({ status }) => status === "fresh"),
+        unavailable: changed.filter(({ status }) => status === "unavailable"),
+      } satisfies Record<SanctionsSourceFreshness["status"], typeof changed>;
+      await transitionLifecycleBatch({
         tx,
         spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
-        ids: changed.map(({ source }) => source),
-        options: {
-          from: ["pending", "complete"],
-          to: "pending",
-          set: {
-            freshnessStatus: sqlCaseFragment({
-              operand: sql`${sanctionsEditionFanouts.sourceId}`,
-              branches: changed.map(
-                ({ source, status }) => sql`WHEN ${source} THEN ${status}`,
-              ),
-              fallback: sql`NULL`,
-            }),
-            cursorOrganizationId: null,
+        ids: changesByFreshness.fresh.map(({ source }) => source),
+        moves: {
+          status: { from: ["pending", "complete"], to: "pending" },
+          freshnessStatus: {
+            from: ["unknown", "fresh", "unavailable"],
+            to: "fresh",
           },
         },
-        recordTransitionAuditEvent: (_auditTx, transitioned) =>
-          recordTransitionAuditEvent(transitioned.length),
+        set: { cursorOrganizationId: null },
+        recordTransitionAuditEvent: async (_auditTx, { ids }) => {
+          recordTransitionAuditEvent(ids.length);
+          await Promise.resolve();
+        },
+      });
+      await transitionLifecycleBatch({
+        tx,
+        spec: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+        ids: changesByFreshness.unavailable.map(({ source }) => source),
+        moves: {
+          status: { from: ["pending", "complete"], to: "pending" },
+          freshnessStatus: {
+            from: ["unknown", "fresh", "unavailable"],
+            to: "unavailable",
+          },
+        },
+        set: { cursorOrganizationId: null },
+        recordTransitionAuditEvent: async (_auditTx, { ids }) => {
+          recordTransitionAuditEvent(ids.length);
+          await Promise.resolve();
+        },
       });
     }
     // SET LOCAL survives a successful savepoint; nested scheduler calls retain their owner role.

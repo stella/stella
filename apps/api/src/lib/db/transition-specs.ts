@@ -109,11 +109,23 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
-export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineKeyedTransitions({
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
   table: sanctionsEditionFanouts,
   key: "sourceId",
-  edges: { pending: ["complete"], complete: ["pending"] },
-  options: { terminal: [] },
+  graphs: {
+    status: {
+      edges: { pending: ["complete"], complete: ["pending"] },
+      terminal: [],
+    },
+    freshnessStatus: {
+      edges: {
+        unknown: ["fresh", "unavailable"],
+        fresh: ["unavailable"],
+        unavailable: ["fresh"],
+      },
+      terminal: [],
+    },
+  },
 });
 
 export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(

@@ -16,7 +16,7 @@ if (!runPostgresTests) {
 } else {
   test("the installed tenant retry index bounds an ordered page among other tenants' due marks", async () => {
     if (databaseUrl === undefined) {
-      return panic("DATABASE_URL is required");
+      panic("DATABASE_URL is required");
     }
     const indexName = "sanctions_contact_marks_organization_retry_idx";
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -48,12 +48,14 @@ if (!runPostgresTests) {
             );
         });
         await tx.execute(sql.raw(definitions.join(";")));
+        // A substantial tenant backlog exercises LIMIT's ordered index path;
+        // a nearly exhausted queue can legitimately favor a bitmap scan and sort.
         await tx.execute(sql`
           INSERT INTO monitoring_retry_index_plan
-          SELECT CASE WHEN n <= 200 THEN 'target' ELSE 'other-' || (n % 10)::text END,
+          SELECT CASE WHEN n <= 2000 THEN 'target' ELSE 'other-' || (n % 10)::text END,
                  gen_random_uuid(),
-                 TIMESTAMPTZ '2026-10-05 12:00:00+00' - n * interval '1 minute',
-                 TIMESTAMPTZ '2026-10-05 12:00:00+00' - n * interval '1 minute'
+                 TIMESTAMPTZ '2026-10-05 12:00:00+00' - ((n * 7919) % 20000) * interval '1 minute',
+                 TIMESTAMPTZ '2026-10-05 12:00:00+00' - ((n * 3571) % 20000) * interval '1 minute'
           FROM generate_series(1, 20000) n
         `);
         await tx.execute(sql`ANALYZE monitoring_retry_index_plan`);
