@@ -2158,6 +2158,7 @@
     "markHandled": "Als erledigt markieren",
     "markNew": "Als neu markieren",
     "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
+    "openSourceFile": "E-Mail-Datei öffnen",
     "originalSender": "Ursprünglicher Absender",
     "originalSenderUnverified": "Ursprünglicher Absender (laut Angabe, nicht verifiziert)",
     "originalSignatureVerified": "Ursprüngliche Signatur verifiziert (<identifier>d={domain}</identifier>)",
@@ -2166,11 +2167,14 @@
     "rotateAddress": "Adresse erneuern",
     "sentAt": "Gesendet am",
     "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
+    "statedInFile": "Kopfzeilen (laut Datei)",
     "states": {
       "handled": "Erledigt"
     },
     "title": "Korrespondenz",
-    "unknownApprover": "Unbekannte genehmigende Person"
+    "unknownApprover": "Unbekannte genehmigende Person",
+    "uploadedBy": "Hochgeladen von {name}",
+    "uploadedFile": "Hochgeladene E-Mail-Datei"
   },
   "docxReview": {
     "acceptAll": "Alle annehmen",

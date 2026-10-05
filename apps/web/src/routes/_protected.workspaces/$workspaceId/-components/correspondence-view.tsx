@@ -24,7 +24,10 @@ import {
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { CorrespondenceDrops } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops";
-import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import {
+  AssertedHeadersLabel,
+  CorrespondenceProvenance,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import {
   useRevokeCorrespondenceAddress,
@@ -215,11 +218,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             <span className="min-w-0 flex-1">
               <CorrespondenceProvenance record={item} />
               <span className="mt-2 block">
-                {item.intake !== "direct" && (
-                  <span className="text-muted-foreground mb-1 block text-xs">
-                    {t("correspondence.assertedOriginal")}
-                  </span>
-                )}
+                <AssertedHeadersLabel record={item} />
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="truncate text-sm font-medium">
                     <bdi dir="auto">

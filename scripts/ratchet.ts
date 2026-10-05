@@ -34,6 +34,8 @@ import path from "node:path";
 import { analyse } from "scslre";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -3940,7 +3942,7 @@ const diffMetric = (
       regressedFiles.push({ file, from, to });
     }
   }
-  regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
+  regressedFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
@@ -3950,7 +3952,7 @@ const diffMetric = (
         staleFiles.push({ file, from, to });
       }
     }
-    staleFiles.sort((a, b) => a.file.localeCompare(b.file));
+    staleFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
   }
 
   const totalStatus = metricStatus(current.count, baseline.count);

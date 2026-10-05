@@ -2161,6 +2161,7 @@ type Messages = {
     "markHandled": "Mark handled";
     "markNew": "Mark new";
     "noAddress": "No email address is active.";
+    "openSourceFile": "Open email file";
     "originalSender": "Original sender";
     "originalSenderUnverified": "Original sender (as stated, not verified)";
     "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
@@ -2169,11 +2170,14 @@ type Messages = {
     "rotateAddress": "Rotate address";
     "sentAt": "Sent on";
     "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "statedInFile": "Headers (as stated in the file)";
     "states": {
       "handled": "Handled";
     };
     "title": "Correspondence";
     "unknownApprover": "Unknown approver";
+    "uploadedBy": "Uploaded by {name}";
+    "uploadedFile": "Uploaded email file";
   };
   "docxReview": {
     "acceptAll": "Accept all";

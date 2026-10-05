@@ -86,6 +86,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { createProgram } from "../packages/scripts/src/typescript-program.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -1821,7 +1823,7 @@ export const scanDbAwaitInLoop = ({
   const byLocation = <T extends { file: string; line: number }>(
     a: T,
     b: T,
-  ): number => a.file.localeCompare(b.file) || a.line - b.line;
+  ): number => compareCodeUnit(a.file, b.file) || a.line - b.line;
 
   return {
     hits: hits.toSorted(byLocation),

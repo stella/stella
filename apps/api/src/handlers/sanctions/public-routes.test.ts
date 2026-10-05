@@ -2,15 +2,20 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
 
+import { COUNTRY_CODES } from "@stll/country-codes";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
-import type { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import {
+  screenSanctionsSubject,
+  SanctionsSubjectError,
+} from "@/api/lib/lists/sanctions/screening-service";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -219,6 +224,7 @@ describe("anonymous sanctions search", () => {
     try {
       await allStarted.promise;
       const { app } = appWith(screen, db);
+      const began = performance.now();
       const rejected = await app.handle(
         request({ type: "organization", name: "Private Admission Sentinel" }),
       );
@@ -235,6 +241,7 @@ describe("anonymous sanctions search", () => {
       expect(JSON.stringify(logger.records)).not.toContain(
         "Private Admission Sentinel",
       );
+      expect(performance.now() - began).toBeLessThan(50);
       expect(await rejected.text()).not.toContain("Private Admission Sentinel");
       expect(validateRole.mock.calls).toHaveLength(maximum);
       expect(screen.mock.calls).toHaveLength(maximum);
@@ -303,6 +310,94 @@ describe("anonymous sanctions search", () => {
     expect(response.status).toBe(422);
     expect(await response.text()).not.toContain(marker);
     expect(screen.mock.calls).toHaveLength(0);
+  });
+
+  test.each([
+    { field: "name", limit: 512 },
+    { field: "companyId", limit: 32 },
+    { field: "firstName", limit: 100 },
+    { field: "lastName", limit: 100 },
+  ] as const)(
+    "every public identity field enforces its size boundary before database work ($field)",
+    async ({ field, limit }) => {
+      const screen = clearScreen();
+      const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(
+        async () => Result.ok(undefined),
+      );
+      const { app } = appWith(screen, testDb(validateRole));
+      const value = "Qzx".padEnd(limit, "a");
+      const subject = (input: string) =>
+        field === "name" || field === "companyId"
+          ? { type: "organization", name: "Example", [field]: input }
+          : {
+              type: "person",
+              firstName: "Alex",
+              lastName: "Tester",
+              [field]: input,
+            };
+      expect((await app.handle(request(subject(value)))).status).toBe(200);
+      expect(validateRole.mock.calls).toHaveLength(1);
+      expect(screen.mock.calls).toHaveLength(1);
+      for (const input of [`${value}a`, ""]) {
+        const response = await app.handle(request(subject(input)));
+        expect(response.status).toBe(422);
+        expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+          PRIVATE_CACHE_CONTROL,
+        );
+        expect(await response.text()).not.toContain(value);
+      }
+      expect(validateRole.mock.calls).toHaveLength(1);
+      expect(screen.mock.calls).toHaveLength(1);
+      if (field === "companyId") {
+        return;
+      }
+      if (field === "name") {
+        screen.mockImplementationOnce(screenSanctionsSubject);
+      }
+      const blank = await app.handle(request(subject(" ")));
+      // The full person's other name still supplies a usable identity.
+      expect(blank.status).toBe(field === "name" ? 400 : 200);
+    },
+  );
+
+  test("nationality cardinality and uniqueness are enforced before role validation", async () => {
+    const screen = clearScreen();
+    const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(async () =>
+      Result.ok(undefined),
+    );
+    const { app } = appWith(screen, testDb(validateRole));
+    const subject = { type: "person", firstName: "Alex", lastName: "Tester" };
+    const valid = await app.handle(
+      request({ ...subject, nationalityCodes: [...COUNTRY_CODES] }),
+    );
+    expect(valid.status).toBe(200);
+    const distinct = Array.from(
+      { length: MAX_CONTACT_NATIONALITY_CODES + 1 },
+      (_, index) =>
+        String.fromCodePoint(65 + Math.floor(index / 26), 65 + (index % 26)),
+    );
+    // Distinct syntactically valid codes isolate cardinality from uniqueness.
+    const boundary = await app.handle(
+      request({
+        ...subject,
+        nationalityCodes: distinct.slice(0, MAX_CONTACT_NATIONALITY_CODES),
+      }),
+    );
+    expect(boundary.status).toBe(400);
+    expect(boundary.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    for (const nationalityCodes of [distinct, ["CZ", "CZ"]]) {
+      const response = await app.handle(
+        request({ ...subject, nationalityCodes }),
+      );
+      expect(response.status).toBe(422);
+      expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+        PRIVATE_CACHE_CONTROL,
+      );
+    }
+    expect(validateRole.mock.calls).toHaveLength(1);
+    expect(screen.mock.calls).toHaveLength(1);
   });
 
   test("rejects excess normalized query tokens before database or screening work", async () => {
@@ -437,3 +532,61 @@ test("public identity responses are never cached, including validation and serve
   expect(error.status).toBe(500);
   expect(error.headers.get(CACHE_CONTROL_HEADER)).toBe(PRIVATE_CACHE_CONTROL);
 });
+
+test.each([
+  {
+    label: "truncated JSON",
+    contentType: "application/json",
+    body: '{"subject":{"name":"PrivateParseQzxv"',
+    status: 400,
+  },
+  {
+    label: "malformed JSON",
+    contentType: "application/json",
+    body: '{"subject":"PrivateParseQzxv",}',
+    status: 400,
+  },
+  {
+    label: "unsupported content type",
+    contentType: "application/octet-stream",
+    body: "PrivateParseQzxv",
+    status: 422,
+  },
+])(
+  "malformed public identity bodies are sanitized, never cached, and consume admission ($label)",
+  async ({ contentType, body, status }) => {
+    const screen = clearScreen();
+    const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(async () =>
+      Result.ok(undefined),
+    );
+    const { app } = appWith(screen, testDb(validateRole));
+    const response = await app.handle(
+      new Request("http://localhost/sanctions/search", {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body,
+      }),
+    );
+    expect(response.status).toBe(status);
+    expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    expect(await response.text()).not.toContain("PrivateParseQzxv");
+    expect(validateRole.mock.calls).toHaveLength(0);
+    expect(screen.mock.calls).toHaveLength(0);
+    for (let count = 1; count < 20; count += 1) {
+      expect(
+        (await app.handle(request({ type: "organization", name: "Example" })))
+          .status,
+      ).toBe(200);
+    }
+    const refused = await app.handle(
+      request({ type: "organization", name: "Example" }),
+    );
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    expect(screen.mock.calls).toHaveLength(19);
+  },
+);

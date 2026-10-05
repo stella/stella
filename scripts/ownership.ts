@@ -491,6 +491,19 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "deepl-availability",
+    capability: "Reading translation provider availability on demand",
+    owner: ["apps/web/src/components/translate-document-dialog.tsx"],
+    summary:
+      "The translation dialog starts availability reads only while open. Its shared query factory requires an explicit open state, keys the cache by organization, and lets an in-flight read complete across toolbar remounts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/lib/deepl/queries"],
+      names: ["deepLAvailabilityOptions"],
+      allowed: [],
+    },
+  },
+  {
     id: "query-view",
     capability: "Presenting non-suspense query results",
     owner: [
@@ -827,7 +840,9 @@ export const OWNERSHIP = [
       "is still a member of them, so it is built only for writes and lookups an " +
       "earlier check already proved. A run a member queued goes through " +
       "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
-      "and field readers (`ContentReadDb`) refuse.",
+      "and field readers (`ContentReadDb`) refuse. " +
+      "`createRootOrganizationBackgroundDb` validates the organization id and " +
+      "binds background work to that organization with no user or stored workspace ids.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/root-scoped-db"],
@@ -853,6 +868,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/email/inbound/runtime.ts",
           reason: "Files inbound mail into the matter its routing resolved.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload.ts",
+          reason:
+            "Files an email file as its uploader, whose matter access the filing transaction rechecks.",
         },
         {
           path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
@@ -1013,6 +1033,11 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
         },

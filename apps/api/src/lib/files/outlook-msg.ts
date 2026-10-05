@@ -32,6 +32,9 @@ const PROPERTY_ID = {
   bodyHtml: "1013",
   clientSubmitTime: "0039",
   messageDeliveryTime: "0e06",
+  internetMessageId: "1035",
+  inReplyToId: "1042",
+  internetReferences: "1039",
   recipientType: "0c15",
   displayName: "3001",
   email: "3003",
@@ -64,6 +67,11 @@ export type OutlookMsgEmail = {
   cc: OutlookMsgRecipient[];
   bcc: OutlookMsgRecipient[];
   date: string | null;
+  /** The sender's submit time, the counterpart of an RFC 5322 Date header. */
+  submittedAt: string | null;
+  messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
   html: string | null;
   text: string | null;
   attachments: OutlookMsgAttachment[];
@@ -84,35 +92,6 @@ const unwrapParse = <T>(result: Result<T, CompoundFileParseError>): T => {
     throw result.error;
   }
   return result.value;
-};
-
-/** @throws {CompoundFileParseError} when the container is malformed or a limit is reached */
-export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
-  const compoundFile = unwrapParse(
-    CompoundFile.parse(new Uint8Array(fileBuffer)),
-  );
-  const rootProperties = collectProperties(compoundFile, []);
-  const recipients = readRecipients(compoundFile);
-  const attachments = readAttachments(compoundFile);
-
-  return {
-    subject: getString(rootProperties, PROPERTY_ID.subject),
-    fromName: getString(rootProperties, PROPERTY_ID.senderName),
-    fromEmail:
-      getString(rootProperties, PROPERTY_ID.senderSmtpAddress) ??
-      getString(rootProperties, PROPERTY_ID.senderEmail),
-    to: recipients.filter((recipient) => recipient.type === "to"),
-    cc: recipients.filter((recipient) => recipient.type === "cc"),
-    bcc: recipients.filter((recipient) => recipient.type === "bcc"),
-    date:
-      getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
-      getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
-    html:
-      getString(rootProperties, PROPERTY_ID.bodyHtml) ??
-      getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
-    text: getString(rootProperties, PROPERTY_ID.body),
-    attachments,
-  };
 };
 
 const collectProperties = (
@@ -321,3 +300,36 @@ const normalizeString = (value: string): string | null => {
 
 const dataViewFor = (bytes: Uint8Array): DataView =>
   new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+/** @throws {CompoundFileParseError} when the container is malformed or a limit is reached */
+export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
+  const compoundFile = unwrapParse(
+    CompoundFile.parse(new Uint8Array(fileBuffer)),
+  );
+  const rootProperties = collectProperties(compoundFile, []);
+  const recipients = readRecipients(compoundFile);
+  const attachments = readAttachments(compoundFile);
+
+  return {
+    subject: getString(rootProperties, PROPERTY_ID.subject),
+    fromName: getString(rootProperties, PROPERTY_ID.senderName),
+    fromEmail:
+      getString(rootProperties, PROPERTY_ID.senderSmtpAddress) ??
+      getString(rootProperties, PROPERTY_ID.senderEmail),
+    to: recipients.filter((recipient) => recipient.type === "to"),
+    cc: recipients.filter((recipient) => recipient.type === "cc"),
+    bcc: recipients.filter((recipient) => recipient.type === "bcc"),
+    date:
+      getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
+      getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    submittedAt: getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    messageId: getString(rootProperties, PROPERTY_ID.internetMessageId),
+    inReplyTo: getString(rootProperties, PROPERTY_ID.inReplyToId),
+    references: getString(rootProperties, PROPERTY_ID.internetReferences),
+    html:
+      getString(rootProperties, PROPERTY_ID.bodyHtml) ??
+      getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
+    text: getString(rootProperties, PROPERTY_ID.body),
+    attachments,
+  };
+};

@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE = "apps/api/src/";
 const SHARED_OWNER = `${API_SOURCE}db/shared-pool-timeouts.ts`;
@@ -544,7 +546,7 @@ export const checkApiTimeoutMutations = ({
   }
   return findings.toSorted(
     (left, right) =>
-      left.file.localeCompare(right.file) || left.line - right.line,
+      compareCodeUnit(left.file, right.file) || left.line - right.line,
   );
 };
 

@@ -18,6 +18,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
 const STALE_LOCK_MS = 30 * 60_000;
@@ -147,7 +149,7 @@ export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
       }
       return { filePath, identity };
     })
-    .toSorted((a, b) => a.identity.localeCompare(b.identity));
+    .toSorted((a, b) => compareCodeUnit(a.identity, b.identity));
   for (const { filePath, identity } of inputs) {
     hash.update("\0");
     hash.update(identity);

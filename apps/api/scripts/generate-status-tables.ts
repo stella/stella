@@ -1,5 +1,7 @@
 import { getColumns, isTable } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   formattedLikeRepository,
   writeOrCheckArtifacts,
@@ -12,7 +14,7 @@ import * as schema from "../src/db/schema";
 export const statusColumns = (exports: Readonly<Record<string, unknown>>) => {
   const inventory = new Map<string, string[]>();
   for (const [name, table] of Object.entries(exports).toSorted(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnit(a, b),
   )) {
     if (!isTable(table)) {
       continue;
