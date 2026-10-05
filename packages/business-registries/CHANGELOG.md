@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.12.1
+
+### Patch Changes
+
+- [#4828](https://github.com/stella/stella/pull/4828) [`d754a5f`](https://github.com/stella/stella/commit/d754a5f7c59be5e05b47f09699706d2dcb55675c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependency versions.
+
 ## 0.12.0
 
 ### Minor Changes
