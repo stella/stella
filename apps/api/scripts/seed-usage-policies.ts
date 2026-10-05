@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { parseArgs } from "node:util";
 
 import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 
 import { runSeedReport } from "./seed-usage-policies-runner";
 
@@ -16,6 +17,7 @@ const run = async () => {
     `/tmp/usage-policy-results-${Date.now()}-${process.pid}.jsonl`;
   const report = await runSeedReport({
     input: env.STELLA_USAGE_POLICY_SEEDS,
+    freeTier: isDeploymentFeatureEnabled("FEATURE_FREE_TIER") ? "on" : "off",
     resultsPath,
     openDb: async () => {
       const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");

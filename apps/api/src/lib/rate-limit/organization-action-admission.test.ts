@@ -13,7 +13,12 @@ import {
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { OrganizationActionState } from "@/api/lib/usage/organization-action-budget";
+import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
+import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import {
+  ORGANIZATION_MODEL_CREDENTIALS,
+  type OrganizationActionState,
+} from "@/api/lib/usage/organization-action-budget";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 
 import { withActionAdmission } from "./action-admission";
@@ -29,6 +34,14 @@ import {
 
 const organizationId = toSafeId<"organization">("service_budget_org");
 const userId = toSafeId<"user">("service_budget_user");
+
+const actionState = (
+  snapshot: OrganizationAccessSnapshot | undefined,
+): OrganizationActionState => ({
+  snapshot,
+  freeTier: FREE_TIER_OFF,
+  modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+});
 const nowMs = Date.UTC(2026, 9, 1, 12, 30);
 const policy = {
   organizationConcurrency: 2,
@@ -93,10 +106,10 @@ describe("organization budgets at action admission", () => {
             budgetNow: () => now,
             readOrganizationState: async () => {
               reads += 1;
-              return {
+              return actionState({
                 state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
                 evaluationEndsAt: new Date(nowMs + 1000),
-              };
+              });
             },
             redis: redis.client,
             run: async (_signal, control) => {
@@ -181,10 +194,10 @@ describe("organization budgets at action admission", () => {
           budgetNow: () => nowMs,
           readOrganizationState: async () => {
             stateReads += 1;
-            return {
+            return actionState({
               state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
               evaluationEndsAt: new Date(nowMs - 1),
-            };
+            });
           },
           redis: redis.client,
           run: async () => {
@@ -226,10 +239,10 @@ describe("organization budgets at action admission", () => {
         budgetNow: () => nowMs,
         readOrganizationState: async () => {
           reads += 1;
-          return {
+          return actionState({
             state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
             evaluationEndsAt: new Date(nowMs + 1),
-          } satisfies OrganizationActionState;
+          });
         },
         redis: redis.client,
       };
@@ -273,10 +286,10 @@ describe("organization budgets at action admission", () => {
       budgetNow: () => now,
       readOrganizationState: async () => {
         reads += 1;
-        return {
+        return actionState({
           state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
           evaluationEndsAt: new Date(nowMs + 1),
-        } satisfies OrganizationActionState;
+        });
       },
       redis: redis.client,
     };
@@ -314,10 +327,11 @@ describe("organization budgets at action admission", () => {
         serviceBudgetConfig,
         periodIdentity,
         budgetNow: () => admissionTime,
-        readOrganizationState: async () => ({
-          state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-          evaluationEndsAt: new Date(deadline),
-        }),
+        readOrganizationState: async () =>
+          actionState({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationEndsAt: new Date(deadline),
+          }),
         redis: {
           send: async (_command, args) => {
             commands.push(args);
@@ -369,7 +383,7 @@ describe("organization budgets at action admission", () => {
         },
         limit: serviceBudgetConfig.selfManagedActions,
       },
-    ] satisfies { state: OrganizationActionState; limit: number }[];
+    ] satisfies { state: OrganizationAccessSnapshot; limit: number }[];
     const actionKinds = Object.keys(ACTION_KINDS).filter(
       (kind): kind is keyof typeof ACTION_KINDS =>
         Object.hasOwn(ACTION_KINDS, kind),
@@ -395,7 +409,7 @@ describe("organization budgets at action admission", () => {
           budgetNow: () => nowMs,
           readOrganizationState: async (scope) => {
             reads.push(scope);
-            return state;
+            return actionState(state);
           },
           redis: redis.client,
           run: async () => "completed",
@@ -425,7 +439,7 @@ describe("organization budgets at action admission", () => {
         state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
         evaluationEndsAt: new Date(nowMs + 1),
       },
-    ] satisfies OrganizationActionState[]) {
+    ] satisfies OrganizationAccessSnapshot[]) {
       const redis = recordingRedis();
       let ran = false;
       const result = await withActionAdmission({
@@ -437,7 +451,7 @@ describe("organization budgets at action admission", () => {
         serviceBudgetConfig,
         periodIdentity,
         budgetNow: () => nowMs,
-        readOrganizationState: async () => state,
+        readOrganizationState: async () => actionState(state),
         redis: redis.client,
         run: async () => {
           ran = true;
@@ -496,12 +510,12 @@ describe("organization budgets at action admission", () => {
             throw new Error("State store unavailable");
           }
           if (failure === "missing-state") {
-            return undefined;
+            return actionState(undefined);
           }
-          return {
+          return actionState({
             state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
             evaluationEndsAt: new Date(nowMs + 1),
-          };
+          });
         },
         redis: redis.client,
         run: async () => {
@@ -605,5 +619,153 @@ describe("organization budgets at action admission", () => {
     expect(readState).toBe(false);
     expect(opened).toBe(false);
     expect(clockRead).toBe(false);
+  });
+});
+
+// A period counter that refuses past the limit the admission passes, as the
+// acquisition script does: enough to observe which actions draw the budget.
+const countingRedis = () => {
+  const commands: string[][] = [];
+  let counted = 0;
+  return {
+    commands,
+    periodAcquisitions: () =>
+      commands.filter((args) => args.at(1) === "3").length,
+    client: {
+      send: async (_command: string, args: string[]) => {
+        commands.push(args);
+        if (args.at(1) !== "3") {
+          return 1;
+        }
+        counted += 1;
+        return counted > Number(args.at(11)) ? -1 : 1;
+      },
+    },
+  };
+};
+
+const FREE_ACTIONS = 3;
+const lapsedEvaluation = {
+  state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+  evaluationEndsAt: new Date(nowMs - 1),
+} as const satisfies OrganizationAccessSnapshot;
+const freeActionState = (
+  modelCredentials: OrganizationActionState["modelCredentials"],
+): OrganizationActionState => ({
+  snapshot: lapsedEvaluation,
+  freeTier: {
+    status: "on",
+    policy: { serviceActionsPerPeriod: FREE_ACTIONS },
+  },
+  modelCredentials,
+});
+
+describe("the free floor's service budget", () => {
+  const admitOnFree = async ({
+    actionKind,
+    modelCredentials,
+    redis,
+  }: {
+    actionKind: PeriodActionKind;
+    modelCredentials: OrganizationActionState["modelCredentials"];
+    redis: ReturnType<typeof countingRedis>;
+  }) =>
+    await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      serviceBudgetsEnabled: true,
+      serviceBudgetConfig,
+      periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+      budgetNow: () => nowMs,
+      readOrganizationState: async () => freeActionState(modelCredentials),
+      redis: redis.client,
+      run: async () => "completed",
+    });
+
+  test("a chat send on the organization's own key is admitted past the free budget", async () => {
+    const redis = countingRedis();
+    for (let send = 0; send < FREE_ACTIONS + 5; send += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "chat.send",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expect(redis.periodAcquisitions()).toBe(0);
+  });
+
+  test("a chat send on managed models is refused once the free budget is spent", async () => {
+    const redis = countingRedis();
+    for (let send = 0; send < FREE_ACTIONS; send += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "chat.send",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expectRefusal(
+      await admitOnFree({
+        actionKind: "chat.send",
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+        redis,
+      }),
+      ACTION_ADMISSION_CODES.periodExhausted,
+    );
+    expect(redis.periodAcquisitions()).toBe(FREE_ACTIONS + 1);
+    expect(
+      redis.commands
+        .filter((args) => args.at(1) === "3")
+        .map((args) => args.at(11)),
+    ).toEqual(Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)));
+  });
+
+  test("managed services stay counted on the organization's own key", async () => {
+    const redis = countingRedis();
+    for (let call = 0; call < FREE_ACTIONS; call += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "mcp.services/call",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expectRefusal(
+      await admitOnFree({
+        actionKind: "mcp.services/call",
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+        redis,
+      }),
+      ACTION_ADMISSION_CODES.periodExhausted,
+    );
+  });
+
+  test("a missing free policy refuses as unavailable, never as unlimited", async () => {
+    const redis = countingRedis();
+    const result = await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      serviceBudgetsEnabled: true,
+      serviceBudgetConfig,
+      periodIdentity,
+      budgetNow: () => nowMs,
+      readOrganizationState: async () => ({
+        snapshot: lapsedEvaluation,
+        freeTier: { status: "on", policy: undefined },
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+      }),
+      redis: redis.client,
+      run: async () => "completed",
+    });
+    expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+    expect(redis.commands).toHaveLength(0);
   });
 });

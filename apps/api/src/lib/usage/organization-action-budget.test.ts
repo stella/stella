@@ -2,15 +2,25 @@ import { describe, expect, test } from "bun:test";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 
-import { resolveOrganizationActionBudget } from "./organization-action-budget";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "./organization-access";
+import type { OrganizationAccessSnapshot } from "./organization-access-snapshot";
+import {
+  resolveOrganizationActionBudget,
+  type OrganizationActionBudgetConfig,
+} from "./organization-action-budget";
 
 const expiresAtMs = Date.UTC(2026, 9, 1, 12, 30);
-const resolve = (
-  overrides: Partial<
-    Parameters<typeof resolveOrganizationActionBudget>[0]
-  > = {},
-) =>
-  resolveOrganizationActionBudget({
+type ResolveOverrides = Partial<
+  OrganizationActionBudgetConfig & {
+    state: OrganizationAccessSnapshot | undefined;
+    now: Date;
+  }
+>;
+const resolve = (overrides: ResolveOverrides = {}) => {
+  const { state, now, ...config } = {
     state: {
       state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
       evaluationEndsAt: new Date(expiresAtMs),
@@ -20,7 +30,16 @@ const resolve = (
     evaluationActions: 7,
     selfManagedActions: 19,
     ...overrides,
+  };
+  return resolveOrganizationActionBudget({
+    access: resolveOrganizationAccess({
+      snapshot: state,
+      now,
+      freeTier: FREE_TIER_OFF,
+    }),
+    ...config,
   });
+};
 
 describe("organization service action budgets", () => {
   test("selects the configured budget for each enabled access state", () => {

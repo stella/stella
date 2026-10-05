@@ -39,6 +39,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
       };
       try {
         const inserted = await runSeedReport({
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "insert.jsonl"),
           openDb: () => db,
@@ -48,6 +49,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
           "inserted",
         ]);
         const replay = await runSeedReport({
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "replay.jsonl"),
           openDb: () => db,
@@ -57,6 +59,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
           "unchanged",
         ]);
         const updated = await runSeedReport({
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, storageBytesPerAssignment: 100 },
           ]),
@@ -69,6 +72,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         ]);
         const path = nodePath.join(dir, "failed.jsonl");
         const failed = await runSeedReport({
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, monthlyUsageUnits: 20 },
             { ...policy, key: "collision" },

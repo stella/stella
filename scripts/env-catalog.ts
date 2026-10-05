@@ -143,6 +143,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_FILE_USAGE_LIMITS",
+  "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_LEGAL_LISTS",
@@ -420,6 +421,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  FEATURE_FREE_TIER:
+    "Fall organizations whose evaluation or paid access lapsed back to the seeded free usage policy. Requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS with USAGE_ENFORCEMENT_ENABLED off.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
   OPENROUTER_WIF_POLICY_ID:
@@ -730,6 +733,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,

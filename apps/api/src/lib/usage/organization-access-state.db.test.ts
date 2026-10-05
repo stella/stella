@@ -39,6 +39,10 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
+import {
   allowsInstanceModels,
   endOrganizationEvaluation,
   recordMissingOrganizationAccessStatesWhileUnenforced,
@@ -141,26 +145,31 @@ const readState = async (organizationId: SafeId<"organization">) =>
 
 test("action admission reads access state only through its authorized organization scope", async () => {
   expect(
-    await readOrganizationActionState(requestScope(ids.orgA), ids.orgA),
+    (await readOrganizationActionState(requestScope(ids.orgA), ids.orgA))
+      .snapshot,
   ).toEqual({
     state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
     evaluationEndsAt: null,
   });
   expect(
-    await readOrganizationActionState(
-      requestScope(evaluatingOrgId),
-      evaluatingOrgId,
-    ),
+    (
+      await readOrganizationActionState(
+        requestScope(evaluatingOrgId),
+        evaluatingOrgId,
+      )
+    ).snapshot,
   ).toMatchObject({
     state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
   });
   // This user belongs to both organizations; the supplied request scope still
   // prevents either organization's admission reader from selecting the other.
   expect(
-    await readOrganizationActionState(requestScope(ids.orgA), evaluatingOrgId),
+    (await readOrganizationActionState(requestScope(ids.orgA), evaluatingOrgId))
+      .snapshot,
   ).toBeUndefined();
   expect(
-    await readOrganizationActionState(requestScope(evaluatingOrgId), ids.orgA),
+    (await readOrganizationActionState(requestScope(evaluatingOrgId), ids.orgA))
+      .snapshot,
   ).toBeUndefined();
 });
 
@@ -397,10 +406,16 @@ describe("the stored shape", () => {
       evaluationEndsAt,
     };
 
-    expect(
-      allowsInstanceModels(row, new Date(evaluationEndsAt.getTime() - 1)),
-    ).toBe(true);
-    expect(allowsInstanceModels(row, evaluationEndsAt)).toBe(false);
+    const allowsAt = (now: Date) =>
+      allowsInstanceModels(
+        resolveOrganizationAccess({
+          snapshot: row,
+          now,
+          freeTier: FREE_TIER_OFF,
+        }),
+      );
+    expect(allowsAt(new Date(evaluationEndsAt.getTime() - 1))).toBe(true);
+    expect(allowsAt(evaluationEndsAt)).toBe(false);
   });
 
   test("a member reads only its own organization's state", async () => {

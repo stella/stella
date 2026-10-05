@@ -12,6 +12,12 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
+import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import {
+  ORGANIZATION_MODEL_CREDENTIALS,
+  type OrganizationActionState,
+} from "@/api/lib/usage/organization-action-budget";
 
 import { withActionAdmission } from "./action-admission";
 import {
@@ -19,6 +25,14 @@ import {
   resolveActionPeriodBudget,
   staleActionPeriodTime,
 } from "./action-period-budget";
+
+const actionState = (
+  snapshot: OrganizationAccessSnapshot | undefined,
+): OrganizationActionState => ({
+  snapshot,
+  freeTier: FREE_TIER_OFF,
+  modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+});
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const policy = {
@@ -98,10 +112,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 : Math.min(storeNow, deadline - 1),
             readOrganizationState: async () => {
               stateReads += 1;
-              return {
+              return actionState({
                 state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
                 evaluationEndsAt: new Date(deadline),
-              };
+              });
             },
             redis: {
               send: async (command, args) => {
@@ -203,10 +217,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             },
             budgetNow: () =>
               staleRetry ? storeNow - 86_400_000 : deadline - 1,
-            readOrganizationState: async () => ({
-              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-              evaluationEndsAt: new Date(deadline),
-            }),
+            readOrganizationState: async () =>
+              actionState({
+                state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                evaluationEndsAt: new Date(deadline),
+              }),
             periodIdentity: {
               actionKind: "chat.improve-prompt",
               logicalPhaseId: "expired-phase",

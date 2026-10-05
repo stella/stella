@@ -3,7 +3,11 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
+import {
+  envApiInvariantViolation,
+  envApiServerSchema,
+  freeTierInvariantViolation,
+} from "./env-schema";
 
 test("agent client storage format requires explicit enablement", () => {
   const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
@@ -311,5 +315,32 @@ test("inbound mail receiving is configured all-or-none and requires its domain",
     ["INBOUND_MAIL_BUCKET", "Inbound_Bucket"],
   ] as const) {
     expect(v.safeParse(envApiServerSchema[name], invalid).success).toBe(false);
+  }
+});
+
+test("the free tier boots only with access state and service budgets, and never with usage enforcement", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_FREE_TIER, undefined)).toBe(false);
+  for (const FEATURE_FREE_TIER of [false, true]) {
+    for (const FEATURE_ORG_ACCESS_STATE of [false, true]) {
+      for (const FEATURE_ORG_SERVICE_BUDGETS of [false, true]) {
+        for (const USAGE_ENFORCEMENT_ENABLED of [false, true]) {
+          const bootable =
+            !FEATURE_FREE_TIER ||
+            (FEATURE_ORG_ACCESS_STATE &&
+              FEATURE_ORG_SERVICE_BUDGETS &&
+              !USAGE_ENFORCEMENT_ENABLED);
+          const violation = freeTierInvariantViolation({
+            FEATURE_FREE_TIER,
+            FEATURE_ORG_ACCESS_STATE,
+            FEATURE_ORG_SERVICE_BUDGETS,
+            USAGE_ENFORCEMENT_ENABLED,
+          });
+          expect(violation === null).toBe(bootable);
+          if (violation !== null) {
+            expect(violation).toStartWith("FEATURE_FREE_TIER requires");
+          }
+        }
+      }
+    }
   }
 });
