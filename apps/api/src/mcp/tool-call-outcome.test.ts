@@ -35,6 +35,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
   getMcpToolDefinition,
@@ -376,22 +377,22 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     test(`skill ${valid ? "success" : "output-contract failure"} is observed once`, async () => {
       const gatewayResult = {
         type: "internal",
-        result: toolDataResult(
-          valid
-            ? {
-                type: "skill",
-                body: PRIVATE_TEXT,
-                compatibility: null,
-                id: null,
-                license: null,
-                metadata: {},
-                name: "private-skill",
-                origin: "built-in",
-                resources: [],
-                version: null,
-              }
-            : { body: PRIVATE_TEXT },
-        ),
+        // The failure case sends a shape the skill output does not declare,
+        // which the checked constructor refuses at compile time.
+        result: valid
+          ? toolDataResult({
+              type: "skill",
+              body: PRIVATE_TEXT,
+              compatibility: null,
+              id: null,
+              license: null,
+              metadata: {},
+              name: "private-skill",
+              origin: "built-in",
+              resources: [],
+              version: null,
+            })
+          : untypedToolDataResult({ body: PRIVATE_TEXT }),
       } satisfies GatewayDispatchResult;
       const result = await handleMcpToolCall({
         toolName: `skill__${PRIVATE_TEXT}`,
