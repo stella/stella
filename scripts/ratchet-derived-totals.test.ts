@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
 
 const metric = {
   id: "test-metric",
@@ -95,22 +96,7 @@ const withClone = (exercise: (root: string) => void) => {
   const clone = path.join(temporary, "clone");
   try {
     mkdirSync(seed);
-    for (const relative of [
-      "scripts/ratchet.ts",
-      "scripts/db-await-in-loop.ts",
-      "scripts/lint-suppressions.ts",
-      "scripts/ownership.ts",
-      "apps/api/src/lib/db/status-tables.gen.ts",
-      "scripts/status-write-shapes.ts",
-      "scripts/parse-memo.ts",
-      "scripts/generated-artifacts.ts",
-      "scripts/result-boundary-globs.ts",
-      "scripts/root-connection-shapes.ts",
-      "scripts/source-globs.ts",
-      "packages/api-contract/src/mcp.ts",
-      "packages/scripts/src/typescript-program.ts",
-      "packages/scripts/src/tsgo-compiler-options.ts",
-    ]) {
+    for (const relative of ratchetDefinitionPaths) {
       mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
       copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
     }

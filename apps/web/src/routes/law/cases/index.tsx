@@ -137,6 +137,7 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { pageTitle } from "@/lib/page-title";
 import {
   isSearchUnavailableError,
@@ -346,12 +347,9 @@ const resultsOrOutage = async <TRead,>(
     catch: (cause): Error =>
       cause instanceof Error ? cause : new UnhandledException({ cause }),
   });
-  if (Result.isError(result)) {
-    return isSearchUnavailableError(result.error)
-      ? null
-      : await Promise.reject(result.error);
-  }
-  return result.value;
+  return Result.isError(result) && isSearchUnavailableError(result.error)
+    ? null
+    : readQueryResult(result);
 };
 
 /**

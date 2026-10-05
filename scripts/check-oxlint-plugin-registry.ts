@@ -9,6 +9,8 @@ const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 const NON_PLUGIN_MODULES = new Set([
   "budget-ledger.ts",
+  "database-access.ts",
+  "module-id.ts",
   "physical-properties.ts",
   "restricted-import.ts",
   "utils.ts",

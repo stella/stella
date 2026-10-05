@@ -86,7 +86,8 @@ void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
 
-const { createPostHogAnalytics } = await import("./posthog");
+const { createPostHogAnalytics, sanitizeFrame, UNKNOWN_FRAME_FUNCTION } =
+  await import("./posthog");
 const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
@@ -422,7 +423,15 @@ describe("PostHog browser analytics adapter", () => {
             value: "",
             stacktrace: {
               type: "raw",
-              frames: [{ filename: "app.js", lineno: 42 }],
+              frames: [
+                {
+                  platform: "web:javascript",
+                  function: UNKNOWN_FRAME_FUNCTION,
+                  in_app: true,
+                  filename: "app.js",
+                  lineno: 42,
+                },
+              ],
             },
           },
         ],
@@ -471,6 +480,7 @@ describe("PostHog browser analytics adapter", () => {
           frames: [
             {
               platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
               filename: "https://my.stll.app/assets/app.js",
               in_app: true,
               lineno: 42,
@@ -480,6 +490,36 @@ describe("PostHog browser analytics adapter", () => {
         },
       },
     ]);
+  });
+
+  // PostHog drops an exception whose raw frame lacks `platform`, `function`
+  // or `in_app` ("missing field function"), so no input frame may lose them.
+  test.each([
+    ["an empty frame", {}],
+    ["a non-object frame", "at renderMatter (app.js:1:2)"],
+    ["a null frame", null],
+    ["a frame without a function", { filename: "app.js", lineno: 3 }],
+    [
+      "a frame with a named function",
+      { function: "renderMatter", filename: "app.js", in_app: false },
+    ],
+    ["a frame from another platform", { platform: "node:javascript" }],
+  ])("a sanitized frame keeps every required field: %s", (_label, frame) => {
+    const sanitized = sanitizeFrame(frame);
+    expect(sanitized.function).toBe(UNKNOWN_FRAME_FUNCTION);
+    expect(typeof sanitized.platform).toBe("string");
+    expect(typeof sanitized.in_app).toBe("boolean");
+  });
+
+  test("a sanitized frame never carries the function name", () => {
+    expect(
+      sanitizeFrame({ function: "Smith v Example", filename: "app.js" }),
+    ).toEqual({
+      platform: "web:javascript",
+      function: UNKNOWN_FRAME_FUNCTION,
+      in_app: true,
+      filename: "app.js",
+    });
   });
 
   test("captureError ignores null and undefined", () => {
@@ -832,8 +872,20 @@ describe("PostHog browser analytics adapter", () => {
         stacktrace: {
           type: "raw",
           frames: [
-            { filename: "app.js", lineno: 1 },
-            { filename: "app.js", lineno: 2 },
+            {
+              platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
+              in_app: true,
+              filename: "app.js",
+              lineno: 1,
+            },
+            {
+              platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
+              in_app: true,
+              filename: "app.js",
+              lineno: 2,
+            },
           ],
         },
       },
@@ -1168,7 +1220,14 @@ describe("PostHog browser analytics adapter", () => {
             value: "",
             stacktrace: {
               type: "raw",
-              frames: [{ filename: "https://my.stll.app/assets/app.js" }],
+              frames: [
+                {
+                  platform: "web:javascript",
+                  function: UNKNOWN_FRAME_FUNCTION,
+                  in_app: true,
+                  filename: "https://my.stll.app/assets/app.js",
+                },
+              ],
             },
           },
         ],

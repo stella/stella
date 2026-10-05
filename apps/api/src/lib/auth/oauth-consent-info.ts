@@ -24,6 +24,7 @@ type VerifiedClientUrl =
 const CLAUDE_DOCS =
   "https://claude.com/docs/connectors/building/authentication";
 const CHATGPT_DOCS = "https://developers.openai.com/plugins/build/auth";
+const CODEX_DOCS = "https://learn.chatgpt.com/docs/extend/mcp?surface=cli";
 const COPILOT_DOCS =
   "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/plugin-authentication-oauth";
 const POWER_PLATFORM_DOCS =
@@ -73,6 +74,8 @@ const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientUrl[] = [
     source: CLAUDE_DOCS,
   },
   { exact: "https://chatgpt.com/oauth/client.json", source: CHATGPT_DOCS },
+  // Codex CLI (loopback redirects, attested by this document).
+  { exact: "https://chatgpt.com/oauth/codex/client.json", source: CODEX_DOCS },
 ];
 
 const matchesVerifiedUrl = (
