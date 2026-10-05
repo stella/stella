@@ -173,6 +173,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // TanStack Query consumes read failures through queryFn Promise rejection;
+  // this adapter translates typed Result errors at that framework boundary.
+  "apps/web/src/lib/errors/query-result.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.

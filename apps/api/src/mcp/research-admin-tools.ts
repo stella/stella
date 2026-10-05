@@ -31,6 +31,7 @@ import {
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
+import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
@@ -731,16 +732,14 @@ const manageOrganizationArgsSchema = nullAsAbsent(
       prompt_caching_enabled: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "Toggle AI prompt caching for the organization (update_org_settings)",
-          ),
+          v.description("Toggle AI prompt caching (update_org_settings)"),
         ),
       ),
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
           v.description(
-            "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+            "Set automatic PDF searchable-text extraction (update_org_settings)",
           ),
         ),
       ),
@@ -778,6 +777,21 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.boolean(),
           v.description(
             "Require a narrative on time entries (update_org_settings)",
+          ),
+        ),
+      ),
+      time_zone: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.string(),
+              v.nonEmpty(),
+              v.maxLength(TIME_ZONE_ID_MAX_LENGTH),
+            ),
+          ),
+          v.description(
+            "IANA time zone, e.g. Europe/Prague; null follows the primary " +
+              "practice jurisdiction",
           ),
         ),
       ),
@@ -832,6 +846,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action === "update_org_settings" ||
@@ -842,7 +857,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           i.time_minimum_unit_minutes === undefined &&
           i.time_edit_window_days === undefined &&
           i.time_locked_through_month === undefined &&
-          i.time_narrative_required === undefined),
+          i.time_narrative_required === undefined &&
+          i.time_zone === undefined),
       "Settings fields apply only to update_org_settings",
     ),
     // matter_id/user_id are meaningless for an org-settings update.
@@ -865,6 +881,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action !== "update_org_settings" ||
@@ -875,7 +892,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.time_minimum_unit_minutes !== undefined ||
         i.time_edit_window_days !== undefined ||
         i.time_locked_through_month !== undefined ||
-        i.time_narrative_required !== undefined,
+        i.time_narrative_required !== undefined ||
+        i.time_zone !== undefined,
       "Provide at least one setting to change for update_org_settings",
     ),
     // The matter-number pattern and padding are a unit (mirrors the backing).
@@ -893,9 +911,8 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
-    "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, document processing, and time policy. Manage provider " +
-    "secrets in the dashboard.",
+    "require matter_id and user_id; the other fields apply to " +
+    "update_org_settings. Manage provider secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -1079,6 +1096,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.time_narrative_required === undefined
           ? {}
           : { timeNarrativeRequired: input.time_narrative_required }),
+        ...(input.time_zone === undefined ? {} : { timeZone: input.time_zone }),
       },
     }),
   );

@@ -3,6 +3,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { Temporal } from "@stll/time";
 
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -26,6 +27,8 @@ export type TimeEntryExportHandlerProps = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   query: Static<typeof timeEntryExportQuerySchema>;
+  /** The instant whose organization day dates the export. */
+  at?: Temporal.Instant;
 };
 
 type TimeEntryExportConditionsOptions = Pick<
