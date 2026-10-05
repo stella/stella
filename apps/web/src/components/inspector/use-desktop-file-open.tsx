@@ -50,6 +50,9 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
 
       await showDesktopEditOpenResultToast({
         messages: {
+          accountRequiredTitle: t(
+            "workspaces.files.desktopEdit.accountRequiredTitle",
+          ),
           notOpenedDescription: t.rich(
             "workspaces.files.desktopEdit.notOpenedDescription",
             {

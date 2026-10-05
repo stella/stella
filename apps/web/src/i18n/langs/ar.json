@@ -841,6 +841,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
@@ -1857,6 +1858,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
@@ -4636,6 +4638,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
@@ -4685,7 +4688,9 @@
       "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
-    "validity": "نافذ من {from} إلى {to}"
+    "validity": "نافذ من {from} إلى {to}",
+    "wordingValidFrom": "الصياغة النافذة منذ {date}",
+    "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
     "create": "إنشاء",
@@ -5422,6 +5427,7 @@
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",

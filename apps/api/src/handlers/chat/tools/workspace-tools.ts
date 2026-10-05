@@ -299,6 +299,7 @@ const toChatToolError = ({
     case 402:
     case 413:
     case 422:
+    case 426:
     case 428:
     case 429:
     case 500:

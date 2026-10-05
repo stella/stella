@@ -16,6 +16,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -105,6 +106,7 @@ export const BilingualTranslateDialog = ({
     () => defaultLanguagePair(locale).target,
   );
   const [state, setState] = useState<BilingualTranslateState>({ step: "pick" });
+  const [initialReview, setInitialReview] = useState("");
 
   const reportFailure = (error: unknown, title: string) => {
     analytics.captureError(error);
@@ -123,13 +125,15 @@ export const BilingualTranslateDialog = ({
         targetLang,
       }),
     onSuccess: (preparation) => {
-      setState({
+      const review = {
         step: "review",
         entityVersionId: preparation.entityVersionId,
         droppedRows: preparation.droppedRows,
         rows: preparation.rows,
         glossary: glossaryDraftsFrom(preparation.glossary),
-      });
+      } as const satisfies BilingualReviewState;
+      setInitialReview(JSON.stringify(review));
+      setState(review);
     },
     onError: (error: unknown) => {
       reportFailure(error, t("bilingualTranslate.error.prepareTitle"));
@@ -256,6 +260,21 @@ export const BilingualTranslateDialog = ({
         }
       />
       <DialogPopup className="max-w-3xl">
+        <DialogFormState
+          dirty={
+            state.step !== "run" &&
+            (sourceLang !== defaultLanguagePair(locale).source ||
+              targetLang !== defaultLanguagePair(locale).target ||
+              (state.step === "review" &&
+                JSON.stringify(state) !== initialReview))
+          }
+          onDiscard={() => {
+            setSourceLang(defaultLanguagePair(locale).source);
+            setTargetLang(defaultLanguagePair(locale).target);
+            setState({ step: "pick" });
+            setInitialReview("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("bilingualTranslate.dialog.title")}</DialogTitle>
           <DialogDescription>
