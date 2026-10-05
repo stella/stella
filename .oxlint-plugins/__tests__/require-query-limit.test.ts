@@ -62,6 +62,13 @@ describe.serial("cursor reads through the bounded owner", () => {
       ),
     ).toEqual([]);
   });
+  test("rejects a non-bounded export from the owner module", async () => {
+    expect(
+      await lint(
+        `import { BOUNDED_READ_EXPORTS } from "@/api/lib/db/read-bounded";\nBOUNDED_READ_EXPORTS(${QUERY}, ${options});`,
+      ),
+    ).toEqual([2]);
+  });
   test("cursor ownership does not bless an unbounded sibling", async () => {
     expect(
       await lint(

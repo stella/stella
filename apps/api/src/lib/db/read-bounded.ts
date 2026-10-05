@@ -56,3 +56,5 @@ export const readCursorPage = async <TRow>(
     cursorForItem,
   });
 };
+
+export const BOUNDED_READ_EXPORTS = { readBounded, readCursorPage } as const;
