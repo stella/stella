@@ -262,8 +262,6 @@ export const withoutPositionSource = (
 // ── Deep duplicate ────────────────────────────────────
 // A duplicated position needs a fresh sourceId and fresh rule/entry ids so it is
 // a distinct materialized column/finding target, never an alias of the original.
-// Named (non-map-arrow) helpers so the id refresh does not spread the mapped
-// element inside the `map` callback (oxc/no-map-spread).
 const withFreshRuleId = (rule: TierRule): TierRule => ({
   id: crypto.randomUUID(),
   text: rule.text,

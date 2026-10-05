@@ -4,7 +4,6 @@ import type { OxlintOverride } from "oxlint";
 import {
   libraryIgnorePatterns,
   libraryOverrides,
-  libraryRules,
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
@@ -887,7 +886,78 @@ export default defineConfig({
     },
   },
   rules: {
-    ...libraryRules,
+    // Every base rule is decided here or in the vendored presets, never by a
+    // spread: a spread replaces preset severities without naming the rules,
+    // and scripts/check-oxlint-effective-config.ts fails on that.
+    "stella-lowercase/stella-lowercase": "error",
+    "no-raw-colors/no-raw-colors": "error",
+    "no-useless-assignment": "error",
+    "promise/no-return-in-finally": "error",
+    // A `.then` callback returns or throws; `no-useless-return` is off below
+    // so the trailing `return;` this asks for can stay.
+    "promise/always-return": "error",
+    "typescript/no-unnecessary-condition": [
+      "error",
+      { allowConstantLoopConditions: "only-allowed-literals" },
+    ],
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/no-misused-promises": [
+      "error",
+      { checksVoidReturn: { attributes: false } },
+    ],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      { allowNullableString: true, allowNullableBoolean: true },
+    ],
+    "typescript/no-confusing-void-expression": [
+      "error",
+      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
+    ],
+    "typescript/prefer-nullish-coalescing": [
+      "error",
+      { ignorePrimitives: { string: true, boolean: true } },
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    // Preset style rules, decided by cost: each fires far more often than
+    // its fix is worth, so it stays off.
+    // Route files, React components and generated modules follow their
+    // framework's names, not one case (54 files).
+    "unicorn/filename-case": "off",
+    // Closures stay next to their only caller (1004 findings).
+    "unicorn/consistent-function-scoping": "off",
+    // Its fix drops the `undefined` that `useRef<T | undefined>(undefined)`
+    // needs (2767 findings).
+    "unicorn/no-useless-undefined": "off",
+    // Style only: an if/else of statements reads as well (40 findings).
+    "unicorn/prefer-ternary": "off",
+    // Wrapping callback and event APIs needs `new Promise` (365 findings).
+    "promise/avoid-new": "off",
+    // Event handlers and stream callbacks are callbacks by design (507
+    // findings).
+    "promise/prefer-await-to-callbacks": "off",
+    // Effects and fire-and-forget calls run outside an async function (485
+    // findings).
+    "promise/prefer-await-to-then": "off",
+    // Arrow functions take the name of their binding (1086 findings).
+    "func-names": "off",
+    // Style only; `function-component-definition` owns component style (343
+    // findings).
+    "func-style": "off",
+    // `i++` in a loop has no ASI hazard under the formatter (733 findings).
+    "no-plusplus": "off",
+    // As with unicorn/no-negated-condition: the negated form is often clearer
+    // (237 findings).
+    "no-negated-condition": "off",
+    // `const x = object.x` is as clear; the fix churns without catching bugs
+    // (2273 findings).
+    "prefer-destructuring": "off",
+    // Methods that implement an interface need not read `this` (26 findings).
+    "class-methods-use-this": "off",
+    // A TaggedError family lives beside the module that raises it (86
+    // findings).
+    "max-classes-per-file": "off",
+    // Trailing comments document table rows and literal values (962 findings).
+    "no-inline-comments": "off",
     "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
@@ -936,8 +1006,7 @@ export default defineConfig({
     // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
     "logical-assignment-operators": "off",
 
-    // Override libraryRules so React correctness is checked in every app and
-    // shared package.
+    // React correctness is checked in every app and shared package.
     "react/jsx-key": "error",
     "react/jsx-props-no-spread-multi": "error",
     "react/no-array-index-key": "error",
@@ -1113,9 +1182,6 @@ export default defineConfig({
       { checkConditionalExpressions: true },
     ],
     ...SIZE_LINT_RULES,
-    // libraryRules sets the bare `complexity` key, which outranks the
-    // canonical id above.
-    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
     // Annotations on literal initializers are deliberate widening
     // (`const marker: string = "…"`); removing them narrows to the literal.
@@ -1178,10 +1244,13 @@ export default defineConfig({
     "unicorn/no-useless-spread": "off",
     // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
-    // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
-    "unicorn/no-nested-ternary": "off",
     // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
+    // `oxc/no-map-spread` stays off as the core preset declares (an entry
+    // here would restate it and fail the liveness test): its fix mutates the
+    // mapped items and contradicts no-computed-key-record-assignment, so
+    // object spread is the one record copy. scripts/oxlint-rule-decisions.test.ts
+    // holds it off.
 
     // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
@@ -1499,6 +1568,12 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      // Plugin fixtures are inputs for the local rules' tests; route fixtures
+      // name their component before declaring it, as route modules do.
+      files: [".oxlint-plugins/__fixtures__/**"],
+      rules: { "eslint/no-use-before-define": "off" },
+    },
     {
       files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       excludeFiles: [

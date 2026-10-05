@@ -12,11 +12,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import {
-  libraryIgnorePatterns,
-  libraryOverrides,
-  libraryRules,
-} from "@stll/oxlint-config";
+import { libraryIgnorePatterns, libraryOverrides } from "@stll/oxlint-config";
 
 import config from "../oxlint.config.ts";
 import {
@@ -30,6 +26,11 @@ import {
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
+import {
+  SEVERITY,
+  declaredBaseRules,
+  flattenLayers,
+} from "./oxlint-effective-config.ts";
 import core from "./oxlint-presets/core.mjs";
 import {
   builtinRules,
@@ -69,9 +70,6 @@ const ignored = (file: string) =>
 const fileIndex = createFileIndex(
   trackedRepoFiles().filter((file) => !ignored(file)),
 );
-
-const presets = (): Record<string, unknown>[] =>
-  Array.isArray(config.extends) ? config.extends.filter(isRecord) : [];
 
 test(
   "every override glob matches a linted file",
@@ -167,31 +165,30 @@ test(
         ),
       );
 
-    const presetState = new Map<string, boolean>();
-    for (const id of pluginDefaults([
-      "eslint",
-      ...presets().flatMap((preset) => stringArray(preset["plugins"])),
-    ])) {
-      presetState.set(id, true);
-    }
-    for (const preset of presets()) {
-      for (const [id, enabled] of stateOf(
-        isRecord(preset["rules"]) ? preset["rules"] : {},
-      )) {
-        presetState.set(id, enabled);
-      }
-    }
+    // What the presets declare, merged by the precedence the effective-config
+    // guard checks against `oxlint --print-config`, so the two cannot disagree
+    // on what a base entry replaces.
+    const presetLayers = flattenLayers(config, "oxlint.config.ts").slice(0, -1);
+    // JS plugin rules have no category or alias to resolve: the last preset
+    // that names one decides it.
+    const presetState = new Map([
+      ...presetLayers.flatMap(({ rules: layerRules }) => [
+        ...stateOf(layerRules),
+      ]),
+      ...[
+        ...declaredBaseRules({
+          layers: presetLayers,
+          builtins: rules,
+          canonical,
+        }).rules,
+      ].map(([id, { severity }]) => [id, severity !== SEVERITY.off] as const),
+    ]);
 
     const noOps: string[] = [];
     const scopes = readScopes(config);
     const baseRules =
       scopes.find((scope) => scope.scope === BASE_SCOPE)?.rules ?? {};
-    const vendoredBase: Readonly<Record<string, unknown>> = libraryRules;
     for (const [key, value] of Object.entries(baseRules)) {
-      // A base entry the shared library config ships is its decision.
-      if (Bun.deepEquals(vendoredBase[key], value)) {
-        continue;
-      }
       if (ruleIsOff(value) && presetState.get(canonical(key)) !== true) {
         noOps.push(`${BASE_SCOPE} | ${key}`);
       }
