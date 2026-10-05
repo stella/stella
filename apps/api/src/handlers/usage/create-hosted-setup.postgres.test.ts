@@ -174,7 +174,8 @@ const startCheckout = async ({ fixture, safeDb }: StartCheckoutOptions) =>
 const startedSession = (response: unknown) =>
   typeof response === "object" &&
   response !== null &&
-  "hostedSessionId" in response
+  "hostedSessionId" in response &&
+  "url" in response
     ? response
     : null;
 
@@ -316,7 +317,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("concurrent starts for one organization create exactly one provider session", async () => {
       await withHostedEnv(async () => {
         await assertProperty(
-          "hosted-checkout-concurrent-starts-single-session",
+          "concurrent starts for one organization create exactly one provider session",
           fc.asyncProperty(
             fc.integer({ min: 2, max: 6 }),
             fc.constantFrom("none", "expired"),
