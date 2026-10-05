@@ -82,7 +82,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
 
 const LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -103,7 +103,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Fetch",
       destructiveHint: false,

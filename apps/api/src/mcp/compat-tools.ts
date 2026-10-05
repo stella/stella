@@ -548,7 +548,7 @@ export const compatFetchConsumesServices = (args: unknown): boolean => {
       return false;
     case "decision":
     case "statute":
-      return true;
+      return false;
     default: {
       id satisfies never;
       return panic("Unclassified compat fetch target");
