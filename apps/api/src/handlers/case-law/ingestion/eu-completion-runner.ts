@@ -208,6 +208,21 @@ type CompletionCandidate =
   | { type: "unchanged" };
 type RowResult = Result<EuCompletionRowOutcome, unknown>;
 
+const storedInput = (
+  row: typeof caseLawDecisions.$inferSelect,
+): Omit<StoredRawReparseInput, "raw"> => ({
+  contentType: row.sourceRawContentType,
+  caseNumber: row.caseNumber,
+  sourceDocumentId: row.sourceDocumentId,
+  language: row.language,
+  court: row.court,
+  ecli: row.ecli,
+  decisionDate: row.decisionDate,
+  decisionType: row.decisionType,
+  sourceUrl: row.sourceUrl,
+  documentUrl: row.documentUrl,
+  metadata: row.metadata ?? {},
+});
 const readStoredRaw = async ({ row, signal, ensure }: CandidateContext) =>
   await Result.gen(async function* () {
     yield* Result.await(ensure());
@@ -807,6 +822,47 @@ const createGuardedLease = ({
   },
 });
 
+const finalizeWrittenCompletion = async (
+  context: CompletionContext,
+): Promise<RowResult> =>
+  await Result.gen(async function* () {
+    yield* Result.await(context.ensure());
+    const settled = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await context.store.finalize(
+            context.receipt.id,
+            context.state.publisherSuccess,
+          ),
+      ),
+    );
+    if (settled === "retryable") {
+      const waiting = yield* Result.await(
+        legacyOperation(
+          async () => await context.store.waitForMirror(context.receipt.id),
+        ),
+      );
+      switch (waiting) {
+        case "waiting":
+          return Result.ok({
+            type: "waiting-for-mirror",
+          } satisfies EuCompletionRowOutcome);
+        case "review-required":
+          return Result.ok({
+            type: "mirror-repair-required",
+          } satisfies EuCompletionRowOutcome);
+        case "applied":
+          return Result.ok({
+            type: "applied",
+          } satisfies EuCompletionRowOutcome);
+        default:
+          waiting satisfies never;
+          return panic("Unexpected completion mirror disposition");
+      }
+    }
+    return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
+  });
+
 const applyCompletionCandidate = async (
   context: CompletionContext,
   candidate: IngestionResult,
@@ -932,47 +988,6 @@ const hydrateCompletionStatements = async ({
       );
     }
     return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
-  });
-
-const finalizeWrittenCompletion = async (
-  context: CompletionContext,
-): Promise<RowResult> =>
-  await Result.gen(async function* () {
-    yield* Result.await(context.ensure());
-    const settled = yield* Result.await(
-      legacyOperation(
-        async () =>
-          await context.store.finalize(
-            context.receipt.id,
-            context.state.publisherSuccess,
-          ),
-      ),
-    );
-    if (settled === "retryable") {
-      const waiting = yield* Result.await(
-        legacyOperation(
-          async () => await context.store.waitForMirror(context.receipt.id),
-        ),
-      );
-      switch (waiting) {
-        case "waiting":
-          return Result.ok({
-            type: "waiting-for-mirror",
-          } satisfies EuCompletionRowOutcome);
-        case "review-required":
-          return Result.ok({
-            type: "mirror-repair-required",
-          } satisfies EuCompletionRowOutcome);
-        case "applied":
-          return Result.ok({
-            type: "applied",
-          } satisfies EuCompletionRowOutcome);
-        default:
-          waiting satisfies never;
-          return panic("Unexpected completion mirror disposition");
-      }
-    }
-    return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
   });
 
 const executeCompletionRow = async (
@@ -1427,18 +1442,3 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
     });
   return { runRow };
 };
-const storedInput = (
-  row: typeof caseLawDecisions.$inferSelect,
-): Omit<StoredRawReparseInput, "raw"> => ({
-  contentType: row.sourceRawContentType,
-  caseNumber: row.caseNumber,
-  sourceDocumentId: row.sourceDocumentId,
-  language: row.language,
-  court: row.court,
-  ecli: row.ecli,
-  decisionDate: row.decisionDate,
-  decisionType: row.decisionType,
-  sourceUrl: row.sourceUrl,
-  documentUrl: row.documentUrl,
-  metadata: row.metadata ?? {},
-});
