@@ -895,9 +895,15 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
       found.push(...findTransferReads(file, source));
     }
   }
-  return found.toSorted(
-    (a, b) => entryKey(a).localeCompare(entryKey(b)) || a.line - b.line,
-  );
+  // Code-unit order: keys are repository paths and identifiers, not display text.
+  return found.toSorted((a, b) => {
+    const left = entryKey(a);
+    const right = entryKey(b);
+    if (left === right) {
+      return a.line - b.line;
+    }
+    return left < right ? -1 : 1;
+  });
 };
 
 const DEFAULT_REASON = {

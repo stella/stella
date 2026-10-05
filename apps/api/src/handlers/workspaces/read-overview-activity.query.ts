@@ -517,24 +517,6 @@ type ReadOverviewActivityExportOptions = Omit<
   "cursor" | "limit"
 > & { cap: number };
 
-export const readOverviewActivityPage = async ({
-  cursor,
-  limit,
-  ...options
-}: ReadOverviewActivityPageOptions) =>
-  await readOverviewActivity({
-    ...options,
-    read: { type: "page", cursor, limit },
-  });
-
-export const readOverviewActivityExport = async ({
-  cap,
-  ...options
-}: ReadOverviewActivityExportOptions) =>
-  (
-    await readOverviewActivity({ ...options, read: { type: "export", cap } })
-  ).map((page) => page.items);
-
 type ReadOverviewActivityOptions = Omit<
   ReadOverviewActivityPageOptions,
   "cursor" | "limit"
@@ -1019,6 +1001,24 @@ const readOverviewActivity = async ({
 
     return Result.ok(payload);
   });
+
+export const readOverviewActivityPage = async ({
+  cursor,
+  limit,
+  ...options
+}: ReadOverviewActivityPageOptions) =>
+  await readOverviewActivity({
+    ...options,
+    read: { type: "page", cursor, limit },
+  });
+
+export const readOverviewActivityExport = async ({
+  cap,
+  ...options
+}: ReadOverviewActivityExportOptions) =>
+  (
+    await readOverviewActivity({ ...options, read: { type: "export", cap } })
+  ).map((page) => page.items);
 
 type EntityRow = {
   file: EntityFile | null;
