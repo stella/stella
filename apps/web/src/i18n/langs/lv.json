@@ -1495,6 +1495,7 @@
     "noResults": "Klauzulu vēl nav",
     "noVariants": "Nav variantu",
     "outdatedVersion": "Pieejams atjauninājums",
+    "overrideNotRenderedWarning": "Klauzulas {clauseName} aizstājums netika izmantots: tās vieta šajā dokumentā neparādās.",
     "renameSlot": "Pārdēvēt slotu",
     "renameSlotInvalid": "Slotu nosaukumiem jābūt unikāliem, un tie nedrīkst saturēt atstarpes, kolus vai figūriekavas.",
     "restoreVersion": "Atjaunot šo versiju",

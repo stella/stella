@@ -1495,6 +1495,7 @@
     "noResults": "لا توجد بنود بعد",
     "noVariants": "لا توجد صيغ",
     "outdatedVersion": "يتوفّر تحديث",
+    "overrideNotRenderedWarning": "لم يُستخدم بديل البند {clauseName}: موضعه لا يظهر في هذا المستند.",
     "renameSlot": "إعادة تسمية الخانة",
     "renameSlotInvalid": "يجب أن تكون أسماء الخانات فريدة وألا تحتوي على مسافات أو نقطتين رأسيتين أو أقواس معقوفة.",
     "restoreVersion": "استعادة هذا الإصدار",

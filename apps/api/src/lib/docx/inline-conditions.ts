@@ -524,6 +524,15 @@ const applyInlineEach = ({
         )}{{ clause("${name}") }}${scopedText.slice(end)}`;
       }
     }
+    scopedText =
+      processingContext.scopeInlineText?.({
+        text: scopedText,
+        values: data,
+        row: isRecord(item) ? item : { value: item },
+        alias: group.alias,
+        arrayPath: group.arrayPath,
+        loop: loopContext(itemIdx, items.length),
+      }) ?? scopedText;
     let iteration = rewriteEachPlaceholdersInText(
       scopedText,
       group.arrayPath,

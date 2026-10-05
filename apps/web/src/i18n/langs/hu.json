@@ -1495,6 +1495,7 @@
     "noResults": "Még nincsenek záradékok",
     "noVariants": "Nincs változat",
     "outdatedVersion": "Frissítés elérhető",
+    "overrideNotRenderedWarning": "A(z) {clauseName} záradék helyettesítése nem lett felhasználva: a helye nem jelenik meg ebben a dokumentumban.",
     "renameSlot": "Foglalat átnevezése",
     "renameSlotInvalid": "A foglalatok neveinek egyedinek kell lenniük, és nem tartalmazhatnak szóközt, kettőspontot vagy kapcsos zárójelet.",
     "restoreVersion": "Verzió visszaállítása",

@@ -82,6 +82,7 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  visibleItemFields,
   savedFillNotices,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
@@ -857,9 +858,11 @@ const ArrayFieldRenderer = ({
   errors,
   touched,
   onEditField,
+  conditions,
 }: {
   field: ResolvedField;
   values: FormValues;
+  conditions: readonly NamedCondition[];
   onChange: (path: string, value?: unknown) => void;
   onBlur: (path: string) => void;
   onClearPaths: (paths: string[]) => void;
@@ -974,7 +977,13 @@ const ArrayFieldRenderer = ({
             <TrashIcon />
           </Button>
 
-          {itemFields.map((subField) => {
+          {visibleItemFields({
+            field,
+            index,
+            itemCount: items.length,
+            values,
+            conditions,
+          }).map((subField) => {
             const itemPath = `${field.path}[${index}].${subField.path}`;
             return (
               <FieldRenderer
@@ -1024,12 +1033,19 @@ const buildSubmitValues = ({
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields = optionalArray(field.itemFields);
       const arrayValues: Record<string, unknown>[] = [];
 
       for (let i = 0; i < items.length; i++) {
         const itemObj = createNullRecord();
-        for (const subField of itemFields) {
+        // Like a hidden field, an item field this item's branch prunes is
+        // not sent.
+        for (const subField of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
           const path = `${field.path}[${i}].${subField.path}`;
           const val = values[path];
           if (
@@ -1121,10 +1137,15 @@ const collectValidatableFields = (
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields = optionalArray(field.itemFields);
 
       for (let i = 0; i < items.length; i++) {
-        for (const sub of itemFields) {
+        for (const sub of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
           const itemPath = `${field.path}[${i}].${sub.path}`;
           result.push({ path: itemPath, field: sub });
         }
@@ -1163,6 +1184,7 @@ const isFieldRequired = (field: ResolvedField): boolean =>
 const collectEmptyArrayFields = (
   field: ResolvedField,
   values: FormValues,
+  conditions: readonly NamedCondition[],
   push: (field: ResolvedField) => void,
 ) => {
   const items = readArrayIndices(values, arrayIndexKey(field.path));
@@ -1173,8 +1195,13 @@ const collectEmptyArrayFields = (
     return;
   }
   for (let i = 0; i < items.length; i++) {
-    const itemFields = optionalArray(field.itemFields);
-    for (const sub of itemFields) {
+    for (const sub of visibleItemFields({
+      field,
+      index: i,
+      itemCount: items.length,
+      values,
+      conditions,
+    })) {
       if (isFieldRequired(sub)) {
         continue;
       }
@@ -1208,7 +1235,7 @@ const collectEmptyOptionalFields = (
       continue;
     }
     if (field.kind === "array") {
-      collectEmptyArrayFields(field, values, push);
+      collectEmptyArrayFields(field, values, conditions, push);
       continue;
     }
     if (
@@ -2045,11 +2072,16 @@ export const TemplateForm = ({
       for (const warning of created.clauseWarnings) {
         stellaToast.add({
           type: "warning",
-          title: t("clauses.legacyDirectiveWarning", {
-            clauseName: warning.clauseName,
-            version:
-              warning.version === null ? "none" : String(warning.version),
-          }),
+          title:
+            warning.code === "CLAUSE_OVERRIDE_NOT_RENDERED"
+              ? t("clauses.overrideNotRenderedWarning", {
+                  clauseName: warning.clauseName,
+                })
+              : t("clauses.legacyDirectiveWarning", {
+                  clauseName: warning.clauseName,
+                  version:
+                    warning.version === null ? "none" : String(warning.version),
+                }),
         });
       }
       for (const notice of savedFillNotices(created)) {
@@ -2417,6 +2449,7 @@ export const TemplateForm = ({
 
             {arrayFields.map((field) => (
               <ArrayFieldRenderer
+                conditions={conditions}
                 errors={errors}
                 field={field}
                 key={field.path}
