@@ -29,8 +29,10 @@ const repositoryRule = (rule: string) => {
       layer[spelling] === undefined ? [] : [layer[spelling]],
     ),
   );
-  return values.at(-1) ??
-    panic(`oxlint.config.ts and its presets do not configure ${rule}`);
+  return (
+    values.at(-1) ??
+    panic(`oxlint.config.ts and its presets do not configure ${rule}`)
+  );
 };
 const builtinBacklogRules = Object.fromEntries(
   BUILTIN_LINT_BACKLOG_RULES.map((rule) => [rule, repositoryRule(rule)]),
