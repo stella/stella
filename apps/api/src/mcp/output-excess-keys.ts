@@ -45,8 +45,8 @@ type ObjectExcessPaths<
   TBranches = MatchingBranches<TActual, TDeclared>,
 > = {
   // A key that can only be absent (`policy?: never` closing a union branch)
-  // never reaches the output.
-  [TKey in keyof TActual & string]-?: [
+  // never reaches the output. Numeric keys serialise as JSON properties too.
+  [TKey in keyof TActual & (string | number)]-?: [
     Exclude<TActual[TKey], undefined>,
   ] extends [never]
     ? never
@@ -57,7 +57,7 @@ type ObjectExcessPaths<
           `${TPath}.${TKey}`
         >
       : `${TPath}.${TKey}`;
-}[keyof TActual & string];
+}[keyof TActual & (string | number)];
 
 /**
  * Paths of properties a produced value's static type carries that the

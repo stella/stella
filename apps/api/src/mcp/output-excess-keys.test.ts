@@ -27,6 +27,13 @@ describe("output excess paths", () => {
     >().toEqualTypeOf<"output.facets.source[].countType">();
   });
 
+  test("names a numeric key the declared output lacks", () => {
+    expectTypeOf<
+      OutputExcessPaths<{ 0: string }, Record<never, never>>
+    >().toEqualTypeOf<"output.0">();
+    expectTypeOf<OutputExcessPaths<{ 0: string }, { 0: string }>>().toBeNever();
+  });
+
   test("accepts a value whose every field is declared", () => {
     expectTypeOf<
       OutputExcessPaths<

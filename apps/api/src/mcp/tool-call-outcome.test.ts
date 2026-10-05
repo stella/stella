@@ -393,7 +393,8 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
               resources: [],
               version: null,
             })
-          : (untypedToolDataResult({ body: PRIVATE_TEXT }) as Extract<
+          : // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- stands in for a gateway that breaks its declared output at runtime
+            (untypedToolDataResult({ body: PRIVATE_TEXT }) as Extract<
               GatewayDispatchResult,
               { type: "internal" }
             >["result"]),
