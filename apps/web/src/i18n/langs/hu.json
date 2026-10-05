@@ -869,6 +869,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Fejrész",
       "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
@@ -2338,6 +2339,8 @@
       "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "hostedCheckoutOpen": "Ennél a szervezetnél már van megnyitott fizetési folyamat. Fejezze be, vagy indítson újat, miután lejárt.",
+      "hostedSubscriptionLive": "Ennek a szervezetnek már van előfizetése. Módosítsa a „Hosztolt használat kezelése” részben.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
@@ -4665,6 +4668,7 @@
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
@@ -4714,7 +4718,9 @@
       "unknown": "Állapota nem egyértelmű"
     },
     "title": "Jogszabályok",
-    "validity": "Hatályos {from} és {to} között"
+    "validity": "Hatályos {from} és {to} között",
+    "wordingValidFrom": "A szöveg {date} óta hatályos",
+    "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },
   "styleSets": {
     "create": "Létrehozás",
@@ -5483,8 +5489,7 @@
         "signCurrent": "Aláírás a stella desktoppal",
         "signNone": "Töltse le a stella desktopot a PDF aláírásához",
         "signOutdated": "Frissítse a stella desktopot az aláíráshoz",
-        "signReason": "Az aláírás a számítógépén lévő tanúsítványt használja, ezért a stella desktopban történik.",
-        "signShort": "Aláírás"
+        "signReason": "Az aláírás a számítógépén lévő tanúsítványt használja, ezért a stella desktopban történik."
       },
       "downloadAs": "Letöltés másként…",
       "downloadAsZip": ".zip fájl letöltése",

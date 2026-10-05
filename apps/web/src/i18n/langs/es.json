@@ -869,6 +869,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
@@ -2338,6 +2339,8 @@
       "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
       "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
       "forbidden": "No tienes permiso para hacer esto.",
+      "hostedCheckoutOpen": "Ya hay un pago abierto para esta organización. Complételo o inicie uno nuevo cuando caduque.",
+      "hostedSubscriptionLive": "Esta organización ya tiene una suscripción. Cámbiela en «Gestionar uso alojado».",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
@@ -4665,6 +4668,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
@@ -4714,7 +4718,9 @@
       "unknown": "Estado incierto"
     },
     "title": "Legislación",
-    "validity": "Vigente del {from} al {to}"
+    "validity": "Vigente del {from} al {to}",
+    "wordingValidFrom": "Redacción vigente desde {date}",
+    "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {
     "create": "Crear",
@@ -5483,8 +5489,7 @@
         "signCurrent": "Firmar con stella desktop",
         "signNone": "Descarga stella desktop para firmar este PDF",
         "signOutdated": "Actualiza stella desktop para firmar",
-        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop.",
-        "signShort": "Firmar"
+        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop."
       },
       "downloadAs": "Descargar como…",
       "downloadAsZip": "Descargar archivo .zip",
