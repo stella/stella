@@ -27,6 +27,10 @@ on:
         required: false
   workflow_dispatch:
     inputs:
+      allow_full:
+        description: Explicitly permit a full suite on a feature branch
+        type: boolean
+        default: false
       depth:
         description: >-
           Suite depth. `fast` runs the guards, lint, typecheck, unit tests
@@ -125,7 +129,13 @@ jobs:
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_REF: ${{ github.ref }}
+          ALLOW_FULL: ${{ inputs.allow_full }}
         run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_DEPTH" == full && "$DISPATCH_REF" != refs/heads/main && "${ALLOW_FULL:-false}" != true ]]; then
+            echo "::error::Full dispatch on a feature branch requires allow_full=true."
+            exit 1
+          fi
           case "${MERGE_QUEUE_DEPTH:-}" in
             ""|full|thin) ;;
             *)
