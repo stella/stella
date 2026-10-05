@@ -24,6 +24,9 @@
 //   bun scripts/check-npm-publish-lag.ts --ref <git-ref> [--packages cli,ui]
 //   bun scripts/check-npm-publish-lag.ts --previous-release-of <git-ref>
 //     [--attempts 10 --interval-seconds 30]
+//
+// Exit codes: 0 every package is on npm, 1 a package lags, 2 bad arguments or
+// manifests, 3 the guard itself failed.
 
 import path from "node:path";
 
@@ -392,10 +395,11 @@ if (import.meta.main) {
   try {
     process.exit(await main(process.argv.slice(2)));
   } catch (error) {
-    if (error instanceof NpmPublishLagError) {
-      process.stderr.write(`::error::npm-publish-lag: ${error.message}\n`);
-      process.exit(2);
-    }
-    throw error;
+    // Exit 1 means "a package lags" and nothing else: release-tag.yml lets an
+    // explicit input accept that one outcome, never a guard that broke.
+    process.stderr.write(
+      `::error::npm-publish-lag: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(error instanceof NpmPublishLagError ? 2 : 3);
   }
 }
