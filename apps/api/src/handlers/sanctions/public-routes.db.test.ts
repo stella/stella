@@ -997,8 +997,11 @@ describe("public sanctions search parity", () => {
           newPerson.lists.find((list) => list.source === "eu") ??
           panic("Missing EU list");
         expect(eu.editionId).toBe(id);
-        expect(eu.possibleMatches.at(0).sourceEntryId).toBe(
-          entries.at(0)?.sourceId,
+        const firstMatch =
+          eu.possibleMatches.at(0) ?? panic("Missing rollover match");
+        const firstEntry = entries.at(0) ?? panic("Missing rollover entry");
+        expect(firstMatch.sourceEntryId).toBe(
+          firstEntry.sourceId ?? panic("Missing rollover source id"),
         );
         await search("Ivan", "Sidorov");
         await search("Zbigniew", "Wroblewski");
@@ -1310,7 +1313,7 @@ describe("public sanctions search parity", () => {
               expect(digest(lists)).toBe(
                 inputDigests.get(
                   list.version.source ?? panic("Missing benchmark source"),
-                ),
+                ) ?? panic("Missing benchmark input digest"),
               );
               return buildScreeningIndex(lists);
             },
