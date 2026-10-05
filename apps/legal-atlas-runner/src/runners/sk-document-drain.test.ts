@@ -76,6 +76,8 @@ const OUTCOMES = {
   },
   unavailable: { status: "unavailable" },
   claimed: { status: "claimed" },
+  busy: { status: "busy" },
+  lost: { status: "lost" },
   superseded: { status: "superseded" },
   deferred: {
     status: "deferred",

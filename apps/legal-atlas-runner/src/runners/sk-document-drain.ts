@@ -79,6 +79,8 @@ export type SkDocumentDrainSummary = OutcomeCounts & {
 const emptySummary = (): SkDocumentDrainSummary => ({
   attempted: 0,
   claimed: 0,
+  busy: 0,
+  lost: 0,
   deferred: 0,
   failed: 0,
   failures: {

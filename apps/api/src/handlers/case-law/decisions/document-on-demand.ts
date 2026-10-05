@@ -71,8 +71,13 @@ const CONCURRENT_FETCH_LIMIT = 2;
 
 class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
-  outcome: PublisherPacingOutcome;
+  outcome: DocumentReadDeferral;
 }> {}
+
+export type DocumentReadDeferral =
+  | PublisherPacingOutcome
+  | "ownership-busy"
+  | "ownership-lost";
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
@@ -145,7 +150,7 @@ export type OnDemandDocumentDeps = {
   ) => Promise<ImmediatePublisherSlotResult<DecisionDocumentOutcome>>;
   recordPacingOutcome: (
     decisionId: SafeId<"caseLawDecision">,
-    outcome: PublisherPacingOutcome,
+    outcome: DocumentReadDeferral,
   ) => void;
 };
 
@@ -170,7 +175,7 @@ const recordFailure = (
 
 export const recordDocumentPacingOutcome = (
   decisionId: SafeId<"caseLawDecision">,
-  outcome: PublisherPacingOutcome,
+  outcome: DocumentReadDeferral,
 ): void =>
   recordFailure(
     new DocumentPacingOutcome({
@@ -223,6 +228,18 @@ const runFetch = async ({
         recordFailure(budgeted.error, decision.id);
         return null;
       case "completed":
+        if (
+          budgeted.value.status === "busy" ||
+          budgeted.value.status === "lost"
+        ) {
+          deps.recordPacingOutcome(
+            decision.id,
+            budgeted.value.status === "busy"
+              ? "ownership-busy"
+              : "ownership-lost",
+          );
+          return null;
+        }
         return budgeted.value.status === "filled"
           ? budgeted.value.document
           : null;

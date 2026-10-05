@@ -1,3 +1,4 @@
+// parser-output-unchanged: document writes coordinate with source ownership; parsing is unchanged.
 // parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 // parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
 // parser-output-unchanged: fetch entry takes an ID and writes require the claimed snapshot; parsing is unchanged.
@@ -99,6 +100,12 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
+  type DeferredDocumentOwnershipRefusal,
+  type DeferredDocumentSourceFence,
+  isDeferredDocumentOwnershipLost,
+  withDeferredDocumentSourceOwnership,
+} from "@/api/lib/legal-search/deferred-document-source-ownership";
+import {
   withDocumentStageObserver,
   recordDocumentStageError,
 } from "@/api/lib/legal-search/document-stage-observation";
@@ -131,7 +138,6 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
-import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** A decision awaiting its document. */
@@ -152,6 +158,7 @@ const claimedPendingDocument = Symbol("claimedPendingDocument");
 type ClaimedPendingDocument = PendingDocument & {
   readonly [claimedPendingDocument]: true;
   readonly sourceHash: string | null;
+  readonly attempts: number;
 };
 
 /**
@@ -1010,6 +1017,9 @@ const storedForCorpusOutcome = (
     case "retry":
       return false;
     case "failed":
+      if (isDeferredDocumentOwnershipLost(outcome.error)) {
+        throw outcome.error;
+      }
       captureError(outcome.error, {
         decisionId,
         step: "storeBackfilledDocument.corpusBatchWrite",
@@ -1055,16 +1065,20 @@ const storedForCorpusOutcome = (
  * idempotent and it also repairs a decision whose text landed but whose
  * index write did not.
  */
-export const storeBackfilledDocument = async ({
+const storeBackfilledDocumentOwned = async ({
   decision,
   document,
-  scopedDb,
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
-}: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
+  fence,
+}: Omit<StoreBackfilledDocumentOptions, "scopedDb"> & {
+  fence: DeferredDocumentSourceFence;
+}): Promise<"stored" | "superseded"> => {
+  const { scopedDb } = fence;
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
+    eq(caseLawDecisions.sourceId, fence.sourceId),
     isNull(caseLawDecisions.redactedAt),
     sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
     // The text column stops being the whole answer once a canonical store
@@ -1102,6 +1116,7 @@ export const storeBackfilledDocument = async ({
       .set({
         ...payloadColumns,
         parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
         ...corpusMirrorColumns({
           status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           written,
@@ -1130,7 +1145,27 @@ export const storeBackfilledDocument = async ({
   } else {
     // One decision, so a batch of one member set: the same path a page of
     // the pipeline takes, rather than a second writer with its own rules.
-    const batch = openCorpusPackBatch({ scopedDb, transfer });
+    const fencedTransfer: CorpusTransfer =
+      transfer.layout === "packs"
+        ? {
+            layout: "packs",
+            putPacks: async (...args) =>
+              await fence.beforeRemoteEffect(
+                async () => await transfer.putPacks(...args),
+              ),
+          }
+        : {
+            layout: "objects",
+            writeObjects: async (...args) =>
+              await fence.beforeRemoteEffect(
+                async () => await transfer.writeObjects(...args),
+              ),
+          };
+    const batch = openCorpusPackBatch({
+      scopedDb,
+      transfer: fencedTransfer,
+      signal: fence.signal,
+    });
     batch.enqueue({
       decisionId: decision.id,
       jurisdiction: decision.country,
@@ -1180,6 +1215,13 @@ export const storeBackfilledDocument = async ({
       },
     });
     const flushed = await batch.flush();
+    if (
+      Result.isError(flushed) &&
+      isDeferredDocumentOwnershipLost(flushed.error)
+    ) {
+      throw flushed.error;
+    }
+    await fence.scopedDb(async () => undefined);
     stored = storedForCorpusOutcome(
       Result.isError(flushed)
         ? { type: "failed", error: flushed.error }
@@ -1188,7 +1230,11 @@ export const storeBackfilledDocument = async ({
     );
   }
 
-  const indexed = await indexDecision(decision.id, scopedDb);
+  const projection = await Result.tryPromise({
+    try: async () => await indexDecision(decision.id, scopedDb),
+    catch: (error) => error,
+  });
+  const indexed = projection.andThen((result) => result);
   if (Result.isError(indexed)) {
     // The text is stored; its projection is derived state the search-index
     // backfill reselects while the row is missing. Failing the store here
@@ -1295,11 +1341,16 @@ export type DocumentFetchClaim =
     }
   | { status: "held" };
 
-export const claimDocumentFetch = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-): Promise<DocumentFetchClaim> =>
-  await scopedDb(async (tx) => {
+const claimDocumentFetchOwned = async ({
+  decisionId,
+  fence,
+  attemptPolicy,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  fence: DeferredDocumentSourceFence;
+  attemptPolicy: "count" | "reserve-final-attempt";
+}): Promise<DocumentFetchClaim> =>
+  await fence.scopedDb(async (tx) => {
     const lockResult: unknown = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext(${decisionId})) AS locked`,
     );
@@ -1308,6 +1359,26 @@ export const claimDocumentFetch = async (
       return { status: "held" };
     }
 
+    const previous = (
+      await tx
+        .select({ attempts: caseLawDecisions.documentFetchAttempts })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId))
+        .limit(1)
+    ).at(0);
+    if (previous === undefined) {
+      return { status: "held" };
+    }
+    const nextAttempts = previous.attempts + 1;
+    // Ownership loss leaves the final attempt retryable. Its verdict commits
+    // the ceiling only while the same source owner still holds the write.
+    const countedAttempts =
+      attemptPolicy === "reserve-final-attempt"
+        ? Math.max(
+            previous.attempts,
+            Math.min(nextAttempts, MAX_DOCUMENT_FETCH_ATTEMPTS - 1),
+          )
+        : nextAttempts;
     // An attempt preserves the decision's public freshness timestamp.
     // audit: skip — public case-law document fetch; no user action
     const claimedRow = (
@@ -1315,12 +1386,13 @@ export const claimDocumentFetch = async (
         .update(caseLawDecisions)
         .set({
           documentFetchAttemptedAt: sql`now()`,
-          documentFetchAttempts: sql`${caseLawDecisions.documentFetchAttempts} + 1`,
+          documentFetchAttempts: countedAttempts,
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
         })
         .where(
           and(
             eq(caseLawDecisions.id, decisionId),
+            eq(caseLawDecisions.sourceId, fence.sourceId),
             isNull(caseLawDecisions.redactedAt),
             isNull(caseLawDecisions.fulltext),
             or(
@@ -1332,17 +1404,20 @@ export const claimDocumentFetch = async (
         .returning({
           ...PENDING_DOCUMENT_COLUMNS,
           sourceHash: caseLawDecisions.sourceHash,
-          attempts: caseLawDecisions.documentFetchAttempts,
         })
     ).at(0);
     if (claimedRow === undefined) {
       return { status: "held" };
     }
-    const { attempts, ...snapshot } = claimedRow;
+    const snapshot = claimedRow;
     return {
       status: "claimed",
-      decision: { ...snapshot, [claimedPendingDocument]: true },
-      attempts,
+      decision: {
+        ...snapshot,
+        attempts: nextAttempts,
+        [claimedPendingDocument]: true,
+      },
+      attempts: nextAttempts,
     };
   });
 
@@ -1368,10 +1443,13 @@ type ClaimedFetchWriteOptions = {
  * conditional on the source version the fetch was claimed on: a refresh
  * that pointed the row at a new document mid-fetch leaves it pending.
  */
-export const markDocumentUnavailable = async ({
+const markDocumentUnavailableOwned = async ({
   decision,
-  scopedDb,
-}: ClaimedFetchWriteOptions): Promise<void> => {
+  fence,
+}: Omit<ClaimedFetchWriteOptions, "scopedDb"> & {
+  fence: DeferredDocumentSourceFence;
+}): Promise<void> => {
+  const { scopedDb } = fence;
   await scopedDb(async (tx) => {
     const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "case_law",
@@ -1382,6 +1460,7 @@ export const markDocumentUnavailable = async ({
       .update(caseLawDecisions)
       .set({
         fulltext: "",
+        documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${decision.attempts}::int)`,
         ...corpusMirrorColumns({
           status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           written: null,
@@ -1390,6 +1469,7 @@ export const markDocumentUnavailable = async ({
       .where(
         and(
           eq(caseLawDecisions.id, decision.id),
+          eq(caseLawDecisions.sourceId, fence.sourceId),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
           storesNoCorpusDocument,
@@ -1414,10 +1494,13 @@ export const markDocumentUnavailable = async ({
  * Fenced on the claimed source version like `markDocumentUnavailable`, so
  * unreadable bytes from before a refresh cannot park the refreshed row.
  */
-export const parkDocumentFetch = async ({
+const parkDocumentFetchOwned = async ({
   decision,
-  scopedDb,
-}: ClaimedFetchWriteOptions): Promise<"parked" | "superseded"> => {
+  fence,
+}: Omit<ClaimedFetchWriteOptions, "scopedDb"> & {
+  fence: DeferredDocumentSourceFence;
+}): Promise<"parked" | "superseded"> => {
+  const { scopedDb } = fence;
   const parked = await scopedDb(
     async (tx) =>
       await writeFetchBookkeeping(tx, {
@@ -1426,6 +1509,7 @@ export const parkDocumentFetch = async ({
         },
         where: and(
           eq(caseLawDecisions.id, decision.id),
+          eq(caseLawDecisions.sourceId, fence.sourceId),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
           holdsClaimedSource(decision.sourceHash),
@@ -1551,6 +1635,7 @@ export type DecisionDocumentOutcome =
   | { status: "filled"; document: BackfilledDocument }
   | { status: "unavailable" }
   | { status: "claimed" }
+  | DeferredDocumentOwnershipRefusal
   /** The source moved mid-fetch; the queue's next pass fetches the current version. */
   | { status: "superseded" }
   /** This decision failed; it comes back after its own cooldown. */
@@ -1580,7 +1665,7 @@ export type FetchDecisionDocumentOptions = {
 type ParseFetchedDocumentOptions = {
   decision: ClaimedPendingDocument;
   bytes: Uint8Array;
-  scopedDb: ScopedDb;
+  fence: DeferredDocumentSourceFence;
 };
 
 /**
@@ -1621,7 +1706,7 @@ type ParseFetchedDocumentResult =
 const parseFetchedDocument = async ({
   bytes,
   decision,
-  scopedDb,
+  fence,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
   assertPdfBody(bytes);
   const parsed = await Result.tryPromise({
@@ -1634,9 +1719,9 @@ const parseFetchedDocument = async ({
   if (!isUnreadablePdfError(parsed.error)) {
     throw parsed.error;
   }
-  const parked = await parkDocumentFetch({
+  const parked = await parkDocumentFetchOwned({
     decision,
-    scopedDb,
+    fence,
   });
   return parked === "parked"
     ? { type: "parked", detail: errorTag(parsed.error) }
@@ -1648,25 +1733,66 @@ const runDecisionDocumentFetch = async ({
   fetchDocument,
   scopedDb,
   signal,
-}: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
-  const claim = await claimDocumentFetch(decisionId, scopedDb);
+  fence,
+}: FetchDecisionDocumentOptions & {
+  fence: DeferredDocumentSourceFence;
+}): Promise<DecisionDocumentOutcome> => {
+  const claim = await claimDocumentFetchOwned({
+    decisionId,
+    fence,
+    attemptPolicy: "reserve-final-attempt",
+  });
   if (claim.status === "held") {
     return { status: "claimed" };
   }
 
-  return await processClaimedDocument({
-    claim,
-    fetchDocument,
-    scopedDb,
-    signal,
+  const result = await Result.tryPromise({
+    try: async () =>
+      await processClaimedDocument({
+        claim,
+        fetchDocument,
+        signal,
+        fence,
+      }),
+    catch: (error) => error,
   });
+  if (
+    Result.isError(result) &&
+    (isDeferredDocumentOwnershipLost(result.error) || signal.aborted)
+  ) {
+    throw result.error;
+  }
+  if (
+    claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS &&
+    (Result.isError(result) ||
+      (result.value.status !== "filled" &&
+        result.value.status !== "unavailable"))
+  ) {
+    await scopedDb(
+      async (tx) =>
+        await writeFetchBookkeeping(tx, {
+          set: {
+            documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${claim.attempts}::int)`,
+          },
+          where: and(
+            eq(caseLawDecisions.id, claim.decision.id),
+            eq(caseLawDecisions.sourceId, fence.sourceId),
+            holdsClaimedSource(claim.decision.sourceHash),
+          ),
+        }),
+    );
+  }
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  return result.value;
 };
 
 type SettleFetchedDocumentOptions = {
   attempts: number;
   decision: ClaimedPendingDocument;
   fetched: PdfFetchResult;
-  scopedDb: ScopedDb;
+  fence: DeferredDocumentSourceFence;
 };
 
 type SettledFetchedDocument =
@@ -1683,14 +1809,14 @@ const settleFetchedDocument = async ({
   attempts,
   decision,
   fetched,
-  scopedDb,
+  fence,
 }: SettleFetchedDocumentOptions): Promise<SettledFetchedDocument> => {
   switch (fetched.type) {
     case "document":
       return await parseFetchedDocument({
         bytes: fetched.bytes,
         decision,
-        scopedDb,
+        fence,
       });
     case "absent":
       return { type: "parsed", document: undefined };
@@ -1708,7 +1834,10 @@ const settleFetchedDocument = async ({
       if (fetched.prefix !== null) {
         assertPdfBody(fetched.prefix);
       }
-      const parked = await parkDocumentFetch({ decision, scopedDb });
+      const parked = await parkDocumentFetchOwned({
+        decision,
+        fence,
+      });
       return {
         type: "settled",
         outcome:
@@ -1730,30 +1859,33 @@ const settleFetchedDocument = async ({
 type ProcessClaimedDocumentOptions = {
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
-  scopedDb: ScopedDb;
   signal: AbortSignal;
+  fence: DeferredDocumentSourceFence;
 };
 
 const processClaimedDocument = async ({
   claim,
   fetchDocument,
-  scopedDb,
   signal,
+  fence,
 }: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
   const { decision } = claim;
   const fetched: PdfFetchResult = decision.documentUrl
-    ? await fetchPdfBytes({
-        documentUrl: decision.documentUrl,
-        fetchDocument,
-        signal,
-      })
+    ? await fence.beforeRemoteEffect(
+        async () =>
+          await fetchPdfBytes({
+            documentUrl: decision.documentUrl,
+            fetchDocument,
+            signal,
+          }),
+      )
     : { type: "absent" };
 
   const parsed = await settleFetchedDocument({
     attempts: claim.attempts,
     decision,
     fetched,
-    scopedDb,
+    fence,
   });
   switch (parsed.type) {
     case "parsed":
@@ -1775,17 +1907,18 @@ const processClaimedDocument = async ({
 
   const { document } = parsed;
   if (!document) {
-    await markDocumentUnavailable({
+    await markDocumentUnavailableOwned({
       decision,
-      scopedDb,
+      fence,
     });
     return { status: "unavailable" };
   }
 
-  const stored = await storeBackfilledDocument({
+  const stored = await storeBackfilledDocumentOwned({
     decision,
     document,
-    scopedDb,
+
+    fence,
   });
   if (stored === "superseded") {
     return { status: "superseded" };
@@ -1814,9 +1947,17 @@ export const fetchDecisionDocument = async (
     source: ADAPTER_KEYS.SK_COURTS,
     observe: options.onDocumentObservation,
     execute: async () =>
-      await withTimeout(async () => await runDecisionDocumentFetch(options), {
-        label: "caseLaw.fetchDecisionDocument",
-        timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+      await ownedDocumentOperation({
+        decisionId: options.decisionId,
+        scopedDb: options.scopedDb,
+        signal: options.signal,
+        operation: async (fence) =>
+          await runDecisionDocumentFetch({
+            ...options,
+            scopedDb: fence.scopedDb,
+            signal: fence.signal,
+            fence,
+          }),
       }),
     outcome: (result) => {
       switch (result.status) {
@@ -1824,6 +1965,8 @@ export const fetchDecisionDocument = async (
         case "unavailable":
         case "claimed":
         case "superseded":
+        case "busy":
+        case "lost":
           return DOCUMENT_FETCH_OUTCOME.ok;
         case "deferred":
         case "parked": {
@@ -1846,4 +1989,73 @@ export const fetchDecisionDocument = async (
           return panic(`Unhandled document outcome: ${String(result)}`);
       }
     },
+  });
+
+type OwnedDocumentOperationOptions<T> = {
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  signal?: AbortSignal;
+  operation: (fence: DeferredDocumentSourceFence) => Promise<T>;
+};
+
+const ownedDocumentOperation = async <T>(
+  options: OwnedDocumentOperationOptions<T>,
+): Promise<T | DeferredDocumentOwnershipRefusal> => {
+  const result = await withDeferredDocumentSourceOwnership({
+    ...options,
+    timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+  });
+  return result.status === "completed" ? result.value : result;
+};
+
+export const claimDocumentFetch = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+): Promise<DocumentFetchClaim | DeferredDocumentOwnershipRefusal> =>
+  await ownedDocumentOperation({
+    decisionId,
+    scopedDb,
+    operation: async (fence) =>
+      await claimDocumentFetchOwned({
+        decisionId,
+        fence,
+        attemptPolicy: "count",
+      }),
+  });
+
+export const storeBackfilledDocument = async (
+  options: StoreBackfilledDocumentOptions,
+) =>
+  await ownedDocumentOperation({
+    decisionId: options.decision.id,
+    scopedDb: options.scopedDb,
+    operation: async (fence) =>
+      await storeBackfilledDocumentOwned({
+        ...options,
+        fence,
+      }),
+  });
+
+export const markDocumentUnavailable = async (
+  options: ClaimedFetchWriteOptions,
+) =>
+  await ownedDocumentOperation({
+    decisionId: options.decision.id,
+    scopedDb: options.scopedDb,
+    operation: async (fence) =>
+      await markDocumentUnavailableOwned({
+        ...options,
+        fence,
+      }),
+  });
+
+export const parkDocumentFetch = async (options: ClaimedFetchWriteOptions) =>
+  await ownedDocumentOperation({
+    decisionId: options.decision.id,
+    scopedDb: options.scopedDb,
+    operation: async (fence) =>
+      await parkDocumentFetchOwned({
+        ...options,
+        fence,
+      }),
   });

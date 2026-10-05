@@ -23,6 +23,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawCorpusPackRefs,
+  corpusIndexProjectionStates,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
@@ -720,6 +722,86 @@ if (!databaseUrl || !runPostgresTests) {
           .select({ id: caseLawSearchDocumentPreviewPassages.decisionId })
           .from(caseLawSearchDocumentPreviewPassages)
           .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, id)),
+      ).toHaveLength(0);
+    });
+
+    test("source ownership expires after transfer and leaves the document unsettled", async () => {
+      const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
+      const id = await insertDecision({
+        caseNumber: `ownership-${suffix}`,
+        contentHash: emptyHash,
+      });
+      const decision = await claimFor(id);
+      const desiredBefore = await db
+        .select()
+        .from(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.family, "case_law"),
+            eq(corpusIndexProjectionStates.entityId, id),
+          ),
+        );
+      let transferred = 0;
+      const outcome = await storeBackfilledDocument({
+        decision,
+        document: parsedDocument,
+        scopedDb,
+        transfer: {
+          layout: "packs",
+          putPacks: async () => {
+            transferred += 1;
+            await db
+              .update(caseLawSources)
+              .set({
+                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+              })
+              .where(eq(caseLawSources.id, sourceId));
+            return Result.ok(undefined);
+          },
+        },
+      });
+      expect(transferred).toBe(1);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusPackRefs)
+          .where(eq(caseLawCorpusPackRefs.decisionId, id)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select()
+          .from(corpusIndexProjectionStates)
+          .where(
+            and(
+              eq(corpusIndexProjectionStates.family, "case_law"),
+              eq(corpusIndexProjectionStates.entityId, id),
+            ),
+          ),
+      ).toEqual(desiredBefore);
+      expect(outcome).toEqual({ status: "lost" });
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            fulltext: true,
+            contentHash: true,
+            textS3Key: true,
+            sectionsS3Key: true,
+            astS3Key: true,
+          },
+        }),
+      ).toEqual({
+        fulltext: null,
+        contentHash: emptyHash,
+        textS3Key: null,
+        sectionsS3Key: null,
+        astS3Key: null,
+      });
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, id)),
       ).toHaveLength(0);
     });
   });

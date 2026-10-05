@@ -1,0 +1,512 @@
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { eq, inArray, sql } from "drizzle-orm";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withDeferredDocumentSourceOwnership } from "@/api/lib/legal-search/deferred-document-source-ownership";
+import {
+  claimDocumentFetch,
+  fetchDecisionDocument,
+  markDocumentUnavailable,
+  parkDocumentFetch,
+  storeBackfilledDocument,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+
+const databaseUrl = process.env["DATABASE_URL"];
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const barrier = () => {
+  let release = () => {};
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, resolve: release };
+};
+
+if (!databaseUrl || !enabled) {
+  describe.skip("deferred document source ownership", () => {
+    test("requires the Postgres test lane", () => {
+      expect(enabled && Boolean(databaseUrl)).toBe(false);
+    });
+  });
+} else {
+  describe("deferred document source ownership", () => {
+    const { db, cleanUp } = openGatedTestDatabase(databaseUrl);
+    const scopedDb: ScopedDb = async (run) =>
+      await db.transaction(async (tx) => await run(tx));
+    const sources: SafeId<"caseLawSource">[] = [];
+    const decisions: SafeId<"caseLawDecision">[] = [];
+    const fixture = async () => {
+      const source =
+        (
+          await db
+            .insert(caseLawSources)
+            .values({
+              adapterKey: `ownership-${Bun.randomUUIDv7()}`,
+              name: "Document ownership test",
+              enabled: false,
+            })
+            .returning({ id: caseLawSources.id })
+        ).at(0) ?? panic("source fixture missing");
+      sources.push(source.id);
+      const decision =
+        (
+          await db
+            .insert(caseLawDecisions)
+            .values({
+              sourceId: source.id,
+              caseNumber: "1/2026",
+              court: "Court",
+              country: "SVK",
+              language: "sk",
+              fulltext: null,
+              documentUrl:
+                "https://obcan.justice.sk/content/public/item/document.pdf",
+            })
+            .returning({ id: caseLawDecisions.id })
+        ).at(0) ?? panic("decision fixture missing");
+      decisions.push(decision.id);
+      return { sourceId: source.id, decisionId: decision.id };
+    };
+    cleanUp(async () => {
+      if (decisions.length > 0) {
+        await db
+          .delete(caseLawDecisions)
+          .where(inArray(caseLawDecisions.id, decisions));
+      }
+      if (sources.length > 0) {
+        await db
+          .delete(caseLawSources)
+          .where(inArray(caseLawSources.id, sources));
+      }
+    });
+    const readDecision = async (decisionId: SafeId<"caseLawDecision">) =>
+      await db.query.caseLawDecisions.findFirst({
+        where: { id: { eq: decisionId } },
+        columns: {
+          fulltext: true,
+          documentFetchAttempts: true,
+          textS3Key: true,
+          sectionsS3Key: true,
+          astS3Key: true,
+        },
+      });
+    const readSource = async (sourceId: SafeId<"caseLawSource">) =>
+      await db.query.caseLawSources.findFirst({
+        where: { id: { eq: sourceId } },
+        columns: {
+          ingestionLeaseToken: true,
+        },
+      });
+
+    test("one source owner proceeds and the other document writer returns busy without an attempt", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const started = barrier();
+      const finish = barrier();
+      let remoteEffects = 0;
+      const first = fetchDecisionDocument({
+        decisionId,
+        scopedDb,
+        signal: new AbortController().signal,
+        fetchDocument: async () => {
+          remoteEffects += 1;
+          started.resolve();
+          await finish.promise;
+          return readOfResponse(new Response(null, { status: 404 }));
+        },
+      });
+      await started.promise;
+      try {
+        expect(
+          await fetchDecisionDocument({
+            decisionId,
+            scopedDb,
+            signal: new AbortController().signal,
+            fetchDocument: async () => {
+              remoteEffects += 1;
+              return readOfResponse(new Response(null, { status: 404 }));
+            },
+          }),
+        ).toEqual({ status: "busy" });
+        expect(remoteEffects).toBe(1);
+        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
+      } finally {
+        finish.resolve();
+      }
+      expect(await first).toEqual({ status: "unavailable" });
+      expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
+    });
+
+    test("a crawler source lease excludes the deferred writer before its claim", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const crawler = await acquireCaseLawSourceIngestionLease({
+        sourceId,
+        scopedDb,
+      });
+      if (crawler === null) {
+        panic("crawler fixture ownership missing");
+      }
+      try {
+        expect(
+          await fetchDecisionDocument({
+            decisionId,
+            scopedDb,
+            signal: new AbortController().signal,
+            fetchDocument: async () => panic("busy writer must not fetch"),
+          }),
+        ).toEqual({ status: "busy" });
+        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(0);
+      } finally {
+        await crawler.release();
+      }
+    });
+
+    for (const transition of ["expire", "replace"] as const) {
+      test(`ownership ${transition} after the remote effect returns lost without settling or parking`, async () => {
+        const { sourceId, decisionId } = await fixture();
+        await db
+          .update(caseLawDecisions)
+          .set({ documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS - 1 })
+          .where(eq(caseLawDecisions.id, decisionId));
+        const replacement = createSafeId<"caseLawSourceIngestionLease">();
+        const outcome = await fetchDecisionDocument({
+          decisionId,
+          scopedDb,
+          signal: new AbortController().signal,
+          fetchDocument: async () => {
+            await db
+              .update(caseLawSources)
+              .set(
+                transition === "expire"
+                  ? {
+                      ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+                    }
+                  : { ingestionLeaseToken: replacement },
+              )
+              .where(eq(caseLawSources.id, sourceId));
+            return readOfResponse(new Response(null, { status: 404 }));
+          },
+        });
+        expect(outcome).toEqual({ status: "lost" });
+        expect(await readDecision(decisionId)).toEqual({
+          fulltext: null,
+          documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS - 1,
+          textS3Key: null,
+          sectionsS3Key: null,
+          astS3Key: null,
+        });
+        expect((await readSource(sourceId))?.ingestionLeaseToken).toBe(
+          transition === "replace" ? replacement : null,
+        );
+      });
+    }
+
+    test("the source row remains locked throughout the decision write transaction", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const result = await withDeferredDocumentSourceOwnership({
+        decisionId,
+        scopedDb,
+        timeoutMs: 1000,
+        operation: async (fence) =>
+          await fence.scopedDb(async (tx) => {
+            const attempt = await Result.tryPromise({
+              try: async () =>
+                await db.transaction(
+                  async (other) =>
+                    await other.execute(
+                      sql`SELECT id FROM public.case_law_sources WHERE id = ${sourceId}::uuid FOR UPDATE NOWAIT`,
+                    ),
+                ),
+              catch: (error) => error,
+            });
+            expect(Result.isError(attempt)).toBe(true);
+            if (Result.isOk(attempt)) {
+              panic("source row was not locked");
+            }
+            expect(String(attempt.error)).toContain("could not obtain lock");
+            await tx
+              .update(caseLawDecisions)
+              .set({ fulltext: "document" })
+              .where(eq(caseLawDecisions.id, decisionId));
+          }),
+      });
+      expect(result.status).toBe("completed");
+      expect((await readDecision(decisionId))?.fulltext).toBe("document");
+    });
+
+    test("expiry during a settlement rolls back the entire database callback", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const result = await withDeferredDocumentSourceOwnership({
+        decisionId,
+        scopedDb,
+        timeoutMs: 1000,
+        operation: async (fence) =>
+          await fence.scopedDb(async (tx) => {
+            await tx
+              .update(caseLawSources)
+              .set({
+                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+              })
+              .where(eq(caseLawSources.id, sourceId));
+            await tx
+              .update(caseLawDecisions)
+              .set({ fulltext: "document" })
+              .where(eq(caseLawDecisions.id, decisionId));
+          }),
+      });
+      expect(result).toEqual({ status: "lost" });
+      expect((await readDecision(decisionId))?.fulltext).toBeNull();
+      expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
+    });
+
+    test("every exported document mutation observes another source owner", async () => {
+      const { sourceId, decisionId } = await fixture();
+      const claim = await claimDocumentFetch(decisionId, scopedDb);
+      if (claim.status !== "claimed") {
+        panic("document claim fixture missing");
+      }
+      const owner = await acquireCaseLawSourceIngestionLease({
+        sourceId,
+        scopedDb,
+      });
+      if (owner === null) {
+        panic("source owner fixture missing");
+      }
+      try {
+        const document = {
+          fulltext: "document",
+          sections: [],
+          documentAst: {
+            version: 1,
+            source: {
+              system: "fixture",
+              documentId: "document",
+              webUrl: "",
+              printUrl: "",
+            },
+            metadata: {
+              caseNumber: "1/2026",
+              ecli: null,
+              court: "Court",
+              decisionDate: null,
+              decisionType: null,
+              keywords: [],
+              statutes: [],
+            },
+            blocks: [],
+          },
+        } satisfies BackfilledDocument;
+        for (const result of [
+          await claimDocumentFetch(decisionId, scopedDb),
+          await markDocumentUnavailable({ decision: claim.decision, scopedDb }),
+          await parkDocumentFetch({ decision: claim.decision, scopedDb }),
+          await storeBackfilledDocument({
+            decision: claim.decision,
+            document,
+            scopedDb,
+            transfer: null,
+          }),
+        ]) {
+          expect(result).toEqual({ status: "busy" });
+        }
+        expect((await readDecision(decisionId))?.fulltext).toBeNull();
+        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
+      } finally {
+        await owner.release();
+      }
+    });
+
+    test("same-source decisions share ownership while another source can proceed", async () => {
+      const first = await fixture();
+      const otherSource = await fixture();
+      const sameSource =
+        (
+          await db
+            .insert(caseLawDecisions)
+            .values({
+              sourceId: first.sourceId,
+              caseNumber: "2/2026",
+              court: "Court",
+              country: "SVK",
+              language: "sk",
+              fulltext: null,
+            })
+            .returning({ id: caseLawDecisions.id })
+        ).at(0) ?? panic("second document fixture missing");
+      decisions.push(sameSource.id);
+      const result = await withDeferredDocumentSourceOwnership({
+        decisionId: first.decisionId,
+        scopedDb,
+        timeoutMs: 1000,
+        operation: async () => {
+          expect(
+            await withDeferredDocumentSourceOwnership({
+              decisionId: sameSource.id,
+              scopedDb,
+              timeoutMs: 1000,
+              operation: async () =>
+                panic("same-source owner must not proceed"),
+            }),
+          ).toEqual({ status: "busy" });
+          expect(
+            await withDeferredDocumentSourceOwnership({
+              decisionId: otherSource.decisionId,
+              scopedDb,
+              timeoutMs: 1000,
+              operation: async () => "document",
+            }),
+          ).toEqual({ status: "completed", value: "document" });
+        },
+      });
+      expect(result.status).toBe("completed");
+    });
+
+    for (const mutation of ["claim", "unavailable", "park", "store"] as const) {
+      test(`${mutation} refuses source ownership lost before its transaction`, async () => {
+        const { sourceId, decisionId } = await fixture();
+        const claim = await claimDocumentFetch(decisionId, scopedDb);
+        if (claim.status !== "claimed") {
+          panic("document claim fixture missing");
+        }
+        let interrupted = false;
+        const interruptedDb: ScopedDb = async (run) => {
+          const owner = await readSource(sourceId);
+          if (
+            !interrupted &&
+            owner !== undefined &&
+            owner.ingestionLeaseToken !== null
+          ) {
+            interrupted = true;
+            await db
+              .update(caseLawSources)
+              .set({
+                ingestionLeaseExpiresAt: new Date("2000-01-01T00:00:00Z"),
+              })
+              .where(eq(caseLawSources.id, sourceId));
+          }
+          return await scopedDb(run);
+        };
+        const document = {
+          fulltext: "document",
+          sections: [],
+          documentAst: {
+            version: 1,
+            source: {
+              system: "fixture",
+              documentId: "document",
+              webUrl: "",
+              printUrl: "",
+            },
+            metadata: {
+              caseNumber: "1/2026",
+              ecli: null,
+              court: "Court",
+              decisionDate: null,
+              decisionType: null,
+              keywords: [],
+              statutes: [],
+            },
+            blocks: [],
+          },
+        } satisfies BackfilledDocument;
+        const mutate = async () => {
+          switch (mutation) {
+            case "claim":
+              return await claimDocumentFetch(decisionId, interruptedDb);
+            case "unavailable":
+              return await markDocumentUnavailable({
+                decision: claim.decision,
+                scopedDb: interruptedDb,
+              });
+            case "park":
+              return await parkDocumentFetch({
+                decision: claim.decision,
+                scopedDb: interruptedDb,
+              });
+            case "store":
+              return await storeBackfilledDocument({
+                decision: claim.decision,
+                document,
+                scopedDb: interruptedDb,
+                transfer: null,
+              });
+          }
+        };
+        const outcome = await mutate();
+        expect(interrupted).toBe(true);
+        expect(outcome).toEqual({ status: "lost" });
+        expect((await readDecision(decisionId))?.fulltext).toBeNull();
+        expect((await readDecision(decisionId))?.documentFetchAttempts).toBe(1);
+      });
+    }
+
+    for (const failure of ["throw", "abort", "deadline"] as const) {
+      test(`${failure} releases source ownership and abandoned work cannot settle`, async () => {
+        const { sourceId, decisionId } = await fixture();
+        const controller = new AbortController();
+        const started = barrier();
+        const continueWork = barrier();
+        const lateFinished = barrier();
+        let lateRefused = false;
+        const run = withDeferredDocumentSourceOwnership({
+          decisionId,
+          scopedDb,
+          signal: controller.signal,
+          timeoutMs: failure === "deadline" ? 50 : 1000,
+          operation: async (fence) => {
+            started.resolve();
+            if (failure === "throw") {
+              throw new Error("document worker stopped");
+            }
+            await continueWork.promise;
+            const lateResult = await Result.tryPromise({
+              try: async () =>
+                await fence.scopedDb(
+                  async (tx) =>
+                    await tx
+                      .update(caseLawDecisions)
+                      .set({ fulltext: "late document" })
+                      .where(eq(caseLawDecisions.id, decisionId)),
+                ),
+              catch: (error) => error,
+            });
+            lateRefused = Result.isError(lateResult);
+            lateFinished.resolve();
+          },
+        });
+        await started.promise;
+        if (failure === "abort") {
+          controller.abort(new Error("document cancelled"));
+        }
+        const stopped = await Result.tryPromise({
+          try: async () => await run,
+          catch: (error) => error,
+        });
+        expect(Result.isError(stopped)).toBe(true);
+        if (Result.isOk(stopped)) {
+          panic("worker did not stop");
+        }
+        const messages = {
+          throw: "document worker stopped",
+          abort: "document cancelled",
+          deadline: "exceeded 50ms",
+        };
+        expect(String(stopped.error)).toContain(messages[failure]);
+        expect((await readSource(sourceId))?.ingestionLeaseToken).toBeNull();
+        if (failure !== "throw") {
+          continueWork.resolve();
+          await lateFinished.promise;
+          expect(lateRefused).toBe(true);
+        }
+        expect((await readDecision(decisionId))?.fulltext).toBeNull();
+      });
+    }
+  });
+}
