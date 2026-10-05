@@ -124,6 +124,10 @@ test("Bun install cache restore remains available but saves require the exact ma
     ).toEqual(["job 'fixture': Bun install cache saves must be main-only"]);
   }
   for (const path of [
+    "~/.bun",
+    "~/.bun/install",
+    "~/.bun/install/",
+    "~\\.bun\\install",
     "~/.bun/install/cache",
     "~\\.bun\\install\\cache",
     "other/cache\n~/.bun/install/cache",
