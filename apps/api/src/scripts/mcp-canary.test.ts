@@ -1,4 +1,8 @@
-import { isLegacyRequest } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  McpServer,
+  isLegacyRequest,
+} from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -32,6 +36,57 @@ import {
 } from "./mcp-canary";
 
 describe("canary protocol routing", () => {
+  test("modern tool calls pass the installed SDK header gate", async () => {
+    let calls = 0;
+    const handler = createMcpHandler(
+      () => {
+        const server = new McpServer({
+          name: "canary-fixture",
+          version: "1.0.0",
+        });
+        server.registerTool("search_case_law", { inputSchema: {} }, () => {
+          calls += 1;
+          return { content: [{ type: "text", text: "ok" }] };
+        });
+        return server;
+      },
+      { legacy: "reject", responseMode: "json" },
+    );
+    const call = () =>
+      createJsonRpcRequest({
+        baseUrl: "https://api.example",
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name: "search_case_law", arguments: {} },
+        token: "token",
+      });
+    try {
+      const valid = call();
+      expect(valid.headers.get("mcp-name")).toBe("search_case_law");
+      const response = await handler.fetch(valid);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        result: { content: [{ type: "text", text: "ok" }] },
+      });
+      expect(calls).toBe(1);
+      for (const name of [null, "another_tool"]) {
+        const invalid = call();
+        if (name === null) {
+          invalid.headers.delete("mcp-name");
+        } else {
+          invalid.headers.set("mcp-name", name);
+        }
+        const refused = await handler.fetch(invalid);
+        expect(refused.status).toBe(400);
+        await refused.body?.cancel();
+        expect(calls).toBe(1);
+      }
+    } finally {
+      await handler.close();
+    }
+  });
+
   test("keeps the compatibility handshake legacy and sends tools/list through the modern handler", async () => {
     const legacyInitialize = createJsonRpcRequest({
       baseUrl: "https://api.example",

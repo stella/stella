@@ -8,6 +8,7 @@ import {
   LATEST_PROTOCOL_VERSION,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
+import type { CallToolRequestParams } from "@modelcontextprotocol/server";
 import { TaggedError } from "better-result";
 import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
@@ -259,10 +260,11 @@ type JsonRpcCall = {
   baseUrl: string;
   era: "legacy" | "modern";
   id: number;
-  method: string;
-  params: Record<string, unknown>;
   token: string;
-};
+} & (
+  | { method: "tools/call"; params: CallToolRequestParams }
+  | { method: "initialize" | "tools/list"; params: Record<string, unknown> }
+);
 
 export const createJsonRpcRequest = ({
   baseUrl,
@@ -301,6 +303,9 @@ export const createJsonRpcRequest = ({
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       ...(era === "modern" ? { "mcp-method": method } : {}),
+      ...(era === "modern" && method === "tools/call"
+        ? { "mcp-name": params.name }
+        : {}),
       "mcp-protocol-version": protocolVersion,
     },
     method: "POST",
