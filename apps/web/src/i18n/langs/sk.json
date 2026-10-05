@@ -946,7 +946,8 @@
       "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
-      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
     }
   },
   "catalogue": {
