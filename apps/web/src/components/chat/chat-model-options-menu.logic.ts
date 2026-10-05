@@ -2,6 +2,7 @@ import {
   getModelDisplayMetadata,
   RECOMMENDED_CHAT_MODELS,
 } from "@stll/ai-catalog";
+import type { ModelDisplayMetadata } from "@stll/ai-catalog";
 import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
 import type { ModelBenchmarkTradeoff } from "@stll/ai-catalog/benchmark-frontier";
 
@@ -45,12 +46,17 @@ export type ModelLineage = {
 };
 
 // Any route to a curated model qualifies, so match on the product shown.
-const recommendedProducts = new Set(
-  RECOMMENDED_CHAT_MODELS.map((modelId) => {
-    const metadata = getModelDisplayMetadata(modelId);
-    return `${metadata?.iconProvider}::${metadata?.displayName}`;
-  }),
-);
+const isRecommendedProduct = ({
+  displayName,
+  iconProvider,
+}: ModelDisplayMetadata): boolean =>
+  RECOMMENDED_CHAT_MODELS.some((modelId) => {
+    const curated = getModelDisplayMetadata(modelId);
+    return (
+      curated?.displayName === displayName &&
+      curated.iconProvider === iconProvider
+    );
+  });
 
 /** Picker values are encoded selections ("provider::modelId"). */
 const catalogueLineage = (value: string): ModelLineage | undefined => {
@@ -61,9 +67,7 @@ const catalogueLineage = (value: string): ModelLineage | undefined => {
     return undefined;
   }
   return {
-    recommended: recommendedProducts.has(
-      `${metadata.iconProvider}::${metadata.displayName}`,
-    ),
+    recommended: isRecommendedProduct(metadata),
     ...(metadata.supersededBy === undefined
       ? {}
       : { supersededBy: metadata.supersededBy }),
