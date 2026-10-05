@@ -49,10 +49,6 @@ const productionE2eSetup = readFileSync(
   ),
   "utf-8",
 );
-const e2eWebBuild = readFileSync(
-  path.join(import.meta.dirname, "../.github/actions/build-e2e-web/action.yml"),
-  "utf-8",
-);
 const marketingWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
@@ -1000,7 +996,6 @@ describe("detect-e2e-changes", () => {
     expect(webBuild).toContain("needs: ci-plan");
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("uses: ./.github/actions/build-e2e-web");
-    expect(e2eWebBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
     const production = workflowJob("e2e-production-shard");
     const productionJob = ciContract.jobs["e2e-production-shard"];
@@ -1089,7 +1084,6 @@ describe("detect-e2e-changes", () => {
     }
     const buildInPlace = actionStep(marketingCapture, "Build production web");
     expect(buildInPlace).toContain("if: inputs.web-build-artifact == ''");
-    expect(buildInPlace).toContain("VITE_FEATURE_TIME_BILLING");
     expect(marketingWorkflow).toContain(
       `web-build-artifact: ${githubExpression("inputs.web-build-artifact")}`,
     );

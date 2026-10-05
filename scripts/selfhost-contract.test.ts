@@ -18,7 +18,6 @@ import {
   productionEnvironmentIssues,
   releaseManifestIssues,
   renderSelfhostEnvExample,
-  selfhostDoctorIssues,
   workflowContractIssues,
 } from "./selfhost-tool";
 
@@ -168,34 +167,6 @@ describe("self-host production environment", () => {
         STELLA_API_IMAGE: image,
       }),
     ).toEqual([]);
-  });
-
-  describe("web and API feature flags", () => {
-    const template = materializeSelfhostTemplateForValidation(
-      renderSelfhostEnvExample(),
-    );
-    const doctorIssues = (text: string, webFlag: string | undefined) =>
-      selfhostDoctorIssues({
-        ambientEnvironment: {},
-        text,
-        webEnvironment: { VITE_FEATURE_TIME_BILLING: webFlag },
-      });
-    const withServerFlag = `${template}\nFEATURE_TIME_BILLING="true"\n`;
-
-    test("rejects the web time billing flag without the API flag", () => {
-      expect(doctorIssues(template, "true")).toEqual([
-        "VITE_FEATURE_TIME_BILLING=true needs FEATURE_TIME_BILLING=true on the API: the web build would offer a feature the API does not serve.",
-      ]);
-    });
-
-    test.each([
-      ["both flags on", withServerFlag, "true"],
-      ["both flags off", template, "false"],
-      ["the web flag unset", template, undefined],
-      ["only the API flag on", withServerFlag, "false"],
-    ])("accepts %s", (_name, text, webFlag) => {
-      expect(doctorIssues(text, webFlag)).toEqual([]);
-    });
   });
 
   test("materializes through the real Docker Compose parser", () => {

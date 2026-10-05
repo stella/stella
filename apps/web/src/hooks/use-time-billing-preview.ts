@@ -2,21 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { env } from "@/env";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useQueryView } from "@/lib/use-query-view";
 import { deploymentFeaturesOptions } from "@/queries/deployment-features";
 import type { DeploymentFeaturesCaller } from "@/queries/deployment-features";
 
-/** The build flag is the explicit self-hosted override; otherwise the server owns access. */
+/** Admission and navigation use the caller's server-owned enrolment decision. */
 export const isTimeBillingPreviewEnabled = async (
   queryClient: QueryClient,
   caller: DeploymentFeaturesCaller,
 ): Promise<boolean> => {
-  if (env.VITE_FEATURE_TIME_BILLING) {
-    return true;
-  }
   const features = await ensureRouteQueryData(
     queryClient,
     deploymentFeaturesOptions(caller),
@@ -38,9 +34,6 @@ export const prefetchTimeBillingServerState = async ({
   caller,
   onError,
 }: PrefetchTimeBillingServerStateOptions): Promise<void> => {
-  if (env.VITE_FEATURE_TIME_BILLING) {
-    return;
-  }
   await prefetchRouteQuery(
     queryClient,
     deploymentFeaturesOptions(caller),
@@ -51,17 +44,13 @@ export const prefetchTimeBillingServerState = async ({
 export const useTimeBillingPreviewEnabled = (): boolean => {
   const user = useAuthenticatedUser();
   const view = useQueryView(
-    useQuery({
-      ...deploymentFeaturesOptions({
+    useQuery(
+      deploymentFeaturesOptions({
         userId: user.id,
         organizationId: user.activeOrganizationId,
       }),
-      enabled: !env.VITE_FEATURE_TIME_BILLING,
-    }),
+    ),
   );
-  if (env.VITE_FEATURE_TIME_BILLING) {
-    return true;
-  }
   switch (view.type) {
     case "pending":
     case "error":

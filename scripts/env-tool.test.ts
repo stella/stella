@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-expansion-mode";
 import { SECRET_EXAMPLES } from "../packages/runtime-mode/src/secret-examples.generated";
 import {
-  DEPLOYMENT_FLAG_PAIRS,
   ENV_CATALOG,
   ENV_CREDENTIAL_CLASSIFICATION,
   ENV_CREDENTIAL_KIND,
@@ -16,7 +15,6 @@ import {
   WEB_ENV_SCHEMA,
 } from "./env-catalog";
 import {
-  deploymentFlagPairingIssues,
   doctorEnvFileNames,
   findEnvUsages,
   findWebBuildArgGaps,
@@ -888,59 +886,6 @@ describe("environment doctor output", () => {
       expect(result.issues).toContain(
         "VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.",
       );
-    }
-  });
-});
-
-describe("deployment flag pairing", () => {
-  test("refuses the time billing web flag without the API flag", () => {
-    for (const api of [
-      {},
-      { FEATURE_TIME_BILLING: "false" },
-      { FEATURE_TIME_BILLING: "" },
-    ]) {
-      expect(
-        deploymentFlagPairingIssues({
-          api,
-          web: { VITE_FEATURE_TIME_BILLING: "true" },
-        }),
-      ).toEqual([
-        "VITE_FEATURE_TIME_BILLING=true needs FEATURE_TIME_BILLING=true on the API: the web build would offer a feature the API does not serve.",
-      ]);
-    }
-  });
-
-  test("accepts every other time billing combination", () => {
-    for (const [web, api] of [
-      ["true", "true"],
-      ["false", "false"],
-      [undefined, undefined],
-      ["false", "true"],
-      [undefined, "true"],
-    ] as const) {
-      expect(
-        deploymentFlagPairingIssues({
-          api: { FEATURE_TIME_BILLING: api },
-          web: { VITE_FEATURE_TIME_BILLING: web },
-        }),
-      ).toEqual([]);
-    }
-  });
-
-  test("reads every pair through both apps' flag schemas", () => {
-    expect(DEPLOYMENT_FLAG_PAIRS.length).toBeGreaterThan(0);
-    for (const pair of DEPLOYMENT_FLAG_PAIRS) {
-      const issues = (web: string, api: string) =>
-        deploymentFlagPairingIssues({
-          api: { [pair.api]: api },
-          web: { [pair.web]: web },
-        });
-      expect(issues("true", "false")).toHaveLength(1);
-      expect(issues("true", "false").at(0)).toContain(pair.web);
-      expect(issues("true", "false").at(0)).toContain(pair.api);
-      expect(issues("true", "true")).toEqual([]);
-      expect(issues("false", "true")).toEqual([]);
-      expect(issues("false", "false")).toEqual([]);
     }
   });
 });
