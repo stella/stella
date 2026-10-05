@@ -5392,7 +5392,6 @@ describe("OpenAI-compatible MCP tools", () => {
     } & Record<string, unknown>;
     decisionId: string;
     message?: string;
-    nextCursor?: string | null;
     status: string;
   };
 
@@ -5812,58 +5811,22 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(readGatedDecisionMock).not.toHaveBeenCalled();
   });
 
-  test("read_case_law_decision reads a retired cursor as the page holding it", async () => {
+  test("read_case_law_decision pages by number only", async () => {
     serveFulltext("0123456789AB");
 
-    const resumed = await readOne({
-      max_chars: 5,
+    // There is no cursor to pass, and none comes back.
+    const error = await refusal({
+      decision_ids: [DECISION_ID],
       cursor: encodePaginationCursor([5, null]),
     });
-    expect(resumed.decision).toMatchObject({ text: "56789", page: 2 });
-    // An old client keeps its continuation until it finishes the decision.
-    expect(resumed.nextCursor).toBe(encodePaginationCursor([10, null]));
-
-    // An old compound cursor's citation half is ignored; an offset inside a
-    // page reads that whole page.
-    const inside = await readOne({
-      max_chars: 5,
-      cursor: encodePaginationCursor([7, "citations-next"]),
-    });
-    expect(inside.decision).toMatchObject({ text: "56789", page: 2 });
-
-    const end = await readOne({
-      max_chars: 5,
-      cursor: encodePaginationCursor([10, null]),
-    });
-    expect(end.decision?.text).toBe("AB");
-    expect(end.nextCursor).toBeNull();
-
-    // A call without a cursor gets no cursor back.
-    expect(await readOne({ max_chars: 5 })).not.toHaveProperty("nextCursor");
+    expect(error["code"]).toBe("validation_error");
+    expect(readGatedDecisionMock).not.toHaveBeenCalled();
+    const entry = await readOne({ max_chars: 5 });
+    expect(entry).not.toHaveProperty("nextCursor");
+    expect(entry.decision).toMatchObject({ page: 1, pageCount: 3 });
   });
 
   test.each([
-    {
-      name: "a cursor that does not decode",
-      args: { cursor: encodePaginationCursor(["not-an-offset"]) },
-      path: "cursor",
-      hint: "cursor is retired: pass page (1 for the start) instead.",
-    },
-    {
-      name: "a cursor beside page",
-      args: { cursor: encodePaginationCursor([0, null]), page: 2 },
-      path: "cursor",
-      hint: "Drop cursor and pass page alone.",
-    },
-    {
-      name: "a cursor across a batch",
-      args: {
-        cursor: encodePaginationCursor([0, null]),
-        decision_ids: [DECISION_ID, CITING_DECISION_ID],
-      },
-      path: "cursor",
-      hint: "Pass page instead of cursor; it applies to each decision of a batch.",
-    },
     {
       name: "full beside max_chars",
       args: { full: true, max_chars: 100 },
@@ -5874,7 +5837,7 @@ describe("OpenAI-compatible MCP tools", () => {
       name: "query beside page",
       args: { query: "nájem", page: 2 },
       path: "query",
-      hint: "Drop query to read pages, or drop page, cursor and full to find paragraphs.",
+      hint: "Drop query to read pages, or drop page and full to find paragraphs.",
     },
     {
       name: "a query with no word",

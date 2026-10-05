@@ -150,7 +150,6 @@ import {
   compactDecisionMetadata,
   decisionParagraphs,
   decisionTextVersion,
-  legacyDecisionCursorOffset,
   pageOfOffset,
   paragraphsMatching,
   textPageSpan,
@@ -931,10 +930,6 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: cursorInput({
-      description:
-        "Retired: pass page instead. A cursor from an earlier version still reads the page holding its position, for one decision id.",
-    }),
     include: v.optional(
       v.pipe(
         v.array(v.picklist(DECISION_READ_INCLUDE)),
@@ -2612,8 +2607,6 @@ const nonDocketReference = ({
 /** Where the text window of each entry starts. */
 type DecisionTextPosition =
   | { type: "page"; page: number }
-  /** The retired opaque cursor's offset; answered as the page holding it. */
-  | { type: "legacy-offset"; offset: number }
   /** A `query` call: matching paragraphs replace the window. */
   | { type: "query"; query: string };
 
@@ -2731,10 +2724,7 @@ const decisionTextPart = ({
   starts,
   text,
   windowChars,
-}: DecisionTextPartOptions): {
-  decision: Partial<FoundDecision>;
-  nextCursor?: string | null;
-} => {
+}: DecisionTextPartOptions): Partial<FoundDecision> => {
   const version = decisionTextVersion(text);
   const versioning = {
     ...(starts.length > 1 || seenTextVersion !== undefined
@@ -2752,48 +2742,33 @@ const decisionTextPart = ({
       query: position.query,
     });
     return {
-      decision: {
-        charCount: text.length,
-        ...versioning,
-        matches: {
-          hitCount: found.hitCount,
-          paragraphs: found.paragraphs.map((paragraph) => ({
-            paragraph: paragraph.paragraph,
-            text: paragraph.text,
-            ...(paragraph.hit ? { hit: true as const } : {}),
-            ...deepLink(appUrl, paragraph.anchorId),
-          })),
-          ...(found.truncated ? { truncated: true as const } : {}),
-        },
+      charCount: text.length,
+      ...versioning,
+      matches: {
+        hitCount: found.hitCount,
+        paragraphs: found.paragraphs.map((paragraph) => ({
+          paragraph: paragraph.paragraph,
+          text: paragraph.text,
+          ...(paragraph.hit ? { hit: true as const } : {}),
+          ...deepLink(appUrl, paragraph.anchorId),
+        })),
+        ...(found.truncated ? { truncated: true as const } : {}),
       },
     };
   }
-  const page =
-    position.type === "legacy-offset"
-      ? pageOfOffset(starts, position.offset)
-      : position.page;
+  const { page } = position;
   const span = textPageSpan({ page, starts, text });
   if (span === null) {
     messages.push(
       `Page ${String(page)} is past the end: this decision's text has ${String(starts.length)} ${starts.length === 1 ? "page" : "pages"} of ${String(windowChars)} characters.`,
     );
   }
-  const decision = {
+  return {
     ...(span === null ? {} : { text: text.slice(span.start, span.end) }),
     page,
     pageCount: starts.length,
     charCount: text.length,
     ...versioning,
-  };
-  if (position.type !== "legacy-offset") {
-    return { decision };
-  }
-  // Only for the retired cursor: the next page's old continuation, so a
-  // client part-way through a decision can finish it.
-  const hasNext = span !== null && span.end < text.length;
-  return {
-    decision,
-    nextCursor: hasNext ? encodePaginationCursor([span.end, null]) : null,
   };
 };
 
@@ -2964,11 +2939,11 @@ const decisionItemResult = ({
       : [];
 
   // Pages exist only for a text the caller may read. The starts are computed
-  // once and serve the page, the outline and a retired cursor alike.
+  // once and serve the page and the outline alike.
   const starts = text === null ? null : textPageStarts(text, windowChars);
   const textPart =
     text === null || starts === null
-      ? { decision: {} }
+      ? {}
       : decisionTextPart({
           appUrl,
           language: read.language,
@@ -2984,16 +2959,13 @@ const decisionItemResult = ({
   return {
     decisionId,
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
-    ...(textPart.nextCursor === undefined
-      ? {}
-      : { nextCursor: textPart.nextCursor }),
     status: DECISION_READ_STATUS.found,
     decision: {
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
       ...decisionStaticFields({ appUrl, digest, includedFields, read }),
-      ...textPart.decision,
+      ...textPart,
       ...(outline === "include" &&
       text !== null &&
       starts !== null &&
@@ -3056,7 +3028,6 @@ type DecisionReadArgs = v.InferOutput<typeof readCaseLawDecisionArgsSchema>;
 
 /** The input combinations the schema admits and the read refuses, if any. */
 const decisionReadArgumentRefusal = ({
-  cursor,
   decision_ids: decisionIds,
   full,
   max_chars: maxChars,
@@ -3064,22 +3035,6 @@ const decisionReadArgumentRefusal = ({
   query,
   text_version: seenTextVersion,
 }: DecisionReadArgs) => {
-  // A retired cursor belongs to ONE decision's text, so it cannot say which
-  // entry of a batch it continues.
-  if (cursor !== undefined && decisionIds.length > 1) {
-    return decisionReadArgumentError(
-      "cursor",
-      `A cursor continues one decision's text; the call carries ${String(decisionIds.length)} decision ids.`,
-      "Pass page instead of cursor; it applies to each decision of a batch.",
-    );
-  }
-  if (cursor !== undefined && page !== undefined) {
-    return decisionReadArgumentError(
-      "cursor",
-      "Pass page or cursor, not both.",
-      "Drop cursor and pass page alone.",
-    );
-  }
   if (full === true && maxChars !== undefined) {
     return decisionReadArgumentError(
       "max_chars",
@@ -3098,11 +3053,11 @@ const decisionReadArgumentRefusal = ({
   if (query === undefined) {
     return null;
   }
-  if (page !== undefined || cursor !== undefined || full === true) {
+  if (page !== undefined || full === true) {
     return decisionReadArgumentError(
       "query",
-      "query returns matching paragraphs instead of a text window, so it takes no page, cursor or full.",
-      "Drop query to read pages, or drop page, cursor and full to find paragraphs.",
+      "query returns matching paragraphs instead of a text window, so it takes no page or full.",
+      "Drop query to read pages, or drop page and full to find paragraphs.",
     );
   }
   if (corpusTokens(query).length === 0) {
@@ -3115,28 +3070,14 @@ const decisionReadArgumentRefusal = ({
   return null;
 };
 
-/**
- * Where each entry's text starts; null for a retired cursor that does not
- * decode. A query replaces the page; a retired cursor reads the page holding
- * its offset; otherwise the page asked for, or the first.
- */
+/** Where each entry's text starts: a query replaces the page. */
 const decisionTextPositionOf = ({
-  cursor,
   page,
   query,
-}: DecisionReadArgs): DecisionTextPosition | null => {
-  if (query !== undefined) {
-    return { type: "query", query } as const;
-  }
-  if (cursor === undefined) {
-    return {
-      type: "page",
-      page: page ?? LIMITS.caseLawDecisionFirstPage,
-    } as const;
-  }
-  const offset = legacyDecisionCursorOffset(cursor);
-  return offset === null ? null : { type: "legacy-offset", offset };
-};
+}: DecisionReadArgs): DecisionTextPosition =>
+  query === undefined
+    ? { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage }
+    : { type: "query", query };
 
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
@@ -3158,13 +3099,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     return refusal;
   }
   const position = decisionTextPositionOf(parsed.output);
-  if (position === null) {
-    return decisionReadArgumentError(
-      "cursor",
-      "This cursor does not decode.",
-      "cursor is retired: pass page (1 for the start) instead.",
-    );
-  }
   const includedFields = decisionIncludedFields({ include, position });
 
   // The same gate the public route applies, in the same shape: a

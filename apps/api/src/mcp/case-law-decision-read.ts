@@ -17,7 +17,6 @@ import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import { LIMITS } from "@/api/lib/limits";
-import { decodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
 import { resolveTextWindowBounds } from "@/api/mcp/tool-utils";
@@ -69,25 +68,6 @@ export const textPageSpan = ({
     return null;
   }
   return { start, end: starts[page] ?? text.length };
-};
-
-/**
- * The offset an old opaque cursor named (`[textOffset, citationsCursor]`, or
- * an outline entry's `[offset, null]`). Null for anything else, which the
- * handler answers as an invalid cursor.
- */
-export const legacyDecisionCursorOffset = (cursor: string): number | null => {
-  const parts = decodePaginationCursor(cursor);
-  const offset = parts?.at(0);
-  if (
-    parts?.length !== 2 ||
-    typeof offset !== "number" ||
-    !Number.isInteger(offset) ||
-    offset < 0
-  ) {
-    return null;
-  }
-  return offset;
 };
 
 /** Characters of the text version token; enough to tell versions apart. */

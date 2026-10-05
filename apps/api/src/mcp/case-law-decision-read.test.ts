@@ -4,7 +4,6 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
-import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
   brandPersistedCaseLawCitationId,
   brandPersistedCaseLawDecisionId,
@@ -14,7 +13,6 @@ import {
   compactDecisionMetadata,
   decisionParagraphs,
   decisionTextVersion,
-  legacyDecisionCursorOffset,
   pageOfOffset,
   paragraphsMatching,
   QUERY_HIT_LIMIT,
@@ -132,26 +130,6 @@ describe("text pages", () => {
     expect(
       [0, 4, 5, 9, 10, 11, 99].map((offset) => pageOfOffset(starts, offset)),
     ).toEqual([1, 1, 2, 2, 3, 3, 3]);
-  });
-});
-
-describe("retired cursors", () => {
-  test.each([
-    { cursor: encodePaginationCursor([120, null]), offset: 120 },
-    { cursor: encodePaginationCursor([0, "citations-next"]), offset: 0 },
-    { cursor: encodePaginationCursor([7, 0]), offset: 7 },
-  ])("decodes $offset", ({ cursor, offset }) => {
-    expect(legacyDecisionCursorOffset(cursor)).toBe(offset);
-  });
-
-  test.each([
-    "not a cursor",
-    encodePaginationCursor([1]),
-    encodePaginationCursor([-1, null]),
-    encodePaginationCursor([1.5, null]),
-    encodePaginationCursor(["1", null]),
-  ])("refuses %p", (cursor) => {
-    expect(legacyDecisionCursorOffset(cursor)).toBeNull();
   });
 });
 

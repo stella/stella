@@ -1771,10 +1771,6 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
           // returned, so `decision.decisionId` is the id to cite from now on,
           // and when the requested page is past the last one.
           message: v.optional(v.string()),
-          // Only for a call that passed the retired `cursor`: the old opaque
-          // continuation, so a client part-way through a decision can finish
-          // it. Goes with the `cursor` input.
-          nextCursor: v.optional(v.nullable(passthroughId())),
           status: v.literal(DECISION_READ_STATUS.found),
         }),
       ),

@@ -101,7 +101,7 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
-| case-law | `stella case-law read` | read | paginated; per-entry cursor, no `--all` |
+| case-law | `stella case-law read` | read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
