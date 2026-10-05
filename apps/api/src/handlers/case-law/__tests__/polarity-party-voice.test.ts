@@ -224,6 +224,10 @@ test("citation abbreviations and dates stay inside the reported submission", () 
     "rozsudek ze dne 29. května 2020, sp. zn. 1 Cdo 1/2020",
     "nález sp. zn. Pl. ÚS 1/20",
     "nález sp. zn. IV. ÚS 1/20",
+    "nález sp.zn.I. ÚS 1/20",
+    "nález č. j. Pl. ÚS 1/20",
+    "nález č.j.IV. ÚS 1/20",
+    "rozsudek č. j. 1 Cdo 1/2020",
   ]) {
     expect(
       selectCitationPolarity(
@@ -231,6 +235,12 @@ test("citation abbreviations and dates stay inside the reported submission", () 
         `stěžovatel tvrdí, že ${reference} překonán`,
       )?.polarity,
     ).toBe("neutral");
+    expect(
+      selectCitationPolarity(
+        csRules,
+        `stěžovatel tvrdí, že ${reference} překonán. Soud konstatuje, že nález nadále neobstojí`,
+      )?.polarity,
+    ).toBe("negative");
   }
 });
 

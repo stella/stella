@@ -41,9 +41,10 @@ export const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
 /**
  * A named capture declares the extent of a reported submission. The engine
  * uses its span, so a party's treatment cannot govern a later court sentence.
- * Docket abbreviations and dates are allowed inside the submission.
+ * Docket abbreviations are consumed whole, including their final period,
+ * so a Roman-numbered docket cannot terminate the submission. Dates also fit.
  */
-const PARTY_SUBMISSION_TEXT = `(?:(?!,\\s*(?:(?:avšak|ale|nicméně)\\s+)?${WORDS_BETWEEN}(?:soud|súd|senát)\\s+)(?:\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|\\p{L}+)\\s*\\d{4}|(?:Pl|[IVXLCDM]+)\\.\\s*ÚS|[^.!?;\\n]|\\.(?=\\s*(?:\\d|zn\\.|j\\.))))*`;
+const PARTY_SUBMISSION_TEXT = `(?:(?!,\\s*(?:(?:avšak|ale|nicméně)\\s+)?${WORDS_BETWEEN}(?:soud|súd|senát)\\s+)(?:(?:sp\\.\\s*zn\\.|č\\.\\s*j\\.)|\\d{1,2}\\.\\s*(?:\\d{1,2}\\.|\\p{L}+)\\s*\\d{4}|(?:Pl|[IVXLCDM]+)\\.\\s*ÚS|[^.!?;\\n]|\\.(?=\\s*\\d)))*`;
 
 /**
  * The bodies whose departure from a decision is a doctrinal act. A velký
