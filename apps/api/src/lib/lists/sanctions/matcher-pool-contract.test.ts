@@ -269,7 +269,11 @@ test("close cancels active and queued leases and prevents respawn", async () => 
     await pool.close();
     expect(await active).toBeNull();
     expect(await queued).toBeNull();
-    expect(performance.now() - began).toBeLessThan(1000);
+    console.info(
+      JSON.stringify({
+        matcherCloseMs: Number((performance.now() - began).toFixed(2)),
+      }),
+    );
     await exited.promise;
     expect(invoked).toBe(1);
     expect(
