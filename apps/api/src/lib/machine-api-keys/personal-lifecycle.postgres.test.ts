@@ -113,7 +113,7 @@ if (!databaseUrl || !runPostgres) {
                     waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
                     WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
                       AND wait_event_type = 'Lock'
-                      AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for update`})`,
+                      AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
                   })
                   .from(organization)
                   .where(eq(organization.id, organizationId));
