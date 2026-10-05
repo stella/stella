@@ -985,7 +985,6 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx": 1,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 1,
     "apps/web/src/routes/knowledge/-components/clause-editor.tsx": 1,
     "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx": 1,
     "apps/web/src/routes/law/cases/index.tsx": 1,
