@@ -754,6 +754,10 @@ export const readFastRequiredJobs = (
     return panic(`Expected a "${CI_RESULT_STEP}" step in ${CI_RESULT_JOB}`);
   }
   const env = readRecord(step["env"], `${CI_RESULT_STEP} env`);
+  // A gate without a fast-required list has no fast depth to recheck.
+  if (!Object.hasOwn(env, "FAST_REQUIRED")) {
+    return null;
+  }
   const required = readJsonEnv(env, "FAST_REQUIRED");
   if (
     !Array.isArray(required) ||
