@@ -21,7 +21,7 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import type { Column, ReactTable, Row } from "@tanstack/react-table";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -69,6 +69,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { ContactReadError } from "@/components/contact-read-error";
 import { EmptyScreen } from "@/components/empty-screen";
 import {
   ResponsiveActionToolbar,
@@ -87,9 +88,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
@@ -142,22 +145,31 @@ function ContactsPage() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery(
-      contactsOptions(activeOrganizationId, {
-        type: typeFilter,
-        q: debouncedQuery || undefined,
-      }),
-    );
-
-  const items: ContactItem[] = data
-    ? data.pages.flatMap((page) => page.items)
-    : [];
+  const contactsQuery = useInfiniteQuery(
+    contactsOptions(activeOrganizationId, {
+      type: typeFilter,
+      q: debouncedQuery || undefined,
+    }),
+  );
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = contactsQuery;
+  const view = useQueryView(contactsQuery, {
+    isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
+  });
+  const items = (() => {
+    switch (view.type) {
+      case "items":
+        return view.items.pages.flatMap((page) => page.items);
+      case "pending":
+      case "error":
+      case "empty":
+        return EMPTY_CONTACTS;
+      default:
+        view satisfies never;
+        return panic("Unhandled contacts query state");
+    }
+  })();
   const isFirstUseEmpty =
-    !isLoading &&
-    items.length === 0 &&
-    searchQuery.trim() === "" &&
-    filter === "all";
+    view.type === "empty" && searchQuery.trim() === "" && filter === "all";
 
   const columns = useContactColumns();
 
@@ -292,7 +304,49 @@ function ContactsPage() {
         />
       ) : (
         <>
-          <ContactsTable isLoading={isLoading} table={table} />
+          {(() => {
+            switch (view.type) {
+              case "pending":
+                return <ContactsTable state="pending" table={table} />;
+              case "error":
+                return (
+                  <ContactsTable
+                    state="error"
+                    table={table}
+                    notice={
+                      <ContactReadError
+                        error={view.error}
+                        onRetry={() =>
+                          detached(view.retry(), "contacts-page.retry")
+                        }
+                      />
+                    }
+                  />
+                );
+              case "empty":
+                return <ContactsTable state="empty" table={table} />;
+              case "items":
+                return (
+                  <ContactsTable
+                    state="items"
+                    table={table}
+                    notice={
+                      view.refetchError !== undefined ? (
+                        <ContactReadError
+                          error={view.refetchError}
+                          onRetry={() =>
+                            detached(view.retry(), "contacts-page.retry")
+                          }
+                        />
+                      ) : undefined
+                    }
+                  />
+                );
+              default:
+                view satisfies never;
+                return panic("Unhandled contacts query state");
+            }
+          })()}
           {hasNextPage && (
             <Button
               className="self-center"
@@ -597,12 +651,13 @@ const EMPTY_CONTACTS: ContactItem[] = [];
 
 type ContactsTableProps = {
   table: ReactTable<ContactTableFeatures, ContactItem>;
-  isLoading: boolean;
+  state: QueryView<unknown, unknown>["type"];
+  notice?: ReactNode;
 };
 
 // Shared table render for both the live page and the route pending shell:
 // header, rows, and skeleton all come off the same TanStack column model.
-const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
+const ContactsTable = ({ table, state, notice }: ContactsTableProps) => {
   const t = useTranslations();
   const rows = table.getRowModel().rows;
 
@@ -623,7 +678,14 @@ const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
         ))}
       </TableHeader>
       <TableBody>
-        {isLoading ? (
+        {notice && (
+          <TableRow>
+            <TableCell colSpan={table.getAllLeafColumns().length}>
+              {notice}
+            </TableCell>
+          </TableRow>
+        )}
+        {state === "pending" ? (
           <TableSkeletonRows
             columns={table.getAllLeafColumns()}
             renderCell={renderContactSkeletonCell}
@@ -631,7 +693,7 @@ const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
         ) : (
           rows.map((row) => <ContactTableRow key={row.id} row={row} />)
         )}
-        {!isLoading && rows.length === 0 && (
+        {state === "empty" && (
           <TableRow>
             <TableCell
               className="text-muted-foreground py-8 text-center"
@@ -727,7 +789,7 @@ function ContactsPendingComponent() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <ContactsToolbarPlaceholder />
-      <ContactsTable isLoading table={table} />
+      <ContactsTable state="pending" table={table} />
     </div>
   );
 }
