@@ -16,7 +16,8 @@ import type {
   Block,
   Inline,
   ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   parsePlUodoDecisionXml,
   plUodoSourceTexts,

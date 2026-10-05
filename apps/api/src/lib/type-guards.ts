@@ -1,6 +1,8 @@
-/** Narrow `unknown` to a plain object (not null, not array). */
+import { isNonNullObject } from "@stll/template-conditions/path";
+
+/** Accept non-null, non-array objects, including class instances. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  isNonNullObject(value) && !Array.isArray(value);
 
 /** Narrow `unknown` to an array without Array.isArray's `any[]` widening. */
 export const isUnknownArray = (value: unknown): value is readonly unknown[] =>

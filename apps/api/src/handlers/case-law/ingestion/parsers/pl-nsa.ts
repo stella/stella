@@ -16,7 +16,8 @@ import type {
   Block,
   DocumentAst,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   buildValidationHtml,

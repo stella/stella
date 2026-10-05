@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
+
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 
 import {

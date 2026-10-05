@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -28,7 +29,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

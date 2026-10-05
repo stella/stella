@@ -13,8 +13,9 @@
 import { notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
+
 import { caseLawDecisions } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,

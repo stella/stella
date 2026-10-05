@@ -2,12 +2,9 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 
-import type {
-  DocumentAst,
-  ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";

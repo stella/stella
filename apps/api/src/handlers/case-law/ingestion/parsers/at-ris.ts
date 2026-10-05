@@ -7,7 +7,8 @@ import type {
   Block,
   DocumentAst,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import {
   buildValidationHtml,

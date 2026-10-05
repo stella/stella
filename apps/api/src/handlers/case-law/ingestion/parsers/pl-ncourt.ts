@@ -22,7 +22,8 @@ import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import {
   buildValidationHtml,
   validateAndLog,

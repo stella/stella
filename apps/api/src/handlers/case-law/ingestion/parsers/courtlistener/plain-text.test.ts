@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
+import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { composeCourtListenerText } from "./compose";
 import { createTextBudget, type FormatParse } from "./outcome";

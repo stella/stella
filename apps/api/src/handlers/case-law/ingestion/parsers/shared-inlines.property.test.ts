@@ -10,9 +10,9 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { Inline } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
-import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
   inlinesToPlainText,
   stripInlinePrefix,

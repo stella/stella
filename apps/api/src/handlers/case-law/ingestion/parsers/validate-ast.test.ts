@@ -4,7 +4,8 @@ import type {
   Block,
   HeadingBlock,
   ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   AST_CONTENT_LOST,
   AST_MISSING,

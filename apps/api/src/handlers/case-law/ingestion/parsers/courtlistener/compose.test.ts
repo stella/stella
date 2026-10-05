@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  type DocumentAst,
+  isDocumentAst,
+  type Block,
+} from "@stll/legal-ast/document-ast";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
 import { classifyCourtListenerDecision } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/order-classification";
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import {

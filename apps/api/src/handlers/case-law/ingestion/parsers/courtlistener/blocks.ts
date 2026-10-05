@@ -30,7 +30,8 @@ import {
   plainTextOf,
   projectPlainText,
   type TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   appendTextInline,
   isExcludedHtmlTag,

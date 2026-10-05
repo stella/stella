@@ -1,4 +1,5 @@
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import type {
   DecisionSection,
   DecisionSectionType,

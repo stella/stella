@@ -12,6 +12,8 @@ import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -19,7 +21,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";

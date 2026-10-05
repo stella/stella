@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";

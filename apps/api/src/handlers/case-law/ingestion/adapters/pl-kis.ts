@@ -49,12 +49,12 @@
 
 import { Result, panic } from "better-result";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelopeObjects,
   defineSourceAdapter,

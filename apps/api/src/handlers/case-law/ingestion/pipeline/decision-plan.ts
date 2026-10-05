@@ -3,6 +3,7 @@ import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -10,7 +11,6 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { proceduralKeysFromMetadata } from "@/api/handlers/case-law/citation-kind";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,

@@ -3,6 +3,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -29,8 +32,6 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
-import { isDocumentAst } from "@/api/lib/case-law/document-ast";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";

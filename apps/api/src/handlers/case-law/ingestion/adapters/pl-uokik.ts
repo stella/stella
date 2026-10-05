@@ -59,6 +59,7 @@ import * as cheerio from "cheerio";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -68,7 +69,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,

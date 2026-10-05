@@ -4,6 +4,10 @@ import { status, t } from "elysia";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  hasUsableAst,
+  omitDerivablePlainText,
+} from "@stll/legal-ast/document-ast";
 
 import {
   caseLawDecisionJudges,
@@ -17,10 +21,6 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
-import {
-  hasUsableAst,
-  omitDerivablePlainText,
-} from "@/api/handlers/case-law/document-ast";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
 import { captureError } from "@/api/lib/analytics/capture";

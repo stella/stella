@@ -11,13 +11,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
