@@ -42,7 +42,8 @@ const previews = pillars.flatMap((pillar) =>
 const compactMenus = [
   {
     label: t("footer.resources"),
-    isCurrent: current === "security" || current === "blog",
+    isCurrent:
+      current === "security" || current === "blog" || current === "pricing",
     links: resolveNavLinks(resourceLinks, t),
   },
   {

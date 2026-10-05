@@ -67,6 +67,13 @@ export const sitemapSources = ({
     ];
   }
   const slug = tail.at(0);
+  if (head === "pricing" && tail.length === 0) {
+    return [
+      `${SRC}/components/PricingPage.astro`,
+      `${SRC}/data/pricing.ts`,
+      messages,
+    ];
+  }
   if (head === "product" && slug !== undefined && tail.length === 1) {
     return [
       `${SRC}/data/products/${slug}.ts`,

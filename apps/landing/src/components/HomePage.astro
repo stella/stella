@@ -6,7 +6,12 @@ import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { getChangelogReleases } from "../lib/changelog";
 import { getReleaseKind } from "../lib/changelog-release";
 import { resolveProductHrefs } from "../data/products/links";
-import { resolveProductDiscoverLabels } from "../data/site-nav";
+import {
+  appUrl,
+  githubUrl,
+  resolveProductDiscoverLabels,
+  selfHostingUrl,
+} from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import { getTranslations, requireLinkedSegment } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -28,11 +33,6 @@ const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
 // The English prose renders on every locale — release notes are engineering
 // artifacts, not marketing copy — isolated with lang="en" dir="ltr" so RTL
 // pages lay the island out correctly.
-
-const appUrl = "https://my.stll.app";
-const selfHostingDocsUrl =
-  "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
-const githubUrl = "https://github.com/stella/stella";
 
 // The subtitle carries a <gh>…</gh> marker pair around each locale's
 // open-source phrase; the marked span renders as a link to the repository.
@@ -165,7 +165,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
             class="reveal-fast mt-8 flex flex-row items-center gap-3"
           >
             <a
-              href={selfHostingDocsUrl}
+              href={selfHostingUrl}
               target="_blank"
               rel="noopener noreferrer"
               style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"

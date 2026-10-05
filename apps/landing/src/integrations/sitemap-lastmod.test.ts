@@ -37,6 +37,17 @@ describe("sitemapSources", () => {
     ]);
   });
 
+  test("pricing pages date from the template, plan data and locale catalog", () => {
+    expect(sources("/pricing/")).toEqual([
+      "apps/landing/src/components/PricingPage.astro",
+      "apps/landing/src/data/pricing.ts",
+      "apps/landing/src/i18n/messages/en.json",
+    ]);
+    expect(sources("/pt-br/pricing/")).toContain(
+      "apps/landing/src/i18n/messages/pt-BR.json",
+    );
+  });
+
   test("docs pages try both markdown extensions", () => {
     expect(sources("/docs/")).toEqual([
       "apps/landing/src/content/docs/docs/index.md",
