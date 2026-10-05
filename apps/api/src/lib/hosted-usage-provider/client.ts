@@ -3,6 +3,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { isNonNullObject } from "@stll/template-conditions/path";
 
 import {
   getHostedUsageProviderKind,
@@ -43,15 +44,12 @@ type CreateHostedSetupResult = {
   url: string;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 const readJsonRecord = async (
   response: Response,
   context: string,
 ): Promise<Record<string, unknown>> => {
   const body: unknown = await response.json();
-  if (isRecord(body)) {
+  if (isNonNullObject(body)) {
     return body;
   }
   throw new HostedUsageProviderApiError({

@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Otázka aj všetky jej odpovede sa odstránia pre celú organizáciu, zo všetkých vyhľadávaní a všetkým členom. Ak ju chcete skryť len v tomto vyhľadávaní, zvoľte „Odstrániť z tohto vyhľadávania“.",
       "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
+      "newQuestionColumn": "Nové",
       "nothingToRun": "Každá bunka už má odpoveď",
+      "questionAdded": "„{question}“ pridané do tabuľky",
       "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",
       "removeFromSearch": "Odstrániť z tohto vyhľadávania",
       "runAll": "Odpovedať na všetko",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
-      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
     }
   },
   "catalogue": {
@@ -1854,6 +1857,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
     "unverifiedCitationHint": "Túto citáciu sa nepodarilo priradiť k zdrojovému dokumentu.",
@@ -1874,15 +1878,23 @@
     "zoomOut": "Oddialiť"
   },
   "consent": {
+    "actingAs": "{clientName} bude konať vo vašom mene v organizácii {organizationName}",
     "allow": "Povoliť",
-    "appIdentity": "Identita aplikácie",
+    "canChange": "Môže meniť",
+    "canRead": "Môže čítať",
     "completeSetup": "Dokončiť nastavenie",
+    "connectTitle": "Pripojiť {clientName} k stella",
+    "connectedTitle": "Pripojené k aplikácii {clientName}",
+    "connectionDuration": "Zostane pripojená, kým ju neodpojíte v Nastaveniach › Pripojenia",
     "defaultClientName": "Aplikácia",
-    "description": "{clientName} chce získať prístup k vášmu pracovnému priestoru stella",
+    "destinationDetails": "Podrobnosti o presmerovaní",
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",
-    "permissions": "Toto umožní aplikácii:",
-    "redirectDestination": "Cieľ presmerovania",
+    "otherPermissions": "Ďalšie povolenia",
+    "publishedBy": "Vydavateľ: <host>{publisherHost}</host>",
+    "returnToAgent": "Pokračujte návratom k svojmu agentovi.",
+    "returnsLocally": "Na tomto počítači sa vrátite do aplikácie {clientName}",
+    "returnsTo": "Vrátite sa do aplikácie {clientName}",
     "scopeAdminRead": "Čítať protokol auditu vašej organizácie",
     "scopeAdminWrite": "Spravovať členov a nastavenia organizácie",
     "scopeBillingWrite": "Vytvoriť, upraviť a vymazať vaše časové záznamy",
@@ -1903,8 +1915,11 @@
     "scopeSkills": "Použitie vašich uložených zručností stella",
     "scopeTemplates": "Zobrazenie, vypĺňanie a vytváranie vašich vzorov dokumentov",
     "scopeTemplatesAnonymized": "Zobraziť, vyplniť a vytvoriť anonymizované verzie vašich vzorov dokumentov",
+    "signedInAs": "Prihlásený ako <email>{accountEmail}</email>",
     "title": "Autorizácia prístupu",
-    "unverifiedApp": "Neoverená aplikácia"
+    "unverifiedApp": "Neoverená aplikácia",
+    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
+    "useAnotherAccount": "Použiť iný účet"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
@@ -5408,6 +5423,7 @@
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
         "authRequiredDescription": "Pred použitím úprav v desktopovej aplikácii obnovte stella a znovu sa prihláste.",
         "authRequiredTitle": "Relácia vypršala",

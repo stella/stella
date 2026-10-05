@@ -1,3 +1,4 @@
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
 export type ProvisionRow = ProvisionReference & {
@@ -7,8 +8,9 @@ export type ProvisionRow = ProvisionReference & {
   sentenceText: string;
   /** Where in the decision the reference stands; two can share an anchor. */
   spanStart: number;
-  /** Opening date of the consolidation the reference was made against. */
+  /** Opening date of the inferred consolidation at the decision date. */
   versionValidFrom: string | null;
+  versionBasis: ProvisionVersionBasis;
   workCollection: string;
   workEli: string | null;
   workIdentifier: string;
@@ -19,7 +21,7 @@ type ProvisionOccurrence = Pick<ProvisionRow, "sentenceText" | "spanStart">;
 
 /** A distinct provision, with every place the decision names it. */
 export type ProvisionGroup = ProvisionReference &
-  Pick<ProvisionRow, "anchor" | "versionValidFrom"> & {
+  Pick<ProvisionRow, "anchor" | "versionValidFrom" | "versionBasis"> & {
     key: string;
     occurrences: ProvisionOccurrence[];
   };
@@ -66,7 +68,7 @@ const KEY_SEPARATOR = "\u0000";
 
 /**
  * Everything that makes two references the same provision: the designation
- * the decision states, and the consolidation it states it against. A
+ * the decision states, and the selected consolidation. A
  * reference to an earlier wording is a different text, so it stays its own
  * row even when the designation matches.
  */
@@ -183,6 +185,7 @@ export const groupProvisionsByWork = (
         subsection: row.subsection,
         unit: row.unit,
         versionValidFrom: row.versionValidFrom,
+        versionBasis: row.versionBasis,
       });
       continue;
     }

@@ -29,6 +29,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -1254,6 +1255,14 @@ const LoadedPDFPageOrganizer = ({
 
       <Dialog onOpenChange={setIsCropOpen} open={isCropOpen}>
         <DialogPopup>
+          <DialogFormState
+            dirty={
+              JSON.stringify(cropMargins) !== JSON.stringify(EMPTY_CROP_MARGINS)
+            }
+            onDiscard={() => {
+              setCropMargins(EMPTY_CROP_MARGINS);
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{tPageEditor("cropTitle")}</DialogTitle>
             <DialogDescription>

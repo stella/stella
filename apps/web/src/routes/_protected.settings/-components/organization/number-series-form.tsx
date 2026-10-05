@@ -80,14 +80,17 @@ export const NumberSeriesForm = ({
       },
     }),
   );
-  const errors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { errors, dirty } = useSelector(form.store, (state) => ({
+    errors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
   const disabled = pending || isSubmitting;
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       errors={errors}
       onSubmit={(event) => {
         event.preventDefault();
