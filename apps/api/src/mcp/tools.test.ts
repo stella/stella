@@ -94,7 +94,10 @@ import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
-import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/stella-tools";
+import {
+  CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
+  READ_DECISION_BATCH_MAX_TEXT_CHARS,
+} from "@/api/mcp/stella-tools";
 import { MCP_CONTENT_MAX_CHARS } from "@/api/mcp/tool-utils";
 import {
   findUndeclaredArguments,
@@ -6179,6 +6182,41 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
     });
     expect(resumed.items.at(0)?.nextCursor).toBeNull();
+  });
+
+  test("read_case_law_decision trims a max_chars batch evenly to the call ceiling", async () => {
+    const ids = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `00000000-0000-4000-8000-0000000d01${String(index).padStart(2, "0")}`,
+    );
+    const texts = new Map(
+      ids.map((id, index) => [id, decisionText(String(index), 9000)]),
+    );
+    serveTexts(texts);
+    const share = READ_DECISION_BATCH_MAX_TEXT_CHARS / ids.length;
+
+    const payload = await readWindows({
+      decision_ids: ids,
+      max_chars: MCP_CONTENT_MAX_CHARS,
+    });
+
+    // Eight full 8000-character windows would be 64000; each entry gets an
+    // even share of the 40000 ceiling and says it was cut there.
+    expect(payload.items).toHaveLength(ids.length);
+    for (const [index, item] of payload.items.entries()) {
+      expect(item.decision).toMatchObject({
+        text: texts.get(ids[index] ?? panic("Missing id"))?.slice(0, share),
+        truncated: true,
+      });
+      expect(item.nextCursor).toBe(encodePaginationCursor([share, null]));
+    }
+    expect(
+      payload.items.reduce(
+        (sum, { decision }) => sum + (decision.text?.length ?? 0),
+        0,
+      ),
+    ).toBe(READ_DECISION_BATCH_MAX_TEXT_CHARS);
   });
 
   test("read_case_law_decision keeps a single id's max_chars window", async () => {

@@ -839,7 +839,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Text window size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own window of this size; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
+          `Text window size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
         ),
       ),
     ),
@@ -2715,6 +2715,9 @@ const decisionItemResult = ({
   };
 };
 
+/** The most decision text one read_case_law_decision call answers with. */
+export const READ_DECISION_BATCH_MAX_TEXT_CHARS = 40_000;
+
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
@@ -2851,10 +2854,15 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // An explicit max_chars sizes every entry's window on its own: each
   // decision is truncated and continued by its own cursor. Without one the
   // default text budget is shared across the entries, so a batch nobody sized
-  // cannot answer with twenty full windows of decision text.
-  const maxTextChars =
-    maxChars ??
-    Math.max(1, Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length));
+  // cannot answer with twenty full windows of decision text. Either way the
+  // whole call stays within the batch ceiling, trimmed evenly per entry.
+  const maxTextChars = Math.max(
+    1,
+    Math.min(
+      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / decisionIds.length),
+    ),
+  );
 
   return toolDataResult({
     items: decisionIds.map((decisionId) =>

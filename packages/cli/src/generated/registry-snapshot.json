@@ -421,7 +421,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Text window size per decision, 1–8000 characters. In a batch each decision gets its own window of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
