@@ -128,7 +128,7 @@ const authorizeAndConsent = async () => {
   }).toString();
   const consentPage = await readOAuthRedirect(
     await getAuth().handler(
-      new Request(url, {
+      new Request(url.href, {
         headers: {
           accept: "application/json",
           cookie: browser.cookieHeader(),
