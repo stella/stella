@@ -1110,6 +1110,30 @@ const readFeatureDeclarationSources = async () => {
   return featureSources;
 };
 
+type GeneratedFeatureDeclarationOptions = Parameters<
+  typeof assertFeatureAccessDeclarations
+>[0] & { dispatchRecords: readonly CapabilityDispatchRecord[] };
+
+/** Validate emitted dispatch entries rather than previously generated shards. */
+const validateGeneratedFeatureDeclarations = ({
+  registry,
+  endpoints,
+  sources: sourceModules,
+  dispatchRecords,
+}: GeneratedFeatureDeclarationOptions): void => {
+  const sources = new Map(sourceModules);
+  for (const file of sources.keys()) {
+    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+      sources.delete(file);
+    }
+  }
+  sources.set(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    serializeDispatchModule(dispatchRecords),
+  );
+  assertFeatureAccessDeclarations({ registry, endpoints, sources });
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, routeFiles, importErrors } =
     await discoverSafeHandlers();
@@ -1568,20 +1592,11 @@ const buildCatalog = async (): Promise<BuildResult> => {
     projectEndpoint(endpoint);
   }
 
-  // Validate the projection being emitted, including newly declared features.
-  for (const file of featureSources.keys()) {
-    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
-      featureSources.delete(file);
-    }
-  }
-  featureSources.set(
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
-    serializeDispatchModule(dispatchRecords),
-  );
-  assertFeatureAccessDeclarations({
+  validateGeneratedFeatureDeclarations({
     registry: FEATURE_REGISTRY,
     endpoints,
     sources: featureSources,
+    dispatchRecords,
   });
 
   // Class guards over the built entries (context-fidelity, file-response,
