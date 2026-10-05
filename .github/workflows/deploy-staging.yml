@@ -71,7 +71,7 @@ jobs:
                 --silent \
                 --show-error \
                 --write-out '%{http_code}' \
-                "${curl_edge_args[@]}" \
+                ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
                 "$STAGING_HEALTH_URL"
             )"; then
               http_status="000"
@@ -87,7 +87,7 @@ jobs:
                   --silent \
                   --show-error \
                   --write-out '%{http_code}' \
-                  "${curl_edge_args[@]}" \
+                  ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
                   "$STAGING_LEGACY_HEALTH_URL"
               )"; then
                 http_status="000"
