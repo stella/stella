@@ -1371,6 +1371,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         vatAmount: v.number(),
         grossAmount: v.number(),
         source: v.string(),
+        billingPurpose: v.string(),
         timeEntryId: v.nullable(passthroughId()),
         expenseId: v.nullable(passthroughId()),
       }),

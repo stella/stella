@@ -6,6 +6,7 @@ import {
   envBaseServerSchema,
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
+import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
@@ -101,6 +102,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_EU_COMPLETION_ENABLED",
+  "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
+  "CASE_LAW_EU_COMPLETION_MODE",
+  "CASE_LAW_EU_COMPLETION_MAX_ROWS",
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
@@ -278,6 +283,14 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  CASE_LAW_EU_COMPLETION_ENABLED:
+    "Enable bounded EU case-law completion. Defaults to false.",
+  CASE_LAW_EU_COMPLETION_KILL_SWITCH:
+    "Stop EU case-law completion before the next publisher or database effect.",
+  CASE_LAW_EU_COMPLETION_MODE:
+    "Completion mode: dry-run by default; apply requires durable supervised approval.",
+  CASE_LAW_EU_COMPLETION_MAX_ROWS:
+    "Maximum completion documents per invocation, from 1 to 100. Defaults to 25.",
   CASE_LAW_REPLAY_ENABLED:
     "Enable bounded background case-law replay. Defaults to false.",
   CASE_LAW_REPLAY_KILL_SWITCH:
@@ -629,6 +642,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
@@ -677,6 +691,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   CHAT_RUN_LOG_SHADOW: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -1119,6 +1137,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: euCompletionTickServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: replayTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1149,6 +1171,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
   ...envOnlineIndexServerSchema,

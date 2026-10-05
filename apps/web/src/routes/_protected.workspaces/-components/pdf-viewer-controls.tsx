@@ -18,6 +18,8 @@ import { Separator } from "@stll/ui/separator";
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
+import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
+import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
   fetchPrintPdf,
   printPdfBuffer,
@@ -52,6 +54,8 @@ type PdfViewerControlsProps = {
   onPrint?: (() => void) | undefined;
   printDisabled?: boolean | undefined;
   onEditPages?: (() => void) | undefined;
+  /** The current PDF the viewer may sign; `null` offers no signing. */
+  pdfSignTarget?: PdfSignTarget | null | undefined;
   extraControls?: ReactNode | undefined;
 };
 
@@ -65,6 +69,7 @@ export const PdfViewerControls = ({
   onPrint,
   printDisabled = false,
   onEditPages,
+  pdfSignTarget,
   extraControls,
 }: PdfViewerControlsProps) => {
   const t = useTranslations();
@@ -258,6 +263,9 @@ export const PdfViewerControls = ({
                 <FilePenLineIcon />
                 {t("workspaces.pdf.pageEditor.editPages")}
               </Button>
+            )}
+            {pdfSignTarget !== null && pdfSignTarget !== undefined && (
+              <PdfSignButton presentation="labelled" target={pdfSignTarget} />
             )}
             {fileMetadata !== undefined && fieldId.length > 0 && (
               <DownloadSplitButton

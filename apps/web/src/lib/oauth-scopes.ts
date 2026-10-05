@@ -1,47 +1,79 @@
 import type { TranslationKey } from "@/i18n/types";
 import type { McpOAuthScope } from "@/lib/api-contract";
 
-// `satisfies Record<McpOAuthScope, TranslationKey>` makes this exhaustive
+export type OAuthScopeGroup = "read" | "change" | "other";
+
+// `satisfies Record<McpOAuthScope, ...>` makes this exhaustive
 // over every scope the OAuth provider can grant (`MCP_OAUTH_SCOPES` in
 // `apps/api/src/mcp/constants.ts`): adding a new grantable scope without a
 // disclosure label here fails the build instead of silently skipping
 // disclosure. Shared by the consent screen and the connected-apps settings
 // card so both surfaces describe a scope identically.
-const OAUTH_SCOPE_LABELS = {
-  "stella:search": "consent.scopeSearch",
-  "stella:read": "consent.scopeRead",
-  "stella:templates": "consent.scopeTemplates",
-  "stella:documents_write": "consent.scopeDocumentsWrite",
-  "stella:matters_write": "consent.scopeMattersWrite",
-  "stella:contacts_write": "consent.scopeContactsWrite",
-  "stella:chat": "consent.scopeChat",
-  "stella:knowledge_write": "consent.scopeKnowledgeWrite",
-  "stella:billing_write": "consent.scopeBillingWrite",
-  "stella:admin_read": "consent.scopeAdminRead",
-  "stella:admin_write": "consent.scopeAdminWrite",
-  "stella:skills": "consent.scopeSkills",
-  "stella:external_mcps": "consent.scopeExternalMcps",
-  "stella:feedback": "consent.scopeFeedback",
-  "stella:search_anonymized": "consent.scopeSearchAnonymized",
-  "stella:read_anonymized": "consent.scopeReadAnonymized",
-  "stella:templates_anonymized": "consent.scopeTemplatesAnonymized",
-  "stella:onboarding": "consent.scopeOnboarding",
-  email: "consent.scopeProfile",
-  offline_access: "consent.scopeOfflineAccess",
-  openid: "consent.scopeProfile",
-  profile: "consent.scopeProfile",
-} as const satisfies Record<McpOAuthScope, TranslationKey>;
+const OAUTH_SCOPE_METADATA = {
+  "stella:search": { label: "consent.scopeSearch", group: "read" },
+  "stella:read": { label: "consent.scopeRead", group: "read" },
+  "stella:templates": { label: "consent.scopeTemplates", group: "change" },
+  "stella:documents_write": {
+    label: "consent.scopeDocumentsWrite",
+    group: "change",
+  },
+  "stella:matters_write": {
+    label: "consent.scopeMattersWrite",
+    group: "change",
+  },
+  "stella:contacts_write": {
+    label: "consent.scopeContactsWrite",
+    group: "change",
+  },
+  "stella:chat": { label: "consent.scopeChat", group: "change" },
+  "stella:knowledge_write": {
+    label: "consent.scopeKnowledgeWrite",
+    group: "change",
+  },
+  "stella:billing_write": {
+    label: "consent.scopeBillingWrite",
+    group: "change",
+  },
+  "stella:admin_read": { label: "consent.scopeAdminRead", group: "read" },
+  "stella:admin_write": { label: "consent.scopeAdminWrite", group: "change" },
+  "stella:skills": { label: "consent.scopeSkills", group: "change" },
+  "stella:external_mcps": {
+    label: "consent.scopeExternalMcps",
+    group: "change",
+  },
+  "stella:feedback": { label: "consent.scopeFeedback", group: "change" },
+  "stella:search_anonymized": {
+    label: "consent.scopeSearchAnonymized",
+    group: "read",
+  },
+  "stella:read_anonymized": {
+    label: "consent.scopeReadAnonymized",
+    group: "read",
+  },
+  "stella:templates_anonymized": {
+    label: "consent.scopeTemplatesAnonymized",
+    group: "change",
+  },
+  "stella:onboarding": { label: "consent.scopeOnboarding", group: "change" },
+  email: { label: "consent.scopeProfile", group: "read" },
+  offline_access: { label: "consent.scopeOfflineAccess", group: "other" },
+  openid: { label: "consent.scopeProfile", group: "read" },
+  profile: { label: "consent.scopeProfile", group: "read" },
+} as const satisfies Record<
+  McpOAuthScope,
+  { label: TranslationKey; group: OAuthScopeGroup }
+>;
 
-type OAuthScopeKey = keyof typeof OAUTH_SCOPE_LABELS;
-type OAuthScopeLabel = (typeof OAUTH_SCOPE_LABELS)[OAuthScopeKey];
+type OAuthScopeKey = keyof typeof OAUTH_SCOPE_METADATA;
+type OAuthScopeLabel = (typeof OAUTH_SCOPE_METADATA)[OAuthScopeKey]["label"];
 type OAuthScopeTranslator = (key: OAuthScopeLabel) => string;
 
 const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
-  scope in OAUTH_SCOPE_LABELS;
+  Object.hasOwn(OAUTH_SCOPE_METADATA, scope);
 
 export type OAuthScopeDisplayEntry =
-  | { label: OAuthScopeLabel; type: "known" }
-  | { scope: string; type: "unknown" };
+  | { label: OAuthScopeLabel; group: OAuthScopeGroup; type: "known" }
+  | { scope: string; group: "other"; type: "unknown" };
 
 /**
  * De-dupes a raw scope list into displayable entries: known scopes collapse
@@ -58,21 +90,37 @@ export const toOAuthScopeDisplayEntries = (
 
   for (const scope of scopes) {
     if (isOAuthScopeKey(scope)) {
-      const label = OAUTH_SCOPE_LABELS[scope];
+      const { label, group } = OAUTH_SCOPE_METADATA[scope];
       if (!seenLabels.has(label)) {
         seenLabels.add(label);
-        entries.push({ label, type: "known" });
+        entries.push({ label, group, type: "known" });
       }
       continue;
     }
 
     if (!seenUnknownScopes.has(scope)) {
       seenUnknownScopes.add(scope);
-      entries.push({ scope, type: "unknown" });
+      entries.push({ scope, group: "other", type: "unknown" });
     }
   }
 
   return entries;
+};
+
+export type OAuthScopeDisplayGroups = Record<
+  OAuthScopeGroup,
+  OAuthScopeDisplayEntry[]
+>;
+
+/** Groups display entries without dropping or rewriting any requested entry. */
+export const groupOAuthScopeDisplayEntries = (
+  entries: readonly OAuthScopeDisplayEntry[],
+): OAuthScopeDisplayGroups => {
+  const groups: OAuthScopeDisplayGroups = { read: [], change: [], other: [] };
+  for (const entry of entries) {
+    groups[entry.group].push(entry);
+  }
+  return groups;
 };
 
 /**

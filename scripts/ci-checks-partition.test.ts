@@ -9,6 +9,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
+import { jobCachePolicy } from "./workflow-cache-policy.ts";
 
 const jobSchema = v.looseObject({
   steps: v.array(v.looseObject({ name: v.string() })),
@@ -33,7 +34,10 @@ const parseJobs = (source: string) =>
 const jobs = parseJobs(
   readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
 );
-const baseJobs = parseJobs(git(["show", `${mergeBase}:${workflowPath}`]));
+const baseWorkflow: unknown = Bun.YAML.parse(
+  git(["show", `${mergeBase}:${workflowPath}`]),
+);
+const baseJobs = v.parse(workflowSchema, baseWorkflow).jobs;
 const removedChecks = v.parse(
   removalSchema,
   JSON.parse(
@@ -175,6 +179,24 @@ const withIsolatedCachePort = (step: Step): Step => {
     step,
   ).with;
   return { ...step, with: { ...inputs, "server-port": "0" } };
+};
+// Only ordinary install jobs may migrate to the shared dependency cache owner.
+const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
+  if (
+    jobCachePolicy({ workflow: baseWorkflow, job }) !== "install-cache" ||
+    usesOf(step) !== "oven-sh/setup-bun@<pinned>"
+  ) {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  return {
+    ...step,
+    uses: "stella/.github/actions/setup-bun-cached@<pinned>",
+    with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
+  };
 };
 const ownedSteps = (steps: readonly Step[]) =>
   steps
@@ -335,7 +357,9 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       ...originalScope
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
-    const originalSetup = setupSteps(originalSteps).map(withIsolatedCachePort);
+    const originalSetup = setupSteps(originalSteps)
+      .map(withIsolatedCachePort)
+      .map((step) => withInstallCache(step, base));
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
       expect(
@@ -1003,4 +1027,27 @@ test("continued guard conditions preserve every previously runnable plan outcome
     ),
     { numRuns: 32 },
   );
+});
+
+test("setup migration preserves runtime inputs and protected install policy", () => {
+  const setup = {
+    name: "Setup Bun",
+    uses: "oven-sh/setup-bun@<pinned>",
+    with: { "bun-version-file": "package.json" },
+  };
+  const migrated = withInstallCache(setup, { steps: [setup] });
+  expect(migrated).toEqual({
+    ...setup,
+    uses: "stella/.github/actions/setup-bun-cached@<pinned>",
+    with: { ...setup.with, save: `\${{ github.ref == 'refs/heads/main' }}` },
+  });
+  const noCache = { ...setup, with: { ...setup.with, "no-cache": true } };
+  for (const steps of [
+    [noCache],
+    [{ uses: "./.github/actions/safe-chain" }, setup],
+  ]) {
+    expect(withInstallCache(setup, { steps })).toEqual(setup);
+  }
+  const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
+  expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
 });
