@@ -32,8 +32,10 @@
 
 ## React
 
-- Put the root or exported component at the top of the file after imports; helper
-  components and types follow below.
+- Put the root or exported component at the top of the file after imports; types
+  and helpers follow below it. A helper below the component must be a function
+  declaration (hoisted, so `no-use-before-define` with `functions: false` allows
+  it) or live in its own module, not a `const` arrow.
 - When React Compiler is enabled, prefer plain React over prophylactic `useMemo`,
   `useCallback`, and `React.memo`.
 - Clean up legacy memoization gradually when touching a file; do not run broad
