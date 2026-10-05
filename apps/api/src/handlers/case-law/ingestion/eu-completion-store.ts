@@ -14,6 +14,7 @@ import {
   sql,
   type SQLWrapper,
 } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
 import { DAY_IN_MS } from "@stll/time";
@@ -39,6 +40,12 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  permitsLifecycleMove,
+  transitionLifecycle,
+  transitionLifecycleBatch,
+} from "@/api/lib/db/transitions";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -228,6 +235,49 @@ const receiptTx = async (tx: Transaction, id: string) =>
       .for("update")
       .limit(1)
   ).at(0) ?? panic("Completion receipt does not exist");
+// Receipt and control transitions are attributed to the completion run's
+// system audit row, which recordTick writes once per tick that changed anything.
+const attributedToCompletionRun = async () => {
+  await Promise.resolve();
+};
+
+type ReceiptMetadata = Omit<
+  PgUpdateSetSource<typeof euCompletionReceipts>,
+  "id" | "status" | "attemptState"
+>;
+type ReceiptMoveOptions = {
+  receipt: EuCompletionReceipt;
+  status: EuCompletionReceipt["status"];
+  attemptState: EuCompletionReceipt["attemptState"];
+  set: ReceiptMetadata;
+};
+/** Moves a receipt locked by receiptTx; both lifecycle columns move together. */
+const moveReceiptTx = async (
+  tx: Transaction,
+  { receipt, status, attemptState, set }: ReceiptMoveOptions,
+) => {
+  const { graphs } = TRANSITIONS.euCompletionReceipts;
+  const statusMove = { from: [receipt.status], to: status };
+  const attemptMove = { from: [receipt.attemptState], to: attemptState };
+  if (
+    !permitsLifecycleMove(graphs.status, statusMove) ||
+    !permitsLifecycleMove(graphs.attemptState, attemptMove)
+  ) {
+    panic(`Completion receipt cannot move from ${receipt.status} to ${status}`);
+  }
+  const moved = await transitionLifecycle({
+    tx,
+    spec: TRANSITIONS.euCompletionReceipts,
+    id: receipt.id,
+    moves: { status: statusMove, attemptState: attemptMove },
+    set,
+    recordTransitionAuditEvent: attributedToCompletionRun,
+  });
+  if (moved.type === "stale") {
+    panic("Completion locked receipt changed under its lock");
+  }
+  return await receiptTx(tx, receipt.id);
+};
 const controlsTx = async (
   tx: Transaction,
   sourceId: EuCompletionReceipt["sourceId"],
@@ -764,28 +814,29 @@ const createSettlementOperations = ({
         .limit(1)
     ).at(0);
     assertCompletionRetryTime({ retrying, retryAt, now });
-    const settled =
-      (
-        await tx
-          .update(euCompletionReceipts)
-          .set(
-            receiptTransition({
-              receipt,
-              settlement: {
-                id,
-                status,
-                ...(retryAt === undefined ? {} : { retryAt }),
-                ...(detail === undefined ? {} : { detail }),
-                ...(mirrorWait === undefined ? {} : { mirrorWait }),
-                ...(refusal === undefined ? {} : { refusal }),
-              },
-              decision,
-              at: new Date(now()),
-            }),
-          )
-          .where(eq(euCompletionReceipts.id, id))
-          .returning()
-      ).at(0) ?? panic("Completion locked receipt disappeared");
+    const {
+      status: settledStatus,
+      attemptState,
+      ...metadata
+    } = receiptTransition({
+      receipt,
+      settlement: {
+        id,
+        status,
+        ...(retryAt === undefined ? {} : { retryAt }),
+        ...(detail === undefined ? {} : { detail }),
+        ...(mirrorWait === undefined ? {} : { mirrorWait }),
+        ...(refusal === undefined ? {} : { refusal }),
+      },
+      decision,
+      at: new Date(now()),
+    });
+    const settled = await moveReceiptTx(tx, {
+      receipt,
+      status: settledStatus,
+      attemptState,
+      set: metadata,
+    });
     if (status === "publisher-refused" && retryAt !== undefined) {
       await holdPublisherRefusalTx(tx, { receipt, retryAt, now });
     }
@@ -1018,66 +1069,84 @@ const readmitSettledMirrorsTx = async (
   const reclaimed = repaired.filter((row) => !markerCurrent(row));
   const readmission = {
     detail: null,
-    attemptState: "idle",
     completedAt: null,
     completionSourceHash: null,
     retryAt: null,
     updatedAt: new Date(now()),
   } as const;
+  const readmit = async (
+    rows: typeof repaired,
+    { to, set }: { to: "fetched" | "pending"; set: ReceiptMetadata },
+  ) => {
+    const moved = await transitionLifecycleBatch({
+      tx,
+      spec: TRANSITIONS.euCompletionReceipts,
+      ids: rows.map(({ receipt }) => receipt.id),
+      moves: {
+        status: { from: ["review-required"], to },
+        attemptState: { from: ["idle", "picked-up", "repair"], to: "idle" },
+      },
+      set,
+      recordTransitionAuditEvent: attributedToCompletionRun,
+    });
+    if (moved.length !== rows.length) {
+      panic("Readmitted receipt was not updated");
+    }
+  };
   // A canonical repair may advance observation order without changing bytes.
   // Rows whose written marker still matches replay that write; the rest
   // reclassify against their current claim, each from the values read above.
-  const replayed =
-    current.length === 0
+  await readmit(current, { to: "fetched", set: readmission });
+  await readmit(reclaimed, {
+    to: "pending",
+    set: {
+      ...readmission,
+      claimedFingerprint: null,
+      payload: null,
+      payloadHash: null,
+      provenance: null,
+      target: null,
+      writtenAt: null,
+      writtenSourceHash: null,
+      writtenObservationOrder: null,
+      writtenParserVersion: null,
+      attempts: 0,
+      mirrorWaits: 0,
+    },
+  });
+  if (reclaimed.length > 0) {
+    const claims = sql.join(
+      reclaimed.map(
+        ({ receipt, sourceHash, observationOrder }) =>
+          sql`(${receipt.id}::text, ${sourceHash}::text, ${observationOrder}::bigint)`,
+      ),
+      sql`, `,
+    );
+    await tx
+      .update(euCompletionReceipts)
+      .set({
+        claimedSourceHash: sql`claim.source_hash`,
+        claimedObservationOrder: sql`claim.observation_order`,
+      })
+      .from(
+        sql`(VALUES ${claims}) AS claim(id, source_hash, observation_order)`,
+      )
+      .where(eq(euCompletionReceipts.id, sql`claim.id`));
+  }
+  const rows =
+    repaired.length === 0
       ? []
       : await tx
-          .update(euCompletionReceipts)
-          .set({ ...readmission, status: "fetched" })
+          .select()
+          .from(euCompletionReceipts)
           .where(
             inArray(
               euCompletionReceipts.id,
-              current.map(({ receipt }) => receipt.id),
+              repaired.map(({ receipt }) => receipt.id),
             ),
-          )
-          .returning();
-  const claims = sql.join(
-    reclaimed.map(
-      ({ receipt, sourceHash, observationOrder }) =>
-        sql`(${receipt.id}::text, ${sourceHash}::text, ${observationOrder}::bigint)`,
-    ),
-    sql`, `,
-  );
-  const restarted =
-    reclaimed.length === 0
-      ? []
-      : await tx
-          .update(euCompletionReceipts)
-          .set({
-            ...readmission,
-            status: "pending",
-            claimedSourceHash: sql`claim.source_hash`,
-            claimedObservationOrder: sql`claim.observation_order`,
-            claimedFingerprint: null,
-            payload: null,
-            payloadHash: null,
-            provenance: null,
-            target: null,
-            writtenAt: null,
-            writtenSourceHash: null,
-            writtenObservationOrder: null,
-            writtenParserVersion: null,
-            attempts: 0,
-            mirrorWaits: 0,
-          })
-          .from(
-            sql`(VALUES ${claims}) AS claim(id, source_hash, observation_order)`,
-          )
-          .where(eq(euCompletionReceipts.id, sql`claim.id`))
-          .returning();
+          );
   // Keep the selection's order: callers process readmitted rows in it.
-  const updated = new Map(
-    [...replayed, ...restarted].map((receipt) => [receipt.id, receipt]),
-  );
+  const updated = new Map(rows.map((receipt) => [receipt.id, receipt]));
   const readmitted = repaired.map(
     ({ receipt }) =>
       updated.get(receipt.id) ?? panic("Readmitted receipt was not updated"),
@@ -1259,23 +1328,19 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
         ) {
           return null;
         }
-        return (
-          (
-            await tx
-              .update(euCompletionReceipts)
-              .set({
-                status: "fetched",
-                payload,
-                payloadHash,
-                claimedFingerprint,
-                target,
-                provenance,
-                updatedAt: new Date(now()),
-              })
-              .where(eq(euCompletionReceipts.id, id))
-              .returning()
-          ).at(0) ?? null
-        );
+        return await moveReceiptTx(tx, {
+          receipt,
+          status: "fetched",
+          attemptState: receipt.attemptState,
+          set: {
+            payload,
+            payloadHash,
+            claimedFingerprint,
+            target,
+            provenance,
+            updatedAt: new Date(now()),
+          },
+        });
       }),
     );
   };
@@ -1320,22 +1385,22 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
         ? EU_COMPLETION_STORE_LIMITS.readmissionDays * DAY_IN_MS
         : retryDelay(attempts + 1);
       const nextRetryAt = withdrawn ? null : new Date(now() + retryDuration);
-      await tx
-        .update(euCompletionReceipts)
-        .set({
+      await moveReceiptTx(tx, {
+        receipt,
+        status: nextStatus,
+        attemptState: withdrawn || exhausted ? "idle" : pickedState,
+        set: {
           attempts: nextAttempts,
-          attemptState: withdrawn || exhausted ? "idle" : pickedState,
           systemicFailures:
             receipt.status === "failed" ? 0 : receipt.systemicFailures,
-          status: nextStatus,
           ...(withdrawn
             ? { payload: null, detail: "corpus document withdrawn" }
             : {}),
           retryAt: nextRetryAt,
           completedAt: withdrawn || exhausted ? new Date(now()) : null,
           updatedAt: new Date(now()),
-        })
-        .where(eq(euCompletionReceipts.id, id));
+        },
+      });
       if (withdrawn) {
         return "waiting";
       }
@@ -1407,14 +1472,14 @@ const createFailureOperations = (
               holdCount: batch.holdCount + 1,
             }
           : batch;
-      await tx
-        .update(euCompletionReceipts)
-        .set({
+      await moveReceiptTx(tx, {
+        receipt: current,
+        status: exhausted ? "failed" : "failed-backoff",
+        attemptState: "idle",
+        set: {
           attempts: classification.attempts,
           systemicFailures: classification.systemicFailures,
           systemicProgress: classification.systemicProgress,
-          attemptState: "idle",
-          status: exhausted ? "failed" : "failed-backoff",
           detail: failure.detail?.slice(0, 512) ?? failure.code,
           retryAt: new Date(
             Math.max(
@@ -1427,8 +1492,8 @@ const createFailureOperations = (
           ),
           completedAt: exhausted ? new Date(now()) : null,
           updatedAt: new Date(now()),
-        })
-        .where(eq(euCompletionReceipts.id, receipt.id));
+        },
+      });
       await tx
         .insert(euCompletionControls)
         .values({
@@ -1661,19 +1726,22 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
       panic("Completion control requires explicit operator attribution");
     }
     await transaction(async (tx) => {
+      const key = sourceId === null ? GLOBAL_CONTROL : sourceControl(sourceId);
       await tx
         .insert(euCompletionControls)
-        .values({
-          key: sourceId === null ? GLOBAL_CONTROL : sourceControl(sourceId),
-          sourceId,
-          state,
-          changedBy,
-          changedAt,
-        })
-        .onConflictDoUpdate({
-          target: euCompletionControls.key,
-          set: { state, changedBy, changedAt },
-        });
+        .values({ key, sourceId })
+        .onConflictDoNothing();
+      const moved = await transitionLifecycle({
+        tx,
+        spec: TRANSITIONS.euCompletionControls,
+        id: key,
+        moves: { state: { from: ["off", "on"], to: state } },
+        set: { changedBy, changedAt },
+        recordTransitionAuditEvent: attributedToCompletionRun,
+      });
+      if (moved.type === "stale") {
+        panic("Completion control row disappeared under its transaction");
+      }
     });
   };
   return { getApproval, approveSupervisedDryRun, setControl };
