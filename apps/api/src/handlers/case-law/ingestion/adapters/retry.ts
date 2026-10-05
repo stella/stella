@@ -102,6 +102,98 @@ export const fetchPublisher = async (
   return response;
 };
 
+type PublisherRateLimitRefusalErrorOptions = {
+  cursor: string | null;
+  publisherKey: PublisherGateId;
+  status: number;
+  cooldownUntilEpochMs: number;
+  adapterKey: AdapterKey;
+};
+
+/** A terminal refusal for this cycle; its shared cooldown uses the Redis TIME clock. */
+export class PublisherRateLimitRefusalError extends AdapterFetchError {
+  readonly publisherKey: PublisherGateId;
+  readonly status: number;
+  readonly cooldownUntilEpochMs: number;
+
+  constructor({
+    publisherKey,
+    status,
+    cooldownUntilEpochMs,
+    adapterKey,
+    cursor,
+  }: PublisherRateLimitRefusalErrorOptions) {
+    super({
+      message: `Publisher rate limit refused: ${status}`,
+      adapterKey,
+      cursor,
+      httpStatus: status,
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+    });
+    this.name = "PublisherRateLimitRefusalError";
+    this.publisherKey = publisherKey;
+    this.status = status;
+    this.cooldownUntilEpochMs = cooldownUntilEpochMs;
+  }
+}
+
+const PUBLISHER_MAX_ATTEMPTS = 6;
+const PUBLISHER_BASE_DELAY_MS = 2000;
+const PUBLISHER_MAX_DELAY_MS = 300_000;
+const RETRY_AFTER_MAX_MS = 900_000;
+const PUBLISHER_RETRY_STATUSES = new Set([408, 502, 503, 504]);
+
+type PublisherRetryDelayOptions = {
+  attempt: number;
+  retryAfter: string | null;
+  now: number;
+  random: number;
+  retryAfterMaxMs?: number;
+};
+
+/** Parse the protocol value before a publisher policy applies its own bounds. */
+export const parsePublisherRetryAfter = (
+  retryAfter: string | null,
+  now: number,
+): number | null => {
+  if (retryAfter === null) {
+    return null;
+  }
+  const value = retryAfter.trim();
+  // The platform date parser accepts bare numbers and non-HTTP dates; reject those rather
+  // than interpreting malformed delta-seconds as a calendar date.
+  let parsed = Number.NaN;
+  if (/^\d+$/u.test(value)) {
+    parsed = Number(value) * 1000;
+  } else if (
+    /^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT|(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d{2}-[A-Z][a-z]{2}-\d{2} \d{2}:\d{2}:\d{2} GMT|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/u.test(
+      value,
+    )
+  ) {
+    // HTTP-date is a legacy protocol grammar rather than Temporal's ISO grammar.
+    parsed = new Date(value).getTime() - now;
+  }
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
+export const publisherRetryDelay = ({
+  attempt,
+  retryAfter,
+  now,
+  random,
+  retryAfterMaxMs = RETRY_AFTER_MAX_MS,
+}: PublisherRetryDelayOptions): number => {
+  const jitter =
+    random *
+    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  const parsed = parsePublisherRetryAfter(retryAfter, now);
+  if (parsed === null) {
+    return jitter;
+  }
+  return Math.max(jitter, Math.min(Math.max(0, parsed), retryAfterMaxMs));
+};
+
 const fetchPublisherRequest = async (
   url: string | URL,
   init: PublisherFetchInit,
@@ -414,98 +506,6 @@ export const fetchWithRetry = async (
 
   // Unreachable: the loop always returns or throws
   return panic("fetchWithRetry: unreachable");
-};
-
-type PublisherRateLimitRefusalErrorOptions = {
-  cursor: string | null;
-  publisherKey: PublisherGateId;
-  status: number;
-  cooldownUntilEpochMs: number;
-  adapterKey: AdapterKey;
-};
-
-/** A terminal refusal for this cycle; its shared cooldown uses the Redis TIME clock. */
-export class PublisherRateLimitRefusalError extends AdapterFetchError {
-  readonly publisherKey: PublisherGateId;
-  readonly status: number;
-  readonly cooldownUntilEpochMs: number;
-
-  constructor({
-    publisherKey,
-    status,
-    cooldownUntilEpochMs,
-    adapterKey,
-    cursor,
-  }: PublisherRateLimitRefusalErrorOptions) {
-    super({
-      message: `Publisher rate limit refused: ${status}`,
-      adapterKey,
-      cursor,
-      httpStatus: status,
-      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
-    });
-    this.name = "PublisherRateLimitRefusalError";
-    this.publisherKey = publisherKey;
-    this.status = status;
-    this.cooldownUntilEpochMs = cooldownUntilEpochMs;
-  }
-}
-
-const PUBLISHER_MAX_ATTEMPTS = 6;
-const PUBLISHER_BASE_DELAY_MS = 2000;
-const PUBLISHER_MAX_DELAY_MS = 300_000;
-const RETRY_AFTER_MAX_MS = 900_000;
-const PUBLISHER_RETRY_STATUSES = new Set([408, 502, 503, 504]);
-
-type PublisherRetryDelayOptions = {
-  attempt: number;
-  retryAfter: string | null;
-  now: number;
-  random: number;
-  retryAfterMaxMs?: number;
-};
-
-/** Parse the protocol value before a publisher policy applies its own bounds. */
-export const parsePublisherRetryAfter = (
-  retryAfter: string | null,
-  now: number,
-): number | null => {
-  if (retryAfter === null) {
-    return null;
-  }
-  const value = retryAfter.trim();
-  // The platform date parser accepts bare numbers and non-HTTP dates; reject those rather
-  // than interpreting malformed delta-seconds as a calendar date.
-  let parsed = Number.NaN;
-  if (/^\d+$/u.test(value)) {
-    parsed = Number(value) * 1000;
-  } else if (
-    /^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT|(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d{2}-[A-Z][a-z]{2}-\d{2} \d{2}:\d{2}:\d{2} GMT|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/u.test(
-      value,
-    )
-  ) {
-    // HTTP-date is a legacy protocol grammar rather than Temporal's ISO grammar.
-    parsed = new Date(value).getTime() - now;
-  }
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
-/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
-export const publisherRetryDelay = ({
-  attempt,
-  retryAfter,
-  now,
-  random,
-  retryAfterMaxMs = RETRY_AFTER_MAX_MS,
-}: PublisherRetryDelayOptions): number => {
-  const jitter =
-    random *
-    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
-  const parsed = parsePublisherRetryAfter(retryAfter, now);
-  if (parsed === null) {
-    return jitter;
-  }
-  return Math.max(jitter, Math.min(Math.max(0, parsed), retryAfterMaxMs));
 };
 
 const isPublisherTimeout = (cause: unknown): boolean =>
