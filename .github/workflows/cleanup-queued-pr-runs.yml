@@ -24,6 +24,9 @@ jobs:
             const repo = context.repo;
             const prEvents = new Set(["pull_request", "pull_request_target"]);
             const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+            const isNotQueuedRefusal = error => error.status === 409
+              && error.message.split(" - https://docs.github.com/rest/actions/workflow-runs#").at(0)
+                === "Cannot cancel a workflow run that has not been queued yet.";
 
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               ...repo, status: "queued", per_page: 100,
@@ -73,6 +76,11 @@ jobs:
                 core.info(`Cancellation requested for ${current.id}: ${reason}`);
                 continue;
               } catch (error) {
+                if (!isNotQueuedRefusal(error)) {
+                  failed += 1;
+                  core.error(`Unable to cancel queued PR run ${current.id}: ${error.message}; manual inspection required`);
+                  continue;
+                }
                 core.warning(`Cancel refused for ${current.id}: ${error.message}`);
               }
               // A run may start while cancellation is attempted. Never force-cancel that run.
@@ -86,6 +94,10 @@ jobs:
                 await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel", args);
                 core.info(`Force-cancellation requested for ${retry.id}: ${retryReason}`);
               } catch (error) {
+                if (isNotQueuedRefusal(error)) {
+                  core.info(`Run ${retry.id} (status: ${retry.status}) skipped: not cancellable (GitHub state)`);
+                  continue;
+                }
                 failed += 1;
                 core.error(`Unable to cancel queued PR run ${retry.id}: ${error.message}; manual inspection required`);
               }
