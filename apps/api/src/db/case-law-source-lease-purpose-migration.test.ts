@@ -28,6 +28,28 @@ test("source lease purposes preserve existing owners and restrict persisted valu
   );
   expect(
     (
+      await db.query(`SELECT convalidated AS validated FROM pg_constraint
+        WHERE conname = 'case_law_sources_ingestion_lease_purpose_valid'`)
+    ).rows,
+  ).toEqual([{ validated: false }]);
+  await db.exec("BEGIN");
+  await db.exec(
+    await Bun.file(
+      new URL(
+        "../../drizzle/20261005185000_case_law_source_lease_purpose_validate/migration.sql",
+        import.meta.url,
+      ),
+    ).text(),
+  );
+  await db.exec("COMMIT");
+  expect(
+    (
+      await db.query(`SELECT convalidated AS validated FROM pg_constraint
+        WHERE conname = 'case_law_sources_ingestion_lease_purpose_valid'`)
+    ).rows,
+  ).toEqual([{ validated: true }]);
+  expect(
+    (
       await db.query(`SELECT ingestion_lease_purpose AS purpose,
       ingestion_lease_token IS NOT NULL AS held,
       CASE WHEN id = 1 THEN ingestion_lease_token = '00000000-0000-4000-8000-000000000001'::uuid

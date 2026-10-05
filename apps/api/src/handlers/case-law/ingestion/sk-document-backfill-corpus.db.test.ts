@@ -791,21 +791,24 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual(desiredBefore);
       expect(outcome).toEqual({ status: "lost" });
       expect(
-        await db.query.caseLawDecisions.findFirst({
-          where: { id: { eq: id } },
-          columns: {
-            fulltext: true,
-            contentHash: true,
-            textS3Key: true,
-            sectionsS3Key: true,
-            astS3Key: true,
-          },
-        }),
+        (
+          await db
+            .select({
+              fulltext: caseLawDecisions.fulltext,
+              contentHash: caseLawDecisions.contentHash,
+              textS3Key: caseLawDecisions.textS3Key,
+              normalizedS3Key: caseLawDecisions.normalizedS3Key,
+              astS3Key: caseLawDecisions.astS3Key,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, id))
+            .limit(1)
+        ).at(0),
       ).toEqual({
         fulltext: null,
         contentHash: emptyHash,
         textS3Key: null,
-        sectionsS3Key: null,
+        normalizedS3Key: null,
         astS3Key: null,
       });
       expect(

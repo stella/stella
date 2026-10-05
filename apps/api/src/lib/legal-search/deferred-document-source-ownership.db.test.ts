@@ -16,6 +16,7 @@ import {
   MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
@@ -88,16 +89,19 @@ if (!databaseUrl || !enabled) {
       }
     });
     const readDecision = async (decisionId: SafeId<"caseLawDecision">) =>
-      await db.query.caseLawDecisions.findFirst({
-        where: { id: { eq: decisionId } },
-        columns: {
-          fulltext: true,
-          documentFetchAttempts: true,
-          textS3Key: true,
-          sectionsS3Key: true,
-          astS3Key: true,
-        },
-      });
+      (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentFetchAttempts: caseLawDecisions.documentFetchAttempts,
+            textS3Key: caseLawDecisions.textS3Key,
+            normalizedS3Key: caseLawDecisions.normalizedS3Key,
+            astS3Key: caseLawDecisions.astS3Key,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decisionId))
+          .limit(1)
+      ).at(0);
     const readSource = async (sourceId: SafeId<"caseLawSource">) =>
       await db.query.caseLawSources.findFirst({
         where: { id: { eq: sourceId } },
@@ -226,7 +230,7 @@ if (!databaseUrl || !enabled) {
           fulltext: null,
           documentFetchAttempts: MAX_DOCUMENT_FETCH_ATTEMPTS - 1,
           textS3Key: null,
-          sectionsS3Key: null,
+          normalizedS3Key: null,
           astS3Key: null,
         });
       } finally {
@@ -256,7 +260,9 @@ if (!databaseUrl || !enabled) {
             if (Result.isOk(attempt)) {
               panic("source row was not locked");
             }
-            expect(String(attempt.error)).toContain("could not obtain lock");
+            expect(getPgErrorCode(attempt.error)).toBe(
+              PG_ERROR.LOCK_NOT_AVAILABLE,
+            );
             await tx
               .update(caseLawDecisions)
               .set({ fulltext: "document" })

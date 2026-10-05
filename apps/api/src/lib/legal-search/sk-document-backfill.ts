@@ -1870,11 +1870,12 @@ const processClaimedDocument = async ({
   fence,
 }: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
   const { decision } = claim;
-  const fetched: PdfFetchResult = decision.documentUrl
+  const { documentUrl } = decision;
+  const fetched: PdfFetchResult = documentUrl
     ? await fence.beforeRemoteEffect(
         async () =>
           await fetchPdfBytes({
-            documentUrl: decision.documentUrl,
+            documentUrl,
             fetchDocument,
             signal,
           }),

@@ -9,8 +9,5 @@ ALTER TABLE "case_law_sources"
   ADD CONSTRAINT "case_law_sources_ingestion_lease_purpose_valid"
   CHECK ("ingestion_lease_purpose" IN ('ingestion', 'decision-merge')) NOT VALID;--> statement-breakpoint
 
-ALTER TABLE "case_law_sources"
-  VALIDATE CONSTRAINT "case_law_sources_ingestion_lease_purpose_valid";--> statement-breakpoint
-
 GRANT UPDATE (ingestion_lease_purpose)
   ON TABLE "case_law_sources" TO stella_ingestion;

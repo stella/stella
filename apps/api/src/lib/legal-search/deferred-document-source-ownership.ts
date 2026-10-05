@@ -2,7 +2,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import { abortTransaction, type ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -102,9 +102,11 @@ export const withDeferredDocumentSourceOwnership = async <T>({
             const assertActive = () => {
               operationSignal.throwIfAborted();
               if (state === "closed") {
-                throw new DeferredDocumentFenceError({
-                  message: "Document ownership is closed",
-                });
+                abortTransaction(
+                  new DeferredDocumentFenceError({
+                    message: "Document ownership is closed",
+                  }),
+                );
               }
             };
             const fencedDb: ScopedDb = async (run) => {
@@ -122,14 +124,18 @@ export const withDeferredDocumentSourceOwnership = async <T>({
                     .for("update")
                 ).at(0);
                 if (owner === undefined) {
-                  throw new DeferredDocumentFenceError({
-                    message: "Document source is missing",
-                  });
+                  abortTransaction(
+                    new DeferredDocumentFenceError({
+                      message: "Document source is missing",
+                    }),
+                  );
                 }
                 if (owner.mergeLease) {
-                  throw new DeferredDocumentOwnershipLostError({
-                    message: "Document source is held for decision merge",
-                  });
+                  abortTransaction(
+                    new DeferredDocumentOwnershipLostError({
+                      message: "Document source is held for decision merge",
+                    }),
+                  );
                 }
                 const value = await run(tx);
                 assertActive();
@@ -146,10 +152,12 @@ export const withDeferredDocumentSourceOwnership = async <T>({
                     .limit(1)
                 ).at(0);
                 if (mergeLease !== undefined) {
-                  throw new DeferredDocumentOwnershipLostError({
-                    message:
-                      "Document source entered decision merge during settlement",
-                  });
+                  abortTransaction(
+                    new DeferredDocumentOwnershipLostError({
+                      message:
+                        "Document source entered decision merge during settlement",
+                    }),
+                  );
                 }
                 assertActive();
                 return value;
@@ -177,7 +185,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
       if (isDeferredDocumentOwnershipLost(result.error)) {
         return { status: "lost" };
       }
-      throw result.error;
+      abortTransaction(result.error);
     }
     return { status: "completed", value: result.value };
   } finally {
