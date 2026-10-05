@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
@@ -181,7 +182,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef)
-    .toSorted((left, right) => left.name.localeCompare(right.name));
+    .toSorted((left, right) => compareCodeUnit(left.name, right.name));
 
 // YAML folding changes whitespace outside literals, not the condition's tokens.
 const conditionTokens = (condition: string) =>

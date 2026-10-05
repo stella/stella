@@ -45,6 +45,8 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { ParsedExposure } from "./lib/enumerate-safe-handlers";
 import {
   discoverSafeHandlers,
@@ -229,7 +231,7 @@ export const classifyCoverage = ({
     missingMcp: missingMcp.toSorted(),
     invalidExposure: invalidExposure.toSorted(),
     unknownToolNames: unknownToolNames.toSorted((a, b) =>
-      a.id.localeCompare(b.id),
+      compareCodeUnit(a.id, b.id),
     ),
     orphanTools: orphanTools.toSorted(),
     staleWaivers,
@@ -295,7 +297,7 @@ export const findHiddenEndpointMismatches = ({
       mismatches.push({ id, callCount, enumerableCount, allowed });
     }
   }
-  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => compareCodeUnit(a.id, b.id));
 };
 
 /**
@@ -315,7 +317,7 @@ export const findStaleAllowlistEntries = ({
   const discovered = new Set(files.map(({ id }) => id));
   return Object.keys(allowlist)
     .filter((id) => !discovered.has(id))
-    .toSorted((a, b) => a.localeCompare(b));
+    .toSorted(compareCodeUnit);
 };
 
 const readBaseline = async (): Promise<string[]> => {

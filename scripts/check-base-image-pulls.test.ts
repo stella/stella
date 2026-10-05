@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const GITHUB_URL = new URL("../.github/", import.meta.url);
 const PULL_SCRIPT = "scripts/pull-base-images.sh";
 const BUILD_PUSH_ACTION = "docker/build-push-action@";
@@ -98,7 +100,7 @@ const collectStepLists = async (): Promise<StepList[]> => {
     }
     lists.push({ source: file, steps: stepsOf(runs["steps"], file) });
   }
-  return lists.toSorted((a, b) => a.source.localeCompare(b.source));
+  return lists.toSorted((a, b) => compareCodeUnit(a.source, b.source));
 };
 
 /** A step's command, with its own `env` substituted and quotes dropped. */

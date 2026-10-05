@@ -13,6 +13,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   CAPTURE_THEMES,
   captureDefinitions,
@@ -322,7 +324,8 @@ export const computeVerdicts = (): Verdict[] => {
 
   verdicts.sort(
     (a, b) =>
-      a.captureId.localeCompare(b.captureId) || a.theme.localeCompare(b.theme),
+      compareCodeUnit(a.captureId, b.captureId) ||
+      compareCodeUnit(a.theme, b.theme),
   );
   return verdicts;
 };

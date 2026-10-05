@@ -40,6 +40,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { isChangesetEntry } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -337,7 +339,7 @@ export const canonicalJson = (value: unknown): string => {
   }
   if (typeof value === "object" && value !== null) {
     const entries = Object.entries(value)
-      .toSorted(([a], [b]) => a.localeCompare(b))
+      .toSorted(([a], [b]) => compareCodeUnit(a, b))
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
     return `{${entries.join(",")}}`;
   }
