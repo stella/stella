@@ -168,7 +168,10 @@ const SignInOptionsPanel = ({
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
@@ -246,6 +249,8 @@ const SignInOptionsPanel = ({
 
       {showEmailOtp && (
         <Form
+          dirty={dirty}
+          onDiscard={() => form.reset()}
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
@@ -402,10 +407,15 @@ const PasswordSignInForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
@@ -495,12 +505,17 @@ const BootstrapSignUpForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <div className="flex flex-col gap-3">
       <TextSeparator>{t("auth.createFirstAccount")}</TextSeparator>
       <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
         errors={formErrors}
         onSubmit={(e) => {
           e.preventDefault();

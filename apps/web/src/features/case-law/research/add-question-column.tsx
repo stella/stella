@@ -125,6 +125,7 @@ export const AddQuestionColumn = ({
         <BulkAddColumns
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: action.surface.suggestion,
             onCreated: action.surface.onAddToSearch,
           }}
@@ -156,7 +157,11 @@ export const AddQuestionColumn = ({
               chooseOrganization();
             }
           }}
-          target={{ kind: "organisation", suggestion: action.suggestion }}
+          target={{
+            kind: "organisation",
+            mode: { type: "add" },
+            suggestion: action.suggestion,
+          }}
           triggerVariant={triggerVariant}
         />
       );
@@ -229,6 +234,7 @@ const PickQuestionColumn = ({
           open
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: surface.suggestion,
             onCreated: surface.onAddToSearch,
           }}
