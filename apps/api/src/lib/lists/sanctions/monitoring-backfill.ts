@@ -13,10 +13,15 @@ import {
   AUDIT_RESOURCE_TYPE,
   CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
   createBackgroundAuditRecorder,
+  recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_MONITORING_BACKFILL_TRANSITIONS } from "@/api/lib/db/transition-specs";
-import { transitionBatch } from "@/api/lib/db/transitions";
+import {
+  defineScopedTransitions,
+  transitionBatch,
+  transitionUpsertBatch,
+} from "@/api/lib/db/transitions";
 import {
   commitSanctionsMonitoringBatch,
   createMonitoringBatchAuditCounts,
@@ -42,16 +47,11 @@ type BackfillTransitionOptions = {
   nextGeneration?: (typeof sanctionsMonitoringBackfills.$inferSelect)["generation"];
 };
 
-export const transitionMonitoringBackfill = async ({
-  tx,
-  job,
-  to,
-  set,
-  nextGeneration,
-  auditCounts,
-}: BackfillTransitionOptions) => {
+const monitoringBackfillAuditBindings = (
+  job: typeof sanctionsMonitoringBackfills.$inferSelect,
+) => {
   const actor = TENANT_SYSTEM_ACTOR.sanctionsMonitoringBackfill;
-  const recordAuditEvent = createBackgroundAuditRecorder({
+  return {
     organizationId: job.organizationId,
     workspaceId: null,
     userId: actor,
@@ -62,8 +62,77 @@ export const transitionMonitoringBackfill = async ({
         name: "Sanctions monitoring backfill",
       },
       trigger: { type: "system", source: actor, sourceId: job.sourceId },
+    } as const,
+  };
+};
+
+const BACKFILL_BATCH_TRANSITIONS = defineScopedTransitions({
+  table: sanctionsMonitoringBackfills,
+  key: "sourceId",
+  scope: ["organizationId"],
+  stateColumn: "status",
+  edges: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS.edges,
+  initial: ["pending"],
+  sameStateUpsert: "ignore",
+});
+
+/** The enqueue statement already locks each full key and advances its generation. */
+export const resetMonitoringBackfills = async (
+  tx: Transaction,
+  jobs: readonly (typeof sanctionsMonitoringBackfills.$inferSelect)[],
+) =>
+  await transitionUpsertBatch({
+    tx,
+    spec: BACKFILL_BATCH_TRANSITIONS,
+    values: jobs.map((job) => ({ ...job, status: "pending" as const })),
+    recordTransitionAuditEvent: async (auditTx, rows) => {
+      const byIdentity = new Map(
+        jobs.map((job) => [
+          JSON.stringify([job.organizationId, job.sourceId]),
+          job,
+        ]),
+      );
+      await recordAuditGroups({
+        tx: auditTx,
+        groups: rows.map(({ identity }) => {
+          const job =
+            byIdentity.get(
+              JSON.stringify([
+                identity["organizationId"],
+                identity["sourceId"],
+              ]),
+            ) ?? panic("Backfill audit identity was not enqueued");
+          return {
+            bindings: monitoringBackfillAuditBindings(job),
+            events: [
+              {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY,
+                resourceId: CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
+                changes: { status: { old: job.status, new: "pending" } },
+                metadata: {
+                  sourceId: job.sourceId,
+                  kind: "sanctions-monitoring-backfill",
+                },
+              },
+            ],
+          };
+        }),
+      });
     },
   });
+
+export const transitionMonitoringBackfill = async ({
+  tx,
+  job,
+  to,
+  set,
+  nextGeneration,
+  auditCounts,
+}: BackfillTransitionOptions) => {
+  const recordAuditEvent = createBackgroundAuditRecorder(
+    monitoringBackfillAuditBindings(job),
+  );
   return await transitionBatch({
     tx,
     spec: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,

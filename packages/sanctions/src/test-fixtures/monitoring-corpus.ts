@@ -32,3 +32,10 @@ export const syntheticMonitoringEntry = (index: number) =>
     listedOn: null,
     sourceUrl: "https://example.test/entry",
   }) satisfies SanctionsEntry;
+
+export const MONITORING_SCREENING_PASSES = 2;
+export const MATCHER_REPORT_BATCH_SIZE = 100;
+export const MATCHER_WORKLOAD_REPORT_COUNT =
+  1 +
+  (MONITORING_CONTACT_COUNT * MONITORING_SCREENING_PASSES) /
+    MATCHER_REPORT_BATCH_SIZE;

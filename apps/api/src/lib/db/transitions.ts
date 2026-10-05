@@ -97,7 +97,11 @@ export const defineScopedTransitions = <
     panic("A scoped transition requires an enum state and identity columns");
   }
   const stateValues = state.enumValues;
-  const primaryKeyCovered = getTableConfig(table).primaryKeys.some(
+  const tableConfig = getTableConfig(table);
+  const uniqueIdentityCovered = [
+    ...tableConfig.primaryKeys,
+    ...tableConfig.uniqueConstraints,
+  ].some(
     ({ columns: primary }) =>
       primary.length === keyColumns.length &&
       primary.every((column) =>
@@ -106,10 +110,12 @@ export const defineScopedTransitions = <
   );
   if (
     new Set(keyNames).size !== keyNames.length ||
-    (!(scope.length === 0 && keyColumn.primary) && !primaryKeyCovered)
+    keyColumns.some((column) => column === undefined || !column.notNull) ||
+    (!(scope.length === 0 && (keyColumn.primary || keyColumn.isUnique)) &&
+      !uniqueIdentityCovered)
   ) {
     panic(
-      "A scoped transition identity must cover exactly one composite primary key",
+      "A scoped transition identity must cover exactly one non-null primary or unique key",
     );
   }
   if (
@@ -286,7 +292,9 @@ const executeScopedUpsertWrites = async <
         `);
   const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
   const updateColumns = insertColumns.filter(
-    (column) => !identityKeys.some((key) => columns[key]?.name === column.name),
+    (column) =>
+      !column.primary &&
+      !identityKeys.some((key) => columns[key]?.name === column.name),
   );
   const priorStates = Object.entries<readonly string[]>(spec.edges).flatMap(
     ([from, targets]) =>
@@ -867,7 +875,7 @@ export const defineKeyedTransitions = <
       )
     ) {
       panic(
-        "A scoped transition identity must cover exactly one composite primary key",
+        "A scoped transition identity must cover exactly one non-null primary or unique key",
       );
     }
   }

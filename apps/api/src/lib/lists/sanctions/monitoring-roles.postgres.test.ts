@@ -202,7 +202,7 @@ if (!databaseUrl || !runPostgresTests) {
       const organizationId = mintAuthProviderId<"organization">();
       const otherOrganizationId = mintAuthProviderId<"organization">();
       const organizations = [organizationId, otherOrganizationId];
-      const drainDue = new Date("1900-01-01T00:00:00.000Z");
+      const drainDue = new Date(Date.now() - 1000);
       const backfillDue = drainDue;
       const drainRunId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
       const backfillRunId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
@@ -421,6 +421,269 @@ if (!databaseUrl || !runPostgresTests) {
         await db
           .delete(systemAuditRuns)
           .where(inArray(systemAuditRuns.subject, [drainRunId, backfillRunId]));
+      }
+    });
+  }, 120_000);
+
+  test("a failed tenant backs off without blocking another tenant, then retries", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const failedOrganizationId = mintAuthProviderId<"organization">();
+      const healthyOrganizationId = mintAuthProviderId<"organization">();
+      const organizations = [failedOrganizationId, healthyOrganizationId];
+      const base = new Date();
+      const runId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+      const rollbackRunId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+      const generationRunId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+      const retryRunId = toSafeId<"schedulerJobRun">(Bun.randomUUIDv7());
+      let failedContactId: typeof contacts.$inferSelect.id | undefined;
+      let healthyContactId: typeof contacts.$inferSelect.id | undefined;
+      const taskContext = (at: Date, taskRunId = runId) => ({
+        db: asTestRaw<SchedulerDb>(db),
+        signal: new AbortController().signal,
+        logger,
+        scheduleContinuation: () => {},
+        job: asTestRaw<SchedulerTaskContext["job"]>({}),
+        payload: null,
+        dueAt: DueSlot.of({ nextRunAt: at, lockedAt: at }),
+        runId: taskRunId,
+      });
+      try {
+        await db.insert(organization).values(
+          organizations.map((id) => ({
+            id,
+            name: "Sanctions retry fixture",
+            slug: id,
+            createdAt: base,
+          })),
+        );
+        const seeded = await db
+          .insert(contacts)
+          .values([
+            {
+              organizationId: failedOrganizationId,
+              type: "person",
+              displayName: "Retry failure subject",
+            },
+            {
+              organizationId: healthyOrganizationId,
+              type: "person",
+              displayName: "Retry healthy subject",
+            },
+          ])
+          .returning();
+        failedContactId = seeded.find(
+          ({ organizationId }) => organizationId === failedOrganizationId,
+        )?.id;
+        healthyContactId = seeded.find(
+          ({ organizationId }) => organizationId === healthyOrganizationId,
+        )?.id;
+        if (failedContactId === undefined || healthyContactId === undefined) {
+          panic("Sanctions retry fixture contacts missing");
+        }
+        await db
+          .update(sanctionsContactMarks)
+          .set({ scheduledAt: new Date(base.getTime() - 1000) })
+          .where(
+            inArray(sanctionsContactMarks.contactId, [
+              failedContactId,
+              healthyContactId,
+            ]),
+          );
+        await db.execute(
+          sql`CREATE FUNCTION reject_retry_fixture_screening() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF (SELECT display_name FROM public.contacts WHERE id = NEW.contact_id) LIKE 'Retry failure%subject' THEN RAISE EXCEPTION 'synthetic tenant screening failure'; END IF; RETURN NEW; END $$`,
+        );
+        await db.execute(
+          sql`CREATE TRIGGER reject_retry_fixture_screening BEFORE INSERT ON public.sanctions_contact_screenings FOR EACH ROW EXECUTE FUNCTION public.reject_retry_fixture_screening()`,
+        );
+
+        const firstRun = await drainSanctionsMonitoringTask(taskContext(base));
+        if (firstRun === undefined) {
+          panic("Sanctions monitoring task returned no outcome");
+        }
+        expect(firstRun.isOk()).toBe(true);
+        expect(
+          await db
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.contactId, healthyContactId)),
+        ).toEqual([]);
+        const failedMark =
+          (
+            await db
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, failedContactId))
+          ).at(0) ?? panic("Failed tenant mark missing");
+        expect(failedMark.attemptCount).toBe(1);
+        expect(failedMark.nextAttemptAt.getTime()).toBeGreaterThan(
+          base.getTime(),
+        );
+        expect(
+          await db
+            .select()
+            .from(sanctionsContactScreenings)
+            .where(eq(sanctionsContactScreenings.contactId, healthyContactId)),
+        ).toHaveLength(7);
+        const failedAudit = await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, failedOrganizationId));
+        expect(failedAudit).toHaveLength(1);
+        expect(failedAudit.at(0)?.metadata).toMatchObject({
+          kind: "sanctions-monitoring-drain-attempt-failed",
+          attempted: 1,
+        });
+
+        await db.execute(
+          sql`CREATE FUNCTION reject_retry_fixture_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.metadata->>'kind' = 'sanctions-monitoring-drain-attempt-failed' AND EXISTS (SELECT 1 FROM public.contacts WHERE organization_id = NEW.organization_id AND display_name = 'Retry failure subject') THEN RAISE EXCEPTION 'synthetic retry audit failure'; END IF; RETURN NEW; END $$`,
+        );
+        await db.execute(
+          sql`CREATE TRIGGER reject_retry_fixture_audit BEFORE INSERT ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION public.reject_retry_fixture_audit()`,
+        );
+        const rollbackRun = await drainSanctionsMonitoringTask(
+          taskContext(
+            new Date(failedMark.nextAttemptAt.getTime() + 1),
+            rollbackRunId,
+          ),
+        );
+        if (rollbackRun === undefined) {
+          panic("Sanctions monitoring retry returned no outcome");
+        }
+        expect(rollbackRun.isErr()).toBe(true);
+        const unadvancedMark =
+          (
+            await db
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, failedContactId))
+          ).at(0) ?? panic("Failed tenant mark missing after audit rollback");
+        expect(unadvancedMark).toMatchObject({
+          attemptCount: 1,
+          nextAttemptAt: failedMark.nextAttemptAt,
+        });
+        expect(
+          await db
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, failedOrganizationId)),
+        ).toHaveLength(1);
+
+        await db.execute(
+          sql`DROP TRIGGER reject_retry_fixture_audit ON public.audit_logs`,
+        );
+        await db.execute(
+          sql`DROP FUNCTION public.reject_retry_fixture_audit()`,
+        );
+        await db
+          .update(contacts)
+          .set({ displayName: "Retry failure changed subject" })
+          .where(eq(contacts.id, failedContactId));
+        const resetMark =
+          (
+            await db
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, failedContactId))
+          ).at(0) ??
+          panic("Generation change did not preserve the queued mark");
+        expect(resetMark.generation).toBe(failedMark.generation + 1n);
+        expect(resetMark.attemptCount).toBe(0);
+        expect(resetMark.nextAttemptAt).toEqual(
+          new Date("1970-01-01T00:00:00.000Z"),
+        );
+        const generationRun = await drainSanctionsMonitoringTask(
+          taskContext(new Date(base.getTime() + 10_000), generationRunId),
+        );
+        if (generationRun === undefined) {
+          panic("Sanctions monitoring generation retry returned no outcome");
+        }
+        expect(generationRun.isOk()).toBe(true);
+        const newBackoffMark =
+          (
+            await db
+              .select()
+              .from(sanctionsContactMarks)
+              .where(eq(sanctionsContactMarks.contactId, failedContactId))
+          ).at(0) ?? panic("Generation retry mark missing");
+        expect(newBackoffMark.attemptCount).toBe(1);
+        expect(newBackoffMark.generation).toBe(resetMark.generation);
+        expect(newBackoffMark.nextAttemptAt.getTime()).toBeGreaterThan(
+          base.getTime() + 10_000,
+        );
+        await db.execute(
+          sql`DROP TRIGGER reject_retry_fixture_screening ON public.sanctions_contact_screenings`,
+        );
+        await db.execute(
+          sql`DROP FUNCTION public.reject_retry_fixture_screening()`,
+        );
+        const retryAt = new Date(newBackoffMark.nextAttemptAt.getTime() + 1);
+        const retryRun = await drainSanctionsMonitoringTask(
+          taskContext(retryAt, retryRunId),
+        );
+        if (retryRun === undefined) {
+          panic("Sanctions monitoring final retry returned no outcome");
+        }
+        expect(retryRun.isOk()).toBe(true);
+        expect(
+          await db
+            .select()
+            .from(sanctionsContactMarks)
+            .where(eq(sanctionsContactMarks.contactId, failedContactId)),
+        ).toEqual([]);
+        expect(
+          await db
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, failedOrganizationId)),
+        ).toHaveLength(3);
+      } finally {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS reject_retry_fixture_screening ON public.sanctions_contact_screenings`,
+        );
+        await db.execute(
+          sql`DROP FUNCTION IF EXISTS public.reject_retry_fixture_screening()`,
+        );
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS reject_retry_fixture_audit ON public.audit_logs`,
+        );
+        await db.execute(
+          sql`DROP FUNCTION IF EXISTS public.reject_retry_fixture_audit()`,
+        );
+        if (failedContactId !== undefined && healthyContactId !== undefined) {
+          await db
+            .delete(sanctionsContactMarks)
+            .where(
+              inArray(sanctionsContactMarks.contactId, [
+                failedContactId,
+                healthyContactId,
+              ]),
+            );
+          await db
+            .delete(sanctionsContactScreenings)
+            .where(
+              inArray(sanctionsContactScreenings.organizationId, organizations),
+            );
+          await db
+            .delete(auditLogs)
+            .where(inArray(auditLogs.organizationId, organizations));
+          await db
+            .delete(contacts)
+            .where(inArray(contacts.id, [failedContactId, healthyContactId]));
+        }
+        await db
+          .delete(organization)
+          .where(inArray(organization.id, organizations));
+        await db
+          .delete(systemAuditRuns)
+          .where(
+            inArray(systemAuditRuns.subject, [
+              runId,
+              rollbackRunId,
+              generationRunId,
+              retryRunId,
+            ]),
+          );
       }
     });
   }, 120_000);

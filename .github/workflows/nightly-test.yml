@@ -310,8 +310,8 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-        # The runner discovers every suite that declares the Postgres gate, so
-        # adding a gated test cannot silently omit it from this workflow.
+        # Includes the full 20k/10k sanctions volume benchmark; required service
+        # CI selects its bounded correctness slice through the same runner.
         run: bun run test:postgres
 
   # BullMQ-backed API suites that gate on STELLA_RUN_VALKEY_TESTS=true and a

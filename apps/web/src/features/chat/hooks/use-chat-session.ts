@@ -71,10 +71,7 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import type {
-  CreateDocumentDestination,
-  NeedsMatterMatter,
-} from "@/components/chat/needs-matter-card";
+import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -132,6 +129,7 @@ import { sha256Hex } from "@/lib/files/sha256";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
@@ -935,22 +933,20 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
-    workspacesNavigationOptions(organizationId),
+  const createDocumentMattersView = useQueryView(
+    useQuery({
+      ...workspacesNavigationOptions(organizationId),
+      select: (navigation) =>
+        navigation.workspaces.map((matter) => ({
+          id: matter.id,
+          name: matter.name,
+          color: matter.color,
+          client: matter.client?.displayName
+            ? { displayName: matter.client.displayName }
+            : null,
+        })),
+    }),
   );
-  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(() => {
-    if (!workspacesNavigation) {
-      return [];
-    }
-    return workspacesNavigation.workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      color: w.color,
-      client: w.client?.displayName
-        ? { displayName: w.client.displayName }
-        : null,
-    }));
-  }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
@@ -1474,8 +1470,7 @@ export const useChatSession = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters: isLoadingMatters,
+    createDocumentMattersView,
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,

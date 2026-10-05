@@ -2975,7 +2975,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-        run: bun run test:postgres
+        # The full volume benchmark runs in nightly postgres-suites; this job
+        # retains its bounded correctness slice alongside every other suite.
+        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
 
       - name: Start corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}

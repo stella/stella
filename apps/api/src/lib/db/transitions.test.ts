@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { getColumns } from "drizzle-orm";
 import {
   integer,
   pgTable,
@@ -647,4 +648,34 @@ test("same-state upserts need a declared policy and ignored rows do not audit", 
   });
   expect(changed).toEqual([]);
   expect(auditCalls).toBe(0);
+});
+
+test("scoped identities accept only schema-declared non-null primary or unique columns", () => {
+  const rows = pgTable("declared_transition_identity", {
+    id: text().primaryKey(),
+    organizationId: text("organization_id").notNull().unique(),
+    state: text({ enum: ["active", "lapsed"] }).notNull(),
+    note: text().notNull(),
+    optionalKey: text("optional_key").unique(),
+  });
+  const columns = getColumns(rows);
+  const keys = Object.keys(columns).filter((key): key is keyof typeof columns =>
+    Object.hasOwn(columns, key),
+  );
+  for (const key of keys) {
+    const outcome = Result.try(() =>
+      defineScopedTransitions({
+        table: rows,
+        key,
+        scope: [],
+        stateColumn: "state",
+        edges: { active: ["lapsed"], lapsed: [] },
+        initial: ["active"],
+      }),
+    );
+    const column = columns[key];
+    expect(outcome.isOk()).toBe(
+      column.notNull && (column.primary || column.isUnique),
+    );
+  }
 });

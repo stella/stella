@@ -21,7 +21,7 @@ export const CONTACT_MONITORING_TRANSITIONS = defineScopedTransitions({
 
 export const FIRM_MONITORING_TRANSITIONS = defineScopedTransitions({
   table: organizationSettings,
-  key: "id",
+  key: "organizationId",
   scope: [],
   stateColumn: "sanctionsMonitoringMode",
   edges: { enabled: ["disabled"], disabled: ["enabled"] },
