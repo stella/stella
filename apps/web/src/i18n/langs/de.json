@@ -1495,6 +1495,7 @@
     "noResults": "Keine Klauseln gefunden",
     "noVariants": "Keine Varianten",
     "outdatedVersion": "Aktualisierung verfügbar",
+    "overrideNotRenderedWarning": "Die Ersetzung für Klausel {clauseName} wurde nicht verwendet: Ihr Platzhalter erscheint in diesem Dokument nicht.",
     "renameSlot": "Slot umbenennen",
     "renameSlotInvalid": "Slot-Namen müssen eindeutig sein und dürfen keine Leerzeichen, Doppelpunkte oder geschweiften Klammern enthalten.",
     "restoreVersion": "Diese Version wiederherstellen",
@@ -2157,6 +2158,7 @@
     "markHandled": "Als erledigt markieren",
     "markNew": "Als neu markieren",
     "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
+    "openSourceFile": "E-Mail-Datei öffnen",
     "originalSender": "Ursprünglicher Absender",
     "originalSenderUnverified": "Ursprünglicher Absender (laut Angabe, nicht verifiziert)",
     "originalSignatureVerified": "Ursprüngliche Signatur verifiziert (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Adresse erneuern",
     "sentAt": "Gesendet am",
     "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
+    "statedInFile": "Kopfzeilen (laut Datei)",
     "states": {
       "handled": "Erledigt"
     },
     "title": "Korrespondenz",
-    "unknownApprover": "Unbekannte genehmigende Person"
+    "unknownApprover": "Unbekannte genehmigende Person",
+    "uploadedBy": "Hochgeladen von {name}",
+    "uploadedFile": "Hochgeladene E-Mail-Datei"
   },
   "docxReview": {
     "acceptAll": "Alle annehmen",

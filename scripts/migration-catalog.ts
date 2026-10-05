@@ -3,6 +3,8 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { REHEARSAL_ROWS_PER_DECISION } from "../apps/api/src/scripts/seed-migration-rehearsal-plan";
 
 type Row = Record<string, unknown>;
@@ -45,12 +47,12 @@ const stable = (value: unknown): unknown => {
   if (isRecord(value)) {
     return Object.fromEntries(
       Object.entries(value)
-        .toSorted(([left], [right]) => left.localeCompare(right))
+        .toSorted(([left], [right]) => compareCodeUnit(left, right))
         .map(([key, nested]) => [
           key,
           Array.isArray(nested) && ["acl", "config", "roles"].includes(key)
             ? nested.toSorted((left, right) =>
-                String(left).localeCompare(String(right)),
+                compareCodeUnit(String(left), String(right)),
               )
             : stable(nested),
         ]),

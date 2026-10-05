@@ -22,6 +22,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -121,7 +122,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     fixtures.push(raw as CaseLawFixture);
   }
   fixtures.sort((a, b) =>
-    a.source.adapter_key.localeCompare(b.source.adapter_key),
+    compareCodeUnit(a.source.adapter_key, b.source.adapter_key),
   );
   return fixtures;
 };

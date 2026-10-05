@@ -25,6 +25,8 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  */
 export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // The 20,000-entry corpus plus PGlite leaves no room for another DB suite.
+  "src/handlers/sanctions/public-routes.db.test.ts",
   // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
   // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",

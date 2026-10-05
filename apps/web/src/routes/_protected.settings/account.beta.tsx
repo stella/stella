@@ -6,6 +6,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { env } from "@/env";
+import { useTimeBillingPreviewOffered } from "@/hooks/use-time-billing-preview";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useDevStore } from "@/lib/dev-store";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -27,6 +28,7 @@ function BetaFeaturesPage() {
   const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
   const timeBillingPreview = useDevStore((s) => s.timeBillingPreview);
   const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
+  const timeBillingPreviewOffered = useTimeBillingPreviewOffered();
   const inboxPreview = useDevStore((s) => s.inboxPreview);
   const setInboxPreview = useDevStore((s) => s.setInboxPreview);
   const avtPreview = useDevStore((s) => s.avtPreview);
@@ -81,27 +83,29 @@ function BetaFeaturesPage() {
             </Field>
           </div>
         </FramePanel>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">{t("common.timeBilling")}</h2>
-            <p className="text-muted-foreground text-xs">
-              {t("settings.account.betaTimeBillingDescription")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={timeBillingPreview}
-                onCheckedChange={(next) => {
-                  if (next === timeBillingPreview) {
-                    return;
-                  }
+        {timeBillingPreviewOffered && (
+          <FramePanel>
+            <div className="flex flex-col gap-3 p-1">
+              <h2 className="text-sm font-medium">{t("common.timeBilling")}</h2>
+              <p className="text-muted-foreground text-xs">
+                {t("settings.account.betaTimeBillingDescription")}
+              </p>
+              <Field className="flex-row items-center gap-2">
+                <Checkbox
+                  checked={timeBillingPreview}
+                  onCheckedChange={(next) => {
+                    if (next === timeBillingPreview) {
+                      return;
+                    }
 
-                  setTimeBillingPreview(next);
-                }}
-              />
-              <FieldLabel>{t("common.timeBilling")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
+                    setTimeBillingPreview(next);
+                  }}
+                />
+                <FieldLabel>{t("common.timeBilling")}</FieldLabel>
+              </Field>
+            </div>
+          </FramePanel>
+        )}
         <FramePanel>
           <div className="flex flex-col gap-3 p-1">
             <h2 className="text-sm font-medium">

@@ -18,6 +18,8 @@
 // base rules. Overrides are resolved per file at lint time and are not part
 // of that output; the override union and liveness guards model them.
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { isRecord, stringArray } from "./oxlint-config-scopes.ts";
 import { pluginScope } from "./oxlint-rule-ids.ts";
 import type { BuiltinRule } from "./oxlint-rule-ids.ts";
@@ -313,7 +315,7 @@ export const shadowedDeclarations = ({
 }: ShadowOptions): Finding[] => {
   const findings: Finding[] = [];
   for (const [rule, replaced] of [...declared.replaced].toSorted(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnit(a, b),
   )) {
     const current = declared.rules.get(rule);
     if (

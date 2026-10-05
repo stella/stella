@@ -126,6 +126,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Unauthenticated reads of bundled deployment content (public template
   // packs, starter playbooks); no database access or tenant-scoped input.
   "public-knowledge": WAIVER_REASON.noTenantReadSurface,
+  // Anonymous screening against the global sanctions lists, read through a
+  // role granted only those reference tables; no tenant-scoped input or rows.
+  sanctions: WAIVER_REASON.noTenantReadSurface,
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.

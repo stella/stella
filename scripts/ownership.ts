@@ -89,6 +89,44 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "public-sanctions-reader-binding",
+    capability:
+      "Binding the public sanctions reader to the scoped connection pool",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "The connection owner constructs a column-restricted, read-only " +
+      "sanctions reader without exporting another raw connection handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createPublicSanctionsReader"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/lists/sanctions/public-read-owner.ts",
+          reason: "Owns the restricted anonymous screening handle.",
+        },
+      ],
+    },
+  },
+  {
+    id: "public-sanctions-screening",
+    capability: "Reading the public sanctions corpus for anonymous screening",
+    owner: ["apps/api/src/lib/lists/sanctions/public-read-owner.ts"],
+    summary:
+      "Anonymous screening uses a column-restricted reader role and read-only " +
+      "transactions. This owner exports the restricted screening handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/lists/sanctions/public-read-owner"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/sanctions/search.ts",
+          reason: "Screens anonymous subjects against the public corpus.",
+        },
+      ],
+    },
+  },
+  {
     id: "desktop-account-bootstrap",
     capability: "Claiming desktop connection and document handoff requests",
     owner: [
@@ -789,7 +827,9 @@ export const OWNERSHIP = [
       "is still a member of them, so it is built only for writes and lookups an " +
       "earlier check already proved. A run a member queued goes through " +
       "`createRootRunActor` instead, whose pinned `writeDb` the document, file " +
-      "and field readers (`ContentReadDb`) refuse.",
+      "and field readers (`ContentReadDb`) refuse. " +
+      "`createRootOrganizationBackgroundDb` validates the organization id and " +
+      "binds background work to that organization with no user or stored workspace ids.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/root-scoped-db"],
@@ -815,6 +855,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/email/inbound/runtime.ts",
           reason: "Files inbound mail into the matter its routing resolved.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload.ts",
+          reason:
+            "Files an email file as its uploader, whose matter access the filing transaction rechecks.",
         },
         {
           path: "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
@@ -975,6 +1020,11 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/email/inbound/upload-queue.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
         },

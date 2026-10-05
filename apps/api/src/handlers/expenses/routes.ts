@@ -5,10 +5,17 @@ import deleteExpense from "@/api/handlers/expenses/delete";
 import readExpenses from "@/api/handlers/expenses/list";
 import updateExpense from "@/api/handlers/expenses/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const expensesRoute = new Elysia({
   prefix: "/expenses/:workspaceId",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({

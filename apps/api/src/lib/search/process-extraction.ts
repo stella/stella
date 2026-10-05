@@ -3,6 +3,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
+
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -20,12 +22,15 @@ import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqu
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
+import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,
@@ -353,6 +358,58 @@ const recordDocxVersionLanguage = async ({
   }
 };
 
+const UPLOADED_MAIL_HANDOFF_SINK = failureSink({
+  event: "native_extraction.uploaded_mail_handoff_failed",
+  expected: [],
+});
+
+type RecordUploadedMailOptions = {
+  source: ExtractionSource;
+  enqueueUploadedMail: ExecuteNativeExtractionDependencies["enqueueUploadedMail"];
+  run: NativeExtractionRun;
+};
+
+/**
+ * Hand an email document to the job that files it as matter correspondence.
+ *
+ * Every transport that stores a file version reaches this run, so uploads
+ * from the web, desktop, CLI, MCP and folder imports are covered without
+ * per-handler calls. The filing runs in the API's worker, not here: this
+ * worker's import graph must stay clear of the API environment. A failed
+ * hand-off is reported, and the file stays a fully indexed document.
+ */
+const recordUploadedMail = async ({
+  source,
+  enqueueUploadedMail,
+  run,
+}: RecordUploadedMailOptions): Promise<void> => {
+  if (!isEmailMimeType(source.extractionMimeType)) {
+    return;
+  }
+  const handedOff = await Result.tryPromise({
+    try: async () =>
+      await enqueueUploadedMail({
+        file: {
+          sourceFileId: source.fileId,
+          storageMimeType: source.storageMimeType,
+          mimeType: source.extractionMimeType,
+        },
+        scope: {
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          entityId: run.entityId,
+        },
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(handedOff)) {
+    observeFailure(handedOff.error, {
+      sink: UPLOADED_MAIL_HANDOFF_SINK,
+      ctx: { entityId: run.entityId, workspaceId: run.workspaceId },
+    });
+  }
+};
+
 export const executeNativeExtraction = async ({
   database,
   fileField,
@@ -373,6 +430,7 @@ export const executeNativeExtraction = async ({
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
 }): Promise<NativeExtractionProjectionOutcome> => {
   const {
+    enqueueUploadedMail,
     extractText,
     persistProjection,
     recordLanguage,
@@ -438,6 +496,8 @@ export const executeNativeExtraction = async ({
     text,
   });
 
+  await recordUploadedMail({ source, enqueueUploadedMail, run });
+
   if (source.extractionMimeType === PDF_MIME_TYPE) {
     await restoreManualOcr({
       db: database,
@@ -477,6 +537,7 @@ export const executeNativeExtraction = async ({
  * connection of its own.
  */
 export type ExecuteNativeExtractionDependencies = {
+  enqueueUploadedMail: typeof enqueueUploadedMailFiling;
   extractText: typeof extractFileTextResult;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
@@ -486,6 +547,7 @@ export type ExecuteNativeExtractionDependencies = {
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
+    enqueueUploadedMail: enqueueUploadedMailFiling,
     extractText: extractFileTextResult,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,

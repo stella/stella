@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { compareCodeUnit } from "@stll/collation";
+
 type SelectMatterNamesOptions = {
   matterCount: number;
   matterNames: readonly string[];
@@ -18,9 +20,7 @@ export const selectMatterNames = ({
   matterNames,
   selectionSeed,
 }: SelectMatterNamesOptions): string[] => {
-  const uniqueNames = [...new Set(matterNames)].toSorted((a, b) =>
-    a.localeCompare(b),
-  );
+  const uniqueNames = [...new Set(matterNames)].toSorted(compareCodeUnit);
   if (selectionSeed === undefined) {
     return uniqueNames.slice(0, matterCount);
   }
@@ -35,7 +35,8 @@ export const selectMatterNames = ({
         .digest("hex"),
     }))
     .toSorted(
-      (a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name),
+      (a, b) =>
+        compareCodeUnit(a.rank, b.rank) || compareCodeUnit(a.name, b.name),
     )
     .slice(0, matterCount)
     .map(({ name }) => name);

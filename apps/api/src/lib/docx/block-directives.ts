@@ -684,7 +684,19 @@ type ProcessResult = {
   errors: TemplateStructureError[];
 };
 
+export type InlineIterationTextOptions = {
+  text: string;
+  values: Record<string, unknown>;
+  row: Record<string, unknown>;
+  alias: string;
+  arrayPath: string;
+  loop: ReturnType<typeof loopContext>;
+};
+
 export type DirectiveProcessingContext = {
+  scopeInlineText?:
+    | ((options: InlineIterationTextOptions) => string)
+    | undefined;
   inlineDataByParagraph: Map<slimdom.Element, Record<string, unknown>>;
   inlineClauseScopes: Map<
     string,
