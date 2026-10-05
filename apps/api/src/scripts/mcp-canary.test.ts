@@ -1,5 +1,6 @@
 import {
   createMcpHandler,
+  fromJsonSchema,
   McpServer,
   isLegacyRequest,
 } from "@modelcontextprotocol/server";
@@ -44,10 +45,14 @@ describe("canary protocol routing", () => {
           name: "canary-fixture",
           version: "1.0.0",
         });
-        server.registerTool("search_case_law", { inputSchema: {} }, () => {
-          calls += 1;
-          return { content: [{ type: "text" as const, text: "ok" }] };
-        });
+        server.registerTool(
+          "search_case_law",
+          { inputSchema: fromJsonSchema({ type: "object", properties: {} }) },
+          () => {
+            calls += 1;
+            return { content: [{ type: "text" as const, text: "ok" }] };
+          },
+        );
         return server;
       },
       { legacy: "reject", responseMode: "json" },
@@ -581,7 +586,7 @@ describe("OAuth client journeys", () => {
     const actualPairs = new Set(
       authorizationRequests.map(
         ({ url }) =>
-          `${url.searchParams.get("client_id")}\n${url.searchParams.get("redirect_uri")}`,
+          `${String(url.searchParams.get("client_id"))}\n${String(url.searchParams.get("redirect_uri"))}`,
       ),
     );
     expect(actualPairs).toEqual(expectedPairs);
@@ -618,7 +623,7 @@ describe("OAuth client journeys", () => {
     const actualPairs = new Set(
       authorizationRequests.map(
         ({ url }) =>
-          `${url.searchParams.get("client_id")}\n${url.searchParams.get("redirect_uri")}`,
+          `${String(url.searchParams.get("client_id"))}\n${String(url.searchParams.get("redirect_uri"))}`,
       ),
     );
     expect(actualPairs).toEqual(expectedPairs);
@@ -626,7 +631,8 @@ describe("OAuth client journeys", () => {
     const registration = requests.find(
       ({ url }) => url.pathname === "/oauth/register",
     );
-    expect(JSON.parse(String(registration?.init?.body))).toMatchObject({
+    expect(registration).toBeDefined();
+    expect(await new Response(registration?.init.body).json()).toMatchObject({
       redirect_uris: LOOPBACK_REDIRECTS,
     });
   });
@@ -674,7 +680,7 @@ describe("desktop handoff probes", () => {
     const fetcher: CanaryFetcher = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
       const headers = new Headers(init.headers);
-      const body = String(init.body ?? "");
+      const body = await new Response(init.body).text();
       requests.push({ path: url.pathname, headers, body });
       if (url.pathname === "/api/auth/get-session") {
         return sessionResponse();
@@ -943,7 +949,10 @@ describe("staging credential journeys", () => {
     const requests: { path: string; body: string }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : input);
-      requests.push({ path: url.pathname, body: String(init.body ?? "") });
+      requests.push({
+        path: url.pathname,
+        body: await new Response(init.body).text(),
+      });
       if (url.pathname === "/v1/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
