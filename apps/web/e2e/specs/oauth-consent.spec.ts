@@ -189,3 +189,87 @@ test("OAuth consent allows and declines through the top-level callback", async (
     await page.unroute(`${callbackUrl}**`);
   }
 });
+
+test("account switching preserves the signed OAuth query through auth routing", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  const id = token();
+  const redirectUri = loopbackRedirectUriFor(id);
+  const clientId = await registerClient({
+    request: context.request,
+    id,
+    redirectUri,
+  });
+
+  // Clear this browser session without revoking the shared authenticated fixture.
+  let signOutWasIntercepted = false;
+  await page.route(`${AUTH_BASE_URL}/sign-out`, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    signOutWasIntercepted = true;
+    await context.clearCookies();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  await openConsent({ page, clientId, id, redirectUri });
+  const initialUrl = new URL(page.url());
+  const signedQuery = new URLSearchParams(initialUrl.hash.slice(1)).get(
+    "oauth_query",
+  );
+  expect(signedQuery).not.toBeNull();
+  const signedHash = initialUrl.hash;
+
+  // The fixture's single organization is auto-selected, so auth routing
+  // resumes OAuth instead of stopping on the organization screen. The server
+  // re-signs the consent URL; check the original signature at its input boundary.
+  const continuation = page.waitForRequest(
+    (request) =>
+      request.url() === `${AUTH_BASE_URL}/oauth2/continue` &&
+      request.method() === "POST",
+  );
+  await page.goto(`${WEB_BASE_URL}/auth${signedHash}`, {
+    waitUntil: "commit",
+  });
+  const continuationRequest = await continuation;
+  expect(continuationRequest.postDataJSON()).toMatchObject({
+    oauth_query: signedQuery,
+    postLogin: true,
+    selected: true,
+  });
+  await expect(
+    page.getByRole("heading", {
+      name: `Connect Consent browser test ${id} to stella`,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL((url) => url.pathname === "/consent");
+
+  const queryBeforeSwitch = new URLSearchParams(
+    new URL(page.url()).hash.slice(1),
+  ).get("oauth_query");
+  expect(queryBeforeSwitch).not.toBeNull();
+  await page.getByRole("button", { name: "Use another account" }).click();
+
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/auth" &&
+      new URLSearchParams(url.hash.slice(1)).get("oauth_query") ===
+        queryBeforeSwitch,
+  );
+  expect(signOutWasIntercepted).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        await (
+          await context.request.get(`${AUTH_BASE_URL}/get-session`)
+        ).json(),
+    )
+    .toBeNull();
+});
