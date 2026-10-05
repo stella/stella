@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import { env } from "@/api/env";
 import readOrganizationSettings, {
   projectOrganizationSettingsRow,
 } from "@/api/handlers/organization-settings/get";
@@ -8,6 +11,7 @@ import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/polic
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -131,6 +135,7 @@ test("organization settings expose registry-derived enabled or hidden statuses w
       },
     });
     const projected = projectOrganizationSettingsRow(null, snapshot);
+    expect(projected.declaredFeatureIds).toEqual(Object.keys(registry));
     for (const featureId of Object.keys(registry)) {
       for (const kind of ["capabilities", "tools", "resources"] as const) {
         expect(
@@ -171,7 +176,7 @@ test("organization settings derive an empty capability object from the empty pro
       scopedDb: database.scopedDb,
     }),
   );
-  expect(result).toMatchObject({ capabilities: {} });
+  expect(result).toMatchObject({ capabilities: {}, declaredFeatureIds: [] });
   expect(identityQueries).toBe(0);
   expect(database.getCallCount()).toBe(1);
 });
@@ -230,6 +235,27 @@ test("organization settings recompute a supplied snapshot when the user or activ
         user: { id: toSafeId<"user">(principal.userId) },
       }),
     );
-    expect(result).toMatchObject({ capabilities: {} });
+    expect(result).toMatchObject({ capabilities: {}, declaredFeatureIds: [] });
   }
+});
+
+describe.serial("undeclared feature deployment discovery", () => {
+  test("the server reports the deployment decision with an empty declaration list", () => {
+    const previous = env.FEATURE_LEGAL_LISTS;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_LEGAL_LISTS = enabled;
+        const result = projectOrganizationSettingsRow(null, emptySnapshot);
+        expect(result.declaredFeatureIds).toEqual([]);
+        expect(result.capabilities).toEqual({});
+        expect(result.deploymentFeatures.legalLists).toBe(enabled);
+      }
+    } finally {
+      env.FEATURE_LEGAL_LISTS = previous;
+      restoreRuntimeMode();
+    }
+  });
 });

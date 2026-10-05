@@ -1,4 +1,6 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 import type { CallerFeature } from "./surfaces";
 
@@ -6,30 +8,52 @@ export class CallerFeatureHiddenError extends TaggedError(
   "CallerFeatureHiddenError",
 )<{ message: string; featureId: string }> {}
 
-type CallerCapabilities = Readonly<
-  Record<string, { status: "enabled" | "hidden" }>
+type CallerAvailability = Pick<
+  OrganizationSettings,
+  "capabilities" | "declaredFeatureIds" | "deploymentFeatures"
 >;
 
+const admittedByServer = (
+  availability: CallerAvailability,
+  feature: CallerFeature,
+): boolean => {
+  if (availability.declaredFeatureIds.includes(feature.id)) {
+    return availability.capabilities[feature.id]?.status === "enabled";
+  }
+  switch (feature.undeclared.type) {
+    case "hidden":
+      return false;
+    case "deployment":
+      return availability.deploymentFeatures[feature.undeclared.key];
+    default:
+      feature.undeclared satisfies never;
+      return panic("Unknown undeclared feature policy");
+  }
+};
+
 export const callerFeatureEnabled = (
-  capabilities: CallerCapabilities | undefined,
+  availability: CallerAvailability | undefined,
   feature: CallerFeature,
 ): boolean =>
-  capabilities?.[feature.id]?.status === "enabled" &&
-  feature.requires.every((id) => capabilities[id]?.status === "enabled");
+  availability !== undefined &&
+  admittedByServer(availability, feature) &&
+  feature.requires.every((dependency) =>
+    admittedByServer(availability, dependency),
+  );
 
 type RunForCallerFeatureOptions = {
-  capabilities: CallerCapabilities;
+  availability: CallerAvailability;
   feature: CallerFeature;
   load: () => Promise<void>;
 };
 
 /** The authorization branch precedes every feature-specific prefetch. */
 export const runForCallerFeature = async ({
-  capabilities,
+  availability,
   feature,
   load,
 }: RunForCallerFeatureOptions) => {
-  if (!callerFeatureEnabled(capabilities, feature)) {
+  if (!callerFeatureEnabled(availability, feature)) {
     return Result.err(
       new CallerFeatureHiddenError({
         message: "The caller feature is hidden",

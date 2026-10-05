@@ -31,7 +31,7 @@ export const useCallerFeatureEnabled = (feature: CallerFeature): boolean => {
     case "items":
       return (
         view.refetchError === undefined &&
-        callerFeatureEnabled(view.items.capabilities, feature)
+        callerFeatureEnabled(view.items, feature)
       );
     default:
       view satisfies never;
@@ -59,7 +59,7 @@ export const loadCallerFeature = async ({
     staleTime: 0,
   });
   return await runForCallerFeature({
-    capabilities: settings.capabilities,
+    availability: settings,
     feature,
     load,
   });

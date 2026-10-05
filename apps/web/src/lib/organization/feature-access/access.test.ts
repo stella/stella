@@ -33,12 +33,19 @@ describe.serial("caller feature admission", () => {
   for (const feature of Object.values(CALLER_FEATURE)) {
     test(`${feature.id} refreshes the caller decision before feature reads`, async () => {
       const queryClient = new QueryClient();
+      const discovery = {
+        declaredFeatureIds: Object.values(CALLER_FEATURE).map(
+          (registered) => registered.id,
+        ),
+        deploymentFeatures: { legalLists: false },
+      };
       const read = spyOn(queryClient, "query").mockResolvedValue({
+        ...discovery,
         capabilities: Object.fromEntries(
-          [feature.id, ...feature.requires].map((id) => [
-            id,
-            { status: "enabled" as const },
-          ]),
+          [
+            feature.id,
+            ...feature.requires.map((dependency) => dependency.id),
+          ].map((id) => [id, { status: "enabled" as const }]),
         ),
       });
       let calls = 0;
@@ -59,7 +66,7 @@ describe.serial("caller feature admission", () => {
           }),
         );
         expect(calls).toBe(1);
-        read.mockResolvedValue({ capabilities: {} });
+        read.mockResolvedValue({ ...discovery, capabilities: {} });
         const outcome = await loadCallerFeature({
           queryClient,
           principal,
