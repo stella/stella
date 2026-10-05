@@ -1312,6 +1312,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
   "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_JSON_OUTPUT_FILE",
   "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
