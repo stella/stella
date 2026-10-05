@@ -53,15 +53,21 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
   await withDatabase(async (db, dir) => {
     const seeds = [policy("retained"), policy("retired")];
     const first = await runSeedReport({
+      mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "first.jsonl"),
       openDb: () => db,
     });
     expect(first.status).toBe("complete");
     expect(readRows(nodePath.join(dir, "first.jsonl"))).toEqual(
-      seeds.map(({ key }) => ({ policyKey: key, outcome: "inserted" })),
+      seeds.map(({ key }) => ({
+        policyKey: key,
+        mode: "apply",
+        outcome: "inserted",
+      })),
     );
     const replay = await runSeedReport({
+      mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "replay.jsonl"),
       openDb: () => db,
@@ -110,6 +116,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       };
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        mode: "apply",
         input: JSON.stringify([changed]),
         resultsPath: path,
         openDb: () => db,
@@ -117,9 +124,11 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       expect(report.status).toBe("complete");
       expect(readRows(path)).toContainEqual({
         policyKey: "retained",
+        mode: "apply",
         outcome: "updated",
       });
       await runSeedReport({
+        mode: "apply",
         input: JSON.stringify([policy("retained")]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
         openDb: () => db,
@@ -132,6 +141,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       billingInterval: "month",
     };
     await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([priced]),
       resultsPath: nodePath.join(dir, "priced.jsonl"),
       openDb: () => db,
@@ -142,20 +152,23 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
     })) {
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        mode: "apply",
         input: JSON.stringify([{ ...priced, [field]: value }]),
         resultsPath: path,
         openDb: () => db,
       });
       expect(report.rows).toEqual([
-        { policyKey: "retained", outcome: "updated" },
+        { policyKey: "retained", mode: "apply", outcome: "updated" },
       ]);
       await runSeedReport({
+        mode: "apply",
         input: JSON.stringify([priced]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
         openDb: () => db,
       });
     }
     await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "unpriced.jsonl"),
       openDb: () => db,
@@ -163,6 +176,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
     const hiddenRows = readRows(nodePath.join(dir, "displayName.jsonl"));
     expect(hiddenRows).toContainEqual({
       policyKey: "retired",
+      mode: "apply",
       outcome: "hidden",
     });
     const rows = await db
@@ -173,15 +187,20 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       .from(usagePolicies);
     expect(rows).toContainEqual({ key: "retired", visibility: "hidden" });
     const final = await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "final.jsonl"),
       openDb: () => db,
     });
     expect(final.rows).toEqual([
-      { policyKey: "retained", outcome: "unchanged" },
+      { policyKey: "retained", mode: "apply", outcome: "unchanged" },
     ]);
     for (const row of hiddenRows) {
-      expect(Object.keys(row).toSorted()).toEqual(["outcome", "policyKey"]);
+      expect(Object.keys(row).toSorted()).toEqual([
+        "mode",
+        "outcome",
+        "policyKey",
+      ]);
     }
   });
 });
@@ -190,6 +209,7 @@ test("writes attempted rows and the failing row after rollback, without private 
   await withDatabase(async (db, dir) => {
     const path = nodePath.join(dir, "failed.jsonl");
     const report = await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([
         policy("first"),
         { ...policy("second"), hostedPolicyRef: "private-ref-first" },
@@ -205,6 +225,7 @@ test("writes attempted rows and the failing row after rollback, without private 
     ]);
     for (const row of rows) {
       expect(Object.keys(row).toSorted()).toEqual([
+        "mode",
         "outcome",
         "policyKey",
         "reason",
@@ -223,6 +244,7 @@ test("empty and invalid configurations produce empty files without opening the d
     for (const [index, input] of ["[]", "invalid JSON"].entries()) {
       const path = nodePath.join(dir, `${index}.jsonl`);
       const report = await runSeedReport({
+        mode: "apply",
         input,
         resultsPath: path,
         openDb: () => {
@@ -234,6 +256,7 @@ test("empty and invalid configurations produce empty files without opening the d
     }
     let opened = false;
     const rejection = await runSeedReport({
+      mode: "apply",
       input: "[]",
       resultsPath: nodePath.join(dir, "0.jsonl"),
       openDb: () => {
@@ -256,6 +279,7 @@ test("empty and invalid configurations produce empty files without opening the d
 test("retirement failure rolls back seeded rows and reports failure", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([policy("retired")]),
       resultsPath: nodePath.join(dir, "before.jsonl"),
       openDb: () => db,
@@ -268,6 +292,7 @@ test("retirement failure rolls back seeded rows and reports failure", async () =
     );
     const path = nodePath.join(dir, "failure.jsonl");
     const report = await runSeedReport({
+      mode: "apply",
       input: JSON.stringify([policy("added")]),
       resultsPath: path,
       openDb: () => db,
@@ -276,11 +301,13 @@ test("retirement failure rolls back seeded rows and reports failure", async () =
     expect(readRows(path)).toEqual([
       {
         policyKey: "added",
+        mode: "apply",
         outcome: "failed",
         reason: "Transaction rolled back.",
       },
       {
         policyKey: "retired",
+        mode: "apply",
         outcome: "failed",
         reason: "Retirement failed; transaction rolled back.",
       },
@@ -296,43 +323,122 @@ test("retirement failure rolls back seeded rows and reports failure", async () =
   });
 });
 
-test("commit failure replaces inserted and hidden outcomes with rolled-back failures", async () => {
+test.each(["apply", "dry_run"] as const)(
+  "commit failure replaces inserted and hidden outcomes with rolled-back failures (%s)",
+  async (mode) => {
+    await withDatabase(async (db, dir) => {
+      await runSeedReport({
+        mode: "apply",
+        input: JSON.stringify([policy("retired")]),
+        resultsPath: nodePath.join(dir, "before.jsonl"),
+        openDb: () => db,
+      });
+      await db.execute(
+        sql`ALTER TABLE usage_policies DROP CONSTRAINT usage_policies_hosted_policy_ref_key`,
+      );
+      await db.execute(
+        sql`ALTER TABLE usage_policies ADD UNIQUE (hosted_policy_ref) DEFERRABLE INITIALLY DEFERRED`,
+      );
+      const path = nodePath.join(dir, "commit-failure.jsonl");
+      const report = await runSeedReport({
+        mode,
+        input: JSON.stringify([
+          policy("first"),
+          { ...policy("second"), hostedPolicyRef: "private-ref-first" },
+        ]),
+        resultsPath: path,
+        openDb: () => db,
+      });
+      expect(report.status).toBe("failed");
+      expect(readRows(path)).toEqual(
+        ["first", "second", "retired"].map((policyKey) => ({
+          policyKey,
+          mode,
+          outcome: "failed",
+          reason: "Transaction rolled back.",
+        })),
+      );
+      expect(
+        await db
+          .select({
+            key: usagePolicies.policyKey,
+            visibility: usagePolicies.visibility,
+          })
+          .from(usagePolicies),
+      ).toEqual([{ key: "retired", visibility: "public" }]);
+    });
+  },
+);
+
+test("dry run writes nothing and reports the outcomes the following real run produces", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
-      input: JSON.stringify([policy("retired")]),
+      mode: "apply",
+      input: JSON.stringify(
+        ["retained", "retired", "stable"].map((key) => policy(key)),
+      ),
       resultsPath: nodePath.join(dir, "before.jsonl"),
       openDb: () => db,
     });
-    await db.execute(
-      sql`ALTER TABLE usage_policies DROP CONSTRAINT usage_policies_hosted_policy_ref_key`,
-    );
-    await db.execute(
-      sql`ALTER TABLE usage_policies ADD UNIQUE (hosted_policy_ref) DEFERRABLE INITIALLY DEFERRED`,
-    );
-    const path = nodePath.join(dir, "commit-failure.jsonl");
-    const report = await runSeedReport({
-      input: JSON.stringify([
-        policy("first"),
-        { ...policy("second"), hostedPolicyRef: "private-ref-first" },
-      ]),
-      resultsPath: path,
+    const input = JSON.stringify([
+      { ...policy("retained"), monthlyUsageUnits: 20 },
+      policy("stable"),
+      policy("added"),
+    ]);
+    const snapshot = async () =>
+      await db.select().from(usagePolicies).orderBy(usagePolicies.policyKey);
+    const before = await snapshot();
+    const dryRunPath = nodePath.join(dir, "dry-run.jsonl");
+    const dryRun = await runSeedReport({
+      mode: "dry_run",
+      input,
+      resultsPath: dryRunPath,
       openDb: () => db,
     });
-    expect(report.status).toBe("failed");
-    expect(readRows(path)).toEqual(
-      ["first", "second", "retired"].map((policyKey) => ({
-        policyKey,
-        outcome: "failed",
-        reason: "Transaction rolled back.",
-      })),
+    expect(dryRun.status).toBe("complete");
+    expect(await snapshot()).toEqual(before);
+    expect(readRows(dryRunPath)).toEqual(
+      dryRun.rows.map((row) => ({ ...row, mode: "dry_run" })),
     );
-    expect(
-      await db
-        .select({
-          key: usagePolicies.policyKey,
-          visibility: usagePolicies.visibility,
-        })
-        .from(usagePolicies),
-    ).toEqual([{ key: "retired", visibility: "public" }]);
+    // Every non-failure outcome is exercised, so equality below is not vacuous.
+    expect(new Set(dryRun.rows.map(({ outcome }) => outcome))).toEqual(
+      new Set(["inserted", "updated", "unchanged", "hidden"]),
+    );
+
+    const apply = await runSeedReport({
+      mode: "apply",
+      input,
+      resultsPath: nodePath.join(dir, "apply.jsonl"),
+      openDb: () => db,
+    });
+    expect(apply.status).toBe("complete");
+    expect(apply.rows).toEqual(
+      dryRun.rows.map((row) => ({ ...row, mode: "apply" })),
+    );
+    expect(await snapshot()).not.toEqual(before);
+  });
+});
+
+test("dry run reports a failing write with the real run's outcomes and rolls back", async () => {
+  await withDatabase(async (db, dir) => {
+    const input = JSON.stringify([
+      policy("first"),
+      { ...policy("second"), hostedPolicyRef: "private-ref-first" },
+    ]);
+    const reports = [];
+    for (const mode of ["dry_run", "apply"] as const) {
+      const path = nodePath.join(dir, `${mode}.jsonl`);
+      const report = await runSeedReport({
+        mode,
+        input,
+        resultsPath: path,
+        openDb: () => db,
+      });
+      expect(report.status).toBe("failed");
+      expect(readFileSync(path, "utf-8")).not.toContain("private-ref");
+      reports.push(report.rows.map(({ mode: _mode, ...row }) => row));
+    }
+    expect(reports.at(0)).toEqual(reports.at(1));
+    expect(await db.select().from(usagePolicies)).toEqual([]);
   });
 });
