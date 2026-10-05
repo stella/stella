@@ -1285,6 +1285,7 @@
     "@tanstack/ai-anthropic@0.19.1": "patches/@tanstack%2Fai-anthropic@0.19.1.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@tanstack/ai-mistral@0.6.10": "patches/@tanstack%2Fai-mistral@0.6.10.patch",
+    "@better-auth/cimd@1.7.5": "patches/@better-auth%2Fcimd@1.7.5.patch",
     "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
     "mailauth@5.0.3": "patches/mailauth@5.0.3.patch",
     "@tanstack/ai-code-mode@0.4.16": "patches/@tanstack%2Fai-code-mode@0.4.16.patch",
