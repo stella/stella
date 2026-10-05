@@ -1,7 +1,11 @@
 import { panic, Panic, TaggedError, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
+import {
+  applicationErrorMessage,
+  errorClassName,
+  errorTag,
+} from "@/api/lib/errors/error-tag";
 
 class ExampleTaggedError extends TaggedError("ExampleTaggedError")<{
   message: string;
@@ -92,4 +96,36 @@ describe("errorTag", () => {
     expect(errorTag(new TypeError("bad access"))).toBe("TypeError");
     expect(errorTag("boom")).toBe("UnknownError");
   });
+});
+
+describe("applicationErrorMessage", () => {
+  const FALLBACK = "Step failed";
+
+  test("keeps the message a tagged error authors", () => {
+    expect(
+      applicationErrorMessage(
+        new ExampleTaggedError({ message: "Template removed" }),
+        FALLBACK,
+      ),
+    ).toBe("Template removed");
+  });
+
+  for (const { label, error } of [
+    { label: "a library error", error: new Error("SENTINEL_FOREIGN_TEXT") },
+    { label: "a type error", error: new TypeError("SENTINEL_FOREIGN_TEXT") },
+    { label: "a thrown string", error: "SENTINEL_FOREIGN_TEXT" },
+    {
+      label: "a message-shaped record",
+      error: { message: "SENTINEL_FOREIGN_TEXT" },
+    },
+    { label: "null", error: null },
+    {
+      label: "a throwing proxy",
+      error: new Proxy({}, { get: () => panic("revoked") }),
+    },
+  ]) {
+    test(`replaces ${label} with the fallback`, () => {
+      expect(applicationErrorMessage(error, FALLBACK)).toBe(FALLBACK);
+    });
+  }
 });

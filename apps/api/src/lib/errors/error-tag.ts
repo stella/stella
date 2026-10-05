@@ -141,3 +141,16 @@ export const errorTag = (error: unknown): string => {
  */
 export const isErrorInstance = (value: unknown): value is Error =>
   Result.try(() => value instanceof Error).unwrapOr(false);
+
+/**
+ * The message of an application `TaggedError`, whose text Stella authors. Any
+ * other value can carry library, provider or model text, so it yields
+ * `fallback` instead. For sinks a user or a persisted row reads.
+ */
+export const applicationErrorMessage = (
+  error: unknown,
+  fallback: string,
+): string =>
+  Result.try(() => (isTaggedError(error) ? error.message : fallback)).unwrapOr(
+    fallback,
+  );

@@ -9,6 +9,7 @@ import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { EmitSignalsResult, NewSignal } from "@/api/lib/signals/emit";
 
@@ -92,7 +93,9 @@ export const runScout = async ({
             .update(scoutRuns)
             .set({
               status: SCOUT_RUN_STATUS.FAILED,
-              error: error instanceof Error ? error.message : String(error),
+              // The structural name only: an observation's message can
+              // quote model output or document text.
+              error: errorTag(error),
               finishedAt: new Date(),
             })
             .where(eq(scoutRuns.id, runId)),

@@ -4,6 +4,11 @@ declare const ProviderCallError: new (options: {
   provider: string;
 }) => object;
 
+declare const ModelRunError: new (options: {
+  message?: string;
+  model: string;
+}) => object;
+
 declare const chunk: { message: string };
 const FIXED_MESSAGE = "Provider request failed";
 // oxlint-disable-next-line provider-call-error-message/provider-call-error-message
@@ -30,6 +35,17 @@ const rejectedProviderMessage = new ProviderCallError({
   message: chunk.message,
 });
 
+// accepted: the model run error supplies its own message
+// expect-clean: provider-call-error-message/provider-call-error-message
+const acceptedModelRunError = new ModelRunError({ model: "openrouter" });
+
+// flagged: callers do not supply ModelRunError messages
+const rejectedModelRunMessage = new ModelRunError({
+  model: "openrouter",
+  // oxlint-disable-next-line provider-call-error-message/provider-call-error-message
+  message: chunk.message,
+});
+
 // flagged: a message remains forbidden through an object spread
 const rejectedSpreadMessage = new ProviderCallError({
   provider: "openrouter",
@@ -42,4 +58,6 @@ export const fixtureValues = [
   rejectedHandlerError,
   rejectedProviderMessage,
   rejectedSpreadMessage,
+  acceptedModelRunError,
+  rejectedModelRunMessage,
 ];

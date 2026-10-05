@@ -43,6 +43,7 @@ import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
+import { applicationErrorMessage } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
@@ -1209,8 +1210,7 @@ const readRunProgress = async (
 
 // ── Worker failure finalization ─────────────────────────
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Flow step failed";
+const FLOW_STEP_FAILED_MESSAGE = "Flow step failed";
 
 /**
  * Flip a run (and its current step) to `failed` after the worker exhausts its
@@ -1238,7 +1238,7 @@ export const failFlowRunFromWorker = async (
     return;
   }
   const scope = await resolveRunScope(run, database);
-  const message = errorMessage(error);
+  const message = applicationErrorMessage(error, FLOW_STEP_FAILED_MESSAGE);
   const now = new Date();
 
   const writeFailure = async (

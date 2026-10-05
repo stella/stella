@@ -5,6 +5,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { applicationErrorMessage } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -13,6 +14,7 @@ const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
 const MAX_OUTPUT_TOKENS = 96;
 const AUTOCOMPLETE_TIMEOUT_MS = 10_000;
+const AUTOCOMPLETE_STREAM_INTERRUPTED_MESSAGE = "stream interrupted";
 
 const requestBody = t.Object({
   prefix: t.String({ maxLength: MAX_PREFIX_CHARS }),
@@ -143,8 +145,10 @@ const autocompleteStream = createSafeRootHandler(
         } catch (error) {
           if (!request.signal.aborted) {
             writeEvent("error", {
-              message:
-                error instanceof Error ? error.message : "stream interrupted",
+              message: applicationErrorMessage(
+                error,
+                AUTOCOMPLETE_STREAM_INTERRUPTED_MESSAGE,
+              ),
             });
           }
         } finally {

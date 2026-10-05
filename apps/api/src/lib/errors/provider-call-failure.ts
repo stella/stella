@@ -2,6 +2,7 @@ import { classifyAIError, providerStatusCode } from "@/api/lib/ai-error";
 import {
   ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
@@ -66,7 +67,8 @@ type CreateProviderCallErrorOptions = {
   code?: string | undefined;
 };
 
-// Provider evidence is consumed here; the error retains its structural projection.
+// Provider evidence is consumed here; the error retains its structural
+// projection. The raw `code` informs classification only.
 export const createProviderCallError = ({
   model,
   evidence,
@@ -82,7 +84,7 @@ export const createProviderCallError = ({
   return new ProviderCallError({
     model,
     status,
-    code,
+    code: providerCallErrorCode(code),
     kind: classifyAIError(input),
     facts: providerFactsFrom(input),
     requestId: providerRequestIdFrom(evidence),
