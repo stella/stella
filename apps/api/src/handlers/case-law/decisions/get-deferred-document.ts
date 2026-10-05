@@ -11,6 +11,8 @@
  * `documentPending` instead; the fetch is wired in here.
  */
 
+import { omitDerivablePlainText } from "@stll/legal-ast/document-ast";
+
 import { envBase } from "@/api/env-base";
 import {
   devReparseEnabled,
@@ -23,7 +25,6 @@ import {
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
-import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";

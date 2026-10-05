@@ -1,15 +1,25 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { integer, pgTable, text, PgDialect } from "drizzle-orm/pg-core";
+import {
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  PgDialect,
+} from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
 import { timestamptz } from "@/api/db/columns";
 import {
+  defineFixedLifecycle,
+  defineLifecycle,
   defineTransitions,
   defineKeyedTransitions,
   transitionBatch,
+  transitionLifecycle,
+  transitionLifecycleBatch,
   permitsTransition,
   transition,
 } from "@/api/lib/db/transitions";
@@ -428,4 +438,206 @@ test("empty and stale batches perform no audit", async () => {
   }
   expect(queries).toBe(1);
   expect(audits).toBe(0);
+});
+
+const leases = ["idle", "held"] as const;
+const leasedJobs = pgTable("lifecycle_test_jobs", {
+  id: text().primaryKey(),
+  status: text({ enum: states }).notNull(),
+  lease: text({ enum: leases }).notNull(),
+  description: text(),
+});
+const lifecycle = defineLifecycle({
+  table: leasedJobs,
+  key: "id",
+  graphs: {
+    status: { edges: graph, terminal: ["completed", "failed"] },
+    lease: { edges: { idle: ["held"], held: ["idle"] }, terminal: [] },
+  },
+});
+
+describe("multi-column lifecycles", () => {
+  test("one update binds every column's sources and audits the changed row", async () => {
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const tx = {
+      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        queries.push(dialect.sqlToQuery(query));
+        return [{ id: "job", status: "running", lease: "held" }];
+      },
+      rollback,
+    };
+    const audited: unknown[] = [];
+    const moves = {
+      status: { from: ["queued"], to: "running" },
+      lease: { from: ["idle"], to: "held" },
+    } as const;
+    expect(
+      await transitionLifecycle({
+        tx,
+        spec: lifecycle,
+        id: "job",
+        moves,
+        set: { description: "Claimed" },
+        recordTransitionAuditEvent: async (auditTx, row) => {
+          expect(auditTx).toBe(tx);
+          audited.push(row);
+        },
+      }),
+    ).toEqual({ type: "transitioned", id: "job" });
+    expect(audited).toEqual([{ id: "job", moves }]);
+    const query = queries.at(0);
+    expect(query?.params).toEqual([
+      "running",
+      "held",
+      "Claimed",
+      "job",
+      "queued",
+      "idle",
+    ]);
+    expect(query?.sql).toContain('"status" IN');
+    expect(query?.sql).toContain('"lease" IN');
+  });
+
+  test("a stale row or an empty batch performs no audit", async () => {
+    let queries = 0;
+    let audits = 0;
+    const tx = {
+      execute: async () => {
+        queries += 1;
+        return [];
+      },
+      rollback,
+    };
+    const moves = {
+      status: { from: ["running"], to: "completed" },
+      lease: { from: ["held"], to: "idle" },
+    } as const;
+    const recordTransitionAuditEvent = async () => {
+      audits += 1;
+    };
+    expect(
+      await transitionLifecycle({
+        tx,
+        spec: lifecycle,
+        id: "job",
+        moves,
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual({ type: "stale" });
+    expect(
+      await transitionLifecycleBatch({
+        tx,
+        spec: lifecycle,
+        ids: [],
+        moves,
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([]);
+    expect(queries).toBe(1);
+    expect(audits).toBe(0);
+  });
+
+  test("every declared column must move legally and stay owned", async () => {
+    const tx = { execute: async () => [], rollback };
+    const legal = {
+      status: { from: ["queued"], to: "running" },
+      lease: { from: ["idle"], to: "held" },
+    } as const;
+    const missingColumn = { status: legal.status } as const;
+    const reopen = {
+      ...legal,
+      status: { from: ["completed"], to: "running" },
+    } as const;
+    const ownedByLifecycle = { lease: "idle", description: "x" } as const;
+    await assertTransitionRejected(
+      transitionLifecycle({
+        tx,
+        spec: lifecycle,
+        id: "job",
+        // @ts-expect-error every declared column needs a move
+        moves: missingColumn,
+        recordTransitionAuditEvent: noAudit,
+      }),
+      "must move lease",
+    );
+    await assertTransitionRejected(
+      transitionLifecycle({
+        tx,
+        spec: lifecycle,
+        id: "job",
+        // @ts-expect-error a terminal source cannot reopen
+        moves: reopen,
+        recordTransitionAuditEvent: noAudit,
+      }),
+      "Illegal status transition",
+    );
+    await assertTransitionRejected(
+      transitionLifecycle({
+        tx,
+        spec: lifecycle,
+        id: "job",
+        moves: legal,
+        // @ts-expect-error metadata cannot write a lifecycle column
+        set: ownedByLifecycle,
+        recordTransitionAuditEvent: noAudit,
+      }),
+      "cannot set lease",
+    );
+  });
+
+  test("definitions validate every column before any write", () => {
+    expect(() =>
+      defineLifecycle({
+        table: leasedJobs,
+        key: "id",
+        graphs: {
+          status: { edges: graph, terminal: ["completed", "failed"] },
+          // @ts-expect-error every persisted state requires a decision
+          lease: { edges: { idle: ["held"] }, terminal: [] },
+        },
+      }),
+    ).toThrow("must cover");
+    expect(() =>
+      defineLifecycle({
+        table: leasedJobs,
+        key: "status",
+        graphs: { lease: { edges: { idle: [], held: [] }, terminal: [] } },
+      }),
+    ).toThrow("must be a primary-key column");
+    expect(() =>
+      defineLifecycle({ table: leasedJobs, key: "id", graphs: {} }),
+    ).toThrow("at least one column");
+    const constrained = pgTable(
+      "lifecycle_constrained_jobs",
+      { key: text().notNull(), lease: text({ enum: leases }).notNull() },
+      (t) => [primaryKey({ columns: [t.key], name: "constrained_pkey" })],
+    );
+    expect(
+      defineLifecycle({
+        table: constrained,
+        key: "key",
+        graphs: { lease: { edges: { idle: [], held: [] }, terminal: [] } },
+      }).key,
+    ).toBe("key");
+    expect(() =>
+      defineFixedLifecycle({
+        table: leasedJobs,
+        // @ts-expect-error fixed columns must be table columns
+        column: "missing",
+        value: "x",
+      }),
+    ).toThrow("Unknown lifecycle column");
+    expect(
+      defineFixedLifecycle({
+        table: leasedJobs,
+        column: "lease",
+        value: "idle",
+      }),
+    ).toEqual({
+      kind: "fixed",
+      table: leasedJobs,
+      column: "lease",
+      value: "idle",
+    });
+  });
 });

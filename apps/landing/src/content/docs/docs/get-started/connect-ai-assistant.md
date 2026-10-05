@@ -12,6 +12,31 @@ The fastest way is to let your agent do it: copy the instructions from
 **Settings → Connections** in stella and paste them into Claude Code, Codex,
 Cursor, or another agent. The steps it follows are below.
 
+## Add stella to Claude Code or Codex
+
+Install the stella plugin, then ask your agent to connect to stella. The
+plugin adds stella's MCP server and a skill that runs the sign-in and checks
+the connection.
+
+Claude Code:
+
+```sh
+claude plugin marketplace add stella/plugins
+claude plugin install stella@stella
+```
+
+Codex:
+
+```sh
+codex plugin marketplace add stella/plugins
+codex plugin add stella@stella
+```
+
+Your agent shows you a sign-in link; open it, approve the connection in
+stella, and the agent confirms once the sign-in succeeds. **Settings →
+Connections** in stella lists the connection afterwards, and you can
+disconnect it there.
+
 ## Instructions for AI agents
 
 If your user asked you to connect them to stella, follow these steps. Use the
