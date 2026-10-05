@@ -8,6 +8,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import messages from "@/i18n/langs/en.json";
+import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -39,6 +40,7 @@ const { ComposerSkillsMenu, ComposerContextMenu, ComposerMcpSubmenu } =
 
 afterEach(cleanup);
 afterAll(async () => {
+  await act(async () => {});
   await GlobalRegistrator.unregister();
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
@@ -198,6 +200,65 @@ for (const { failedSource, failedQueryKey } of [
   });
 }
 
+test("the MCP menu retains catalog rows during an initial connections failure", async () => {
+  const client = createClient();
+  const connectors = mcpConnectorsOptions(organizationId);
+  const connections = mcpConnectionsOptions(organizationId, user.id);
+  client.setQueryData(connectors.queryKey, {
+    connectors: [
+      {
+        id: toSafeId<"mcpConnector">("catalog-connector"),
+        slug: "catalog",
+        displayName: "Catalog connector",
+        organizationId: null,
+        description: "Catalog connector",
+        url: "https://connector.example.test/mcp",
+        authType: "none",
+        isCurated: true,
+        oauthRequestedScopes: null,
+        allowedTools: null,
+        documentationUrl: null,
+        tokenHelpUrl: null,
+        iconUrl: null,
+        authorizationStatus: "not_required",
+        authorizationReview: null,
+        isRecommended: false,
+        recommendedJurisdictions: [],
+      },
+    ],
+    canManageCustomConnectors: false,
+    nativeTools: [],
+  } satisfies McpConnectorsResponse);
+  client.getQueryCache().build(client, { queryKey: connections.queryKey });
+  markFailed(client, connections.queryKey);
+  const ui = mount(
+    client,
+    <Menu open>
+      <MenuTrigger>{messages.chat.composerMenu.mcpServers}</MenuTrigger>
+      <MenuPopup>
+        <ComposerMcpSubmenu
+          enabled
+          guideAnchorsEnabled={false}
+          mcp={{ activeOrganizationId: organizationId }}
+        />
+      </MenuPopup>
+    </Menu>,
+  );
+  await waitFor(() =>
+    expect(
+      ui.getByRole("menuitem", { name: messages.chat.composerMenu.mcpServers }),
+    ).toBeDefined(),
+  );
+  fireEvent.click(
+    ui.getByRole("menuitem", { name: messages.chat.composerMenu.mcpServers }),
+  );
+  await waitFor(() => expect(ui.getByRole("alert")).toBeDefined());
+  expect(ui.getByRole("button", { name: messages.common.retry })).toBeDefined();
+  expect(ui.getByRole("menuitem", { name: "Catalog connector" })).toBeDefined();
+  expect(ui.queryByText(messages.chat.composerMenu.noMcpServers)).toBeNull();
+  client.clear();
+});
+
 test("the context search retains a failed empty refresh notice instead of no results", async () => {
   const client = createClient();
   const options = workspacesNavigationOptions(organizationId);
@@ -266,14 +327,20 @@ const RegisteredMentionSources = ({
   );
 };
 
-for (const { failingRead, failure } of [
+for (const { failingRead, failure, withHealthy = true } of [
   { failingRead: "getItems", failure: new Error("Local source unavailable") },
   {
     failingRead: "searchItems",
     failure: new Error("Search source unavailable"),
   },
+  { failingRead: "both", failure: new Error("Sources unavailable") },
+  {
+    failingRead: "both",
+    failure: new Error("Sources unavailable"),
+    withHealthy: false,
+  },
 ]) {
-  test(`a registered source ${failingRead} failure offers retry and recovery merges both successful sources`, async () => {
+  test(`a registered source ${failingRead} failure with healthy=${withHealthy} offers retry and recovery merges both successful sources`, async () => {
     const client = createClient();
     client.setQueryData(workspacesNavigationOptions(organizationId).queryKey, {
       workspaces: [],
@@ -299,11 +366,31 @@ for (const { failingRead, failure } of [
         id: toSafeId<"caseLawDecision">("searched-decision"),
       }),
     } satisfies ChatMentionOption;
+    const healthyLocal = {
+      ...local,
+      label: "Contract healthy local",
+      resource: resourceRef({
+        type: RESOURCE_TYPE.CASE_LAW_DECISION,
+        id: toSafeId<"caseLawDecision">("healthy-local"),
+      }),
+    } satisfies ChatMentionOption;
+    const healthySearch = {
+      ...searched,
+      label: "Contract healthy search",
+      resource: resourceRef({
+        type: RESOURCE_TYPE.CASE_LAW_DECISION,
+        id: toSafeId<"caseLawDecision">("healthy-search"),
+      }),
+    } satisfies ChatMentionOption;
     const sources = [
       {
         id: "local-source",
+        labelKey: "common.files",
         getItems: async () => {
-          if (unavailable && failingRead === "getItems") {
+          if (
+            unavailable &&
+            (failingRead === "getItems" || failingRead === "both")
+          ) {
             throw failure;
           }
           return [local];
@@ -311,13 +398,23 @@ for (const { failingRead, failure } of [
       },
       {
         id: "search-source",
+        labelKey: "common.caseLaw",
         getItems: () => [],
         searchItems: async () => {
-          if (unavailable && failingRead === "searchItems") {
+          if (
+            unavailable &&
+            (failingRead === "searchItems" || failingRead === "both")
+          ) {
             throw failure;
           }
           return [searched];
         },
+      },
+      {
+        id: "healthy-source",
+        labelKey: "common.files",
+        getItems: () => (withHealthy ? [healthyLocal] : []),
+        searchItems: async () => (withHealthy ? [healthySearch] : []),
       },
     ] satisfies ChatInputMentionSource[];
     const ui = mount(client, <RegisteredMentionSources sources={sources} />);
@@ -330,10 +427,43 @@ for (const { failingRead, failure } of [
       ui.getByPlaceholderText(messages.chat.composerMenu.searchMatters),
       { target: { value: "contract" } },
     );
-    await waitFor(() => expect(ui.getByRole("alert")).toBeDefined());
+    await waitFor(() =>
+      expect(ui.getAllByRole("alert")).toHaveLength(
+        failingRead === "both" ? 2 : 1,
+      ),
+    );
+    if (withHealthy) {
+      expect(ui.getByText(healthyLocal.label)).toBeDefined();
+      expect(ui.getByText(healthySearch.label)).toBeDefined();
+    } else {
+      expect(ui.queryByText(healthyLocal.label)).toBeNull();
+      expect(ui.queryByText(healthySearch.label)).toBeNull();
+    }
     expect(ui.queryByText(messages.common.noResults)).toBeNull();
+    if (failingRead === "both") {
+      expect(ui.getByText(messages.common.files)).toBeDefined();
+      expect(ui.getByText(messages.common.caseLaw)).toBeDefined();
+    }
+    if (failingRead !== "both") {
+      expect(
+        ui.getByText(
+          failingRead === "getItems"
+            ? messages.common.files
+            : messages.common.caseLaw,
+        ),
+      ).toBeDefined();
+      expect(
+        ui.getByText(failingRead === "getItems" ? searched.label : local.label),
+      ).toBeDefined();
+    }
     unavailable = false;
-    fireEvent.click(ui.getByRole("button", { name: messages.common.retry }));
+    const retries = ui.getAllByRole("button", { name: messages.common.retry });
+    expect(retries).toHaveLength(failingRead === "both" ? 2 : 1);
+    const retry = retries.at(0);
+    if (!retry) {
+      throw new Error("Expected source retry");
+    }
+    fireEvent.click(retry);
     await waitFor(() => expect(ui.getByText(local.label)).toBeDefined());
     expect(ui.getByText(searched.label)).toBeDefined();
     expect(ui.queryByRole("alert")).toBeNull();

@@ -99,6 +99,7 @@ import {
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -109,7 +110,6 @@ import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
@@ -954,21 +954,28 @@ const useContextMentionSearch = ({
         getMentionItems(),
         searchMentionItems(query),
       ]);
-      return selectChatSuggestionItems({
-        localItems: readQueryResult(localItems),
-        query,
-        searchedItems: readQueryResult(searchedItems),
-      });
+      return {
+        items: selectChatSuggestionItems({
+          localItems: localItems.items,
+          query,
+          searchedItems: searchedItems.items,
+        }),
+        failures: [...localItems.failures, ...searchedItems.failures],
+      };
     },
     enabled,
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery);
+  const view = useQueryView(mentionQuery, {
+    isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
+  });
   return {
     view,
     enabled,
-    results: enabled && view.type === "items" ? view.items : [],
+    retry: mentionQuery.refetch,
+    failures: enabled && view.type === "items" ? view.items.failures : [],
+    results: enabled && view.type === "items" ? view.items.items : [],
     // Still settling: the debounce has not caught up with the field, or the
     // sources are answering.
     isSearching:
@@ -1054,6 +1061,14 @@ export const ComposerContextMenu = ({
         trigger={searchTrigger(host, "context")}
         value={search}
       />
+      {mentionSearch.failures.map((failure) => (
+        <div key={`${failure.sourceId}:${failure.operation}`}>
+          <BidiText as="span">{t(failure.labelKey)}</BidiText>
+          <QueryViewFeedback
+            view={{ type: "error", error: failure, retry: mentionSearch.retry }}
+          />
+        </div>
+      ))}
       <ComposerQueryResults
         views={
           mentionSearch.enabled
@@ -1063,7 +1078,11 @@ export const ComposerContextMenu = ({
         hasItems={
           filteredMatters.length > 0 || mentionSearch.results.length > 0
         }
-        empty={<ComposerSubmenuEmpty>{emptyLabel()}</ComposerSubmenuEmpty>}
+        empty={
+          mentionSearch.failures.length === 0 ? (
+            <ComposerSubmenuEmpty>{emptyLabel()}</ComposerSubmenuEmpty>
+          ) : null
+        }
       >
         <ComposerContextResults
           editor={editor}
@@ -1536,11 +1555,7 @@ export const ComposerMcpSubmenu = ({
         />
         <ComposerQueryResults
           views={{ connectors: connectorsView, connections: connectionsView }}
-          hasItems={
-            rows.length > 0 &&
-            (connectionsView.type === "items" ||
-              connectionsView.type === "empty")
-          }
+          hasItems={rows.length > 0}
           empty={mcpRowsContent}
         >
           {mcpRowsContent}

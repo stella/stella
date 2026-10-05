@@ -77,23 +77,6 @@ const renderTermsLink = (chunks: ReactNode) => (
   </a>
 );
 
-export const SignInPanel = (props: SignInPanelProps) => {
-  const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const capabilitiesView = useQueryView(capabilitiesQuery);
-  if (capabilitiesView.type !== "items") {
-    return <QueryViewFeedback view={capabilitiesView} />;
-  }
-  return (
-    <>
-      <QueryViewFeedback view={capabilitiesView} />
-      <SignInOptionsPanel
-        {...props}
-        authCapabilities={capabilitiesView.items}
-      />
-    </>
-  );
-};
-
 const SignInOptionsPanel = ({
   className,
   redirectTo,
@@ -722,3 +705,20 @@ const MicrosoftIcon = () => (
     <rect fill="#FFB900" height="9" width="9" x="11" y="11" />
   </svg>
 );
+
+export const SignInPanel = (props: SignInPanelProps) => {
+  const capabilitiesQuery = useQuery(authCapabilitiesOptions);
+  const capabilitiesView = useQueryView(capabilitiesQuery);
+  if (capabilitiesView.type !== "items") {
+    return <QueryViewFeedback view={capabilitiesView} />;
+  }
+  return (
+    <>
+      <QueryViewFeedback view={capabilitiesView} />
+      <SignInOptionsPanel
+        {...props}
+        authCapabilities={capabilitiesView.items}
+      />
+    </>
+  );
+};

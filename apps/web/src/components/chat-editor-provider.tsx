@@ -25,7 +25,6 @@ import type { EditorProps } from "@tiptap/pm/view";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result, TaggedError } from "better-result";
-import type { UnhandledException } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -67,6 +66,7 @@ import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   areDraftDocsEqual,
@@ -130,10 +130,79 @@ export class ChatSubmitPreservedError extends TaggedError(
   restoreThreadKey?: string;
 }> {}
 
+export const CHAT_MENTION_SOURCE_LABELS = {
+  context: "chat.composerMenu.context",
+  files: "common.files",
+  caseLaw: "common.caseLaw",
+} as const satisfies Record<string, TranslationKey>;
+
+type ChatMentionSourceLabelKey =
+  (typeof CHAT_MENTION_SOURCE_LABELS)[keyof typeof CHAT_MENTION_SOURCE_LABELS];
+
 export type ChatInputMentionSource = {
   id: string;
+  labelKey: ChatMentionSourceLabelKey;
   getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>;
   searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
+};
+
+class ChatMentionSourceError extends TaggedError("ChatMentionSourceError")<{
+  message: string;
+  sourceId: string;
+  labelKey: ChatMentionSourceLabelKey;
+  operation: "getItems" | "searchItems";
+  cause: unknown;
+  retryable: true;
+}> {}
+
+type ChatMentionSourceResult = {
+  items: ChatMentionOption[];
+  failures: ChatMentionSourceError[];
+};
+
+const readMentionSources = async (
+  sources: readonly ChatInputMentionSource[],
+  read: { operation: "getItems" } | { operation: "searchItems"; query: string },
+): Promise<ChatMentionSourceResult> => {
+  const results = await Promise.all(
+    sources.map(async (source) => ({
+      sourceId: source.id,
+      labelKey: source.labelKey,
+      result: await Result.tryPromise(async () => {
+        switch (read.operation) {
+          case "getItems":
+            return await source.getItems();
+          case "searchItems":
+            if (source.searchItems === undefined) {
+              return [];
+            }
+            return await source.searchItems(read.query);
+          default:
+            read satisfies never;
+            return panic("Unhandled mention read");
+        }
+      }),
+    })),
+  );
+  const items: ChatMentionOption[] = [];
+  const failures: ChatMentionSourceError[] = [];
+  for (const { sourceId, labelKey, result } of results) {
+    if (Result.isError(result)) {
+      const error = new ChatMentionSourceError({
+        message: "Mention source unavailable",
+        sourceId,
+        labelKey,
+        operation: read.operation,
+        cause: result.error,
+        retryable: true,
+      });
+      getAnalytics().captureError(error);
+      failures.push(error);
+      continue;
+    }
+    items.push(...result.value);
+  }
+  return { items, failures };
 };
 
 const EMPTY_MENTION_SOURCES: readonly ChatInputMentionSource[] = [];
@@ -210,13 +279,9 @@ export type ChatEditorController = {
 // update loop that trips React's max-update-depth guard under load).
 type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
-  getMentionItems: () => Promise<
-    Result<ChatMentionOption[], UnhandledException>
-  >;
+  getMentionItems: () => Promise<ChatMentionSourceResult>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
-  searchMentionItems: (
-    query: string,
-  ) => Promise<Result<ChatMentionOption[], UnhandledException>>;
+  searchMentionItems: (query: string) => Promise<ChatMentionSourceResult>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
@@ -301,29 +366,13 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const [extensionVersion, setExtensionVersion] = useState(0);
 
   const getMentionItems = useCallback(async () => {
-    const items: ChatMentionOption[] = [];
     const sources = Array.from(
       getOrCreateMap(registrationsRef).values(),
     ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
-    const results = await Promise.all(
-      sources.map(
-        async (source) =>
-          await Result.tryPromise(async () => await source.getItems()),
-      ),
-    );
-
-    for (const result of results) {
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        return Result.err(result.error);
-      }
-      items.push(...result.value);
-    }
-
-    return Result.ok(items);
+    return await readMentionSources(sources, { operation: "getItems" });
   }, []);
 
   const getPluginRegistrations = useCallback(() => {
@@ -341,36 +390,16 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   }, []);
 
   const searchMentionItems = useCallback(async (query: string) => {
-    const items: ChatMentionOption[] = [];
-
-    // Mention sources are independent; query them in parallel and append
-    // results in registration/source order (preserved by Promise.all).
     const sources = Array.from(
       getOrCreateMap(registrationsRef).values(),
     ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
-    const results = await Promise.all(
-      sources.map(
-        async (source) =>
-          await Result.tryPromise(
-            async () => await source.searchItems?.(query),
-          ),
-      ),
-    );
-
-    for (const result of results) {
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        return Result.err(result.error);
-      }
-      if (result.value !== undefined) {
-        items.push(...result.value);
-      }
-    }
-
-    return Result.ok(items);
+    return await readMentionSources(sources, {
+      operation: "searchItems",
+      query,
+    });
   }, []);
 
   const registerExtension = useCallback(
