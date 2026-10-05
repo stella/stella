@@ -9,8 +9,8 @@ import {
 
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { projectMcpRefusal } from "@/api/mcp/error-codes";
-import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import type { InternalToolError } from "@/api/mcp/tool-types";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 import {
   classifyRegistryErrorKind,

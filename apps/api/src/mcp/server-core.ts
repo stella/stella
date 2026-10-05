@@ -815,10 +815,7 @@ export const createMcpHttpRequestHandler = ({
     const missingHintedScope = requiredScopesHint?.find(
       (scope) => !session.scopes.includes(scope),
     );
-    if (
-      missingHintedScope !== undefined &&
-      requiredScopesHint !== undefined
-    ) {
+    if (missingHintedScope !== undefined && requiredScopesHint !== undefined) {
       return missingScopeResult({
         grantedScopes: session.scopes,
         missingScope: missingHintedScope,
