@@ -763,6 +763,7 @@ When adding a new country adapter:
 
 ```
 case-law/
+├── document-ast.ts        # Canonical AST types
 ├── consts.ts              # Adapter keys, timeouts
 ├── routes.ts              # API routes (/case prefix)
 ├── decisions/             # Read/list/search handlers

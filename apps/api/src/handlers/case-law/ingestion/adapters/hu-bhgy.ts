@@ -54,7 +54,6 @@ import type { Document as FolioDocument } from "@stll/docx-core/model";
  * (rule 16).
  */
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import {
@@ -62,6 +61,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,

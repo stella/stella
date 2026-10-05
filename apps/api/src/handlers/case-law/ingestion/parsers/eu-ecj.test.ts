@@ -26,9 +26,8 @@ import * as cheerio from "cheerio";
 import {
   hasBlockInlines,
   hasInlineChildren,
-} from "@stll/legal-ast/document-ast";
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
+} from "@/api/handlers/case-law/document-ast";
+import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ecjDocumentHtml,
   ecjDocumentRoot,

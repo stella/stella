@@ -11,8 +11,8 @@
 import { Result } from "better-result";
 
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
-import type { Block } from "@stll/legal-ast/document-ast";
 
+import type { Block } from "@/api/handlers/case-law/document-ast";
 import type { PrincipalTextEvidence } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/order-classification";
 import {
   COURTLISTENER_REJECTION_REASON,

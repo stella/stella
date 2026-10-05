@@ -1,4 +1,4 @@
-/** Accept non-null, non-array objects, including class instances. */
+/** Narrow `unknown` to a plain object (not null, not array). */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

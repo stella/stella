@@ -206,15 +206,18 @@ export type EnclosingScope = {
   condition: string | undefined;
 };
 
+/** How a clause slot's body was chosen for a fill. */
+export const CLAUSE_RESOLUTIONS = [
+  "latest",
+  "pinned",
+  "explicit",
+  "variant",
+  "override",
+] as const;
+
 export type ClauseProvenance = {
   slotKey: string;
-  resolution?:
-    | "latest"
-    | "pinned"
-    | "explicit"
-    | "variant"
-    | "override"
-    | undefined;
+  resolution?: (typeof CLAUSE_RESOLUTIONS)[number] | undefined;
   version?: number | undefined;
   id?: string | undefined;
   name?: string | undefined;

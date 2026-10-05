@@ -27,7 +27,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
-    "@types/chrome": "0.3.0",
+    "@types/chrome": "0.3.4",
     "bun-types": "catalog:",
     "vite": "catalog:",
     "wxt": "0.21.4"

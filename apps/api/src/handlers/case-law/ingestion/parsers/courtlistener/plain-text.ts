@@ -16,8 +16,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
-import type { Inline } from "@stll/legal-ast/document-ast";
-
+import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { isExcludedHtmlTag, visibleHtmlText } from "../shared-inlines";

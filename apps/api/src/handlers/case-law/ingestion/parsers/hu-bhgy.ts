@@ -39,6 +39,8 @@ import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import type {
   Block,
   DocumentAst,
@@ -48,9 +50,7 @@ import type {
   ParagraphRole,
   TableBlock,
   TableCell,
-} from "@stll/legal-ast/document-ast";
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
+} from "@/api/handlers/case-law/document-ast";
 import {
   inlinesToPlainText,
   stripInlinePrefix,

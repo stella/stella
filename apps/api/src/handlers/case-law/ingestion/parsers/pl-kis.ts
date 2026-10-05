@@ -7,8 +7,7 @@
  * there is one Polish parser and this is not a second one.
  */
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   assemblePlSnParagraphs,

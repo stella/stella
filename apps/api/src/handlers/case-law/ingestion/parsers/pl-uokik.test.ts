@@ -9,8 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
-
+import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   parsePlUokikDocument,

@@ -17,16 +17,15 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
 import type {
   Block,
   DocumentAst,
   ParagraphBlock,
-} from "@stll/legal-ast/document-ast";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
-
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
+} from "@/api/handlers/case-law/document-ast";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type {
   DecisionSupplementTarget,
   EmptyAst,

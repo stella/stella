@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 
-import type { Inline } from "@stll/legal-ast/document-ast";
-
+import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ASPOSE_SPACER_GAP,
   inlinesToPlainText,

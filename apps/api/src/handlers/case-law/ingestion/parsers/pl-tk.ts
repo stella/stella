@@ -23,8 +23,7 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphRole,
-} from "@stll/legal-ast/document-ast";
-
+} from "@/api/handlers/case-law/document-ast";
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,

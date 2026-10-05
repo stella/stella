@@ -27,12 +27,6 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
-import type {
-  Block,
-  DocumentAst,
-  HeadingBlock,
-  Inline,
-} from "@stll/legal-ast/document-ast";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -45,6 +39,12 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
+import type {
+  Block,
+  DocumentAst,
+  HeadingBlock,
+  Inline,
+} from "@/api/handlers/case-law/document-ast";
 import {
   ANONYMIZED_CLASS,
   inlinesToPlainText,

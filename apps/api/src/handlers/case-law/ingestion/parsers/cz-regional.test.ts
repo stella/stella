@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
-
+import type {
+  Block,
+  ParagraphBlock,
+} from "@/api/handlers/case-law/document-ast";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 

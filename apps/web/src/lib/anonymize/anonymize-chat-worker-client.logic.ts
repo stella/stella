@@ -137,6 +137,7 @@ export const createAnonymizeChatWorkerClient = ({
         }),
     });
     if (Result.isError(workerResult)) {
+      // oxlint-disable-next-line result-boundary/no-rejected-result-error -- anonymize is a promise API: every failure, queued or not, reaches callers as a rejection
       return await Promise.reject(workerResult.error);
     }
     const activeWorker = workerResult.value;

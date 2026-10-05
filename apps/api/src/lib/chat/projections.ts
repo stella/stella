@@ -26,6 +26,7 @@ import {
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  FACET_COUNT_TYPE,
   SEARCH_TOTAL_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
 } from "@stll/api-contract/search";
@@ -1370,6 +1371,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         vatAmount: v.number(),
         grossAmount: v.number(),
         source: v.string(),
+        billingPurpose: v.string(),
         timeEntryId: v.nullable(passthroughId()),
         expenseId: v.nullable(passthroughId()),
       }),
@@ -1440,6 +1442,15 @@ const caseLawFacetBucketProjection = v.strictObject({
   value: v.string(),
   label: v.nullable(v.string()),
   count: v.number(),
+});
+
+/**
+ * A source bucket's count is capped, so it says whether it is the exact
+ * number, a lower bound, or the index's estimate.
+ */
+const caseLawSourceFacetBucketProjection = v.strictObject({
+  ...caseLawFacetBucketProjection.entries,
+  countType: v.picklist(Object.values(FACET_COUNT_TYPE)),
 });
 
 /**
@@ -1515,7 +1526,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           year: v.array(caseLawFacetBucketProjection),
           decisionType: v.array(caseLawFacetBucketProjection),
           // `value` is the source id `search_case_law` accepts as `source_id`.
-          source: v.array(caseLawFacetBucketProjection),
+          source: v.array(caseLawSourceFacetBucketProjection),
           language: v.array(caseLawFacetBucketProjection),
         }),
       ),

@@ -4,8 +4,7 @@ import {
   type Block,
   type Inline,
   plainTextOf,
-} from "@stll/legal-ast/document-ast";
-
+} from "@/api/handlers/case-law/document-ast";
 import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 

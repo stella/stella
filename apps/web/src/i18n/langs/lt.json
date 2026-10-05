@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "Klausimas ir visi jo atsakymai bus ištrinti visai jūsų organizacijai – iš visų paieškų ir visiems nariams. Jei norite jį pašalinti tik iš šios paieškos, pasirinkite „Pašalinti iš šios paieškos“.",
       "editQuestionHint": "Pakeitus formuluotę, atsakymo tipą ar jo parinktis, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
+      "newQuestionColumn": "Nauja",
       "nothingToRun": "Kiekvienas langelis jau turi atsakymą",
+      "questionAdded": "„{question}“ pridėta prie lentelės",
       "questionPlaceholder": "pvz., Ar teismas pripažino atleidimą teisėtu?",
       "removeFromSearch": "Pašalinti iš šios paieškos",
       "runAll": "Atsakyti į visus",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
       "textPending": "Sprendimo tekstas dar gaunamas",
       "textReadFailed": "Nepavyko įkelti sprendimo teksto",
-      "textUnavailable": "Šiam sprendimui teksto nėra"
+      "textUnavailable": "Šiam sprendimui teksto nėra",
+      "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)"
     }
   },
   "catalogue": {
@@ -1874,15 +1877,23 @@
     "zoomOut": "Nutolinti"
   },
   "consent": {
+    "actingAs": "{clientName} veiks veiksmus jūsų vardu organizacijoje „{organizationName}“",
     "allow": "Leisti",
-    "appIdentity": "Programėlės tapatybė",
+    "canChange": "Gali keisti",
+    "canRead": "Gali skaityti",
     "completeSetup": "Užbaigti sąranką",
+    "connectTitle": "Prijungti {clientName} prie stella",
+    "connectedTitle": "Prisijungta prie „{clientName}“",
+    "connectionDuration": "Ryšys išliks, kol jį atjungsite skiltyje Nustatymai › Ryšiai",
     "defaultClientName": "Programa",
-    "description": "{clientName} nori pasiekti jūsų stella darbo sritį",
+    "destinationDetails": "Peradresavimo informacija",
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",
-    "permissions": "Tai leis programai:",
-    "redirectDestination": "Peradresavimo paskirties vieta",
+    "otherPermissions": "Kiti leidimai",
+    "publishedBy": "Paskelbė <host>{publisherHost}</host>",
+    "returnToAgent": "Norėdami tęsti, grįžkite pas savo agentą.",
+    "returnsLocally": "Šiame kompiuteryje grįšite į „{clientName}“",
+    "returnsTo": "Grįšite į „{clientName}“",
     "scopeAdminRead": "Skaityti jūsų organizacijos audito žurnalą",
     "scopeAdminWrite": "Tvarkyti organizacijos narius ir nustatymus",
     "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
@@ -1903,8 +1914,11 @@
     "scopeSkills": "Naudoti jūsų išsaugotus stella įgūdžius",
     "scopeTemplates": "Dokumentų šablonų sąrašas, pildymas ir kūrimas",
     "scopeTemplatesAnonymized": "Peržiūrėti, pildyti ir kurti anonimizuotas jūsų dokumentų šablonų versijas",
+    "signedInAs": "Prisijungta kaip <email>{accountEmail}</email>",
     "title": "Suteikti prieigą",
-    "unverifiedApp": "Nepatvirtinta programėlė"
+    "unverifiedApp": "Nepatvirtinta programėlė",
+    "unverifiedExplanation": "stella nepatikrino, kas skelbia šią programą.",
+    "useAnotherAccount": "Naudoti kitą paskyrą"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
@@ -2450,6 +2464,7 @@
     "current": "Dabartinė",
     "deleteVersion": "Ištrinti versiją",
     "descriptionPlaceholder": "Pridėti pastabą apie šią versiją...",
+    "displayFailed": "Šio failo nepavyko parodyti.",
     "downloadRedline": "Atsisiųsti redline",
     "dropToUploadVersion": "Vilkite, kad įkeltumėte kaip naują versiją",
     "editLatestVersionDescription": "Tai ne dabartinė versija. Norėdami redaguoti ją naršyklėje, pirma padarykite ją naujausia versija, tada atrakinkite redagavimui.",
@@ -5429,6 +5444,18 @@
         "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Jau įdiegta? Prijunkite",
+        "connect": "Prijungti stella desktop",
+        "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
+        "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
+        "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
+        "signCurrent": "Pasirašyti su stella desktop",
+        "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
+        "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
+        "signShort": "Pasirašyti"
+      },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
       "downloadExtractedText": "Išgautas tekstas (.txt)",
@@ -5442,7 +5469,6 @@
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
       "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
-        "action": "Pasirašyti darbalaukio programoje",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
         "cancelledCertificateDescription": "Pasirinkto sertifikato negalima naudoti pasirašymui. Pasirinkite tokį, kuris leidžia skaitmeninį parašą.",
         "cancelledCertifiedDescription": "Šis PDF yra sertifikuotas, o jo sertifikavimas neleidžia pridėti daugiau parašų.",

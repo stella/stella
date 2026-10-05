@@ -17,6 +17,7 @@ import {
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
 } from "@stll/legal-ast/czech-document-roles";
+
 import type {
   Block,
   DocumentAst,
@@ -24,8 +25,7 @@ import type {
   Inline,
   ParagraphBlock,
   TableCell,
-} from "@stll/legal-ast/document-ast";
-
+} from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 

@@ -11,8 +11,7 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
 
-import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
-
+import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
 import {
   isCsvRow,
   OPINION_COLUMNS,

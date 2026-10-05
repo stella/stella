@@ -3,7 +3,6 @@
 import { Result, panic } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -50,6 +49,7 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
