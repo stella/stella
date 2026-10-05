@@ -955,6 +955,7 @@ export const folioCollabContributions = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
         [
           table.sinceVersionId,
           { target: "entity_versions", kind: "owned-content" },
@@ -1013,6 +1014,7 @@ export const folioCollabPublications = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
         [
           table.entityVersionId,
           { target: "entity_versions", kind: "owned-content" },

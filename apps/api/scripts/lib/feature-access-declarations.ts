@@ -774,6 +774,7 @@ const inspectEndpoint = ({
     }
     if (
       declaration.id === undefined ||
+      !Object.hasOwn(registry, declaration.id) ||
       !featurePrerequisiteClosure(registry, declaration.id).has(id)
     ) {
       violations.push({

@@ -123,6 +123,7 @@ import {
   nullAsAbsent,
   toolDataResult,
   uuidInputSchema,
+  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -1301,7 +1302,9 @@ const listTasksArgsSchema = nullAsAbsent(
     matter_id: v.optional(
       uuidInputSchema("Matter ID to list tasks in; omit for every matter"),
     ),
-    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
+    task_id: v.optional(
+      entityIdInputSchema("Task entity ID to read in detail"),
+    ),
     assignee: v.optional(
       v.pipe(
         v.picklist(TASK_ASSIGNEE_FILTERS),
@@ -1589,7 +1592,7 @@ const saveTaskArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       task_id: v.optional(
-        uuidInputSchema("Task entity ID to update; omit to create"),
+        entityIdInputSchema("Task entity ID to update; omit to create"),
       ),
       matter_id: v.optional(
         uuidInputSchema(
@@ -1662,7 +1665,7 @@ const saveTaskArgsSchema = nullAsAbsent(
         ),
       ),
       link_entity_id: v.optional(
-        uuidInputSchema(
+        entityIdInputSchema(
           "Entity ID to link to the task (document, folder, or another task)",
         ),
       ),
@@ -2140,7 +2143,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 
 const deleteTaskArgsSchema = nullAsAbsent(
   v.strictObject({
-    task_id: uuidInputSchema("Task entity ID to delete"),
+    task_id: entityIdInputSchema("Task entity ID to delete"),
     confirm: v.optional(
       v.pipe(
         v.boolean(),

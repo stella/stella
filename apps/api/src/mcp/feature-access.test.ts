@@ -45,6 +45,10 @@ import {
   handleMcpToolCall,
 } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-feature";
 const organizationId = "org_fixture";
@@ -392,7 +396,12 @@ describe("mixed native task inputs", () => {
         item_type: "fact",
       },
     });
-    expect(JSON.stringify(result)).toContain('"code":"not_found"');
+    expect(result.content).toContainEqual({
+      type: "text",
+      text: JSON.stringify({
+        error: { code: "not_found", message: "Not found" },
+      }),
+    });
     expect(scopedDb).not.toHaveBeenCalled();
     const chat = await runRegistryWriteTool({
       context: writable,
@@ -469,4 +478,28 @@ describe("mixed native task inputs", () => {
       }
     });
   }
+});
+
+test("unavailable native task returns missing before destructive confirmation", async () => {
+  const { context } = contextFor("ordinary");
+  const database = createScopedDbMock({
+    select: () => createSelectQueryMock([]),
+  });
+  const response = await handleMcpToolCall({
+    context: {
+      ...context,
+      scopedDb: database.scopedDb,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    },
+    toolName: "delete_task",
+    args: { task_id: "00000000-0000-4000-8000-000000000001" },
+  });
+  expect(response.content).toContainEqual({
+    type: "text",
+    text: JSON.stringify({
+      error: { code: "not_found", message: "Not found" },
+    }),
+  });
+  expect(JSON.stringify(response)).not.toContain("confirmation_required");
+  expect(database.getCallCount()).toBe(1);
 });

@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -309,6 +311,36 @@ export const runRegistryWriteTool = async (
         kind: "unavailable",
         message: `Your member role does not permit this ${toolName} operation.`,
       }),
+    );
+  }
+
+  const visible = await Result.tryPromise(
+    async () =>
+      await resourcesAreVisible({
+        inputs: [
+          {
+            schema:
+              "inputSchemaSource" in staticDefinition
+                ? staticDefinition.inputSchemaSource
+                : staticDefinition.inputSchema,
+            value: normalized.value,
+          },
+        ],
+        scopedDb: context.scopedDb,
+      }),
+  );
+  if (visible.isErr()) {
+    captureError(visible.error, { source: "chat", toolName });
+    return Result.err(
+      new ChatToolError({
+        kind: "server-defect",
+        message: "Tool execution failed",
+      }),
+    );
+  }
+  if (!visible.value) {
+    return Result.err(
+      new ChatToolError({ kind: "not-found", message: "Not found" }),
     );
   }
 

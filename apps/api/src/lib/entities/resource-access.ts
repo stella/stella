@@ -25,6 +25,30 @@ export const resourcesAreVisible = async ({
     if (!isRecord(schema)) {
       return;
     }
+    if (Array.isArray(schema["pipe"])) {
+      for (const action of schema["pipe"]) {
+        if (isRecord(action) && action["type"] === "metadata") {
+          visit(action["metadata"], value);
+        }
+      }
+    }
+    visit(schema["wrapped"], value);
+    visit(schema["advertisedSchema"], value);
+    if (isRecord(value) && isRecord(schema["entries"])) {
+      for (const [key, nested] of Object.entries(schema["entries"])) {
+        visit(nested, value[key]);
+      }
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visit(schema["item"], item);
+      }
+    }
+    if (Array.isArray(schema["options"])) {
+      for (const branch of schema["options"]) {
+        visit(branch, value);
+      }
+    }
     const kind = schema["x-stella-resource-kind"];
     if (
       typeof kind === "string" &&

@@ -344,6 +344,12 @@ export const legalListFactDetails = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.itemEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_fact_details_item_fk",
@@ -414,6 +420,7 @@ export const legalListItemSources = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
+        [table.itemEntityId, { target: "entities", kind: "owned-content" }],
         [
           table.sourceEntityVersionId,
           { target: "entity_versions", kind: "owned-content" },
@@ -836,6 +843,12 @@ export const legalListItemComments = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.itemEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_item_comments_item_fk",
@@ -871,6 +884,12 @@ export const legalListItemReviews = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.itemEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_item_reviews_item_fk",

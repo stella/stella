@@ -105,7 +105,7 @@ export const entityFeaturePolicies = (
   if (conditions.length === 0) {
     return [];
   }
-  const fence = sql.join(conditions, sql` AND `);
+  const fence = sql.join(conditions, sql` AND `).inlineParams();
   return [
     pgPolicy("workspace_entity_feature", {
       as: "restrictive",

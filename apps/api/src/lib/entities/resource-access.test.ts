@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -101,5 +101,51 @@ test("generic handlers return the same missing response before resource details"
         : { code: 404, response: { message: "Not found" } },
     );
     expect(lookups).toBe(visible ? 1 : 0);
+  }
+});
+
+test("native task schemas retain visibility annotations without publishing them", async () => {
+  const { getStaticMcpToolDefinition } =
+    await import("@/api/mcp/static-tool-definitions");
+  for (const name of ["list_tasks", "save_task", "delete_task"]) {
+    const definition = getStaticMcpToolDefinition(name);
+    expect(definition).toBeDefined();
+    if (definition === undefined) {
+      panic("Task definition required");
+    }
+    expect(JSON.stringify(definition.inputSchema)).not.toContain(
+      "x-stella-resource-kind",
+    );
+    const input =
+      "inputSchemaSource" in definition
+        ? definition.inputSchemaSource
+        : definition.inputSchema;
+    const missing = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
+    });
+    expect(
+      await resourcesAreVisible({
+        inputs: [
+          {
+            schema: input,
+            value: { task_id: "00000000-0000-4000-8000-000000000001" },
+          },
+        ],
+        scopedDb: missing.scopedDb,
+      }),
+    ).toBe(false);
+    expect(missing.getCallCount()).toBe(1);
+    // A definition reconstructed only from its wire schema omits trusted metadata.
+    expect(
+      await resourcesAreVisible({
+        inputs: [
+          {
+            schema: definition.inputSchema,
+            value: { task_id: "00000000-0000-4000-8000-000000000001" },
+          },
+        ],
+        scopedDb: missing.scopedDb,
+      }),
+    ).toBe(true);
   }
 });

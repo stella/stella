@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -14,8 +16,10 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
@@ -131,6 +135,26 @@ const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
 };
 
 const noopRecorder = asTestRaw<AuditRecorder>(mock(async () => undefined));
+
+const visibleReferenceDatabase = (ids: readonly string[]) =>
+  createScopedDbMock({
+    select: () => {
+      const query = {
+        from: () => query,
+        where: (condition: SQL) =>
+          Promise.resolve(
+            new PgDialect()
+              .sqlToQuery(condition)
+              .params.filter(
+                (id): id is string =>
+                  typeof id === "string" && ids.includes(id),
+              )
+              .map((id) => ({ id })),
+          ),
+      };
+      return query;
+    },
+  });
 
 const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
@@ -318,15 +342,23 @@ describe("list verification access grants across MCP tools", () => {
   });
 
   const grantCurrentMember = () => {
-    env.API_FEATURE_ACCESS_GRANTS = {
-      [LIST_VERIFICATION_FEATURE_ID]: [
-        {
-          type: "member",
-          organizationId: "org_1",
-          email: "standard@example.test",
-        },
-      ],
-    };
+    env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
+      [
+        ...featurePrerequisiteClosure(
+          FEATURE_REGISTRY,
+          LIST_VERIFICATION_FEATURE_ID,
+        ),
+      ].map((id) => [
+        id,
+        [
+          {
+            type: "member" as const,
+            organizationId: "org_1",
+            email: "standard@example.test",
+          },
+        ],
+      ]),
+    );
   };
 
   type VerificationContextOptions = {
@@ -369,7 +401,20 @@ describe("list verification access grants across MCP tools", () => {
                 },
               ]
             : [];
-        const rows = identity ? identityRows : viewRows;
+        const referenceProbe =
+          projection !== undefined &&
+          Object.keys(projection).length === 1 &&
+          "id" in projection;
+        const selectedRows = () => {
+          if (identity) {
+            return identityRows;
+          }
+          if (referenceProbe) {
+            return [{ id: resourceId }];
+          }
+          return viewRows;
+        };
+        const rows = selectedRows();
         const query = Promise.resolve(rows);
         const builder = Object.assign(query, {
           from: () => query,
@@ -408,6 +453,7 @@ describe("list verification access grants across MCP tools", () => {
           limit: () => query,
         });
       },
+      insert: () => ({ values: async () => [] }),
       update: () => {
         mutations += 1;
         return {
@@ -693,7 +739,7 @@ describe("list verification access grants across MCP tools", () => {
       });
       expect(parseToolPayload(result)).toEqual({ valid: true, capability });
     }
-    expect(fixture.resourceLookups()).toBe(0);
+    expect(fixture.resourceLookups()).toBeGreaterThan(0);
     expect(fixture.mutations()).toBe(0);
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -1002,6 +1048,12 @@ describe("documents.compare capability contract", () => {
       },
       context: createContext({
         grantedScopes: ["stella:documents_write"],
+        scopedDb: visibleReferenceDatabase([
+          DOCUMENT_ID,
+          "55555555-5555-4555-8555-555555555555",
+          BASE_VERSION_ID,
+          TARGET_VERSION_ID,
+        ]).scopedDb,
         workspaceIds: [MATTER_ID],
       }),
       toolName: "invoke_capability",
@@ -1333,6 +1385,9 @@ describe("invoke_capability gates", () => {
         validate_only: true,
       },
       context: createContext({
+        scopedDb: visibleReferenceDatabase([
+          "00000000-0000-4000-8000-000000000001",
+        ]).scopedDb,
         grantedScopes: [
           "stella:read",
           "stella:documents_write",
@@ -1398,6 +1453,7 @@ describe("invoke_capability gates", () => {
   test("destructive capability without confirm -> confirmation_required", async () => {
     const result = await call("invoke_capability", {
       capability: "clauses.categories.delete",
+      input: { params: { categoryId: "a1111111-1111-4111-8111-111111111111" } },
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("confirmation_required");
@@ -3104,7 +3160,7 @@ describe("invoke_capability deployment feature gate", () => {
       (feature) => feature === undefined || !disabledFeatures.has(feature),
     );
     const ungrantedIds = capabilityCatalog
-      .filter(requiresVerificationGrant)
+      .filter((entry) => entry.featureAccess === "required")
       .map(({ id }) => id);
     expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
       hidden,
@@ -3234,10 +3290,14 @@ describe("feature access discovery guard: real capability catalog", () => {
         args: { limit: 50 },
         context,
       });
-      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
-        0,
-      );
-      for (const { id } of capabilityCatalog) {
+      const listedIds = parseToolPayload<{ items: { id: string }[] }>(
+        list,
+      ).items.map((item) => item.id);
+      for (const { id, featureAccess } of capabilityCatalog) {
+        if (featureAccess === "conditional") {
+          continue;
+        }
+        expect(listedIds).not.toContain(id);
         const described = await handleMcpToolCall({
           toolName: "describe_capability",
           args: { capability: id },
@@ -3424,3 +3484,82 @@ test.each(["default-deny", "granted", "colleague"] as const)(
     }
   },
 );
+
+for (const grants of [
+  [],
+  [LEGAL_LISTS_FEATURE_ID],
+  [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+]) {
+  test(`real list catalogue discovery with ${grants.length} grants`, async () => {
+    const context = createContext();
+    const grantMap = Object.fromEntries(
+      grants.map((id) => [
+        id,
+        [{ type: "organization" as const, organizationId: "org_1" }],
+      ]),
+    );
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: grantMap,
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+          }),
+        ]),
+      ),
+    });
+    const entries = capabilityCatalog.filter((entry) =>
+      entry.id.startsWith("lists."),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    const list = await handleMcpToolCall({
+      toolName: "list_capabilities",
+      args: { domain: "lists", limit: MAX_LIST_LIMIT },
+      context,
+    });
+    const listed = parseToolPayload<{ items: { id: string }[] }>(
+      list,
+    ).items.map((item) => item.id);
+    for (const entry of entries) {
+      expect(entry.featureAccess).toBe("required");
+      expect(entry.featureId).toBeDefined();
+      const enabled =
+        entry.featureId === LEGAL_LISTS_FEATURE_ID
+          ? grants.length > 0
+          : grants.length === 2;
+      expect(listed.includes(entry.id)).toBe(enabled);
+      const schema = await handleMcpToolCall({
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      if (enabled) {
+        expect(parseToolPayload<{ id: string }>(schema).id).toBe(entry.id);
+        continue;
+      }
+      expect(errorEnvelope(schema)).toMatchObject({
+        code: "not_found",
+        message: "Not found",
+      });
+      for (const validate_only of [false, true]) {
+        const denied = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          args: { capability: entry.id, validate_only },
+          context,
+        });
+        expect(errorEnvelope(denied)).toMatchObject({
+          code: "not_found",
+          message: "Not found",
+        });
+      }
+    }
+  });
+}
