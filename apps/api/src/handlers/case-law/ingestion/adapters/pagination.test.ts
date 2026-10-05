@@ -543,11 +543,15 @@ describe("a page the origin never answered does not move the cursor", () => {
   test("a transport timeout exhausts retries and keeps the cursor", async () => {
     const originalFetch = globalThis.fetch;
     const requestedPages: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: RequestInfo | URL) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      requestedPages.push(url.searchParams.get("page") ?? "");
-      throw new DOMException("Request timed out", "TimeoutError");
-    });
+    globalThis.fetch = asFetchMock(
+      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        requestedPages.push(url.searchParams.get("page") ?? "");
+        throw new DOMException("Request timed out", "TimeoutError");
+      },
+    );
     restore = () => {
       globalThis.fetch = originalFetch;
     };

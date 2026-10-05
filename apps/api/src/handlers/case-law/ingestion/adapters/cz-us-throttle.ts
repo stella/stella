@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import type { ReadRefusalScope } from "@/api/lib/errors/read-outcome";
 import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
@@ -84,6 +85,7 @@ const isRateLimitRefusal = (response: Response): boolean => {
 
 export type NalusRequestInit = {
   fetchStage: DocumentFetchStage;
+  refusalScope?: ReadRefusalScope | undefined;
   body?: string | undefined;
   headers?: Record<string, string> | undefined;
   method?: "POST" | undefined;
@@ -156,7 +158,7 @@ export const createNalusFetch = (
           });
     const outcome = readOutcomeOfStatus(
       response.status,
-      "source",
+      init.refusalScope ?? "source",
       response.headers.get("Retry-After"),
     );
     if (outcome.type === "refused") {
