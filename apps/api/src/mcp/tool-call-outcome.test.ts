@@ -3,7 +3,7 @@ import {
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -83,7 +83,9 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   records = [];
   analytics = installRecordingAnalytics();
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
 });
 afterEach(() => {
   resetLogSinkForTesting();
@@ -275,6 +277,8 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
                   "00000000-0000-4000-8000-0000000b0001",
                 ),
               });
+            default:
+              return panic(`Unexpected failure: ${failure satisfies never}`);
           }
         },
       };
@@ -422,9 +426,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     test(`${builder} marks internal faults before scoping and serialization`, () => {
       const built = build();
       if (
-        built === null ||
-        built.status !== "error" ||
-        built.error.type !== "structured" ||
+        built?.error.type !== "structured" ||
         built.error.code !== "internal_error"
       ) {
         throw new Error("fixture did not produce a structured internal error");
