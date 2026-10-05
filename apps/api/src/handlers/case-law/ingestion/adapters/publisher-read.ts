@@ -78,7 +78,12 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = Omit<PublisherFetchInit, "refusalMode"> & {
+// parser-output-unchanged: a type-only change to the read options; no parsed record changes.
+/**
+ * An intersection, not `Omit`: `Omit` over the timeout union collapses it, and
+ * the intersection narrows `refusalMode` all the same.
+ */
+export type PublisherReadInit = PublisherFetchInit & {
   /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
   refusalMode?: "stop-refusal" | undefined;
   /** What a 401, 403 or 451 answer withholds; "document" when omitted. */

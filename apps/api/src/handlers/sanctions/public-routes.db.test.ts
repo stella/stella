@@ -20,6 +20,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
@@ -281,6 +282,7 @@ const assertParity = async ({
   const inProduct = (
     await runEntityCheckShared({
       observer: "unobserved",
+      permit: grantThirdPartyOutboundPermit(),
       check: "sanctions",
       subject,
       sanctions: {

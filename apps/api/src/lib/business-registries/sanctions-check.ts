@@ -4,6 +4,7 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -92,6 +93,8 @@ export type SanctionsCheckResult = SanctionsScreening & {
 
 export type SanctionsCheckDependencies = {
   observer: RegistryRequestObservation;
+  /** Resolving a company ID to its name asks the company's register. */
+  permit: ThirdPartyOutboundPermit;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   executeLookup?: typeof executeRegistryLookup | undefined;
@@ -157,6 +160,7 @@ const resolveCompanyName = async ({
   }
   const lookup = await lookupBusinessRegistryShared({
     observer: dependencies.observer,
+    permit: dependencies.permit,
     scopedDb: dependencies.scopedDb,
     organizationId: dependencies.organizationId,
     registry,

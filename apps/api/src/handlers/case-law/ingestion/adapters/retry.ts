@@ -1,4 +1,5 @@
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
+// parser-output-unchanged: excluding the native timeout option only narrows the request type.
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 // parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 // parser-output-unchanged: rethrowCycleStop moves the existing cycle-stop rethrow here unchanged; parsed output is not affected.
@@ -328,7 +329,7 @@ const isRetryableStatus = (status: number): boolean => status >= 500;
  */
 export const fetchWithRetry = async (
   url: string,
-  init: BunFetchRequestInit | undefined,
+  init: Omit<BunFetchRequestInit, "timeout"> | undefined,
   opts: FetchWithRetryOptions,
 ): Promise<Response> => {
   const {
