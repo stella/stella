@@ -513,6 +513,9 @@ export const RowActions = ({
       DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType].application;
     await showDesktopEditOpenResultToast({
       messages: {
+        accountRequiredTitle: t(
+          "workspaces.files.desktopEdit.accountRequiredTitle",
+        ),
         notOpenedDescription: t.rich(
           "workspaces.files.desktopEdit.notOpenedDescription",
           {

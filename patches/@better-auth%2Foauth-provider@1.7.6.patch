@@ -1,7 +1,7 @@
-diff --git a/dist/introspect-njKASm3q.mjs b/dist/introspect-njKASm3q.mjs
+diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
 index c8d635e57ca4cd3fe8f7cbfd5c769d61b7e96874..61814b7418ca78b61433eee5766e1a138e0fe12c 100644
---- a/dist/introspect-njKASm3q.mjs
-+++ b/dist/introspect-njKASm3q.mjs
+--- a/dist/introspect-CbYi2MJT.mjs
++++ b/dist/introspect-CbYi2MJT.mjs
 @@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
