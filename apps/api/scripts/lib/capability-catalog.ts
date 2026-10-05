@@ -532,7 +532,9 @@ export type CapabilityDispatchRecord = {
   id: string;
   importPath: string;
   exportName: string | undefined;
-  featureAccess?: { featureId: string; type: "required" | "conditional" };
+  featureAccess?:
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
 };
 
 /**
