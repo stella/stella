@@ -501,6 +501,11 @@ export const LIMITS = {
   caseLawSearchQueriesMax: 5,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
+  /**
+   * Citing decisions a decision read names in its citation summary; the rest
+   * are paged by the citation read.
+   */
+  caseLawTopCitingDecisions: 5,
   /** The page a decision read starts on; pages count from one. */
   caseLawDecisionFirstPage: 1,
   /**

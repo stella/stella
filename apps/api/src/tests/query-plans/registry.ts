@@ -7,9 +7,11 @@ import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference"
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
+import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
+  topCitingDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   decisionRecordQuery,
@@ -411,6 +413,20 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.citation-summary"],
+  },
+  {
+    id: "case-law.top-citing-decisions",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      topCitingDecisionsQuery({
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        limit: CITATION_DIGEST_TOP_CITING,
+        tx,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.top-citing-decisions"],
   },
   {
     id: "legislation.list",

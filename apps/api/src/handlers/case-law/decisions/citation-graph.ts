@@ -628,9 +628,12 @@ type TopCitingDecisionsQueryOptions = {
 
 /**
  * Bounded the way the summary is: the scan reads at most
- * `CITATION_SUMMARY_SCAN_LIMIT` indexed citations of this decision, so a
- * decision cited thousands of times costs the same as the summary beside it,
- * and the ranking runs over what was scanned.
+ * `CITATION_SUMMARY_SCAN_LIMIT` indexed citations of this decision in id
+ * order, so a decision cited thousands of times costs the same as the summary
+ * beside it, and the ranking runs over what was scanned. The precedent filter
+ * applies after the cap, as the summary's does: inside it, the planner would
+ * read every precedent citation of the decision and sort them before the
+ * limit.
  */
 export const topCitingDecisionsQuery = ({
   decisionId,
@@ -639,9 +642,13 @@ export const topCitingDecisionsQuery = ({
 }: TopCitingDecisionsQueryOptions) => {
   const spec = DIRECTION_SPECS.incoming;
   const candidates = tx
-    .select({ id: caseLawCitations.id, relatedId: spec.related })
+    .select({
+      id: caseLawCitations.id,
+      relatedId: spec.related,
+      kind: caseLawCitations.kind,
+    })
     .from(caseLawCitations)
-    .where(and(eq(spec.anchor, decisionId), precedentOnly))
+    .where(eq(spec.anchor, decisionId))
     .orderBy(asc(caseLawCitations.id))
     .limit(CITATION_SUMMARY_SCAN_LIMIT)
     .as("top_citing_candidates");
@@ -665,7 +672,10 @@ export const topCitingDecisionsQuery = ({
       .innerJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
       .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
       .where(
-        visibleFor({ keepsUnresolved: false, related: candidates.relatedId }),
+        and(
+          eq(candidates.kind, CITATION_KIND.PRECEDENT),
+          visibleFor({ keepsUnresolved: false, related: candidates.relatedId }),
+        ),
       )
       // Grouped by the far decision's key, so its other columns are
       // functionally dependent and one decision is one row.

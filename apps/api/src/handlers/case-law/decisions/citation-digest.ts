@@ -29,7 +29,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { LIMITS } from "@/api/lib/limits";
 
 /** Citing decisions the digest names; the rest are paged elsewhere. */
-export const CITATION_DIGEST_TOP_CITING = 5;
+export const CITATION_DIGEST_TOP_CITING = LIMITS.caseLawTopCitingDecisions;
 
 export type DecisionCitationDigest = {
   summary: DecisionCitationSummary;

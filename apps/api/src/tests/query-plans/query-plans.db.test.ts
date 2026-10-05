@@ -319,6 +319,27 @@ test("citation summary caps both indexed citation scans before joining decisions
   }
 });
 
+test("top citing decisions cap the indexed citation scan before joining decisions", async () => {
+  const entry = QUERY_PLAN_REGISTRY.find(
+    (candidate) => candidate.id === "case-law.top-citing-decisions",
+  );
+  if (entry === undefined) {
+    panic("Top citing decisions have no query-plan entry");
+  }
+  const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
+  const citations = scans.filter(
+    ({ relation }) => relation === "case_law_citations",
+  );
+  expect(citations).toHaveLength(1);
+  expect(citations.map(({ index }) => index)).toEqual([
+    "case_law_citations_cited_page_idx",
+  ]);
+  for (const { limitAbove, limitRows } of citations) {
+    expect(limitAbove).toBe(true);
+    expect(limitRows).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT);
+  }
+});
+
 test(
   "the old ECLI OR shape fails while the UNION shape keeps both indexes",
   async () => {
