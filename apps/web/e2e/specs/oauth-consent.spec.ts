@@ -229,10 +229,10 @@ test("account switching preserves the signed OAuth query through auth routing", 
 
   // The fixture's single organization is auto-selected, so auth routing
   // resumes OAuth instead of stopping on the organization screen. The server
-  // re-signs the consent URL; check the original signature at its input boundary.
+  // re-signs the consent URL after set-active; check the signature on that request.
   const continuation = page.waitForRequest(
     (request) =>
-      request.url() === `${AUTH_BASE_URL}/oauth2/continue` &&
+      new URL(request.url()).pathname === "/api/auth/organization/set-active" &&
       request.method() === "POST",
   );
   await page.goto(`${WEB_BASE_URL}/auth${signedHash}`, {
@@ -241,8 +241,6 @@ test("account switching preserves the signed OAuth query through auth routing", 
   const continuationRequest = await continuation;
   expect(continuationRequest.postDataJSON()).toMatchObject({
     oauth_query: signedQuery,
-    postLogin: true,
-    selected: true,
   });
   await expect(
     page.getByRole("heading", {
