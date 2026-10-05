@@ -199,9 +199,9 @@ export const withInterleaving = async <State>({
                     });
                   }
                   stepPids.add(session.pid);
-                  const stepTask = step.run(tx, controller.signal);
-                  stepTasks.push(stepTask);
                   try {
+                    const stepTask = step.run(tx, controller.signal);
+                    stepTasks.push(stepTask);
                     await stepTask;
                   } finally {
                     await afterCancellation();
