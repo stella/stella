@@ -360,10 +360,10 @@ describe("public corpus active request capacity", () => {
 
   test("one page's search and facets wait for each other instead of refusing", async () => {
     const pending: (() => void)[] = [];
-    const work = () => {
+    const work = async () => {
       const completion = Promise.withResolvers<string>();
       pending.push(() => completion.resolve("done"));
-      return completion.promise;
+      return await completion.promise;
     };
     // Production shape: one slot per task, so the facets must wait.
     expect(getPublicCorpusClassPolicy().totalConcurrency).toBe(1);

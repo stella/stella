@@ -20,7 +20,7 @@ const createAdmission = ({
     maxWaiters,
   });
 
-const ask = (
+const ask = async (
   admission: ReturnType<typeof createAdmission>,
   client: string,
   {
@@ -32,7 +32,7 @@ const ask = (
     waitMs?: number;
     signal?: AbortSignal;
   } = {},
-) => admission.acquire({ routeClass, client, waitMs, signal });
+) => await admission.acquire({ routeClass, client, waitMs, signal });
 
 const settled = async <T>(promise: Promise<T>) => {
   const marker = Symbol("pending");
@@ -80,12 +80,11 @@ describe("public corpus admission", () => {
     const admission = createAdmission({ classCapacity: 1, totalCapacity: 1 });
     const holder = await ask(admission, "holder");
     const order: string[] = [];
-    const waiters = ["x", "y", "z"].map((client) =>
-      ask(admission, client).then((lease) => {
-        order.push(client);
-        return lease;
-      }),
-    );
+    const waiters = ["x", "y", "z"].map(async (client) => {
+      const lease = await ask(admission, client);
+      order.push(client);
+      return lease;
+    });
     holder?.();
     for (const waiter of waiters) {
       (await waiter)?.();
