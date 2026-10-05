@@ -69,7 +69,7 @@ const hasMainBranchConcurrency = (workflow: unknown) => {
 
 type ConcurrencyProblemsOptions = {
   supersedingEvents?: readonly string[];
-  mode?: "supersede" | "preserve-events" | "serialize-main";
+  mode?: "supersede" | "preserve-events";
 };
 
 /** Why a pull request workflow's runs would not supersede each other. */
@@ -99,17 +99,6 @@ const concurrencyProblems = (
   const cancel = concurrency["cancel-in-progress"];
   // Disarming consumes individual push events. A later trusted autofix must
   // never supersede an earlier invalidation, including a pending run.
-  // Shared main recordings serialize label requests with scheduled recordings.
-  if (mode === "serialize-main") {
-    return [
-      ...(group === `\${{ github.workflow }}-\${{ github.ref }}`
-        ? []
-        : ["main recording needs a branch group"]),
-      ...(cancel === false
-        ? []
-        : ["main recording must finish before its replacement"]),
-    ];
-  }
   if (mode === "preserve-events") {
     return [
       ...(group === `\${{ github.workflow }}-\${{ github.run_id }}`
@@ -261,7 +250,6 @@ const concurrencyModes: Record<
   NonNullable<ConcurrencyProblemsOptions["mode"]>
 > = {
   "disarm-auto-merge.yml": "preserve-events",
-  "network-baseline-record.yml": "serialize-main",
 };
 
 describe("pull request workflow concurrency", () => {
@@ -282,37 +270,6 @@ describe("pull request workflow concurrency", () => {
         }).map((problem) => `${file}: ${problem}`),
       ),
     ).toEqual([]);
-  });
-
-  test("main recording concurrency rejects PR groups and cancellation", () => {
-    const workflow = {
-      on: { pull_request_target: { branches: ["main"], types: ["labeled"] } },
-      concurrency: {
-        group: `\${{ github.workflow }}-\${{ github.ref }}`,
-        "cancel-in-progress": false,
-      },
-    };
-    expect(concurrencyProblems(workflow, { mode: "serialize-main" })).toEqual(
-      [],
-    );
-    expect(
-      concurrencyProblems(
-        {
-          ...workflow,
-          concurrency: { ...workflow.concurrency, "cancel-in-progress": true },
-        },
-        { mode: "serialize-main" },
-      ),
-    ).toEqual(["main recording must finish before its replacement"]);
-    expect(
-      concurrencyProblems(
-        {
-          ...workflow,
-          concurrency: { ...workflow.concurrency, group: "per-pr" },
-        },
-        { mode: "serialize-main" },
-      ),
-    ).toEqual(["main recording needs a branch group"]);
   });
 
   test("event-preserving concurrency rejects shared groups and cancellation", () => {
@@ -632,6 +589,26 @@ test("main recordings serialize without cancelling a committed baseline", async 
   };
   expect(await groupFor("network-baseline-record.yml", main)).toBe(
     await groupFor("network-baseline-record.yml", { ...main, run_id: 2 }),
+  );
+});
+
+test("unrelated labels cannot supersede baseline recording requests", async () => {
+  const file = "network-baseline-request.yml";
+  const request = {
+    ...recording,
+    workflow: "Request network baseline",
+    event_name: "pull_request_target",
+  };
+  const group = await groupFor(file, request);
+  expect(group).toBe("Request network baseline-pr-12");
+  expect(await groupFor(file, { ...request, run_id: 2 })).toBe(group);
+  const unrelated = {
+    ...request,
+    event: { ...request.event, label: { name: "unrelated" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(group);
+  expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
+    await groupFor(file, unrelated),
   );
 });
 

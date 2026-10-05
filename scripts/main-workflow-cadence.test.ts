@@ -176,8 +176,7 @@ test("hourly heavy scheduling skips only the last completed tested SHA and alway
 
 test("an unchanged scheduled SHA allocates no suite or status runner and fetches no history", () => {
   for (const job of ["suites", "status"]) {
-    const condition = heavy.jobs[job]?.if;
-    expect(condition, job).toBeDefined();
+    const condition = v.parse(v.string(), heavy.jobs[job]?.if);
     expect(
       new Script(`Boolean(${condition})`).runInNewContext({
         always: () => true,
@@ -229,37 +228,36 @@ test("main maintenance triggers avoid duplicate push work and cache warming foll
 
 test("baseline labels dispatch trusted main while recording permissions stay read-only", async () => {
   const recording = read("network-baseline-record");
-  expect(Object.keys(recording.on)).toEqual([
-    "pull_request_target",
-    "schedule",
-    "workflow_dispatch",
-  ]);
-  expect(recording.on["pull_request_target"]).toEqual({
+  const requester = read("network-baseline-request");
+  expect(Object.keys(recording.on)).toEqual(["schedule", "workflow_dispatch"]);
+  expect(Object.keys(requester.on)).toEqual(["pull_request_target"]);
+  expect(requester.on["pull_request_target"]).toEqual({
     branches: ["main"],
     types: ["labeled"],
   });
   const build = recording.jobs["build"];
+  const buildCondition = v.parse(v.string(), build?.if);
   for (const ref of ["refs/heads/main", "refs/pull/42/merge"]) {
     for (const event_name of [
       "schedule",
       "workflow_dispatch",
       "pull_request_target",
+      "push",
     ]) {
       for (const label of ["baseline:record", "unrelated"]) {
         const permitted =
-          ref === "refs/heads/main" && event_name !== "pull_request_target";
+          ref === "refs/heads/main" &&
+          (event_name === "schedule" || event_name === "workflow_dispatch");
         expect(
-          new Script(`Boolean(${build?.if})`).runInNewContext({
+          new Script(`Boolean(${buildCondition})`).runInNewContext({
             github: { ref, event_name, event: { label: { name: label } } },
           }),
         ).toBe(permitted);
       }
     }
   }
-  for (const [name, job] of Object.entries(recording.jobs)) {
-    if (name === "request") {
-      continue;
-    }
+  expect(Object.keys(recording.jobs)).toEqual(["build", "record"]);
+  for (const job of Object.values(recording.jobs)) {
     expect(
       Object.values(job.permissions ?? {}).every((value) => value === "read"),
     ).toBe(true);
@@ -273,12 +271,22 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
       });
     }
   }
-  const request = recording.jobs["request"];
+  expect(Object.keys(requester.jobs)).toEqual(["request"]);
+  const request = requester.jobs["request"];
+  const requestCondition = v.parse(v.string(), request?.if);
   expect(request?.permissions).toEqual({ actions: "write" });
   expect(request?.steps).toHaveLength(1);
+  expect(request?.steps?.at(0)?.uses).toBe(
+    "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+  );
+  expect(request?.steps?.at(0)?.run).toBeUndefined();
+  expect(request?.steps?.at(0)?.with?.["retries"]).toBe(0);
   const requestScript = v.parse(
     v.string(),
     request?.steps?.at(0)?.with?.["script"],
+  );
+  expect(requestScript).not.toMatch(
+    /checkout|cache|exec|spawn|require\(|import\(/u,
   );
   for (const event_name of [
     "pull_request_target",
@@ -287,7 +295,9 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   ]) {
     for (const label of ["baseline:record", "unrelated"]) {
       const calls: unknown[] = [];
-      const enabled = new Script(`Boolean(${request?.if})`).runInNewContext({
+      const enabled = new Script(
+        `Boolean(${requestCondition})`,
+      ).runInNewContext({
         github: { event_name, event: { label: { name: label } } },
       });
       if (enabled) {
@@ -352,7 +362,7 @@ test("landing dispatch ends after acceptance, propagates rejection and never wai
       const result = Bun.spawnSync(["bash", "-e", "-c", script], {
         env: {
           ...process.env,
-          PATH: `${directory}:${process.env["PATH"]}`,
+          PATH: `${directory}:${v.parse(v.string(), process.env["PATH"])}`,
           CALLS: calls,
           DISPATCH_EXIT: String(exitCode),
           GITHUB_STEP_SUMMARY: summary,
