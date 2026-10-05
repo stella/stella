@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
+  splitStatuteTitleCitation,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
@@ -44,9 +45,10 @@ import {
 } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { recordLawOpen } from "@/lib/law-search-history";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 
@@ -115,6 +117,25 @@ export const PublicStatuteViewer = ({
   const readerRef = useRef<HTMLDivElement>(null);
 
   const header = statute ?? work;
+  const openedPath = useRouterState({
+    select: ({ location }) => location.pathname,
+  });
+  useExternalSyncEffect(() => {
+    const citation = splitStatuteTitleCitation(header.title).citation;
+    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(work.eli ?? "");
+    const year = eliCitation?.at(1);
+    const number = eliCitation?.at(2);
+    const title =
+      citation !== null || year === undefined || number === undefined
+        ? header.title
+        : `${number}/${year} · ${header.title}`;
+    recordLawOpen({
+      kind: "statute",
+      id: work.eli ?? work.id,
+      title,
+      path: openedPath,
+    });
+  }, [header.title, work.id, work.eli, openedPath]);
   // Picking a day means going to that day's consolidation, and only the
   // readable segment can address one. A document the corpus holds no segment
   // for keeps the version menu, which switches by id.
