@@ -32,6 +32,7 @@ import {
 import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
@@ -42,6 +43,8 @@ import {
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const permit = grantThirdPartyOutboundPermit();
 
 const ARES_COMPANY_FIXTURE: AresCompany = {
   ico: "27082440",
@@ -84,6 +87,7 @@ describe("executeRegistryLookup — details channel", () => {
 
     const result = await executeRegistryLookup({
       observer: "unobserved",
+      permit,
       handler,
       query: "27082440",
     });
@@ -117,6 +121,7 @@ describe("executeRegistryLookup — details channel", () => {
 
     const result = await executeRegistryLookup({
       observer: "unobserved",
+      permit,
       handler,
       query: "Alza",
     });
@@ -137,6 +142,7 @@ describe("executeRegistryLookup — details channel", () => {
     );
     const result = await executeRegistryLookup({
       observer: "unobserved",
+      permit,
       handler: stubHandler({
         lookup: async () => {
           throw cause;
@@ -205,6 +211,7 @@ describe("ORSR lookup detail", () => {
     try {
       const result = await executeRegistryLookup({
         observer: "unobserved",
+        permit,
         handler: BUSINESS_REGISTRY_DISPATCH.orsr,
         query: "31333532",
         detail,
@@ -333,6 +340,7 @@ describe("VIES handler wiring", () => {
   test("name search is rejected with a useful error", async () => {
     const result = await executeRegistryLookup({
       observer: "unobserved",
+      permit,
       handler: BUSINESS_REGISTRY_DISPATCH.vies,
       query: "Acme Corp",
     });
@@ -385,7 +393,10 @@ describe("Companies House hit address", () => {
     });
     try {
       const handler = BUSINESS_REGISTRY_DISPATCH["companies-house"];
-      const hit = await handler.lookup("12345678", { observer: "unobserved" });
+      const hit = await handler.lookup("12345678", {
+        observer: "unobserved",
+        permit,
+      });
       expect(hit?.address?.line1).toBe(
         "c/o Acme Secretaries Limited PO Box 5000 1 Imaginary Street",
       );
@@ -464,6 +475,7 @@ describe("DENUE deployment gating", () => {
     try {
       const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106", {
         observer: "unobserved",
+        permit,
       });
       expect(hit?.registry).toBe("denue");
       expect(hit?.legalForm).toBeNull();
@@ -521,6 +533,7 @@ describe("executeRegistryLookup — canonical-id guard", () => {
   test("maps an isCanonicalId failure to a handler error instead of throwing", async () => {
     const result = await executeRegistryLookup({
       observer: "unobserved",
+      permit,
       handler: stubHandler({
         isCanonicalId: () => {
           throw new Error("native binding unavailable");
