@@ -614,6 +614,22 @@ type CzNsBuildResult =
       read: UnreadPublisherOutcome;
     };
 
+/**
+ * The listing row as stored, with its fields in one fixed order. A row the
+ * reconciliation parked comes back from JSONB with its keys reordered, and the
+ * same row must store the same bytes whichever path built it.
+ */
+const storedListingRow = ({
+  unid,
+  caseNumber,
+  additionalCaseNumbers,
+}: CzNsListingRow): string =>
+  JSON.stringify({
+    unid,
+    caseNumber,
+    additionalCaseNumbers,
+  } satisfies Record<keyof CzNsListingRow, unknown>);
+
 type BuildCzNsDecisionFromPagesOptions = {
   row: CzNsListingRow;
   webHtml: string;
@@ -742,22 +758,6 @@ const buildCzNsDecisionFromPages = ({
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 };
-
-/**
- * The listing row as stored, with its fields in one fixed order. A row the
- * reconciliation parked comes back from JSONB with its keys reordered, and the
- * same row must store the same bytes whichever path built it.
- */
-const storedListingRow = ({
-  unid,
-  caseNumber,
-  additionalCaseNumbers,
-}: CzNsListingRow): string =>
-  JSON.stringify({
-    unid,
-    caseNumber,
-    additionalCaseNumbers,
-  } satisfies Record<keyof CzNsListingRow, unknown>);
 
 /**
  * Build one decision from a listed row, through this adapter's own fetch and
