@@ -577,7 +577,7 @@ export default eslintCompatPlugin({
           computedKeyAssignment:
             "Build dynamically keyed records with Object.fromEntries(...) or a Map.",
           assignedSource:
-            "Copy dynamic entries with Object.fromEntries(...) or object spread.",
+            "Copy dynamic entries with object spread ({ ...target, ...source }).",
           unguardedRead:
             "Check Object.hasOwn(table, key) before reading an open module-level record.",
         },
