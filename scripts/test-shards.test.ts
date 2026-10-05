@@ -8,6 +8,7 @@ import {
   parseApiTestShard,
   partitionTestFiles,
 } from "../apps/api/scripts/test-file-shards";
+import { durationSeconds } from "../apps/api/scripts/test-timings";
 import {
   apiShardValue,
   assertApiShardExecuted,
@@ -154,9 +155,11 @@ test("API sub-shards cover every discovered file exactly once, including new fil
     const shard = parseApiTestShard(apiShardValue(id));
     return shard === null
       ? []
-      : (partitionTestFiles({ files: input, durations, count: shard.count }).at(
-          shard.index - 1,
-        ) ?? []);
+      : (partitionTestFiles({
+          files: input,
+          durations: durationSeconds(durations),
+          count: shard.count,
+        }).at(shard.index - 1) ?? []);
   });
   expect(selected.toSorted()).toEqual(input.toSorted());
   expect(new Set(selected).size).toBe(input.length);

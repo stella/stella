@@ -2487,6 +2487,7 @@ jobs:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -2506,11 +2507,36 @@ jobs:
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
           set -o pipefail
+          if [[ -n "$API_TEST_SHARD" ]]; then
+            bun apps/api/scripts/refresh-test-durations.ts --check
+          fi
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Check API test duration drift
+        if: >-
+          !cancelled()
+          && startsWith(matrix.shard, 'api-')
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
+        run: |
+          # A Turbo cache hit executes no test process and emits no new timings.
+          if [[ -d "$API_TEST_TIMINGS_DIR" ]]; then
+            bun apps/api/scripts/refresh-test-durations.ts --check "$API_TEST_TIMINGS_DIR"
+          fi
+
+      - name: Upload API test timings
+        if: always() && startsWith(matrix.shard, 'api-')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Test web
         if: >-

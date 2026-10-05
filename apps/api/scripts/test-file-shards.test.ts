@@ -104,11 +104,18 @@ test("an API sub-shard must select files before the runner can start", () => {
     selectApiTestFiles({ files: [], durations: {}, shardValue: "1/4" }),
   ).toThrow("selected zero test files");
   expect(() =>
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "4/4" }),
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: { seconds: 1, source: "estimated" } },
+      shardValue: "4/4",
+    }),
   ).toThrow("selected zero test files");
   expect(
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "1/4" })
-      .testPaths,
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: { seconds: 1, source: "estimated" } },
+      shardValue: "1/4",
+    }).testPaths,
   ).toEqual(["one"]);
   expect(
     selectApiTestFiles({ files: [], durations: {}, shardValue: undefined }),
