@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import path from "node:path";
 
 const IPV6 = "2606:4700:4700::1111";
 const IPV4 = "1.1.1.1";
@@ -22,13 +24,14 @@ type ProbeOptions = {
   preAborted?: boolean;
 };
 
-// Built-in module mocks stay in a child runtime so concurrent auth tests retain
-// their real DNS and HTTPS transports. The installed dependency is exercised.
+// Built-in module mocks stay in an isolated test runner so concurrent auth tests
+// retain real transports and Bun applies mocks to the dependency's ESM imports.
 const probe = async (options: ProbeOptions) => {
   const script = `
-    import { mock } from "bun:test";
+    import { mock, test } from "bun:test";
     import { EventEmitter } from "node:events";
     import { Readable } from "node:stream";
+    test("isolated CIMD transport probe", async () => {
     const config = ${JSON.stringify(options)};
     let resolutions = 0;
     const attempts = [];
@@ -36,6 +39,9 @@ const probe = async (options: ProbeOptions) => {
     const controller = new AbortController();
     const abort = () => controller.abort(new DOMException("overall deadline", "TimeoutError"));
     if (config.preAborted) abort();
+    // Initialize built-in ESM records before replacing their exports.
+    await import("node:dns/promises");
+    await import("node:https");
     mock.module("node:dns/promises", () => ({
       lookup: async () => {
         resolutions++;
@@ -109,20 +115,29 @@ const probe = async (options: ProbeOptions) => {
       clearTimeout(timer);
     }
     console.log(JSON.stringify({ ...result, attempts, authorities, resolutions, elapsedMs: performance.now() - started }));
+    });
   `;
-  const child = Bun.spawn({
-    cmd: [process.execPath, "--no-env-file", "-e", script],
-    cwd: new URL("../../../../..", import.meta.url).pathname,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  expect(exitCode, stderr).toBe(0);
-  return JSON.parse(stdout);
+  const cwd = new URL("../../../../..", import.meta.url).pathname;
+  const directory = await mkdtemp(path.join(cwd, ".cimd-transport-"));
+  try {
+    const fixture = path.join(directory, "probe.test.mjs");
+    await Bun.write(fixture, script);
+    const child = Bun.spawn({
+      cmd: [process.execPath, "--no-env-file", "test", fixture],
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode, stderr).toBe(0);
+    return JSON.parse(stdout);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 };
 
 describe("CIMD connections use only vetted addresses within one fetch budget", () => {
