@@ -5,12 +5,14 @@ import path from "node:path";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
 import { discoverGatedTestFiles } from "./run-gated-tests";
 import { TEST_BATCH_KIND } from "./test-batch-plan";
 import { runInLanes } from "./test-lanes";
 
-export const CORPUS_ENGINE_GATE = "STELLA_RUN_CORPUS_ENGINE_TESTS";
+const corpusRunner = packageJson.ciGateTestRunners["test:corpus"];
+export const CORPUS_ENGINE_GATE = corpusRunner.gate;
 const TEMPLATE_CONTAINER = "corpus-engine";
 // Two PGlite schema builders can overlap with the longest engine-only suite.
 const ENGINE_TEST_LANES = 3;
@@ -30,7 +32,7 @@ export const assertCorpusEngineTestCoverage = async (apiRoot: string) => {
   const discovered = await discoverGatedTestFiles({
     apiRoot,
     gate: CORPUS_ENGINE_GATE,
-    testFileGlob: "src/**/*.test.ts",
+    testFileGlob: corpusRunner.testFileGlob,
   });
   const listed = new Set<string>(CORPUS_ENGINE_TEST_FILES);
   const missing = discovered.filter((file) => !listed.has(file));
@@ -93,10 +95,10 @@ export const runCorpusEngineSuites = async ({
     signal,
     runBatch: async (suite) => {
       const started = performance.now();
-      const result = await Result.tryPromise(() => execute(suite));
+      const result = await Result.tryPromise(async () => await execute(suite));
       const exitCode = result.isErr() ? 1 : childExitStatus(result.value);
       const detail = result.isErr()
-        ? String(result.error)
+        ? result.error.message
         : `exit=${String(result.value.exitCode)}, signal=${String(result.value.signalCode ?? "none")}`;
       report(
         `${exitCode === 0 ? "PASS" : "FAIL"} ${suite.file}: ${((performance.now() - started) / 1000).toFixed(1)}s (${detail})`,
@@ -159,7 +161,7 @@ const runCommand = async ({
   ]);
   if (childExitStatus(child) !== 0) {
     throw new CorpusSuiteCommandError({
-      message: `${command.at(0)} failed: exit=${String(child.exitCode)}, signal=${String(child.signalCode)}`,
+      message: `${String(command.at(0))} failed: exit=${String(child.exitCode)}, signal=${String(child.signalCode)}`,
     });
   }
   return stdout.trim();
@@ -191,8 +193,8 @@ export const executeCorpusSuite = async ({
   mkdirSync(temporaryDir);
   const logPath = path.join(suite.outputDir, "suite.log");
   const log = openSync(logPath, "w");
-  const command = (args: string[]) =>
-    run({ command: args, cwd: apiRoot, signal });
+  const command = async (args: string[]) =>
+    await run({ command: args, cwd: apiRoot, signal });
   const result = await Result.tryPromise(async () => {
     await command([
       "docker",
@@ -239,7 +241,7 @@ export const executeCorpusSuite = async ({
     ]);
     const environment = {
       ...process.env,
-      [CORPUS_ENGINE_GATE]: "true",
+      [CORPUS_ENGINE_GATE]: corpusRunner.gateValue,
       STELLA_RUN_POSTGRES_TESTS: undefined,
       STELLA_CORPUS_ENGINE_TEST_ENDPOINT: endpoint,
       PGLITE_TEST_SNAPSHOT: undefined,
@@ -273,19 +275,21 @@ export const executeCorpusSuite = async ({
     });
   });
   // Cleanup is not tied to the cancelled signal: every owned container is reaped.
-  const diagnostics = await Result.tryPromise(() =>
-    run({
-      command: ["docker", "logs", suite.containerName],
-      cwd: apiRoot,
-      output: log,
-    }),
+  const diagnostics = await Result.tryPromise(
+    async () =>
+      await run({
+        command: ["docker", "logs", suite.containerName],
+        cwd: apiRoot,
+        output: log,
+      }),
   );
-  const cleanup = await Result.tryPromise(() =>
-    run({
-      command: ["docker", "rm", "--force", "--volumes", suite.containerName],
-      cwd: apiRoot,
-      output: log,
-    }),
+  const cleanup = await Result.tryPromise(
+    async () =>
+      await run({
+        command: ["docker", "rm", "--force", "--volumes", suite.containerName],
+        cwd: apiRoot,
+        output: log,
+      }),
   );
   closeSync(log);
   process.stdout.write(
@@ -297,7 +301,7 @@ export const executeCorpusSuite = async ({
     rmSync(temporaryDir, { recursive: true, force: true });
   }
   const errors = [result, diagnostics, cleanup].flatMap((operation) =>
-    operation.isErr() ? [String(operation.error)] : [],
+    operation.isErr() ? [operation.error.message] : [],
   );
   if (errors.length > 0) {
     throw new CorpusSuiteCommandError({ message: errors.join("; ") });
@@ -332,9 +336,16 @@ if (import.meta.main) {
     const result = await runCorpusEngineSuites({
       suites,
       signal: abort.signal,
-      report: (message) => process.stdout.write(`${message}\n`),
-      execute: (suite) =>
-        executeCorpusSuite({ apiRoot, image, signal: abort.signal, suite }),
+      report: (message) => {
+        process.stdout.write(`${message}\n`);
+      },
+      execute: async (suite) =>
+        await executeCorpusSuite({
+          apiRoot,
+          image,
+          signal: abort.signal,
+          suite,
+        }),
     });
     process.exitCode = result.exitCode;
   } catch (error) {

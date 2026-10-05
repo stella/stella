@@ -132,7 +132,9 @@ test("successful suites return zero and report every file's elapsed time", async
     suites: suites(),
     execute: async () => ({ exitCode: 0 }),
     signal: new AbortController().signal,
-    report: (message) => messages.push(message),
+    report: (message) => {
+      messages.push(message);
+    },
   });
   expect(result.exitCode).toBe(0);
   expect(result.outcomes).toHaveLength(CORPUS_ENGINE_TEST_FILES.length);
@@ -170,7 +172,9 @@ test("all files run with at most three active suites and every failure is named"
       };
     },
     signal: new AbortController().signal,
-    report: (message) => messages.push(message),
+    report: (message) => {
+      messages.push(message);
+    },
   });
   expect(active).toBe(3);
   release();
@@ -178,10 +182,12 @@ test("all files run with at most three active suites and every failure is named"
   expect(peak).toBe(3);
   expect(started).toEqual(planned.map(({ file }) => file));
   expect(result.exitCode).toBe(1);
-  for (const suite of [planned.at(0), planned.at(-1)]) {
+  for (const { file } of planned.filter(
+    (_, index) => index === 0 || index === planned.length - 1,
+  )) {
     expect(
       messages.some(
-        (message) => message === `Failed corpus engine suite: ${suite?.file}`,
+        (message) => message === `Failed corpus engine suite: ${file}`,
       ),
     ).toBe(true);
   }
@@ -202,7 +208,9 @@ test("a genuinely signalled Bun child fails even when its exit code is null", as
       return { exitCode: child.exitCode, signalCode: child.signalCode };
     },
     signal: new AbortController().signal,
-    report: (message) => messages.push(message),
+    report: (message) => {
+      messages.push(message);
+    },
   });
   expect(result.exitCode).toBe(1);
   expect(messages.join("\n")).toContain("signal=SIGTERM");
@@ -216,7 +224,9 @@ test("executor rejection is reported and does not omit other suites", async () =
       throw new TypeError("fixture execution failed");
     },
     signal: new AbortController().signal,
-    report: (message) => messages.push(message),
+    report: (message) => {
+      messages.push(message);
+    },
   });
   expect(result.exitCode).toBe(1);
   expect(result.outcomes).toHaveLength(CORPUS_ENGINE_TEST_FILES.length);
