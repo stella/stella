@@ -171,14 +171,13 @@ for (const controlled of [true, false]) {
         response.resolve(Response.json({ configured: true }));
       });
       await waitFor(() => {
-        expect(
-          client.getQueryData(
-            deepLAvailabilityOptions({
-              organizationId: "organization-a",
-              open: true,
-            }).queryKey,
-          ),
-        ).toEqual({ configured: true });
+        const availability = client.getQueryData(
+          deepLAvailabilityOptions({
+            organizationId: "organization-a",
+            open: true,
+          }).queryKey,
+        );
+        expect(availability).toEqual({ configured: true });
       });
       expect(aborts).toBe(0);
       expect(calls).toBe(1);
