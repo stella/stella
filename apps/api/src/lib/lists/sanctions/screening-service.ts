@@ -425,6 +425,8 @@ type ScreenSanctionsSubjectProps = {
   matcher?: SanctionsListMatcher;
 };
 
+export const SANCTIONS_SCREENING_BATCH_SIZE = 100;
+
 type ScreenSanctionsSubjectsOptions = Omit<
   ScreenSanctionsSubjectProps,
   "subject"
