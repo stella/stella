@@ -164,6 +164,7 @@
   },
   "resolutions": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
     "@expo/cli": "57.0.26",
@@ -188,8 +189,7 @@
     "prosemirror-view": "1.42.5",
     "react-native-screens": "4.26.2",
     "svgo": "4.1.0",
-    "undici": "8.10.2",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.0"
+    "undici": "8.10.2"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
