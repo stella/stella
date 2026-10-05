@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -59,7 +58,6 @@ import { useDecisionProvisionAnchors } from "@/features/case-law/components/case
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
@@ -92,7 +90,6 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
-  initialSearchQuery?: string | undefined;
 };
 
 /**
@@ -147,7 +144,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId, initialSearchQuery } = props;
+  const { decision, decisionId, initialAnchorId } = props;
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
@@ -185,24 +182,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   const [panelWidth, setPanelWidth] = useState(220);
   const isDragging = useRef(false);
-  const {
-    searchOpen,
-    searchQuery,
-    activeMatchIndex,
-    openSearch,
-    setMatchCount,
-    setSearchQuery,
-  } = useCaseSearchStore(
-    useShallow((s) => ({
-      searchOpen: s.isOpen,
-      searchQuery: s.query,
-      activeMatchIndex: s.activeMatchIndex,
-      openSearch: s.open,
-      setMatchCount: s.setMatchCount,
-      setSearchQuery: s.setQuery,
-    })),
-  );
-
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
@@ -398,15 +377,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       detached(generate(), "decision-workspace.generate");
     }
   }, [analysisRunnable, analysisState.status, ast, generate]);
-
-  const reset = useCaseSearchStore((s) => s.reset);
-  useExternalSyncEffect(() => {
-    reset();
-    if (initialSearchQuery) {
-      setSearchQuery(initialSearchQuery);
-      openSearch();
-    }
-  }, [decisionId, initialSearchQuery, openSearch, reset, setSearchQuery]);
 
   const notesFilterOptions = [
     { icon: NotesFilterAllIcon, label: t("common.all"), value: "all" },
@@ -647,7 +617,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   data-slot="reader-document-column"
                 >
                   <DecisionText
-                    activeMatchIndex={activeMatchIndex}
                     aiHeadnotes={aiHeadnotes}
                     annotationAnchors={annotations.anchors}
                     citationAnchors={citationAnchors}
@@ -655,9 +624,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     decisionId={decisionId}
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
-                    onMatchCountChange={setMatchCount}
                     provisionAnchors={provisionAnchors}
-                    searchQuery={searchOpen ? searchQuery : ""}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
                   />

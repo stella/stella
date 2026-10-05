@@ -105,6 +105,7 @@ export const CaseDecisionInspectorView = ({
     contentRef,
     enabled: decision !== undefined,
     highlightKey: tab.id,
+    initialQuery: payload.searchQuery,
     panelRef,
   });
   // The same marks, store and bar the full page has. The target is addressed
@@ -166,7 +167,10 @@ export const CaseDecisionInspectorView = ({
               </>
             )}
             {/* The text moves to the page, so the tab that held it goes. */}
-            <DecisionMainViewAction onMoveToMain={onClose} payload={payload} />
+            <DecisionMainViewAction
+              onMoveToMain={onClose}
+              payload={{ ...payload, searchQuery: find.findQuery || undefined }}
+            />
           </>
         }
         label={tab.label}
@@ -247,11 +251,9 @@ export const CaseDecisionInspectorView = ({
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
                 />
-                {/* The words that found the decision come with the tab: the
-                  reader opens on them marked, at the passage the row named,
-                  and the passage keeps its marker rather than flashing once. */}
+                {/* The find bar owns every search mark; the landing passage
+                    remains independent of the query the reader edits. */}
                 <DecisionText
-                  activeMatchIndex={0}
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}
                   decision={decision}
@@ -260,7 +262,6 @@ export const CaseDecisionInspectorView = ({
                   notesByAnchorId={notesByAnchorId}
                   onAnnotationActivate={annotations.setActiveAnnotationId}
                   provisionAnchors={provisionAnchors}
-                  searchQuery={payload.searchQuery ?? ""}
                   statuteCitationAnchors={statuteCitationAnchors}
                 />
               </>

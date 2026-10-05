@@ -82,7 +82,6 @@ const renderDecision = (abstract: string): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
-        activeMatchIndex={-1}
         decision={textDecision({
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
@@ -93,7 +92,6 @@ const renderDecision = (abstract: string): string =>
           },
         })}
         decisionId="dec-1"
-        searchQuery=""
       />
     </IntlProvider>,
   );
@@ -127,7 +125,6 @@ describe("a decision whose text did not resolve", () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <QueryClientProvider client={new QueryClient()}>
           <DecisionText
-            activeMatchIndex={-1}
             decision={textDecision({
               documentAst: null,
               documentPending: true,
@@ -143,7 +140,6 @@ describe("a decision whose text did not resolve", () => {
               },
             })}
             decisionId="dec-1"
-            searchQuery=""
           />
         </QueryClientProvider>
       </IntlProvider>,
@@ -189,11 +185,8 @@ describe("source attribution", () => {
   });
 });
 
-// A results row sends the reader to one passage for one reason: it holds the
-// words they searched for. Both facts have to survive the trip — the words
-// marked through the reader's own find, the passage marked in a way that
-// outlives an arrival flash.
-const searchedAst = {
+// A landing passage keeps its marker after the reader arrives.
+const landingAst = {
   blocks: [
     {
       anchorId: "p-1",
@@ -232,21 +225,17 @@ const searchedAst = {
   version: 1,
 } satisfies DocumentAst;
 
-const renderSearchedDecision = ({
-  activeMatchIndex,
+const renderLandedDecision = ({
   landingAnchorId,
 }: {
-  activeMatchIndex: number;
   landingAnchorId?: string | undefined;
 }): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
-        activeMatchIndex={activeMatchIndex}
-        decision={textDecision({ documentAst: searchedAst, language: "en" })}
+        decision={textDecision({ documentAst: landingAst, language: "en" })}
         decisionId="dec-1"
         landingAnchorId={landingAnchorId}
-        searchQuery="contract"
       />
     </IntlProvider>,
   );
@@ -286,19 +275,16 @@ const renderTopMatter = ({
   documentAst = ast,
   fields = {},
   notesByAnchorId,
-  searchQuery = "",
 }: Partial<
   Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
 > & {
   analysis?: DecisionAnalysis;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
-  searchQuery?: string;
 } = {}): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
-        activeMatchIndex={-1}
         aiHeadnotes={
           analysis === undefined ? null : (
             <AiHeadnotes analysis={analysis} onAnchorClick={() => undefined} />
@@ -317,61 +303,13 @@ const renderTopMatter = ({
         })}
         decisionId="dec-1"
         notesByAnchorId={notesByAnchorId}
-        searchQuery={searchQuery}
       />
     </IntlProvider>,
   );
 
-/** Every match the page carries, in the order it draws them. */
-const matchIndexesInOrder = (markup: string): number[] =>
-  [...markup.matchAll(/data-reader-match-index="(?<index>\d+)"/gu)].map(
-    (match) => Number(match.groups?.["index"]),
-  );
-
-const activeMatchIndexOf = (markup: string): number | null => {
-  const active =
-    /<mark class="[^"]*ring-1[^"]*"[^>]* data-reader-match-index="(?<index>\d+)"/u.exec(
-      markup,
-    )?.groups?.["index"];
-  return active === undefined ? null : Number(active);
-};
-
-describe("a decision opened from a search result", () => {
-  test("the query's words are marked and the landing passage holds the active match", () => {
-    const markup = renderSearchedDecision({
-      activeMatchIndex: 0,
-      landingAnchorId: "p-2",
-    });
-
-    expect(markup).toContain('data-reader-match-index="0"');
-    expect(markup).toContain('data-reader-match-index="1"');
-    expect(activeMatchIndexOf(markup)).toBe(1);
-  });
-
-  test("without a landing passage the find keeps its own position", () => {
-    expect(
-      activeMatchIndexOf(renderSearchedDecision({ activeMatchIndex: 0 })),
-    ).toBe(0);
-  });
-
-  // A question's source chip names the block its answer came from, which the
-  // query had no part in choosing. Activating the find's own position there
-  // would mark an occurrence the reader never asked about, somewhere else
-  // entirely; the passage they did ask for still carries its marker.
-  test("a landing passage the query does not reach activates no match", () => {
-    const markup = renderSearchedDecision({
-      activeMatchIndex: 0,
-      landingAnchorId: "p-3",
-    });
-
-    expect(markup).toContain('data-reader-match-index="0"');
-    expect(activeMatchIndexOf(markup)).toBeNull();
-    expect(markup).toContain('data-anchor="p-3" data-reader-landing=""');
-  });
-
+describe("a decision opened at a passage", () => {
   test("the landing passage keeps a marker, and no other block takes one", () => {
-    const markup = renderSearchedDecision({
-      activeMatchIndex: 0,
+    const markup = renderLandedDecision({
       landingAnchorId: "p-2",
     });
 
@@ -465,22 +403,12 @@ describe("what a decision opens with", () => {
     ).not.toContain("open");
   });
 
-  // `buildSearchResults` numbers matches in piece order, so a page whose
-  // blocks moved has to be indexed in the order it draws them; otherwise the
-  // find walks backwards through it.
-  test("numbers the find's matches in the order the page renders them", () => {
+  test("renders a lifted headnote before the body", () => {
     const markup = renderTopMatter({
       documentAst: astWith([
         publisherParagraph("p-h", "headnotes", "Court reasoning, headnote."),
       ]),
-      searchQuery: "court",
     });
-
-    // The reference line, then the headnote, then the court's paragraph: the
-    // headnote renders above the body even though the parser marked it
-    // further down, and the numbering follows the page.
-    expect(matchIndexesInOrder(markup)).toEqual([0, 1, 2]);
-    // Compared on the anchors: the query's marks cut both texts into spans.
     expect(markup.indexOf('id="p-h"')).toBeLessThan(markup.indexOf('id="p-1"'));
   });
 

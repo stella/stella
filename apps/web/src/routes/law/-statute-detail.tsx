@@ -18,6 +18,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
@@ -92,6 +96,7 @@ type PublicStatuteViewerProps = PublicStatuteRouteData & {
   comparison: StatuteCompareSearch;
   /** A provision designation the URL asked the reader to open at. */
   requestedJump: string | undefined;
+  searchQuery: string | undefined;
 };
 
 /**
@@ -103,6 +108,7 @@ export const PublicStatuteViewer = ({
   asOf,
   comparison,
   requestedJump,
+  searchQuery,
   statute,
   versions,
   windowGap,
@@ -113,8 +119,17 @@ export const PublicStatuteViewer = ({
   const asOfLabelId = useId();
   const routeHash = useRouterState({ select: (state) => state.location.hash });
   const readerRef = useRef<HTMLDivElement>(null);
-
+  const contentRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
+  const find = useInspectorFind({
+    contentRef,
+    enabled: statute !== null && comparison.compare === undefined,
+    highlightKey: `statute-page-${header.id}`,
+    initialQuery: searchQuery,
+    panelRef,
+  });
+
   // Picking a day means going to that day's consolidation, and only the
   // readable segment can address one. A document the corpus holds no segment
   // for keeps the version menu, which switches by id.
@@ -122,7 +137,7 @@ export const PublicStatuteViewer = ({
 
   const goTo = useCallback(
     (params: StatuteRouteParams, nextAsOf: string | undefined) => {
-      const search = nextAsOf === undefined ? {} : { asOf: nextAsOf };
+      const search = { asOf: nextAsOf, q: find.findQuery || undefined };
 
       detached(
         params.version === undefined
@@ -143,7 +158,7 @@ export const PublicStatuteViewer = ({
         "statutes.reader-navigate",
       );
     },
-    [navigate],
+    [find.findQuery, navigate],
   );
 
   const handleVersionChange = useCallback(
@@ -293,6 +308,7 @@ export const PublicStatuteViewer = ({
       <div
         className="flex flex-col gap-4 py-6"
         data-slot="reader-document-column"
+        ref={contentRef}
       >
         {statute === null ? (
           <NoVersionOnDay windowGap={windowGap} />
@@ -313,7 +329,7 @@ export const PublicStatuteViewer = ({
   );
 
   return (
-    <main className="relative min-h-0 flex-1">
+    <main className="relative flex min-h-0 flex-1 flex-col" ref={panelRef}>
       <ChromeHeaderActions>
         {canPickDate && (versions.length > 1 || asOf !== undefined) && (
           <div className="flex min-w-0 items-center gap-1">
@@ -357,80 +373,83 @@ export const PublicStatuteViewer = ({
         </Suspense>
       ) : (
         <>
-          {/* The rail hides itself when a document has no outline to show. */}
-          <OutlineRail
-            ariaLabel={t("statutes.outline")}
-            // While the field has a query, the panel points at the selected match
-            // rather than at the scroll position, and the ranked list it shows is
-            // flat, so there is nothing left to fold.
-            {...(isSearching
-              ? { activeId: selectedMatch?.item.id ?? null }
-              : { collapsedFromLevel: STATUTE_OUTLINE_COLLAPSE_LEVEL })}
-            header={
-              outline.length < 2 ? undefined : (
-                <OutlineJumpField
-                  matchCount={outlineMatches.matches.length}
-                  onJump={() => {
-                    const container = readerRef.current;
+          <InspectorFindBar find={find} />
+          <div className="relative min-h-0 flex-1">
+            {/* The rail hides itself when a document has no outline to show. */}
+            <OutlineRail
+              ariaLabel={t("statutes.outline")}
+              // While the field has a query, the panel points at the selected match
+              // rather than at the scroll position, and the ranked list it shows is
+              // flat, so there is nothing left to fold.
+              {...(isSearching
+                ? { activeId: selectedMatch?.item.id ?? null }
+                : { collapsedFromLevel: STATUTE_OUTLINE_COLLAPSE_LEVEL })}
+              header={
+                outline.length < 2 ? undefined : (
+                  <OutlineJumpField
+                    matchCount={outlineMatches.matches.length}
+                    onJump={() => {
+                      const container = readerRef.current;
 
-                    if (selectedMatch === null || container === null) {
-                      return;
+                      if (selectedMatch === null || container === null) {
+                        return;
+                      }
+
+                      jumpToAnchor(selectedMatch.item.id, container);
+                    }}
+                    onSelectedIndexChange={(nextIndex) =>
+                      setJump((previous) => ({
+                        ...previous,
+                        selectedIndex: nextIndex,
+                      }))
                     }
-
-                    jumpToAnchor(selectedMatch.item.id, container);
-                  }}
-                  onSelectedIndexChange={(nextIndex) =>
-                    setJump((previous) => ({
-                      ...previous,
-                      selectedIndex: nextIndex,
-                    }))
-                  }
-                  onValueChange={(query) =>
-                    setJump({ query, selectedIndex: 0 })
-                  }
-                  selectedIndex={selectedIndex}
-                  selectedText={
-                    selectedMatch === null
-                      ? undefined
-                      : outlineEntryText(selectedMatch.item)
-                  }
-                  value={jump.query}
-                />
-              )
-            }
-            items={visibleOutline}
-            onJump={(anchorId, container) => {
-              // A result clicked in the panel becomes the selection: while the
-              // field has a query the highlight is controlled from here, so
-              // without this the clicked row scrolls the reader while the old one
-              // stays marked and Enter goes back to it.
-              const clicked = outlineMatches.matches.findIndex(
-                (match) => match.item.id === anchorId,
-              );
-
-              if (clicked !== -1) {
-                setJump((previous) => ({
-                  ...previous,
-                  selectedIndex: clicked,
-                }));
+                    onValueChange={(query) =>
+                      setJump({ query, selectedIndex: 0 })
+                    }
+                    selectedIndex={selectedIndex}
+                    selectedText={
+                      selectedMatch === null
+                        ? undefined
+                        : outlineEntryText(selectedMatch.item)
+                    }
+                    value={jump.query}
+                  />
+                )
               }
+              items={visibleOutline}
+              onJump={(anchorId, container) => {
+                // A result clicked in the panel becomes the selection: while the
+                // field has a query the highlight is controlled from here, so
+                // without this the clicked row scrolls the reader while the old one
+                // stays marked and Enter goes back to it.
+                const clicked = outlineMatches.matches.findIndex(
+                  (match) => match.item.id === anchorId,
+                );
 
-              jumpToAnchor(anchorId, container);
-            }}
-            resolvePct={resolveAnchorPct}
-            scrollContainerRef={readerRef}
-          />
-          {/* The composer floats over the wording here as it does over a
+                if (clicked !== -1) {
+                  setJump((previous) => ({
+                    ...previous,
+                    selectedIndex: clicked,
+                  }));
+                }
+
+                jumpToAnchor(anchorId, container);
+              }}
+              resolvePct={resolveAnchorPct}
+              scrollContainerRef={readerRef}
+            />
+            {/* The composer floats over the wording here as it does over a
           decision, bound to this consolidation and so to its one
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
-          {activeLegal === null ? (
-            readerBody
-          ) : (
-            <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
-              {readerBody}
-            </LegalReaderAIChat>
-          )}
+            {activeLegal === null ? (
+              readerBody
+            ) : (
+              <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+                {readerBody}
+              </LegalReaderAIChat>
+            )}
+          </div>
         </>
       )}
     </main>
