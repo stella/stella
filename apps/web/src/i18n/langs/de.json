@@ -2450,6 +2450,7 @@
     "current": "Aktuell",
     "deleteVersion": "Version löschen",
     "descriptionPlaceholder": "Notiz zu dieser Version hinzufügen...",
+    "displayFailed": "Diese Datei konnte nicht angezeigt werden.",
     "downloadRedline": "Redline herunterladen",
     "dropToUploadVersion": "Zum Hochladen als neue Version ablegen",
     "editLatestVersionDescription": "Dies ist nicht die aktuelle Version. Um sie im Browser zu bearbeiten, machen Sie sie zuerst zur neuesten Version und entsperren Sie sie dann zur Bearbeitung.",

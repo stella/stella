@@ -562,6 +562,7 @@ const AttachmentPreviewContent = ({
   return (
     <MeasuredPdfProvider
       active
+      surface="email-attachment-pdf"
       fallback={{
         error: (
           <FacetMessage

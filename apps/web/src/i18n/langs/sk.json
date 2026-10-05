@@ -2450,6 +2450,7 @@
     "current": "Aktuálna",
     "deleteVersion": "Odstrániť verziu",
     "descriptionPlaceholder": "Pridajte poznámku k tejto verzii...",
+    "displayFailed": "Tento súbor sa nepodarilo zobraziť.",
     "downloadRedline": "Stiahnuť redline",
     "dropToUploadVersion": "Pustite súbor pre nahranie ako novej verzie",
     "editLatestVersionDescription": "Táto verzia nie je aktuálna. Ak ju chcete upravovať v prehliadači, najprv z nej vytvorte najnovšiu verziu a potom ju odomknite pre úpravy.",

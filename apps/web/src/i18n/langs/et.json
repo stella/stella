@@ -2450,6 +2450,7 @@
     "current": "Praegune",
     "deleteVersion": "Kustuta versioon",
     "descriptionPlaceholder": "Lisa märkus selle versiooni kohta...",
+    "displayFailed": "Seda faili ei õnnestunud kuvada.",
     "downloadRedline": "Laadi alla redline",
     "dropToUploadVersion": "Kukutage uue versioonina üleslaadimiseks",
     "editLatestVersionDescription": "See ei ole praegune versioon. Brauseris muutmiseks määrake see esmalt uusimaks versiooniks ja seejärel avage see muutmiseks.",

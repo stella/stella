@@ -716,6 +716,7 @@ const FileTabMeasurementBoundary = ({
         fieldId={fieldId}
         initialScaleOffset={scaleOffset}
         onError={onError}
+        surface="inspector-pdf"
       >
         {children}
       </MeasuredPdfProvider>

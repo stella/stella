@@ -2450,6 +2450,7 @@
     "current": "Dabartinė",
     "deleteVersion": "Ištrinti versiją",
     "descriptionPlaceholder": "Pridėti pastabą apie šią versiją...",
+    "displayFailed": "Šio failo nepavyko parodyti.",
     "downloadRedline": "Atsisiųsti redline",
     "dropToUploadVersion": "Vilkite, kad įkeltumėte kaip naują versiją",
     "editLatestVersionDescription": "Tai ne dabartinė versija. Norėdami redaguoti ją naršyklėje, pirma padarykite ją naujausia versija, tada atrakinkite redagavimui.",
