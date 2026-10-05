@@ -1,10 +1,8 @@
 import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildAnonymizedExportMasks,
-  extractAnonymizedExportText,
-} from "@/lib/pdf/anonymized-export.logic";
+import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
+import { buildAnonymizedExportMasks } from "@/lib/pdf/anonymized-export.logic";
 
 const loadPages = async (pdf: PDF) =>
   (await PDF.load(await pdf.save())).getPages();
@@ -29,7 +27,7 @@ describe("anonymized PDF export masks", () => {
     const page = pdf.addPage({ size: "letter" });
     page.drawText("Wide narrow", { x: 50, y: 700, size: 18 });
     const pages = await loadPages(pdf);
-    const extraction = extractAnonymizedExportText(pages);
+    const extraction = extractPdfAnonymizationText(pages);
     const masks = buildAnonymizedExportMasks({
       extraction,
       terms: ["narrow"],
@@ -56,7 +54,7 @@ describe("anonymized PDF export masks", () => {
     const second = pdf.addPage({ size: "letter" });
     second.drawText("needle", { x: 50, y: 700, size: 18 });
 
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     const masks = buildAnonymizedExportMasks({
       extraction,
       terms: ["needle", "needle"],
@@ -72,7 +70,7 @@ describe("anonymized PDF export masks", () => {
     page.drawText("Acme", { x: 50, y: 700, size: 18 });
     page.drawText("Holdings", { x: 50, y: 675, size: 18 });
 
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     const masks = buildAnonymizedExportMasks({
       extraction,
       terms: ["Acme Holdings"],
@@ -92,7 +90,7 @@ describe("anonymized PDF export masks", () => {
       });
     }
 
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     const masks = buildAnonymizedExportMasks({
       extraction,
       terms: ["needle"],
@@ -105,7 +103,7 @@ describe("anonymized PDF export masks", () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     page.drawText("source", { x: 50, y: 700, size: 18 });
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     extraction.glyphs.fill(null);
 
     expect(
@@ -118,7 +116,7 @@ describe("anonymized PDF export masks", () => {
     pdf
       .addPage({ size: "letter" })
       .drawText("source", { x: 50, y: 700, size: 18 });
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     for (const glyph of extraction.glyphs) {
       if (glyph !== null) {
         glyph.box.width = 0;
@@ -134,7 +132,7 @@ describe("anonymized PDF export masks", () => {
     const page = pdf.addPage({ size: "letter" });
     page.drawText("keep this source", { x: 50, y: 700, size: 18 });
     const before = page.extractText();
-    const extraction = extractAnonymizedExportText([page]);
+    const extraction = extractPdfAnonymizationText([page]);
 
     buildAnonymizedExportMasks({ extraction, terms: ["source"] }).unwrap();
 
@@ -145,7 +143,7 @@ describe("anonymized PDF export masks", () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     page.drawText("A", { x: 50, y: 700, size: 18 });
-    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const extraction = extractPdfAnonymizationText(await loadPages(pdf));
     const glyph = extraction.glyphs.find((entry) => entry !== null);
     if (!glyph) {
       throw new Error("fixture did not produce a glyph");

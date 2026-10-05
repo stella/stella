@@ -2450,6 +2450,7 @@
     "current": "Dabartinė",
     "deleteVersion": "Ištrinti versiją",
     "descriptionPlaceholder": "Pridėti pastabą apie šią versiją...",
+    "displayFailed": "Šio failo nepavyko parodyti.",
     "downloadRedline": "Atsisiųsti redline",
     "dropToUploadVersion": "Vilkite, kad įkeltumėte kaip naują versiją",
     "editLatestVersionDescription": "Tai ne dabartinė versija. Norėdami redaguoti ją naršyklėje, pirma padarykite ją naujausia versija, tada atrakinkite redagavimui.",
@@ -5429,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Jau įdiegta? Prijunkite",
+        "connect": "Prijungti stella desktop",
+        "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
+        "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
+        "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
+        "signCurrent": "Pasirašyti su stella desktop",
+        "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
+        "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
+        "signShort": "Pasirašyti"
+      },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
       "downloadExtractedText": "Išgautas tekstas (.txt)",
@@ -5442,7 +5455,6 @@
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
       "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
-        "action": "Pasirašyti darbalaukio programoje",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
         "cancelledCertificateDescription": "Pasirinkto sertifikato negalima naudoti pasirašymui. Pasirinkite tokį, kuris leidžia skaitmeninį parašą.",
         "cancelledCertifiedDescription": "Šis PDF yra sertifikuotas, o jo sertifikavimas neleidžia pridėti daugiau parašų.",

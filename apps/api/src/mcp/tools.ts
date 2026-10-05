@@ -2,7 +2,7 @@ import type {
   CallToolResult,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
-import { panic, Result } from "better-result";
+import { Panic, panic, Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
@@ -11,6 +11,8 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -32,6 +34,7 @@ import {
   withInputNotes,
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
+import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -49,6 +52,7 @@ import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
+  McpOutputContractError,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -306,6 +310,7 @@ type McpToolCallArgs = {
   context: McpRequestContext;
   mode?: McpMode;
   toolName: string;
+  dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
 };
 const unknownToolResult = (toolName: string) =>
   structuredErrorResult({
@@ -319,9 +324,12 @@ const callGatewayTool = async ({
   context,
   mode = "default",
   toolName,
+  dependencies,
 }: McpToolCallArgs): Promise<CallToolResult | undefined> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
-  const gatewayResult = await dispatchGatewayToolCall({
+  const gatewayResult = await (
+    dependencies?.dispatchGatewayToolCall ?? dispatchGatewayToolCall
+  )({
     args,
     context,
     mode,
@@ -355,11 +363,12 @@ const callGatewayTool = async ({
   return undefined;
 };
 
-export const handleMcpToolCall = async ({
+const dispatchMcpToolCall = async ({
   args,
   context,
   mode = "default",
   toolName,
+  dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const unavailableResult = featureUnavailableToolResult({
@@ -376,6 +385,7 @@ export const handleMcpToolCall = async ({
     context,
     mode,
     toolName,
+    ...(dependencies === undefined ? {} : { dependencies }),
   });
   if (gatewayResult !== undefined) {
     return gatewayResult;
@@ -575,10 +585,17 @@ export const handleMcpToolCall = async ({
   return finished.value;
 };
 
+const MCP_OUTPUT_CONTRACT_SINK = failureSink({
+  event: "mcp.output_contract_violated",
+  expected: [],
+});
+
 /**
  * The one envelope for a handler, egress, or output-contract failure. Generic
  * message: never leak internals to the caller. `captureError` keeps the real
- * exception for observability.
+ * exception for observability. An output-contract violation goes through the
+ * failure owner instead, which grades it a defect and logs it at ERROR: the
+ * caller sees an ordinary tool error, so nothing else would surface it.
  */
 const internalErrorResult = ({
   mode,
@@ -591,7 +608,18 @@ const internalErrorResult = ({
   toolName: string;
   error: unknown;
 }): CallToolResult => {
-  captureError(error, { source: "mcp", toolName });
+  const contractViolation =
+    Panic.is(error) && McpOutputContractError.is(error.cause)
+      ? error.cause
+      : undefined;
+  if (contractViolation !== undefined) {
+    observeFailure(contractViolation, {
+      sink: MCP_OUTPUT_CONTRACT_SINK,
+      ctx: { source: "mcp", tool: toolName },
+    });
+  } else {
+    captureError(error, { source: "mcp", toolName });
+  }
   return serializeToolResult(
     scopeToolResultToSurface(
       structuredErrorResult({
@@ -603,3 +631,24 @@ const internalErrorResult = ({
     ),
   );
 };
+
+export const handleMcpToolCall = async ({
+  args,
+  context,
+  mode = "default",
+  toolName,
+  dependencies,
+}: McpToolCallArgs): Promise<CallToolResult> =>
+  await observeMcpToolCall({
+    context,
+    mode,
+    toolName,
+    run: async () =>
+      await dispatchMcpToolCall({
+        args,
+        context,
+        mode,
+        toolName,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      }),
+  });

@@ -2450,6 +2450,7 @@
     "current": "Actuelle",
     "deleteVersion": "Supprimer la version",
     "descriptionPlaceholder": "Ajouter une note sur cette version...",
+    "displayFailed": "Impossible d’afficher ce fichier.",
     "downloadRedline": "Télécharger le redline",
     "dropToUploadVersion": "Déposer pour téléverser comme nouvelle version",
     "editLatestVersionDescription": "Ce n’est pas la version actuelle. Pour la modifier dans le navigateur, faites-en d’abord la dernière version, puis déverrouillez-la pour la modifier.",
@@ -5429,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour se lancera automatiquement lorsque les modifications desktop actives seront terminées; réessayez après son redémarrage.",
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Déjà installé ? Le connecter",
+        "connect": "Connecter stella desktop",
+        "editNone": "Téléchargez stella desktop pour modifier ce fichier",
+        "editOutdated": "Mettez à jour stella desktop pour modifier",
+        "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
+        "signCurrent": "Signer avec stella desktop",
+        "signNone": "Téléchargez stella desktop pour signer ce PDF",
+        "signOutdated": "Mettez à jour stella desktop pour signer",
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
+        "signShort": "Signer"
+      },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
       "downloadExtractedText": "Texte extrait (.txt)",
@@ -5442,7 +5455,6 @@
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
       "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
-        "action": "Signer dans l’app de bureau",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
         "cancelledCertificateDescription": "Le certificat choisi ne peut pas servir à signer. Choisissez-en un qui autorise les signatures numériques.",
         "cancelledCertifiedDescription": "Ce PDF est certifié et sa certification n’autorise pas d’autres signatures.",

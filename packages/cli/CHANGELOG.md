@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 3.8.5
+
+### Patch Changes
+
+- [#4760](https://github.com/stella/stella/pull/4760) [`c17c9b8`](https://github.com/stella/stella/commit/c17c9b88822a27615a99baa589dd54d66ef4b666) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the time-policy settings as `organization update-settings` flags.
+
+- [#4760](https://github.com/stella/stella/pull/4760) [`c17c9b8`](https://github.com/stella/stella/commit/c17c9b88822a27615a99baa589dd54d66ef4b666) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the organization time zone to the settings capabilities and an `organization update-settings --time-zone` flag.
+
 ## 3.8.4
 
 ### Patch Changes

@@ -2450,6 +2450,7 @@
     "current": "Pašreizējā",
     "deleteVersion": "Dzēst versiju",
     "descriptionPlaceholder": "Pievienot piezīmi par šo versiju...",
+    "displayFailed": "Šo failu neizdevās parādīt.",
     "downloadRedline": "Lejupielādēt redline",
     "dropToUploadVersion": "Nometiet, lai augšupielādētu kā jaunu versiju",
     "editLatestVersionDescription": "Šī nav pašreizējā versija. Lai to rediģētu pārlūkā, vispirms padariet to par jaunāko versiju, pēc tam atbloķējiet rediģēšanai.",
@@ -5429,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop ir jāatjaunina. Tas atjaunināsies automātiski, kad aktīvie darbvirsmas labojumi būs pabeigti; mēģiniet vēlreiz pēc restartēšanas.",
         "updateRequiredTitle": "Atjauniniet stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Jau instalēts? Savienot",
+        "connect": "Savienot stella desktop",
+        "editNone": "Lejupielādējiet stella desktop, lai rediģētu šo failu",
+        "editOutdated": "Atjauniniet stella desktop, lai rediģētu",
+        "editReason": "Rediģēšana datorā atver failu jūsu datora lietotnē, izmantojot stella desktop.",
+        "signCurrent": "Parakstīt ar stella desktop",
+        "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
+        "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
+        "signShort": "Parakstīt"
+      },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadExtractedText": "Izvilktais teksts (.txt)",
@@ -5442,7 +5455,6 @@
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
-        "action": "Parakstīt datora lietotnē",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
         "cancelledCertificateDescription": "Izvēlēto sertifikātu nevar izmantot parakstīšanai. Izvēlieties tādu, kas atļauj digitālo parakstu.",
         "cancelledCertifiedDescription": "Šis PDF ir sertificēts, un tā sertifikācija neatļauj pievienot citus parakstus.",

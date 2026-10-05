@@ -7,7 +7,15 @@
  */
 
 import { Result } from "better-result";
-import { and, eq, inArray, notInArray, sql, getColumns } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getColumns,
+  inArray,
+  notInArray,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { openSync, closeSync, writeFileSync } from "node:fs";
 import * as v from "valibot";
@@ -112,119 +120,148 @@ export const parseSeeds = (input: string) => {
   return v.parse(usagePolicySeedsSchema, parsed);
 };
 
-type SeedRowResult =
-  | {
-      policyKey: string;
-      outcome: "inserted" | "updated" | "unchanged" | "hidden";
-    }
-  | { policyKey: string; outcome: "failed"; reason: string };
+export const USAGE_POLICY_SEED_MODES = {
+  dryRun: "dry_run",
+  apply: "apply",
+} as const;
+export type UsagePolicySeedMode =
+  (typeof USAGE_POLICY_SEED_MODES)[keyof typeof USAGE_POLICY_SEED_MODES];
+
+type SeedRowResult = { policyKey: string; mode: UsagePolicySeedMode } & (
+  | { outcome: "inserted" | "updated" | "unchanged" | "hidden" }
+  | { outcome: "failed"; reason: string }
+);
 
 type SeedPoliciesOptions = {
   db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "transaction">;
   seeds: UsagePolicySeed[];
+  mode: UsagePolicySeedMode;
 };
 
-const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
+type SeedTransaction = Parameters<
+  Parameters<SeedPoliciesOptions["db"]["transaction"]>[0]
+>[0];
+
+const seedPolicies = async ({ db, seeds, mode }: SeedPoliciesOptions) => {
   const rows: SeedRowResult[] = [];
   let pendingKey = seeds.at(0)?.key;
   let pendingHiddenKeys: string[] = [];
-  const result = await Result.tryPromise(async () =>
-    db.transaction(async (tx) => {
-      for (const seedPolicy of seeds) {
-        pendingKey = seedPolicy.key;
-        const values = {
-          policyKey: seedPolicy.key,
-          displayName: seedPolicy.displayName,
-          description: seedPolicy.description,
-          kind: seedPolicy.kind,
-          monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
-          hostedPolicyRef: seedPolicy.hostedPolicyRef,
-          priceAmountCents: seedPolicy.priceAmountCents,
-          priceCurrency: seedPolicy.priceCurrency,
-          billingInterval: seedPolicy.billingInterval,
-          priceBasis: seedPolicy.priceBasis,
-          storageBytesPerAssignment:
-            seedPolicy.storageBytesPerAssignment === null
-              ? null
-              : BigInt(seedPolicy.storageBytesPerAssignment),
-          maxMembers: seedPolicy.maxMembers,
-          serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
-          visibility: seedPolicy.visibility,
-          sortOrder: seedPolicy.sortOrder,
-        };
-        const { policyKey: _policyKey, ...set } = values;
-        // Derive comparison columns from the update projection: newly seeded
-        // fields automatically participate in unchanged detection.
-        const changed = Object.entries(getColumns(usagePolicies))
-          .filter(([key]) => key in set)
-          .map(
-            ([, column]) =>
-              sql`${column} IS DISTINCT FROM excluded.${sql.identifier(column.name)}`,
-          );
-        const written = await tx
-          .insert(usagePolicies)
-          .values(values)
-          .onConflictDoUpdate({
-            target: usagePolicies.policyKey,
-            set,
-            setWhere: sql.join(changed, sql` OR `),
-          })
-          .returning({ inserted: sql<boolean>`xmax = 0` });
-        const row = written.at(0);
-        pendingKey = undefined;
-        if (row === undefined) {
-          rows.push({ policyKey: seedPolicy.key, outcome: "unchanged" });
-          continue;
+  const writeSeeds = async (tx: SeedTransaction) => {
+    for (const seedPolicy of seeds) {
+      pendingKey = seedPolicy.key;
+      const values = {
+        policyKey: seedPolicy.key,
+        displayName: seedPolicy.displayName,
+        description: seedPolicy.description,
+        kind: seedPolicy.kind,
+        monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
+        hostedPolicyRef: seedPolicy.hostedPolicyRef,
+        priceAmountCents: seedPolicy.priceAmountCents,
+        priceCurrency: seedPolicy.priceCurrency,
+        billingInterval: seedPolicy.billingInterval,
+        priceBasis: seedPolicy.priceBasis,
+        storageBytesPerAssignment:
+          seedPolicy.storageBytesPerAssignment === null
+            ? null
+            : BigInt(seedPolicy.storageBytesPerAssignment),
+        maxMembers: seedPolicy.maxMembers,
+        serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
+        visibility: seedPolicy.visibility,
+        sortOrder: seedPolicy.sortOrder,
+      };
+      const { policyKey: _policyKey, ...set } = values;
+      // Derive comparison columns from the update projection: newly seeded
+      // fields automatically participate in unchanged detection.
+      const changed = Object.entries(getColumns(usagePolicies))
+        .filter(([key]) => key in set)
+        .map(
+          ([, column]) =>
+            sql`${column} IS DISTINCT FROM excluded.${sql.identifier(column.name)}`,
+        );
+      const written = await tx
+        .insert(usagePolicies)
+        .values(values)
+        .onConflictDoUpdate({
+          target: usagePolicies.policyKey,
+          set,
+          setWhere: sql.join(changed, sql` OR `),
+        })
+        .returning({ inserted: sql<boolean>`xmax = 0` });
+      const row = written.at(0);
+      pendingKey = undefined;
+      if (row === undefined) {
+        rows.push({ policyKey: seedPolicy.key, mode, outcome: "unchanged" });
+        continue;
+      }
+      rows.push({
+        policyKey: seedPolicy.key,
+        mode,
+        outcome: row.inserted ? "inserted" : "updated",
+      });
+    }
+    if (seeds.length === 0) {
+      return;
+    }
+    const retiring = and(
+      notInArray(
+        usagePolicies.policyKey,
+        seeds.map((seedPolicy) => seedPolicy.key),
+      ),
+      eq(usagePolicies.visibility, "public"),
+    );
+    // Lock retirement candidates so failure evidence includes every attempted
+    // row, even when the bulk update itself throws before RETURNING.
+    const candidates = await tx
+      .select({ policyKey: usagePolicies.policyKey })
+      .from(usagePolicies)
+      .where(retiring)
+      .for("update");
+    pendingHiddenKeys = candidates.map(({ policyKey }) => policyKey);
+    if (pendingHiddenKeys.length === 0) {
+      return;
+    }
+    const hidden = await tx
+      .update(usagePolicies)
+      .set({ visibility: "hidden" })
+      .where(inArray(usagePolicies.policyKey, pendingHiddenKeys))
+      .returning({ policyKey: usagePolicies.policyKey });
+    pendingHiddenKeys = [];
+    for (const row of hidden) {
+      rows.push({ policyKey: row.policyKey, mode, outcome: "hidden" });
+    }
+  };
+  const result = await Result.tryPromise({
+    try: async () =>
+      await db.transaction(async (tx) => {
+        await writeSeeds(tx);
+        if (mode === USAGE_POLICY_SEED_MODES.dryRun) {
+          // Check deferred constraints now so a dry run reports the failures
+          // the real run would only hit at commit.
+          await tx.execute(sql`SET CONSTRAINTS ALL IMMEDIATE`);
+          tx.rollback();
         }
-        rows.push({
-          policyKey: seedPolicy.key,
-          outcome: row.inserted ? "inserted" : "updated",
-        });
-      }
-      if (seeds.length === 0) {
-        return;
-      }
-      const retiring = and(
-        notInArray(
-          usagePolicies.policyKey,
-          seeds.map((seedPolicy) => seedPolicy.key),
-        ),
-        eq(usagePolicies.visibility, "public"),
-      );
-      // Lock retirement candidates so failure evidence includes every attempted
-      // row, even when the bulk update itself throws before RETURNING.
-      const candidates = await tx
-        .select({ policyKey: usagePolicies.policyKey })
-        .from(usagePolicies)
-        .where(retiring)
-        .for("update");
-      pendingHiddenKeys = candidates.map(({ policyKey }) => policyKey);
-      if (pendingHiddenKeys.length === 0) {
-        return;
-      }
-      const hidden = await tx
-        .update(usagePolicies)
-        .set({ visibility: "hidden" })
-        .where(inArray(usagePolicies.policyKey, pendingHiddenKeys))
-        .returning({ policyKey: usagePolicies.policyKey });
-      pendingHiddenKeys = [];
-      for (const row of hidden) {
-        rows.push({ policyKey: row.policyKey, outcome: "hidden" });
-      }
-    }),
-  );
-  if (result.isOk()) {
+      }),
+    catch: (cause) => cause,
+  });
+  // A dry run ends in a deliberate rollback after every write succeeded.
+  if (
+    result.isOk() ||
+    (mode === USAGE_POLICY_SEED_MODES.dryRun &&
+      result.error instanceof TransactionRollbackError)
+  ) {
     return { status: "complete", rows } as const;
   }
   // All attempted mutations rolled back, including any rows before the failure.
   const failedRows: SeedRowResult[] = rows.map(({ policyKey }) => ({
     policyKey,
+    mode,
     outcome: "failed",
     reason: "Transaction rolled back.",
   }));
   if (pendingKey !== undefined) {
     failedRows.push({
       policyKey: pendingKey,
+      mode,
       outcome: "failed",
       reason: "Policy write failed; transaction rolled back.",
     });
@@ -232,6 +269,7 @@ const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
   for (const policyKey of pendingHiddenKeys) {
     failedRows.push({
       policyKey,
+      mode,
       outcome: "failed",
       reason: "Retirement failed; transaction rolled back.",
     });
@@ -242,12 +280,14 @@ const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
 type SeedReportOptions = {
   input: string;
   resultsPath: string;
+  mode: UsagePolicySeedMode;
   openDb: () => SeedPoliciesOptions["db"] | Promise<SeedPoliciesOptions["db"]>;
 };
 
 export const runSeedReport = async ({
   input,
   resultsPath,
+  mode,
   openDb,
 }: SeedReportOptions) => {
   // Refuse an existing path and verify writability before opening the database.
@@ -258,7 +298,7 @@ export const runSeedReport = async ({
     if (seeds.length === 0) {
       return { status: "complete", rows: [] } as const;
     }
-    return await seedPolicies({ db: await openDb(), seeds });
+    return await seedPolicies({ db: await openDb(), seeds, mode });
   });
   const report = result.isOk()
     ? result.value
@@ -268,6 +308,7 @@ export const runSeedReport = async ({
           ({ key }) =>
             ({
               policyKey: key,
+              mode,
               outcome: "failed",
               reason: "Seed failed; check configuration and database access.",
             }) as const,

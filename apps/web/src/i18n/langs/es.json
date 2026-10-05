@@ -2450,6 +2450,7 @@
     "current": "Actual",
     "deleteVersion": "Eliminar versión",
     "descriptionPlaceholder": "Agregar una nota sobre esta versión...",
+    "displayFailed": "No se pudo mostrar este archivo.",
     "downloadRedline": "Descargar redline",
     "dropToUploadVersion": "Suelte aquí para subir como nueva versión",
     "editLatestVersionDescription": "Esta no es la versión actual. Para editarla en el navegador, conviértala primero en la última versión y, a continuación, desbloquéela para editar.",
@@ -5429,6 +5430,18 @@
         "updateRequiredDescription": "stella desktop necesita una actualización. Se actualizará automáticamente cuando terminen las ediciones de escritorio activas; inténtalo de nuevo después de que se reinicie.",
         "updateRequiredTitle": "Actualiza stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "¿Ya está instalado? Conéctalo",
+        "connect": "Conectar stella desktop",
+        "editNone": "Descarga stella desktop para editar este archivo",
+        "editOutdated": "Actualiza stella desktop para editar",
+        "editReason": "La edición en el escritorio abre el archivo en una aplicación de tu ordenador a través de stella desktop.",
+        "signCurrent": "Firmar con stella desktop",
+        "signNone": "Descarga stella desktop para firmar este PDF",
+        "signOutdated": "Actualiza stella desktop para firmar",
+        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop.",
+        "signShort": "Firmar"
+      },
       "downloadAs": "Descargar como…",
       "downloadAsZip": "Descargar archivo .zip",
       "downloadExtractedText": "Texto extraído (.txt)",
@@ -5442,7 +5455,6 @@
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
       "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
       "pdfSigning": {
-        "action": "Firmar en la app de escritorio",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
         "cancelledCertificateDescription": "El certificado elegido no sirve para firmar. Elige uno que permita firmas digitales.",
         "cancelledCertifiedDescription": "Este PDF está certificado y su certificación no permite más firmas.",
