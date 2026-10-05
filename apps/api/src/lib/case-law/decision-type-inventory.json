@@ -1,0 +1,79 @@
+{
+  "provenance": "Seeded from the adapters' closed vocabularies, their recorded fixtures and tests, and two values the production type facet showed (CZE: usn., ministery_of_justice_decision). Regenerate from the corpus index: a terms aggregation over document_type per jurisdiction on opening passages, the aggregation the type facet runs; each list is that jurisdiction's distinct stored values, sorted.",
+  "jurisdictions": {
+    "AUT": [
+      "bescheid",
+      "bescheidbeschwerde - einzel - erkenntnis",
+      "beschluss",
+      "erkenntnis",
+      "ordentliche erledigung (sachentscheidung)",
+      "zurückweisung mangels erheblicher rechtsfrage"
+    ],
+    "CZE": [
+      "ministery_of_justice_decision",
+      "nález",
+      "order_t",
+      "rozhodnutí ministerstva spravedlnosti",
+      "rozsudek",
+      "stanovisko",
+      "stanovisko pléna",
+      "trestní příkaz",
+      "usn.",
+      "usnesení"
+    ],
+    "EU": ["judgment", "opinion", "order", "unknown"],
+    "HUN": [
+      "elvi határozat",
+      "határozat",
+      "jogegységi határozat",
+      "kollégiumi vélemény",
+      "kollégiumi állásfoglalás",
+      "végzés",
+      "ítélet"
+    ],
+    "POL": [
+      "decyzja",
+      "informacja o odmowie wydania opinii zabezpieczającej",
+      "informacja o wydaniu opinii zabezpieczającej",
+      "interpretacja indywidualna",
+      "interpretacja ogólna",
+      "objaśnienia podatkowe",
+      "odmowa wydania wiążącej informacji akcyzowej",
+      "odmowa wydania wiążącej informacji stawkowej",
+      "opinia",
+      "opinia w sprawie opodatkowania wyrównawczego",
+      "orzeczenie",
+      "postanowienie",
+      "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
+      "postanowienie rozstrzygające spór o właściwość",
+      "rozstrzygnięcie",
+      "sygnalizacja",
+      "uchwała",
+      "uchylenie odmowy wydania wiążącej informacji stawkowej",
+      "uchylenie wiążącej informacji akcyzowej",
+      "uchylenie wiążącej informacji stawkowej",
+      "uzasadnienie",
+      "uzasadnienie bez sentencji",
+      "wiążąca informacja akcyzowa",
+      "wiążąca informacja stawkowa",
+      "wyciąg z protokołu",
+      "wyrok",
+      "zarządzenie",
+      "zmiana interpretacji indywidualnej",
+      "zmiana interpretacji ogólnej",
+      "zmiana wiążącej informacji akcyzowej",
+      "zmiana wiążącej informacji stawkowej"
+    ],
+    "SVK": [
+      "nález",
+      "platobný rozkaz",
+      "rozhodnutie",
+      "rozsudok",
+      "trestný rozkaz",
+      "uznesenie",
+      "uznesenie bez odôvodnenia",
+      "uznesenie o trovách"
+    ],
+    "USA": ["decision", "opinion", "order"]
+  }
+}

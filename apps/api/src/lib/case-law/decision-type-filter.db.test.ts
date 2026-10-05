@@ -96,3 +96,87 @@ test("both Postgres searches match stated types regardless of casing within the 
   }
   await client.close();
 }, 60_000);
+
+test("the type facet folds stated spellings into one kind, and filtering by it returns every spelling", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  await db.execute(
+    sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+  );
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(caseLawSourceRow({ id: sourceId }));
+  const stated = [
+    "usnesení",
+    "usn.",
+    "usnesení",
+    "rozsudek",
+    "zzz-nepojmenovaný-typ",
+  ];
+  const decisions = stated.map((decisionType, index) => ({
+    id: createSafeId<"caseLawDecision">(),
+    sourceId,
+    country: "CZE",
+    language: "cs",
+    court: "Nejvyšší soud",
+    caseNumber: `CZE-${index}`,
+    decisionType,
+    decisionDate: "2020-01-01",
+  }));
+  await db.insert(caseLawDecisions).values(decisions);
+  await db.insert(caseLawSearchDocuments).values(
+    decisions.map(({ id, language }) => ({
+      decisionId: id,
+      searchableText: WORD,
+      language,
+      regconfig: "simple",
+      tsv: sql`to_tsvector('simple', ${WORD})`,
+    })),
+  );
+  const configs = await createFtsConfigCache(async () => [
+    { language: "cs", regconfig: "simple", useUnaccent: false },
+  ]).loadFtsSearchConfigs();
+  const courtWeights = courtWeightMapFromSeed();
+  const plan = (decisionType: string | undefined) =>
+    caseLawSearchPlan({
+      body: {
+        country: "CZE",
+        query: WORD,
+        ...(decisionType === undefined ? {} : { decisionType }),
+      },
+      configs,
+      courtWeights,
+      excerpt: DEFAULT_SEARCH_EXCERPT,
+      limit: 10,
+      parsedCursor: null,
+      queryUsed: WORD,
+      sort: DEFAULT_SEARCH_SORT,
+    });
+  const idsWhere = (wanted: (type: string) => boolean) =>
+    decisions
+      .filter(({ decisionType }) => wanted(decisionType))
+      .map(({ id }) => String(id))
+      .toSorted();
+  const hitIds = async (decisionType: string) =>
+    (await db.execute(plan(decisionType).hits)).rows
+      .map((row) => String(row["decision_id"]))
+      .toSorted();
+
+  const facet = await db.execute(plan(undefined).facets.decisionType);
+  expect(
+    facet.rows.map((row) => [String(row["value"]), Number(row["count"])]),
+  ).toEqual([
+    ["order", 3],
+    ["judgment", 1],
+    ["other", 1],
+  ]);
+
+  const orderIds = idsWhere((type) => type.startsWith("usn"));
+  expect(orderIds.length).toBe(3);
+  for (const requested of ["order", "usnesení", "Usn."]) {
+    expect(await hitIds(requested)).toEqual(orderIds);
+  }
+  expect(await hitIds("other")).toEqual(
+    idsWhere((type) => type.startsWith("zzz")),
+  );
+  await client.close();
+}, 60_000);
