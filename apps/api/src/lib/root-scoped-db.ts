@@ -86,6 +86,20 @@ const NO_STORED_WORKSPACES = {
   serverValidatedWorkspaceIds: [],
 } as const satisfies CurrentMembershipScope;
 
+/** Background organization work has no user or matter authority. */
+export const createRootOrganizationBackgroundDb = (
+  organizationId: SafeId<"organization">,
+  database: RlsDatabase<Transaction> = rlsDb,
+) => {
+  const validatedOrganizationId = brandPersistedOrganizationId(organizationId);
+  return createScopedDb(
+    database,
+    NO_STORED_WORKSPACES,
+    validatedOrganizationId,
+    null,
+  );
+};
+
 export const createRootSafeDb = (
   options: RootScopedDbOptions,
   database: RlsDatabase<Transaction> = rlsDb,
