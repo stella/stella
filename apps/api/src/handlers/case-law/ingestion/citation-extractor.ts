@@ -43,7 +43,10 @@ import {
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
-import { boundedCitationKey } from "@/api/handlers/case-law/citation-storage-bounds";
+import {
+  boundedCitationKey,
+  fitsCitationStorageField,
+} from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   type CitationScopeIndex,
   type CitationScopesRejectedError,
@@ -679,9 +682,6 @@ const PL_AUTHORITY_FILE_NUMBER_PATTERN = new RegExp(
   String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
   "gu",
 );
-
-/** Width of the `citation_key` columns a citation's key is stored in. */
-const CITATION_KEY_MAX_LENGTH = 128;
 
 // National Appeal Chamber (KIO) dockets, joined ones included, from the same
 // source the search grammar reads: "KIO 1234/24", "KIO/UZP 1188/08",
@@ -1872,7 +1872,8 @@ export const extractCitations = (
         if (
           pattern === PL_KIO_PATTERN &&
           (match.index < kioRunEnd ||
-            bareCitationKey(citationText).length > CITATION_KEY_MAX_LENGTH)
+            !fitsCitationStorageField("key", bareCitationKey(citationText)) ||
+            !fitsCitationStorageField("text", citationText))
         ) {
           kioRunEnd = Math.max(kioRunEnd, matchEnd);
           // A single KIO docket holds no comma.
