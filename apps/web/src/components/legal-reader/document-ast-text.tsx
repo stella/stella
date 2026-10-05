@@ -12,6 +12,7 @@ import type {
   Inline,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import { fulltextProjectionPieces } from "@stll/legal-ast/projection-digest";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -1468,30 +1469,26 @@ export const FulltextFallback = ({
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
   text: string;
 }) => {
-  const paragraphs = text.split(/\n{2,}/u);
+  const pieces = fulltextProjectionPieces(text);
 
   return (
     <>
-      {paragraphs.map((paragraph, index) => {
-        const pieceId = `fulltext:${index}`;
-
-        return (
-          <p
-            className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
-            data-anchor={pieceId}
-            id={pieceId}
-            key={pieceId}
-          >
-            <InlineContent
-              activeMatchIndex={activeMatchIndex}
-              anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
-              inlines={[{ text: paragraph, type: "text" }]}
-              pieceId={pieceId}
-              ranges={rangesForPiece(rangesByPieceId, pieceId)}
-            />
-          </p>
-        );
-      })}
+      {pieces.map(({ pieceId, text: paragraph }) => (
+        <p
+          className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
+          data-anchor={pieceId}
+          id={pieceId}
+          key={pieceId}
+        >
+          <InlineContent
+            activeMatchIndex={activeMatchIndex}
+            anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
+            inlines={[{ text: paragraph, type: "text" }]}
+            pieceId={pieceId}
+            ranges={rangesForPiece(rangesByPieceId, pieceId)}
+          />
+        </p>
+      ))}
     </>
   );
 };
@@ -1616,7 +1613,7 @@ export const firstMatchIndexInPassage = ({
 
 /** Search pieces for the paragraph split `FulltextFallback` renders. */
 export const buildFulltextSearchPieces = (text: string): SearchPiece[] =>
-  text.split(/\n{2,}/u).map((paragraph, index) => ({
-    id: `fulltext:${index}`,
+  fulltextProjectionPieces(text).map(({ pieceId, text: paragraph }) => ({
+    id: pieceId,
     text: paragraph,
   }));

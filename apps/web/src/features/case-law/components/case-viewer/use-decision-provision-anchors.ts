@@ -7,14 +7,14 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
+import { provisionOccurrenceContexts } from "@stll/legal-atlas/provision-placement";
+import type { ProvisionAnchorSource } from "@stll/legal-atlas/provision-placement";
+import { placeStoredProvision } from "@stll/legal-atlas/stored-provision-placement";
 
 import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
-import { provisionOccurrenceContexts } from "@/features/case-law/provision-anchors";
-import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
-import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
@@ -233,6 +233,7 @@ export const useDecisionProvisionAnchors = ({
       reference: row,
       sentenceText: row.sentenceText,
       spanStart: row.spanStart,
+      workEli: row.workEli,
     })),
   );
   const anchors: DecisionProvisionAnchor[] = [];
@@ -250,17 +251,30 @@ export const useDecisionProvisionAnchors = ({
     const versionIndex = versionedWorks.findIndex((work) => work.key === key);
     const versionQuery =
       versionIndex === -1 ? undefined : versions.at(versionIndex);
-    const placement = resolveProvisionDocument({
-      row,
-      statute,
-      versions: optionalArray(versionsByWork.get(key)),
-      statuteState: statutesPending ? "loading" : "settled",
-      versionsState: versionQuery?.isPending === true ? "loading" : "settled",
+    const availableVersions = optionalArray(versionsByWork.get(key));
+    const placement = placeStoredProvision({
+      row: { ...row, id, reference: row, occurrence: occurrences.get(id) },
+      text: { type: "blocks", blocks, decisionDate: decisionAsOf },
+      versions:
+        statute === undefined
+          ? availableVersions
+          : [
+              statute,
+              ...availableVersions.filter(
+                ({ id: versionId, language }) =>
+                  versionId !== statute.id && language === statute.language,
+              ),
+            ],
     });
     switch (placement.status) {
-      case "pending":
-        continue;
       case "unplaced":
+        if (
+          (placement.reason === "statute-not-loaded" && statutesPending) ||
+          (placement.reason === "no-version-in-force" &&
+            versionQuery?.isPending === true)
+        ) {
+          continue;
+        }
         failures.push({ id, reason: placement.reason });
         continue;
       case "placed":
@@ -280,6 +294,11 @@ export const useDecisionProvisionAnchors = ({
       row.previewKey === null ? undefined : previewByKey.get(row.previewKey);
     anchors.push({
       id,
+      exactSpan: {
+        blockId: placement.pieceId,
+        start: placement.start,
+        end: placement.end,
+      },
       occurrence: occurrences.get(id),
       reference: row,
       sentenceText: row.sentenceText,

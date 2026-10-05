@@ -1,60 +1,6 @@
-/**
- * Which consolidation of an act a citation was made against.
- *
- * A decision applies the wording in force when it was issued, and a citation
- * reference records that version's opening date. Following the reference to
- * today's wording would show the reader text the court never read — and an
- * anchor the current version may not even carry — so the version window is
- * matched here rather than assumed away.
- */
-
-import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
-import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
-
-export type StatuteVersionWindow = LegislationExpressionEligibility & {
-  /** Opens the window; null for a work kept as a single unversioned text. */
-  versionValidFrom: string | null;
-  /** Closes it, exclusive; null while the version is the one in force. */
-  versionValidTo: string | null;
-};
-
-/**
- * The corpus half-open interval `[from, to)`: a version whose successor opens
- * on a date ends on that date. Dates are ISO date-only, which orders
- * correctly as text.
- *
- * Only an eligible version covers any date: one that never took effect, one
- * whose publisher dates are inconsistent, a withdrawn one or a promulgated
- * text keeps its stored dates as history, but a citation is never linked to
- * it as the wording in force.
- */
-export const versionCoversDate = (
-  version: StatuteVersionWindow,
-  date: string,
-): boolean =>
-  isEligibleLegislationExpression(version) &&
-  (version.versionValidFrom === null || version.versionValidFrom <= date) &&
-  (version.versionValidTo === null || version.versionValidTo > date);
-
-/** The consolidation in force on `date`, or null when the corpus holds none. */
-export const pickVersionAt = <TVersion extends StatuteVersionWindow>(
-  versions: readonly TVersion[],
-  date: string,
-): TVersion | null =>
-  versions.find((version) => versionCoversDate(version, date)) ?? null;
-
-/**
- * Whether a work's other consolidations have to be read: some reference
- * states a version the resolved consolidation does not cover. A reference to
- * wording that consolidation still carries is answered by it alone, which is
- * why the versions read is not started for it.
- */
-export const referencesOutsideVersion = (
-  version: StatuteVersionWindow,
-  references: readonly { versionValidFrom: string | null }[],
-): boolean =>
-  references.some(
-    (reference) =>
-      reference.versionValidFrom !== null &&
-      !versionCoversDate(version, reference.versionValidFrom),
-  );
+export {
+  pickVersionAt,
+  referencesOutsideVersion,
+  versionCoversDate,
+} from "@stll/api-contract/legislation-version-window";
+export type { StatuteVersionWindow } from "@stll/api-contract/legislation-version-window";

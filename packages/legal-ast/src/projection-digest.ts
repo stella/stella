@@ -25,6 +25,13 @@ export type ProjectionPiece = {
   text: string;
 };
 
+/** Plain-text readers share this exact paragraph split and piece identity. */
+export const fulltextProjectionPieces = (text: string): ProjectionPiece[] =>
+  text.split(/\n{2,}/u).map((paragraph, index) => ({
+    pieceId: `fulltext:${index}`,
+    text: paragraph,
+  }));
+
 const piecesOfBlock = (block: Block): ProjectionPiece[] => {
   switch (block.type) {
     case "heading":

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
+import { locateProvisionAnchors } from "@stll/legal-atlas/provision-placement";
 
 const paragraph = (id: string, text: string): Block => ({
   id,

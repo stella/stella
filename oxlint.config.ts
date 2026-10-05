@@ -1840,13 +1840,13 @@ export default defineConfig({
       },
     },
     {
-      // The comparison's owners: the helper and its web twin, which check
+      // The comparison's owners: the SQL and shared value helpers, which check
       // eligibility first; the schema's partial unique indexes; the writer's
       // identity lookup and junction report, which place the version being
       // stored; and tests, which build and assert windows by hand.
       files: [
         "apps/api/src/lib/legal-search/legislation-validity-window.ts",
-        "apps/web/src/features/case-law/statute-version.ts",
+        "packages/api-contract/src/legislation-version-window.ts",
         "apps/api/src/db/schema/legislation.ts",
         "apps/api/src/handlers/legislation/ingestion.ts",
         "apps/api/src/**/*.test.ts",

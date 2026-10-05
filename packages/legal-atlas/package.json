@@ -39,6 +39,10 @@
       "types": "./src/provision-citation-grammars.ts",
       "import": "./src/provision-citation-grammars.ts"
     },
+    "./provision-placement": {
+      "types": "./src/provision-placement.ts",
+      "import": "./src/provision-placement.ts"
+    },
     "./provision-citation-profile": {
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
@@ -78,6 +82,10 @@
     "./ingestion-cycle": {
       "types": "./src/ingestion-cycle.ts",
       "import": "./src/ingestion-cycle.ts"
+    },
+    "./stored-provision-placement": {
+      "types": "./src/stored-provision-placement.ts",
+      "import": "./src/stored-provision-placement.ts"
     }
   },
   "scripts": {
@@ -93,6 +101,7 @@
     "@stll/api-contract": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

@@ -9,6 +9,7 @@ export const PROVISION_PLACEMENT_FAILURE_REASONS = [
   "span-out-of-bounds",
   "span-overlap",
   "ambiguous-placement",
+  "ambiguous-version",
   "page-limit-reached",
 ] as const;
 

@@ -8,6 +8,8 @@ import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
+import type { ProvisionAnchorSpan } from "@stll/legal-atlas/provision-placement";
+import { locateProvisionAnchors } from "@stll/legal-atlas/provision-placement";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
@@ -72,8 +74,6 @@ import type { DecisionStatuteCitationAnchor } from "@/features/case-law/componen
 import { dissentingJudges } from "@/features/case-law/decision-judges";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
-import type { ProvisionAnchorSpan } from "@/features/case-law/provision-anchors";
-import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

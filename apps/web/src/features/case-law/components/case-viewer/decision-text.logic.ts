@@ -7,7 +7,6 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
-import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
@@ -22,10 +21,10 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 
-import { buildFulltextSearchPieces } from "@/components/legal-reader/document-ast-text";
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { optionalArray } from "@/lib/arrays";
+
+export { decisionTextBlocks as visibleDecisionBlocks } from "@stll/legal-atlas/provision-placement";
 
 /** Account for provision links displaced by any other kind of rendered link. */
 export const resolveDecisionLinkOverlaps = <
@@ -237,67 +236,6 @@ export const decisionDisplayReference = ({
     (block) => block.type === "paragraph" && block.role === "case-number",
   );
   return caseNumberBlock?.plainText ?? caseNumber;
-};
-
-/**
- * Remove structural metadata that the reader renders elsewhere. Content is
- * never hidden by matching its words: a court's title and constitutional
- * formula are part of the decision and remain visible as AST headings. The
- * case-number header is the reference line only for a docket primary; under
- * any other primary it is the docket, which nothing else shows, so it stays.
- */
-export const visibleDecisionBlocks = (
-  ast: DocumentAst | null,
-  caseNumberType: DecisionPrimaryReferenceType,
-  fulltext?: string | null,
-): Block[] => {
-  const docketIsReferenceLine =
-    caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
-  const visible: Block[] = [];
-  let inReasoning = false;
-  for (const block of optionalArray(ast?.blocks)) {
-    if (
-      (docketIsReferenceLine &&
-        block.type === "paragraph" &&
-        block.role === "case-number") ||
-      (block.type === "table" && block.role === "related-proceedings")
-    ) {
-      continue;
-    }
-    if (
-      block.type === "heading" &&
-      /^Odůvodnění\s*:?$/iu.test(block.plainText)
-    ) {
-      inReasoning = true;
-    }
-    if (inReasoning && block.type === "paragraph" && block.role === undefined) {
-      const heading = caseLawSectionHeading(block.plainText);
-      if (heading !== null) {
-        visible.push({
-          anchorId: block.anchorId,
-          id: block.id,
-          inlines: block.inlines,
-          level: heading.level,
-          plainText: block.plainText,
-          type: "heading",
-        });
-        continue;
-      }
-    }
-    visible.push(block);
-  }
-  if (visible.length > 0 || !fulltext) {
-    return visible;
-  }
-  return buildFulltextSearchPieces(fulltext).map(
-    ({ id, text }): ParagraphBlock => ({
-      id,
-      anchorId: id,
-      type: "paragraph",
-      plainText: text,
-      inlines: [{ type: "text", text }],
-    }),
-  );
 };
 
 /** Search-piece ids for publisher text the reader renders from a field. */
