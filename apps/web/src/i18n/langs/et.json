@@ -5439,8 +5439,7 @@
         "signCurrent": "Allkirjasta stella desktopiga",
         "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
         "signOutdated": "Uuenda stella desktop, et allkirjastada",
-        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
-        "signShort": "Allkirjasta"
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis."
       },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",

@@ -5443,7 +5443,6 @@ type Messages = {
         "signNone": "Download stella desktop to sign this PDF";
         "signOutdated": "Update stella desktop to sign";
         "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.";
-        "signShort": "Sign";
       };
       "downloadAs": "Download as…";
       "downloadAsZip": "Download as ZIP";

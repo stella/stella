@@ -264,7 +264,7 @@ export const PdfViewerControls = ({
               />
             )}
             {pdfSignTarget !== null && pdfSignTarget !== undefined && (
-              <PdfSignButton presentation="labelled" target={pdfSignTarget} />
+              <PdfSignButton target={pdfSignTarget} />
             )}
             {fileMetadata !== undefined && fieldId.length > 0 && (
               <DownloadSplitButton
