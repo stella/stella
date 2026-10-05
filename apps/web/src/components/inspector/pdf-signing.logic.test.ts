@@ -7,6 +7,7 @@ import {
   pdfSigningFinalizedQueryKeys,
   pdfSigningStartErrorCode,
   type PdfSigningSessionSnapshot,
+  resolvePdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
 
 const NOW = Date.UTC(2026, 8, 21, 12, 0, 0);
@@ -213,5 +214,44 @@ describe("refreshing after a signature lands", () => {
     expect(queryClient.getQueryState(detail)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(versions)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
+  });
+});
+
+describe("resolvePdfSignTarget", () => {
+  const signable = {
+    canUpdateEntity: true,
+    entityId: "entity-1",
+    file: {
+      fieldId: "field-1",
+      mimeType: "application/pdf",
+      propertyId: "property-1",
+    },
+    isCurrentVersion: true,
+    workspaceId: "workspace-1",
+  };
+
+  test("targets the current PDF of an entity the user can update", () => {
+    expect(resolvePdfSignTarget(signable)).toEqual({
+      entityId: "entity-1",
+      fieldId: "field-1",
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+  });
+
+  test.each([
+    ["without update permission", { canUpdateEntity: false }],
+    ["on an older version", { isCurrentVersion: false }],
+    ["without a file", { file: null }],
+    [
+      "for a file that is not a PDF",
+      { file: { ...signable.file, mimeType: "application/msword" } },
+    ],
+    [
+      "for a file without a property",
+      { file: { ...signable.file, propertyId: undefined } },
+    ],
+  ])("offers no signing %s", (_label, override) => {
+    expect(resolvePdfSignTarget({ ...signable, ...override })).toBeNull();
   });
 });
