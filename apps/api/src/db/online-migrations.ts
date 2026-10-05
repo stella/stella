@@ -145,6 +145,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_jurisdiction_due_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "lane", "due_at", "decision_id") WHERE "due_at" IS NOT NULL AND "work_status" <> \'blocked\'',
+    definitionBody:
+      "ON public.case_law_provision_extractions USING btree (jurisdiction, lane, due_at, decision_id) WHERE ((due_at IS NOT NULL) AND (work_status <> 'blocked'::text))",
+    isUnique: false,
+    name: "case_law_provision_extractions_jurisdiction_due_idx",
+    tableName: "case_law_provision_extractions",
+  },
   DOCUMENT_OUTSTANDING_INDEX,
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   {

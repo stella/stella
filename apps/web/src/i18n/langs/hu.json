@@ -946,7 +946,8 @@
       "textNotYetAvailable": "A bíróság nem tette közzé a határozat szövegét, vagy az itt még nem érhető el.",
       "textPending": "A határozat szövege még betöltés alatt áll",
       "textReadFailed": "A határozat szövegét nem sikerült betölteni",
-      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg"
+      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+      "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)"
     }
   },
   "catalogue": {
