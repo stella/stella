@@ -490,8 +490,8 @@ export const serializeToolResult = (
   return {
     content: [{ type: "text", text: JSON.stringify({ error }) }],
     isError: true,
-    ...(error.code === "internal_error"
-      ? { [MCP_INTERNAL_TOOL_FAILURE]: true }
+    ...(result.error.code === "internal_error"
+      ? { [MCP_INTERNAL_TOOL_FAILURE]: result.error[MCP_INTERNAL_TOOL_FAILURE] }
       : {}),
   };
 };
@@ -592,34 +592,23 @@ export const structuredErrorResult = ({
   retryable?: boolean | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const error: {
-    type: "structured";
-    code: McpErrorCode;
-    message: string;
-    hint?: string;
-    issues?: readonly McpValidationIssue[];
-    retryable?: boolean;
-    contactUrl?: string;
-    requestId?: string;
-  } = { type: "structured", code, message };
-  if (hint !== undefined) {
-    error.hint = hint;
-  }
-  if (issues !== undefined && issues.length > 0) {
-    error.issues = issues;
-  }
-  if (retryable !== undefined) {
-    error.retryable = retryable;
-  }
-  if (contactUrl !== undefined) {
-    error.contactUrl = contactUrl;
-  }
   const requestId = getCurrentRequestId();
-  if (requestId !== undefined) {
-    error.requestId = requestId;
-  }
-
-  return { status: "error", error };
+  const fields = {
+    type: "structured",
+    message,
+    ...(hint === undefined ? {} : { hint }),
+    ...(issues === undefined || issues.length === 0 ? {} : { issues }),
+    ...(retryable === undefined ? {} : { retryable }),
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(requestId === undefined ? {} : { requestId }),
+  } as const;
+  return {
+    status: "error",
+    error:
+      code === "internal_error"
+        ? { ...fields, code, [MCP_INTERNAL_TOOL_FAILURE]: true }
+        : { ...fields, code },
+  };
 };
 
 /**

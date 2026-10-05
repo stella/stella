@@ -23,13 +23,17 @@ import { gatewayLoadErrorResult } from "@/api/mcp/gateway/external-tools";
 import { withInputNotes } from "@/api/mcp/input-normalization";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolCallOutcome,
+  MCP_INTERNAL_TOOL_FAILURE,
   type McpToolCallOutcome,
 } from "@/api/mcp/tool-call-outcome";
+import type { InternalToolStructuredError } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
   serializeToolResult,
+  structuredErrorResult,
   toolDataResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -43,6 +47,13 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const PRIVATE_TEXT = "private-content-and-query-37a9";
+true satisfies {
+  type: "structured";
+  code: "internal_error";
+  message: string;
+} extends InternalToolStructuredError
+  ? false
+  : true;
 const MATTER_ID = "00000000-0000-4000-8000-0000000a0001";
 const contextFor = () =>
   asTestRaw<McpRequestContext>({
@@ -392,31 +403,85 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     });
   }
 
-  test("provenance remains server-owned and never enters the wire envelope", () => {
-    const internal = serializeToolResult(
+  const internalErrorBuilders = {
+    internalFailureResult: () =>
       internalFailureResult(
         new HandlerError({ status: 500, message: PRIVATE_TEXT }),
       ),
-    );
+    structuredErrorResult: () =>
+      structuredErrorResult({
+        code: "internal_error",
+        message: "Tool execution failed",
+        hint: "Draft a report with prepare_feedback.",
+      }),
+    gatewayLoadErrorResult: () =>
+      gatewayLoadErrorResult(
+        new McpGatewayLoadError({ message: PRIVATE_TEXT }),
+      ),
+  };
+  for (const [builder, build] of Object.entries(internalErrorBuilders)) {
+    test(`${builder} marks internal faults before scoping and serialization`, () => {
+      const built = build();
+      if (
+        built === null ||
+        built.status !== "error" ||
+        built.error.type !== "structured" ||
+        built.error.code !== "internal_error"
+      ) {
+        throw new Error("fixture did not produce a structured internal error");
+      }
+      expect(built.error[MCP_INTERNAL_TOOL_FAILURE]).toBe(true);
+      const scoped = scopeToolResultToSurface(built, { mode: "law" });
+      if (
+        scoped.status !== "error" ||
+        scoped.error.type !== "structured" ||
+        scoped.error.code !== "internal_error"
+      ) {
+        throw new Error(
+          "scoping did not preserve the structured internal error",
+        );
+      }
+      expect(scoped.error[MCP_INTERNAL_TOOL_FAILURE]).toBe(true);
+      const serialized = serializeToolResult(scoped);
+      expect(MCP_INTERNAL_TOOL_FAILURE in serialized).toBe(true);
+      expect(getMcpToolCallOutcome(serialized)).toBe("internal_error");
+      expect(
+        getMcpToolCallOutcome(withInputNotes(serialized, ["normalized input"])),
+      ).toBe("internal_error");
+      const wire = JSON.stringify(serialized);
+      expect(getMcpToolCallOutcome(JSON.parse(wire))).toBe("tool_error");
+      expect(JSON.stringify(serialized)).not.toContain(
+        "mcp.internal-tool-failure",
+      );
+    });
+  }
+
+  test("business failures remain tool errors without internal provenance", () => {
     const business = serializeToolResult(
       internalFailureResult(
         new HandlerError({ status: 400, message: "invalid date" }),
       ),
     );
-    expect(getMcpToolCallOutcome(internal)).toBe("internal_error");
-    expect(
-      getMcpToolCallOutcome(withInputNotes(internal, ["normalized input"])),
-    ).toBe("internal_error");
-    const wire = JSON.stringify(internal);
-    expect(getMcpToolCallOutcome(JSON.parse(wire))).toBe("tool_error");
     expect(getMcpToolCallOutcome(business)).toBe("tool_error");
-    expect(JSON.stringify(internal)).not.toContain("mcp.internal-tool-failure");
+    expect(MCP_INTERNAL_TOOL_FAILURE in business).toBe(false);
   });
 
-  for (const admitted of [false, true]) {
-    test(`HTTP ${admitted ? "admitted call" : "early scope refusal"} emits exactly one outcome`, async () => {
+  for (const path of [
+    "scope-refusal",
+    "admitted",
+    "discovery-load-fault",
+    "discovery-unexpected-fault",
+    "admission-unexpected-fault",
+  ] as const) {
+    test(`HTTP ${path} emits exactly one outcome`, async () => {
+      const admitted = path !== "scope-refusal";
+      const internal =
+        path === "discovery-load-fault" ||
+        path === "discovery-unexpected-fault" ||
+        path === "admission-unexpected-fault";
       const context = contextFor();
       context.grantedScopes = ["stella:read"];
+      const captured: unknown[] = [];
       const handler = createMcpHttpRequestHandler({
         actionSizePolicy: () => Result.ok(undefined),
         authenticateMcpRequest: async () =>
@@ -427,9 +492,25 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
           }),
         resolveMcpSessionContext: async () => context,
         captureError: (error) => {
-          throw error;
+          captured.push(error);
         },
-        getMcpToolDefinition,
+        getMcpToolDefinition: async (toolName, requestContext, mode) => {
+          if (path === "discovery-load-fault") {
+            throw new McpGatewayLoadError({ message: PRIVATE_TEXT });
+          }
+          if (path === "discovery-unexpected-fault") {
+            throw new HandlerError({ status: 500, message: PRIVATE_TEXT });
+          }
+          return await getMcpToolDefinition(toolName, requestContext, mode);
+        },
+        ...(path === "admission-unexpected-fault"
+          ? {
+              admitAction: async () =>
+                Result.err(
+                  new HandlerError({ status: 500, message: PRIVATE_TEXT }),
+                ),
+            }
+          : {}),
         getMcpToolRequiredScopesHint,
         handleMcpToolCall,
         listMcpTools,
@@ -468,12 +549,23 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
         }),
       );
       expect(response.status).toBe(200);
-      expect(await response.text()).toContain(
-        admitted ? "validation_error" : "missing_scope",
+      const codes = {
+        "scope-refusal": "missing_scope",
+        admitted: "validation_error",
+        "discovery-load-fault": "internal_error",
+        "discovery-unexpected-fault": "internal_error",
+        "admission-unexpected-fault": "internal_error",
+      } as const satisfies Record<typeof path, string>;
+      expect(await response.text()).toContain(codes[path]);
+      expect(captured).toHaveLength(
+        path === "discovery-unexpected-fault" ||
+          path === "admission-unexpected-fault"
+          ? 1
+          : 0,
       );
       expectOutcome({
         tool: admitted ? "list_matters" : "save_time_entry",
-        outcome: "tool_error",
+        outcome: internal ? "internal_error" : "tool_error",
       });
     });
   }
