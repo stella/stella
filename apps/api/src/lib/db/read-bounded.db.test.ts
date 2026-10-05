@@ -89,7 +89,7 @@ describe("complete bounded reads", () => {
         if (cap > 0) {
           const traversed: typeof expectedRows = [];
           let cursor: string | undefined;
-          do {
+          for (;;) {
             const page = await readCursorPage(
               testDb
                 .select({ canonical: anonymizationBlacklistEntries.canonical })
@@ -130,7 +130,7 @@ describe("complete bounded reads", () => {
             }
             expect(page.nextCursor).toBe(lastItem.canonical);
             cursor = page.nextCursor;
-          } while (cursor !== undefined);
+          }
           expect(traversed).toEqual(expectedRows);
         }
       } finally {
