@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
-import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
 import { watchDesktopEditHandoff } from "./desktop-edit-handoff";
@@ -23,10 +22,14 @@ describe("desktop handoff terminal failures", () => {
           };
         },
       });
-      expect(await rejectionOf(watched)).toMatchObject({
-        _tag: "DesktopHandoffFailedError",
-        failureReason,
-      });
+      const result = await watched;
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toMatchObject({
+          _tag: "DesktopHandoffFailedError",
+          failureReason,
+        });
+      }
       expect(reads).toBe(1);
     });
   }
@@ -37,12 +40,12 @@ describe("desktop handoff terminal failures", () => {
         expiresAt: expiresAt(),
         readStatus: async () => ({ status: "opened", sessionId: "session" }),
       }),
-    ).toBe("opened");
+    ).toMatchObject({ status: "ok", value: "opened" });
     expect(
       await watchDesktopEditHandoff({
         expiresAt: expiresAt(),
         readStatus: async () => ({ status: "expired", expiresAt: expiresAt() }),
       }),
-    ).toBe("expired");
+    ).toMatchObject({ status: "ok", value: "expired" });
   });
 });

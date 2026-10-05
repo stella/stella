@@ -60,6 +60,7 @@ import {
   countRootConnectionShapes,
   countRootConnectionTypeImports,
 } from "./root-connection-shapes";
+import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -2928,6 +2929,22 @@ const RESULT_BOUNDARY_METRICS = [
 ] as const satisfies readonly RatchetMetric[];
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "repo",
+    id: "schema-introspection-files",
+    description:
+      "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
+    perFile: true,
+    count: (context) => {
+      const paths = schemaIntrospectionPaths(
+        readSource(context, "scripts/ownership.ts"),
+      );
+      return {
+        count: paths.length,
+        files: Object.fromEntries(paths.map((file) => [file, 1])),
+      };
+    },
+  },
   {
     scope: "file",
     id: "direct-status-writes",
@@ -6073,6 +6090,26 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
   return failures;
 };
 
+const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const schemaIntrospectionMetric = requireSnapshot(
+    snapshot,
+    "schema-introspection-files",
+  );
+  if (
+    schemaIntrospectionMetric.count !== 2 ||
+    Object.keys(schemaIntrospectionMetric.files).length !== 2 ||
+    schemaIntrospectionMetric.files["scripts/inventory-a.test.ts"] !== 1 ||
+    schemaIntrospectionMetric.files["scripts/inventory-b.test.ts"] !== 1
+  ) {
+    failures.push(
+      "schema-introspection-files did not measure exact path membership",
+    );
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -6155,6 +6192,11 @@ const runSelfTest = (): number => {
   }
 
   try {
+    writeFixture(
+      root,
+      "scripts/ownership.ts",
+      'export const SCHEMA_INTROSPECTION = [{ path: "scripts/inventory-a.test.ts", reason: "Table metadata." }, { path: "scripts/inventory-b.test.ts", reason: "Column metadata." }];',
+    );
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
@@ -6550,6 +6592,8 @@ const runSelfTest = (): number => {
     writeFileSync(path.join(root, "package.json"), "{}");
     writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
     const snapshot = scanAll(root);
+
+    failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));

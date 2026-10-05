@@ -12,13 +12,14 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
-import { api } from "@/lib/api";
-import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
   watchDesktopEditHandoff,
-} from "@/lib/desktop-edit-handoff";
+} from "@/features/desktop/desktop-edit-handoff";
+import { api } from "@/lib/api";
+import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
@@ -308,11 +309,13 @@ const waitForDesktopEditHandoffOpened = async ({
   handoffId: string;
   workspaceId: string;
 }) => {
-  const outcome = await watchDesktopEditHandoff({
-    expiresAt,
-    readStatus: async () =>
-      await readDesktopEditHandoffStatus({ handoffId, workspaceId }),
-  });
+  const outcome = readQueryResult(
+    await watchDesktopEditHandoff({
+      expiresAt,
+      readStatus: async () =>
+        await readDesktopEditHandoffStatus({ handoffId, workspaceId }),
+    }),
+  );
   if (outcome === "opened") {
     return;
   }

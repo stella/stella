@@ -21,9 +21,10 @@ const { useDesktopPdfSign } =
 const { IntlProvider } = await import("use-intl");
 const { stellaToast, ToastProvider } = await import("@stll/ui/toast");
 const { showDesktopEditOpenResultToast } =
-  await import("./desktop-edit-status-toast");
+  await import("@/lib/desktop-edit-status-toast");
 const { watchDesktopEditHandoff } = await import("./desktop-edit-handoff");
-const { WINDOWS_EXE_URL } = await import("./desktop-downloads");
+const { readQueryResult } = await import("@/lib/errors/query-result");
+const { WINDOWS_EXE_URL } = await import("@/lib/desktop-downloads");
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 
@@ -76,7 +77,10 @@ for (const { locale, messages } of [
                   failedAt: Temporal.Now.instant().toString(),
                 };
               },
-            }).then(() => undefined),
+            }).then((result) => {
+              readQueryResult(result);
+              return undefined;
+            }),
           },
         });
       });

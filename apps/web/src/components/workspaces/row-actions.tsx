@@ -1219,7 +1219,6 @@ const RowOcrMenuActions = ({
     <>
       {canRunOcr && (
         <MenuItem
-          className="min-h-11 sm:min-h-11"
           disabled={isPending}
           onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
         >
@@ -1229,14 +1228,13 @@ const RowOcrMenuActions = ({
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <MenuSubTrigger className="min-h-11 sm:min-h-11">
+          <MenuSubTrigger>
             <ScanTextIcon />
             {t("workspaces.files.runOcr")}
           </MenuSubTrigger>
           <MenuSubPopup>
             {rowSources.map((source) => (
               <MenuItem
-                className="min-h-11 sm:min-h-11"
                 disabled={isPending}
                 key={source.fieldId}
                 onClick={() => detached(onRun(source), "row-actions.run-ocr")}
