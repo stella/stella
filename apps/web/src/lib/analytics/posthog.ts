@@ -123,7 +123,71 @@ const domExceptionClass = (type: string, value: string): string => {
 // handler still names no defect, only that a request was cut short.
 const CANCELLED_REQUEST_CLASS = "AbortError";
 
-const isNoiseException = (event: {
+// Errors whose type names an expected outcome, handled where it happens: no
+// desktop app running, a public-law source down, a signed-out session.
+const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
+  "AuthClientError",
+  "DesktopBridgeUnavailableError",
+  "PublicLawUnavailableError",
+]);
+
+// Messages that name no defect of ours: React reconciling a DOM another
+// script (a translator, an extension) already changed, and a request the
+// network dropped (the route's own offline state reports connectivity).
+const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
+  /Failed to execute '(?:removeChild|insertBefore)' on 'Node'/u,
+  /The node (?:to be removed )?is not a child of this node/iu,
+  /^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)$/u,
+];
+
+const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
+
+// API answers the UI already turns into a state (sign in, no access, not
+// found, a rejected provider key or continuation). Other 4xx and every 5xx
+// stay reported.
+const API_ERROR_TYPES: ReadonlySet<string> = new Set([
+  "ApiError",
+  "StreamReadError",
+]);
+const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
+  "ai_config_provider_validation_failed",
+  "chat_continuation_rejected",
+]);
+
+const hasExtensionFrame = (entry: unknown): boolean => {
+  const stacktrace = isRecord(entry) ? entry["stacktrace"] : undefined;
+  const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
+  if (!Array.isArray(frames)) {
+    return false;
+  }
+  const list: unknown[] = frames;
+  return list.some((frame) =>
+    EXTENSION_FRAME.test(readStringField(frame, "filename")),
+  );
+};
+
+const isExpectedApiOutcome = (
+  type: string,
+  properties: Record<string, unknown> | undefined,
+): boolean => {
+  if (!API_ERROR_TYPES.has(type) || properties === undefined) {
+    return false;
+  }
+  const status = properties["error_status"];
+  const code = properties["error_code"];
+  return (
+    (typeof status === "number" && EXPECTED_API_STATUSES.has(status)) ||
+    (typeof code === "string" && EXPECTED_API_CODES.has(code))
+  );
+};
+
+const NOISE_PATTERNS = [
+  ...EXCEPTION_NOISE_PATTERNS,
+  ...ENVIRONMENT_NOISE_PATTERNS,
+];
+
+export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
   const list = event.properties?.["$exception_list"];
@@ -136,7 +200,10 @@ const isNoiseException = (event: {
     const type = readStringField(entry, "type");
     return (
       domExceptionClass(type, value) === CANCELLED_REQUEST_CLASS ||
-      EXCEPTION_NOISE_PATTERNS.some(
+      EXPECTED_OUTCOME_TYPES.has(type) ||
+      isExpectedApiOutcome(type, event.properties) ||
+      hasExtensionFrame(entry) ||
+      NOISE_PATTERNS.some(
         (pattern) => pattern.test(value) || pattern.test(type),
       )
     );
