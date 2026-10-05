@@ -237,10 +237,19 @@ const apiErrorIdentity = (
 // Free-text fields (context lines, local variables, function names) never
 // pass through. Function names are unsafe even when identifier-shaped:
 // engines infer them from computed property keys, which can be user data.
+//
+// PostHog's ingestion parses each raw frame by `platform` and requires
+// `function`; a frame without them fails the whole exception. These carry
+// posthog-js's own defaults for a browser frame, with the function always
+// reported as unknown.
+export const UNKNOWN_FRAME_FUNCTION = "?";
+const WEB_FRAME_PLATFORM = "web:javascript";
+
 type SanitizedFrame = {
-  platform?: string;
+  platform: string;
+  function: typeof UNKNOWN_FRAME_FUNCTION;
+  in_app: boolean;
   filename?: string;
-  in_app?: boolean;
   lineno?: number;
   colno?: number;
 };
@@ -250,22 +259,21 @@ const stripUrlMetadata = (url: string): string => {
   return terminator === -1 ? url : url.slice(0, terminator);
 };
 
-const sanitizeFrame = (frame: unknown): SanitizedFrame => {
-  if (!isRecord(frame)) {
-    return {};
-  }
-  const filename = frame["filename"];
-  const platform = frame["platform"];
-  const inApp = frame["in_app"];
-  const lineno = frame["lineno"];
-  const colno = frame["colno"];
+export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
+  const fields = isRecord(frame) ? frame : {};
+  const filename = fields["filename"];
+  const platform = fields["platform"];
+  const inApp = fields["in_app"];
+  const lineno = fields["lineno"];
+  const colno = fields["colno"];
   return {
-    ...(typeof platform === "string" ? { platform } : {}),
+    platform: typeof platform === "string" ? platform : WEB_FRAME_PLATFORM,
+    function: UNKNOWN_FRAME_FUNCTION,
+    in_app: typeof inApp === "boolean" ? inApp : true,
     // URL metadata on asset URLs can carry tokens; keep only the path.
     ...(typeof filename === "string"
       ? { filename: stripUrlMetadata(filename) }
       : {}),
-    ...(typeof inApp === "boolean" ? { in_app: inApp } : {}),
     ...(typeof lineno === "number" ? { lineno } : {}),
     ...(typeof colno === "number" ? { colno } : {}),
   };
