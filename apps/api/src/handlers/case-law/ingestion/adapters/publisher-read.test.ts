@@ -29,11 +29,11 @@ afterEach(() => {
 const URL_UNDER_TEST = "https://publisher.invalid/document/1";
 
 const init = (
-  overrides: Partial<PublisherReadInit> = {},
+  overrides: Partial<Omit<PublisherReadInit, "timeout" | "timeoutMs">> = {},
 ): PublisherReadInit => ({
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeout: { type: "idle", ms: 1000 },
   ...overrides,
 });
 
