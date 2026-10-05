@@ -4075,7 +4075,9 @@ export default defineConfig({
     },
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
-      rules: { "require-caller-feature-access/require-caller-feature-access": "error" },
+      rules: {
+        "require-caller-feature-access/require-caller-feature-access": "error",
+      },
     },
     {
       // Outside the API, apps and packages read their own env modules; a
