@@ -330,14 +330,16 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
     role: OWNER_MEMBER_ROLE,
   });
   // The owner fixture exercises billing pages; other principals retain opt-in access.
-  await db
-    .insert(featureEnrolments)
-    .values({
-      organizationId: toSafeId<"organization">(organizationId),
-      userId: toSafeId<"user">(testUserId),
-      featureId: "time-billing",
-    })
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(featureEnrolments)
+      .values({
+        organizationId: toSafeId<"organization">(organizationId),
+        userId: toSafeId<"user">(testUserId),
+        featureId: "time-billing",
+      })
+      .onConflictDoNothing();
+  });
   const colleagueUserIds = await ensureSeedColleagueUsers();
 
   for (const userId of colleagueUserIds) {
