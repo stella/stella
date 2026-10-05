@@ -1,3 +1,4 @@
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import {
   oauthProvider,
   type ClientDiscovery,
@@ -98,8 +99,8 @@ const nativeConsentPrompt = (
     return undefined;
   }
   // The consent endpoint consumes this signed prompt before issuing a code.
-  // Login and account-selection prompts survive; native grants require UI
-  // even when the client requests no interaction.
+  // Login and account-selection prompts survive. Non-interactive requests use
+  // the provider's interaction-required response through the post-login gate.
   const prompts =
     prompt === undefined
       ? []
@@ -107,12 +108,10 @@ const nativeConsentPrompt = (
           .split(" ")
           .map((value) => value.trim())
           .filter(Boolean);
-  return [
-    ...new Set([
-      ...(prompts.every((value) => value === "none") ? [] : prompts),
-      "consent",
-    ]),
-  ].join(" ");
+  if (prompts.length > 0 && prompts.every((value) => value === "none")) {
+    return "none";
+  }
+  return [...new Set([...prompts, "consent"])].join(" ");
 };
 
 /**
@@ -264,10 +263,17 @@ const resolveNativeAuthorizationClient = async (
   return null;
 };
 
-const createOAuthPolicyMiddleware = (
-  policy: OAuthScopePolicyContext,
-  discoveries: readonly ClientDiscovery[],
-) =>
+type OAuthPolicyMiddlewareOptions = {
+  policy: OAuthScopePolicyContext;
+  discoveries: readonly ClientDiscovery[];
+  noInteractionRequests: WeakSet<Request>;
+};
+
+const createOAuthPolicyMiddleware = ({
+  policy,
+  discoveries,
+  noInteractionRequests,
+}: OAuthPolicyMiddlewareOptions) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
       const body: unknown = ctx.body;
@@ -322,6 +328,9 @@ const createOAuthPolicyMiddleware = (
     };
     const grantable = grantableScopes(client, requested, policy).join(" ");
     const consentPrompt = nativeConsentPrompt(resolved, parameters);
+    if (consentPrompt === "none" && ctx.request) {
+      noInteractionRequests.add(ctx.request);
+    }
     if (grantable === scope && consentPrompt === undefined) {
       return UNCHANGED;
     }
@@ -385,7 +394,7 @@ const extensionsWithScopePolicy = (
   });
 
 type StellaOAuthProviderOptions = OAuthOptions<Scope[]> &
-  Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>;
+  Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions" | "postLogin">>;
 
 export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
@@ -401,7 +410,23 @@ export const createStellaOAuthProvider = (
     providerScopes: options.scopes,
   };
   const extensions = extensionsWithScopePolicy(options.extensions, policy);
-  const policyOptions = { ...options, extensions };
+  const noInteractionRequests = new WeakSet<Request>();
+  const policyOptions = {
+    ...options,
+    extensions,
+    postLogin: {
+      ...options.postLogin,
+      shouldRedirect: async (context) => {
+        const { request } = getCurrentAuthEndpointContext();
+        // The provider validates the client, redirect, PKCE and session before
+        // this gate, then answers prompt=none with interaction_required.
+        if (request && noInteractionRequests.has(request)) {
+          return true;
+        }
+        return await options.postLogin.shouldRedirect(context);
+      },
+    } satisfies typeof options.postLogin,
+  };
   const provider = oauthProvider(policyOptions);
   // Registration has its own capability policy; discovery retains the
   // provider's policy. Both endpoints use the provider's persistence path.
@@ -426,7 +451,11 @@ export const createStellaOAuthProvider = (
         {
           matcher: (ctx: HookEndpointContext) =>
             OAUTH_SCOPE_POLICY_PATHS.has(ctx.path ?? ""),
-          handler: createOAuthPolicyMiddleware(policy, discoveries),
+          handler: createOAuthPolicyMiddleware({
+            policy,
+            discoveries,
+            noInteractionRequests,
+          }),
         },
       ],
     },

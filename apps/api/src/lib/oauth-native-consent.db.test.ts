@@ -328,17 +328,12 @@ describe("OAuth native client consent", () => {
         prompt: "none",
         redirectUri: scenario.redirectUri,
       });
-      expect(noPromptPage.pathname).toBe("/consent");
-      expect(noPromptPage.searchParams.has("code")).toBe(false);
-      expect(
-        new URLSearchParams(readSignedQuery(noPromptPage)).get("prompt"),
-      ).toBe("consent");
-      const noPromptRedirect = await consentAndReadRedirect(
-        browser,
-        noPromptPage,
+      expect(noPromptPage.pathname).toBe(
+        new URL(scenario.redirectUri).pathname,
       );
-      expect(noPromptRedirect.searchParams.get("code")).toEqual(
-        expect.any(String),
+      expect(noPromptPage.searchParams.has("code")).toBe(false);
+      expect(noPromptPage.searchParams.get("error")).toBe(
+        "interaction_required",
       );
     } else {
       expect(secondPage.searchParams.get("code")).toEqual(expect.any(String));
