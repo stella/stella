@@ -28,6 +28,8 @@ const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
     "checkout, artifact download, setup-node without a cache input and the hardened publish action; no cache",
 };
 
+export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
+
 /** Why a step can save to the Actions cache, or null when it cannot. */
 const cacheSave = (step: Record<string, unknown>): string | null => {
   const uses = typeof step["uses"] === "string" ? step["uses"] : "";
@@ -225,6 +227,26 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         return [];
       }
       const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+      const inputs = isRecord(step["with"]) ? step["with"] : {};
+      if (
+        uses.startsWith("stella/.github/actions/setup-bun-cached@") &&
+        inputs["save"] !== MAIN_ONLY_BUN_CACHE_SAVE
+      ) {
+        return [`job '${name}': Bun install cache saves must be main-only`];
+      }
+      const path = typeof inputs["path"] === "string" ? inputs["path"] : "";
+      const bunStore =
+        /(?:^|[\\/])\.bun[\\/]install[\\/]cache(?:[\\/\s]|$)/u.test(path);
+      if (bunStore && /^actions\/cache@/u.test(uses)) {
+        return [`job '${name}': split Bun cache restore from main-only save`];
+      }
+      if (
+        bunStore &&
+        uses.startsWith("actions/cache/save@") &&
+        step["if"] !== MAIN_ONLY_BUN_CACHE_SAVE
+      ) {
+        return [`job '${name}': Bun install cache saves must be main-only`];
+      }
       if (policy === "install-cache") {
         return uses.startsWith("oven-sh/setup-bun@")
           ? [
