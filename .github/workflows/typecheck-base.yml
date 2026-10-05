@@ -4,10 +4,11 @@ on:
   push:
     branches: [main]
 
-# Newer main recordings supersede older work; unavailable SHAs use the exact-base fallback.
+# A running recording finishes; a newer push replaces only a queued one.
+# SHAs without a recording use the exact-base fallback.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
