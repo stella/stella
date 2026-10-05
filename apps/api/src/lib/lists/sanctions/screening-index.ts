@@ -10,12 +10,12 @@ import type {
 } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -56,7 +56,7 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
 }> {}
 
 const loadEditionEntries = async (
-  db: ScopedDb,
+  db: SanctionsReadDb,
   edition: SanctionsActiveEdition,
 ): Promise<SanctionsEntry[]> => {
   const entries: SanctionsEntry[] = [];
@@ -102,7 +102,7 @@ const loadEditionEntries = async (
 type BuildSanctionsIndex = typeof buildScreeningIndex;
 
 type LoadIndexProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
   build: BuildSanctionsIndex;
@@ -161,7 +161,7 @@ const loadIndex = async ({
 };
 
 type CacheProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
 };
@@ -300,6 +300,6 @@ export const createSanctionsIndexCache = ({
   };
 };
 
-/** Shared by every screening in this process: the in-product check and public search. */
+/** Shared by signed-in screening callers in this process. */
 export const sharedSanctionsIndexCache: SanctionsIndexCache =
   createSanctionsIndexCache();

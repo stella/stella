@@ -5,6 +5,7 @@ import type { CountryCode } from "@stll/country-codes";
 import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
+  MAX_QUERY_TOKENS,
   SANCTIONS_SOURCES,
   screen,
 } from "@stll/sanctions";
@@ -17,12 +18,13 @@ import type {
   SanctionsIssuer,
   SanctionsSource,
   ScreeningQuery,
+  ScreeningQueryError,
 } from "@stll/sanctions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import type {
@@ -162,9 +164,15 @@ export type SanctionsScreening = {
 const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
+export const SANCTIONS_SUBJECT_ERROR_MESSAGES = {
+  "empty-query": "The name to screen has no letters",
+  "invalid-birth-date": "The date of birth is not a valid calendar date",
+  "excess-query-tokens": `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+} as const satisfies Record<ScreeningQueryError["code"], string>;
+
 /** The subject cannot be screened as given; the caller corrects it. */
-class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
-  code: "empty-query" | "invalid-birth-date";
+export class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
+  code: ScreeningQueryError["code"];
   message: string;
 }> {}
 
@@ -172,11 +180,13 @@ const EMPTY_INDEX = buildScreeningIndex([]);
 
 const toScreeningQuery = (
   subject: SanctionsScreeningSubject,
+  nameSource: NonNullable<ScreeningQuery["nameSource"]>,
 ): ScreeningQuery => {
   switch (subject.type) {
     case "organization": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "organisation",
         identifiers: subject.identifiers,
       };
@@ -184,6 +194,7 @@ const toScreeningQuery = (
     case "person": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "person",
         ...(subject.birthDate !== null && { birthDate: subject.birthDate }),
         nationality: subject.nationalityCodes,
@@ -282,7 +293,7 @@ const toPossibleMatch = (
 });
 
 type ScreenListProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   freshness: SanctionsSourceFreshness;
   query: ScreeningQuery;
   base: ListOutcomeBase;
@@ -326,6 +337,9 @@ const screenList = async ({
         : SANCTIONS_MATCH_LIMIT,
   });
   if (screened.isErr()) {
+    if (screened.error.code === "work-limit") {
+      return unavailableList(base, "load-failed", freshness);
+    }
     // The query was validated against an empty index first, and these
     // errors depend on the query alone.
     return panic("A validated sanctions query was rejected");
@@ -339,6 +353,9 @@ const screenList = async ({
     toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
+    if (screened.value.truncated) {
+      return unavailableList(base, "load-failed", freshness);
+    }
     return {
       ...base,
       ...screenedEdition,
@@ -362,8 +379,9 @@ const screenList = async ({
 
 type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
-  db: ScopedDb;
+  db: SanctionsReadDb;
   subject: SanctionsScreeningSubject;
+  nameSource?: ScreeningQuery["nameSource"];
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];
   /** Internal monitoring must diff the complete hit set. */
@@ -380,6 +398,7 @@ type ScreenSanctionsSubjectProps = {
 export const screenSanctionsSubject = async ({
   db,
   subject,
+  nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
   resultMode = "bounded",
@@ -387,9 +406,18 @@ export const screenSanctionsSubject = async ({
 }: ScreenSanctionsSubjectProps): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>
 > => {
-  const query = toScreeningQuery(subject);
+  const query = toScreeningQuery(subject, nameSource);
   const validated = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
   if (validated.isErr()) {
+    if (validated.error.code === "work-limit") {
+      return Result.ok(
+        unavailableSanctionsScreening({
+          reason: "load-failed",
+          practiceJurisdictions,
+          now,
+        }),
+      );
+    }
     return Result.err(
       new SanctionsSubjectError({
         code: validated.error.code,
@@ -410,24 +438,27 @@ export const screenSanctionsSubject = async ({
       }),
     );
   }
-  // db-await-in-loop: one concurrent read per sanctions source (a small fixed set); each list's index is cached per edition, so a warm screening reads nothing
-  const lists = await Promise.all(
-    freshness.value.map(
-      async (sourceFreshness) =>
-        await screenList({
-          db,
-          freshness: sourceFreshness,
-          query,
-          base: listBase({
-            source: sourceFreshness.source,
-            practiceJurisdictions,
-            heldUpdate: sourceFreshness.heldUpdate,
-          }),
-          indexCache,
-          resultMode,
+  const lists: SanctionsListOutcome[] = [];
+  for (const sourceFreshness of freshness.value) {
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    lists.push(
+      // db-await-in-loop: one bounded read per sanctions source; sequential macrotask yields prevent warm indexes from monopolizing the event loop
+      await screenList({
+        db,
+        freshness: sourceFreshness,
+        query,
+        base: listBase({
+          source: sourceFreshness.source,
+          practiceJurisdictions,
+          heldUpdate: sourceFreshness.heldUpdate,
         }),
-    ),
-  );
+        indexCache,
+        resultMode,
+      }),
+    );
+  }
   return Result.ok({
     status: aggregateSanctionsStatus(lists),
     checkedAt,

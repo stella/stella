@@ -8,6 +8,7 @@ import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-se
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -76,6 +77,10 @@ export const rlsDb = markRlsDatabase({
     fn: (tx: TransactionOf<typeof rawRlsDb>) => Promise<TResult>,
   ): Promise<TResult> => await rawRlsDb.transaction(fn),
 });
+
+/** The connection owner supplies only a role-restricted sanctions reader. */
+export const createPublicSanctionsReader = () =>
+  createSanctionsPublicReadDb(rlsDb);
 
 type Database = typeof rootDb;
 export type Transaction = TransactionOf<Database>;

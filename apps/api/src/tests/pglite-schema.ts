@@ -735,6 +735,18 @@ export const installPgliteMigration = async ({
   }
 };
 
+/** Derive public sanctions column grants from the migration rather than mirror them. */
+export const readPglitePublicSanctionsGrants = (): string[] => {
+  const migration = nodePath.join(
+    DRIZZLE_DIR,
+    "20261003122400_public_sanctions_reader",
+    "migration.sql",
+  );
+  return readMigrationStatements(migration)
+    .map(executableSql)
+    .filter((statement) => statement.startsWith("GRANT "));
+};
+
 /** Install alias graph invariants which declarative schema push cannot express. */
 export const installPgliteDecisionAliases = async (
   db: PgliteSchemaDb,

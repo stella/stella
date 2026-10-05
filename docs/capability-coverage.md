@@ -676,7 +676,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
-| public_indexing | 8 |
+| public_indexing | 9 |
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
