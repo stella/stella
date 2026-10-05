@@ -104,6 +104,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "entities.metadata",
   "entity_versions.source",
   "entity_views.layout",
+  "eu_completion_approvals.reviewed_counts",
+  "eu_completion_controls.batch",
+  "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
   "flow_definitions.steps",
@@ -272,6 +275,12 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "entity_views.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "eu_completion_approvals.approved_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
+  "eu_completion_approvals.supervised_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
+  "eu_completion_controls.changed_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
   "expenses.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
   "extraction_runs.requested_by":

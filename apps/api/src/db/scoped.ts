@@ -4,7 +4,7 @@
  * the prod `rootDb = drizzle(DATABASE_URL, ...)` initialization.
  */
 
-import { Result, UnhandledException } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
@@ -19,6 +19,7 @@ import {
 } from "@/api/db/rls";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -28,6 +29,7 @@ import {
   getPgErrorCode,
   PG_ERROR,
 } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
 
@@ -230,7 +232,14 @@ export const createMembershipScopedDb =
       fn,
     });
 
-export type CreateIngestionDbOptions = {
+export type CreateIngestionDbOptions<
+  TTransaction extends ScopedTransactionBase = ScopedTransactionBase,
+> = {
+  /** Owner-only maintenance receipts surround canonical role-scoped writes in the same transaction. */
+  maintenance?: {
+    before: (tx: TTransaction) => Promise<void>;
+    after: (tx: TTransaction) => Promise<void>;
+  };
   /**
    * How long a batch keeps trying to enter the corpus schema lane. Pass the
    * caller's own transaction budget: a batch that has outlived it must fail
@@ -255,19 +264,42 @@ export type CreateIngestionDbOptions = {
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    { laneWaitMs, signal }: CreateIngestionDbOptions = {},
+    {
+      laneWaitMs,
+      signal,
+      maintenance,
+    }: CreateIngestionDbOptions<TTransaction> = {},
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,
-    options: CreateIngestionDbOptions = {},
+    options: Pick<
+      CreateIngestionDbOptions<TTransaction>,
+      "laneWaitMs" | "signal"
+    > = {},
   ): Promise<T> =>
     await runUnderCorpusSchemaLane({
       database,
       work: async (tx) => {
+        const ownerRow =
+          maintenance === undefined
+            ? null
+            : executedRows(
+                await tx.execute(sql`SELECT current_user AS role`),
+              ).at(0);
+        const owner = isRecord(ownerRow) ? ownerRow["role"] : null;
+        if (maintenance !== undefined && typeof owner !== "string") {
+          panic("Maintenance transaction has no owner role");
+        }
+        await maintenance?.before(tx);
         await tx.execute(
           sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
         );
-        return await fn(tx);
+        const value = await fn(tx);
+        if (maintenance !== undefined && typeof owner === "string") {
+          await tx.execute(sql`SELECT set_config('role', ${owner}, true)`);
+          await maintenance.after(tx);
+        }
+        return value;
       },
       ...(laneWaitMs === undefined ? {} : { laneWaitMs }),
       ...(signal === undefined ? {} : { signal }),

@@ -202,6 +202,11 @@ export const ROOT_CONNECTION_DOORS = [
           reason: "Claims the native connection request.",
         },
         {
+          path: "apps/api/src/lib/business-registries/desktop/handoff-auth.ts",
+          reason:
+            "Records a terminal handoff acknowledgement before returning a protocol or account refusal.",
+        },
+        {
           path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
           reason: "Creates and claims document handoffs.",
         },
@@ -1279,6 +1284,11 @@ const OWNERSHIP_DECLARATIONS = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
+          reason:
+            "Loads persisted source bytes under the completion job's byte cap and tick deadline.",
         },
         {
           path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",

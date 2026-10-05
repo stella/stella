@@ -124,47 +124,62 @@ const authClientPlugins = [
   twoFactorClient(),
 ];
 
-export const authClient = createAuthClient({
-  baseURL: browserAuthBaseUrl(),
-  plugins: authClientPlugins,
-  fetchOptions: {
-    customFetchImpl: async (input, init) => {
-      const method = resolveRequestMethod(input, init);
-      if (method === "GET") {
-        // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
-        // first session/role read so route entry does not wait for the main
-        // graph to boot before these leave the browser. Consume-once + TTL +
-        // the mutation fence below keep a stale response from ever
-        // satisfying a post-auth-change read.
-        const prefetched = await takeBootPrefetch(requestPathname(input));
-        if (prefetched !== null) {
-          return prefetched;
+const customFetchImpl = async (
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> => {
+  const method = resolveRequestMethod(input, init);
+  if (method === "GET") {
+    // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
+    // first session/role read so route entry does not wait for the main
+    // graph to boot before these leave the browser. Consume-once + TTL +
+    // the mutation fence below keep a stale response from ever
+    // satisfying a post-auth-change read.
+    const prefetched = await takeBootPrefetch(requestPathname(input));
+    if (prefetched !== null) {
+      return prefetched;
+    }
+  } else {
+    // Any auth mutation (sign-in/out, org switch, 2FA) invalidates
+    // whatever the boot prefetch captured before it.
+    discardBootPrefetch();
+  }
+  return await fetchWithTimeout(input, {
+    ...init,
+    signal: init?.signal ?? undefined,
+    timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+  });
+};
+
+const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
+  createAuthClient({
+    disableDefaultFetchPlugins: redirectMode === "manual",
+    baseURL: browserAuthBaseUrl(),
+    plugins: authClientPlugins,
+    fetchOptions: {
+      customFetchImpl,
+      headers: {
+        get "Accept-Language"() {
+          return useI18nStore.getState().lang;
+        },
+      },
+      onRequest: withOauthQueryFromHash,
+      onError: (context) => {
+        if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
+          const t = getTranslator();
+          notifyUserError(context.error, t("auth.rateLimitExceeded"));
         }
-      } else {
-        // Any auth mutation (sign-in/out, org switch, 2FA) invalidates
-        // whatever the boot prefetch captured before it.
-        discardBootPrefetch();
-      }
-      return await fetchWithTimeout(input, {
-        ...init,
-        signal: init?.signal ?? undefined,
-        timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
-      });
-    },
-    headers: {
-      get "Accept-Language"() {
-        return useI18nStore.getState().lang;
       },
     },
-    onRequest: withOauthQueryFromHash,
-    onError: (context) => {
-      if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
-        const t = getTranslator();
-        notifyUserError(context.error, t("auth.rateLimitExceeded"));
-      }
-    },
-  },
-});
+  });
+
+export const authClient = createStellaAuthClient("automatic");
+
+/** Consent owns the completion view and navigation; the SDK's redirect hook must not race it. */
+export const submitOAuthConsent = async (accept: boolean) => {
+  const consentClient = createStellaAuthClient("manual");
+  return await consentClient.oauth2.consent({ accept });
+};
 
 export const listAuthSessions = async () => {
   const result = await authClient.listSessions();

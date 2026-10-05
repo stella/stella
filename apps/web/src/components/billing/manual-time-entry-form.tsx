@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { DialogFormState } from "@stll/ui/dialog";
 import { Label } from "@stll/ui/label";
 
 import { DurationInput } from "@/components/billing/duration-input";
@@ -97,6 +98,22 @@ export const ManualTimeEntryForm = ({
         submit(onSubmit);
       }}
     >
+      <DialogFormState
+        dirty={
+          dateWorked !== defaultValues.dateWorked ||
+          durationMinutes !== defaultValues.durationMinutes ||
+          narrative !== defaultValues.narrative ||
+          narrativeLanguage !== defaultValues.narrativeLanguage ||
+          billable !== defaultValues.billable
+        }
+        onDiscard={() => {
+          setDateWorked(defaultValues.dateWorked);
+          setDurationMinutes(defaultValues.durationMinutes);
+          setNarrative(defaultValues.narrative);
+          setNarrativeLanguage(defaultValues.narrativeLanguage);
+          setBillable(defaultValues.billable);
+        }}
+      />
       <fieldset className="flex min-w-0 flex-col gap-4" disabled={pending}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
