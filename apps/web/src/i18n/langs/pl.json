@@ -2461,6 +2461,7 @@
     "current": "Bieżąca",
     "deleteVersion": "Usuń wersję",
     "descriptionPlaceholder": "Dodaj notatkę o tej wersji...",
+    "displayFailed": "Nie udało się wyświetlić tego pliku.",
     "downloadRedline": "Pobierz redline",
     "dropToUploadVersion": "Upuść, aby przesłać jako nową wersję",
     "editLatestVersionDescription": "To nie jest bieżąca wersja. Aby edytować ją w przeglądarce, ustaw ją najpierw jako najnowszą wersję, a następnie odblokuj do edycji.",

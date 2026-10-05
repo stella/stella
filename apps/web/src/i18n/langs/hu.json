@@ -2461,6 +2461,7 @@
     "current": "Aktuális",
     "deleteVersion": "Verzió törlése",
     "descriptionPlaceholder": "Megjegyzés hozzáadása ehhez a verzióhoz...",
+    "displayFailed": "Ezt a fájlt nem sikerült megjeleníteni.",
     "downloadRedline": "Redline letöltése",
     "dropToUploadVersion": "Engedje el új verzióként való feltöltéshez",
     "editLatestVersionDescription": "Ez nem az aktuális verzió. A böngészőben való szerkesztéshez először tegye a legújabb verzióvá, majd oldja fel a szerkesztéshez.",

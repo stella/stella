@@ -2461,6 +2461,7 @@
     "current": "Pašreizējā",
     "deleteVersion": "Dzēst versiju",
     "descriptionPlaceholder": "Pievienot piezīmi par šo versiju...",
+    "displayFailed": "Šo failu neizdevās parādīt.",
     "downloadRedline": "Lejupielādēt redline",
     "dropToUploadVersion": "Nometiet, lai augšupielādētu kā jaunu versiju",
     "editLatestVersionDescription": "Šī nav pašreizējā versija. Lai to rediģētu pārlūkā, vispirms padariet to par jaunāko versiju, pēc tam atbloķējiet rediģēšanai.",

@@ -2461,6 +2461,7 @@
     "current": "Aktuální",
     "deleteVersion": "Smazat verzi",
     "descriptionPlaceholder": "Přidejte poznámku k této verzi...",
+    "displayFailed": "Tento soubor se nepodařilo zobrazit.",
     "downloadRedline": "Stáhnout redline",
     "dropToUploadVersion": "Přetažením nahrajete jako novou verzi",
     "editLatestVersionDescription": "Tato verze není aktuální. Pokud ji chcete upravovat v prohlížeči, nejdřív z ní vytvořte nejnovější verzi a potom ji odemkněte pro úpravy.",

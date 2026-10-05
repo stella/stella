@@ -2461,6 +2461,7 @@
     "current": "الحالي",
     "deleteVersion": "حذف الإصدار",
     "descriptionPlaceholder": "أضف ملاحظة حول هذا الإصدار...",
+    "displayFailed": "تعذّر عرض هذا الملف.",
     "downloadRedline": "تنزيل نسخة التتبّع",
     "dropToUploadVersion": "أفلِت للرفع كإصدار جديد",
     "editLatestVersionDescription": "هذا ليس الإصدار الحالي. لتعديله في المتصفح، اجعله أولاً أحدث إصدار، ثم ألغِ قفله للتعديل.",
