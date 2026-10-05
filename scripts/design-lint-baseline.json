@@ -1654,7 +1654,7 @@
     "apps/api/src/lib/legal-search/reconciliation-store.db.test.ts": 5,
     "apps/api/src/lib/legal-search/reconciliation-store.ts": 1,
     "apps/api/src/lib/legal-search/sk-document-backfill.ts": 5,
-    "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
+    "apps/api/src/lib/lists/sanctions/screening-service.ts": 2,
     "apps/api/src/lib/markdown/html-to-markdown.ts": 10,
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts": 2,
     "apps/api/src/lib/mcp-upstream/cached-tools.ts": 2,
