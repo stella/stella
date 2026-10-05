@@ -222,6 +222,7 @@ export const readSesInboundDelivery = async ({
     );
   }
   const metadata = {
+    objectKey: receipt.action.objectKey,
     receivedAt: mail.timestamp,
     envelope: {
       mailFrom: mail.source,
@@ -340,23 +341,27 @@ export const receiveSesInboundMail = async ({
   const delivery = result.value;
   switch (delivery.status) {
     case "oversized":
-      return await recordOversizedInboundMail({
-        envelope: delivery.envelope,
-        receivedAt: delivery.receivedAt,
-        deliveryKey: delivery.deliveryKey,
-        inboundDomain,
-        persist,
-      });
+      return (
+        await recordOversizedInboundMail({
+          envelope: delivery.envelope,
+          receivedAt: delivery.receivedAt,
+          deliveryKey: delivery.deliveryKey,
+          inboundDomain,
+          persist,
+        })
+      ).map((deliveries) => ({ deliveries, objectKey: delivery.objectKey }));
     case "received":
-      return await ingestInboundMail({
-        raw: delivery.raw,
-        envelope: delivery.envelope,
-        receivedAt: delivery.receivedAt,
-        verify: delivery.verify,
-        scan: delivery.scan,
-        inboundDomain,
-        persist,
-      });
+      return (
+        await ingestInboundMail({
+          raw: delivery.raw,
+          envelope: delivery.envelope,
+          receivedAt: delivery.receivedAt,
+          verify: delivery.verify,
+          scan: delivery.scan,
+          inboundDomain,
+          persist,
+        })
+      ).map((deliveries) => ({ deliveries, objectKey: delivery.objectKey }));
     default:
       delivery satisfies never;
       return panic("Unhandled inbound source disposition");
@@ -380,13 +385,11 @@ export const receiveAndDeleteSesInboundMail = async ({
       ? Result.ok([{ status: "already_completed" as const }])
       : outcome;
   }
-  // Successful receive has already validated the event and source object.
-  const { receipt } = v.parse(sesDeliverySchema, source.event);
+  const { deliveries, objectKey } = outcome.value;
   const removed = await Result.tryPromise({
     try: async () =>
       await withTimeout(
-        async (signal) =>
-          await deleteObject({ key: receipt.action.objectKey, signal }),
+        async (signal) => await deleteObject({ key: objectKey, signal }),
         {
           label: "inbound-object-delete",
           timeoutMs: INBOUND_MAIL_LIMITS.providerTimeoutMs,
@@ -398,5 +401,5 @@ export const receiveAndDeleteSesInboundMail = async ({
         reason: "object-delete-failed",
       }),
   });
-  return removed.isErr() ? removed : outcome;
+  return removed.isErr() ? removed : Result.ok(deliveries);
 };

@@ -377,9 +377,10 @@ test.each(["declared", "streamed"] as const)(
           return Result.ok({ status: "dropped", reason: "message_too_large" });
         },
       });
-      expect(result.isOk() && result.value).toEqual([
+      expect(result.isOk() && result.value.deliveries).toEqual([
         { status: "dropped", reason: "message_too_large" },
       ]);
+      expect(result.isOk() && result.value.objectKey).toBe("mail/delivery-1");
       expect(drops).toBe(1);
       expect(emitted).toBeLessThan(40);
       expect(body.destroyed).toBe(true);
