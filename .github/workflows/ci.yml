@@ -3278,6 +3278,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read
 
     steps:
       - name: Checkout
@@ -3313,38 +3314,15 @@ jobs:
           bun run generate
           bun run typegen
 
-      - name: Measure merge base
-        run: |
-          base_dir="$RUNNER_TEMP/typecheck-base"
-          git worktree add --detach "$base_dir" "$(git merge-base origin/main HEAD)"
-          git -C "$base_dir" submodule update --init --recursive
-          (
-            cd "$base_dir"
-            bash scripts/retry.sh bun ci --ignore-scripts
-            # Older merge bases still commit the runtime aggregates.
-            if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
-              bun --filter @stll/api generate:capability-runtime
-            fi
-            # Older bases commit the snapshot. Generate only when the base
-            # owns an untracked output, using its cached producer if present.
-            if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
-              if bun -e 'process.exit("generate" in require("./package.json").scripts ? 0 : 1)'; then
-                bun run generate
-              else
-                bun --filter @stll/api gen:web-api-types
-              fi
-            fi
-            if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
-              bun --filter @stll/web generate:route-tree
-            fi
-            bun run typegen
-          )
-          bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
+      - name: Load merge base measurement
+        run: bash scripts/prepare-typecheck-base.sh
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           NPM_TOKEN: ""
 
       - name: Generated API type review diff
-        # Reuse the measured base checkout and its installed dependencies.
+        # The main recording includes the generated base files.
         # Both files were generated from their own revision above.
         run: |
           patch="$RUNNER_TEMP/web-api-types.patch"
