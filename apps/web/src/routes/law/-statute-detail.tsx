@@ -17,6 +17,8 @@ import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -45,6 +47,7 @@ import {
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
@@ -56,6 +59,11 @@ const LazyStatuteCompareView = lazy(async () => {
   const module =
     await import("@/features/statutes/components/statute-compare-view");
   return { default: module.StatuteCompareView };
+});
+
+const LazyAuthenticatedStatuteChat = lazy(async () => {
+  const module = await import("./-authenticated-statute-chat");
+  return { default: module.AuthenticatedStatuteChat };
 });
 
 type OutlineJumpState = {
@@ -108,6 +116,7 @@ export const PublicStatuteViewer = ({
   windowGap,
   work,
 }: PublicStatuteViewerProps) => {
+  const user = useMaybeAuthenticatedUser();
   const t = useTranslations();
   const navigate = useNavigate();
   const asOfLabelId = useId();
@@ -312,6 +321,32 @@ export const PublicStatuteViewer = ({
     </div>
   );
 
+  let readerWithChat = readerBody;
+  if (activeLegal !== null) {
+    readerWithChat =
+      user === null ? (
+        <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+          {readerBody}
+        </LegalReaderAIChat>
+      ) : (
+        <Suspense
+          fallback={
+            <FileViewerWithAI
+              activeLegal={activeLegal}
+              className="h-full"
+              overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.gated}
+            >
+              {readerBody}
+            </FileViewerWithAI>
+          }
+        >
+          <LazyAuthenticatedStatuteChat activeLegal={activeLegal}>
+            {readerBody}
+          </LazyAuthenticatedStatuteChat>
+        </Suspense>
+      );
+  }
+
   return (
     <main className="relative min-h-0 flex-1">
       <ChromeHeaderActions>
@@ -424,13 +459,7 @@ export const PublicStatuteViewer = ({
           decision, bound to this consolidation and so to its one
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
-          {activeLegal === null ? (
-            readerBody
-          ) : (
-            <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
-              {readerBody}
-            </LegalReaderAIChat>
-          )}
+          {readerWithChat}
         </>
       )}
     </main>
