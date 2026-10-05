@@ -78,6 +78,10 @@
     "./ingestion-cycle": {
       "types": "./src/ingestion-cycle.ts",
       "import": "./src/ingestion-cycle.ts"
+    },
+    "./provision-version-grammar": {
+      "types": "./src/provision-version-grammar.ts",
+      "import": "./src/provision-version-grammar.ts"
     }
   },
   "scripts": {

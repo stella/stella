@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
@@ -11,6 +12,7 @@ import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallbac
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
+  allowsLegacyProvisionFallback,
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
   statuteByCitedWork,
@@ -112,7 +114,7 @@ export const useDecisionProvisionAnchors = ({
 
   const grammar = useCitingProvisionCitationGrammar(country);
   const fallbackReferences =
-    grammar === null
+    grammar === null || !allowsLegacyProvisionFallback(data)
       ? []
       : locateAbbreviatedProvisionCitations(blocks, grammar);
   const works: LinkedWork[] = [];
@@ -130,7 +132,7 @@ export const useDecisionProvisionAnchors = ({
       rowsByWork.set(key, workRows);
     }
     workRows.push(row);
-    const asOf = row.versionValidFrom ?? decisionAsOf;
+    const asOf = provisionVersionAsOf(row, decisionAsOf);
     if (asOf === null) {
       continue;
     }
@@ -227,14 +229,13 @@ export const useDecisionProvisionAnchors = ({
     if (statute === undefined) {
       continue;
     }
-    const document =
-      row.versionValidFrom === null ||
-      versionCoversDate(statute, row.versionValidFrom)
-        ? statute
-        : pickVersionAt(
-            optionalArray(versionsByWork.get(key)),
-            row.versionValidFrom,
-          );
+    const asOf = provisionVersionAsOf(row, decisionAsOf);
+    if (asOf === null) {
+      continue;
+    }
+    const document = versionCoversDate(statute, asOf)
+      ? statute
+      : pickVersionAt(optionalArray(versionsByWork.get(key)), asOf);
     if (document === null) {
       continue;
     }

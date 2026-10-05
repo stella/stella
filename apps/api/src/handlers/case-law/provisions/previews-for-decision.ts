@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
@@ -29,6 +31,7 @@ type CitationRow = {
   anchor: string;
   jurisdiction: string;
   versionValidFrom: string | null;
+  versionBasis: ProvisionVersionBasis;
   workEli: string | null;
 };
 
@@ -52,15 +55,8 @@ const previewKeyOf = (
   anchor: string,
 ): string => `${documentId}#${anchor}`;
 
-/**
- * The date a citation's wording is read at: the version the reference itself
- * states, and the decision's own date otherwise. A court applies the text in
- * force when it decided, so that is the truthful fallback.
- */
-const citationAsOf = (
-  row: CitationRow,
-  decisionDate: string | null,
-): string | null => row.versionValidFrom ?? decisionDate;
+const citationAsOf = (row: CitationRow, decisionDate: string | null) =>
+  provisionVersionAsOf(row, decisionDate);
 
 const workRequestsFor = (
   rows: readonly CitationRow[],

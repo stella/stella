@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
@@ -81,8 +82,9 @@ export const ProvisionsCited = ({
   const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
   for (const group of groups) {
     const asOf =
-      group.provisions.find((provision) => provision.versionValidFrom !== null)
-        ?.versionValidFrom ?? decisionAsOf;
+      group.provisions
+        .map((provision) => provisionVersionAsOf(provision, decisionAsOf))
+        .find((date) => date !== null) ?? null;
     if (group.workEli !== null && asOf !== null) {
       citedWorkByGroup.set(group.key, {
         asOf,
@@ -215,6 +217,12 @@ const WorkReferences = ({
    */
   const documentFor = (provision: ProvisionGroup) => {
     if (statute === undefined) {
+      return null;
+    }
+    if (
+      provisionVersionAsOf(provision, null) === null &&
+      provision.versionBasis.type !== "inferred"
+    ) {
       return null;
     }
 

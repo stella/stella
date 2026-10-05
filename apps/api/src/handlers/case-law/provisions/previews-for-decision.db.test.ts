@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -71,6 +73,7 @@ type CitationSeed = {
   eli: string | null;
   spanStart: number;
   versionValidFrom?: string | null;
+  versionBasis?: ProvisionVersionBasis;
 };
 
 const citation = ({
@@ -78,11 +81,13 @@ const citation = ({
   eli,
   spanStart,
   versionValidFrom = null,
+  versionBasis = DECISION_DATE_VERSION_BASIS,
 }: CitationSeed) => ({
   anchor,
   jurisdiction: "CZE",
   spanStart,
   versionValidFrom,
+  versionBasis,
   workEli: eli,
 });
 
@@ -301,4 +306,48 @@ describe("previews for a page of decision provision citations", () => {
 
     expect(previewed).toHaveLength(LIMITS.caseLawProvisionPreviewVersionsMax);
   });
+});
+
+test("unstated applied versions and unresolved amendments never preview the decision-date wording", async () => {
+  for (const versionBasis of [
+    { type: "not_stated" },
+    {
+      type: "stated_version",
+      amendmentWorkIdentifier: "303/2013 Sb.",
+      expression: null,
+      evidence: { kind: "stated_version", start: 0, end: 42 },
+    },
+  ] as const satisfies readonly ProvisionVersionBasis[]) {
+    const result = await previewsFor([
+      citation({
+        anchor: "par_1729",
+        eli: CIVIL_CODE_ELI,
+        spanStart: 0,
+        versionValidFrom: "2014-01-01",
+        versionBasis,
+      }),
+    ]);
+    expect(result.items.at(0)?.previewKey).toBeNull();
+    expect(result.previews).toEqual([]);
+  }
+});
+
+test("a resolved temporal expression keeps preview wording on its expression side of an amendment", async () => {
+  const versionBasis = {
+    type: "stated_date",
+    date: "2020-01-01",
+    relation: "until",
+    expression: { date: "2014-01-01", eli: `${CIVIL_CODE_ELI}/2014-01-01` },
+    evidence: { kind: "stated_date", start: 0, end: 42 },
+  } as const satisfies ProvisionVersionBasis;
+  const result = await previewsFor([
+    citation({
+      anchor: "par_1729",
+      eli: CIVIL_CODE_ELI,
+      spanStart: 0,
+      versionValidFrom: "2014-01-01",
+      versionBasis,
+    }),
+  ]);
+  expect(result.previews.at(0)?.documentId).toBe(civilCodeOld);
 });
