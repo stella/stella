@@ -665,8 +665,7 @@ const TemplateStudioChatInner = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
-    createDocumentMatters,
-    isLoadingCreateDocumentMatters,
+    createDocumentMattersView,
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
@@ -1311,9 +1310,7 @@ const TemplateStudioChatInner = ({
   const threadVisible = panelOpen && hasThreadContent;
 
   return (
-    <ChatMattersContext
-      value={{ createDocumentMatters, isLoadingCreateDocumentMatters }}
-    >
+    <ChatMattersContext value={{ createDocumentMattersView }}>
       <ChatApprovalContext
         value={{
           activeOrganizationId,
