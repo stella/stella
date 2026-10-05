@@ -324,7 +324,7 @@ describe("the source hash fingerprints every stored part", () => {
       }),
     );
 
-    const replayed = reparse({
+    const replayed = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
