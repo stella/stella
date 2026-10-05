@@ -89,6 +89,39 @@ type Vocabulary = {
   postings: number[][];
   /** Aliases in which two adjacent tokens join into the string. */
   joinPostings: number[][];
+  /** Reused by synchronous lookups; generations make clearing proportional to touched ids. */
+  lookupScratch?: LookupScratch;
+};
+
+type LookupScratch = {
+  counts: Uint32Array;
+  generations: Uint32Array;
+  generation: number;
+  touched: number[];
+  candidates: number[];
+};
+
+const MAX_LOOKUP_GENERATION = 0xff_ff_ff_ff;
+
+const nextLookupScratch = (vocabulary: Vocabulary): LookupScratch => {
+  let scratch = vocabulary.lookupScratch;
+  if (scratch === undefined) {
+    scratch = {
+      counts: new Uint32Array(vocabulary.strings.length),
+      generations: new Uint32Array(vocabulary.strings.length),
+      generation: 0,
+      touched: [],
+      candidates: [],
+    };
+    vocabulary.lookupScratch = scratch;
+  }
+  if (scratch.generation >= MAX_LOOKUP_GENERATION) {
+    scratch.generations.fill(0);
+    scratch.generation = 1;
+  } else {
+    scratch.generation += 1;
+  }
+  return scratch;
 };
 
 type IndexedAlias = {
@@ -329,22 +362,26 @@ const similarStrings = ({
   }
   const grams = bigrams(text);
   const counts = characterCounts(text);
-  const shared = new Map<number, number>();
-  const touched: number[] = [];
+  const scratch = nextLookupScratch(vocabulary);
+  const generation = scratch.generation;
+  const { counts: sharedCounts, generations, touched, candidates } = scratch;
+  touched.length = 0;
+  candidates.length = 0;
   for (let other = length - budget; other <= length + budget; other += 1) {
     for (const gram of grams) {
       for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
         if (!spendScreeningWork(work)) {
           return similar;
         }
-        if (!shared.has(id)) {
+        if (generations[id] !== generation) {
+          generations.fill(generation, id, id + 1);
+          sharedCounts.fill(0, id, id + 1);
           touched.push(id);
         }
-        shared.set(id, (shared.get(id) ?? 0) + 1);
+        sharedCounts.fill((sharedCounts[id] ?? 0) + 1, id, id + 1);
       }
     }
   }
-  const candidates: number[] = [];
   for (const id of touched) {
     if (!spendScreeningWork(work)) {
       return similar;
@@ -355,7 +392,7 @@ const similarStrings = ({
       id === exact ||
       pairBudget === 0 ||
       Math.abs(candidateLength - length) > pairBudget ||
-      (shared.get(id) ?? 0) <
+      (sharedCounts[id] ?? 0) <
         Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
     ) {
       continue;
@@ -384,16 +421,21 @@ const similarStrings = ({
   }
   candidates.sort(
     (left, right) =>
-      (shared.get(right) ?? 0) /
+      (sharedCounts[right] ?? 0) /
         Math.max(grams.size, vocabulary.gramCounts[right] ?? 0) -
-        (shared.get(left) ?? 0) /
+        (sharedCounts[left] ?? 0) /
           Math.max(grams.size, vocabulary.gramCounts[left] ?? 0) ||
       left - right,
   );
   if (candidates.length > MAX_FUZZY_STRINGS) {
     work.selection = "partial";
   }
-  for (const id of candidates.slice(0, MAX_FUZZY_STRINGS)) {
+  for (
+    let index = 0;
+    index < Math.min(candidates.length, MAX_FUZZY_STRINGS);
+    index += 1
+  ) {
+    const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
     const candidateLength = vocabulary.lengths[id] ?? 0;
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (!spendScreeningWork(work, length * candidateLength)) {
