@@ -1,7 +1,11 @@
 import * as v from "valibot";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import {
+  API_KEY_KIND,
+  API_KEY_POLICY,
   isMachineApiKeyAudienceAllowed,
   MACHINE_API_KEY_CONFIG_ID,
   machineApiKeyMetadataSchema,
@@ -13,6 +17,8 @@ import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import { readPersonalApiKeyPolicy } from "@/api/lib/personal-api-key-lifecycle";
+import { personalApiKeyPermissionsAllowed } from "@/api/lib/personal-api-key-policy";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -61,12 +67,14 @@ export const resolveMachineApiKeySession = async (
     mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
     resolveAuthorization = resolveCredentialMemberAuthorization,
+    resolvePersonalPolicy = readPersonalApiKeyPolicy,
   }: {
     mode?: McpMode | undefined;
     verifyApiKey?: (
       ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
     resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+    resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
   } = {},
 ): Promise<McpSession> => {
   const verification = await verifyApiKey({
@@ -121,6 +129,23 @@ export const resolveMachineApiKeySession = async (
     throw rejectCredential();
   }
 
+  let personalKeyAllowed = true;
+  if (metadata.output.kind === API_KEY_KIND.personal) {
+    const { organizationId } = brandActorSessionIdentity({
+      organizationId: metadata.output.organizationId,
+      userId: key.referenceId,
+    });
+    if (
+      !personalApiKeyPermissionsAllowed(storedPermissions.output) ||
+      key.expiresAt === null ||
+      key.expiresAt.getTime() - key.createdAt.getTime() >
+        API_KEY_POLICY.personal.maxDays * DAY_IN_MS ||
+      (await resolvePersonalPolicy(organizationId)) !== "enabled"
+    ) {
+      personalKeyAllowed = false;
+    }
+  }
+
   const { organizationId, scopes } = metadata.output;
   const userId = key.referenceId;
 
@@ -136,7 +161,11 @@ export const resolveMachineApiKeySession = async (
     brandActorSessionIdentity({ organizationId, userId }),
   );
 
-  if (!authorization || !isMemberRole(authorization.role)) {
+  if (
+    !personalKeyAllowed ||
+    !authorization ||
+    !isMemberRole(authorization.role)
+  ) {
     throw rejectCredential();
   }
 

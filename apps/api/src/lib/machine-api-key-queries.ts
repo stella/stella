@@ -66,7 +66,7 @@ export const machineApiKeyCursor = createTimestampIdCursorCodec({
 
 type MachineApiKeyCursor = TimestampIdCursor<string>;
 
-const machineApiKeyColumns = {
+export const machineApiKeyColumns = {
   createdAt: apikey.createdAt,
   enabled: apikey.enabled,
   expiresAt: apikey.expiresAt,

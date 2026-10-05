@@ -1594,6 +1594,11 @@ const OWNERSHIP_DECLARATIONS = [
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
         {
+          path: "apps/api/src/lib/personal-api-key-lifecycle.ts",
+          reason:
+            "Builds the key owner authority from a locked live membership before minting.",
+        },
+        {
           path: "apps/api/src/lib/auth.ts",
           reason: "Builds the authenticated session context.",
         },
