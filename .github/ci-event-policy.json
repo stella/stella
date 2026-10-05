@@ -46,8 +46,7 @@
     "scheduled-run-alerts.yml/notify": "main",
     "build-api-image.yml/resolve": "main",
     "build-api-image.yml/build": "main",
-    "codeql.yml/scope": "queue",
-    "codeql.yml/analyze": "queue",
+    "codeql.yml/analyze": "release-pr",
     "pr-lint.yml/pr-lint": "pr-fast",
     "dependency-review.yml/dependency-review": "pr-fast",
     "agent-sandbox-canary.yml/real-model-mcp-canary": "main",
@@ -135,7 +134,8 @@
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
-    "scorecard.yml/scorecard": "main"
+    "scorecard.yml/scorecard": "main",
+    "codeql.yml/scope": "release-pr"
   },
   "pending": {
     "ci.yml/ci-tests": {

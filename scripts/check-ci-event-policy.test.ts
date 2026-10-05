@@ -228,3 +228,46 @@ test("advisory fix evidence is an explicit label opt-in rather than an automatic
     }),
   ).toEqual([]);
 });
+
+test("the actual reusable CI main group is distinct from its caller and coalesces", () => {
+  expect(
+    checkCiEventPolicies({
+      workflows: { "ci.yml": workflows["ci.yml"] },
+      policy: {
+        jobs: Object.fromEntries(
+          Object.entries(policy.jobs).filter(([key]) =>
+            key.startsWith("ci.yml/"),
+          ),
+        ),
+        pending: policy.pending,
+        pushMain: { "ci.yml": policy.pushMain["ci.yml"] },
+      },
+    }),
+  ).toEqual([]);
+});
+
+test("CodeQL accepts the main release policy and rejects ordinary PR scans", () => {
+  const workflow = structuredClone(workflows["codeql.yml"]);
+  const declared = {
+    jobs: {
+      "codeql.yml/scope": "release-pr",
+      "codeql.yml/analyze": "release-pr",
+    },
+    pending: {},
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "codeql.yml": workflow },
+      policy: declared,
+    }),
+  ).toEqual([]);
+  workflow.jobs.scope.if = "true";
+  expect(
+    checkCiEventPolicies({
+      workflows: { "codeql.yml": workflow },
+      policy: declared,
+    }),
+  ).toContain(
+    "codeql.yml: pull_request/feature/example/false differs from nightly/manual/release policy",
+  );
+});

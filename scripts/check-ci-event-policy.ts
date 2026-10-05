@@ -12,6 +12,7 @@ const policySchema = v.object({
       "main",
       "schema-pr",
       "pr-opt-in",
+      "release-pr",
       "pending",
     ]),
   ),
@@ -172,6 +173,35 @@ const checkMainConcurrency = ({
   return problems;
 };
 
+const checkCodeqlEventPolicy = (condition: string) => {
+  const problems: string[] = [];
+  for (const event of ["pull_request", "workflow_dispatch", "schedule"]) {
+    for (const branch of [
+      "feature/example",
+      "chore/release-0.1",
+      "changeset-release/main",
+    ]) {
+      for (const draft of [false, true]) {
+        const expected =
+          event !== "pull_request" || (!draft && branch !== "feature/example");
+        const actual = evaluate(condition, {
+          values: {
+            "github.event_name": event,
+            "github.event.pull_request.draft": draft,
+            "github.event.pull_request.head.ref": branch,
+          },
+        });
+        if (actual !== expected) {
+          problems.push(
+            `codeql.yml: ${event}/${branch}/${draft} differs from nightly/manual/release policy`,
+          );
+        }
+      }
+    }
+  }
+  return problems;
+};
+
 type CheckJobEventPolicyOptions = {
   key: string;
   file: string;
@@ -190,6 +220,15 @@ const checkJobEventPolicy = ({
   triggers,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
+  if (file === "codeql.yml" && eventPolicy !== "release-pr") {
+    return [`${key}: CodeQL jobs must declare nightly/manual/release policy`];
+  }
+  if (eventPolicy === "release-pr") {
+    if (file !== "codeql.yml") {
+      return [`${key}: nightly/manual/release policy belongs to CodeQL`];
+    }
+    return [];
+  }
   if (eventPolicy === "pending") {
     if (
       key !== "ci.yml/ci-tests" ||
@@ -242,6 +281,43 @@ const checkJobEventPolicy = ({
   return problems;
 };
 
+const checkCodeqlWorkflow = (
+  workflow: v.InferOutput<typeof workflowSchema>,
+) => {
+  const problems: string[] = [];
+  const triggers = Object.keys(workflow.on);
+  if (
+    triggers.length !== 3 ||
+    !triggers.includes("schedule") ||
+    !triggers.includes("pull_request") ||
+    !triggers.includes("workflow_dispatch")
+  ) {
+    problems.push(
+      "codeql.yml: triggers must be nightly, manual and pull_request only",
+    );
+  }
+  const scope = workflow.jobs.scope;
+  const analyze = workflow.jobs.analyze;
+  problems.push(
+    ...checkCodeqlEventPolicy(
+      typeof scope?.if === "string" ? scope.if : "true",
+    ),
+  );
+  if (
+    analyze?.needs !== "scope" ||
+    typeof analyze.if !== "string" ||
+    !definitelyFalse(analyze.if, {
+      values: { "needs.scope.result": "skipped" },
+    })
+  ) {
+    problems.push("codeql.yml: analysis must depend on eligible scope");
+  }
+  if (workflow.concurrency === undefined) {
+    problems.push("codeql.yml: scans need a concurrency group");
+  }
+  return problems;
+};
+
 type CheckCiEventPoliciesOptions = {
   workflows: Record<string, unknown>;
   policy: unknown;
@@ -257,6 +333,9 @@ export const checkCiEventPolicies = ({
   const problems: string[] = [];
   for (const [file, raw] of Object.entries(workflows)) {
     const workflow = v.parse(workflowSchema, raw);
+    if (file === "codeql.yml") {
+      problems.push(...checkCodeqlWorkflow(workflow));
+    }
     if (
       pushesMain(workflow.on["push"]) ||
       (file === "ci.yml" && Object.hasOwn(workflow.on, "workflow_call"))
