@@ -841,6 +841,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "expandProvisions": "Développer les dispositions",
       "headMatter": "En-tête",
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
@@ -865,7 +866,9 @@
       },
       "deleteColumnConfirm": "La question et toutes ses réponses seront supprimées pour toute votre organisation, dans chaque recherche et pour chaque membre. Pour la retirer de cette recherche uniquement, choisissez « Retirer de cette recherche ».",
       "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
+      "newQuestionColumn": "Nouveau",
       "nothingToRun": "Chaque cellule a déjà une réponse",
+      "questionAdded": "« {question} » ajoutée au tableau",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",
       "removeFromSearch": "Retirer de cette recherche",
       "runAll": "Tout répondre",
@@ -944,7 +947,8 @@
       "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
-      "textUnavailable": "Aucun texte n'est disponible pour cette décision"
+      "textUnavailable": "Aucun texte n'est disponible pour cette décision",
+      "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)"
     }
   },
   "catalogue": {
@@ -1854,6 +1858,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
     "unverifiedCitationHint": "Cette citation n'a pas pu être associée au document source.",
@@ -1874,15 +1879,23 @@
     "zoomOut": "Zoom arrière"
   },
   "consent": {
+    "actingAs": "{clientName} agira en votre nom dans {organizationName}",
     "allow": "Autoriser",
-    "appIdentity": "Identité de l’application",
+    "canChange": "Peut modifier",
+    "canRead": "Peut lire",
     "completeSetup": "Terminer la configuration",
+    "connectTitle": "Connecter {clientName} à stella",
+    "connectedTitle": "Connecté à {clientName}",
+    "connectionDuration": "Reste connecté jusqu’à ce que vous le déconnectiez dans Paramètres › Connexions",
     "defaultClientName": "Une application",
-    "description": "{clientName} souhaite accéder à votre espace de travail stella",
+    "destinationDetails": "Détails de la redirection",
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
-    "permissions": "Cela autorisera l’application à :",
-    "redirectDestination": "Destination de redirection",
+    "otherPermissions": "Autorisations supplémentaires",
+    "publishedBy": "Publié par <host>{publisherHost}</host>",
+    "returnToAgent": "Retournez à votre agent pour continuer.",
+    "returnsLocally": "Vous retournerez à {clientName} sur cet ordinateur",
+    "returnsTo": "Vous retournerez à {clientName}",
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
@@ -1903,8 +1916,11 @@
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
+    "signedInAs": "Connecté en tant que <email>{accountEmail}</email>",
     "title": "Autoriser l’accès",
-    "unverifiedApp": "Application non vérifiée"
+    "unverifiedApp": "Application non vérifiée",
+    "unverifiedExplanation": "stella n’a pas vérifié qui publie cette application.",
+    "useAnotherAccount": "Utiliser un autre compte"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
@@ -4622,6 +4638,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "currentWording": "Rédaction actuelle",
     "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
@@ -4671,7 +4688,9 @@
       "unknown": "Statut incertain"
     },
     "title": "Législation",
-    "validity": "En vigueur du {from} au {to}"
+    "validity": "En vigueur du {from} au {to}",
+    "wordingValidFrom": "Rédaction en vigueur depuis le {date}",
+    "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
     "create": "Créer",
@@ -5408,6 +5427,7 @@
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Connectez stella desktop à votre compte",
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
@@ -5430,6 +5450,18 @@
         "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour se lancera automatiquement lorsque les modifications desktop actives seront terminées; réessayez après son redémarrage.",
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Déjà installé ? Le connecter",
+        "connect": "Connecter stella desktop",
+        "editNone": "Téléchargez stella desktop pour modifier ce fichier",
+        "editOutdated": "Mettez à jour stella desktop pour modifier",
+        "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
+        "signCurrent": "Signer avec stella desktop",
+        "signNone": "Téléchargez stella desktop pour signer ce PDF",
+        "signOutdated": "Mettez à jour stella desktop pour signer",
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
+        "signShort": "Signer"
+      },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
       "downloadExtractedText": "Texte extrait (.txt)",
@@ -5443,7 +5475,6 @@
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
       "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
-        "action": "Signer dans l’app de bureau",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
         "cancelledCertificateDescription": "Le certificat choisi ne peut pas servir à signer. Choisissez-en un qui autorise les signatures numériques.",
         "cancelledCertifiedDescription": "Ce PDF est certifié et sa certification n’autorise pas d’autres signatures.",

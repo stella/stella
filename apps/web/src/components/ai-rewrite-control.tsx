@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DialogFormState } from "@stll/ui/dialog";
 import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -71,6 +72,7 @@ export const AiRewriteControl = ({
       return;
     }
     setOpen(false);
+    setCustomInstruction("");
     onRewrite(instruction);
   };
 
@@ -79,6 +81,10 @@ export const AiRewriteControl = ({
       className={cn("inline-flex shrink-0 items-center", className)}
       data-slot="ai-rewrite-control"
     >
+      <DialogFormState
+        dirty={customInstruction !== ""}
+        onDiscard={() => setCustomInstruction("")}
+      />
       <Button
         aria-label={actionLabel}
         className="size-11 max-w-11 flex-none rounded-e-none"

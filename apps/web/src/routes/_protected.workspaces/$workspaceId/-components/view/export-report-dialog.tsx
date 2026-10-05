@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -385,6 +386,20 @@ const ExportReportDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-md">
+      <DialogFormState
+        dirty={
+          templateValue !== null ||
+          mode !== initialMode ||
+          format !== "docx" ||
+          !aiNarrative
+        }
+        onDiscard={() => {
+          setTemplateValue(null);
+          setMode(initialMode);
+          setFormat("docx");
+          setAiNarrative(true);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("workspaces.views.reportExport.title")}</DialogTitle>
         <DialogDescription>

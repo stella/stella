@@ -59,9 +59,9 @@ import {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
-  createSourceMetadataUrlSchemaResolver,
-  type SourceMetadataUrlSchemaResolver,
-} from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+  createSourceContractResolver,
+  type SourceContractResolver,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
@@ -1210,7 +1210,7 @@ type IngestItemOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   slice: string;
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
@@ -1234,7 +1234,7 @@ const ingestListedItem = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   slice,
   sourceId,
   summary,
@@ -1322,7 +1322,7 @@ const ingestListedItem = async ({
               observedAt: now,
               observationOrder,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           );
         };
         // The decision first, then what its page states beside it. A
@@ -1372,7 +1372,7 @@ const ingestListedItem = async ({
             reparseStoredRaw,
             readStoredRaw: readStoredRawFromS3,
           },
-          resolveMetadataUrlSchema,
+          resolveSourceContract,
         );
         if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${placed.reason}`);
@@ -1453,7 +1453,7 @@ type WalkSliceOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   slice: string;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
@@ -1477,7 +1477,7 @@ const walkSlice = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   slice,
   sleep,
   sourceId,
@@ -1575,7 +1575,7 @@ const walkSlice = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice,
       sourceId,
       summary,
@@ -1626,7 +1626,7 @@ type RecheckTextlessHeldOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -1640,7 +1640,7 @@ const recheckTextlessHeldRows = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   sleep,
   sourceId,
 }: RecheckTextlessHeldOptions): Promise<ReconciliationUnitSummary> => {
@@ -1753,7 +1753,7 @@ const recheckTextlessHeldRows = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice: item.slice,
       sourceId,
       summary,
@@ -1773,7 +1773,7 @@ type RetryParkedOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -1792,7 +1792,7 @@ const retryParkedItems = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   sleep,
   sourceId,
 }: RetryParkedOptions): Promise<ReconciliationUnitSummary> => {
@@ -1877,7 +1877,7 @@ const retryParkedItems = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice: item.slice,
       sourceId,
       summary,
@@ -1928,8 +1928,7 @@ const executeReconciliationUnit = async ({
     return { type: "leased" };
   }
 
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(scopedDb);
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
   try {
     switch (unit.type) {
       case "parked-retries":
@@ -1943,7 +1942,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             sleep,
             sourceId,
           }),
@@ -1960,7 +1959,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             sleep,
             sourceId,
           }),
@@ -1978,7 +1977,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             slice: unit.slice,
             sleep,
             sourceId,

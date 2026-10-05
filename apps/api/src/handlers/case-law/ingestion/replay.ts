@@ -38,9 +38,9 @@ import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipel
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
-  createSourceMetadataUrlSchemaResolver,
-  type SourceMetadataUrlSchemaResolver,
-} from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+  createSourceContractResolver,
+  type SourceContractResolver,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
@@ -727,7 +727,7 @@ const storedInputFor = (
 type ReplayRowOptions = {
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   metadataUrlSchema?: unknown;
   row: ReplayDecisionRow;
   /** The payload this replay read, as stored. */
@@ -1013,7 +1013,7 @@ const replayWouldChangeRow = async ({
  * did not: the payload the parser derives from it did.
  */
 const replayRow = async ({
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   metadataUrlSchema,
   row,
   raw,
@@ -1116,7 +1116,7 @@ const replayRow = async ({
     sourceLease,
     scopedDb,
     sourceId,
-    resolveMetadataUrlSchema,
+    resolveSourceContract,
   });
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return {
@@ -1142,7 +1142,7 @@ type WriteReplayCandidateOptions = {
   sourceLease: CaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
 };
 
 const writeReplayCandidate = async ({
@@ -1152,7 +1152,7 @@ const writeReplayCandidate = async ({
   sourceLease,
   scopedDb,
   sourceId,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
 }: WriteReplayCandidateOptions) => {
   // Ordered on the source's own counter, under its lease: the row guards
   // compare observation orders, so a replay numbering itself independently
@@ -1191,14 +1191,14 @@ const writeReplayCandidate = async ({
       observationOrder,
       refresh: DECISION_REFRESH.ALWAYS,
     },
-    resolveMetadataUrlSchema,
+    resolveSourceContract,
   );
 };
 
 type ReplayOneRowOptions = {
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   metadataUrlSchema?: unknown;
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
@@ -1220,7 +1220,7 @@ type ReplayOneRowOptions = {
  * as one.
  */
 const replayOneRow = async ({
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   metadataUrlSchema,
   capability,
   readStoredRaw,
@@ -1282,7 +1282,7 @@ const replayOneRow = async ({
         ...(s3Policy === undefined ? {} : { s3Policy }),
         row,
         raw,
-        resolveMetadataUrlSchema,
+        resolveSourceContract,
         metadataUrlSchema,
         reparsed: parsed.value,
         rejectionPolicy,
@@ -1525,8 +1525,7 @@ export const replayCaseLawSource = async ({
     return { type: "unknown-boundary", after };
   }
 
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(scopedDb);
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
   const outcomes = emptyOutcomeCounts();
   const rejections = emptyRejectionCounts();
   const problems: ReplayRowReport[] = [];
@@ -1566,7 +1565,7 @@ export const replayCaseLawSource = async ({
         await completeReplayRow({
           ...(signal === undefined ? {} : { signal }),
           ...(s3Policy === undefined ? {} : { s3Policy }),
-          resolveMetadataUrlSchema,
+          resolveSourceContract,
           metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,
           readStoredRaw,

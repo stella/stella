@@ -44,6 +44,7 @@ const provisionItem = (text: string) =>
     openEnded: false,
     anchor: text,
     versionValidFrom: text,
+    versionBasis: { type: "inferred", kind: "decision_date" },
     sentenceText: text,
     spanStart: 0,
     spanEnd: 10,
@@ -77,6 +78,7 @@ const citingItem = (text: string) =>
     country: text,
     language: text,
     decisionDate: text,
+    versionBasis: { type: "inferred", kind: "decision_date" },
     citationAuthority: 1,
     sentenceText: text,
     spanStart: 0,
@@ -180,4 +182,46 @@ test("public provision citation counts bound serialized Unicode anchors", () => 
     }),
     { numRuns: 12 },
   );
+});
+
+test("provision reads require an explicit version basis", () => {
+  const provision = { ...provisionItem("text"), previewKey: null };
+  const decisionPage = {
+    items: [provision],
+    limit: 1,
+    nextCursor: null,
+    status: { type: "legacy" },
+    generation: "0",
+    publishedProjectionDigest: null,
+    previews: [],
+  };
+  const citingPage = {
+    items: [citingItem("text")],
+    limit: 1,
+    nextCursor: null,
+  };
+  expect(
+    Value.Check(decisionProvisionsSuccessResponseSchema, decisionPage),
+  ).toBe(true);
+  expect(Value.Check(citingDecisionsSuccessResponseSchema, citingPage)).toBe(
+    true,
+  );
+  for (const versionBasis of [
+    undefined,
+    { type: "stated" },
+    { type: "inferred", kind: "unknown" },
+  ]) {
+    expect(
+      Value.Check(decisionProvisionsSuccessResponseSchema, {
+        ...decisionPage,
+        items: [{ ...provision, versionBasis }],
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(citingDecisionsSuccessResponseSchema, {
+        ...citingPage,
+        items: [{ ...citingItem("text"), versionBasis }],
+      }),
+    ).toBe(false);
+  }
 });

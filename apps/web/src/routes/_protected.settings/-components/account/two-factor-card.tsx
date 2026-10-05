@@ -14,6 +14,7 @@ import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -442,6 +443,7 @@ const EnableTwoFactorDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        <DialogFormState dirty={code !== "" || password !== ""} />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.setupTitle")}
@@ -729,6 +731,13 @@ const DisableTwoFactorDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.disableConfirmTitle")}
@@ -916,6 +925,13 @@ const RegenerateBackupCodesDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.regenerateConfirmTitle")}
