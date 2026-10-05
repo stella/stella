@@ -265,7 +265,9 @@ describe("ingestion paging disposition", () => {
               sourceSince = null;
             }
             const shouldCapture = !unavailable && noProgress >= 5 && !captured;
-            captured ||= shouldCapture;
+            if (shouldCapture) {
+              captured = true;
+            }
             const step = health.step(
               "source",
               turn.progress ? recovery : failure(turn.kind),

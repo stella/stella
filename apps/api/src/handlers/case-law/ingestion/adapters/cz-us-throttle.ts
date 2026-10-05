@@ -45,6 +45,7 @@ const NALUS_PATH_PREFIXES = [NALUS_SEARCH_PATH] as const;
  * the limit; the redirect to it is what the crawl sees first.
  */
 const LIMIT_EXCEEDED_PAGE = "limit-exceeded.html";
+const PUBLISHER_AUTH_REFUSAL_STATUSES = [401, 403] as const;
 
 /**
  * NALUS refused the request because the publisher's own rate limit is spent.
@@ -90,7 +91,7 @@ export type NalusRequestInit = {
 type NalusFetch = (
   url: string,
   init: NalusRequestInit,
-) => Promise<Result<Response, NalusRateLimitedError>>;
+) => Promise<Result<Response, NalusRateLimitedError | AdapterFetchError>>;
 
 /**
  * Every NALUS request the adapter makes, behind one publisher gate.
@@ -151,13 +152,19 @@ export const createNalusFetch = (
                   }
                 : documentFetchResponseOutcome(ADAPTER_KEYS.CZ_US, candidate),
           });
-    if ([401, 403].includes(response.status)) {
-      throw new AdapterFetchError({
-        message: "Publisher request refused",
-        adapterKey: ADAPTER_KEYS.CZ_US,
-        cursor: null,
-        httpStatus: response.status,
-      });
+    if (
+      PUBLISHER_AUTH_REFUSAL_STATUSES.some(
+        (status) => status === response.status,
+      )
+    ) {
+      return Result.err(
+        new AdapterFetchError({
+          message: "Publisher request refused",
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          cursor: null,
+          httpStatus: response.status,
+        }),
+      );
     }
     if (isRateLimitRefusal(response)) {
       return Result.err(
