@@ -1628,7 +1628,16 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
-const resolveDepth = (eventName: string, dispatchDepth: string) => {
+type ResolveDepthOptions = {
+  ref?: string;
+  allowFull?: string;
+  heavyOnly?: string;
+};
+const resolveDepth = (
+  eventName: string,
+  dispatchDepth: string,
+  options: ResolveDepthOptions = {},
+) => {
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Resolve suite depth",
   );
@@ -1640,6 +1649,9 @@ const resolveDepth = (eventName: string, dispatchDepth: string) => {
       cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
       env: {
         DISPATCH_DEPTH: dispatchDepth,
+        DISPATCH_REF: options.ref ?? "refs/heads/main",
+        ALLOW_FULL: options.allowFull ?? "false",
+        HEAVY_ONLY: options.heavyOnly ?? "false",
         EVENT_NAME: eventName,
         GITHUB_OUTPUT: output,
         PATH: process.env["PATH"] ?? "",
@@ -1673,6 +1685,33 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     "format('pr-{0}', github.event.pull_request.number || github.ref)",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
+});
+
+test("full feature-branch dispatch requires an explicit opt-in at planning time", () => {
+  for (const heavyOnly of ["false", "true"]) {
+    expect(
+      resolveDepth(EVENT.workflowDispatch, "full", {
+        ref: "refs/heads/feature",
+        heavyOnly,
+      }),
+    ).toBe("error");
+    expect(
+      resolveDepth(EVENT.workflowDispatch, "full", {
+        ref: "refs/heads/feature",
+        allowFull: "true",
+        heavyOnly,
+      }),
+    ).toBe("suite_depth=full");
+    expect(resolveDepth(EVENT.workflowDispatch, "full", { heavyOnly })).toBe(
+      "suite_depth=full",
+    );
+  }
+  expect(
+    resolveDepth(EVENT.workflowDispatch, "fast", { ref: "refs/heads/feature" }),
+  ).toBe("suite_depth=fast");
+  expect(
+    resolveDepth(EVENT.mergeGroup, "full", { ref: "refs/heads/queue" }),
+  ).toBe("suite_depth=full");
 });
 
 test("a manual run plans the depth it was dispatched with, the merge queue always full, a pull request always fast", () => {
