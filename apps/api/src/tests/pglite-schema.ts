@@ -8,6 +8,8 @@ import nodePath from "node:path";
 import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
 
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
+import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -111,6 +113,18 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
+};
+
+export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
+  for (const spec of FLOW_TRANSITION_SPECS_V1) {
+    for (const statement of transitionTriggerSql(spec).split(
+      "--> statement-breakpoint",
+    )) {
+      if (statement.trim()) {
+        await db.execute(sql.raw(statement));
+      }
+    }
+  }
 };
 
 export const createSchemaPglite = async () =>
@@ -297,6 +311,22 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   await installPgliteMigration({
     db,
     migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
+  });
+};
+
+const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261004003000_tree_parent_cycle_guard",
+  "migration.sql",
+);
+
+/** Install the self-referencing tree triggers omitted by declarative schema push. */
+export const installPgliteTreeParentGuards = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH,
   });
 };
 
@@ -593,7 +623,10 @@ const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE TRIGGER",
 ] as const;
 
-/** Install membership capacity and ownership guards omitted by schema push. */
+/**
+ * Install membership capacity, ownership and matter-membership reference
+ * guards omitted by schema push.
+ */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -603,6 +636,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261004001000_matter_membership_organization_membership",
         "migration.sql",
       ),
     ),
@@ -693,6 +733,18 @@ export const installPgliteMigration = async ({
     }
     await db.execute(sql.raw(statement));
   }
+};
+
+/** Derive public sanctions column grants from the migration rather than mirror them. */
+export const readPglitePublicSanctionsGrants = (): string[] => {
+  const migration = nodePath.join(
+    DRIZZLE_DIR,
+    "20261003122400_public_sanctions_reader",
+    "migration.sql",
+  );
+  return readMigrationStatements(migration)
+    .map(executableSql)
+    .filter((statement) => statement.startsWith("GRANT "));
 };
 
 /** Install alias graph invariants which declarative schema push cannot express. */

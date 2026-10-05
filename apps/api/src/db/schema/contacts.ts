@@ -2,6 +2,7 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
+import { workspaceInsertCheck } from "@/api/db/rls";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -359,7 +360,7 @@ export const workspaces = p.pgTable(
     p.pgPolicy("workspace_insert", {
       for: "insert",
       to: stella,
-      withCheck: organizationCheck,
+      withCheck: workspaceInsertCheck,
     }),
     p.pgPolicy("workspace_update", {
       for: "update",

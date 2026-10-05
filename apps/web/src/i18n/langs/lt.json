@@ -1495,6 +1495,7 @@
     "noResults": "Sąlygų dar nėra",
     "noVariants": "Nėra variantų",
     "outdatedVersion": "Galimas atnaujinimas",
+    "overrideNotRenderedWarning": "Sąlygos {clauseName} pakeitimas nepanaudotas: jos vieta šiame dokumente nerodoma.",
     "renameSlot": "Pervadinti nišą",
     "renameSlotInvalid": "Nišų pavadinimai turi būti unikalūs ir negali turėti tarpų, dvitaškių ar riestinių skliaustų.",
     "restoreVersion": "Atkurti šią versiją",
@@ -2157,6 +2158,7 @@
     "markHandled": "Pažymėti kaip sutvarkytą",
     "markNew": "Pažymėti kaip naują",
     "noAddress": "Aktyvaus el. pašto adreso nėra.",
+    "openSourceFile": "Atidaryti el. laiško failą",
     "originalSender": "Pradinis siuntėjas",
     "originalSenderUnverified": "Pradinis siuntėjas (nurodytas, nepatvirtintas)",
     "originalSignatureVerified": "Pradinis parašas patvirtintas (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Pakeisti adresą",
     "sentAt": "Išsiųsta",
     "sharedMailboxFiler": "Bendra pašto dėžutė {address}, patvirtino {approver}",
+    "statedInFile": "Antraštės (pagal failą)",
     "states": {
       "handled": "Sutvarkyta"
     },
     "title": "Korespondencija",
-    "unknownApprover": "Nežinomas tvirtintojas"
+    "unknownApprover": "Nežinomas tvirtintojas",
+    "uploadedBy": "Įkėlė {name}",
+    "uploadedFile": "Įkeltas el. laiško failas"
   },
   "docxReview": {
     "acceptAll": "Priimti visus",
@@ -3477,6 +3482,7 @@
         "approvedOn": "Patvirtinta {date}",
         "approvedToast": "Peržiūros vadovas patvirtintas",
         "saveBeforeApprove": "Prieš patvirtindami šį peržiūros vadovą, išsaugokite pakeitimus.",
+        "sourcesNotice": "Prieš patvirtindami patikrinkite, ar jokioje pozicijoje neįvardytas dokumentas, byla ar priešinga šalis: šį peržiūros vadovą gali skaityti visa organizacija.",
         "statusApproved": "Patvirtinta",
         "statusDraft": "Juodraštis"
       },
@@ -3575,6 +3581,7 @@
       "referenceStandard": "Iš referencijos",
       "removeCheck": "Pašalinti patikrą",
       "removeIdeal": "Pašalinti idealią formuluotę",
+      "removeSource": "Pašalinti šaltinį {documentName}",
       "reorderPosition": "Pertvarkyti poziciją",
       "review": {
         "changePlaybook": "Pasirinkti kitą peržiūros vadovą",
@@ -3606,6 +3613,10 @@
         "blocker": "Blokuojanti"
       },
       "severityLabel": "Svarba",
+      "staleCopy": {
+        "loaded": "Įkelta naujesnė šio peržiūros vadovo versija. Prieš redaguodami įkelkite iš naujo.",
+        "unavailable": "Nepavyko įkelti naujausios šio peržiūros vadovo versijos. Tai paskutinė įkelta kopija; ji gali būti pasenusi."
+      },
       "starters": {
         "addedToast": "Peržiūros vadovas pridėtas",
         "browseButton": "Naršyti parengtus peržiūros vadovus",
@@ -4306,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
       "deleteAccountTasksDescription": "Jums priskirtos aktyvios užduotys. Perleiskite jas kitiems darbo srities nariams, kad darbas tęstųsi.",
       "deleteAccountTasksTitle": "Perleisti aktyvias užduotis",
+      "deleteAccountTasksUnassignedNotice": "Užduotys be pasirinkto nario liks darbo srityje be atsakingo asmens.",
       "deleteAccountWarning": "Ištrynimas yra negrįžtamas. Prisijungimo duomenys ir privatūs paskyros duomenys bus pašalinti.",
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Užbaigta darbo sričių istorija liks priskirta jūsų ištrintai paskyrai.",
       "desktop": "Darbalaukis",

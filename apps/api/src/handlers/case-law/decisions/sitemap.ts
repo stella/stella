@@ -7,7 +7,6 @@ import {
   publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import {
   caseLawDecisions,
@@ -29,6 +28,7 @@ import {
   SITEMAP_UNDATED_YEAR,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { chunked } from "@/api/lib/chunked";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -245,9 +245,9 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const unavailable = publicCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country);
   if (unavailable !== null) {
-    return status(503, unavailable);
+    return unavailable;
   }
   const country = publicCaseLawCountry(query.country);
   if (country === null) {

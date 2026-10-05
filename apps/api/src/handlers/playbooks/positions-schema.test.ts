@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   playbookPositionsSchema,
+  POSITION_LIMITS,
   POSITION_PURPOSE_MAX_LENGTH,
   positionSchema,
 } from "@/api/lib/workflow/playbook-positions";
@@ -200,6 +201,66 @@ describe("askConfigSchema — auto vs manual", () => {
             rulesHash: "abc123",
           },
         },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("positionSchema — sources", () => {
+  const source = (entityId: string) => ({
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    entityId,
+  });
+  const SOURCE = source("44444444-4444-4444-8444-444444444444");
+
+  test("accepts sources on both position modes", () => {
+    for (const position of [extractPosition, gradedPosition]) {
+      expect(
+        Value.Check(positionSchema, { ...position, sources: [SOURCE] }),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects an empty list: absent is the one way to store none", () => {
+    expect(
+      Value.Check(positionSchema, { ...gradedPosition, sources: [] }),
+    ).toBe(false);
+  });
+
+  test("rejects a source that carries anything but the two ids", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        sources: [{ ...SOURCE, name: "Supply agreement.docx" }],
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        sources: [{ entityId: SOURCE.entityId }],
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        sources: [{ ...SOURCE, entityId: "ent_1" }],
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects more sources than the limit", () => {
+    const sources = Array.from(
+      { length: POSITION_LIMITS.sourcesMaxItems + 1 },
+      (_, index) =>
+        source(`44444444-4444-4444-8444-${String(index).padStart(12, "0")}`),
+    );
+    expect(Value.Check(positionSchema, { ...gradedPosition, sources })).toBe(
+      false,
+    );
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        sources: sources.slice(1),
       }),
     ).toBe(true);
   });

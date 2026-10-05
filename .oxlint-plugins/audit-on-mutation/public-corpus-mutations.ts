@@ -136,63 +136,6 @@ const staticSql = ({
     : null;
 };
 
-const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
-  let current = unwrapExpression(node);
-  while (current !== null) {
-    const parent = isAstNode(current.parent) ? current.parent : null;
-    if (parent?.type !== "MemberExpression" || parent.object !== current) {
-      break;
-    }
-    const method = memberPropertyName(parent);
-    const invocation = isAstNode(parent.parent) ? parent.parent : null;
-    if (
-      invocation?.type !== "CallExpression" ||
-      !Array.isArray(invocation.arguments)
-    ) {
-      return true;
-    }
-    if (
-      method === "select" ||
-      method === "with" ||
-      method === "innerJoin" ||
-      method === "leftJoin" ||
-      method === "rightJoin" ||
-      method === "fullJoin"
-    ) {
-      return true;
-    }
-    if (
-      method === "from" &&
-      tableFor({ context, node: invocation.arguments.at(0), tables }) ===
-        undefined
-    ) {
-      return true;
-    }
-    // Expressions supplied to a builder may contain a subquery or opaque SQL.
-    const argumentsToCheck =
-      method === "from" ? invocation.arguments.slice(1) : invocation.arguments;
-    if (
-      argumentsToCheck.some((argument) =>
-        containsRead({ context, node: argument, tables }),
-      )
-    ) {
-      return true;
-    }
-    current = invocation;
-  }
-  const parent =
-    current !== null && isAstNode(current.parent) ? current.parent : null;
-  return (
-    parent !== null &&
-    [
-      "VariableDeclarator",
-      "AssignmentExpression",
-      "ReturnStatement",
-      "CallExpression",
-    ].includes(parent.type)
-  );
-};
-
 type ReadArgs = MutationArgs & { seen?: Set<unknown> };
 const containsRead = ({
   context,
@@ -248,6 +191,63 @@ const containsRead = ({
   // Opaque calls, SQL templates, spreads and other expressions cannot prove
   // that their input contains only public corpus values.
   return true;
+};
+
+const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
+  let current = unwrapExpression(node);
+  while (current !== null) {
+    const parent = isAstNode(current.parent) ? current.parent : null;
+    if (parent?.type !== "MemberExpression" || parent.object !== current) {
+      break;
+    }
+    const method = memberPropertyName(parent);
+    const invocation = isAstNode(parent.parent) ? parent.parent : null;
+    if (
+      invocation?.type !== "CallExpression" ||
+      !Array.isArray(invocation.arguments)
+    ) {
+      return true;
+    }
+    if (
+      method === "select" ||
+      method === "with" ||
+      method === "innerJoin" ||
+      method === "leftJoin" ||
+      method === "rightJoin" ||
+      method === "fullJoin"
+    ) {
+      return true;
+    }
+    if (
+      method === "from" &&
+      tableFor({ context, node: invocation.arguments.at(0), tables }) ===
+        undefined
+    ) {
+      return true;
+    }
+    // Expressions supplied to a builder may contain a subquery or opaque SQL.
+    const argumentsToCheck =
+      method === "from" ? invocation.arguments.slice(1) : invocation.arguments;
+    if (
+      argumentsToCheck.some((argument) =>
+        containsRead({ context, node: argument, tables }),
+      )
+    ) {
+      return true;
+    }
+    current = invocation;
+  }
+  const parent =
+    current !== null && isAstNode(current.parent) ? current.parent : null;
+  return (
+    parent !== null &&
+    [
+      "VariableDeclarator",
+      "AssignmentExpression",
+      "ReturnStatement",
+      "CallExpression",
+    ].includes(parent.type)
+  );
 };
 
 export const isPublicCorpusMutation = ({

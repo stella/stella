@@ -229,7 +229,7 @@ const directToolMessage = (
 };
 
 /** The line a run adds to its logs when it ran a read in place of `name`. */
-export const autofixNote = (name: string, target: string): string =>
+const autofixNote = (name: string, target: string): string =>
   `Ran ${quoteToolName(target)} for ${quoteToolName(name)}; use the external_ name in scripts.`;
 
 /**

@@ -1495,6 +1495,7 @@
     "noResults": "Zatiaľ žiadne ustanovenia",
     "noVariants": "Žiadne varianty",
     "outdatedVersion": "K dispozícii je aktualizácia",
+    "overrideNotRenderedWarning": "Náhrada ustanovenia {clauseName} nebola použitá: jeho miesto sa v tomto dokumente nezobrazuje.",
     "renameSlot": "Premenovať slot",
     "renameSlotInvalid": "Názvy slotov musia byť jedinečné a nesmú obsahovať medzery, dvojbodky ani zložené zátvorky.",
     "restoreVersion": "Obnoviť túto verziu",
@@ -2157,6 +2158,7 @@
     "markHandled": "Označiť ako vybavené",
     "markNew": "Označiť ako nové",
     "noAddress": "Nie je aktívna žiadna e-mailová adresa.",
+    "openSourceFile": "Otvoriť súbor e-mailu",
     "originalSender": "Pôvodný odosielateľ",
     "originalSenderUnverified": "Pôvodný odosielateľ (uvedený, neoverený)",
     "originalSignatureVerified": "Pôvodný podpis overený (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Zmeniť adresu",
     "sentAt": "Odoslané dňa",
     "sharedMailboxFiler": "Zdieľaná schránka {address}, schválil(a) {approver}",
+    "statedInFile": "Hlavičky (ako sú uvedené v súbore)",
     "states": {
       "handled": "Vybavené"
     },
     "title": "Korešpondencia",
-    "unknownApprover": "Neznámy schvaľovateľ"
+    "unknownApprover": "Neznámy schvaľovateľ",
+    "uploadedBy": "Nahral(a) {name}",
+    "uploadedFile": "Nahraný súbor e-mailu"
   },
   "docxReview": {
     "acceptAll": "Prijať všetky",
@@ -3477,6 +3482,7 @@
         "approvedOn": "Schválené {date}",
         "approvedToast": "Playbook schválený",
         "saveBeforeApprove": "Pred schválením playbooku uložte zmeny.",
+        "sourcesNotice": "Pred schválením skontrolujte, že žiadna pozícia nemenuje dokument, spis ani protistranu: tento playbook môže čítať celá organizácia.",
         "statusApproved": "Schválené",
         "statusDraft": "Koncept"
       },
@@ -3575,6 +3581,7 @@
       "referenceStandard": "Z referencie",
       "removeCheck": "Odstrániť kontrolu",
       "removeIdeal": "Odstrániť ideálne znenie",
+      "removeSource": "Odstrániť zdroj {documentName}",
       "reorderPosition": "Zmeniť poradie pozície",
       "review": {
         "changePlaybook": "Vybrať iný playbook",
@@ -3606,6 +3613,10 @@
         "blocker": "Blokujúca"
       },
       "severityLabel": "Závažnosť",
+      "staleCopy": {
+        "loaded": "Bola načítaná novšia verzia tohto playbooku. Pred úpravami ju načítajte znova.",
+        "unavailable": "Najnovšiu verziu tohto playbooku sa nepodarilo načítať. Zobrazuje sa posledná načítaná kópia, ktorá môže byť zastaraná."
+      },
       "starters": {
         "addedToast": "Playbook pridaný",
         "browseButton": "Prehľadávať úvodné playbooky",
@@ -4306,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vybrať člena...",
       "deleteAccountTasksDescription": "Máte priradené aktívne úlohy. Preveďte ich na iných členov pracovného priestoru, aby práca pokračovala.",
       "deleteAccountTasksTitle": "Previesť aktívne úlohy",
+      "deleteAccountTasksUnassignedNotice": "Úlohy bez vybraného člena zostanú v pracovnom priestore bez riešiteľa.",
       "deleteAccountWarning": "Vymazanie je nezvratný krok. Prihlasovacie údaje a súkromné údaje účtu budú odstránené.",
       "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Dokončená história pracovných priestorov zostane priradená k vymazanému účtu.",
       "desktop": "Aplikácia pre počítač",

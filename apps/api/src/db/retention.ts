@@ -3,6 +3,18 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  task_assignees: {
+    boundedBy:
+      "Unique task and user assignments, cascade-deleted with either parent.",
+  },
+  work_obligation_events: {
+    boundedBy:
+      "Obligation lifecycle history, cascade-deleted with its matter or obligation.",
+  },
+  search_projection_repair_queue: {
+    boundedBy:
+      "One pending repair per projection target, removed by the repair drain after projection success or source deletion.",
+  },
   feedback_reports: {
     boundedBy:
       "Rate-limited public intake with fingerprint deduplication and receipt lifecycle.",

@@ -1495,6 +1495,7 @@
     "noResults": "Aucune clause",
     "noVariants": "Aucune variante",
     "outdatedVersion": "Mise à jour disponible",
+    "overrideNotRenderedWarning": "Le remplacement de la clause {clauseName} n’a pas été utilisé : son emplacement n’apparaît pas dans ce document.",
     "renameSlot": "Renommer l'emplacement",
     "renameSlotInvalid": "Les noms d'emplacement doivent être uniques et ne peuvent pas contenir d'espaces, de deux-points ni d'accolades.",
     "restoreVersion": "Restaurer cette version",
@@ -2157,6 +2158,7 @@
     "markHandled": "Marquer comme traité",
     "markNew": "Marquer comme nouveau",
     "noAddress": "Aucune adresse e-mail active.",
+    "openSourceFile": "Ouvrir le fichier e-mail",
     "originalSender": "Expéditeur d’origine",
     "originalSenderUnverified": "Expéditeur d’origine (déclaré, non vérifié)",
     "originalSignatureVerified": "Signature d’origine vérifiée (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Renouveler l’adresse",
     "sentAt": "Envoyé le",
     "sharedMailboxFiler": "Boîte partagée {address}, approuvée par {approver}",
+    "statedInFile": "En-têtes (selon le fichier)",
     "states": {
       "handled": "Traité"
     },
     "title": "Correspondance",
-    "unknownApprover": "Approbateur inconnu"
+    "unknownApprover": "Approbateur inconnu",
+    "uploadedBy": "Importé par {name}",
+    "uploadedFile": "Fichier e-mail importé"
   },
   "docxReview": {
     "acceptAll": "Tout accepter",
@@ -3477,6 +3482,7 @@
         "approvedOn": "Approuvé le {date}",
         "approvedToast": "Playbook approuvé",
         "saveBeforeApprove": "Enregistrez les modifications avant d’approuver ce playbook.",
+        "sourcesNotice": "Avant d’approuver, vérifiez qu’aucun critère ne nomme un document, un dossier ou une contrepartie : toute l’organisation peut lire ce playbook.",
         "statusApproved": "Approuvé",
         "statusDraft": "Brouillon"
       },
@@ -3575,6 +3581,7 @@
       "referenceStandard": "De la référence",
       "removeCheck": "Supprimer la vérification",
       "removeIdeal": "Supprimer la formulation idéale",
+      "removeSource": "Retirer la source {documentName}",
       "reorderPosition": "Réorganiser le critère",
       "review": {
         "changePlaybook": "Choisir un autre playbook",
@@ -3606,6 +3613,10 @@
         "blocker": "Bloquant"
       },
       "severityLabel": "Gravité",
+      "staleCopy": {
+        "loaded": "Une version plus récente de ce playbook a été chargée. Rechargez avant de le modifier.",
+        "unavailable": "La dernière version de ce playbook n’a pas pu être chargée. Il s’agit de la dernière copie chargée ; elle n’est peut-être plus à jour."
+      },
       "starters": {
         "addedToast": "Playbook ajouté",
         "browseButton": "Parcourir les playbooks de démarrage",
@@ -4306,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Sélectionner un membre...",
       "deleteAccountTasksDescription": "Des tâches actives vous sont attribuées. Transférez-les à d'autres membres de l'espace de travail pour que le travail continue.",
       "deleteAccountTasksTitle": "Transférer les tâches actives",
+      "deleteAccountTasksUnassignedNotice": "Les tâches sans membre sélectionné resteront dans leur espace de travail sans personne assignée.",
       "deleteAccountWarning": "La suppression est irréversible. Vos identifiants de connexion et données privées du compte seront supprimés.",
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",

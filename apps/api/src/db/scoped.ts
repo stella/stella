@@ -109,7 +109,7 @@ type ScopedDbArgs =
   | [
       workspaceScope: CurrentMembershipScope,
       organizationId: SafeId<"organization">,
-      userId: SafeId<"user">,
+      userId: SafeId<"user"> | null,
     ];
 
 const runScopedTransaction = async <

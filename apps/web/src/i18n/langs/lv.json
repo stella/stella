@@ -1495,6 +1495,7 @@
     "noResults": "Klauzulu vēl nav",
     "noVariants": "Nav variantu",
     "outdatedVersion": "Pieejams atjauninājums",
+    "overrideNotRenderedWarning": "Klauzulas {clauseName} aizstājums netika izmantots: tās vieta šajā dokumentā neparādās.",
     "renameSlot": "Pārdēvēt slotu",
     "renameSlotInvalid": "Slotu nosaukumiem jābūt unikāliem, un tie nedrīkst saturēt atstarpes, kolus vai figūriekavas.",
     "restoreVersion": "Atjaunot šo versiju",
@@ -2157,6 +2158,7 @@
     "markHandled": "Atzīmēt kā izskatītu",
     "markNew": "Atzīmēt kā jaunu",
     "noAddress": "Nav aktīvas e-pasta adreses.",
+    "openSourceFile": "Atvērt e-pasta failu",
     "originalSender": "Sākotnējais sūtītājs",
     "originalSenderUnverified": "Sākotnējais sūtītājs (norādīts, nav pārbaudīts)",
     "originalSignatureVerified": "Sākotnējais paraksts pārbaudīts (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "Mainīt adresi",
     "sentAt": "Nosūtīts",
     "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "statedInFile": "Galvenes (pēc faila norādītā)",
     "states": {
       "handled": "Izskatīts"
     },
     "title": "Sarakste",
-    "unknownApprover": "Nezināms apstiprinātājs"
+    "unknownApprover": "Nezināms apstiprinātājs",
+    "uploadedBy": "Augšupielādēja {name}",
+    "uploadedFile": "Augšupielādēts e-pasta fails"
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
@@ -3477,6 +3482,7 @@
         "approvedOn": "Apstiprināts {date}",
         "approvedToast": "Pārbaudes ceļvedis apstiprināts",
         "saveBeforeApprove": "Pirms šī pārbaudes ceļveža apstiprināšanas saglabājiet izmaiņas.",
+        "sourcesNotice": "Pirms apstiprināšanas pārbaudiet, vai nevienā pozīcijā nav nosaukts dokuments, lieta vai pretpuse: šo pārbaudes ceļvedi var lasīt visa organizācija.",
         "statusApproved": "Apstiprināts",
         "statusDraft": "Melnraksts"
       },
@@ -3575,6 +3581,7 @@
       "referenceStandard": "No atsauces",
       "removeCheck": "Noņemt pārbaudi",
       "removeIdeal": "Noņemt ideālo formulējumu",
+      "removeSource": "Noņemt avotu {documentName}",
       "reorderPosition": "Pārkārtot pozīciju",
       "review": {
         "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
@@ -3606,6 +3613,10 @@
         "blocker": "Bloķējoša"
       },
       "severityLabel": "Nopietnība",
+      "staleCopy": {
+        "loaded": "Ir ielādēta jaunāka šī pārbaudes ceļveža versija. Pirms rediģēšanas pārlādējiet.",
+        "unavailable": "Neizdevās ielādēt šī pārbaudes ceļveža jaunāko versiju. Šī ir pēdējā ielādētā kopija, un tā var būt novecojusi."
+      },
       "starters": {
         "addedToast": "Pārbaudes ceļvedis pievienots",
         "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",
@@ -4306,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
       "deleteAccountTasksDescription": "Jums ir piešķirti aktīvi uzdevumi. Nododiet tos citiem darba vietas dalībniekiem, lai darbs turpinātos.",
       "deleteAccountTasksTitle": "Nodot aktīvos uzdevumus",
+      "deleteAccountTasksUnassignedNotice": "Uzdevumi bez izvēlēta dalībnieka paliks darba vietā bez atbildīgās personas.",
       "deleteAccountWarning": "Dzēšana ir neatgriezeniska. Pieteikšanās dati un privātie konta dati tiks noņemti.",
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",

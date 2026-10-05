@@ -3,6 +3,8 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
+import { childExitStatus } from "./child-exit-status";
+
 const tsc = path.join(
   import.meta.dir,
   "../../../node_modules/@typescript/native/bin/tsc",
@@ -46,5 +48,5 @@ if (import.meta.main) {
     console.error(result.error);
   }
 
-  process.exit(result.status ?? 1);
+  process.exit(childExitStatus(result));
 }

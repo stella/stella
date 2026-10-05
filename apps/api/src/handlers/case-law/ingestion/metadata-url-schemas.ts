@@ -13,12 +13,12 @@ import {
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
-export const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
+const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
   documentSupplements: { items: { sourceUrl: "url" } },
 } as const;
 
 /** Pure companion imports avoid the eager adapter registry and its source clients. */
-const METADATA_URL_SCHEMAS = {
+export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: undefined,
   [ADAPTER_KEYS.CZ_NS]: undefined,
   [ADAPTER_KEYS.CZ_NSS]: undefined,

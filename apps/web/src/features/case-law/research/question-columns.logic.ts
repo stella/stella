@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   answerNeedsRun,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
@@ -11,6 +13,7 @@ import type {
 import type { PermissionInput } from "@stll/permissions";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import type { QueryView } from "@/lib/query-view.logic";
 import type {
   JustificationContent,
   WorkspaceFieldContent,
@@ -422,6 +425,7 @@ export type AvailableQuestionColumns = {
    * columns and their answers, and is simply offered nothing to change.
    */
   grants: QuestionColumnGrants;
+  readNotice?: QuestionReadNotice;
   /**
    * What a newly written question's suggested wording is grounded in. It lives
    * on the available surface because the composer that uses it is drawn from
@@ -462,6 +466,8 @@ type GatedQuestionColumns = {
  */
 export type QuestionColumnSurface =
   | { type: "hidden" }
+  | { type: "pending" }
+  | ({ type: "error" } & QuestionReadNotice)
   | AvailableQuestionColumns
   | GatedQuestionColumns;
 
@@ -482,4 +488,69 @@ export const questionColumnSurface = ({
   return activeOrganizationId === null
     ? { type: "gated", suggestion: available.suggestion }
     : { type: "available", ...available };
+};
+
+// Reads are kept together because a run estimate spends both the columns and
+// their answers. A cached refetch failure keeps the table but suspends runs.
+type QuestionReadNotice = {
+  error: unknown;
+  retry: () => Promise<unknown>;
+};
+
+type QuestionReads =
+  | { type: "pending" }
+  | ({ type: "error" } & QuestionReadNotice)
+  | {
+      type: "ready";
+      columns: readonly QuestionColumn[];
+      answers: readonly QuestionAnswer[];
+      answersStatus: "pending" | "ready";
+      notice?: QuestionReadNotice;
+    };
+
+type QuestionReadsOptions = {
+  columns: QueryView<readonly QuestionColumn[], unknown>;
+  answers: QueryView<readonly QuestionAnswer[], unknown> | null;
+};
+
+export const questionReads = ({
+  columns,
+  answers,
+}: QuestionReadsOptions): QuestionReads => {
+  for (const view of [columns, answers]) {
+    if (view === null) {
+      continue;
+    }
+    switch (view.type) {
+      case "error":
+        return { type: "error", error: view.error, retry: view.retry };
+      case "pending":
+      case "empty":
+      case "items":
+        break;
+      default:
+        view satisfies never;
+        return panic("Unhandled question read state");
+    }
+  }
+  if (columns.type === "pending") {
+    return { type: "pending" };
+  }
+  const failedRefetch = [columns, answers].find(
+    (view) => view?.type === "items" && view.refetchError !== undefined,
+  );
+  return {
+    type: "ready",
+    columns: columns.type === "items" ? columns.items : NO_QUESTION_COLUMNS,
+    answers: answers?.type === "items" ? answers.items : NO_QUESTION_ANSWERS,
+    answersStatus: answers?.type === "pending" ? "pending" : "ready",
+    ...(failedRefetch?.type === "items"
+      ? {
+          notice: {
+            error: failedRefetch.refetchError,
+            retry: failedRefetch.retry,
+          },
+        }
+      : {}),
+  };
 };

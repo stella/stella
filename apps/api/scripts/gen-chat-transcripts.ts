@@ -15,6 +15,8 @@
 
 import path from "node:path";
 
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
@@ -27,7 +29,8 @@ for (const recorder of Object.values(RECORDED_CONVERSATION_SUITES)) {
     stderr: "inherit",
     stdout: "inherit",
   });
-  const exitCode = await child.exited;
+  await child.exited;
+  const exitCode = childExitStatus(child);
   if (exitCode !== 0) {
     process.exit(exitCode);
   }

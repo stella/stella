@@ -31,6 +31,8 @@ import {
   formatQueuePlacementFailure,
   isReleasePullRequest,
   latestEjection,
+  MERGE_BAR_REPOSITORIES,
+  type MergeBarRepository,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
@@ -49,6 +51,15 @@ import {
   type RunJob,
 } from "./merge-bar";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+
+// The CLI runs below spawn the real script offline against a fake gh, as a
+// local test run; its source freshness check is covered in
+// merge-bar-freshness.test.ts.
+const CLI_TEST_ENV = {
+  NODE_ENV: "test",
+  STELLA_LOCAL_DEV: "1",
+  STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
+};
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
@@ -131,6 +142,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
@@ -224,6 +236,7 @@ esac
         ],
         env: {
           ...process.env,
+          ...CLI_TEST_ENV,
           PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           GH_READ_TOKEN: "read-fixture",
           GH_TOKEN: "write-fixture",
@@ -284,6 +297,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -441,6 +455,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -529,6 +544,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -1539,6 +1555,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -1849,6 +1866,44 @@ describe("green result freshness", () => {
       cwd: REPO_ROOT,
     });
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
+  });
+
+  // The ci-result gate shape of every repository merge-bar lands: its real
+  // workflow, a fixture of its gate step, or null when it has no CI workflow.
+  const FOLIO_GATE_WORKFLOW = `
+jobs:
+  ci-plan:
+    outputs:
+      code_required: \${{ steps.plan.outputs.code }}
+  typecheck: {}
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          JOB_SCOPES: '{"typecheck": "code_required"}'
+`;
+  const GATE_WORKFLOWS = {
+    "stella/stella": readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
+    "stella/folio": FOLIO_GATE_WORKFLOW,
+    "stella/stella-infra": null,
+  } as const satisfies Record<MergeBarRepository, string | null>;
+
+  test.each(Object.keys(MERGE_BAR_REPOSITORIES).map((repo) => [repo]))(
+    "%s's gate shape reads without panicking",
+    (repo) => {
+      const workflow = GATE_WORKFLOWS[readMergeBarRepository(repo)];
+      if (workflow === null) {
+        return;
+      }
+      expect(() => readFastRequiredJobs(workflow)).not.toThrow();
+    },
+  );
+
+  test("a gate without a fast-required list has no fast jobs to recheck", () => {
+    expect(readFastRequiredJobs(FOLIO_GATE_WORKFLOW)).toBeNull();
   });
 
   test("fast scopes override regular scopes, including null and absent scopes", () => {
@@ -2480,6 +2535,7 @@ esac
             ],
             env: {
               ...process.env,
+              ...CLI_TEST_ENV,
               PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
               FIXTURE_PULL_REQUEST: JSON.stringify({
                 data: {
@@ -2761,6 +2817,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_WRITES: writes,
         FIXTURE_PULL_REQUEST: JSON.stringify({
@@ -3194,6 +3251,51 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
 };
 
 describe("verified merge handoff", () => {
+  test("GitHub refuses a head moved between verification and enable", () => {
+    const result = armAndVerify({
+      pullRequestId: "PR_fixture",
+      expectedHeadSha: HEAD_SHA,
+      jump: false,
+      checksSucceeded: false,
+      readState: () => ({
+        id: "PR_fixture",
+        headRefOid: HEAD_SHA,
+        updatedAt: "2026-10-02T09:00:00Z",
+        autoMergeRequest: null,
+        mergeQueueEntry: null,
+      }),
+      readRemovals: () => [],
+      mutate: (query, variables) => {
+        // The server head changed after the read. Omitting the pin would
+        // accept that unverified head, so this fake models both outcomes.
+        if (
+          query.includes("expectedHeadOid:$sha") &&
+          variables.sha !== OTHER_SHA
+        ) {
+          throw new Error("expectedHeadOid does not match current head");
+        }
+        return {
+          data: {
+            enablePullRequestAutoMerge: {
+              pullRequest: {
+                id: "PR_fixture",
+                headRefOid: HEAD_SHA,
+                updatedAt: "2026-10-02T09:00:00Z",
+                autoMergeRequest: { enabledAt: "2026-10-02T10:00:00Z" },
+                mergeQueueEntry: null,
+              },
+            },
+          },
+        };
+      },
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "expectedHeadOid does not match current head",
+      );
+    }
+  });
   test.each([
     { initialEnabledAt: "2026-10-02T08:41:00Z" },
     {
@@ -3436,6 +3538,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         GH_READ_TOKEN: "read-fixture",
         GH_TOKEN: "write-fixture",
@@ -3535,6 +3638,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         GH_READ_TOKEN: "read-fixture",
         GH_TOKEN: "write-fixture",

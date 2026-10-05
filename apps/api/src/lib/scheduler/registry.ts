@@ -97,6 +97,10 @@ import {
   redactHostedUsageWebhookEvents,
 } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import {
+  RECEIVE_INBOUND_MAIL_TASK,
+  receiveInboundMail,
+} from "@/api/lib/scheduler/tasks/inbound-mail-receive";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -188,6 +192,7 @@ const SCHEDULER_TASKS = {
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,

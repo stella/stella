@@ -16,6 +16,8 @@
 
 import { expect, test } from "bun:test";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import config, { API_PROVIDER_ADAPTER_MODULES } from "../oxlint.config.ts";
 import {
   isRecord,
@@ -130,7 +132,7 @@ const pathKey = (
   const scope =
     importNames.length === 0
       ? `path:${name}`
-      : `path:${name}#${[...importNames].toSorted((a, b) => a.localeCompare(b)).join(",")}`;
+      : `path:${name}#${[...importNames].toSorted(compareCodeUnit).join(",")}`;
   // A ban that lets type-only imports through forbids less than one that does
   // not, so the two must never compare equal.
   return allowTypeImports ? `${scope}+types` : scope;
@@ -421,7 +423,7 @@ test("every restriction-shaped rule with options is tracked", () => {
     }
   }
   const sorted = (names: Iterable<string>) =>
-    [...names].toSorted((a, b) => a.localeCompare(b));
+    [...names].toSorted(compareCodeUnit);
   expect(sorted(configured)).toEqual(sorted(TRACKED_RULES));
 });
 
@@ -468,7 +470,7 @@ test("no override silently drops an inherited restriction", () => {
   );
 
   const sorted = (values: Iterable<string>) =>
-    [...values].toSorted((a, b) => a.localeCompare(b));
+    [...values].toSorted(compareCodeUnit);
   // Both directions: an undeclared drop is the bug this guard exists for, and
   // a declared drop that no longer happens means the table is stale.
   expect(sorted(observed)).toEqual(sorted(declared));

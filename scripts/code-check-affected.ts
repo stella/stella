@@ -65,6 +65,9 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.oxlint-plugins/**",
   "$TURBO_ROOT$/scripts/oxlint-presets/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
+  "$TURBO_ROOT$/scripts/status-write-shapes.ts",
+  "$TURBO_ROOT$/scripts/parse-memo.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -612,6 +615,61 @@ export const formatCheckFailure = ({
   return `${lines.join("\n")}\n`;
 };
 
+type ExecuteCheckCommandsOptions = {
+  commands: readonly (readonly string[])[];
+  runner?: (
+    command: readonly string[],
+  ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
+  write?: (output: string) => void;
+  dryRun?: boolean;
+};
+
+export const executeCheckCommands = async ({
+  commands,
+  runner = runCheck,
+  write = (output) => {
+    process.stdout.write(output);
+  },
+  dryRun = false,
+}: ExecuteCheckCommandsOptions): Promise<number> => {
+  const failures: CodeCheckError[] = [];
+  for (const command of commands) {
+    if (dryRun) {
+      write(`  ${command.join(" ")}\n`);
+      continue;
+    }
+    const result = await runner(command);
+    if (result.isErr()) {
+      failures.push(result.error);
+    }
+  }
+  if (failures.length === 0) {
+    return 0;
+  }
+  write(`code-check: ${failures.length} failed command(s)\n`);
+  for (const failure of failures) {
+    switch (failure._tag) {
+      case "CommandFailedError": {
+        write(
+          formatCheckFailure({
+            summary: summarizeCheckFailure(failure),
+            annotations: process.env["GITHUB_ACTIONS"] === "true",
+          }),
+        );
+        break;
+      }
+      case "DelegatedCheckFailedError": {
+        break;
+      }
+      default: {
+        failure satisfies never;
+        panic("unknown code-check failure");
+      }
+    }
+  }
+  return 1;
+};
+
 const workspacePaths = (): Set<string> => {
   const workspaces = new Set<string>();
   for (const parent of WORKSPACE_PARENTS) {
@@ -696,6 +754,7 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "run",
   ...tasks,
   "--concurrency=2",
+  "--continue=dependencies-successful",
   ...(scope.type === "all"
     ? []
     : scope.targets.map((target) => `--filter=./${target}`)),
@@ -858,6 +917,7 @@ export const scopedCommands = (
       "run",
       "typecheck:repo",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   }
   return commands;
@@ -985,7 +1045,7 @@ const runFullFallback = (
   return Result.ok();
 };
 
-const main = async (): Promise<Result<void, CodeCheckError>> => {
+const main = async (): Promise<Result<number, CommandFailedError>> => {
   const options = parseArgs(process.argv.slice(2));
   const scoped = planScope(options.scope);
   if (scoped.isErr()) {
@@ -1027,23 +1087,33 @@ const main = async (): Promise<Result<void, CodeCheckError>> => {
       process.stdout.write(message);
     },
   });
+  const commands: string[][] = [];
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
-    if (options.dryRun) {
-      process.stdout.write(`  ${resultBoundaryCommand.join(" ")}\n`);
-    } else {
-      const boundaryLint = await runCheck(resultBoundaryCommand);
-      if (boundaryLint.isErr()) {
-        return boundaryLint;
-      }
-    }
+    commands.push(resultBoundaryCommand);
   }
 
   if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
-    return options.dryRun ? Result.ok() : runFullFallback(leg);
+    const fallbackCommand = [
+      "bun",
+      "run",
+      "code-check",
+      ...(leg === undefined ? [] : ["--leg", leg]),
+    ];
+    commands.push(fallbackCommand);
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        runner: async (command) =>
+          command === fallbackCommand
+            ? runFullFallback(leg)
+            : runCheck(command),
+      }),
+    );
   }
 
   const scopeLabel = (scope: TaskScope): string => {
@@ -1058,23 +1128,15 @@ const main = async (): Promise<Result<void, CodeCheckError>> => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
-  const commands = scopedCommands(
-    plan,
-    leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+  commands.push(
+    ...scopedCommands(
+      plan,
+      leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+    ),
   );
-  if (options.dryRun) {
-    for (const command of commands) {
-      process.stdout.write(`  ${command.join(" ")}\n`);
-    }
-    return Result.ok();
-  }
-  for (const command of commands) {
-    const check = await runCheck(command);
-    if (check.isErr()) {
-      return check;
-    }
-  }
-  return Result.ok();
+  return Result.ok(
+    await executeCheckCommands({ commands, dryRun: options.dryRun }),
+  );
 };
 
 /**
@@ -1093,25 +1155,13 @@ export const failureExitCode = (code: number | null | undefined) =>
 if (import.meta.main) {
   const result = await main();
   if (result.isErr()) {
-    const error = result.error;
-    switch (error._tag) {
-      case "CommandFailedError": {
-        process.stdout.write(
-          formatCheckFailure({
-            summary: summarizeCheckFailure(error),
-            annotations: process.env["GITHUB_ACTIONS"] === "true",
-          }),
-        );
-        break;
-      }
-      case "DelegatedCheckFailedError": {
-        break;
-      }
-      default: {
-        error satisfies never;
-        panic("unknown code-check failure");
-      }
-    }
-    process.exit(failureExitCode(error.exitCode));
+    process.stdout.write(
+      formatCheckFailure({
+        summary: summarizeCheckFailure(result.error),
+        annotations: process.env["GITHUB_ACTIONS"] === "true",
+      }),
+    );
+    process.exit(failureExitCode(result.error.exitCode));
   }
+  process.exitCode = result.value;
 }

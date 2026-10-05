@@ -121,10 +121,12 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "you did not just " +
       "create. `fields[]` (`path`, " +
       "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
-      "`date_format`, and `source`: who fills the field, " +
+      "`date_format`, `visibleWhen` (the branch condition, or null), and `source`: who fills the field, " +
       "as one object with a `type`), " +
       "`arrays[]` (one entry per `{% for %}` loop: its `path` plus the " +
-      "`itemFieldPaths` it repeats), `conditions[]` (every `{% if %}` " +
+      "`itemFieldPaths` it repeats and `itemAliases` used in branch conditions). " +
+      "Evaluate an item field’s `visibleWhen` per array item with its alias bound to that item; " +
+      "required fields apply only where their markers render. `conditions[]` (every `{% if %}` " +
       "block, by governing `path` and `kind`), `computed[]` " +
       "(each `path` + its `formula`) and the same " +
       "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +

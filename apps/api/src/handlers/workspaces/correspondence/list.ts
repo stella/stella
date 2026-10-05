@@ -29,6 +29,8 @@ const CORRESPONDENCE_LIST_COLUMNS = {
   sentAt: correspondence.sentAt,
   handlingState: correspondence.handlingState,
   assigneeId: correspondence.assigneeId,
+  source: correspondence.source,
+  sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
   originalSignature: correspondence.originalSignature,
   authenticatedSenderAddress: correspondence.authenticatedSenderAddress,
@@ -76,7 +78,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 
 const config = {
   description:
-    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
+    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -140,6 +142,8 @@ const listCorrespondence = createSafeHandler(
       items: page.items.map(
         ({
           cursorTimestamp: _cursorTimestamp,
+          source,
+          sourceEntityId,
           intake,
           originalSignature,
           authenticatedSenderAddress,
@@ -151,6 +155,8 @@ const listCorrespondence = createSafeHandler(
         }) => ({
           ...record,
           ...readCorrespondenceProvenance({
+            source,
+            sourceEntityId,
             intake,
             originalSignature,
             authenticatedSenderAddress,

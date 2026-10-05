@@ -31,6 +31,7 @@ import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-memb
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
 export const Route = createFileRoute(
@@ -96,31 +97,40 @@ function CorrespondenceDetailPage() {
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
-          <section className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-sm font-medium">
-              {t("correspondence.deliveryAuthentication")}
-            </h2>
-            <CorrespondenceProvenance record={record} />
-            <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-              {(["spf", "dkim", "dmarc"] as const).map((check) => (
-                <bdi dir="ltr" key={check}>
-                  {check.toUpperCase()}:{" "}
-                  {t(
-                    CORRESPONDENCE_AUTH_LABEL_KEYS[
-                      record.authenticatedSender[check]
-                    ],
-                  )}
-                </bdi>
-              ))}
-            </span>
-          </section>
+          {record.source === "delivery" ? (
+            <section className="space-y-3 rounded-lg border p-4">
+              <h2 className="text-sm font-medium">
+                {t("correspondence.deliveryAuthentication")}
+              </h2>
+              <CorrespondenceProvenance record={record} />
+              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                {(["spf", "dkim", "dmarc"] as const).map((check) => (
+                  <bdi dir="ltr" key={check}>
+                    {check.toUpperCase()}:{" "}
+                    {t(
+                      CORRESPONDENCE_AUTH_LABEL_KEYS[
+                        record.authenticatedSender[check]
+                      ],
+                    )}
+                  </bdi>
+                ))}
+              </span>
+            </section>
+          ) : (
+            <UploadedSource
+              uploader={filers.find((filer) => filer.type === "user")}
+              signatureDomain={provenance.signatureDomain}
+              sourceEntityId={record.sourceEntityId}
+              workspaceId={workspaceId}
+            />
+          )}
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            {record.intake !== "direct" && (
+            {provenance.assertedHeadersLabel !== null && (
               <h2 className="text-sm font-medium sm:col-span-2">
-                {t("correspondence.assertedOriginal")}
+                {t(provenance.assertedHeadersLabel)}
               </h2>
             )}
-            {record.intake !== "direct" && (
+            {provenance.assertedHeadersLabel !== null && (
               <DetailField
                 label={t("inspector.metadata.documentProperties.keys.subject")}
               >

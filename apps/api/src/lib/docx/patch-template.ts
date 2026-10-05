@@ -8,13 +8,15 @@
  * DOM before value replacement runs.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { NamedCondition } from "@stll/template-conditions";
+import { scanMarkers, substitutionKey } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -29,7 +31,7 @@ import {
 } from "./block-directives";
 import { deriveManifest } from "./derived-manifest";
 import { discoverPlaceholders } from "./discover-placeholders";
-import { discoverTemplate } from "./discover-template";
+import { discoverTemplate, locateFieldMarkers } from "./discover-template";
 import { processInlineConditions } from "./inline-conditions";
 import { manifestNamedConditions } from "./manifest-conditions";
 import {
@@ -39,10 +41,22 @@ import {
 } from "./numbering";
 import {
   MAIN_DOCUMENT_PART_PATH,
+  paragraphText,
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
-import { patchXmlPart } from "./rich-patch";
+import {
+  collectRenderedFieldTokens,
+  createFieldMarkerTable,
+  scopeInlineFieldTokens,
+  swapFieldMarkersForTokens,
+} from "./rendered-field-markers";
+import type { RenderedFieldOccurrence } from "./rendered-field-markers";
+import {
+  paragraphSpanText,
+  patchParagraphPlaceholders,
+  patchXmlPart,
+} from "./rich-patch";
 import { stripManifest } from "./strip-custom-xml-manifest";
 import type {
   FillTemplateResult,
@@ -118,11 +132,88 @@ const templatePartContainer = (
   return doc.getElementsByTagNameNS(W_NS, localName).at(0);
 };
 
+/**
+ * One `{{ clause(...) }}` marker that survives directive evaluation. Inside a
+ * `{% for %}` iteration it carries that iteration's bindings (the context the
+ * evaluator resolves the iteration's own markers against); at document scope
+ * it carries none and renders from the fill's values.
+ */
+export type ClauseSlotOccurrence = {
+  patchKey: string;
+  loopScope: Record<string, unknown> | undefined;
+};
+
+/**
+ * Called once per surviving clause marker after a part's directives are
+ * evaluated. A value returned for a loop-scoped occurrence is substituted into
+ * that iteration's paragraph; `undefined` leaves the marker to the document
+ * values.
+ */
+export type ClauseSlotVisitor = (
+  occurrence: ClauseSlotOccurrence,
+) => RichPatchValue | undefined;
+
+const visitClauseSlots = (
+  container: slimdom.Element,
+  processingContext: ReturnType<typeof createDirectiveProcessingContext>,
+  visit: ClauseSlotVisitor,
+): void => {
+  for (const paragraph of [...container.getElementsByTagNameNS(W_NS, "p")]) {
+    const loopScope = processingContext.inlineDataByParagraph.get(paragraph);
+    const scoped = new Map<string, RichPatchValue>();
+    for (const { meta } of scanMarkers(paragraphText(paragraph))) {
+      const patchKey = meta.kind === "clause" ? substitutionKey(meta) : null;
+      if (patchKey === null) {
+        continue;
+      }
+      const inlineScope = processingContext.inlineClauseScopes.get(patchKey);
+      const scope = inlineScope?.values ?? loopScope;
+      const value = visit({
+        patchKey: inlineScope?.patchKey ?? patchKey,
+        loopScope: scope,
+      });
+      if (value !== undefined && scope !== undefined) {
+        scoped.set(patchKey, value);
+      }
+    }
+    if (scoped.size > 0) {
+      patchParagraphPlaceholders(paragraph, Object.fromEntries(scoped));
+    }
+  }
+};
+
+/**
+ * Read-only hooks around the directive pass: `prepare` sees each part's
+ * container before evaluation, `inspect` after it, with the loop bindings of
+ * every paragraph a loop iteration produced.
+ */
+type DirectivePassInspection = {
+  prepare: (container: slimdom.Element) => Result<void, HandlerError<422>>;
+  scopeInlineText: ReturnType<
+    typeof createDirectiveProcessingContext
+  >["scopeInlineText"];
+  inspect: (
+    container: slimdom.Element,
+    loopScopes: ReadonlyMap<slimdom.Element, Record<string, unknown>>,
+  ) => void;
+};
+
+type DirectiveEvaluationOptions = {
+  namedConditions?: NamedCondition[] | undefined;
+  conditionValues?: Record<string, string> | undefined;
+  visitClauseSlot?: ClauseSlotVisitor | undefined;
+  inspection?: DirectivePassInspection | undefined;
+};
+
 const preProcessTemplateDirectives = async (
   zip: JSZip,
   templateData: TemplateData,
-  namedConditions?: NamedCondition[],
-  conditionValues?: Record<string, string>,
+  {
+    namedConditions,
+    conditionValues,
+    visitClauseSlot,
+    inspection,
+  }: DirectiveEvaluationOptions = {},
 ): Promise<{
   buffer: Buffer;
   expandedValues: Record<string, RichPatchValue>;
@@ -158,6 +249,9 @@ const preProcessTemplateDirectives = async (
     (await zip.file("word/numbering.xml")?.async("string")) ?? null;
   const validNumIds = collectValidNumIds(numberingXml);
   const processingContext = createDirectiveProcessingContext();
+  processingContext.scopeInlineText = inspection?.scopeInlineText;
+  processingContext.clauseScopeMode =
+    visitClauseSlot === undefined ? "ignore" : "collect";
 
   for (const { path, xml } of parts) {
     const doc = slimdom.parseXmlDocument(xml);
@@ -170,7 +264,15 @@ const preProcessTemplateDirectives = async (
     const paragraphCount = container.getElementsByTagNameNS(W_NS, "p").length;
     const paragraphOffset = paragraphOffsets[source];
     paragraphOffsets[source] += paragraphCount;
+    const prepared = inspection?.prepare(container);
+    if (prepared !== undefined && Result.isError(prepared)) {
+      return null;
+    }
     if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
+      if (visitClauseSlot) {
+        visitClauseSlots(container, processingContext, visitClauseSlot);
+      }
+      inspection?.inspect(container, processingContext.inlineDataByParagraph);
       continue;
     }
 
@@ -194,6 +296,14 @@ const preProcessTemplateDirectives = async (
       });
     }
 
+    // Clause slots render where the evaluator kept them: a pruned branch drops
+    // its marker, and a loop iteration renders the clause under its bindings.
+    if (visitClauseSlot) {
+      visitClauseSlots(container, processingContext, visitClauseSlot);
+    }
+
+    inspection?.inspect(container, processingContext.inlineDataByParagraph);
+
     if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
       pruneDanglingNumPr(container, validNumIds);
     }
@@ -213,7 +323,116 @@ const preProcessTemplateDirectives = async (
 
 type FillTemplateOptions = {
   namedConditions: NamedCondition[];
+  /** Renders a clause slot inside a loop iteration ({@link ClauseSlotVisitor}). */
+  clauseSlots?: ClauseSlotVisitor | undefined;
 };
+
+/** The clause slots and value markers a fill renders. */
+export type RenderedTemplateMarkers = {
+  clauseSlots: ClauseSlotOccurrence[];
+  /** The template's own value markers (clause bodies are rendered by their
+   *  slots, see `renderedClauseFieldMarkers`). */
+  fields: RenderedFieldOccurrence[];
+};
+
+/**
+ * Every clause marker and value marker the fill renders for `values`, each
+ * with its loop scope, from the same directive pass {@link fillTemplate} runs:
+ * a marker in a pruned branch is absent and a marker in a loop appears once
+ * per iteration.
+ */
+export const renderedTemplateMarkers = async (
+  template: ScannedFile,
+  values: TemplateData,
+  namedConditions: NamedCondition[],
+): Promise<Result<RenderedTemplateMarkers, HandlerError<422>>> => {
+  const rendered: RenderedTemplateMarkers = { clauseSlots: [], fields: [] };
+  const collect: ClauseSlotVisitor = (occurrence) => {
+    rendered.clauseSlots.push(occurrence);
+    return undefined;
+  };
+  const zip = await loadDocx(Buffer.from(template.bytes));
+  const authoredTexts = await Promise.all(
+    templateContentPartPaths(Object.keys(zip.files)).map(async (path) => {
+      const xml = await zip.file(path)?.async("string");
+      if (xml === undefined) {
+        return "";
+      }
+      const doc = slimdom.parseXmlDocument(xml);
+      return [...doc.getElementsByTagNameNS(W_NS, "p")]
+        .map(paragraphSpanText)
+        .join("\n");
+    }),
+  );
+  const table = createFieldMarkerTable(authoredTexts);
+  let markerError: HandlerError<422> | undefined;
+  const inspection: DirectivePassInspection = {
+    scopeInlineText: (options) => scopeInlineFieldTokens(table, options),
+    prepare: (container) => {
+      const swapped = swapFieldMarkersForTokens(
+        locateFieldMarkers(container).fieldMarkers,
+        table,
+      );
+      if (Result.isError(swapped)) {
+        markerError = swapped.error;
+      }
+      return swapped;
+    },
+    inspect: (container, loopScopes) => {
+      if (markerError === undefined) {
+        collectRenderedFieldTokens(
+          container,
+          loopScopes,
+          table,
+          rendered.fields,
+        );
+      }
+    },
+  };
+  const evaluated = await preProcessTemplateDirectives(zip, values, {
+    namedConditions: namedConditions.length > 0 ? namedConditions : undefined,
+    conditionValues: readConditionRawValues(values),
+    inspection,
+    visitClauseSlot: collect,
+  });
+  if (markerError !== undefined) {
+    return Result.err(markerError);
+  }
+  if (evaluated !== null) {
+    return Result.ok(rendered);
+  }
+  // No part carries a directive: every marker renders at document scope.
+  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
+    const xml = await zip.file(path)?.async("string");
+    const container =
+      xml === undefined
+        ? undefined
+        : templatePartContainer(
+            slimdom.parseXmlDocument(xml),
+            templatePartSource(path),
+          );
+    if (container) {
+      const prepared = inspection.prepare(container);
+      if (Result.isError(prepared)) {
+        return prepared;
+      }
+      inspection.inspect(container, new Map());
+      visitClauseSlots(container, createDirectiveProcessingContext(), collect);
+    }
+  }
+  return Result.ok(rendered);
+};
+
+/** Clause occurrence preparation uses the same rendering inspection as the
+ * required-fields gate. */
+export const renderedClauseSlotOccurrences = async (
+  template: ScannedFile,
+  values: TemplateData,
+  namedConditions: NamedCondition[],
+): Promise<Result<ClauseSlotOccurrence[], HandlerError<422>>> =>
+  (await renderedTemplateMarkers(template, values, namedConditions)).map(
+    ({ clauseSlots }) => clauseSlots,
+  );
 
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */
@@ -254,12 +473,11 @@ export const fillTemplate = async (
     const conditionValues = readConditionRawValues(values);
     // Checks for block directives internally; returns null
     // when none are found
-    const result = await preProcessTemplateDirectives(
-      zip,
-      values,
+    const result = await preProcessTemplateDirectives(zip, values, {
       namedConditions,
       conditionValues,
-    );
+      visitClauseSlot: options?.clauseSlots,
+    });
 
     if (result) {
       data = result.buffer;

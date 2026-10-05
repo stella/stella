@@ -20,6 +20,16 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  isFeatureEnabled,
+  isFeatureAccessSnapshotForPrincipal,
+} from "@/api/lib/auth/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessProof,
+} from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -105,8 +115,6 @@ import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
-
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
  * `type: "covered"` disposition references one of these; the coverage guard
@@ -160,7 +168,7 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
  */
-export type McpCapabilityReason =
+type McpCapabilityReason =
   | "template_authoring_ui"
   | "workspace_schema"
   | "knowledge_library_admin"
@@ -226,7 +234,7 @@ export type McpCapabilityReason =
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
  */
-export type McpInternalReason =
+type McpInternalReason =
   | "auth_plumbing"
   | "upload_mechanics"
   | "realtime_stream"
@@ -398,6 +406,7 @@ export type HandlerConfig = InputSchema &
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
+    featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
@@ -438,7 +447,7 @@ export const ACCOUNT_ACCESS = {
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+const requiresStandardAccount = (accountAccess: AccountAccess) =>
   accountAccess === ACCOUNT_ACCESS.standard;
 
 type SandboxAccountAccess = {
@@ -493,6 +502,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     session: {
       activeOrganizationId: SafeId<"organization">;
     };
+    featureAccessSnapshot?: FeatureAccessSnapshot;
+    featureAccessProof?: FeatureAccessProof;
     scopedDb: ScopedDb;
     safeDb: SafeDb;
     /** Resolve non-deleting workspace IDs only when an operation spans matters. */
@@ -616,7 +627,7 @@ type SafeErrorBody = {
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
-export const safeHandlerErrorResponseSchema = t.Object(
+const safeHandlerErrorResponseSchema = t.Object(
   {
     message: t.String(),
     code: t.Optional(t.String()),
@@ -1159,6 +1170,84 @@ const createSafeScopedHandler = <
       });
     }
 
+    const featureAccess = config.featureAccess;
+    if (featureAccess !== undefined) {
+      const principal = {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      };
+      const snapshot =
+        ctx.featureAccessSnapshot === undefined ||
+        !isFeatureAccessSnapshotForPrincipal(
+          ctx.featureAccessSnapshot,
+          principal,
+        )
+          ? await ctx.safeDb(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                }),
+            )
+          : Result.ok(ctx.featureAccessSnapshot);
+      if (Result.isError(snapshot)) {
+        return await runSafeHandler({
+          ctx,
+          contentDelivery: config.contentDelivery,
+          async *handler() {
+            return yield* Result.await(
+              Promise.resolve(Result.err(snapshot.error)),
+            );
+          },
+        });
+      }
+      ctx.featureAccessSnapshot = snapshot.value;
+      delete ctx.featureAccessProof;
+      const enabled = isFeatureEnabled(
+        snapshot.value,
+        featureAccess.featureId,
+        principal,
+      );
+      const decision = snapshot.value.decisions.get(featureAccess.featureId);
+      if (enabled && decision?.status === "enabled") {
+        ctx.featureAccessProof = decision.proof;
+      }
+      if (!enabled) {
+        const usage =
+          featureAccess.type === "required"
+            ? Result.ok(true)
+            : await Result.tryPromise(
+                async () =>
+                  await featureAccess.usesFeature({
+                    body: ctx.body,
+                    params: ctx.params,
+                    query: ctx.query,
+                    organizationId: ctx.session.activeOrganizationId,
+                    scopedDb: ctx.scopedDb,
+                    safeDb: ctx.safeDb,
+                    ...(hasWorkspaceId(ctx)
+                      ? { workspaceId: ctx.workspaceId }
+                      : {}),
+                  }),
+              );
+        if (Result.isError(usage)) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(usage.error)),
+              );
+            },
+          });
+        }
+        if (usage.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+      }
+    }
+
     if (requiresStandardAccount(config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
@@ -1487,7 +1576,7 @@ export const assertUsageAvailableForHandler = async ({
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
  */
-export const RUN_CONFIRMATION_UNITS = 50;
+const RUN_CONFIRMATION_UNITS = 50;
 
 type RunSizePreflightInput = UsagePreflightInput & {
   /** Units the initiator expects the whole run to consume. */

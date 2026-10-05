@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -32,8 +33,10 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
+  readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 import {
@@ -537,6 +540,7 @@ export const ROLE_GRANT_STATEMENTS = [
         TO stella_public_law_reader
     `,
     ),
+  ...readPglitePublicSanctionsGrants(),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -627,6 +631,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await db.execute(
+    sql.raw("CREATE ROLE stella_public_sanctions_reader NOLOGIN"),
+  );
+  await db.execute(
     sql.raw("CREATE ROLE stella_case_law_analysis_writer NOLOGIN"),
   );
   await db.execute(
@@ -642,6 +649,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
@@ -657,6 +665,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
+  await installPgliteTreeParentGuards(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
@@ -685,9 +694,8 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();
   }
-  const snapshotBytes = await Bun.file(snapshotPath).arrayBuffer();
   return await PGlite.create({
     extensions: { pg_trgm },
-    loadDataDir: new Blob([snapshotBytes]),
+    loadDataDir: Bun.file(snapshotPath),
   });
 };

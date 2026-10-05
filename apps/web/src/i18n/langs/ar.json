@@ -1495,6 +1495,7 @@
     "noResults": "لا توجد بنود بعد",
     "noVariants": "لا توجد صيغ",
     "outdatedVersion": "يتوفّر تحديث",
+    "overrideNotRenderedWarning": "لم يُستخدم بديل البند {clauseName}: موضعه لا يظهر في هذا المستند.",
     "renameSlot": "إعادة تسمية الخانة",
     "renameSlotInvalid": "يجب أن تكون أسماء الخانات فريدة وألا تحتوي على مسافات أو نقطتين رأسيتين أو أقواس معقوفة.",
     "restoreVersion": "استعادة هذا الإصدار",
@@ -2157,6 +2158,7 @@
     "markHandled": "تحديد كمُعالج",
     "markNew": "تحديد كجديد",
     "noAddress": "لا يوجد عنوان بريد إلكتروني نشط.",
+    "openSourceFile": "فتح ملف البريد الإلكتروني",
     "originalSender": "المرسل الأصلي",
     "originalSenderUnverified": "المرسل الأصلي (كما ورد، غير متحقق منه)",
     "originalSignatureVerified": "تم التحقق من التوقيع الأصلي (<identifier>d={domain}</identifier>)",
@@ -2165,11 +2167,14 @@
     "rotateAddress": "تغيير العنوان",
     "sentAt": "أُرسل في",
     "sharedMailboxFiler": "صندوق بريد مشترك {address}، وافق عليه {approver}",
+    "statedInFile": "الترويسات (كما وردت في الملف)",
     "states": {
       "handled": "مُعالج"
     },
     "title": "المراسلات",
-    "unknownApprover": "موافق غير معروف"
+    "unknownApprover": "موافق غير معروف",
+    "uploadedBy": "رُفِع بواسطة {name}",
+    "uploadedFile": "ملف بريد إلكتروني مرفوع"
   },
   "docxReview": {
     "acceptAll": "قبول الكل",
@@ -3477,6 +3482,7 @@
         "approvedOn": "تمت الموافقة في {date}",
         "approvedToast": "تمت الموافقة على دليل المراجعة",
         "saveBeforeApprove": "احفظ التغييرات قبل اعتماد دليل المراجعة هذا.",
+        "sourcesNotice": "قبل الاعتماد، تأكد من أن أي موقف لا يذكر اسم مستند أو ملف قانوني أو طرف مقابل: يمكن للمؤسسة كلها قراءة دليل المراجعة هذا.",
         "statusApproved": "معتمد",
         "statusDraft": "مسودة"
       },
@@ -3575,6 +3581,7 @@
       "referenceStandard": "من المرجع",
       "removeCheck": "إزالة الفحص",
       "removeIdeal": "إزالة الصياغة المثالية",
+      "removeSource": "إزالة المصدر {documentName}",
       "reorderPosition": "إعادة ترتيب الموقف",
       "review": {
         "changePlaybook": "اختر دليل مراجعة آخر",
@@ -3606,6 +3613,10 @@
         "blocker": "حاسمة"
       },
       "severityLabel": "الخطورة",
+      "staleCopy": {
+        "loaded": "جرى تحميل نسخة أحدث من دليل المراجعة هذا. أعد التحميل قبل التعديل.",
+        "unavailable": "تعذّر تحميل أحدث نسخة من دليل المراجعة هذا. هذه آخر نسخة جرى تحميلها وقد تكون قديمة."
+      },
       "starters": {
         "addedToast": "تمت إضافة دليل المراجعة",
         "browseButton": "استعراض أدلّة المراجعة الجاهزة",
@@ -4306,6 +4317,7 @@
       "deleteAccountTaskReassignPlaceholder": "اختر عضوًا...",
       "deleteAccountTasksDescription": "لديك مهام نشطة مسندة إليك. انقلها إلى أعضاء آخرين في مساحة العمل حتى يستمر العمل.",
       "deleteAccountTasksTitle": "نقل المهام النشطة",
+      "deleteAccountTasksUnassignedNotice": "ستبقى المهام التي لم يُحدَّد لها عضو في مساحة العمل دون مسؤول عنها.",
       "deleteAccountWarning": "الحذف إجراء لا رجعة فيه. ستُزال بيانات تسجيل الدخول وبيانات الحساب الخاصة.",
       "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. سيبقى سجل مساحات العمل المكتمل منسوبًا إلى حسابك المحذوف.",
       "desktop": "سطح المكتب",

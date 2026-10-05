@@ -13,6 +13,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
@@ -1239,6 +1240,26 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
+test("CI result rejects a failed check leg after independent guards finish", () => {
+  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+    const results = Object.fromEntries(
+      resultJob.needs.map((job) => [job, "success"]),
+    );
+    expect(evaluateResult({ event, results })).toBe(0);
+    for (const leg of [
+      "ci-checks-generated",
+      "ci-checks-policy",
+      "ci-checks-rest",
+    ]) {
+      expect(resultJob.needs).toContain(leg);
+      expect(
+        evaluateResult({ event, results: { ...results, [leg]: "failure" } }),
+        leg,
+      ).toBe(1);
+    }
+  }
+});
+
 test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
   const gates: ExpectedResultGate[] = [];
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -1802,7 +1823,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
     "ci-checks-rest: Test CLI runtime package parity",
   ]);
   expect(parity.at(0)?.condition).toBe(
-    "needs.ci-plan.outputs.package_checks_required == 'true'",
+    `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
   expect(jobScopes["ci-checks-rest"]).toBeNull();
   expect(fastRequired).toContain("ci-checks-rest");
@@ -1860,7 +1881,7 @@ test("CI rehearses every released API platform with the shared release smoke con
       runner,
       platform,
     }))
-    .toSorted((a, b) => a.platform.localeCompare(b.platform));
+    .toSorted((a, b) => compareCodeUnit(a.platform, b.platform));
   expect(releasePlatforms.length).toBeGreaterThan(0);
   expect(
     v.parse(
@@ -1887,7 +1908,7 @@ test("CI rehearses every released API platform with the shared release smoke con
     v.parse(v.array(MatrixEntry), JSON.parse(dispatchPlatforms ?? "")),
   ]) {
     expect(
-      platforms.toSorted((a, b) => a.platform.localeCompare(b.platform)),
+      platforms.toSorted((a, b) => compareCodeUnit(a.platform, b.platform)),
     ).toEqual(releasePlatforms);
   }
   const ciCommands = smokeCommands(apiImageJob);
@@ -2671,9 +2692,11 @@ test("property-testing guards run only when dependencies are installed", () => {
     "ci-checks-rest",
   ]) {
     const steps = jobSteps(ciJobs[job]);
-    const installCondition = steps.find(
-      ({ name }) => name === "Install dependencies",
-    )?.if;
+    const installCondition =
+      "needs.ci-plan.outputs.package_checks_required == 'true'";
+    expect(
+      steps.find(({ name }) => name === "Install dependencies")?.if,
+    ).toContain(`(${installCondition})`);
     const guards = steps.filter(({ run }) =>
       run?.includes("bun test packages/property-testing/"),
     );
@@ -2682,7 +2705,9 @@ test("property-testing guards run only when dependencies are installed", () => {
       expect(installCondition, job).toBeDefined();
     }
     for (const guard of guards) {
-      expect(guard.if, `${job}: ${String(guard.name)}`).toBe(installCondition);
+      expect(guard.if, `${job}: ${String(guard.name)}`).toBe(
+        `\${{ !cancelled() && steps.install.outcome == 'success' && (${installCondition}) }}`,
+      );
     }
   }
   expect(guardCount).toBeGreaterThan(0);
@@ -2970,15 +2995,13 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
-  expect(
-    suites.map(({ name }) => name).toSorted((a, b) => a.localeCompare(b)),
-  ).toEqual(
+  expect(suites.map(({ name }) => name).toSorted(compareCodeUnit)).toEqual(
     [
       "Test desktop browser interactions",
       "Test extension browser boundary",
       "Test UI browser interactions",
       "Test UI playground visuals",
-    ].toSorted((a, b) => a.localeCompare(b)),
+    ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
     const legs = browser.strategy.matrix.suite.filter((leg) =>
@@ -3991,7 +4014,7 @@ test("property suites and their budgets select required PR checks", () => {
     ({ name }) => name === "Property-test convention guard",
   );
   expect(propertyGuard?.if).toBe(
-    "needs.ci-plan.outputs.package_checks_required == 'true'",
+    `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
   const tests = jobSteps(ciJobs["ci-tests"]).find(
     ({ name }) => name === "Test API or rest",

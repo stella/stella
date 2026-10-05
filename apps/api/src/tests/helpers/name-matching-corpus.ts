@@ -31,7 +31,7 @@ import { anonymizeTextFields } from "@/api/mcp/anonymization";
 
 export const NAME_MATCHING_MATCHERS = ["deny-list", "forced"] as const;
 
-export type NameMatchingMatcher = (typeof NAME_MATCHING_MATCHERS)[number];
+type NameMatchingMatcher = (typeof NAME_MATCHING_MATCHERS)[number];
 
 export type NameMatchingTally = {
   expectation: NameMatchingCase["expectation"];

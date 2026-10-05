@@ -53,6 +53,7 @@ import {
 } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { RAW_MODE_ONLY_CHAT_TOOL_NAMES } from "@/api/handlers/chat/tools/raw-mode-only-tools";
+import type { ChatRegistryContextDeps } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
@@ -86,6 +87,7 @@ import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import type {
@@ -111,6 +113,7 @@ import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
@@ -390,6 +393,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
   memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;
@@ -754,6 +759,8 @@ const honouredSkillDeclarations = ({
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
+    featureAccessSnapshot,
+    testDependencies,
     memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     safeDb,
     scopedDb,
@@ -845,6 +852,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map(),
   };
   const executionTools = buildChatCodeModeTools({
+    featureAccessSnapshot,
+    testDependencies,
     documentedReads: skillDeclarations.documentedChatReads,
     memberRole,
     organizationId,
@@ -1135,6 +1144,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // input-specific role checks. Real per-workspace statuses are threaded through so the
   // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
   const registryWriteTools = buildChatWriteTools({
+    featureAccessSnapshot,
+    testDependencies,
     memberRole,
     organizationId,
     pinServerValidatedWorkspaceId,
@@ -1215,7 +1226,22 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...subagentTools,
     },
   });
-  const tools = props.projectToolSet?.(registered) ?? registered;
+  const projected = props.projectToolSet?.(registered) ?? registered;
+  const tools = Object.fromEntries(
+    Object.entries(projected).filter(([name]) =>
+      isMcpDescriptorFeatureEnabled({
+        context: {
+          featureAccessSnapshot,
+          testDependencies,
+          organizationId,
+          userId,
+        },
+        kind: "tools",
+        id: name,
+        featureId: getStaticMcpToolDefinition(name)?.featureId,
+      }),
+    ),
+  );
   scriptCallTools = {
     directTools: Object.keys(tools),
     unavailableReasons: new Map([
@@ -1230,7 +1256,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
             (name) => [name, "web research is off for this chat"] as const,
           )),
       ...Object.keys(registered)
-        .filter((name) => !(name in tools))
+        .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
     ]),
   };
@@ -1239,19 +1265,23 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
 
 type GetChatValidationToolsProps = Omit<
   GetChatToolsProps,
+  | "featureAccessSnapshot"
   | "docxSuggestionSurface"
   | "hasActiveDocxEditClient"
   | "hasActiveDocxFileClient"
   | "purpose"
   | "skillMetadata"
   | "thirdPartyBoundary"
->;
+> & {
+  featureAccessSnapshot: GetChatToolsProps["featureAccessSnapshot"];
+};
 
 /**
  * The tool set an incoming message's tool calls are validated against. It
  * never executes, so every surface- and catalog-dependent group is registered
  * at its widest: for any request, this set must contain every tool a run on
- * the same thread could have exposed.
+ * the same thread could have exposed under the current caller access. The
+ * snapshot property is explicit so request wiring cannot omit its decision.
  */
 export const getChatValidationTools = (
   props: GetChatValidationToolsProps,

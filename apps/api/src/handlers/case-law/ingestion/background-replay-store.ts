@@ -90,7 +90,7 @@ const withReplayTransaction = async <T>(
     return await work(tx);
   });
 
-export const REPLAY_SYSTEMIC_ISOLATION_THRESHOLD = 3;
+const REPLAY_SYSTEMIC_ISOLATION_THRESHOLD = 3;
 const PREFLIGHT_CHECKPOINT = "case-law-replay:preflight";
 
 const checkpointName = (

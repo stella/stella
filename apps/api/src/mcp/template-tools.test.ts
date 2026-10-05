@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
+import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
@@ -339,17 +340,21 @@ const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
  * that producer (and is covered where it lives); here it pins that both tools
  * serve exactly what list_templates' detail mode serves.
  */
-const describedTemplate = (
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> => ({
-  name: "NDA",
-  fields: [],
-  conditions: [],
-  computed: [],
-  arrays: [],
-  warnings: [],
-  ...overrides,
-});
+type DescribedTemplateSuccess = Extract<
+  DescribeTemplateResult,
+  { name: string }
+>;
+
+const describedTemplate = (overrides: Partial<DescribedTemplateSuccess> = {}) =>
+  ({
+    name: "NDA",
+    fields: [],
+    conditions: [],
+    computed: [],
+    arrays: [],
+    warnings: [],
+    ...overrides,
+  }) satisfies DescribeTemplateResult;
 
 /** A host file reference pointing at `bytes`, as an MCP host would supply. */
 const hostFileResponse = (bytes: Uint8Array) =>
@@ -685,6 +690,7 @@ describe("MCP template tools", () => {
           path: "company",
           label: "Company",
           inputType: "text",
+          visibleWhen: null,
           required: true,
           hint: "Enter the KRS number",
           options: null,
@@ -704,6 +710,7 @@ describe("MCP template tools", () => {
           path: "scope",
           label: "Scope",
           inputType: "text",
+          visibleWhen: "signed",
           required: false,
           hint: null,
           options: null,
@@ -720,12 +727,17 @@ describe("MCP template tools", () => {
           path: "role",
           label: "Role",
           inputType: "select",
+          visibleWhen: null,
           required: false,
           hint: null,
           options: ["director", "proxy"],
           lookup: null,
           validation: null,
-          source: { kind: "party", role: "counterparty", field: "name" },
+          source: {
+            kind: "party",
+            role: "opposing_party",
+            field: "displayName",
+          },
           aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
@@ -739,9 +751,15 @@ describe("MCP template tools", () => {
         { path: "is_consumer", kind: "ai", prompt: "Is this a consumer?" },
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
-      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      arrays: [
+        {
+          path: "deliverables",
+          itemAliases: ["deliverable"],
+          itemFieldPaths: ["name", "due_date"],
+        },
+      ],
       warnings: [],
-    });
+    } satisfies DescribeTemplateResult);
 
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID },
@@ -757,6 +775,7 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           hint: "Enter the KRS number",
+          visibleWhen: null,
           // The whole lookup, registry included, in the shape the `fields`
           // overlay accepts: read, edit, send back.
           source: {
@@ -767,6 +786,7 @@ describe("MCP template tools", () => {
           validation: { required: true },
         }),
         expect.objectContaining({
+          visibleWhen: "signed",
           source: {
             type: "ai",
             prompt: "Draft the scope of this power of attorney",
@@ -775,8 +795,13 @@ describe("MCP template tools", () => {
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
+          visibleWhen: null,
           options_from: "parties",
-          source: { type: "party", role: "counterparty", field: "name" },
+          source: {
+            type: "party",
+            role: "opposing_party",
+            field: "displayName",
+          },
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
@@ -789,8 +814,27 @@ describe("MCP template tools", () => {
       ],
       // A `{% for %}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
-      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      arrays: [
+        {
+          path: "deliverables",
+          itemAliases: ["deliverable"],
+          itemFieldPaths: ["name", "due_date"],
+        },
+      ],
     });
+    const payload = parseToolPayload(result);
+    if (
+      !isRecord(payload) ||
+      !isRecord(payload["configure"]) ||
+      !Array.isArray(payload["configure"]["fields"])
+    ) {
+      throw new TypeError("Expected a configure field skeleton");
+    }
+    for (const field of payload["configure"]["fields"]) {
+      expect(field).not.toHaveProperty("visibleWhen");
+      expect(field).not.toHaveProperty("itemAliases");
+    }
+    expect(payload["configure"]).not.toHaveProperty("arrays");
   });
 
   test("list_templates (detail) anonymizes nested field option text", async () => {
@@ -801,7 +845,16 @@ describe("MCP template tools", () => {
           path: "role",
           label: "Smith role",
           inputType: "select",
+          visibleWhen: null,
           required: false,
+          hint: null,
+          validation: null,
+          source: null,
+          aiSeesDocument: false,
+          aiPrompt: null,
+          aiAdapt: false,
+          optionsFrom: null,
+          dateFormat: null,
           options: ["Smith director"],
           lookup: {
             registry: "krs",
@@ -822,7 +875,7 @@ describe("MCP template tools", () => {
           hint: "Retype {{Smith.name}} in one run.",
         },
       ],
-    });
+    } satisfies DescribeTemplateResult);
     anonymizeTextFieldsMock.mockResolvedValue(
       Result.ok({
         entityCount: 7,
@@ -3943,6 +3996,7 @@ describe("MCP template tools", () => {
             path: "company",
             label: "Company",
             inputType: "text",
+            visibleWhen: null,
             required: true,
             hint: null,
             options: null,

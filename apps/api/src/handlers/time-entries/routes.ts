@@ -16,10 +16,17 @@ import listTimeSuggestions from "@/api/handlers/time-entries/suggestions/list";
 import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
 import updateTimeEntryById from "@/api/handlers/time-entries/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const timeEntriesRoute = new Elysia({
   prefix: "/time-entries/:workspaceId",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({
