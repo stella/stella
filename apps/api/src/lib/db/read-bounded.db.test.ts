@@ -1,4 +1,4 @@
-import { Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq, gt } from "drizzle-orm";
 
@@ -124,7 +124,11 @@ describe("complete bounded reads", () => {
               break;
             }
             expect(page.items).toHaveLength(cap);
-            expect(page.nextCursor).toBe(page.items.at(-1)?.canonical);
+            const lastItem = page.items.at(-1);
+            if (lastItem === undefined) {
+              panic("A continuing cursor page must contain an item");
+            }
+            expect(page.nextCursor).toBe(lastItem.canonical);
             cursor = page.nextCursor;
           } while (cursor !== undefined);
           expect(traversed).toEqual(expectedRows);
