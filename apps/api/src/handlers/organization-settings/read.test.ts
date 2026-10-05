@@ -142,14 +142,14 @@ test("organization settings expose registry-derived enabled or hidden statuses w
           isMcpDescriptorFeatureEnabled({
             context: {
               organizationId,
-              userId: "user_test",
+              userId: toSafeId<"user">("user_test"),
               featureAccessSnapshot: snapshot,
             },
             kind,
             id: "fixture",
             featureId,
           }),
-        ).toBe(result.capabilities[featureId]?.status === "enabled");
+        ).toBe(projected.capabilities[featureId]?.status === "enabled");
       }
     }
     expect(Object.keys(projected.capabilities)).toEqual(Object.keys(registry));

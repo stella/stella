@@ -107,7 +107,6 @@ export default eslintCompatPlugin({
                 reportedFilename.endsWith(
                   "require-caller-feature-access.fixture.tsx",
                 ));
-            return enabled;
           },
           ImportDeclaration(node) {
             if (!enabled || !isAstNode(node) || node.importKind === "type") {
@@ -225,7 +224,7 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
-            if (!enabled) {
+            if (!enabled || !isAstNode(node)) {
               return;
             }
             const key = memberPropertyName(node);
