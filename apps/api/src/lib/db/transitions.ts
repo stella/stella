@@ -291,9 +291,15 @@ const executeScopedUpsertWrites = async <
           RETURNING ${returning}
         `);
   const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
+  const primaryColumns = new Set(
+    getTableConfig(spec.table).primaryKeys.flatMap(({ columns: primary }) =>
+      primary.map((column) => column.name),
+    ),
+  );
   const updateColumns = insertColumns.filter(
     (column) =>
       !column.primary &&
+      !primaryColumns.has(column.name) &&
       !identityKeys.some((key) => columns[key]?.name === column.name),
   );
   const priorStates = Object.entries<readonly string[]>(spec.edges).flatMap(
@@ -875,7 +881,7 @@ export const defineKeyedTransitions = <
       )
     ) {
       panic(
-        "A scoped transition identity must cover exactly one non-null primary or unique key",
+        "A scoped transition identity must cover exactly one composite primary key",
       );
     }
   }

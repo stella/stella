@@ -386,7 +386,7 @@ test("contact monitoring endpoint and capability perform the requested transitio
         now: new Date(),
         signal: new AbortController().signal,
       });
-    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    expect((await drain()).unwrap()).toEqual({ claimed: 1, terminal: 1 });
     const before = await contactState(contact.id);
     expect(before.matches).toHaveLength(1);
     expect(before.matches.at(0)?.state).toBe("active");
@@ -494,7 +494,7 @@ test("contact monitoring endpoint and capability perform the requested transitio
     expect(includedReplay.ok).toBe(true);
     expect((await contactState(contact.id)).audits).toEqual(queued.audits);
     expect((await contactState(contact.id)).marks).toEqual(queued.marks);
-    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    expect((await drain()).unwrap()).toEqual({ claimed: 1, terminal: 1 });
     const refreshed = await contactState(contact.id);
     expect(refreshed.marks).toHaveLength(0);
     expect(refreshed.matches).toHaveLength(1);

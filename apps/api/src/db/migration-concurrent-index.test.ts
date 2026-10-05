@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
@@ -1250,7 +1251,7 @@ describe("concurrent index migration safety", () => {
     ).toEqual([]);
     for (const name of names) {
       if (name === undefined) {
-        throw new Error("Concurrent index identifier was not captured");
+        panic("Concurrent index identifier was not captured");
       }
       const validatedIndexNames = new Set(ONLINE_VALIDATED_INDEX_NAMES);
       expect(validatedIndexNames.delete(name)).toBe(true);

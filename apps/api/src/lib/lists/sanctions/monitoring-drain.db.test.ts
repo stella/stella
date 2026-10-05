@@ -2123,7 +2123,7 @@ test(
     const progress = await job();
     expect(progress.status).toBe("pending");
     expect(progress.cursorContactId).not.toBeNull();
-    expect(await audits()).toHaveLength(0);
+    expect(await audits()).toHaveLength(1);
     await client.exec(`CREATE FUNCTION reject_backfill_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id = 'system:sanctions-monitoring-backfill' THEN RAISE EXCEPTION 'synthetic backfill audit failure'; END IF; RETURN NEW; END $$;
     CREATE TRIGGER reject_backfill_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION reject_backfill_audit();`);
     try {
@@ -2132,7 +2132,7 @@ test(
       ).toContain("synthetic backfill audit failure");
       expect((await job()).status).toBe("pending");
       expect((await job()).cursorContactId).toBe(progress.cursorContactId);
-      expect(await audits()).toHaveLength(0);
+      expect(await audits()).toHaveLength(1);
       expect(
         await scoped(
           async (tx) => await tx.select().from(sanctionsContactScreenings),
@@ -2148,15 +2148,32 @@ test(
     ).toBe("advanced");
     expect((await job()).status).toBe("complete");
     const events = await audits();
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    expect(events.at(0)?.changes).toBeNull();
+    expect(events.at(0)?.metadata).toMatchObject({ updatedScreenings: 100 });
     expect(events.at(0)?.userId).toBe("system:sanctions-monitoring-backfill");
-    expect(events.at(0)?.changes).toEqual({
+    expect(events.at(1)?.changes).toEqual({
       status: { old: "pending", new: "complete" },
     });
     expect(
       await advance(new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 3)),
     ).toBe("idle");
-    expect(await audits()).toHaveLength(1);
+    expect(await audits()).toHaveLength(2);
+    await scoped(async (tx) => {
+      await tx
+        .update(sanctionsMonitoringBackfills)
+        .set({
+          status: "pending",
+          cursorContactId: null,
+        })
+        .where(eq(sanctionsMonitoringBackfills.organizationId, organizationId));
+    });
+    expect(
+      await advance(new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 4)),
+    ).toBe("advanced");
+    expect((await job()).status).toBe("pending");
+    expect((await job()).cursorContactId).not.toBeNull();
+    expect(await audits()).toHaveLength(2);
   },
   TIMEOUT,
 );

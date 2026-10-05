@@ -8,6 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  DOCUMENT_PROCESSING_MODE,
   contacts,
   auditLogs,
   sanctionsContactMarks,
@@ -19,7 +20,11 @@ import {
   sanctionsSources,
   sanctionsScreeningEvents,
 } from "@/api/db/schema";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -154,6 +159,250 @@ if (!runPostgresTests || databaseUrl === undefined) {
       }
     });
   }, 60_000);
+
+  test("general settings and monitoring preserve the first unique-key row in either order", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      for (const firstWriter of ["general", "monitoring"] as const) {
+        const admin = openClient().db;
+        const generalDb = openClient().db;
+        const monitoringDb = openClient().db;
+        const organizationId = mintAuthProviderId<"organization">();
+        const generalSettingsId = createSafeId<"organizationSettings">();
+        const generalUserId = mintAuthProviderId<"user">();
+        const monitoringUserId = mintAuthProviderId<"user">();
+        const firstReady = Promise.withResolvers<undefined>();
+        const secondStarted = Promise.withResolvers<undefined>();
+        const releaseFirst = Promise.withResolvers<undefined>();
+        let monitoringSettingsId: typeof generalSettingsId | undefined;
+        let firstTransaction: Promise<void> | undefined;
+        let secondTransaction: Promise<void> | undefined;
+        let firstPid: number | undefined;
+        let secondPid: number | undefined;
+
+        const generalAudit = createBackgroundAuditRecorder({
+          organizationId,
+          workspaceId: null,
+          userId: generalUserId,
+          execution: {
+            performer: { type: "user", id: generalUserId },
+            trigger: { type: "direct" },
+          },
+        });
+        const monitoringAudit = createBackgroundAuditRecorder({
+          organizationId,
+          workspaceId: null,
+          userId: monitoringUserId,
+          execution: {
+            performer: { type: "user", id: monitoringUserId },
+            trigger: { type: "direct" },
+          },
+        });
+        const generalWrite = async (hold: boolean) =>
+          await generalDb.transaction(async (tx) => {
+            const pid =
+              (
+                await tx.execute<{ pid: number }>(
+                  sql`SELECT pg_backend_pid() AS pid`,
+                )
+              ).at(0)?.pid ?? panic("General settings backend missing");
+            if (hold) {
+              firstPid = pid;
+            } else {
+              secondPid = pid;
+              secondStarted.resolve(undefined);
+            }
+            await tx.execute(sql`SET LOCAL ROLE stella`);
+            await tx.execute(
+              sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+            );
+            await tx
+              .insert(organizationSettings)
+              .values({
+                id: generalSettingsId,
+                organizationId,
+                documentProcessingMode:
+                  DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT,
+              })
+              .onConflictDoUpdate({
+                target: organizationSettings.organizationId,
+                set: {
+                  documentProcessingMode:
+                    DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT,
+                  updatedAt: new Date(),
+                },
+              });
+            await generalAudit(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+              resourceId: organizationId,
+              changes: {
+                documentProcessingMode: {
+                  old: DOCUMENT_PROCESSING_MODE.OFF,
+                  new: DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT,
+                },
+              },
+            });
+            if (hold) {
+              firstReady.resolve(undefined);
+              await releaseFirst.promise;
+            }
+          });
+        const monitoringWrite = async (hold: boolean) =>
+          await monitoringDb.transaction(async (tx) => {
+            const pid =
+              (
+                await tx.execute<{ pid: number }>(
+                  sql`SELECT pg_backend_pid() AS pid`,
+                )
+              ).at(0)?.pid ?? panic("Monitoring settings backend missing");
+            if (hold) {
+              firstPid = pid;
+            } else {
+              secondPid = pid;
+              secondStarted.resolve(undefined);
+            }
+            await tx.execute(sql`SET LOCAL ROLE stella`);
+            await tx.execute(
+              sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+            );
+            await enableSanctionsMonitoring(tx, {
+              organizationId,
+              recordAuditEvent: monitoringAudit,
+            });
+            const settings =
+              (
+                await tx
+                  .select({ id: organizationSettings.id })
+                  .from(organizationSettings)
+                  .where(
+                    eq(organizationSettings.organizationId, organizationId),
+                  )
+              ).at(0) ??
+              panic("Monitoring settings row missing in transaction");
+            monitoringSettingsId = settings.id;
+            if (hold) {
+              firstReady.resolve(undefined);
+              await releaseFirst.promise;
+            }
+          });
+
+        try {
+          await admin.insert(organization).values({
+            id: organizationId,
+            name: "Settings natural-key race",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          const first =
+            firstWriter === "general"
+              ? generalWrite(true)
+              : monitoringWrite(true);
+          firstTransaction = first;
+          await Promise.race([
+            firstReady.promise,
+            first.then(() =>
+              panic("First settings writer finished before barrier"),
+            ),
+          ]);
+
+          const second =
+            firstWriter === "general"
+              ? monitoringWrite(false)
+              : generalWrite(false);
+          secondTransaction = second;
+          await Promise.race([
+            secondStarted.promise,
+            second.then(() =>
+              panic("Second settings writer finished before conflict"),
+            ),
+          ]);
+          const awaitedPid =
+            secondPid ?? panic("Second settings writer PID missing");
+          let blockers: number[] = [];
+          for (let attempt = 0; attempt < 200; attempt += 1) {
+            blockers =
+              (
+                await admin.execute<{ blockers: number[] }>(
+                  sql`SELECT pg_blocking_pids(${awaitedPid}) AS blockers`,
+                )
+              ).at(0)?.blockers ?? [];
+            if (firstPid !== undefined && blockers.includes(firstPid)) {
+              break;
+            }
+          }
+          expect(blockers).toContain(
+            firstPid ?? panic("First settings writer PID missing"),
+          );
+          releaseFirst.resolve(undefined);
+          await Promise.all([first, second]);
+
+          const settings =
+            (
+              await admin
+                .select()
+                .from(organizationSettings)
+                .where(eq(organizationSettings.organizationId, organizationId))
+            ).at(0) ?? panic("Settings race did not persist settings");
+          const expectedSettingsId =
+            (firstWriter === "general"
+              ? generalSettingsId
+              : monitoringSettingsId) ??
+            panic("First settings writer did not capture its row ID");
+          expect(settings.id).toBe(expectedSettingsId);
+          expect(settings.sanctionsMonitoringMode).toBe("enabled");
+          expect(settings.documentProcessingMode).toBe(
+            DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT,
+          );
+          expect(
+            await admin
+              .select()
+              .from(sanctionsOrganizationMarks)
+              .where(
+                eq(sanctionsOrganizationMarks.organizationId, organizationId),
+              ),
+          ).toHaveLength(1);
+          const events = await admin
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId));
+          const expectedAuditUsers =
+            firstWriter === "general"
+              ? [generalUserId]
+              : [generalUserId, monitoringUserId];
+          expect(events.map(({ userId }) => userId).toSorted()).toEqual(
+            expectedAuditUsers.toSorted(),
+          );
+          expect(
+            events.filter(({ userId }) => userId === generalUserId),
+          ).toHaveLength(1);
+          expect(
+            events.filter(({ userId }) => userId === monitoringUserId),
+          ).toHaveLength(firstWriter === "general" ? 0 : 1);
+          expect(
+            events.filter(({ changes }) =>
+              Object.hasOwn(changes ?? {}, "documentProcessingMode"),
+            ),
+          ).toHaveLength(1);
+          expect(
+            events.filter(({ changes }) =>
+              Object.hasOwn(changes ?? {}, "sanctionsMonitoringMode"),
+            ),
+          ).toHaveLength(firstWriter === "general" ? 0 : 1);
+        } finally {
+          releaseFirst.resolve(undefined);
+          await Promise.allSettled(
+            [firstTransaction, secondTransaction].filter(
+              (transaction) => transaction !== undefined,
+            ),
+          );
+          await admin
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+        }
+      }
+    });
+  }, 60_000);
+
   for (const operation of [
     "serial-disable",
     "commit-first",
