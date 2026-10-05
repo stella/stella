@@ -1,5 +1,6 @@
 mod account;
 mod app_lifecycle;
+mod app_window;
 mod autostart;
 mod bridge;
 mod clipboard;
@@ -449,14 +450,10 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     return;
   }
 
-  let builder = tauri::WebviewWindowBuilder::new(
-    handle,
-    "main",
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("stella desktop")
-  .inner_size(480.0, 460.0)
-  .resizable(false);
+  let builder = crate::app_window::builder(handle, "main", "index.html")
+    .title("stella desktop")
+    .inner_size(480.0, 460.0)
+    .resizable(false);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,

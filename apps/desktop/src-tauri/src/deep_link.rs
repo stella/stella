@@ -460,10 +460,10 @@ pub(crate) async fn show_connection_confirmation(
     percent_encode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     app_handle,
     "selfhost-connect-dialog",
-    tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
+    format!("selfhost-connect-dialog.html#{hash}"),
   )
   .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)
