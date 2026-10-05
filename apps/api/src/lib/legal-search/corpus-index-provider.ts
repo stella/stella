@@ -42,6 +42,7 @@ import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
+import { eligibleCorpusRows } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
   corpusSearchGroupToken,
   decodeCorpusSearchCursor,
@@ -128,6 +129,7 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
   tx
     .select({
       id: caseLawDecisions.id,
+      eligible: sql<boolean>`coalesce(${and(redistributableCaseLawSource, publishedCaseLawDecision, currentCaseLawCorpusProjection(generation))}, false)`,
       caseNumber: caseLawDecisions.caseNumber,
       caseNumberType: caseLawDecisions.caseNumberType,
       ecli: caseLawDecisions.ecli,
@@ -155,14 +157,7 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(
-      and(
-        inArray(caseLawDecisions.id, ids),
-        redistributableCaseLawSource,
-        publishedCaseLawDecision,
-        currentCaseLawCorpusProjection(generation),
-      ),
-    );
+    .where(inArray(caseLawDecisions.id, ids));
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
@@ -188,7 +183,7 @@ const rankCorpusIndexProviderCandidates = async ({
   const ids = candidates.map((candidate) =>
     toSafeId<"caseLawDecision">(candidate.id),
   );
-  const rows =
+  const readRows =
     ids.length === 0
       ? []
       : await caseLawPublicReadDb(
@@ -198,6 +193,8 @@ const rankCorpusIndexProviderCandidates = async ({
               ids,
             }),
         );
+
+  const rows = eligibleCorpusRows({ family: "case_law", ids, rows: readRows });
 
   // Keyed by plain string id (candidate ids from corpus index are strings).
   const displayById = new Map(rows.map((row) => [String(row.id), row]));

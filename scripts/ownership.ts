@@ -63,6 +63,12 @@ export type OwnershipEnforcement =
       readonly method: string;
       readonly within: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "function-call";
+      readonly name: string;
+      readonly within: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {
@@ -2396,6 +2402,51 @@ const OWNERSHIP_DECLARATIONS = [
     },
   },
   {
+    id: "corpus-hit-classification",
+    capability: "Classifying corpus engine hit identities",
+    owner: ["apps/api/src/lib/legal-search/corpus-hit-disposition.ts"],
+    summary:
+      "The identity reader runs through one typed disposition owner in native, " +
+      "scored, BM25 and highlight modes. Malformed hits are counted separately " +
+      "from repeated passages and physical highlight copies.",
+    enforcement: {
+      kind: "function-call",
+      name: "extractId",
+      within: ["apps/api/src/lib/legal-search/", "apps/api/src/handlers/"],
+      allowed: [],
+    },
+  },
+  {
+    id: "corpus-candidate-rehydration",
+    capability: "Classifying eligible canonical search candidates",
+    owner: [
+      "apps/api/src/handlers/case-law/decisions/search.ts",
+      "apps/api/src/lib/legal-search/corpus-index-provider.ts",
+      "apps/api/src/lib/legal-search/corpus-rehydration-disposition.ts",
+    ],
+    summary:
+      "Raw candidate eligibility rows stay within their rehydration owners. " +
+      "`eligibleCorpusRows` classifies and filters them before ranking or rendering.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/handlers/case-law/decisions/search",
+        "@/api/lib/legal-search/corpus-index-provider",
+      ],
+      names: [
+        "candidateDecisionRowsQuery",
+        "pageDecisionRowsQuery",
+        "rehydrateCorpusIndexProviderCandidatesQuery",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/decisions/search-hydration.db.test.ts",
+          reason: "Verifies candidate eligibility with the public reader role.",
+        },
+      ],
+    },
+  },
+  {
     id: "compact-uuid",
     capability: "Compacting a uuid into a URL segment and reading it back",
     owner: ["packages/uuid-codec/"],
@@ -2598,6 +2649,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "function-call": {
+      return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";

@@ -21,6 +21,10 @@ import type {
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import {
+  setLogSinkForTesting,
+  type LogRecord,
+} from "@/api/lib/observability/logger";
+import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
@@ -259,4 +263,41 @@ test("a withdrawn version is dropped while its erase is still pending", async ()
 
   expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
   expect([...result.context.byId.keys()]).toEqual([projectedId]);
+});
+
+test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
+  const records: LogRecord[] = [];
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
+  try {
+    const missingId = createSafeId<"legislationDocument">();
+    const result = await rehydrateLegislationCandidates({
+      body: { query: "smlouva" },
+      legislationDb,
+      generation: PROJECTED_GENERATION,
+      candidates: candidatesOf(
+        projectedId,
+        queuedId,
+        movedId,
+        unheldId,
+        withdrawnId,
+        missingId,
+      ),
+    });
+    expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+    const observations = records.filter(
+      (record) => record.message === "corpus.search.hit_dispositions",
+    );
+    expect(observations).toHaveLength(1);
+    expect(observations.at(0)?.attributes).toMatchObject({
+      stage: "rehydration",
+      family: "legislation",
+      excluded: 4,
+      drift: 1,
+      malformed: 0,
+    });
+  } finally {
+    setLogSinkForTesting(null);
+  }
 });

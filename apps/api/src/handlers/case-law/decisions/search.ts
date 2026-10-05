@@ -175,6 +175,7 @@ import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
+import { eligibleCorpusRows } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
   type CorpusSearchCursor,
   decodeCorpusSearchCursor,
@@ -1188,8 +1189,8 @@ type DecisionRowsQueryOptions = {
  * every candidate the scan reaches — a few hundred of them — so every column
  * here is paid for a couple of hundred times to serve a page of ten. The
  * authority and the deciding court drive the blend, the group key folds the
- * language versions of one judgment, and the request's filters are applied in
- * SQL rather than read back.
+ * language versions of one judgment. SQL evaluates eligibility for every
+ * candidate so rehydration can account for exclusions before ranking.
  */
 export const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
@@ -1198,6 +1199,7 @@ export const candidateDecisionRowsQuery = (
   tx
     .select({
       id: caseLawDecisions.id,
+      eligible: sql<boolean>`coalesce(${and(...filters)}, false)`,
       citationAuthority: caseLawDecisions.citationAuthority,
       // The court's rank is a blend signal; the country scopes the pattern
       // match that resolves it, since court names repeat across borders.
@@ -1215,7 +1217,7 @@ export const candidateDecisionRowsQuery = (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(inArray(caseLawDecisions.id, ids), ...filters));
+    .where(inArray(caseLawDecisions.id, ids));
 
 type CandidateDecisionRow = Awaited<
   ReturnType<typeof candidateDecisionRowsQuery>
@@ -1233,6 +1235,7 @@ export const pageDecisionRowsQuery = (
   tx
     .select({
       ...publicDecisionRowColumns(),
+      eligible: sql<boolean>`coalesce(${and(...filters)}, false)`,
       // The hit carries every identifier the publisher supplied; a list row
       // does not, so this one column is the search's own.
       identifiers: sql<unknown>`coalesce((
@@ -1249,7 +1252,7 @@ export const pageDecisionRowsQuery = (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(inArray(caseLawDecisions.id, ids), ...filters));
+    .where(inArray(caseLawDecisions.id, ids));
 
 type PageDecisionRow = Awaited<
   ReturnType<typeof pageDecisionRowsQuery>
@@ -1378,7 +1381,12 @@ export const readCaseLawPageDecisionRows = async ({
         }),
       ),
   );
-  return new Map(rows.map((row) => [String(row.id), row]));
+  return new Map(
+    eligibleCorpusRows({ family: "case_law", ids, rows }).map((row) => [
+      String(row.id),
+      row,
+    ]),
+  );
 };
 
 type RehydrateCaseLawCandidatesOptions = {
@@ -1516,7 +1524,7 @@ export const rehydrateCaseLawCandidates = async ({
   for (const id of ids) {
     hydrated.set(id, null);
   }
-  for (const row of rows) {
+  for (const row of eligibleCorpusRows({ family: "case_law", ids, rows })) {
     hydrated.set(String(row.id), row);
   }
 

@@ -46,6 +46,7 @@ import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
+import { eligibleCorpusRows } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import type {
   CorpusSearchCursor,
   CorpusSearchPhase,
@@ -449,12 +450,13 @@ export const rehydrateLegislationCandidates = async ({
     currentLegislationCorpusProjection(generation),
   ];
   const read = await legislationDb(async (tx) => {
-    const rows =
+    const candidateRows =
       ids.length === 0
         ? []
         : await tx
             .select({
               id: legislationDocuments.id,
+              eligible: sql<boolean>`coalesce(${and(...rehydrationFilters)}, false)`,
               sourceId: legislationDocuments.sourceId,
               eli: legislationDocuments.eli,
               slug: legislationDocuments.slug,
@@ -473,9 +475,12 @@ export const rehydrateLegislationCandidates = async ({
               legislationSources,
               eq(legislationSources.id, legislationDocuments.sourceId),
             )
-            .where(
-              and(inArray(legislationDocuments.id, ids), ...rehydrationFilters),
-            );
+            .where(inArray(legislationDocuments.id, ids));
+    const rows = eligibleCorpusRows({
+      family: "legislation",
+      ids,
+      rows: candidateRows,
+    });
     const named =
       namedWorks ??
       (await readNamedLegislationWorks(tx, {

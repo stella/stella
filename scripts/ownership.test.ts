@@ -62,6 +62,26 @@ describe("renderOwnershipDocument", () => {
     ).toContain("call `.getState()` in `apps/api/src/`");
   });
 
+  test("renders a function-call row with its scope", () => {
+    expect(
+      renderOwnershipDocument([
+        entry({
+          enforcement: {
+            kind: "function-call",
+            name: "extractId",
+            within: [
+              "apps/api/src/lib/legal-search/",
+              "apps/api/src/handlers/",
+            ],
+            allowed: [],
+          },
+        }),
+      ]),
+    ).toContain(
+      "call `extractId()` in `apps/api/src/lib/legal-search/`, `apps/api/src/handlers/`",
+    );
+  });
+
   test("renders one row per entry, keyed by id", () => {
     const rendered = renderOwnershipDocument(OWNERSHIP);
     for (const { id } of OWNERSHIP) {

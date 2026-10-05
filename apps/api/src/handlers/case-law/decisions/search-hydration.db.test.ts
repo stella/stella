@@ -27,7 +27,13 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import { eligibleCorpusRows } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  setLogSinkForTesting,
+  type LogRecord,
+} from "@/api/lib/observability/logger";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -356,6 +362,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
       "country",
       "court",
       "courtId",
+      "eligible",
       "id",
       "languageGroupKey",
     ]);
@@ -582,5 +589,96 @@ test("corpus hydration and page reads apply the same case-insensitive type filte
       });
       expect([...rows.keys()].toSorted()).toEqual(expected.toSorted());
     }
+  }
+});
+
+test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
+  const records: LogRecord[] = [];
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
+  try {
+    const missingId = createSafeId<"caseLawDecision">();
+    const result = await rehydrateCaseLawCandidates({
+      body: SEARCH_BODY,
+      caseLawDb,
+      courtWeights,
+      generation: GENERATION,
+      candidates: candidatesOf(
+        czechId,
+        foreignId,
+        closedId,
+        queuedId,
+        missingId,
+      ),
+    });
+    expect(result.ranked.map((hit) => hit.id)).toEqual([czechId]);
+    const observations = records.filter(
+      (record) => record.message === "corpus.search.hit_dispositions",
+    );
+    expect(observations).toHaveLength(1);
+    expect(observations.at(0)?.attributes).toMatchObject({
+      stage: "rehydration",
+      family: "case_law",
+      excluded: 3,
+      drift: 1,
+      malformed: 0,
+    });
+    expect(reads).toBe(1);
+  } finally {
+    setLogSinkForTesting(null);
+  }
+});
+
+test("the shared provider accounts for canonical eligibility with its existing batch", async () => {
+  const records: LogRecord[] = [];
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
+  try {
+    const missingId = createSafeId<"caseLawDecision">();
+    const ids = [czechId, closedId, queuedId, missingId];
+    const rows = await caseLawDb(
+      async (tx) =>
+        await rehydrateCorpusIndexProviderCandidatesQuery(tx, {
+          generation: GENERATION,
+          ids,
+        }),
+    );
+    const eligible = eligibleCorpusRows({ family: "case_law", ids, rows });
+    expect(eligible.map((row) => row.id)).toEqual([czechId]);
+    expect(
+      records.find(
+        (record) => record.message === "corpus.search.hit_dispositions",
+      )?.attributes,
+    ).toMatchObject({ excluded: 2, drift: 1 });
+    expect(reads).toBe(1);
+  } finally {
+    setLogSinkForTesting(null);
+  }
+});
+
+test("the final page read accounts for canonical exclusions before presentation", async () => {
+  const records: LogRecord[] = [];
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
+  try {
+    const missingId = createSafeId<"caseLawDecision">();
+    const rows = await readCaseLawPageDecisionRows({
+      body: SEARCH_BODY,
+      generation: GENERATION,
+      caseLawDb,
+      ids: [czechId, foreignId, closedId, missingId],
+    });
+    expect([...rows.keys()]).toEqual([czechId]);
+    expect(
+      records.find(
+        (record) => record.message === "corpus.search.hit_dispositions",
+      )?.attributes,
+    ).toMatchObject({ excluded: 2, drift: 1 });
+    expect(reads).toBe(1);
+  } finally {
+    setLogSinkForTesting(null);
   }
 });

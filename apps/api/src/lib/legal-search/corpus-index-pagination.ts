@@ -9,6 +9,8 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
+import { classifyCorpusHit } from "@/api/lib/legal-search/corpus-hit-disposition";
+import { reportCorpusHitDispositions } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
   CorpusIndexError,
   CorpusIndexHit,
@@ -375,16 +377,30 @@ const readPageSnippets = async ({
 
   // Best-first, so the first snippet a document gets is its best-scoring
   // copy's; the later ones are the refresh overlap and are dropped.
+  let malformed = 0;
   for (const [index, hit] of result.value.hits.entries()) {
-    const id = extractId(hit);
-    if (id === null || snippetById.has(id)) {
-      continue;
-    }
-    const snippet = extractSnippet(result.value.snippets[index], hit);
-    if (snippet !== null) {
-      snippetById.set(id, snippet);
+    const disposition = classifyCorpusHit(hit, extractId);
+    switch (disposition.type) {
+      case "malformed":
+        malformed += 1;
+        break;
+      case "valid": {
+        const { id } = disposition;
+        if (snippetById.has(id)) {
+          break;
+        }
+        const snippet = extractSnippet(result.value.snippets[index], hit);
+        if (snippet !== null) {
+          snippetById.set(id, snippet);
+        }
+        break;
+      }
+      default:
+        disposition satisfies never;
+        panic("Unhandled corpus hit disposition");
     }
   }
+  reportCorpusHitDispositions({ stage: "highlight", malformed });
   return { indexMs, rounds: 1, snippetById };
 };
 
@@ -757,6 +773,7 @@ const readPositionSearchPage = async <TContext>({
   const windowStart = parsedCursor?.windowStart ?? 0;
   let startOffset = windowStart;
   let scanned = 0;
+  let malformed = 0;
   /** Document owning the last passage the scan read; the next window's edge. */
   let lastScannedId: string | null = null;
   let totalHits = Number.POSITIVE_INFINITY;
@@ -831,42 +848,53 @@ const readPositionSearchPage = async <TContext>({
     totalHits = Math.max(round.numHits, startOffset + hits.length);
     scores.recordRound(round, startOffset);
     for (const [index, hit] of hits.entries()) {
-      const id = extractId(hit);
-      if (id === null) {
-        continue;
-      }
-      lastScannedId = id;
-      // Keep emitted candidates while replaying the window: their best
-      // member must still represent the group when the ranker folds it.
-      // The cursor comparison runs only after that fold.
+      const disposition = classifyCorpusHit(hit, extractId);
+      switch (disposition.type) {
+        case "malformed":
+          malformed += 1;
+          break;
+        case "valid": {
+          const { id } = disposition;
+          lastScannedId = id;
+          // Keep emitted candidates while replaying the window: their best
+          // member must still represent the group when the ranker folds it.
+          // The cursor comparison runs only after that fold.
 
-      // Hits arrive best-first, so the first hit seen for a document is its
-      // best-scoring passage: it sets the document's rank, the passage a
-      // snippet is later cut from, and the anchor the result deep-links to.
-      // Later passages of the same document only add to its breadth count.
-      const seen = passageCountById.get(id);
-      if (seen !== undefined) {
-        passageCountById.set(id, seen + 1);
-        continue;
-      }
-      passageCountById.set(id, 1);
+          // Hits arrive best-first, so the first hit seen for a document is its
+          // best-scoring passage: it sets the document's rank, the passage a
+          // snippet is later cut from, and the anchor the result deep-links to.
+          // Later passages of the same document only add to its breadth count.
+          const seen = passageCountById.get(id);
+          if (seen !== undefined) {
+            passageCountById.set(id, seen + 1);
+            continue;
+          }
+          passageCountById.set(id, 1);
 
-      candidates.push({
-        id,
-        score: corpusIndexLexicalScore(startOffset + index),
-      });
-      scores.recordBestPassage(round, index, id);
+          candidates.push({
+            id,
+            score: corpusIndexLexicalScore(startOffset + index),
+          });
+          scores.recordBestPassage(round, index, id);
 
-      const clause = passageClause(hit);
-      if (clause !== null) {
-        passageClauseById.set(id, clause);
-      }
-      const anchorId = readAnchorId(hit);
-      if (anchorId !== null) {
-        anchorIdById.set(id, anchorId);
+          const clause = passageClause(hit);
+          if (clause !== null) {
+            passageClauseById.set(id, clause);
+          }
+          const anchorId = readAnchorId(hit);
+          if (anchorId !== null) {
+            anchorIdById.set(id, anchorId);
+          }
+          break;
+        }
+        default:
+          disposition satisfies never;
+          panic("Unhandled corpus hit disposition");
       }
     }
 
+    reportCorpusHitDispositions({ stage: scanTransport.type, malformed });
+    malformed = 0;
     startOffset += hits.length;
     scanned += hits.length;
     ranking = await rankCandidates(candidates);
@@ -1055,36 +1083,48 @@ const readBm25SearchPage = async <TContext>(
   const passageClauseById = new Map<string, string>();
   const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
+  let malformed = 0;
   for (const { fields: hit, score } of hits) {
     if (topScore === null) {
       panic("A nonempty BM25 universe requires a top score");
     }
-    const id = extractId(hit);
-    if (id === null) {
-      continue;
-    }
-    const seen = passageCountById.get(id);
-    passageCountById.set(id, (seen ?? 0) + 1);
-    if (seen !== undefined) {
-      continue;
-    }
-    // Retain the cursor decision until grouping; dropping its representative
-    // could expose a language sibling and repeat a judgment on the next page.
-    // Filter-only matches can have no lexical signal (all scores zero).
-    candidates.push({
-      id,
-      score: topScore === 0 ? 0 : (score / topScore) ** CORPUS_BM25_RATIO_POWER,
-    });
-    bestScoreById.set(id, score);
-    const clause = passageClause(hit);
-    if (clause !== null) {
-      passageClauseById.set(id, clause);
-    }
-    const anchor = readAnchorId(hit);
-    if (anchor !== null) {
-      anchorIdById.set(id, anchor);
+    const disposition = classifyCorpusHit(hit, extractId);
+    switch (disposition.type) {
+      case "malformed":
+        malformed += 1;
+        break;
+      case "valid": {
+        const { id } = disposition;
+        const seen = passageCountById.get(id);
+        passageCountById.set(id, (seen ?? 0) + 1);
+        if (seen !== undefined) {
+          continue;
+        }
+        // Retain the cursor decision until grouping; dropping its representative
+        // could expose a language sibling and repeat a judgment on the next page.
+        // Filter-only matches can have no lexical signal (all scores zero).
+        candidates.push({
+          id,
+          score:
+            topScore === 0 ? 0 : (score / topScore) ** CORPUS_BM25_RATIO_POWER,
+        });
+        bestScoreById.set(id, score);
+        const clause = passageClause(hit);
+        if (clause !== null) {
+          passageClauseById.set(id, clause);
+        }
+        const anchor = readAnchorId(hit);
+        if (anchor !== null) {
+          anchorIdById.set(id, anchor);
+        }
+        break;
+      }
+      default:
+        disposition satisfies never;
+        panic("Unhandled corpus hit disposition");
     }
   }
+  reportCorpusHitDispositions({ stage: "bm25", malformed });
   const ranking = await rankCandidates(candidates);
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(0, limit);
