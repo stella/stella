@@ -347,7 +347,9 @@ const resolveRef = (args: Args): string => {
   }
   return (
     newestStableTag(tags.stdout.split("\n").map((tag) => tag.trim())) ??
-    fail(`no stable release tag is reachable from ${args.previousReleaseOf}`)
+    fail(
+      `no stable release tag is reachable from ${args.previousReleaseOf ?? "HEAD"}`,
+    )
   );
 };
 
@@ -371,7 +373,9 @@ const main = async (argv: readonly string[]): Promise<number> => {
   const rows = await assessWithRetries(packages, npmRegistryFetcher, {
     attempts: args.attempts,
     intervalMs: args.intervalSeconds * 1000,
-    sleep: (ms) => Bun.sleep(ms),
+    sleep: async (ms) => {
+      await Bun.sleep(ms);
+    },
   });
   const table = renderLagTable(rows);
   const lagging = laggingPackages(rows);

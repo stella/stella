@@ -304,7 +304,7 @@ try {
         failures.push(
           isDistModuleEntry(entry)
             ? `${subpath}: "${specifier}" resolved outside dist`
-            : `${subpath}: "${specifier}" did not resolve to ${entry}`,
+            : `${subpath}: "${specifier}" did not resolve to ${JSON.stringify(entry)}`,
         );
       }
       resolvedBySubpath.set(subpath, resolved);
