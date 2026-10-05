@@ -943,10 +943,10 @@ const PlaybookEditorForm = ({
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      className="@container flex min-h-0 flex-1 flex-col overflow-y-auto"
       ref={scrollRef}
     >
-      <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
+      <div className="mx-auto flex w-full max-w-5xl gap-8 p-4 @lg:p-6">
         <div className="min-w-0 flex-1 space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Button
@@ -1426,7 +1426,7 @@ const OutlineRail = ({
   return (
     <nav
       aria-label={t("knowledge.playbooks.outline")}
-      className="sticky top-6 hidden h-fit w-48 shrink-0 lg:block"
+      className="sticky top-6 hidden h-fit w-48 shrink-0 @3xl:block"
     >
       <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}

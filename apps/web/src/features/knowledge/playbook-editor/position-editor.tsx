@@ -399,7 +399,7 @@ export const PositionEditor = ({
             )}
             {!position.enabled && (
               <span
-                className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}
+                className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}
               >
                 {t("knowledge.playbooks.disabledBadge")}
               </span>
@@ -552,7 +552,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   // the standard comes from instead.
   if (tiers === null) {
     return (
-      <span className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}>
+      <span className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}>
         {t("knowledge.playbooks.referenceStandard")}
       </span>
     );
@@ -572,7 +572,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   }
 
   return (
-    <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+    <span className="hidden shrink-0 items-center gap-1.5 @xl:flex">
       {counts.map((entry) => (
         <span className="flex items-center gap-1" key={entry.key}>
           <span className={cn("size-1.5 rounded-full", entry.cls)} />
