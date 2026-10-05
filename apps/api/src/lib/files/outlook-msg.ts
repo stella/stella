@@ -94,39 +94,6 @@ const unwrapParse = <T>(result: Result<T, CompoundFileParseError>): T => {
   return result.value;
 };
 
-/** @throws {CompoundFileParseError} when the container is malformed or a limit is reached */
-export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
-  const compoundFile = unwrapParse(
-    CompoundFile.parse(new Uint8Array(fileBuffer)),
-  );
-  const rootProperties = collectProperties(compoundFile, []);
-  const recipients = readRecipients(compoundFile);
-  const attachments = readAttachments(compoundFile);
-
-  return {
-    subject: getString(rootProperties, PROPERTY_ID.subject),
-    fromName: getString(rootProperties, PROPERTY_ID.senderName),
-    fromEmail:
-      getString(rootProperties, PROPERTY_ID.senderSmtpAddress) ??
-      getString(rootProperties, PROPERTY_ID.senderEmail),
-    to: recipients.filter((recipient) => recipient.type === "to"),
-    cc: recipients.filter((recipient) => recipient.type === "cc"),
-    bcc: recipients.filter((recipient) => recipient.type === "bcc"),
-    date:
-      getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
-      getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
-    submittedAt: getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
-    messageId: getString(rootProperties, PROPERTY_ID.internetMessageId),
-    inReplyTo: getString(rootProperties, PROPERTY_ID.inReplyToId),
-    references: getString(rootProperties, PROPERTY_ID.internetReferences),
-    html:
-      getString(rootProperties, PROPERTY_ID.bodyHtml) ??
-      getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
-    text: getString(rootProperties, PROPERTY_ID.body),
-    attachments,
-  };
-};
-
 const collectProperties = (
   compoundFile: CompoundFile,
   storagePath: string[],
@@ -333,3 +300,36 @@ const normalizeString = (value: string): string | null => {
 
 const dataViewFor = (bytes: Uint8Array): DataView =>
   new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+/** @throws {CompoundFileParseError} when the container is malformed or a limit is reached */
+export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
+  const compoundFile = unwrapParse(
+    CompoundFile.parse(new Uint8Array(fileBuffer)),
+  );
+  const rootProperties = collectProperties(compoundFile, []);
+  const recipients = readRecipients(compoundFile);
+  const attachments = readAttachments(compoundFile);
+
+  return {
+    subject: getString(rootProperties, PROPERTY_ID.subject),
+    fromName: getString(rootProperties, PROPERTY_ID.senderName),
+    fromEmail:
+      getString(rootProperties, PROPERTY_ID.senderSmtpAddress) ??
+      getString(rootProperties, PROPERTY_ID.senderEmail),
+    to: recipients.filter((recipient) => recipient.type === "to"),
+    cc: recipients.filter((recipient) => recipient.type === "cc"),
+    bcc: recipients.filter((recipient) => recipient.type === "bcc"),
+    date:
+      getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
+      getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    submittedAt: getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
+    messageId: getString(rootProperties, PROPERTY_ID.internetMessageId),
+    inReplyTo: getString(rootProperties, PROPERTY_ID.inReplyToId),
+    references: getString(rootProperties, PROPERTY_ID.internetReferences),
+    html:
+      getString(rootProperties, PROPERTY_ID.bodyHtml) ??
+      getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
+    text: getString(rootProperties, PROPERTY_ID.body),
+    attachments,
+  };
+};

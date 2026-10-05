@@ -29,11 +29,9 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
-import {
-  CorrespondenceProvenance,
-  OriginalSignature,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
 export const Route = createFileRoute(
@@ -324,63 +322,6 @@ function CorrespondenceDetailPage() {
     </div>
   );
 }
-
-// An uploaded record links the email file it was read from; the file keeps the
-// attachments, so opening it shows them. Its uploader is its user filer.
-const UploadedSource = ({
-  uploader,
-  signatureDomain,
-  sourceEntityId,
-  workspaceId,
-}: {
-  uploader:
-    | { userName: string | null; userStatus: "active" | "deleted" }
-    | undefined;
-  signatureDomain: string | null;
-  sourceEntityId: string;
-  workspaceId: string;
-}) => {
-  const t = useTranslations();
-  let uploaderName = t("common.unknownUser");
-  if (uploader?.userStatus === "deleted") {
-    uploaderName = t("tasks.deletedAccount");
-  } else if (uploader?.userName) {
-    uploaderName = uploader.userName;
-  }
-  return (
-    <section className="space-y-3 rounded-lg border p-4">
-      <h2 className="text-sm font-medium">
-        {t("correspondence.uploadedFile")}
-      </h2>
-      <span className="block space-y-1 text-xs">
-        <span className="block">
-          <bdi dir="auto">
-            {t("correspondence.uploadedBy", { name: uploaderName })}
-          </bdi>
-        </span>
-        <OriginalSignature domain={signatureDomain} />
-      </span>
-      <Button
-        className="min-h-11"
-        onClick={() =>
-          detached(
-            openEntityInInspector(
-              sourceEntityId,
-              t("correspondence.uploadedFile"),
-              workspaceId,
-            ),
-            "correspondence.open-source-file",
-          )
-        }
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        {t("correspondence.openSourceFile")}
-      </Button>
-    </section>
-  );
-};
 
 // Back to the matter's correspondence view (the overview when the matter
 // removed it). Until the matter's views are cached, the matter itself, which

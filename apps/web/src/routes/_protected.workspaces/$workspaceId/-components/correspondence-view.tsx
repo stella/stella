@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { CorrespondenceProvenance as CorrespondenceProvenanceRecord } from "@stll/api-contract/correspondence";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
@@ -25,7 +24,10 @@ import {
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
 import { CorrespondenceDrops } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops";
-import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
+import {
+  AssertedHeadersLabel,
+  CorrespondenceProvenance,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import {
   useRevokeCorrespondenceAddress,
@@ -272,23 +274,6 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
         </div>
       )}
     </div>
-  );
-};
-
-const AssertedHeadersLabel = ({
-  record,
-}: {
-  record: CorrespondenceProvenanceRecord;
-}) => {
-  const t = useTranslations();
-  const { assertedHeadersLabel } = correspondenceProvenancePresentation(record);
-  if (assertedHeadersLabel === null) {
-    return null;
-  }
-  return (
-    <span className="text-muted-foreground mb-1 block text-xs">
-      {t(assertedHeadersLabel)}
-    </span>
   );
 };
 

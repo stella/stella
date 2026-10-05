@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import type { CorrespondenceProvenance as Provenance } from "@stll/api-contract/correspondence";
 
 import { correspondenceProvenancePresentation } from "./correspondence-provenance.logic";
+import { OriginalSignature } from "./original-signature";
 
 export const CorrespondenceProvenance = ({
   record,
@@ -27,17 +28,15 @@ export const CorrespondenceProvenance = ({
   );
 };
 
-export const OriginalSignature = ({ domain }: { domain: string | null }) => {
+export const AssertedHeadersLabel = ({ record }: { record: Provenance }) => {
   const t = useTranslations();
-  if (domain === null) {
+  const { assertedHeadersLabel } = correspondenceProvenancePresentation(record);
+  if (assertedHeadersLabel === null) {
     return null;
   }
   return (
-    <span className="block">
-      {t.rich("correspondence.originalSignatureVerified", {
-        domain,
-        identifier: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
-      })}
+    <span className="text-muted-foreground mb-1 block text-xs">
+      {t(assertedHeadersLabel)}
     </span>
   );
 };
