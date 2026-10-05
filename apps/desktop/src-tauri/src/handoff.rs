@@ -191,10 +191,10 @@ async fn recover(
       Ok(Recovery::Stop)
     }
     Failure::AccountRequired => {
-      if let Err(message) = host.connect_account().await {
-        if host.confirm(&Failure::Other(message)).await? {
-          return Ok(Recovery::Retry);
-        }
+      if let Err(message) = host.connect_account().await
+        && host.confirm(&Failure::Other(message)).await?
+      {
+        return Ok(Recovery::Retry);
       }
       Ok(Recovery::Stop)
     }
@@ -253,7 +253,7 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
     };
     let message_key = failure.message_key();
     match recover(failure, &DesktopRecovery { app, manager }).await? {
-      Recovery::Retry => continue,
+      Recovery::Retry => {}
       Recovery::Stop => return Err(crate::i18n::t(message_key).into()),
     }
   }
