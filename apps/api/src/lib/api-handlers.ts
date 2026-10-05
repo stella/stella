@@ -655,6 +655,7 @@ const safeHandlerErrorResponseSchemas = <TErrorSchema extends TSchema>(
   409: errorSchema,
   413: errorSchema,
   422: errorSchema,
+  426: errorSchema,
   428: errorSchema,
   429: errorSchema,
   500: errorSchema,

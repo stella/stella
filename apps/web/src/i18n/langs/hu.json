@@ -5407,6 +5407,7 @@
         "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Csatlakoztassa a stella desktop alkalmazást a fiókjához",
         "action": "Szerkesztés az asztali alkalmazásban",
         "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
         "authRequiredTitle": "A munkamenet lejárt",

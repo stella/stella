@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+
 import {
   decidePdfSigningPoll,
   parsePdfSigningDeadline,
@@ -22,6 +24,21 @@ const openSession = (
 });
 
 describe("pdf signing poll decisions", () => {
+  for (const closeReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
+    test(`${closeReason} settles before the handoff deadline`, () => {
+      expect(
+        decidePdfSigningPoll({
+          deadline: NOW + 120_000,
+          now: NOW,
+          session: openSession({ status: "cancelled", closeReason }),
+        }),
+      ).toEqual({
+        type: "settled",
+        outcome: { type: "cancelled", closeReason },
+      });
+    });
+  }
+
   test("keeps waiting at the poll cadence while the session is open", () => {
     expect(
       decidePdfSigningPoll({

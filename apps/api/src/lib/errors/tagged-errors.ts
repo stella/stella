@@ -24,6 +24,7 @@ export type HandlerErrorStatusCode =
   | 409
   | 413
   | 422
+  | 426
   | 428
   | 429
   | 500

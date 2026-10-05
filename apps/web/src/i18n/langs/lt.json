@@ -5407,6 +5407,7 @@
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Prijunkite stella desktop prie savo paskyros",
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",

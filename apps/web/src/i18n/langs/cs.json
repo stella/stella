@@ -5407,6 +5407,7 @@
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",

@@ -5407,6 +5407,7 @@
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",

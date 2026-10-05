@@ -156,6 +156,11 @@ export const ROOT_CONNECTION_DOORS = [
           reason: "Claims the native connection request.",
         },
         {
+          path: "apps/api/src/lib/business-registries/desktop/handoff-auth.ts",
+          reason:
+            "Records a terminal handoff acknowledgement before returning a protocol or account refusal.",
+        },
+        {
           path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
           reason: "Creates and claims document handoffs.",
         },
