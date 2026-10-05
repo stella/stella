@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -221,6 +222,14 @@ test("completed child success survives active registry persistence failure", asy
   }
 });
 
+// Bun hides passing test names when it detects an AI agent session, so the
+// reporter-output assertion would depend on who runs the suite.
+const reporterEnv = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([key]) => key !== "CLAUDECODE" && key !== "AGENT",
+  ),
+);
+
 test("real Bun test batches produce distinct JUnit artifacts and retain reporter output", async () => {
   const fixture = createFixture();
   const junitPaths: string[] = [];
@@ -253,7 +262,7 @@ import { expect, test } from "bun:test";
           });
         },
         cwd: fixture.directory,
-        env: process.env,
+        env: reporterEnv,
         identity: { kind: "batch", label, files: [testFile], lane: 0 },
         mode: "buffered",
       });
