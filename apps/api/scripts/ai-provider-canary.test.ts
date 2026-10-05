@@ -683,8 +683,8 @@ describe("AI provider canary retry contract", () => {
       unknown: false,
     } as const satisfies Record<AIErrorKind, boolean>;
 
-    expect([...AI_ERROR_KINDS].toSorted()).toEqual(
-      Object.keys(expectedRetryability).toSorted(),
+    expect(Object.keys(expectedRetryability).toSorted()).toEqual(
+      [...AI_ERROR_KINDS].toSorted(),
     );
     expect(
       AI_ERROR_KINDS.map((kind) =>

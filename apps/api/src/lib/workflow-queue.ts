@@ -197,7 +197,11 @@ const requesterCanOpenMatter = async (
 const WORKFLOW_ENTITY_JOB_NAME = "process-entity" as const;
 type WorkflowEntityJobName = typeof WORKFLOW_ENTITY_JOB_NAME;
 type WorkflowEntityQueue = Queue<EntityJobData, void, WorkflowEntityJobName>;
-type WorkflowEntityWorker = Worker<EntityJobData, void, WorkflowEntityJobName>;
+type WorkflowEntityWorker = BullMqWorker<
+  EntityJobData,
+  void,
+  WorkflowEntityJobName
+>;
 type WorkflowEntityJob = Job<EntityJobData, void, WorkflowEntityJobName>;
 
 // ── Public API ─────────────────────────────────────────

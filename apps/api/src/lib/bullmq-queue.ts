@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { Job, Queue, UnrecoverableError, Worker } from "bullmq";
-import type { QueueOptions } from "bullmq";
+import type { JobProgress, QueueOptions } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -40,7 +40,8 @@ class QueueFailureJob<
   DataType = unknown,
   ResultType = unknown,
   NameType extends string = string,
-> extends Job<DataType, ResultType, NameType> {
+  ProgressType extends JobProgress = JobProgress,
+> extends Job<DataType, ResultType, NameType, ProgressType> {
   override async moveToFailed<E extends Error>(
     error: E,
     token: string,
