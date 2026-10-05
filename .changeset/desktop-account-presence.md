@@ -1,5 +1,4 @@
 ---
-"@stll/api-contract": minor
 ---
 
-Add desktop account presence request and response contracts with shared heartbeat policy.
+Add desktop account presence contracts and shared heartbeat policy.
