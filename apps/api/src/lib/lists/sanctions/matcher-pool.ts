@@ -114,16 +114,18 @@ const exchangeMatcherMessage = async ({
     return { status: "unavailable" };
   }
   return await new Promise((resolve) => {
-    const abort = () => {
-      worker.off("message", reply);
-      resolve({ status: "unavailable" });
+    const listeners = {
+      abort: () => {
+        worker.off("message", listeners.reply);
+        resolve({ status: "unavailable" });
+      },
+      reply: (response: SanctionsMatcherReply) => {
+        signal.removeEventListener("abort", listeners.abort);
+        resolve(response);
+      },
     };
-    const reply = (response: SanctionsMatcherReply) => {
-      signal.removeEventListener("abort", abort);
-      resolve(response);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    worker.once("message", reply);
+    signal.addEventListener("abort", listeners.abort, { once: true });
+    worker.once("message", listeners.reply);
     const sent = Result.try(() => worker.postMessage(message, []));
     if (sent.isErr()) {
       fail();
