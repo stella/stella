@@ -2029,21 +2029,21 @@ describe("provider status recovery preserves failure ownership", () => {
     new ChatLoopDetectedError({ message: "Loop detected" }),
     new ChatEmptyCompletionError({ message: "Empty completion" }),
   ]) {
-    test(`passes through ${String(error)} unchanged`, () => {
+    test(`passes through ${error._tag} unchanged`, () => {
       expect(withRecoveredProviderStatus({ error, model: testModel })).toBe(
         error,
       );
     });
   }
 
-  for (const error of [
-    new Error("SENTINEL_LIBRARY_TEXT"),
-    new TypeError("SENTINEL_LIBRARY_TEXT"),
-    "SENTINEL_LIBRARY_TEXT",
-    { message: "SENTINEL_LIBRARY_TEXT" },
-    undefined,
+  for (const { name, error } of [
+    { name: "an Error", error: new Error("SENTINEL_LIBRARY_TEXT") },
+    { name: "a TypeError", error: new TypeError("SENTINEL_LIBRARY_TEXT") },
+    { name: "a thrown string", error: "SENTINEL_LIBRARY_TEXT" },
+    { name: "a message object", error: { message: "SENTINEL_LIBRARY_TEXT" } },
+    { name: "undefined", error: undefined },
   ]) {
-    test(`replaces ${String(error)} with a fixed-message model run error`, () => {
+    test(`replaces ${name} with a fixed-message model run error`, () => {
       const recovered = withRecoveredProviderStatus({
         error,
         model: testModel,

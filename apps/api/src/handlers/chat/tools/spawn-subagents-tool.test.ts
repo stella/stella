@@ -572,7 +572,9 @@ describe("createSpawnSubagentsTool — thrown subagent failures", () => {
     env.USAGE_ENFORCEMENT_ENABLED = false;
     env.AI_PROVIDER = "anthropic";
     env.ANTHROPIC_API_KEY = "sk-test";
-    runSubagentImpl = async () => await Promise.reject(failure);
+    runSubagentImpl = async () => {
+      throw failure;
+    };
     try {
       return await buildTool()({ subagents: [{ task: "a" }] }, {});
     } finally {

@@ -76,7 +76,9 @@ const recordFailure = async (thrown: unknown) => {
       db,
       organizationId: ids.orgA,
       scoutKey: SCOUT_KEY.MANUAL_REQUEST,
-      observe: async () => await Promise.reject(thrown),
+      observe: async () => {
+        throw thrown;
+      },
     }),
   );
   return { after: await failedRunErrors(), before, rejection };
