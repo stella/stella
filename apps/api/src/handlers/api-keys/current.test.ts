@@ -8,7 +8,7 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
+import type { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 type ResolveCredential = typeof resolveMachineApiKeyCredential;
