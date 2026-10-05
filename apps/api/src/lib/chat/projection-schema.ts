@@ -7,6 +7,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefKind, ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ToolOutputDegradeSource } from "@/api/lib/chat/tool-output-degrade";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/chat/tool-output-degrade";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
@@ -14,11 +19,6 @@ import {
   brandPersistedPropertyId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { ToolOutputDegradeSource } from "@/api/lib/tool-output-degrade";
-import {
-  parseStrippingUndeclaredKeys,
-  reportToolOutputDegrade,
-} from "@/api/lib/tool-output-degrade";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**

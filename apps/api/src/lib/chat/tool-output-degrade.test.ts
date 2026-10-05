@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { parseStrippingUndeclaredKeys } from "@/api/lib/tool-output-degrade";
+import { parseStrippingUndeclaredKeys } from "@/api/lib/chat/tool-output-degrade";
 
 const parse = (schema: v.GenericSchema, value: unknown) =>
   parseStrippingUndeclaredKeys(schema, value);

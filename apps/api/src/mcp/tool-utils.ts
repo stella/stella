@@ -28,6 +28,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/chat/tool-output-degrade";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -39,10 +43,6 @@ import {
   isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
-import {
-  parseStrippingUndeclaredKeys,
-  reportToolOutputDegrade,
-} from "@/api/lib/tool-output-degrade";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";

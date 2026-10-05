@@ -5,9 +5,9 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/tool-output-degrade";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
