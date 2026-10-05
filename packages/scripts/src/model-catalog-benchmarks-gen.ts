@@ -30,6 +30,8 @@ import {
   MODEL_BENCHMARK_SPLIT,
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import { formatInteger } from "./model-catalog-rates-gen";
 
@@ -40,6 +42,8 @@ const OUTPUT_PATH = path.resolve(
 const FILTER_URL = "https://datasets-server.huggingface.co/filter";
 const PAGE_LENGTH = 100;
 const FETCH_TIMEOUT_MS = 30_000;
+// A page contains at most 100 leaderboard rows, with room for upstream metadata.
+const PAGE_MAX_BYTES = 1024 * 1024;
 const INCONCLUSIVE_RUN_LIMIT = 3;
 const RATING_DECIMALS = 100;
 
@@ -200,12 +204,19 @@ const fetchPage = async (
     });
   const fetched = await Result.tryPromise({
     try: async () => {
-      const response = await fetch(pageUrl(offset), {
+      const response = await fetchWithTimeout(pageUrl(offset), {
         headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        timeout: { type: "idle", ms: FETCH_TIMEOUT_MS },
       });
       httpStatus = response.status;
-      return { payload: await response.text(), status: response.status };
+      const bytes =
+        response.body === null
+          ? new Uint8Array()
+          : await readCappedBytes(response.body, PAGE_MAX_BYTES);
+      return {
+        payload: bytes === null ? null : new TextDecoder().decode(bytes),
+        status: response.status,
+      };
     },
     catch: (cause) =>
       inconclusive(
@@ -219,6 +230,13 @@ const fetchPage = async (
   if (status !== 200) {
     return Result.err(
       inconclusive(`Arena page at offset ${offset} responded ${status}`),
+    );
+  }
+  if (payload === null) {
+    return Result.err(
+      inconclusive(
+        `Arena page at offset ${offset} exceeds ${PAGE_MAX_BYTES} bytes`,
+      ),
     );
   }
   const json = Result.try({

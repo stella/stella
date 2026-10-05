@@ -171,12 +171,21 @@ describe("benchmark check availability", () => {
       preload,
       `
       const fixture = await Bun.file(${JSON.stringify(responseFile)}).json();
+      if (fixture.slow) {
+        const schedule = globalThis.setTimeout;
+        globalThis.setTimeout = (callback, delay, ...args) => {
+          if (delay !== 30_000) throw new Error("Unexpected transfer deadline");
+          return schedule(callback, 0, ...args);
+        };
+      }
       globalThis.fetch = async (url) => {
         if (fixture.modelsDevUnavailable && String(url).includes("models.dev")) return new Response("unavailable", { status: 503 });
         if (fixture.network) throw new TypeError("network unavailable");
         const offset = Number(new URL(url).searchParams.get("offset"));
         if (offset > 0 && fixture.nextStatus) return new Response("unavailable", { status: fixture.nextStatus });
-        return new Response(fixture.rawBody ?? JSON.stringify(fixture.body), { status: fixture.status });
+        if (fixture.slow) return new Response(new ReadableStream(), { status: 200 });
+        const text = (fixture.rawBody ?? JSON.stringify(fixture.body)) + (fixture.oversized ? " ".repeat(2 * 1024 * 1024) : "");
+        return new Response(text, { status: fixture.status });
       };
     `,
     );
@@ -271,6 +280,30 @@ describe("benchmark check availability", () => {
       }),
     ),
   });
+
+  test.each([
+    { oversized: true, reason: "exceeds" },
+    { slow: true, reason: "Fetch timed out" },
+  ])(
+    "reports bounded transfer failures as inconclusive: %j",
+    async (fixture) => {
+      const { run, stateFile } = await setup();
+      const checked = await run({
+        ...fixture,
+        status: 200,
+        body: currentPage(),
+      });
+      expect(checked.exitCode).toBe(0);
+      expect(checked.output).toContain('"status":"inconclusive"');
+      expect(checked.output).toContain('"httpStatus":200');
+      expect(checked.output).toContain('"pageOffset":0');
+      expect(checked.output).toContain(fixture.reason);
+      expect(await Bun.file(stateFile).json()).toMatchObject({
+        consecutiveInconclusive: 1,
+        lastOutcome: { status: "inconclusive", httpStatus: 200, pageOffset: 0 },
+      });
+    },
+  );
 
   test("a successful fetch resets the counter, including a hard snapshot failure", async () => {
     const { run, stateFile } = await setup();
