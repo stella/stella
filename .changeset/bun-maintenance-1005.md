@@ -1,6 +1,5 @@
 ---
 "@stll/business-registries": patch
-"@stll/ui": patch
 "@stll/workspace-ui": patch
 ---
 
