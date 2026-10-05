@@ -509,6 +509,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("result-boundary.fixture.ts", [
     "result-boundary/no-throw-outside-boundary",
     "result-boundary/no-try-catch-outside-boundary",
+    "result-boundary/no-rejected-result-error",
   ]),
 ];
 
@@ -5261,6 +5262,16 @@ export default defineConfig({
       },
     },
     {
+      // better-result boundary lint, part 1b: `Promise.reject(result.error)`
+      // is a throw by another name. The web app has no other site, so the ban
+      // covers all of it rather than only the zero-violation directories; a
+      // TanStack query or mutation function unwraps with `readQueryResult`.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "result-boundary/no-rejected-result-error": "error",
+      },
+    },
+    {
       // better-result boundary lint, part 2: the boundary carve-out.
       //
       // These modules legitimately throw or catch: framework route mounts,
@@ -5276,6 +5287,7 @@ export default defineConfig({
       rules: {
         "result-boundary/no-throw-outside-boundary": "off",
         "result-boundary/no-try-catch-outside-boundary": "off",
+        "result-boundary/no-rejected-result-error": "off",
       },
     },
     {
