@@ -14,18 +14,24 @@ import {
   brandPersistedPropertyId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import type { ToolOutputDegradeSource } from "@/api/lib/tool-output-degrade";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/tool-output-degrade";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Chat projection schemas: one Valibot `strictObject` per converted tool that
  * describes exactly what the chat surface forwards, with each id-bearing
  * field's chat semantics attached via `v.metadata`. `projectForChat` applies a
- * schema in a single pass: one strict parse (an unknown handler field fails
- * closed, structurally unable to reach the model), then one walk over the
- * parsed value guided by the same annotations that strips declared fields,
- * hydrates tenant UUIDs into chat refs, and enforces the "no raw tenant UUID
- * reaches the model" invariant together — so the shape and its ref decisions
- * cannot drift apart the way a hand-maintained path list can.
+ * schema in a single pass: one strict parse (an unknown handler field is
+ * stripped and reported as a defect, structurally unable to reach the model),
+ * then one walk over the parsed value guided by the same annotations that
+ * strips declared fields, hydrates tenant UUIDs into chat refs, and enforces
+ * the "no raw tenant UUID reaches the model" invariant together — so the shape
+ * and its ref decisions cannot drift apart the way a hand-maintained path list
+ * can.
  *
  * Lives in `lib/` rather than the chat handler slice because the MCP tool
  * handlers (`@/api/mcp/*-tools.ts`) import their own projection to tie payload
@@ -561,10 +567,10 @@ export const deriveRefMediationEntry = (
 // --- Applying a projection schema ---------------------------------------------------
 
 /**
- * A payload that failed its projection schema: a handler emitted a field
- * nobody classified (or a declared field changed shape). Carries only the
- * dot-paths of the issues, never any payload value, so it can reach telemetry
- * without leaking what it refused.
+ * A payload that failed its projection schema: a declared field is missing or
+ * changed shape (undeclared fields alone are stripped, not refused). Carries
+ * only the dot-paths of the issues, never any payload value, so it can reach
+ * telemetry without leaking what it refused.
  */
 type ProjectionSchemaViolation = { issuePaths: readonly string[] };
 
@@ -605,9 +611,11 @@ const collectIssuePaths = (
 /**
  * Strict-parse a tool payload against its projection schema. The parse is the
  * structural guarantee: an unknown key anywhere in the declared object tree —
- * a field nobody classified — fails here, before the annotation walk ever
- * sees the payload, so an undeclared field cannot flow to the model by
- * construction. On failure the violation carries issue paths only.
+ * a field nobody classified — never reaches the annotation walk. A payload
+ * whose only violation is such keys is stripped of them and re-parsed (the
+ * shared degrade, `parseStrippingUndeclaredKeys`), with their paths returned
+ * for the defect report; any missing or invalid declared field still fails.
+ * On failure the violation carries issue paths only.
  */
 const strictParseProjection = ({
   payload,
@@ -615,13 +623,16 @@ const strictParseProjection = ({
 }: {
   schema: ChatProjectionSchema;
   payload: unknown;
-}): Result<Record<string, unknown>, ProjectionSchemaViolation> => {
-  const parsed = v.safeParse(schema, payload);
-  if (parsed.success) {
-    return Result.ok(parsed.output);
+}): Result<
+  { output: Record<string, unknown>; undeclaredPaths: readonly string[] },
+  ProjectionSchemaViolation
+> => {
+  const parsed = parseStrippingUndeclaredKeys(schema, payload);
+  if (Result.isOk(parsed)) {
+    return Result.ok(parsed.value);
   }
   const issuePaths: string[] = [];
-  for (const issue of parsed.issues) {
+  for (const issue of parsed.error.issues) {
     collectIssuePaths(issue, issuePaths);
   }
   return Result.err({ issuePaths: [...new Set(issuePaths)] });
@@ -677,7 +688,9 @@ export type DehydratedInput = {
 
 /**
  * Surfaced to the model when a projected payload still carries a raw uuid at
- * a position the schema does not license. Deliberately does not say
+ * a position the schema does not license and the offending leaf cannot be
+ * dropped (only the root itself; any nested leaf is dropped and reported
+ * instead, so the model sees less but never the raw id). Deliberately does not say
  * "anonymization": the anonymization feature (the anonymized MCP surface) is
  * a different mechanism and is not involved — chat egress runs in default
  * mode. This is the chat ref projection's own fail-closed invariant, it fires
@@ -691,10 +704,10 @@ export const REF_PROJECTION_FAILURE_MESSAGE =
 
 /**
  * Surfaced to the model when a converted tool's payload fails its projection
- * schema's strict parse: a handler emitted a field nobody classified (or a
- * declared field changed shape). Same fail-closed semantics as
- * `REF_PROJECTION_FAILURE_MESSAGE`; the parse fires before any field can be
- * forwarded, so the undeclared field never reaches the model by construction.
+ * schema's strict parse: a declared field is missing or changed shape. (A
+ * field nobody classified alone is stripped and reported, not refused.) Same
+ * fail-closed semantics as `REF_PROJECTION_FAILURE_MESSAGE`; the parse fires
+ * before any field can be forwarded.
  */
 export const PROJECTION_SCHEMA_FAILURE_MESSAGE =
   "The tool result did not match the shape the chat projection declares " +
@@ -721,54 +734,62 @@ type ProjectWalkContext = {
    * Offending paths of the terminal UUID invariant, recorded during the walk:
    * a UUID-bearing string at any position not licensed by a `passthroughId`
    * annotation (an ordinary declared field, an unenumerated subtree, a ref
-   * leaf hydration could not rewrite). Paths only, never values.
+   * leaf hydration could not rewrite). Each offending leaf is dropped from
+   * the projection (`OMITTED`). Paths only, never values.
    */
   uuidViolations: string[];
 };
 
 /**
- * Record a violation if a string leaf carries a UUID anywhere in it. A
- * substring match (not just a bare-UUID exact match) so a UUID embedded
- * inside a longer string (a url, free text) is still caught.
+ * Record a violation if a string leaf carries a UUID anywhere in it, and say
+ * whether it did so the caller drops the leaf. A substring match (not just a
+ * bare-UUID exact match) so a UUID embedded inside a longer string (a url,
+ * free text) is still caught.
  */
-const checkStringLeaf = (
+const recordUuidLeaf = (
   ctx: ProjectWalkContext,
   value: unknown,
   segments: readonly string[],
-): void => {
+): boolean => {
   if (typeof value === "string" && UUID_ANYWHERE_REGEX.test(value)) {
     ctx.uuidViolations.push(segments.join("."));
+    return true;
   }
+  return false;
 };
 
 /**
- * Scan an `unenumeratedJson` subtree, which is forwarded unmodified: every
- * string inside stays subject to the UUID invariant, unlicensed. Paths use
- * the same `a.b` / `a[].b` grammar as the rest of the walk (arrays collapsed
- * to a `[]` suffix on their key).
+ * Forward an `unenumeratedJson` subtree: every string inside stays subject to
+ * the UUID invariant, unlicensed, and an offending string is dropped (its key
+ * from an object, the item from an array). Paths use the same `a.b` / `a[].b`
+ * grammar as the rest of the walk (arrays collapsed to a `[]` suffix on their
+ * key).
  */
-const scanUnenumerated = (
+const scrubUnenumerated = (
   ctx: ProjectWalkContext,
   node: unknown,
   segments: readonly string[],
-): void => {
+): unknown => {
   if (typeof node === "string") {
-    checkStringLeaf(ctx, node, segments);
-    return;
+    return recordUuidLeaf(ctx, node, segments) ? OMITTED : node;
   }
   if (Array.isArray(node)) {
-    for (const item of node) {
-      scanUnenumerated(ctx, item, segments);
-    }
-    return;
+    return node
+      .map((item: unknown) => scrubUnenumerated(ctx, item, segments))
+      .filter((item) => item !== OMITTED);
   }
   if (!isRecord(node)) {
-    return;
+    return node;
   }
+  const kept: [string, unknown][] = [];
   for (const [key, value] of Object.entries(node)) {
     const segment = Array.isArray(value) ? `${key}[]` : key;
-    scanUnenumerated(ctx, value, [...segments, segment]);
+    const scrubbed = scrubUnenumerated(ctx, value, [...segments, segment]);
+    if (scrubbed !== OMITTED) {
+      kept.push([key, scrubbed]);
+    }
   }
+  return Object.fromEntries(kept);
 };
 
 /** Read the first scalar a (non-array) dotted path resolves to in `raw`. */
@@ -831,9 +852,8 @@ const projectEntityLeaf = ({
 }: ProjectEntityLeafArgs): unknown => {
   if (!isUuidString(value)) {
     // Not an exact UUID (an opaque or already-shaped value): forwarded, but
-    // an embedded UUID substring still fails closed.
-    checkStringLeaf(ctx, value, segments);
-    return value;
+    // a leaf with an embedded UUID substring is dropped.
+    return recordUuidLeaf(ctx, value, segments) ? OMITTED : value;
   }
 
   // The output entity IS one the request named on input: reuse the ref already
@@ -847,9 +867,9 @@ const projectEntityLeaf = ({
   if (!isUuidString(workspaceUuid)) {
     // Owning workspace not recoverable for this field: refusing to mint a ref
     // against a guessed workspace leaves the raw UUID at an entity-ref
-    // position, which the terminal invariant refuses (never licensed).
+    // position, which the terminal invariant never licenses: dropped.
     ctx.uuidViolations.push(segments.join("."));
-    return value;
+    return OMITTED;
   }
 
   return ctx.refRegistry.toEntityRef({
@@ -872,8 +892,7 @@ const projectRefLeaf = ({
   segments,
 }: ProjectRefLeafArgs): unknown => {
   if (!isUuidString(value)) {
-    checkStringLeaf(ctx, value, segments);
-    return value;
+    return recordUuidLeaf(ctx, value, segments) ? OMITTED : value;
   }
   switch (kind) {
     case "matter": {
@@ -988,8 +1007,7 @@ const projectField = ({
       }
       case "json": {
         const segment = Array.isArray(value) ? `${key}[]` : key;
-        scanUnenumerated(ctx, value, [...segments, segment]);
-        return value;
+        return scrubUnenumerated(ctx, value, [...segments, segment]);
       }
       case "ref": {
         return projectRefLeaf({
@@ -1040,7 +1058,11 @@ const projectField = ({
       );
     }
     const itemSegments = [...segments, `${key}[]`];
-    return value.map((entry) => projectValue(ctx, item, entry, itemSegments));
+    // A dropped item (a bare string carrying an unlicensed UUID) leaves the
+    // array; the model sees fewer items, never the raw id.
+    return value
+      .map((entry) => projectValue(ctx, item, entry, itemSegments))
+      .filter((entry) => entry !== OMITTED);
   }
   if (nodeType === "unknown") {
     return panic(
@@ -1115,15 +1137,12 @@ const projectValue = (
     );
   }
   // A scalar leaf (string/number/boolean/literal/picklist/null): ordinary
-  // data. A UUID-bearing string here is undeclared and fails closed.
-  checkStringLeaf(ctx, value, segments);
-  return value;
+  // data. A UUID-bearing string here is undeclared and dropped.
+  return recordUuidLeaf(ctx, value, segments) ? OMITTED : value;
 };
 
-/** Where a projection ran, for the fail-closed telemetry context. */
-type ProjectionTelemetrySource =
-  | "run-registry-tool"
-  | "run-registry-write-tool";
+/** Where a projection ran, for the defect telemetry context. */
+type ProjectionTelemetrySource = Exclude<ToolOutputDegradeSource, "mcp">;
 
 export type ProjectForChatOptions<TPayload> = {
   schema: ChatProjectionSchema;
@@ -1139,8 +1158,10 @@ export type ProjectForChatOptions<TPayload> = {
  * The single output-side transform for a projected tool payload:
  *
  * 1. Strict-parse against the projection schema. An unknown key anywhere in
- *    the declared object tree — a field nobody classified — fails closed as a
- *    `server-defect`, with the issue dot-paths (never values) to telemetry.
+ *    the declared object tree — a field nobody classified — is stripped and
+ *    reported as a defect (paths, never values); a missing or invalid
+ *    declared field fails closed as a `server-defect`, with the issue
+ *    dot-paths (never values) to telemetry.
  * 2. One walk over the parsed value, guided by the schema annotations:
  *    `strippedField` leaves are omitted, `chatRef`/`chatEntityRef` leaves are
  *    hydrated into chat refs (entity workspaces resolved per their declared
@@ -1151,8 +1172,9 @@ export type ProjectForChatOptions<TPayload> = {
  *    annotations are documentation the type system cannot fully enforce (a
  *    wrong workspace source silently skips hydration), so every forwarded
  *    string is checked rather than trusting the static mapping alone; a
- *    survivor fails closed as a `server-defect`, its path (never its value)
- *    to telemetry.
+ *    survivor's leaf is dropped from the result and reported as a defect,
+ *    its path (never its value) to telemetry. Only a root that cannot be
+ *    dropped fails closed as a `server-defect`.
  */
 export const projectForChat = <TPayload>({
   schema,
@@ -1176,22 +1198,43 @@ export const projectForChat = <TPayload>({
     return Result.err(error);
   }
 
+  const { output, undeclaredPaths } = parsed.value;
+  if (undeclaredPaths.length > 0) {
+    reportToolOutputDegrade({
+      defect: "undeclared_fields",
+      paths: undeclaredPaths,
+      source,
+      toolName,
+    });
+  }
+
   const ctx: ProjectWalkContext = {
     dehydration,
-    raw: parsed.value,
+    raw: output,
     refRegistry,
     uuidViolations: [],
   };
-  const projected = projectValue(ctx, schema, parsed.value, []);
+  const projected = projectValue(ctx, schema, output, []);
 
-  const offendingPath = ctx.uuidViolations.at(0);
-  if (offendingPath !== undefined) {
+  if (projected === OMITTED) {
     const error = new ChatToolError({
       kind: "server-defect",
       message: REF_PROJECTION_FAILURE_MESSAGE,
     });
-    captureError(error, { path: offendingPath, source, toolName });
+    captureError(error, {
+      path: ctx.uuidViolations.at(0) ?? "(root)",
+      source,
+      toolName,
+    });
     return Result.err(error);
+  }
+  if (ctx.uuidViolations.length > 0) {
+    reportToolOutputDegrade({
+      defect: "unmapped_id",
+      paths: [...new Set(ctx.uuidViolations)],
+      source,
+      toolName,
+    });
   }
 
   return Result.ok(projected);
