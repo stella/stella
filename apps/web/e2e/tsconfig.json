@@ -1,6 +1,7 @@
 {
   "extends": "../../../packages/typescript-config/base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     "paths": { "@/*": ["../src/*"] },
     "types": ["node", "vite/client"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json"

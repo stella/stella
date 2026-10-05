@@ -41,11 +41,43 @@ const cases = {
 for (const [name, selectionCase] of Object.entries(cases)) {
   test(`selection toolbar follows ${name} within its pane`, async ({
     page,
-    baseURL,
+    context,
   }) => {
-    await page.setContent(
-      `<link rel="stylesheet" href="${baseURL}/src/styles/app.css"><div id="fixture"></div>`,
+    // Vite injects styles in development; production emits hashed asset links.
+    const stylesheetPage = await context.newPage();
+    await stylesheetPage.goto("/auth");
+    await expect
+      .poll(
+        async () =>
+          await stylesheetPage.evaluate(() => {
+            const probe = window.document.createElement("div");
+            probe.className = "fixed -translate-x-1/2";
+            window.document.body.append(probe);
+            const position = window.getComputedStyle(probe).position;
+            probe.remove();
+            return position;
+          }),
+      )
+      .toBe("fixed");
+    const styles = await stylesheetPage.evaluate(() =>
+      Array.from(
+        window.document.querySelectorAll("style, link[rel='stylesheet']"),
+      )
+        .map((node) => {
+          if (node instanceof HTMLLinkElement) {
+            const link = node.cloneNode();
+            if (!(link instanceof HTMLLinkElement)) {
+              throw new Error("Stylesheet link clone changed element type");
+            }
+            link.href = node.href;
+            return link.outerHTML;
+          }
+          return node.outerHTML;
+        })
+        .join("\n"),
     );
+    await stylesheetPage.close();
+    await page.setContent(`<head>${styles}</head><div id="fixture"></div>`);
     await page.addScriptTag({ content: fixture.bundle });
     const pane = page.getByTestId("pane");
     await expect(pane).toBeVisible();
@@ -61,7 +93,6 @@ for (const [name, selectionCase] of Object.entries(cases)) {
       )?.firstChild;
       if (
         root === null ||
-        root === undefined ||
         start === null ||
         start === undefined ||
         end === null ||
@@ -99,6 +130,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
       return;
     }
     await expect(toolbar).toBeVisible();
+    await expect(toolbar).toHaveCSS("position", "fixed");
     await expect
       .poll(async () => (await toolbar.boundingBox())?.width ?? 0)
       .toBeGreaterThan(200);

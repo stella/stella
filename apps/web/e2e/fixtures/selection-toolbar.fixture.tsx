@@ -40,7 +40,7 @@ const Fixture = () => {
           }}
           ref={(node) => {
             if (node === null) {
-              return;
+              return undefined;
             }
             const pointerUp = (event: PointerEvent) =>
               showSelection(node, { x: event.clientX, y: event.clientY });
