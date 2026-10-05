@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
@@ -150,6 +150,17 @@ const pauseEditionFanouts = async (db: GatedTestDb) => {
   const saved = await db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     const fanouts = await tx.select().from(sanctionsEditionFanouts);
+    if (fanouts.length > 0) {
+      await tx
+        .update(sanctionsEditionFanouts)
+        .set({ status: "complete" })
+        .where(
+          inArray(
+            sanctionsEditionFanouts.sourceId,
+            fanouts.map(({ sourceId }) => sourceId),
+          ),
+        );
+    }
     const freshness = await readSanctionsFreshness({
       db: async (read) => await read(asTestRaw<Transaction>(tx)),
       now,
