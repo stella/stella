@@ -380,3 +380,89 @@ describe("workflow_run trust", () => {
     expect(trustProblems({ on: ["push"], jobs: { a: {} } })).toEqual([]);
   });
 });
+
+test("publishing tokens and their artifact chain reject cached Bun setup", () => {
+  const rawSetup = {
+    uses: "oven-sh/setup-bun@fixture",
+    with: { "bun-version-file": "package.json" },
+  };
+  const cachedSetup = {
+    ...rawSetup,
+    uses: "stella/.github/actions/setup-bun-cached@fixture",
+  };
+  for (const permission of ["contents", "packages", "id-token"]) {
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [cachedSetup],
+          },
+        },
+      }),
+    ).toHaveLength(1);
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [rawSetup],
+          },
+        },
+      }),
+    ).toEqual([]);
+  }
+  expect(
+    workflowCacheProblems({
+      permissions: "write-all",
+      jobs: { publish: { steps: [cachedSetup] } },
+    }),
+  ).toHaveLength(1);
+  expect(
+    workflowCacheProblems({
+      permissions: { contents: "write" },
+      jobs: {
+        ordinary: { permissions: { contents: "read" }, steps: [cachedSetup] },
+      },
+    }),
+  ).toEqual([]);
+  for (const needs of ["verify", ["verify"]]) {
+    const workflow = {
+      jobs: {
+        build: {
+          steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+        },
+        verify: { needs: "build", steps: [] },
+        publish: { permissions: { "id-token": "write" }, needs, steps: [] },
+        ordinary: { steps: [cachedSetup] },
+      },
+    };
+    expect(workflowCacheProblems(workflow)).toHaveLength(1);
+    workflow.jobs.build.steps[0] = rawSetup;
+    expect(workflowCacheProblems(workflow)).toEqual([]);
+  }
+  const consumers = {
+    jobs: {
+      build: {
+        permissions: { contents: "write" },
+        steps: [rawSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      externalPublish: {
+        steps: [cachedSetup, { uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  expect(workflowCacheProblems(consumers)).toHaveLength(1);
+  const artifacts = {
+    jobs: {
+      build: {
+        steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      publish: {
+        permissions: { packages: "write" },
+        steps: [{ uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  expect(workflowCacheProblems(artifacts)).toHaveLength(1);
+});

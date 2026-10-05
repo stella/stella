@@ -73,6 +73,94 @@ export const usesDefaultCacheScope = (workflow: unknown) =>
     DEFAULT_SCOPE_EVENTS.includes(event),
   );
 
+const hasPublishToken = (workflow: unknown, job: unknown) => {
+  if (!isRecord(job)) {
+    return false;
+  }
+  const permissions =
+    job["permissions"] ??
+    (isRecord(workflow) ? workflow["permissions"] : undefined);
+  if (typeof permissions === "string") {
+    return permissions !== "read-all";
+  }
+  return (
+    isRecord(permissions) &&
+    ["id-token", "contents", "packages"].some(
+      (key) =>
+        permissions[key] === "write" ||
+        (typeof permissions[key] === "string" &&
+          permissions[key].includes("${{")),
+    )
+  );
+};
+
+const hasArtifactStep = (job: unknown, operation: string) =>
+  isRecord(job) &&
+  Array.isArray(job["steps"]) &&
+  job["steps"].some(
+    (step: unknown) =>
+      isRecord(step) &&
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith(`actions/${operation}-artifact@`),
+  );
+
+// Protect the full dependency chain of a publishing token. Artifact readers
+// can consume uploads without a needs edge, so include those producers too.
+const publishingJobNames = (workflow: unknown) => {
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    return new Set<string>();
+  }
+  const jobs = workflow["jobs"];
+  const protectedJobs = new Set(
+    Object.keys(jobs).filter((name) => hasPublishToken(workflow, jobs[name])),
+  );
+  const pending = [...protectedJobs];
+  while (pending.length > 0) {
+    const name = pending.pop();
+    if (name === undefined) {
+      continue;
+    }
+    const job = jobs[name];
+    if (!isRecord(job)) {
+      continue;
+    }
+    const needs = job["needs"];
+    const dependencies = Array.isArray(needs)
+      ? needs.filter(
+          (dependency): dependency is string => typeof dependency === "string",
+        )
+      : [];
+    if (typeof needs === "string") {
+      dependencies.push(needs);
+    }
+    if (hasArtifactStep(job, "download")) {
+      dependencies.push(
+        ...Object.keys(jobs).filter((candidate) =>
+          hasArtifactStep(jobs[candidate], "upload"),
+        ),
+      );
+    }
+    if (hasArtifactStep(job, "upload")) {
+      dependencies.push(
+        ...Object.keys(jobs).filter((candidate) =>
+          hasArtifactStep(jobs[candidate], "download"),
+        ),
+      );
+    }
+    for (const dependency of dependencies) {
+      if (protectedJobs.has(dependency)) {
+        continue;
+      }
+      if (!isRecord(jobs[dependency])) {
+        continue;
+      }
+      protectedJobs.add(dependency);
+      pending.push(dependency);
+    }
+  }
+  return protectedJobs;
+};
+
 export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
   if (usesDefaultCacheScope(workflow)) {
     return "default-scope";
@@ -99,6 +187,17 @@ export const jobCachePolicy = ({ workflow, job }: JobCachePolicyOptions) => {
     )
   ) {
     return "no-cache";
+  }
+  if (
+    hasPublishToken(workflow, job) ||
+    (isRecord(workflow) &&
+      isRecord(workflow["jobs"]) &&
+      Object.entries(workflow["jobs"]).some(
+        ([name, candidate]) =>
+          candidate === job && publishingJobNames(workflow).has(name),
+      ))
+  ) {
+    return "publish-chain";
   }
   return "install-cache";
 };
@@ -131,6 +230,11 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
           ? [
               `job '${name}': raw Bun setup needs the shared install-cache action`,
             ]
+          : [];
+      }
+      if (policy === "publish-chain") {
+        return /setup-bun-cached@|^actions\/cache(?:\/[^@]+)?@/u.test(uses)
+          ? [`job '${name}': ${uses} changes publishing dependency policy`]
           : [];
       }
       if (policy === "cold-install") {
