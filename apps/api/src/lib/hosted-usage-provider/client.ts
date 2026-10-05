@@ -1,6 +1,7 @@
 /** Thin client for the hosted usage provider's outbound HTTP API. */
 
 import { Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { isNonNullObject } from "@stll/template-conditions/path";
@@ -42,6 +43,8 @@ type CreateHostedSetupInput = {
 type CreateHostedSetupResult = {
   id: string;
   url: string;
+  /** When the provider closes the session; null when it reports none. */
+  expiresAt: Date | null;
 };
 
 const readJsonRecord = async (
@@ -70,6 +73,15 @@ const readStringField = (
     message: `${context} missing ${field}`,
   });
 };
+
+const sessionExpirySchema = v.nullish(
+  v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    v.transform((value) => new Date(value)),
+  ),
+  null,
+);
 
 /**
  * POST a JSON body to the provider API. The one outbound boundary of this
@@ -128,6 +140,7 @@ const createNeutralSetupSession = async ({
       return {
         id: readStringField(json, "id", "Hosted setup session"),
         url: readStringField(json, "url", "Hosted setup session"),
+        expiresAt: v.parse(sessionExpirySchema, json["expires_at"]),
       };
     },
     catch: (cause) => {
@@ -176,6 +189,7 @@ export const createPolarSetupSession = async ({
       return {
         id: readStringField(json, "id", "Hosted setup session"),
         url: readStringField(json, "url", "Hosted setup session"),
+        expiresAt: v.parse(sessionExpirySchema, json["expires_at"]),
       };
     },
     catch: (cause) => {
