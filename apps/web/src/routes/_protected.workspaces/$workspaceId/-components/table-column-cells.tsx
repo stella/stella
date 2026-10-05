@@ -16,6 +16,8 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
+import { AiCell } from "@/components/workspaces/ai-cell";
+import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import {
   CellMetadataFlags,
   useCellMetadataFlags,
@@ -48,6 +50,37 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
 
 export const PropertyCell = ({
+  entity,
+  property,
+}: {
+  entity: WorkspaceEntity;
+  property: WorkspaceProperty;
+}) => {
+  const content = entity.fields[property.id]?.content;
+  const preview = useWorkspaceStore((s) =>
+    content?.type === "pending"
+      ? s.getExtractionPreview(entity.entityId, property.id)
+      : null,
+  );
+  if (property.tool.type !== "ai-model") {
+    return <PropertyCellContent entity={entity} property={property} />;
+  }
+  return (
+    <AiCell
+      state={propertyAiCellState(content)}
+      preview={preview}
+      failure={
+        content?.type === "error" ? (
+          <PropertyCellContent entity={entity} property={property} />
+        ) : undefined
+      }
+    >
+      <PropertyCellContent entity={entity} property={property} />
+    </AiCell>
+  );
+};
+
+const PropertyCellContent = ({
   entity,
   property,
 }: {

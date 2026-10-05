@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createTranslator } from "use-intl/core";
 
 import {
   answerNeedsRun,
@@ -7,6 +8,9 @@ import {
 } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
+import { aiColumnRunScope } from "@/components/workspaces/ai-column-run.logic";
+import en from "@/i18n/langs/en.json";
+
 import {
   allowedColumnActions,
   answerKey,
@@ -14,6 +18,8 @@ import {
   READ_ONLY_QUESTIONS,
   questionEditDiscardsAnswers,
   questionRunSet,
+  questionQueuedAnswerKeys,
+  questionRefusedAnswerKeys,
   questionSuggestionBody,
   researchRunBatches,
   UNSEARCHED_SCOPE,
@@ -75,6 +81,85 @@ const answer = (
 
 const columns = [column("c1"), column("c2")];
 const page = ["d1", "d2", "d3"];
+
+test("header labels name the page or selected rows with the actual scoped count", () => {
+  const t = createTranslator({ locale: "en", messages: en });
+  for (const [selectedRowIds, expected] of [
+    [[], "Run for 3 rows on this page"],
+    [["d2"], "Run for 1 selected row"],
+    [["d1", "d3", "off-page"], "Run for 2 selected rows"],
+  ] satisfies [string[], string][]) {
+    const scope = aiColumnRunScope({ pageRowIds: page, selectedRowIds });
+    expect(
+      t(
+        scope.type === "selection"
+          ? "aiColumns.runSelectedRows"
+          : "aiColumns.runPageRows",
+        { count: scope.count },
+      ),
+    ).toBe(expected);
+  }
+  const scope = aiColumnRunScope({
+    pageRowIds: page,
+    selectedRowIds: ["d1", "d2"],
+  });
+  expect(t("aiColumns.selectedRun", { count: scope.count })).toBe(
+    "Run AI columns for 2 rows",
+  );
+  expect(
+    t("aiColumns.countSummary", {
+      columns: columns.length,
+      rows: scope.count,
+      answers: columns.length * scope.count,
+    }),
+  ).toBe("2 columns × 2 rows = 4 answers. Answers spend budget.");
+});
+
+test("queued cells match the run's billable holes for remaining and forced reruns", () => {
+  const answersByKey = new Map([
+    answer("c1", "d1", "answered"),
+    answer("c2", "d1", "failed"),
+    answer("c1", "d2", "pending"),
+    answer("c2", "d2", "pending", true),
+  ]);
+  for (const force of [false, true]) {
+    const runSet = questionRunSet({
+      answersByKey,
+      columns,
+      pageDecisionIds: page,
+      selectedDecisionIds: [],
+      force,
+    });
+    const queued = questionQueuedAnswerKeys({ answersByKey, runSet, force });
+    expect(queued.size).toBe(runSet.cells);
+    expect(queued.has(answerKey("c1", "d1"))).toBe(force);
+    expect(queued.has(answerKey("c2", "d1"))).toBe(true);
+    expect(queued.has(answerKey("c1", "d2"))).toBe(false);
+    expect(queued.has(answerKey("c2", "d2"))).toBe(true);
+    expect(queued.has(answerKey("c1", "d3"))).toBe(true);
+    expect(queued.has(answerKey("c2", "d3"))).toBe(true);
+  }
+});
+
+test("budget refusal preserves previous answers on forced reruns", () => {
+  const answersByKey = new Map([
+    answer("c1", "d1", "answered"),
+    answer("c2", "d1", "failed"),
+    answer("c1", "d2", "pending"),
+    answer("c2", "d2", "not_allowed"),
+  ]);
+  const runSet = questionRunSet({
+    answersByKey,
+    columns,
+    pageDecisionIds: page,
+    selectedDecisionIds: [],
+    force: true,
+  });
+  expect([...questionRefusedAnswerKeys({ answersByKey, runSet })]).toEqual([
+    answerKey("c1", "d3"),
+    answerKey("c2", "d3"),
+  ]);
+});
 
 describe("what a run covers", () => {
   test("an untouched page is every cell of it", () => {
@@ -285,6 +370,12 @@ describe("who is shown question columns", () => {
   const noop = () => undefined;
   const available = {
     answersByKey: new Map<string, QuestionAnswer>(),
+    pageDecisionIds: page,
+    selectedDecisionIds: [],
+    queuedAnswerKeys: new Set<string>(),
+    refusedAnswerKeys: new Set<string>(),
+    onRunColumn: noop,
+    onRunSelectedRows: noop,
     columns,
     addable: [],
     onAddToSearch: noop,

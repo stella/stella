@@ -54,6 +54,17 @@
       "polish": "Uzlabot formulējumu"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
+    "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
+    "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
+    "runColumnPage": "Palaist kolonnu (šajā lapā)",
+    "runPageRows": "Palaist {count, plural, zero {# rindai šajā lapā} one {# rindai šajā lapā} other {# rindām šajā lapā}}",
+    "runRemainingPage": "Palaist atlikušās (šajā lapā)",
+    "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
+    "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
+  },
   "appearance": {
     "calendar": "Kalendārs",
     "calendarGregorian": "Gregora",
@@ -5996,7 +6007,6 @@
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
-      "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",
       "scopeFile": "Pašreizējais fails",
