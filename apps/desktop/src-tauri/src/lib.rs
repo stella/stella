@@ -17,6 +17,7 @@ mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod handoff;
 mod http_client;
 mod i18n;
 mod keychain;
