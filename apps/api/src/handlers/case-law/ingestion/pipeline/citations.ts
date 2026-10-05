@@ -11,7 +11,6 @@ import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
-import { assertCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -27,6 +26,7 @@ import type {
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";

@@ -9,7 +9,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -30,6 +29,7 @@ import {
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -381,16 +381,18 @@ describe("building a ruling from its three pages", () => {
           });
           const decision = built(outcome);
           expect(decision.sourceDocumentId).toBe("30308");
-          expect(decision.court).toBe(length > width ? "" : court);
+          expect(length > width ? "" : court).toBe(decision.court);
           expect(decision.isListingOnly === true).toBe(
             detailHtml === undefined || length > width,
           );
-          expect(decision.metadata["quarantineReason"]).toBe(
-            length > width ? "court-too-long" : undefined,
-          );
-          expect(decision.metadata["courtAsStated"]).toBe(
-            length > width ? court : undefined,
-          );
+          expect(
+            decision.metadata["quarantineReason"] ===
+              (length > width ? "court-too-long" : undefined),
+          ).toBe(true);
+          expect(
+            decision.metadata["courtAsStated"] ===
+              (length > width ? court : undefined),
+          ).toBe(true);
           expect(sanitizeResult(decision).court).toBe(decision.court);
         }
       }

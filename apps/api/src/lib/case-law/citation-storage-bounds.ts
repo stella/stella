@@ -2,7 +2,7 @@ import { panic, TaggedError } from "better-result";
 
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 
-const columnWidth = ({ length }: { length?: number }) => {
+const columnWidth = ({ length }: { length: number | undefined }) => {
   if (length === undefined || length <= 0) {
     return panic("Citation storage requires an explicit column width");
   }

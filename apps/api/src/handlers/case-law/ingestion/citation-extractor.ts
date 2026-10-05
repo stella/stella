@@ -43,7 +43,6 @@ import {
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
-import { boundedCitationKey } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   type CitationScopeIndex,
   type CitationScopesRejectedError,
@@ -56,6 +55,7 @@ import type {
   UsCitationRejection,
   UsCitedDecision,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
+import { boundedCitationKey } from "@/api/lib/case-law/citation-storage-bounds";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   UNPERSISTABLE_DECISION_FIELDS,

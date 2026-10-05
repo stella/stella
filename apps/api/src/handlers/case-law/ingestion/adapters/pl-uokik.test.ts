@@ -14,7 +14,6 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 
-import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -51,6 +50,7 @@ import {
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
@@ -435,22 +435,24 @@ describe("a decision", () => {
         ]) {
           const decision = decisionOf(await buildFrom(entry, detail));
           expect(decision.sourceDocumentId).toBe(FILELESS);
-          expect(decision.caseNumber).toBe(length > width ? FILELESS : number);
+          expect(length > width ? FILELESS : number).toBe(decision.caseNumber);
           expect(decision.caseNumberIsPlaceholder === true).toBe(
             length > width,
           );
-          expect(decision.metadata["caseNumberFallbackReason"]).toBe(
-            length > width ? "overlong-number" : undefined,
-          );
-          expect(decision.metadata["decisionNumber"]).toBe(number);
+          expect(
+            decision.metadata["caseNumberFallbackReason"] ===
+              (length > width ? "overlong-number" : undefined),
+          ).toBe(true);
+          expect(decision.metadata["decisionNumber"] === number).toBe(true);
           if (length > width || token === "𐐀") {
             expect(decision.identifiers).toBeUndefined();
           }
-          expect(decision.metadata["identifierStorageReason"]).toBe(
-            length <= width && token === "𐐀"
-              ? "unrepresentable-identifier"
-              : undefined,
-          );
+          expect(
+            decision.metadata["identifierStorageReason"] ===
+              (length <= width && token === "𐐀"
+                ? "unrepresentable-identifier"
+                : undefined),
+          ).toBe(true);
           expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
         }
       }
@@ -465,12 +467,14 @@ describe("a decision", () => {
         undefined,
       ),
     );
-    expect(decision.caseNumber).toBe(FILELESS);
+    expect(FILELESS).toBe(decision.caseNumber);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
-    expect(decision.metadata["decisionNumberAsListed"]).toBe(registerLine);
-    expect(decision.metadata["caseNumberFallbackReason"]).toBe(
-      "overlong-number",
+    expect(decision.metadata["decisionNumberAsListed"] === registerLine).toBe(
+      true,
     );
+    expect(
+      decision.metadata["caseNumberFallbackReason"] === "overlong-number",
+    ).toBe(true);
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {

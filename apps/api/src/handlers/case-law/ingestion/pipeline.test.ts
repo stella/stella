@@ -44,6 +44,7 @@ import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -893,7 +894,10 @@ describe("runIngestionPipeline — failure records", () => {
    * observation; the second reads its source; the third is the decision's write; later calls reach the
    * failure-record insert and the cursor update.
    */
-  const failingDecisionDb = (insertError: Error | null) => {
+  const failingDecisionDb = (
+    insertError: Error | null,
+    rejectDecisionWrite = true,
+  ) => {
     const state: {
       persistedCursor: string | null | undefined;
       insertedRows: FailureRow[];
@@ -901,7 +905,7 @@ describe("runIngestionPipeline — failure records", () => {
     let calls = 0;
     const scopedDb: ScopedDb = async (callback) => {
       calls++;
-      if (calls === 3) {
+      if (calls === 3 && rejectDecisionWrite) {
         throw new Error("decision rejected\u0000at byte 12");
       }
 
@@ -967,9 +971,47 @@ describe("runIngestionPipeline — failure records", () => {
     logs = null;
   });
 
+  for (const field of ["caseNumber", "court"] as const) {
+    test(`records an overwidth ${field} normalization refusal and advances the cursor`, async () => {
+      const source = caseLawSourceRow({ name: "Normalization failure source" });
+      const value = "X".repeat(CITATION_STORAGE_WIDTHS[field] + 1);
+      const input = plainTextIngestionResult({
+        ...baseResult({}),
+        [field]: value,
+      });
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      // Normalization refuses before the decision write; the ledger insert is
+      // the next transaction and must not receive a synthetic write failure.
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+      });
+      expect(state.insertedRows).toHaveLength(1);
+      const [row] = state.insertedRows;
+      expect(row?.caseNumber).toBe(
+        input.caseNumber.slice(0, CITATION_STORAGE_WIDTHS.caseNumber),
+      );
+      expect(row?.errorMessage).toContain(
+        field === "caseNumber"
+          ? "Decision number exceeds storage limits"
+          : "Decision court exceeds storage limits",
+      );
+      expect(result.inserted).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.haltReason).toBeNull();
+      expect(result.nextCursor).toBe("cursor-2");
+      expect(state.persistedCursor).toBe("cursor-2");
+    });
+  }
+
   test("writes a failure record within the column limits and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
-    const caseNumber = "X".repeat(300);
+    const caseNumber = "X".repeat(CITATION_STORAGE_WIDTHS.caseNumber);
     czNsAdapter.fetchPage = async () =>
       Result.ok({
         decisions: [

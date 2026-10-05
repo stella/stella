@@ -29,6 +29,7 @@ import {
   normalizeDecisionIdentifierValue,
   normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
@@ -2417,7 +2418,10 @@ describe("stored decision identifier projection", () => {
 
   test("gives a decision no key its citation_key column cannot hold", () => {
     const caseNumber = `ABC123/${"x".repeat(140)}.pdf`;
-    expect(citationKeyOf(caseNumber)?.length).toBeGreaterThan(128);
+    expect(Array.from(bareCitationKey(caseNumber)).length).toBeGreaterThan(
+      CITATION_STORAGE_WIDTHS.key,
+    );
+    expect(citationKeyOf(caseNumber)).toBeNull();
     expect(
       decisionCitationKeyOf({
         caseNumber,
@@ -2431,6 +2435,25 @@ describe("stored decision identifier projection", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       }),
     ).toBe(citationKeyOf(fits));
+  });
+
+  test("citation and decision keys share exact Unicode storage boundaries", () => {
+    const width = CITATION_STORAGE_WIDTHS.key;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const reference = token.repeat(length);
+        const exact = bareCitationKey(reference);
+        expect(Array.from(exact)).toHaveLength(length);
+        const expected = length <= width ? exact : null;
+        expect(citationKeyOf(reference)).toBe(expected);
+        expect(
+          decisionCitationKeyOf({
+            caseNumber: reference,
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          }),
+        ).toBe(expected);
+      }
+    }
   });
 
   test("recovers publisher case-number aliases from stored metadata", () => {

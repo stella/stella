@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -45,7 +45,7 @@ describe("decision storage normalization", () => {
             catch: (error: unknown) => error,
           });
           if (length <= width) {
-            expect(result.unwrap()[field]).toBe(value);
+            expect(value).toBe(result.unwrap()[field]);
           } else {
             expect(result.isErr()).toBe(true);
             if (result.isOk()) {
@@ -66,9 +66,9 @@ describe("decision storage normalization", () => {
         ...decision,
         [field]: `\0${value}\0`,
       });
-      expect(normalized[field]).toBe(value);
+      expect(value).toBe(normalized[field]);
       expect(normalized.sourceDocumentId).toBe(decision.sourceDocumentId);
-      expect(sanitizeResult(normalized)[field]).toBe(value);
+      expect(value).toBe(sanitizeResult(normalized)[field]);
     });
   }
 });

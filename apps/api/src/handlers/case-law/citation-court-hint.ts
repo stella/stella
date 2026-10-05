@@ -21,7 +21,7 @@ import {
   CITATION_MARKER_SOURCE,
   DECISION_DATE_SOURCE,
 } from "@/api/handlers/case-law/citation-decision-date";
-import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 
 /**
  * How far before the number the court phrase may begin. The longest common
