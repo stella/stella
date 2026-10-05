@@ -16,7 +16,7 @@ import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_RESOLUTION_STATUS,
   effectiveCitationIdentifierTypeSql,
@@ -432,10 +432,8 @@ const projectDecisionPage = async (
       sql`, `,
     );
 
-    // Match ingestion's decision-row-then-graph lock order. NO KEY UPDATE
-    // excludes concurrent refreshes while remaining compatible with the
-    // resolver's foreign-key KEY SHARE checks.
-    await lockCitationGraph(tx);
+    // Graph acquisition precedes the decision page at the transaction owner.
+    // NO KEY UPDATE remains compatible with resolver KEY SHARE checks.
     const rewritten = await tx.execute(sql`
     WITH expected(decision_id, type, value, normalized_value) AS (
       VALUES ${expected}
@@ -524,8 +522,7 @@ const projectCitationPage = async (
   batchSize: number,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
   // audit: skip — rewrites derived public case-law identifiers; no workspace data
-  // Resolver batches take the graph lock before citation row locks too.
-  await lockCitationGraph(tx);
+  // The page transaction owns the graph before any row locks.
   const rows = readCitationRows(
     await tx.execute(citationRowsSql(checkpoint.cursorId, batchSize, true)),
   );
@@ -796,34 +793,37 @@ const runBackfillPage = async (
   rootDb: CaseLawRootHandle,
   batchSize: number,
 ): Promise<BackfillPageResult> =>
-  await rootDb.transaction(async (tx) => {
-    const checkpoint = await loadCheckpoint(tx, "for-update");
-    if (checkpoint === null) {
-      return panic("Decision identifier backfill checkpoint is missing");
-    }
-    switch (checkpoint.phase) {
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
-        return {
-          status: "progress",
-          progress: await projectDecisionPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
-        return {
-          status: "progress",
-          progress: await projectCitationPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
-        return await verifyDecisionPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
-        return await verifyCitationPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
-        return { status: "completed" };
-      default: {
-        checkpoint satisfies never;
-        return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+  await runCitationGraphTransaction(
+    rootDb.transaction.bind(rootDb),
+    async (tx) => {
+      const checkpoint = await loadCheckpoint(tx, "for-update");
+      if (checkpoint === null) {
+        return panic("Decision identifier backfill checkpoint is missing");
       }
-    }
-  });
+      switch (checkpoint.phase) {
+        case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+          return {
+            status: "progress",
+            progress: await projectDecisionPage(tx, checkpoint, batchSize),
+          };
+        case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+          return {
+            status: "progress",
+            progress: await projectCitationPage(tx, checkpoint, batchSize),
+          };
+        case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+          return await verifyDecisionPage(tx, checkpoint, batchSize);
+        case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+          return await verifyCitationPage(tx, checkpoint, batchSize);
+        case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+          return { status: "completed" };
+        default: {
+          checkpoint satisfies never;
+          return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+        }
+      }
+    },
+  );
 
 const normalizeBatchSize = (batchSize: number | undefined): number => {
   const normalized =
