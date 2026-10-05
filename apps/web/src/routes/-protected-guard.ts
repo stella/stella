@@ -3,7 +3,10 @@ import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
-import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import {
+  isTimeBillingRouteEnabled,
+  prefetchTimeBillingServerState,
+} from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -55,28 +58,36 @@ export const loadProtectedContext = async ({
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
-
-  if (
-    location.pathname === "/settings/organization/time-policy" &&
-    isTimeBillingRouteEnabled()
-  ) {
-    detached(
-      context.queryClient.query({
-        ...organizationSettingsOptions({
-          organizationId: activeOrganizationId,
-          userId: authContext.user.id,
-        }),
-        staleTime: "static",
-      }),
-      "protected-layout.time-policy-prefetch",
-    );
-  }
+  const userId = authContext.session.userId;
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error);
   };
+  detached(
+    prefetchTimeBillingServerState(context.queryClient, onPrefetchError),
+    "protected-layout.deployment-features-prefetch",
+  );
+
+  if (location.pathname === "/settings/organization/time-policy") {
+    detached(
+      (async () => {
+        if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+          return;
+        }
+        await context.queryClient.query({
+          ...organizationSettingsOptions({
+            organizationId: activeOrganizationId,
+            userId,
+          }),
+          staleTime: "static",
+        });
+      })(),
+      "protected-layout.time-policy-prefetch",
+    );
+  }
+
   detached(
     prefetchRouteQuery(
       context.queryClient,

@@ -28,6 +28,7 @@ export type { ListStats, ReplacementPolicy } from "./replacement";
 export {
   DEFAULT_CUTOFF,
   ScreeningQueryError,
+  ScreeningWorkLimitError,
   buildScreeningIndex,
   screen,
 } from "./screening";
@@ -44,3 +45,5 @@ export type {
 export { parseUnList, readUnListVersion } from "./un";
 export { parseUkList, readUkListVersion } from "./uk";
 export { parseSecoList, readSecoListVersion } from "./seco";
+
+export { MAX_QUERY_TOKENS, hasExcessQueryTokens } from "./normalise";
