@@ -34,7 +34,12 @@ import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import { ac, assignableRoles, roles } from "@stll/permissions";
+import {
+  ac,
+  assignableRoles,
+  CLIENT_MATTER_ADMIN_ROLES,
+  roles,
+} from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -148,10 +153,7 @@ import {
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
-import {
-  CLIENT_MATTER_ADMIN_ROLES,
-  isMemberRole,
-} from "@/api/lib/member-roles";
+import { isMemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
