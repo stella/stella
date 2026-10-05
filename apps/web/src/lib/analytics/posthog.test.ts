@@ -55,9 +55,14 @@ const initMock = mock((_key: string, options: PostHogInitOptions) => {
 const registerMock = mock((_properties: Record<string, unknown>) => undefined);
 const getDistinctIdMock = mock(() => distinctId);
 const isIdentifiedMock = mock(() => identified);
-const resetMock = mock(() => {
-  distinctId = "anonymous_after_reset";
-  identified = false;
+type ResetOptions = {
+  bootstrap?: { distinctID?: string; isIdentifiedID?: boolean };
+};
+// Mirrors posthog-js: a bootstrapped id becomes the distinct id, identified
+// when the bootstrap says so; a bare reset mints a new anonymous id.
+const resetMock = mock((options?: ResetOptions) => {
+  distinctId = options?.bootstrap?.distinctID ?? "anonymous_after_reset";
+  identified = options?.bootstrap?.isIdentifiedID === true;
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
@@ -1609,7 +1614,11 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("identifies users by stable id and attaches the organization group", () => {
+  const bootstrapped = (userId: string) => ({
+    bootstrap: { distinctID: userId, isIdentifiedID: true },
+  });
+
+  test("binds the signed-in user by stable id without an identify merge", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1617,11 +1626,31 @@ describe("PostHog browser analytics adapter", () => {
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(identifyMock).toHaveBeenCalledWith("user_123");
+    expect(resetMock).toHaveBeenCalledWith(bootstrapped("user_123"));
+    expect(identifyMock).not.toHaveBeenCalled();
     expect(groupMock).toHaveBeenCalledWith("organization", "org_1");
   });
 
-  test("identifies the same user only once per browser app session", () => {
+  test("two page loads of the same user produce one distinct id", () => {
+    const distinctIds: string[] = [];
+    for (const pageLoad of [1, 2]) {
+      // Persistence is off: every load starts with a new anonymous id.
+      distinctId = `anonymous_load_${String(pageLoad)}`;
+      identified = false;
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+      distinctIds.push(getDistinctIdMock());
+    }
+
+    expect(new Set(distinctIds)).toEqual(new Set(["user_123"]));
+    // No load links its anonymous id to the person.
+    expect(identifyMock).not.toHaveBeenCalled();
+  });
+
+  test("binds the same user only once per browser app session", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1630,8 +1659,7 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(identifyMock).toHaveBeenCalledTimes(1);
-    expect(resetMock).not.toHaveBeenCalled();
+    expect(resetMock).toHaveBeenCalledTimes(1);
   });
 
   test("rebinds the organization group on a same-user organization switch", () => {
@@ -1643,14 +1671,14 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
 
-    // The identity guard still suppresses the duplicate identify, but the
-    // group must follow the active organization or later events attribute
-    // to the previous organization across an ownership boundary.
-    expect(identifyMock).toHaveBeenCalledTimes(1);
+    // The identity guard still suppresses a second bind, but the group must
+    // follow the active organization or later events attribute to the
+    // previous organization across an ownership boundary.
+    expect(resetMock).toHaveBeenCalledTimes(1);
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
-  test("resets before identifying a different user", () => {
+  test("binds a different user in place of the previous one", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1659,9 +1687,28 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_456", activeOrganizationId: "org_2" });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
-    expect(identifyMock).toHaveBeenNthCalledWith(2, "user_456");
+    expect(resetMock).toHaveBeenNthCalledWith(2, bootstrapped("user_456"));
+    expect(getDistinctIdMock()).toBe("user_456");
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
+  });
+
+  test("every identity change keeps the build metadata on later events", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.reset();
+
+    // `reset` clears super-properties; each one is followed by a register.
+    expect(registerMock).toHaveBeenCalledTimes(3);
+    for (const [properties] of registerMock.mock.calls) {
+      expect(Object.keys(properties).toSorted()).toEqual([
+        "app_commit",
+        "app_version",
+      ]);
+    }
   });
 
   test("reset can be limited to identified sessions", () => {
@@ -1677,7 +1724,8 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset({ onlyIfIdentified: true });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
+    expect(resetMock).toHaveBeenNthCalledWith(2, undefined);
+    expect(isIdentifiedMock()).toBe(false);
   });
 
   test("reset clears anonymous sessions by default", () => {
@@ -1701,8 +1749,8 @@ describe("PostHog browser analytics adapter", () => {
     analytics.reset();
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
-    expect(identifyMock).toHaveBeenCalledTimes(2);
+    expect(resetMock).toHaveBeenNthCalledWith(3, bootstrapped("user_123"));
+    expect(identifyMock).not.toHaveBeenCalled();
   });
 
   test("sanitizer keeps a validated API response identity and groups by it", () => {
