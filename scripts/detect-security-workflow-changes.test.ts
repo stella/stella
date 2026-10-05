@@ -198,29 +198,41 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   expect(detect("codeql", ["README.md", "source.ts"])).toBe("true");
 });
 
-test("migration coverage preserves every prior dependency and excludes unrelated code", () => {
+test("migration coverage includes configured schema sources and excludes unrelated code", () => {
+  const config = readFileSync(
+    new URL("../apps/api/drizzle.config.ts", import.meta.url),
+    "utf-8",
+  );
+  const schemaSources = [...config.matchAll(/"(\.\/src\/db\/[^"\n]+)"/gu)].map(
+    (match) => match[1],
+  );
+  expect(schemaSources.length).toBeGreaterThan(0);
+  for (const source of schemaSources) {
+    if (source === undefined) {
+      panic("Schema source did not match");
+    }
+    expect(detect("migrations", [`apps/api/${source.slice(2)}`]), source).toBe(
+      "true",
+    );
+  }
   for (const file of [
     "apps/api/drizzle/20261001/migration.sql",
     "apps/api/src/db/schema/tables.ts",
-    "apps/api/src/lib/db/client.ts",
-    "apps/api/src/server.ts",
     "apps/api/drizzle.config.ts",
-    "scripts/check-migration-safety.ts",
-    "scripts/check-migration-index-builds.test.ts",
-    "scripts/migration-index-findings.json",
-    "scripts/fixtures/migration-index-builds/create-index/good.sql",
-    "scripts/check-migrations.sh",
-    "scripts/rehearse-better-auth-constraint-retry.sh",
-    ".squawk.toml",
-    ".github/workflows/db-migrations.yml",
-    ".github/workflows/release.yml",
-    "scripts/detect-security-workflow-changes.sh",
   ]) {
     expect(detect("migrations", [file]), file).toBe("true");
   }
-  expect(detect("migrations", ["apps/web/src/view.ts", "README.md"])).toBe(
-    "false",
-  );
+  expect(
+    detect("migrations", [
+      "apps/web/src/view.ts",
+      "README.md",
+      "apps/api/src/db/shared-pool-timeouts.ts",
+      "apps/api/src/db/adaptive-backfill.test.ts",
+      "apps/api/src/lib/db/client.ts",
+      "apps/api/src/server.ts",
+      "scripts/check-migration-safety.ts",
+    ]),
+  ).toBe("false");
 });
 
 test("unknown PR bases, diff failures and non-PR events run the checks", () => {
