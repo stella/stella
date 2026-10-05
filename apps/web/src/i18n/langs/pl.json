@@ -841,6 +841,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
@@ -1857,6 +1858,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
     "unverifiedCitationHint": "Nie udało się dopasować tego cytatu do dokumentu źródłowego.",
@@ -2309,6 +2311,8 @@
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
+      "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -4636,6 +4640,7 @@
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
@@ -4685,7 +4690,9 @@
       "unknown": "Status niejasny"
     },
     "title": "Akty prawne",
-    "validity": "Obowiązuje od {from} do {to}"
+    "validity": "Obowiązuje od {from} do {to}",
+    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
+    "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
     "create": "Utwórz",
@@ -5422,6 +5429,7 @@
         "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Połącz stella desktop ze swoim kontem",
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
@@ -5453,8 +5461,7 @@
         "signCurrent": "Podpisz w stella desktop",
         "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
         "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
-        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop.",
-        "signShort": "Podpisz"
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop."
       },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",

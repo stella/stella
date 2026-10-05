@@ -4,7 +4,8 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import cancelPdfSigningSessionFromDesktop from "@/api/handlers/entities/pdf-signing-cancel";
 import submitPdfSigningCertificate from "@/api/handlers/entities/pdf-signing-certificate";
-import redeemPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-redeem-handoff";
+import { createRedeemPdfSigningHandoffEndpoint } from "@/api/handlers/entities/pdf-signing-redeem-handoff";
+import type { RedeemPdfSigningHandoffDependencies } from "@/api/handlers/entities/pdf-signing-redeem-handoff";
 import submitPdfSigningSignature from "@/api/handlers/entities/pdf-signing-signature";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
@@ -16,34 +17,42 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
  * outside the `/v1` group in `server.ts` (Eden type depth) and therefore
  * carries the version prefix and the shared API limiter itself.
  */
-export const pdfSigningSessionsRoute = new Elysia({
-  prefix: STELLA_API_VERSION_PREFIX,
-})
-  .use(rateLimit(createStandardApiRateLimitOptions()))
-  .post("/pdf-signing-handoffs/redeem", redeemPdfSigningHandoff.handler, {
-    body: redeemPdfSigningHandoff.config.body,
+export const createPdfSigningSessionsRoute = (
+  dependencies?: RedeemPdfSigningHandoffDependencies,
+) => {
+  const redeemPdfSigningHandoff =
+    createRedeemPdfSigningHandoffEndpoint(dependencies);
+  return new Elysia({
+    prefix: STELLA_API_VERSION_PREFIX,
   })
-  .post(
-    "/pdf-signing-sessions/:sessionId/certificate",
-    submitPdfSigningCertificate.handler,
-    {
-      body: submitPdfSigningCertificate.config.body,
-      params: submitPdfSigningCertificate.config.params,
-    },
-  )
-  .post(
-    "/pdf-signing-sessions/:sessionId/signature",
-    submitPdfSigningSignature.handler,
-    {
-      body: submitPdfSigningSignature.config.body,
-      params: submitPdfSigningSignature.config.params,
-    },
-  )
-  .post(
-    "/pdf-signing-sessions/:sessionId/cancel",
-    cancelPdfSigningSessionFromDesktop.handler,
-    {
-      body: cancelPdfSigningSessionFromDesktop.config.body,
-      params: cancelPdfSigningSessionFromDesktop.config.params,
-    },
-  );
+    .use(rateLimit(createStandardApiRateLimitOptions()))
+    .post("/pdf-signing-handoffs/redeem", redeemPdfSigningHandoff.handler, {
+      body: redeemPdfSigningHandoff.config.body,
+    })
+    .post(
+      "/pdf-signing-sessions/:sessionId/certificate",
+      submitPdfSigningCertificate.handler,
+      {
+        body: submitPdfSigningCertificate.config.body,
+        params: submitPdfSigningCertificate.config.params,
+      },
+    )
+    .post(
+      "/pdf-signing-sessions/:sessionId/signature",
+      submitPdfSigningSignature.handler,
+      {
+        body: submitPdfSigningSignature.config.body,
+        params: submitPdfSigningSignature.config.params,
+      },
+    )
+    .post(
+      "/pdf-signing-sessions/:sessionId/cancel",
+      cancelPdfSigningSessionFromDesktop.handler,
+      {
+        body: cancelPdfSigningSessionFromDesktop.config.body,
+        params: cancelPdfSigningSessionFromDesktop.config.params,
+      },
+    );
+};
+
+export const pdfSigningSessionsRoute = createPdfSigningSessionsRoute();
