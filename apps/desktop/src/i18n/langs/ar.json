@@ -132,7 +132,8 @@
     "takeoverSubtitle": "سيتابع من آخر نقطة حفظ لديك.",
     "takeoverTitle": "يريد {requester} تولي التحرير",
     "takeoverWindowTitle": "طلب تولي التحرير",
-    "webOrigin": "أصل الويب"
+    "webOrigin": "أصل الويب",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها"
   },
   "settings": {
     "about": "حول",

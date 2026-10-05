@@ -11,6 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
 import {
   prepareComparisonBaseline,
   validateBaselineFile,
@@ -346,7 +347,9 @@ describe("network baseline workflows", () => {
       const job = jobs[name] ?? expect.unreachable(name);
       expect(job.permissions).toMatchObject({
         contents: "read",
-        actions: "read",
+        actions: isCanonicalFailureCancellation(job.steps.at(-1))
+          ? "write"
+          : "read",
       });
       const prepare = job.steps.findIndex(
         (step) => step.uses === "./.github/actions/prepare-network-baseline",

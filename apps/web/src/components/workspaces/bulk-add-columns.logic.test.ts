@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { createTranslator } from "use-intl";
 
 import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
 
 import {
+  columnDialogCopy,
+  columnDialogLimitReached,
+  columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
@@ -11,12 +15,64 @@ import {
 } from "@/components/workspaces/bulk-add-columns.logic";
 import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
 import type { QuestionColumn } from "@/features/case-law/research/question-columns.logic";
+import messages from "@/i18n/langs/en.json";
 
 const NO_FILES: string[] = [];
 
 const draftOf = (patch: Partial<Draft>): Draft => ({
   ...makeEmptyDraft(0, NO_FILES),
   ...patch,
+});
+
+describe("column dialog labels match the operation", () => {
+  const t = createTranslator({ locale: "en", messages });
+
+  test("adding columns keeps the add title and primary action", () => {
+    const copy = columnDialogCopy({ type: "add" });
+    expect(t(copy.title)).toBe("Add columns");
+    expect(t(copy.primary)).toBe("Add columns");
+  });
+
+  test("editing a column names the edit and saves it", () => {
+    const copy = columnDialogCopy({
+      type: "edit",
+      column: {
+        id: "question",
+        question: "What did the court hold?",
+        content: { version: 1, type: "text" },
+      },
+    });
+    expect(t(copy.title)).toBe("Edit column");
+    expect(t(copy.primary)).toBe("Save");
+  });
+});
+
+describe("column count caps apply only to creation", () => {
+  test.each([false, true])(
+    "editing stays available when the cap is %s",
+    (reached) => {
+      expect(
+        columnDialogLimitReached(
+          {
+            type: "edit",
+            column: {
+              id: "question",
+              question: "What did the court hold?",
+              content: { version: 1, type: "text" },
+            },
+          },
+          reached,
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test.each([false, true])(
+    "adding respects whether the cap is %s",
+    (reached) => {
+      expect(columnDialogLimitReached({ type: "add" }, reached)).toBe(reached);
+    },
+  );
 });
 
 describe("what an organisation draft becomes", () => {
@@ -165,5 +221,37 @@ describe("what a partly refused batch leaves behind", () => {
     release?.();
     await settled;
     expect(order).toEqual(["write", "refresh"]);
+  });
+});
+
+describe("column draft opening baseline", () => {
+  test("stored questions and new drafts start clean, detect every field edit, and become clean on revert", () => {
+    const initial = draftOf({
+      name: "Stored question",
+      contentType: "single-select",
+      options: [{ value: "yes", color: "green" }],
+    });
+    const patches = {
+      id: 1,
+      name: "Changed question",
+      prompt: "Changed prompt",
+      mentions: ["mention"],
+      fileIds: ["file"],
+      contentType: "text",
+      tool: "manual-input",
+      options: [{ value: "no", color: "red" }],
+      fallback: "fallback",
+    } satisfies Draft;
+    expect(columnDraftsChanged([initial], [initial])).toBe(false);
+    const blank = makeEmptyDraft(0, NO_FILES);
+    expect(columnDraftsChanged([blank], [blank])).toBe(false);
+    for (const [field, value] of Object.entries(patches)) {
+      const changed = { ...initial, [field]: value };
+      expect(columnDraftsChanged([changed], [initial])).toBe(true);
+      expect(columnDraftsChanged([structuredClone(initial)], [initial])).toBe(
+        false,
+      );
+    }
+    expect(columnDraftsChanged([initial, blank], [initial])).toBe(true);
   });
 });
