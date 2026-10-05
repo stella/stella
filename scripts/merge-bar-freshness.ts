@@ -20,7 +20,23 @@ import path from "node:path";
 
 const MAIN_REF = "refs/remotes/origin/main";
 const FETCH_TIMEOUT_MS = 20_000;
-const SHELL_SCRIPT_PATTERN = /[\w-]+\.sh\b/gu;
+const SHELL_SCRIPT_SUFFIX = ".sh";
+
+/**
+ * `*.sh` names a source mentions (e.g. `scripts/detect-e2e-changes.sh` gives
+ * `detect-e2e-changes.sh`). Splitting on non-name characters keeps this linear;
+ * a `[\w-]+\.sh` scan would rescan long word runs from every position.
+ */
+const shellScriptNames = (source: string) =>
+  source.split(/[^\w.-]+/u).flatMap((token) => {
+    if (!token.endsWith(SHELL_SCRIPT_SUFFIX)) {
+      return [];
+    }
+    const stemStart =
+      token.lastIndexOf(".", token.length - SHELL_SCRIPT_SUFFIX.length - 1) + 1;
+    const name = token.slice(stemStart);
+    return name.length > SHELL_SCRIPT_SUFFIX.length ? [name] : [];
+  });
 const LS_TREE_LINE_PATTERN = /^\d+ blob ([0-9a-f]+)\t(.+)$/u;
 
 type BarFile = {
@@ -150,7 +166,7 @@ const barSourcePaths = (root: string, entry: string) => {
         ),
       );
     }
-    for (const [name] of source.matchAll(SHELL_SCRIPT_PATTERN)) {
+    for (const name of shellScriptNames(source)) {
       const script = path.join("scripts", name);
       if (existsSync(path.join(repositoryRoot, script))) {
         pending.push(script);
