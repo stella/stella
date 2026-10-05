@@ -6,6 +6,7 @@ import { createPersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecy
 
 import { personalApiKeyBodySchema } from "./schema";
 
+// permissions-exempt: Members mint only their own keys, bounded by their live role.
 const config = {
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.standard,

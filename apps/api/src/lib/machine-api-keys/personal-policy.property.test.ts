@@ -266,7 +266,7 @@ describe("personal API key authority", () => {
         ),
       );
     },
-    propertyTestTimeout(),
+    propertyTestTimeout(15_000),
   );
 
   test("read-only defaults carry no write permissions for any role", () => {

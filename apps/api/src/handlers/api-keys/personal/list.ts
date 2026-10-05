@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -10,12 +12,16 @@ import { personalApiKeyListQuerySchema } from "./schema";
 const listPermissions = {
   own: { workspace: ["read"] },
   organization: { organizationSettings: ["update"] },
-} as const;
+} satisfies Record<
+  Parameters<typeof listPersonalApiKeys>[0]["access"],
+  PermissionInput
+>;
 
 export const createListPersonalApiKeysHandler = (
   access: keyof typeof listPermissions,
 ) => {
   const config = {
+    access: "read",
     permissions: listPermissions[access],
     accountAccess: ACCOUNT_ACCESS.standard,
     mcp: { type: "internal", reason: "provider_secret" },

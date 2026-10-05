@@ -6,6 +6,7 @@ import { revokePersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecy
 
 import { personalApiKeyIdBodySchema } from "./schema";
 
+// permissions-exempt: Members revoke only keys scoped to their own user and organization.
 const config = {
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.standard,

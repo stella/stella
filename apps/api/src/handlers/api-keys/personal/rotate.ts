@@ -10,6 +10,7 @@ import {
   personalApiKeyIdBodySchema,
 } from "./schema";
 
+// permissions-exempt: Members rotate only their own keys, bounded by their live role.
 const config = {
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.standard,
