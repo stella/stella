@@ -7,6 +7,7 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import {
   caseLawDecisions,
@@ -293,8 +294,11 @@ export const listCitingDecisionsHandler = async (
     ...page,
     nextCursor: byAuthority ? null : page.nextCursor,
     items: page.items.map(
-      ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>
-        item,
+      ({
+        anchor: _anchor,
+        decisionDateCursor: _decisionDateCursor,
+        ...item
+      }) => ({ ...item, versionBasis: DECISION_DATE_VERSION_BASIS }),
     ),
   };
 };

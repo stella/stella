@@ -5,13 +5,18 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 
 import { panic } from "better-result";
 import type { Result } from "better-result";
 import { createStore, useStore } from "zustand";
 
+import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
+import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getTranslator } from "@/i18n/translator";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   allocateEntityOverlayId,
   deleteCachedAnonymization,
@@ -20,18 +25,14 @@ import {
   setCachedAnonymization,
 } from "@/lib/pdf/anonymization-cache";
 import {
-  getEntitySpans,
+  locateOverlayEntities,
   rebuildFileAnonymization,
 } from "@/lib/pdf/anonymization-helpers";
-import type {
-  EntityOverlay,
-  FileAnonymization,
-} from "@/lib/pdf/anonymization-types";
+import type { FileAnonymization } from "@/lib/pdf/anonymization-types";
 import {
   DEFAULT_PAGE_BUFFER_SIZE,
   SCROLL_AREA_VIEWPORT_SELECTOR,
 } from "@/lib/pdf/consts";
-import { PDFErrorBoundary } from "@/lib/pdf/pdf-error-boundary";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -283,29 +284,21 @@ const createPDFStore = ({
         return 0;
       }
 
-      const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const regex = new RegExp(escaped, "giu");
-      const newEntities: EntityOverlay[] = [];
-      let match: RegExpExecArray | null;
-
-      while ((match = regex.exec(file.extractedText)) !== null) {
-        const idx = match.index;
-        const matchLen = match[0].length;
-
-        const spans = getEntitySpans({
-          charSpans: file.charSpans,
-          entityStart: idx,
-          entityEnd: idx + matchLen,
-        });
-        if (spans.length > 0) {
-          newEntities.push({
-            id: allocateEntityOverlayId(),
-            label,
-            text: file.extractedText.slice(idx, idx + matchLen),
-            spans,
-          });
-        }
+      // Matched and positioned exactly as detected terms are, so a term the
+      // reader adds is covered by the same boxes the export masks.
+      const located = locateOverlayEntities({
+        extraction: file.extraction,
+        term: searchText,
+        label,
+        allocateId: allocateEntityOverlayId,
+        seenRanges: new Set(),
+      });
+      if (located.isErr()) {
+        getAnalytics().captureError(located.error);
+        notifyUserError(located.error, getTranslator()("errors.actionFailed"));
+        return 0;
       }
+      const newEntities = located.value;
 
       if (newEntities.length === 0) {
         return 0;
@@ -608,21 +601,32 @@ const returnUndefined = (): undefined => undefined;
 type PDFProviderProps = PropsWithChildren<{
   fieldId: string;
   startPage: number;
+  /** Names the viewer in telemetry; see {@link RecoverableViewerBoundary}. */
+  surface: ViewerSurface;
   initialScaleOffset?: number | undefined;
   fitToWidth?: number | undefined;
+  /** `error` replaces the generic failed state for a final failure only. */
   fallback?: PDFPageFallback | undefined;
+  onDownload?: (() => void) | undefined;
   onError?: ((error: Error) => void) | undefined;
 }>;
 
-export const PDFProvider = ({
+type PDFStoreProviderProps = PropsWithChildren<{
+  fieldId: string;
+  startPage: number;
+  initialScaleOffset?: number | undefined;
+  fitToWidth?: number | undefined;
+  suspense: ReactNode;
+}>;
+
+const PDFStoreProvider = ({
   fieldId,
   startPage,
   initialScaleOffset = 0,
   fitToWidth,
   children,
-  fallback,
-  onError,
-}: PDFProviderProps) => {
+  suspense,
+}: PDFStoreProviderProps) => {
   const [{ store, destroy }] = useState(() =>
     createPDFStore({
       fieldId,
@@ -647,9 +651,29 @@ export const PDFProvider = ({
 
   return (
     <PDFStoreContext value={store}>
-      <PDFErrorBoundary fallback={fallback?.error} onError={onError}>
-        <Suspense fallback={fallback?.suspense}>{children}</Suspense>
-      </PDFErrorBoundary>
+      <Suspense fallback={suspense}>{children}</Suspense>
     </PDFStoreContext>
   );
 };
+
+/**
+ * The recoverable boundary sits outside the store, so every retry starts a
+ * fresh store and loads the document on a fresh PDF.js worker.
+ */
+export const PDFProvider = ({
+  fallback,
+  onDownload,
+  onError,
+  surface,
+  ...props
+}: PDFProviderProps) => (
+  <RecoverableViewerBoundary
+    finalFallback={fallback?.error}
+    onDownload={onDownload}
+    onError={onError}
+    pending={fallback?.suspense}
+    surface={surface}
+  >
+    <PDFStoreProvider {...props} suspense={fallback?.suspense} />
+  </RecoverableViewerBoundary>
+);

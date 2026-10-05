@@ -13,6 +13,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -626,6 +627,17 @@ export const ExistingFileOrganizerDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-w-3xl">
+        <DialogFormState
+          dirty={
+            (rows.length > 0 &&
+              JSON.stringify(rows) !== JSON.stringify(initialRows)) ||
+            selectedDeleteFolders.length > 0
+          }
+          onDiscard={() => {
+            setRows(initialRows);
+            setDeleteFolders([]);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.importOrganizer.title")}</DialogTitle>
           <DialogDescription>

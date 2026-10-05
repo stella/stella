@@ -132,7 +132,8 @@
     "takeoverSubtitle": "Redagavimas bus tęsiamas nuo paskutinio išsaugoto kontrolinio taško.",
     "takeoverTitle": "{requester} nori perimti redagavimą",
     "takeoverWindowTitle": "Perėmimo prašymas",
-    "webOrigin": "Žiniatinklio kilmė"
+    "webOrigin": "Žiniatinklio kilmė",
+    "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte"
   },
   "settings": {
     "about": "Apie",
