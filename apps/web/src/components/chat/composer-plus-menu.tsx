@@ -89,6 +89,7 @@ import {
   type ComposerMenuShortcut,
   type ShortcutPopupSide,
 } from "@/components/chat/composer-plus-menu.logic";
+import { ComposerQueryResults } from "@/components/chat/composer-query-results";
 import {
   ComposerSubmenuSearch,
   pickHighlightedItemOnTab,
@@ -108,6 +109,7 @@ import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
@@ -125,6 +127,7 @@ import {
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -663,7 +666,7 @@ const ComposerSkillMenuItem = ({
   );
 };
 
-const ComposerSkillsMenu = ({
+export const ComposerSkillsMenu = ({
   enabled,
   host,
   skills,
@@ -681,16 +684,18 @@ const ComposerSkillsMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isPending: isLoadingSkills,
-  } = useInfiniteQuery({
+  const skillsQuery = useInfiniteQuery({
     ...skillsOptions(activeOrganizationId, userId),
     enabled,
   });
+  const skillsView = useQueryView(skillsQuery, {
+    isEmpty: (data) =>
+      data.pages.every(
+        (page) => page.builtIn.length === 0 && page.installed.length === 0,
+      ),
+  });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = skillsQuery;
+  const data = skillsView.type === "items" ? skillsView.items : undefined;
 
   const availability = useComposerSkillAvailability({
     chat,
@@ -720,6 +725,7 @@ const ComposerSkillsMenu = ({
   const query = search.trim().toLowerCase();
   useExternalSyncEffect(() => {
     if (
+      skillsQuery.isError ||
       !shouldDrainSkillPages({
         hasNextPage,
         isFetchingNextPage,
@@ -730,7 +736,14 @@ const ComposerSkillsMenu = ({
       return;
     }
     detached(fetchNextPage(), "composer-plus-menu.fetch-next-page");
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, open, query]);
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    open,
+    query,
+    skillsQuery.isError,
+  ]);
 
   const filteredItems = query
     ? items.filter((item) => itemName(item).toLowerCase().includes(query))
@@ -744,11 +757,7 @@ const ComposerSkillsMenu = ({
   };
 
   let skillItemsContent: React.ReactNode;
-  if (isLoadingSkills) {
-    skillItemsContent = (
-      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
-    );
-  } else if (
+  if (
     filteredItems.length === 0 &&
     query !== "" &&
     (hasNextPage || isFetchingNextPage)
@@ -802,7 +811,13 @@ const ComposerSkillsMenu = ({
         trigger={searchTrigger(host, "skills")}
         value={search}
       />
-      {skillItemsContent}
+      <ComposerQueryResults
+        views={{ skills: skillsView }}
+        hasItems={filteredItems.length > 0}
+        empty={skillItemsContent}
+      >
+        {skillItemsContent}
+      </ComposerQueryResults>
       {hasNextPage && (
         <MenuItem
           disabled={isFetchingNextPage}
@@ -926,7 +941,7 @@ const useContextMentionSearch = ({
   const { id: userId } = useAuthenticatedUser();
   const [query] = useDebounce(search.trim(), CHAT_MENTION_SEARCH_DEBOUNCE_MS);
   const enabled = open && query !== "";
-  const { data, isFetching } = useQuery({
+  const mentionQuery = useQuery({
     queryKey: contextMentionSearchKey({
       organizationId,
       query,
@@ -939,18 +954,26 @@ const useContextMentionSearch = ({
         getMentionItems(),
         searchMentionItems(query),
       ]);
-      return selectChatSuggestionItems({ localItems, query, searchedItems });
+      return selectChatSuggestionItems({
+        localItems: readQueryResult(localItems),
+        query,
+        searchedItems: readQueryResult(searchedItems),
+      });
     },
     enabled,
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
+  const view = useQueryView(mentionQuery);
   return {
-    results: enabled && data ? data : [],
+    view,
+    enabled,
+    results: enabled && view.type === "items" ? view.items : [],
     // Still settling: the debounce has not caught up with the field, or the
     // sources are answering.
     isSearching:
-      search.trim() !== "" && (query !== search.trim() || isFetching),
+      search.trim() !== "" &&
+      (query !== search.trim() || mentionQuery.isFetching),
   };
 };
 
@@ -961,7 +984,7 @@ const useContextMentionSearch = ({
 // and "insert a mention" at once. A non-empty search also lists the mention
 // sources' matches (files, case law) grouped by category, so a word typed
 // after "@" finds what it names wherever it lives.
-const ComposerContextMenu = ({
+export const ComposerContextMenu = ({
   context,
   enabled,
   host,
@@ -979,11 +1002,15 @@ const ComposerContextMenu = ({
   useFocusSearchOnOpen(open, searchRef);
   // Same navigation list `ChatMatterPicker` and the mention sources' matter
   // options read from — no dedicated endpoint for this submenu.
-  const { data } = useQuery({
+  const mattersQuery = useQuery({
     ...workspacesNavigationOptions(activeOrganizationId),
     enabled,
   });
-  const matters: ContextMatter[] = data ? data.workspaces : [];
+  const mattersView = useQueryView(mattersQuery, {
+    isEmpty: (data) => data.workspaces.length === 0,
+  });
+  const matters: ContextMatter[] =
+    mattersView.type === "items" ? mattersView.items.workspaces : [];
   const mentionSearch = useContextMentionSearch({
     open,
     organizationId: activeOrganizationId,
@@ -1008,6 +1035,15 @@ const ComposerContextMenu = ({
       setSearch("");
     }
   };
+  const emptyLabel = () => {
+    if (mentionSearch.isSearching) {
+      return t("common.loading");
+    }
+    if (query !== "") {
+      return t("common.noResults");
+    }
+    return t("chat.composerMenu.noMatters");
+  };
   const label = t("chat.composerMenu.context");
   const content = (
     <>
@@ -1018,14 +1054,26 @@ const ComposerContextMenu = ({
         trigger={searchTrigger(host, "context")}
         value={search}
       />
-      <ComposerContextResults
-        editor={editor}
-        hasQuery={query !== ""}
-        isSearching={mentionSearch.isSearching}
-        matters={filteredMatters}
-        mentions={mentionSearch.results}
-        threadRef={threadRef}
-      />
+      <ComposerQueryResults
+        views={
+          mentionSearch.enabled
+            ? { matters: mattersView, mentions: mentionSearch.view }
+            : { matters: mattersView }
+        }
+        hasItems={
+          filteredMatters.length > 0 || mentionSearch.results.length > 0
+        }
+        empty={<ComposerSubmenuEmpty>{emptyLabel()}</ComposerSubmenuEmpty>}
+      >
+        <ComposerContextResults
+          editor={editor}
+          hasQuery={query !== ""}
+          isSearching={mentionSearch.isSearching}
+          matters={filteredMatters}
+          mentions={mentionSearch.results}
+          threadRef={threadRef}
+        />
+      </ComposerQueryResults>
     </>
   );
 
@@ -1335,7 +1383,7 @@ const ComposerContextMatterSub = ({
   );
 };
 
-const ComposerMcpSubmenu = ({
+export const ComposerMcpSubmenu = ({
   enabled,
   guideAnchorsEnabled,
   mcp,
@@ -1353,14 +1401,24 @@ const ComposerMcpSubmenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  const { data: connectorsData, isPending: isLoadingConnectors } = useQuery({
+  const connectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled,
   });
-  const { data: connectionsData, isPending: isLoadingConnections } = useQuery({
+  const connectionsQuery = useQuery({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
+  const connectorsView = useQueryView(connectorsQuery, {
+    isEmpty: (data) => data.connectors.length === 0,
+  });
+  const connectionsView = useQueryView(connectionsQuery, {
+    isEmpty: (data) => data.connections.length === 0,
+  });
+  const connectorsData =
+    connectorsView.type === "items" ? connectorsView.items : undefined;
+  const connectionsData =
+    connectionsView.type === "items" ? connectionsView.items : undefined;
 
   const connectionBySlug = useMemo(() => {
     const map = new Map<
@@ -1412,7 +1470,7 @@ const ComposerMcpSubmenu = ({
   };
 
   let mcpRowsContent: React.ReactNode;
-  if (isLoadingConnectors || isLoadingConnections) {
+  if (connectorsView.type === "pending" || connectionsView.type === "pending") {
     mcpRowsContent = (
       <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
     );
@@ -1476,7 +1534,17 @@ const ComposerMcpSubmenu = ({
           ref={searchRef}
           value={search}
         />
-        {mcpRowsContent}
+        <ComposerQueryResults
+          views={{ connectors: connectorsView, connections: connectionsView }}
+          hasItems={
+            rows.length > 0 &&
+            (connectionsView.type === "items" ||
+              connectionsView.type === "empty")
+          }
+          empty={mcpRowsContent}
+        >
+          {mcpRowsContent}
+        </ComposerQueryResults>
         <MenuSeparator />
         <MenuItem onClick={openMcpSettings}>
           {t("chat.composerMenu.openMcpSettings")}

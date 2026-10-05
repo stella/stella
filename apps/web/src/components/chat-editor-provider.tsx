@@ -25,6 +25,7 @@ import type { EditorProps } from "@tiptap/pm/view";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result, TaggedError } from "better-result";
+import type { UnhandledException } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -209,9 +210,13 @@ export type ChatEditorController = {
 // update loop that trips React's max-update-depth guard under load).
 type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
-  getMentionItems: () => Promise<ChatMentionOption[]>;
+  getMentionItems: () => Promise<
+    Result<ChatMentionOption[], UnhandledException>
+  >;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
-  searchMentionItems: (query: string) => Promise<ChatMentionOption[]>;
+  searchMentionItems: (
+    query: string,
+  ) => Promise<Result<ChatMentionOption[], UnhandledException>>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
@@ -313,12 +318,12 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     for (const result of results) {
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error);
-        continue;
+        return Result.err(result.error);
       }
       items.push(...result.value);
     }
 
-    return items;
+    return Result.ok(items);
   }, []);
 
   const getPluginRegistrations = useCallback(() => {
@@ -358,14 +363,14 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     for (const result of results) {
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error);
-        continue;
+        return Result.err(result.error);
       }
       if (result.value !== undefined) {
         items.push(...result.value);
       }
     }
 
-    return items;
+    return Result.ok(items);
   }, []);
 
   const registerExtension = useCallback(
