@@ -10,7 +10,7 @@ import {
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
-import { Temporal } from "@stll/time";
+import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -83,6 +83,7 @@ import type { NotificationPing } from "@/api/lib/notifications";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -1029,6 +1030,11 @@ const raiseReviewTask = async ({
     )
     .limit(1);
   const actorIsMember = membership.length > 0;
+  const workingTargetDate = features.governedWorkflow
+    ? todayFor(
+        await readWorkspaceOrganizationTimeZone(tx, workspaceId),
+      ).toString()
+    : null;
   const task = await Result.gen(() =>
     createTaskEntityHandler({
       tx,
@@ -1041,10 +1047,9 @@ const raiseReviewTask = async ({
         ...(features.governedWorkflow
           ? {
               ...(actorIsMember ? { ownerUserId: actorUserId } : {}),
-              // A gate is due the moment the run reaches it.
-              workingTargetDate: Temporal.Now.instant()
-                .toString({ fractionalSecondDigits: 3 })
-                .slice(0, 10),
+              // A gate is due the moment the run reaches it, on the
+              // organization's day.
+              workingTargetDate,
             }
           : {}),
       },

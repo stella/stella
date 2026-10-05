@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
@@ -18,6 +19,7 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useQueryView } from "@/lib/use-query-view";
 
 /**
  * The reception of the decision on the main view, in the title row: the
@@ -33,26 +35,40 @@ export const TopBarCitations = () => {
   return <TopBarCitationsFor decision={decision} />;
 };
 
-const TopBarCitationsFor = ({
+export const TopBarCitationsFor = ({
   decision,
 }: {
-  decision: PublicCaseLawDecision;
+  decision: Pick<
+    PublicCaseLawDecision,
+    | "id"
+    | "decisionDate"
+    | "caseNumber"
+    | "country"
+    | "court"
+    | "language"
+    | "languageAlternates"
+    | "slug"
+  >;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decision.id),
+  const summaryView = useQueryView(
+    useQuery(decisionCitationSummaryOptions(decision.id)),
   );
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the row waits for hydration to stay identical.
   const hydrated = useHydrated();
-  if (!hydrated || summary === undefined) {
+  if (!hydrated) {
     return null;
   }
+  if (summaryView.type !== "items") {
+    return <QueryViewFeedback view={summaryView} />;
+  }
+  const summary = summaryView.items;
   const total = totalCitations(summary.incoming);
   if (total === 0 && !summary.capped.incoming) {
-    return null;
+    return <QueryViewFeedback view={summaryView} />;
   }
   const positive = summary.incoming.positive + summary.incoming.supportive;
   const negative = summary.incoming.negative;
@@ -88,55 +104,58 @@ const TopBarCitationsFor = ({
   };
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            aria-label={label}
-            className={cn(
-              "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
-              CITATION_TRIGGER_TOUCH_TARGET,
-            )}
-            type="button"
+    <>
+      <QueryViewFeedback view={summaryView} />
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              aria-label={label}
+              className={cn(
+                "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
+                CITATION_TRIGGER_TOUCH_TARGET,
+              )}
+              type="button"
+            />
+          }
+        >
+          <CitationYearStrip
+            byYear={summary.incomingByYear}
+            fromYear={fromYear}
+            toYear={currentYear}
           />
-        }
-      >
-        <CitationYearStrip
-          byYear={summary.incomingByYear}
-          fromYear={fromYear}
-          toYear={currentYear}
-        />
-        <span aria-hidden="true" className="tabular-nums">
-          {format.number(total)}
-          {summary.capped.incoming ? "+" : null}
-        </span>
-        {!summary.capped.incoming && (positive > 0 || negative > 0) && (
-          <span
-            aria-hidden="true"
-            className="flex items-center gap-1 tabular-nums"
-          >
-            {positive > 0 && (
-              <span className="text-primary">+{format.number(positive)}</span>
-            )}
-            {negative > 0 && (
-              <span className="text-destructive">
-                −{format.number(negative)}
-              </span>
-            )}
+          <span aria-hidden="true" className="tabular-nums">
+            {format.number(total)}
+            {summary.capped.incoming ? "+" : null}
           </span>
-        )}
-      </PopoverTrigger>
-      <PopoverPanel
-        align="start"
-        className="w-[min(24rem,calc(100vw-2rem))] max-w-none"
-      >
-        <CitationTimelinePanel
-          fromYear={fromYear}
-          summary={summary}
-          target={target}
-          toYear={currentYear}
-        />
-      </PopoverPanel>
-    </Popover>
+          {!summary.capped.incoming && (positive > 0 || negative > 0) && (
+            <span
+              aria-hidden="true"
+              className="flex items-center gap-1 tabular-nums"
+            >
+              {positive > 0 && (
+                <span className="text-primary">+{format.number(positive)}</span>
+              )}
+              {negative > 0 && (
+                <span className="text-destructive">
+                  −{format.number(negative)}
+                </span>
+              )}
+            </span>
+          )}
+        </PopoverTrigger>
+        <PopoverPanel
+          align="start"
+          className="w-[min(24rem,calc(100vw-2rem))] max-w-none"
+        >
+          <CitationTimelinePanel
+            fromYear={fromYear}
+            summary={summary}
+            target={target}
+            toYear={currentYear}
+          />
+        </PopoverPanel>
+      </Popover>
+    </>
   );
 };

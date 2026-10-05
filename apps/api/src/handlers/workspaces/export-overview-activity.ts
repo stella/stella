@@ -8,7 +8,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { escapeCSV } from "@/api/lib/csv";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
@@ -17,7 +16,7 @@ import {
   matterActivityFilterQueryProperties,
   toMatterActivityFilters,
 } from "./matter-activity-query";
-import { readOverviewActivityPage } from "./read-overview-activity.query";
+import { readOverviewActivityExport } from "./read-overview-activity.query";
 import type { MatterActivityItem } from "./read-overview-activity.query";
 
 const MATTER_ACTIVITY_EXPORT_FORMATS = ["csv", "json"] as const;
@@ -108,25 +107,15 @@ const exportOverviewActivity = createSafeHandler(
   config,
   async function* ({ query, recordAuditEvent, safeDb, session, workspaceId }) {
     const filters = toMatterActivityFilters(query);
-    const page = yield* Result.await(
-      readOverviewActivityPage({
-        cursor: null,
+    const items = yield* Result.await(
+      readOverviewActivityExport({
         filters,
-        limit: LIMITS.exportRowLimit + 1,
+        cap: LIMITS.exportRowLimit,
         organizationId: session.activeOrganizationId,
         safeDb,
         workspaceId,
       }),
     );
-
-    if (page.items.length > LIMITS.exportRowLimit) {
-      return Result.err(
-        new HandlerError({
-          status: 413,
-          message: `The export exceeds ${LIMITS.exportRowLimit} rows. Narrow the filters and try again.`,
-        }),
-      );
-    }
 
     yield* Result.await(
       safeDb(async (tx) => {
@@ -134,7 +123,7 @@ const exportOverviewActivity = createSafeHandler(
           action: AUDIT_ACTION.DOWNLOAD,
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
           resourceId: workspaceId,
-          metadata: { format: query.format, rowCount: page.items.length },
+          metadata: { format: query.format, rowCount: items.length },
         });
       }),
     );
@@ -146,7 +135,7 @@ const exportOverviewActivity = createSafeHandler(
         }),
         filters,
         format: query.format,
-        items: page.items,
+        items,
       }),
     );
   },

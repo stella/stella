@@ -15,6 +15,7 @@ import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -283,6 +284,7 @@ export const createTemplateTools = ({
         values,
         scopedDb,
         organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         useRecording: "caller",
         aiCollaborators: () => aiCollaborators(unrestoredFields),

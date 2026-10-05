@@ -51,8 +51,16 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isAstNode } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
+import {
+  getPropertyName,
+  isAstNode,
+  isIdentifierReference,
+  resolveImport,
+  resolveVariable,
+  stableInitializer,
+  unwrapExpression,
+} from "./utils.ts";
+import type { AstNode, ScopeContext } from "./utils.ts";
 
 const getType = (node: unknown): string | null => {
   if (typeof node !== "object" || node === null || !("type" in node)) {
@@ -131,6 +139,87 @@ const collectChainMethodNames = (node: unknown): Set<string> => {
   }
 
   return names;
+};
+
+const queryChainEnd = (node: AstNode): AstNode => {
+  let current = node;
+  while (isAstNode(current.parent)) {
+    const parent = current.parent;
+    if (unwrapExpression(parent) === current) {
+      current = parent;
+      continue;
+    }
+    if (
+      parent.type !== "MemberExpression" ||
+      parent.object !== current ||
+      !isAstNode(parent.parent) ||
+      parent.parent.type !== "CallExpression" ||
+      parent.parent.callee !== parent
+    ) {
+      break;
+    }
+    current = parent.parent;
+  }
+  return current;
+};
+
+const isBoundedConsumer = (context: ScopeContext, node: AstNode): boolean => {
+  const end = queryChainEnd(node);
+  const call = end.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.at(0) !== end
+  ) {
+    return false;
+  }
+  const imported = resolveImport(context, call.callee);
+  return (
+    imported?.moduleId === "apps/api/src/lib/db/read-bounded" &&
+    imported.imported === "readBounded"
+  );
+};
+
+// Every read of an assigned builder must apply a bound. A bounded sibling use
+// does not justify an unbounded await, return, or unrelated consumer.
+const usesBoundedRead = (context: ScopeContext, node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  if (isBoundedConsumer(context, node)) {
+    return true;
+  }
+  const end = queryChainEnd(node);
+  const declaration = end.parent;
+  if (
+    !isAstNode(declaration) ||
+    declaration.type !== "VariableDeclarator" ||
+    declaration.init !== end ||
+    !isIdentifierReference(declaration.id)
+  ) {
+    return false;
+  }
+  const variable = resolveVariable(context, declaration.id);
+  if (
+    variable === null ||
+    unwrapExpression(stableInitializer(variable)) !== unwrapExpression(end)
+  ) {
+    return false;
+  }
+  const reads = variable.references.filter((reference) => reference.isRead());
+  return (
+    reads.length > 0 &&
+    reads.every(({ identifier }) => {
+      if (!isAstNode(identifier)) {
+        return false;
+      }
+      return (
+        isBoundedConsumer(context, identifier) ||
+        collectChainMethodNames(queryChainEnd(identifier)).has("limit")
+      );
+    })
+  );
 };
 
 // A findMany options arg satisfies the rule only when it is an object
@@ -311,7 +400,11 @@ export default eslintCompatPlugin({
             // Only a select-builder chain (has `.from`) that is ordered
             // but not limited is unbounded. Guarding on `from` keeps
             // non-Drizzle `.orderBy` calls out of scope.
-            if (chain.has("from") && !chain.has("limit")) {
+            if (
+              chain.has("from") &&
+              !chain.has("limit") &&
+              !usesBoundedRead(context, node)
+            ) {
               // Report on the `orderBy` member identifier, not the whole
               // chain CallExpression (which starts at the chain root, often
               // several lines up), so the diagnostic — and any

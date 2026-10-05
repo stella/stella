@@ -35,10 +35,11 @@ import type {
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import {
-  DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
   decisionDocumentState,
+  documentHydrationFor,
   readsSharedPublicLawCorpus,
+  STORED_ONLY_DOCUMENT_HYDRATION,
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -2518,6 +2519,8 @@ type DecisionItemOptions = {
   decisionId: string;
   /** See `decisionDocumentState`: the deployment's half of the answer. */
   readsSharedCorpus: boolean;
+  /** Whether this call could fetch a pending document at all. */
+  documentHydration: DecisionDocumentHydration["type"];
   /** The window this entry's share of the call's text budget allows. */
   maxTextChars: number;
   outline: "include" | "omit";
@@ -2526,6 +2529,24 @@ type DecisionItemOptions = {
   firstWindow: boolean;
   include: v.InferOutput<typeof readCaseLawDecisionArgsSchema>["include"];
   citationsCursor: DecisionCursorState["citations"];
+};
+
+/** What a caller does about a document this call left pending. */
+const pendingDocumentMessage = (
+  documentHydration: DecisionDocumentHydration["type"],
+): string => {
+  switch (documentHydration) {
+    case "on-demand": {
+      return `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`;
+    }
+    case "stored-only": {
+      return "The publisher document for this decision is not stored yet. The ingestion queue fetches it; read this decision again later.";
+    }
+    default: {
+      documentHydration satisfies never;
+      return panic("Unhandled document hydration");
+    }
+  }
 };
 
 const decisionIncludedFields = ({
@@ -2552,6 +2573,7 @@ const decisionItemResult = ({
   outline,
   read,
   readsSharedCorpus,
+  documentHydration,
   textOffset,
   firstWindow,
   include,
@@ -2569,7 +2591,7 @@ const decisionItemResult = ({
   if (isDecisionDocumentPending(read, readsSharedCorpus)) {
     return {
       decisionId,
-      message: `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`,
+      message: pendingDocumentMessage(documentHydration),
       status: DECISION_READ_STATUS.pending,
     };
   }
@@ -2781,10 +2803,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       operation: async (decisionId) =>
         [
           decisionId,
-          await readDecision(
-            decisionId,
-            DECISION_DOCUMENT_HYDRATION.storedOnly,
-          ),
+          await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
         ] as const,
     }),
   );
@@ -2814,12 +2833,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
 
   // The pending entries this call fetches, in input order. Anything past the
   // budget, and anything whose fetch does not finish, stays pending and is
-  // reported as such.
-  const fetchedIds = uniqueIds
-    .filter((decisionId) =>
-      isDecisionDocumentPending(readOf(decisionId), readsSharedCorpus),
-    )
-    .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
+  // reported as such. A caller without a third-party outbound permit (a chat
+  // script) fetches none.
+  const onDemand = documentHydrationFor(context.thirdPartyOutboundPermit);
+  const fetchedIds =
+    onDemand.type === "stored-only"
+      ? []
+      : uniqueIds
+          .filter((decisionId) =>
+            isDecisionDocumentPending(readOf(decisionId), readsSharedCorpus),
+          )
+          .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
   // The re-read runs the gate again rather than hydrating the row it already
   // holds: a publisher fetch must not run inside the read transaction, and
   // the content that answers has to come from a state the gate approved.
@@ -2827,8 +2851,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: fetchedIds,
       limit: LIMITS.caseLawDecisionBatchHydrationsMax,
-      operation: async (decisionId) =>
-        await readDecision(decisionId, DECISION_DOCUMENT_HYDRATION.onDemand),
+      operation: async (decisionId) => await readDecision(decisionId, onDemand),
     })
   ).entries()) {
     const decisionId =
@@ -2852,6 +2875,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         outline: decisionIds.length === 1 ? "include" : "omit",
         read: readOf(decisionId),
         readsSharedCorpus,
+        documentHydration: onDemand.type,
         textOffset: offsets.text,
         firstWindow: cursor === undefined,
         include,

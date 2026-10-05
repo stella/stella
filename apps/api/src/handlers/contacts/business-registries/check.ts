@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 import { isCountryCode } from "@stll/country-codes";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,
@@ -184,6 +185,7 @@ const businessRegistriesCheck = createSafeRootHandler(
     const result = yield* Result.await(
       runEntityCheckShared({
         observer,
+        permit: grantThirdPartyOutboundPermit(),
         check: body.check,
         subject,
         signal: request.signal,

@@ -329,6 +329,8 @@ const createFixtureTools = ({
       scopedDb,
       organizationId,
       requiredFields: "enforce",
+      // Fixture fills never reach a third-party lookup.
+      thirdPartyOutboundPermit: undefined,
     });
     if ("usageRejection" in filled) {
       // No usage check is configured for this call, so this branch is

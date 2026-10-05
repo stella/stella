@@ -4516,6 +4516,13 @@
         "narrativeRequired": "Exigir uma narrativa",
         "title": "Política de registro de tempo"
       },
+      "timeZone": {
+        "description": "Meses bloqueados, datas de fatura e trabalho com prazo seguem o dia do calendário neste fuso horário. Enquanto nenhum for escolhido, ele segue a jurisdição principal: Europe/Prague para a Tchéquia e a Eslováquia, UTC nos demais casos.",
+        "followJurisdiction": "Seguir a jurisdição principal",
+        "followingJurisdiction": "Seguir a jurisdição principal ({timeZone})",
+        "title": "Fuso horário",
+        "updated": "Fuso horário atualizado"
+      },
       "usage": "Uso",
       "usageDescription": "Limites de uso e estado da habilitação desta organização",
       "usageEmptyDescription": "Configure uma habilitação de uso para ativar recursos de IA medidos nesta organização.",
