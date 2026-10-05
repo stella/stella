@@ -68,6 +68,7 @@
     "model-catalog-check.yml/model-catalog-check": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/record": "main",
+    "typecheck-base.yml/record": "main",
     "deploy-staging.yml/resolve": "main",
     "deploy-staging.yml/staging-health": "main",
     "deploy-staging.yml/build-api": "main",
@@ -145,6 +146,10 @@
     }
   },
   "pushMain": {
+    "typecheck-base.yml": {
+      "role": "analysis",
+      "cancelInProgress": false
+    },
     "sync-branch-protection.yml": {
       "role": "publish",
       "cancelInProgress": false
