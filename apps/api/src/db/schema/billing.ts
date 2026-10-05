@@ -192,7 +192,10 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
-    ...entityFeaturePolicies(table, new Map([[table.workItemId, "entities"]])),
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.workItemId, { target: "entities", kind: "context" }]]),
+    ),
     p.check(
       "time_entries_invoice_attachment_check",
       sql`${table.invoiceAttachment} IN (${sql.join(
@@ -891,7 +894,10 @@ export const expenses = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
-    ...entityFeaturePolicies(table, new Map([[table.matterId, "entities"]])),
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.matterId, { target: "entities", kind: "context" }]]),
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
@@ -909,7 +915,9 @@ export const expenses = p.pgTable(
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
     ...wsOrganizationPolicies("expenses", {
       columns: table,
-      references: new Map([[table.matterId, "entities"]]),
+      references: new Map([
+        [table.matterId, { target: "entities", kind: "context" }],
+      ]),
     }),
   ],
 );

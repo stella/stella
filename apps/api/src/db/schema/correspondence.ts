@@ -200,7 +200,9 @@ export const correspondence = p.pgTable.withRLS(
     }),
     ...wsOrganizationPolicies("correspondence", {
       columns: table,
-      references: new Map([[table.sourceEntityId, "entities"]]),
+      references: new Map([
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -347,7 +349,9 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     ),
     ...wsOrganizationPolicies("correspondence_attachments", {
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );

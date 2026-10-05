@@ -299,7 +299,9 @@ export const legalListItems = p.pgTable(
     ),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -412,8 +414,11 @@ export const legalListItemSources = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
-        [table.sourceEntityVersionId, "entity_versions"],
-        [table.sourceEntityId, "entities"],
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     ),
     p
@@ -545,8 +550,11 @@ export const legalListGenerationSources = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
-        [table.sourceEntityVersionId, "entity_versions"],
-        [table.sourceEntityId, "entities"],
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     ),
     p
@@ -701,7 +709,9 @@ export const legalListGenerationCandidates = p.pgTable(
     ),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.acceptedEntityId, "entities"]]),
+      references: new Map([
+        [table.acceptedEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -727,8 +737,11 @@ export const legalListGenerationCandidateSources = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
-        [table.sourceEntityVersionId, "entity_versions"],
-        [table.sourceEntityId, "entities"],
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     ),
     p

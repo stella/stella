@@ -673,8 +673,8 @@ export const fileChatThreads = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
-        [table.entityId, "entities"],
-        [table.fieldId, "fields"],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
       ]),
     ),
     p

@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -6,6 +6,10 @@ import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
@@ -517,7 +521,8 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 const timeEntryColumns = {
   id: timeEntries.id,
   activityGroup: timeEntries.activityGroup,
-  entityId: timeEntries.workItemId,
+  entityId: entityContextId(timeEntries.workItemId),
+  entityReference: entityContextReference(timeEntries.workItemId),
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
   durationMinutes: timeEntries.durationMinutes,
@@ -1341,6 +1346,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         return {
           id: te.id,
           entityId: te.workItemId,
+          entityReference: te.workItemReference,
           dateWorked: te.dateWorked,
           billedMinutes: te.billedMinutes,
           rateAtEntry: te.rateAtEntry,
@@ -1353,11 +1359,11 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         };
       }),
       expenses: invoiceRow.expenses.map((ex) => {
-        const entity =
-          ex.matter ?? panic("Invoiced expense has no matter entity");
+        const entity = ex.matter;
         return {
           id: ex.id,
           entityId: ex.matterId,
+          entityReference: ex.matterReference,
           dateIncurred: ex.dateIncurred,
           amount: ex.amount,
           currency: ex.currency,
@@ -1366,7 +1372,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           invoiceDescription: ex.invoiceDescription,
           billable: ex.billable,
           markup: ex.markup,
-          entity: { id: entity.id, name: entity.name },
+          entity: entity ? { id: entity.id, name: entity.name } : null,
         };
       }),
       lines: invoiceRow.lines.map(

@@ -161,9 +161,12 @@ export const officeFileEvidence = p.pgTable(
     ...wsOrganizationPolicies("office_file_evidence", {
       columns: table,
       references: new Map([
-        [table.entityVersionId, "entity_versions"],
-        [table.entityId, "entities"],
-        [table.fieldId, "fields"],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
       ]),
     }),
   ],

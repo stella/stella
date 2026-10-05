@@ -5,6 +5,7 @@ import * as p from "drizzle-orm/pg-core";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import type { EntityReferenceClassification } from "./entity-feature-policies";
 import { entityFeaturePolicies } from "./entity-feature-policies";
 import { INGESTION_ROLE_NAME } from "./role-names";
 
@@ -307,10 +308,7 @@ const userFileScopeCheck = sql`(
 
 type EntityFeaturePolicyOptions = {
   columns: Record<string, p.AnyPgColumn>;
-  references?: ReadonlyMap<
-    p.AnyPgColumn,
-    "entities" | "entity_versions" | "fields"
-  >;
+  references?: ReadonlyMap<p.AnyPgColumn, EntityReferenceClassification>;
 };
 
 export const wsPolicies = (entityAccess?: EntityFeaturePolicyOptions) => [

@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, GetColumnData } from "drizzle-orm";
 import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
@@ -9,14 +10,66 @@ import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
+export type EntityReferenceClassification = {
+  target: "entities" | "entity_versions" | "fields";
+  kind: "owned-content" | "context";
+};
+
+// Schema callbacks and FK metadata use distinct column objects for the same column.
+const entityReferences = new WeakMap<
+  PgTable,
+  Map<string, EntityReferenceClassification>
+>();
+
+export const entityReferenceClassification = (column: AnyPgColumn) =>
+  entityReferences.get(column.table)?.get(column.name);
+
+export type EntityContextReference =
+  | { type: "available"; id: string }
+  | { type: "unavailable" }
+  | null;
+
+/** Retains the source classification when a relational query aliases its columns. */
+export const entityContextProjection = <TColumn extends AnyPgColumn>(
+  source: TColumn,
+) => {
+  getTableConfig(source.table);
+  const classification = entityReferenceClassification(source);
+  if (classification?.kind !== "context") {
+    return panic("Context projection requires a classified context reference");
+  }
+  const visibility = (column: TColumn) =>
+    sql`EXISTS (SELECT 1 FROM ${sql.identifier("public")}.${sql.identifier(classification.target)} context_resource WHERE context_resource.id = ${column})`;
+  return {
+    id: (column: TColumn) =>
+      sql<GetColumnData<TColumn> | null>`CASE WHEN ${visibility(column)} THEN ${column} ELSE NULL END`,
+    reference: (column: TColumn) =>
+      sql<EntityContextReference>`CASE WHEN ${column} IS NULL THEN NULL WHEN ${visibility(column)} THEN jsonb_build_object('type', 'available', 'id', ${column}) ELSE jsonb_build_object('type', 'unavailable') END`,
+  };
+};
+
+export const entityContextId = <TColumn extends AnyPgColumn>(column: TColumn) =>
+  entityContextProjection(column).id(column);
+
+export const entityContextReference = (column: AnyPgColumn) =>
+  entityContextProjection(column).reference(column);
+
 /** All workspace-bound entity readers and writers inherit the same feature fence. */
 export const entityFeaturePolicies = (
   columns: Record<string, AnyPgColumn>,
   references: ReadonlyMap<
     AnyPgColumn,
-    "entities" | "entity_versions" | "fields"
+    EntityReferenceClassification
   > = new Map(),
 ) => {
+  for (const [column, classification] of references) {
+    let tableReferences = entityReferences.get(column.table);
+    if (tableReferences === undefined) {
+      tableReferences = new Map();
+      entityReferences.set(column.table, tableReferences);
+    }
+    tableReferences.set(column.name, classification);
+  }
   const conditions: SQL[] = [];
   const root = Object.values(columns).find(
     (column) => column.name === "list_item_type",
@@ -29,19 +82,23 @@ export const entityFeaturePolicies = (
       );
       continue;
     }
-    if (references.get(column) === "entities") {
+    const classification = references.get(column);
+    if (classification?.kind !== "owned-content") {
+      continue;
+    }
+    if (classification.target === "entities") {
       conditions.push(
         sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.entities e WHERE e.id = ${column}) END)`,
       );
       continue;
     }
-    if (references.get(column) === "entity_versions") {
+    if (classification.target === "entity_versions") {
       conditions.push(
         sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.entity_versions v WHERE v.id = ${column}) END)`,
       );
       continue;
     }
-    if (references.get(column) === "fields") {
+    if (classification.target === "fields") {
       conditions.push(
         sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.fields f WHERE f.id = ${column}) END)`,
       );

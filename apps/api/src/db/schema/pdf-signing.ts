@@ -226,9 +226,15 @@ export const pdfSigningSessions = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.baseVersionId, "entity_versions"],
-        [table.entityId, "entities"],
-        [table.finalizedVersionId, "entity_versions"],
+        [
+          table.baseVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.finalizedVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
       ]),
     }),
     // Row security is forced on this table (see its migration), so the

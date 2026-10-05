@@ -162,8 +162,8 @@ export const reportExports = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.resultEntityId, "entities"],
-        [table.resultFieldId, "fields"],
+        [table.resultEntityId, { target: "entities", kind: "owned-content" }],
+        [table.resultFieldId, { target: "fields", kind: "owned-content" }],
       ]),
     }),
   ],

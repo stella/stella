@@ -261,9 +261,12 @@ export const documentProcessingRuns = p.pgTable(
     ...entityFeaturePolicies(
       table,
       new Map([
-        [table.entityId, "entities"],
-        [table.entityVersionId, "entity_versions"],
-        [table.fieldId, "fields"],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
       ]),
     ),
     p

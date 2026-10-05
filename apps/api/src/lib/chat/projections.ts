@@ -1178,6 +1178,21 @@ export const LIST_PLAYBOOKS_PROJECTION = v.union([
  * resolves. `entityId` is the entry's matter entity; `id`/`userId` are
  * billing/user handles, not tenant refs.
  */
+const contextEntityReference = (
+  workspaceSource: Parameters<typeof chatEntityRef>[0],
+) =>
+  v.nullable(
+    v.union([
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("available"),
+          id: chatEntityRef(workspaceSource),
+        }),
+      ),
+      projectionBranch(v.strictObject({ type: v.literal("unavailable") })),
+    ]),
+  );
+
 const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   ({
     id: passthroughId(),
@@ -1188,6 +1203,11 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
           ? { from: "inputParam", param: "matter_id" }
           : { from: "sibling", key: "workspaceId" },
       ),
+    ),
+    entityReference: contextEntityReference(
+      workspace.from === "inputParam"
+        ? { from: "inputParam", param: "matter_id" }
+        : { from: "sibling", key: "workspaceId" },
     ),
     userId: v.nullable(passthroughId()),
     dateWorked: v.string(),
@@ -1328,6 +1348,10 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
             path: "invoice.workspaceId",
           }),
         ),
+        entityReference: contextEntityReference({
+          from: "outputPath",
+          path: "invoice.workspaceId",
+        }),
         dateWorked: v.string(),
         billedMinutes: v.number(),
         rateAtEntry: v.number(),
@@ -1342,7 +1366,13 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     expenses: v.array(
       v.strictObject({
         id: passthroughId(),
-        entityId: chatEntityRef({
+        entityId: v.nullable(
+          chatEntityRef({
+            from: "outputPath",
+            path: "invoice.workspaceId",
+          }),
+        ),
+        entityReference: contextEntityReference({
           from: "outputPath",
           path: "invoice.workspaceId",
         }),
@@ -1354,7 +1384,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         invoiceDescription: v.nullable(v.string()),
         billable: v.boolean(),
         markup: v.number(),
-        entity: invoiceLineEntityProjection(),
+        entity: v.nullable(invoiceLineEntityProjection()),
       }),
     ),
     lines: v.array(

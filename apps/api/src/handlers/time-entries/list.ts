@@ -7,7 +7,10 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
-import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
+import {
+  timeEntryContextColumns,
+  timeEntryReadColumns,
+} from "@/api/handlers/time-entries/time-entry-columns";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
@@ -261,7 +264,7 @@ const readTimeEntries = createSafeHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select(timeEntryReadColumns)
+          .select({ ...timeEntryReadColumns, ...timeEntryContextColumns })
           .from(timeEntries)
           .where(and(...conditions))
           .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
@@ -299,6 +302,7 @@ const readTimeEntries = createSafeHandler(
         id: row.id,
         userId: row.userId,
         workItemId: row.workItemId,
+        workItemReference: row.workItemReference,
         dateWorked: row.dateWorked,
         timezoneId: row.timezoneId,
         durationMinutes: row.durationMinutes,

@@ -2,6 +2,8 @@ import { getTableName } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
+import { entityReferenceClassification } from "./entity-feature-policies";
+
 const ENTITY_RELATION_ALIASES = {
   entities: "e",
   entity_versions: "v",
@@ -62,9 +64,6 @@ export const entityFeatureCoverageViolations = (
           (typeof role === "object" && role !== null && role.name === "stella"),
       );
     });
-    if (!appReadable) {
-      continue;
-    }
     const root = config.columns.find(
       (column) => column.name === "list_item_type",
     );
@@ -83,12 +82,36 @@ export const entityFeatureCoverageViolations = (
                 })),
           )
         : [{ column: root, target: undefined }];
-    if (required.length === 0) {
+    const relationships = config.columns.flatMap((column) =>
+      column.name === "id" &&
+      Object.hasOwn(ENTITY_RELATION_ALIASES, config.name)
+        ? []
+        : [...entityRelationsOf(column)].map((target) => ({ column, target })),
+    );
+    for (const { column, target } of relationships) {
+      const classification = entityReferenceClassification(column);
+      if (classification === undefined || classification.target !== target) {
+        violations.push(
+          `${config.name}.${column.name} requires a classified entity relationship`,
+        );
+      }
+    }
+    if (!appReadable || required.length === 0) {
       continue;
     }
     const expression =
       policy?.using === undefined ? "" : dialect.sqlToQuery(policy.using).sql;
     for (const { column, target } of required) {
+      if (target !== undefined) {
+        const classification = entityReferenceClassification(column);
+        if (
+          classification === undefined ||
+          classification.target !== target ||
+          classification.kind === "context"
+        ) {
+          continue;
+        }
+      }
       let alias: string | undefined;
       if (
         target === "entities" ||

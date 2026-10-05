@@ -153,7 +153,9 @@ export const documentTranslationRuns = p.pgTable(
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_translation_runs", {
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );

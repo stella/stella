@@ -410,8 +410,11 @@ export const documentReviewParties = p.pgTable(
     ...wsOrganizationPolicies("document_review_parties", {
       columns: table,
       references: new Map([
-        [table.entityVersionId, "entity_versions"],
-        [table.entityId, "entities"],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],
@@ -481,7 +484,9 @@ export const documentReviewReferencePassages = p.pgTable(
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_reference_passages", {
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );

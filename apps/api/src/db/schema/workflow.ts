@@ -268,8 +268,8 @@ export const workObligations = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.sourceEntityId, "entities"],
-        [table.entityId, "entities"],
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],

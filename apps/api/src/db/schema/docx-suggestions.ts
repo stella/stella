@@ -143,7 +143,12 @@ export const docxSuggestions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    ...entityFeaturePolicies(table, new Map([[table.entityId, "entities"]])),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     // Status-scoped lookups within an entity (task-specified).
     p
       .index("docx_suggestions_ws_entity_status_idx")

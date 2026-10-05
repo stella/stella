@@ -552,7 +552,9 @@ export const searchDocuments = p.pgTable(
       .onDelete("cascade"),
     ...wsOrganizationPolicies("search_documents", {
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -602,7 +604,12 @@ export const searchDocumentPreviewPassages = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
-    ...entityFeaturePolicies(table, new Map([[table.entityId, "entities"]])),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
   ],
 );
 
@@ -912,9 +919,12 @@ export const extractedContent = p.pgTable(
     ...wsOrganizationPolicies("extracted_content", {
       columns: table,
       references: new Map([
-        [table.sourceEntityVersionId, "entity_versions"],
-        [table.sourceFieldId, "fields"],
-        [table.entityId, "entities"],
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceFieldId, { target: "fields", kind: "owned-content" }],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],

@@ -396,7 +396,12 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    ...entityFeaturePolicies(table, new Map([[table.entityId, "entities"]])),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
     // identifier limit and was silently truncated in the catalog until
     // 20260813110000 renamed it.

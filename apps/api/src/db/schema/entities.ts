@@ -201,7 +201,16 @@ export const entities = p.pgTable(
       .index("entities_agenda_ical_uid_idx")
       .on(table.workspaceId, table.externalICalUid)
       .where(isNotNull(table.externalICalUid)),
-    ...wsPolicies({ columns: table }),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.parentId, { target: "entities", kind: "owned-content" }],
+        [
+          table.currentVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -305,7 +314,9 @@ export const taskAssignees = p.pgTable(
       .on(table.entityId, table.userId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -350,8 +361,8 @@ export const entityLinks = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.sourceEntityId, "entities"],
-        [table.targetEntityId, "entities"],
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+        [table.targetEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],
@@ -438,7 +449,9 @@ export const entityVersions = p.pgTable(
     p.index("entity_versions_workspace_id_idx").on(table.workspaceId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -485,8 +498,11 @@ export const entityVersionAiSummaries = p.pgTable(
     ...wsOrganizationPolicies("entity_version_ai_summaries", {
       columns: table,
       references: new Map([
-        [table.entityVersionId, "entity_versions"],
-        [table.entityId, "entities"],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],
@@ -606,9 +622,15 @@ export const desktopEditSessions = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.baseVersionId, "entity_versions"],
-        [table.finalizedVersionId, "entity_versions"],
-        [table.entityId, "entities"],
+        [
+          table.baseVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [
+          table.finalizedVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
   ],
@@ -677,7 +699,9 @@ export const desktopEditHandoffs = p.pgTable(
       .onDelete("cascade"),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityId, "entities"]]),
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
     }),
   ],
 );
@@ -825,9 +849,15 @@ export const folioCollabRooms = p.pgTable(
     ...wsPolicies({
       columns: table,
       references: new Map([
-        [table.entityId, "entities"],
-        [table.baseVersionId, "entity_versions"],
-        [table.sourceVersionId, "entity_versions"],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.baseVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [
+          table.sourceVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
       ]),
     }),
   ],
@@ -924,7 +954,12 @@ export const folioCollabContributions = p.pgTable(
       .onDelete("cascade"),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.sinceVersionId, "entity_versions"]]),
+      references: new Map([
+        [
+          table.sinceVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
     }),
   ],
 );
@@ -977,7 +1012,12 @@ export const folioCollabPublications = p.pgTable(
       .onDelete("cascade"),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityVersionId, "entity_versions"]]),
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
     }),
   ],
 );
@@ -1406,7 +1446,12 @@ export const fields = p.pgTable(
     p.unique("fields_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityVersionId, "entity_versions"]]),
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
     }),
   ],
 );
@@ -1445,7 +1490,12 @@ export const cellMetadata = p.pgTable(
     p.index("cell_metadata_entity_version_id_idx").on(table.entityVersionId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.entityVersionId, "entity_versions"]]),
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
     }),
   ],
 );
@@ -1474,7 +1524,9 @@ export const justifications = p.pgTable(
     p.index("justifications_workspace_id_idx").on(table.workspaceId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.fieldId, "fields"]]),
+      references: new Map([
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
     }),
   ],
 );

@@ -176,7 +176,12 @@ export const flowRunSteps = p.pgTable(
     p.index("flow_run_steps_workspace_id_idx").on(table.workspaceId),
     ...wsPolicies({
       columns: table,
-      references: new Map([[table.reviewTaskEntityId, "entities"]]),
+      references: new Map([
+        [
+          table.reviewTaskEntityId,
+          { target: "entities", kind: "owned-content" },
+        ],
+      ]),
     }),
   ],
 );
