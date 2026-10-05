@@ -56,6 +56,7 @@ import {
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -109,6 +110,7 @@ const TaskDetailPanelContent = ({
   const clearNewFlag = useInspectorTabsStore((s) => s.clearTaskNewFlag);
   const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
+  const legalListsEnabled = useFeatureAccess("legal-lists");
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const userId = useRouteContext({
@@ -603,7 +605,7 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
-          {env.VITE_FEATURE_LEGAL_LISTS && (
+          {env.VITE_FEATURE_LEGAL_LISTS && legalListsEnabled && (
             <MetadataRow label={tCommon("type")}>
               <ItemTypeSelect
                 ariaLabel={tCommon("type")}

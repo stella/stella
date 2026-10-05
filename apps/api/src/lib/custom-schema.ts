@@ -42,12 +42,19 @@ export const withDescription = <T extends TSchema>(
 
 export const tSafeId = <T extends SafeIdType>(
   resourceKind: T,
-  options?: { description: string },
+  {
+    usage = "reference",
+    ...options
+  }: {
+    description?: string;
+    usage?: "reference" | "creation";
+  } = {},
 ) =>
   Type.Unsafe<SafeId<T>>({
     ...tUuid,
     ...options,
     "x-stella-resource-kind": resourceKind,
+    "x-stella-resource-usage": usage,
   });
 
 export const tUserId = t.String({

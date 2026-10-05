@@ -47,6 +47,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
 import { env } from "@/env";
+import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -65,6 +66,8 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { featureAccessOptions } from "@/queries/feature-access";
+import { featureIsEnabled } from "@/queries/feature-access.logic";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 const searchSchema = v.object({
@@ -83,6 +86,17 @@ export const Route = createFileRoute(
       return;
     }
 
+    const principal = {
+      organizationId: context.user.activeOrganizationId,
+      userId: context.user.id,
+    };
+    const access = await ensureRouteQueryData(
+      context.queryClient,
+      featureAccessOptions(principal),
+    );
+    if (!featureIsEnabled(access, principal, "legal-lists")) {
+      return;
+    }
     await ensureRouteQueryData(
       context.queryClient,
       legalListsOptions(params.workspaceId),
@@ -93,7 +107,8 @@ export const Route = createFileRoute(
 });
 
 function ListsRoutePage() {
-  return env.VITE_FEATURE_LEGAL_LISTS ? (
+  const legalListsEnabled = useFeatureAccess("legal-lists");
+  return env.VITE_FEATURE_LEGAL_LISTS && legalListsEnabled ? (
     <LegalListsPage />
   ) : (
     <DisabledListsRedirect />

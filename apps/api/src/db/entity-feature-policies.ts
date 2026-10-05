@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { pgPolicy } from "drizzle-orm/pg-core";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
@@ -58,4 +60,38 @@ export const entityFeaturePolicies = (
       withCheck: fence,
     }),
   ];
+};
+
+/** The migration and its parity check render the schema owner's actual policies. */
+export const entityFeaturePolicyStatements = (
+  tables: readonly PgTable[],
+): string[] => {
+  const dialect = new PgDialect();
+  return tables
+    .map(getTableConfig)
+    .toSorted((left, right) => compareCodeUnit(left.name, right.name))
+    .flatMap((config) =>
+      config.policies.flatMap((policy) => {
+        if (
+          policy.name !== "workspace_entity_feature" ||
+          policy.using === undefined ||
+          policy.withCheck === undefined
+        ) {
+          return [];
+        }
+        return [
+          dialect
+            .sqlToQuery(
+              sql`
+        CREATE POLICY ${sql.identifier(policy.name)}
+        ON ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
+        AS RESTRICTIVE FOR ALL TO ${sql.identifier(APPLICATION_RLS_ROLE_NAME)}
+        USING (${policy.using}) WITH CHECK (${policy.withCheck});
+      `.inlineParams(),
+            )
+            .sql.trim()
+            .replace(/\s+/gu, " "),
+        ];
+      }),
+    );
 };

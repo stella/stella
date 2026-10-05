@@ -6,6 +6,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { env } from "@/env";
+import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { useTimeBillingPreviewOffered } from "@/hooks/use-time-billing-preview";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useDevStore } from "@/lib/dev-store";
@@ -31,6 +32,7 @@ function BetaFeaturesPage() {
   const timeBillingPreviewOffered = useTimeBillingPreviewOffered();
   const inboxPreview = useDevStore((s) => s.inboxPreview);
   const setInboxPreview = useDevStore((s) => s.setInboxPreview);
+  const verificationEnabled = useFeatureAccess("list-verification");
   const avtPreview = useDevStore((s) => s.avtPreview);
   const setAvtPreview = useDevStore((s) => s.setAvtPreview);
 
@@ -129,7 +131,7 @@ function BetaFeaturesPage() {
             </Field>
           </div>
         </FramePanel>
-        {env.VITE_FEATURE_LEGAL_LISTS && (
+        {env.VITE_FEATURE_LEGAL_LISTS && verificationEnabled && (
           <FramePanel>
             <div className="flex flex-col gap-3 p-1">
               <h2 className="text-sm font-medium">

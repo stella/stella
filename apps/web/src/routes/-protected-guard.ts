@@ -18,6 +18,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
+import { featureAccessOptions } from "@/queries/feature-access";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -135,8 +136,22 @@ export const loadProtectedContext = async ({
 export const prefetchProtectedShell = async ({
   context,
 }: {
-  context: { queryClient: QueryClient };
+  context: { queryClient: QueryClient } & Awaited<
+    ReturnType<typeof loadProtectedContext>
+  >;
 }) =>
-  await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
-    getAnalytics().captureError(error);
-  });
+  await Promise.all([
+    prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
+      getAnalytics().captureError(error);
+    }),
+    prefetchRouteQuery(
+      context.queryClient,
+      featureAccessOptions({
+        organizationId: context.user.activeOrganizationId,
+        userId: context.user.id,
+      }),
+      (error) => {
+        getAnalytics().captureError(error);
+      },
+    ),
+  ]);

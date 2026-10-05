@@ -19,6 +19,7 @@ import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-ke
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
 import getDeploymentFeatures from "@/api/handlers/organization-settings/deployment-features/get";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
+import getFeatureAccess from "@/api/handlers/organization-settings/feature-access/get";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
@@ -131,6 +132,9 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get("/deployment-features", getDeploymentFeatures.handler, {
     permissions: getDeploymentFeatures.config.permissions,
+  })
+  .get("/feature-access", getFeatureAccess.handler, {
+    permissions: getFeatureAccess.config.permissions,
   })
   .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
     permissions: getDocumentOcrAvailability.config.permissions,

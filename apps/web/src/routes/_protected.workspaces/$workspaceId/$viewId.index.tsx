@@ -146,7 +146,7 @@ export const Route = createFileRoute(
       },
       avt: async () => {
         // A disabled preview redirects instead of rendering the view.
-        if (!isAvtPreviewEnabled()) {
+        if (!(await isAvtPreviewEnabled(queryClient))) {
           return;
         }
         await Promise.all([

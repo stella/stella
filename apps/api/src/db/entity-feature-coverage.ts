@@ -74,7 +74,8 @@ export const entityFeatureCoverageViolations = (
     const required =
       root === undefined
         ? config.columns.flatMap((column) =>
-            column.name === "id"
+            column.name === "id" &&
+            Object.hasOwn(ENTITY_RELATION_ALIASES, config.name)
               ? []
               : [...entityRelationsOf(column)].map((target) => ({
                   column,
@@ -100,6 +101,7 @@ export const entityFeatureCoverageViolations = (
         policy?.as !== "restrictive" ||
         policy.for !== "all" ||
         policy.withCheck === undefined ||
+        dialect.sqlToQuery(policy.withCheck).sql !== expression ||
         !expression.includes(`"${config.name}"."${column.name}"`) ||
         (target !== undefined &&
           !expression.includes(

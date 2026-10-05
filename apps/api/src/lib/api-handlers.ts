@@ -1287,7 +1287,6 @@ const createSafeScopedHandler = <
               { schema: config.query, value: ctx.query },
             ],
             scopedDb: ctx.scopedDb,
-            ...(hasWorkspaceId(ctx) ? { workspaceId: ctx.workspaceId } : {}),
           }),
       );
       if (visible.isErr()) {

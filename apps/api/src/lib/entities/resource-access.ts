@@ -1,8 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const RESOURCE_TABLES = {
@@ -14,14 +13,12 @@ const RESOURCE_TABLES = {
 type ResourceAccessOptions = {
   inputs: readonly { schema: unknown; value: unknown }[];
   scopedDb: ScopedDb;
-  workspaceId?: SafeId<"workspace">;
 };
 
 /** Trusted id schemas enumerate direct resource access before handler details run. */
 export const resourcesAreVisible = async ({
   inputs,
   scopedDb,
-  workspaceId,
 }: ResourceAccessOptions): Promise<boolean> => {
   const identifiers = new Map<string, Set<string>>();
   const visit = (schema: unknown, value: unknown) => {
@@ -31,6 +28,7 @@ export const resourcesAreVisible = async ({
     const kind = schema["x-stella-resource-kind"];
     if (
       typeof kind === "string" &&
+      schema["x-stella-resource-usage"] !== "creation" &&
       Object.hasOwn(RESOURCE_TABLES, kind) &&
       typeof value === "string"
     ) {
@@ -75,14 +73,9 @@ export const resourcesAreVisible = async ({
         .select({ id: table.id })
         .from(table)
         .where(
-          and(
-            inArray(
-              table.id,
-              [...ids].map((id) => sql`${id}`),
-            ),
-            workspaceId === undefined
-              ? undefined
-              : eq(table.workspaceId, workspaceId),
+          inArray(
+            table.id,
+            [...ids].map((id) => sql`${id}`),
           ),
         );
       if (rows.length !== ids.size) {
