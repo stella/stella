@@ -680,6 +680,7 @@ const TemplateStudioChatInner = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();

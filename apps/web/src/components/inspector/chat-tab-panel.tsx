@@ -273,6 +273,7 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId: tabWorkspaceId,
   });

@@ -2,7 +2,10 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import type { PlaybookSaveMessage } from "@/components/chat/chat-ui-tools";
-import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import {
+  playbookPaneReaction,
+  reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 
 const ORGANIZATION_ID = "org-1";
@@ -172,5 +175,41 @@ describe("playbook save cache reconciliation", () => {
     expect(
       await reconcile({ messages, queryClient: seededQueryClient() }),
     ).toBe("playbook-b");
+  });
+});
+
+describe("the playbook pane after a save", () => {
+  const closed = {
+    isMobile: false,
+    openedThisSession: false,
+    paneOpen: false,
+  };
+
+  test("a main-area chat opens it once, then only updates it", () => {
+    expect(playbookPaneReaction({ mode: "auto-open", ...closed })).toBe("open");
+    expect(
+      playbookPaneReaction({ mode: "auto-open", ...closed, paneOpen: true }),
+    ).toBe("update");
+    // Closed by the user after it opened: it stays closed.
+    expect(
+      playbookPaneReaction({
+        mode: "auto-open",
+        ...closed,
+        openedThisSession: true,
+      }),
+    ).toBe("none");
+  });
+
+  test("other surfaces and a phone screen never open it by themselves", () => {
+    expect(playbookPaneReaction({ mode: "on-request", ...closed })).toBe(
+      "none",
+    );
+    expect(
+      playbookPaneReaction({ mode: "auto-open", ...closed, isMobile: true }),
+    ).toBe("none");
+    // An open pane still follows the latest save everywhere.
+    expect(
+      playbookPaneReaction({ mode: "on-request", ...closed, paneOpen: true }),
+    ).toBe("update");
   });
 });

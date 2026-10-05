@@ -53,3 +53,40 @@ export const reconcilePlaybookSaveToolCalls = async ({
   });
   return latestPlaybookId;
 };
+
+/**
+ * Whether a chat surface opens the playbook pane by itself. Only a main-area
+ * chat does: there the pane opens beside the conversation. In an inspector
+ * chat tab or beside a file, the pane would cover the interview the user is
+ * answering, so it opens only from the row's "Open playbook".
+ */
+export type PlaybookPaneMode = "auto-open" | "on-request";
+
+type PlaybookPaneReactionArgs = {
+  mode: PlaybookPaneMode;
+  /** Below `md` the inspector is a sheet over the whole chat. */
+  isMobile: boolean;
+  /** The pane was already opened once while this session was mounted. */
+  openedThisSession: boolean;
+  paneOpen: boolean;
+};
+
+/**
+ * What a newly saved playbook does to the thread's pane. An open pane
+ * follows it without taking focus. A closed pane opens once per mounted
+ * session, like a document draft: also on arrival at a thread that already
+ * saved one, and never again after the user closed it.
+ */
+export const playbookPaneReaction = ({
+  mode,
+  isMobile,
+  openedThisSession,
+  paneOpen,
+}: PlaybookPaneReactionArgs): "update" | "open" | "none" => {
+  if (paneOpen) {
+    return "update";
+  }
+  return mode === "auto-open" && !isMobile && !openedThisSession
+    ? "open"
+    : "none";
+};

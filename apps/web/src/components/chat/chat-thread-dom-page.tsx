@@ -82,6 +82,7 @@ const ChatThreadDomPage = ({
     chat,
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   onSession(session);

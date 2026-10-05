@@ -1570,6 +1570,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });

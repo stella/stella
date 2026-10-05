@@ -17,6 +17,7 @@ import * as v from "valibot";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
@@ -94,7 +95,11 @@ import {
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
-import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import {
+  playbookPaneReaction,
+  reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   createInitialSendQueueState,
@@ -183,6 +188,8 @@ type UseChatSessionOptions = {
    * here — only the live transition matters.
    */
   onError?: ((error: Error) => void) | undefined;
+  /** Whether a playbook this thread saves opens beside it by itself. */
+  playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
@@ -291,6 +298,7 @@ export const useChatSession = ({
   getSendMode,
   initialOlderCursor,
   onError,
+  playbookPane,
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
@@ -1081,9 +1089,12 @@ export const useChatSession = ({
     [organizationId, queryClient, t],
   );
 
+  const isMobile = useIsMobile();
+  const openedPlaybookPaneRef = useRef(false);
   /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
   const handleOpenPlaybook = useCallback(
     (playbookId: string) => {
+      openedPlaybookPaneRef.current = true;
       useInspectorTabsStore.getState().openView({
         type: PLAYBOOK_DRAFT_VIEW,
         id: playbookPaneTabId,
@@ -1095,24 +1106,37 @@ export const useChatSession = ({
   );
 
   /**
-   * A thread's pane follows the playbook its latest save wrote, without
-   * taking focus: a thread that starts a second playbook moves the pane to it.
+   * The thread's pane follows the playbook its latest save wrote. An open
+   * pane moves to it without taking focus, so a thread that starts a second
+   * playbook takes the pane along; a closed one may open (see
+   * `playbookPaneReaction`).
    */
   const followPlaybookSave = useLatestCallback((playbookId: string) => {
     const inspector = useInspectorTabsStore.getState();
     const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
-    if (
-      tab === undefined ||
-      tab.type !== "view" ||
-      tab.viewType !== PLAYBOOK_DRAFT_VIEW
-    ) {
-      return;
-    }
-    inspector.updateView({
-      id: playbookPaneTabId,
-      label: playbookPaneLabel(playbookId),
-      payload: { type: "playbook", playbookId },
+    const reaction = playbookPaneReaction({
+      mode: playbookPane,
+      isMobile,
+      openedThisSession: openedPlaybookPaneRef.current,
+      paneOpen: tab?.type === "view" && tab.viewType === PLAYBOOK_DRAFT_VIEW,
     });
+    switch (reaction) {
+      case "none":
+        return;
+      case "open":
+        handleOpenPlaybook(playbookId);
+        return;
+      case "update":
+        inspector.updateView({
+          id: playbookPaneTabId,
+          label: playbookPaneLabel(playbookId),
+          payload: { type: "playbook", playbookId },
+        });
+        return;
+      default:
+        reaction satisfies never;
+        panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
+    }
   });
 
   // A chat `save_playbook` writes an org-level playbook from any surface, so

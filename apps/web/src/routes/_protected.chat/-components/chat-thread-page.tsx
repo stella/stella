@@ -250,6 +250,7 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "auto-open",
     onError: (nextError) => {
       usageLimit.handle(nextError);
     },
