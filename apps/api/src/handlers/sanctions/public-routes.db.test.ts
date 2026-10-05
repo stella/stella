@@ -20,6 +20,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
@@ -43,6 +44,7 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
+import { recordingMatcherWorker } from "@/api/lib/lists/sanctions/test-fixtures/recording-matcher-worker";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -281,6 +283,7 @@ const assertParity = async ({
   const inProduct = (
     await runEntityCheckShared({
       observer: "unobserved",
+      permit: grantThirdPartyOutboundPermit(),
       check: "sanctions",
       subject,
       sanctions: {
@@ -1151,7 +1154,12 @@ describe("public sanctions search parity", () => {
         }
         return inputHash.digest("hex");
       };
-      const pool = benchmarkPool();
+      const recorded = recordingMatcherWorker();
+      const pool = createSanctionsMatcherPool({
+        deadlineMs: 10_000,
+        createWorker: recorded.createWorker,
+      });
+      pools.add(pool);
       const context = new InMemoryRateLimitContext();
       const route = createPublicSanctionsRoute({
         db: publicDb,
@@ -1229,6 +1237,7 @@ describe("public sanctions search parity", () => {
               body: JSON.stringify({ subject: { type: "organization", name } }),
             });
           expect((await route.handle(adversarialRequest())).status).toBe(200);
+          const before = { ...recorded.work };
           const began = performance.now();
           let lastTick = began;
           let maximumTurnMs = 0;
@@ -1242,17 +1251,22 @@ describe("public sanctions search parity", () => {
           try {
             const response = await route.handle(adversarialRequest());
             expect(response.status).toBe(200);
-            expect(ticks).toBeGreaterThan(0);
             maximumTurnMs = Math.max(
               maximumTurnMs,
               performance.now() - lastTick,
             );
-            expect(maximumTurnMs).toBeLessThan(50);
+            // A warm search evaluates each source once and reloads no entries.
+            expect(recorded.work.screenings - before.screenings).toBe(
+              Object.keys(SANCTIONS_SOURCES).length,
+            );
+            expect(recorded.work.entries - before.entries).toBe(0);
+            expect(recorded.work.entryBatches - before.entryBatches).toBe(0);
             console.info(
               JSON.stringify({
                 adversarialService: name,
                 totalMs: Number((performance.now() - began).toFixed(2)),
                 maximumTurnMs: Number(maximumTurnMs.toFixed(2)),
+                ticks,
               }),
             );
           } finally {

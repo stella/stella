@@ -74,6 +74,7 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -468,13 +469,14 @@ export const ToolApprovalCard = ({
     isTurnActive,
     responded,
   });
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
   });
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const mcpIconHref =
     externalMcpConnectorSlug === null
       ? undefined

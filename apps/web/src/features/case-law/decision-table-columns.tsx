@@ -276,6 +276,7 @@ const toDecisionColumnDef = (
               questions === null ? [] : allowedColumnActions(questions.grants)
             }
             column={header.column}
+            isNew={questions?.addedIds.has(questionColumn.id) ?? false}
             question={questionColumn}
             {...(questions === null
               ? {}

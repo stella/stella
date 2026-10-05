@@ -865,7 +865,9 @@
       },
       "deleteColumnConfirm": "La question et toutes ses réponses seront supprimées pour toute votre organisation, dans chaque recherche et pour chaque membre. Pour la retirer de cette recherche uniquement, choisissez « Retirer de cette recherche ».",
       "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
+      "newQuestionColumn": "Nouveau",
       "nothingToRun": "Chaque cellule a déjà une réponse",
+      "questionAdded": "« {question} » ajoutée au tableau",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",
       "removeFromSearch": "Retirer de cette recherche",
       "runAll": "Tout répondre",
@@ -944,7 +946,8 @@
       "textNotYetAvailable": "La juridiction n’a pas publié le texte de la décision, ou celui-ci n’est pas encore disponible ici.",
       "textPending": "Le texte de la décision est en cours de récupération",
       "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
-      "textUnavailable": "Aucun texte n'est disponible pour cette décision"
+      "textUnavailable": "Aucun texte n'est disponible pour cette décision",
+      "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)"
     }
   },
   "catalogue": {
@@ -1874,15 +1877,23 @@
     "zoomOut": "Zoom arrière"
   },
   "consent": {
+    "actingAs": "{clientName} agira en votre nom dans {organizationName}",
     "allow": "Autoriser",
-    "appIdentity": "Identité de l’application",
+    "canChange": "Peut modifier",
+    "canRead": "Peut lire",
     "completeSetup": "Terminer la configuration",
+    "connectTitle": "Connecter {clientName} à stella",
+    "connectedTitle": "Connecté à {clientName}",
+    "connectionDuration": "Reste connecté jusqu’à ce que vous le déconnectiez dans Paramètres › Connexions",
     "defaultClientName": "Une application",
-    "description": "{clientName} souhaite accéder à votre espace de travail stella",
+    "destinationDetails": "Détails de la redirection",
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
-    "permissions": "Cela autorisera l’application à :",
-    "redirectDestination": "Destination de redirection",
+    "otherPermissions": "Autorisations supplémentaires",
+    "publishedBy": "Publié par <host>{publisherHost}</host>",
+    "returnToAgent": "Retournez à votre agent pour continuer.",
+    "returnsLocally": "Vous retournerez à {clientName} sur cet ordinateur",
+    "returnsTo": "Vous retournerez à {clientName}",
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
@@ -1903,8 +1914,11 @@
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
+    "signedInAs": "Connecté en tant que <email>{accountEmail}</email>",
     "title": "Autoriser l’accès",
-    "unverifiedApp": "Application non vérifiée"
+    "unverifiedApp": "Application non vérifiée",
+    "unverifiedExplanation": "stella n’a pas vérifié qui publie cette application.",
+    "useAnotherAccount": "Utiliser un autre compte"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
@@ -2450,6 +2464,7 @@
     "current": "Actuelle",
     "deleteVersion": "Supprimer la version",
     "descriptionPlaceholder": "Ajouter une note sur cette version...",
+    "displayFailed": "Impossible d’afficher ce fichier.",
     "downloadRedline": "Télécharger le redline",
     "dropToUploadVersion": "Déposer pour téléverser comme nouvelle version",
     "editLatestVersionDescription": "Ce n’est pas la version actuelle. Pour la modifier dans le navigateur, faites-en d’abord la dernière version, puis déverrouillez-la pour la modifier.",
@@ -4516,6 +4531,13 @@
         "narrativeRequired": "Exiger une description",
         "title": "Règles de saisie du temps"
       },
+      "timeZone": {
+        "description": "Les mois verrouillés, les dates de facture et le travail à échéance suivent le jour calendaire de ce fuseau horaire. Tant qu’aucun n’est choisi, il découle de la juridiction principale : Europe/Prague pour la Tchéquie et la Slovaquie, UTC sinon.",
+        "followJurisdiction": "Suivre la juridiction principale",
+        "followingJurisdiction": "Suivre la juridiction principale ({timeZone})",
+        "title": "Fuseau horaire",
+        "updated": "Fuseau horaire mis à jour"
+      },
       "usage": "Utilisation",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
@@ -5422,6 +5444,18 @@
         "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour se lancera automatiquement lorsque les modifications desktop actives seront terminées; réessayez après son redémarrage.",
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Déjà installé ? Le connecter",
+        "connect": "Connecter stella desktop",
+        "editNone": "Téléchargez stella desktop pour modifier ce fichier",
+        "editOutdated": "Mettez à jour stella desktop pour modifier",
+        "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
+        "signCurrent": "Signer avec stella desktop",
+        "signNone": "Téléchargez stella desktop pour signer ce PDF",
+        "signOutdated": "Mettez à jour stella desktop pour signer",
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
+        "signShort": "Signer"
+      },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
       "downloadExtractedText": "Texte extrait (.txt)",
@@ -5435,7 +5469,6 @@
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
       "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
-        "action": "Signer dans l’app de bureau",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
         "cancelledCertificateDescription": "Le certificat choisi ne peut pas servir à signer. Choisissez-en un qui autorise les signatures numériques.",
         "cancelledCertifiedDescription": "Ce PDF est certifié et sa certification n’autorise pas d’autres signatures.",

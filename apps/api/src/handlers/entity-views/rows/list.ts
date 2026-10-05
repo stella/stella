@@ -62,7 +62,7 @@ const config = {
       t.String({
         format: "date",
         description:
-          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the server's UTC day",
+          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the organization's day in its time zone",
       }),
     ),
     group: t.Optional(
@@ -133,6 +133,9 @@ const listRows = createSafeRootHandler(
       body.limit ?? LIMITS.entitiesWindowSizeDefault,
     );
     const organizationId = session.activeOrganizationId;
+    const asOf = yield* Result.await(
+      resolveWorkAsOf({ asOf: body.asOf, safeDb, organizationId }),
+    );
     // One instant for the window and the signal hydration, so a snooze that
     // lapses between the two reads cannot drop a row from the page.
     const now = new Date();
@@ -202,7 +205,7 @@ const listRows = createSafeRootHandler(
             safeDb,
             scope,
             entityIds: pageTaskIds,
-            asOf: resolveWorkAsOf(body.asOf),
+            asOf,
           }),
     ]);
     const signalRows = yield* signalRowsResult;

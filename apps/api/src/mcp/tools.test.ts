@@ -25,6 +25,7 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
+  FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
@@ -49,10 +50,14 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  type DecisionDocumentHydration,
+  STORED_ONLY_DOCUMENT_HYDRATION,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -107,7 +112,10 @@ import {
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -988,6 +996,8 @@ const createContext = ({
   recordAuditEvent,
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
+  // The MCP transport holds a permit for every request (`context.ts`).
+  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
   testDependencies: {
     ...testDependencies,
     anonymizeTextFields: anonymizeTextFieldsMock,
@@ -2234,7 +2244,14 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         year: [{ count: 1, label: null, value: "2024" }],
         decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        source: [
+          {
+            count: 1,
+            countType: FACET_COUNT_TYPE.EXACT,
+            label: "Nejvyšší soud ČR",
+            value: "source-id",
+          },
+        ],
         language: [{ count: 1, label: null, value: "cs" }],
       },
       hits: [
@@ -2339,7 +2356,14 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         year: [{ count: 1, label: null, value: "2024" }],
         decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        source: [
+          {
+            count: 1,
+            countType: FACET_COUNT_TYPE.EXACT,
+            label: "Nejvyšší soud ČR",
+            value: "source-id",
+          },
+        ],
         language: [{ count: 1, label: null, value: "cs" }],
       },
       nextCursor: "cursor_2",
@@ -2409,6 +2433,55 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("an output that violates the tool's contract is logged as a defect", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: {
+        court: [],
+        // A bucket field the output contract does not declare.
+        year: [{ count: 1, label: null, value: "2024", undeclared: true }],
+        decisionType: [],
+        source: [],
+        language: [],
+      },
+      hits: [],
+      nextCursor: null,
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      queryUsed: "contract",
+      warnings: [],
+    });
+    const logs = installRecordingLogger();
+    try {
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["contract"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: { code: "internal_error" },
+      });
+      expect(
+        logs.at("ERROR").map(({ message, attributes }) => ({
+          message,
+          tool: attributes?.["tool"],
+          grade: attributes?.["failure.grade"],
+          reason: attributes?.["failure.reason"],
+        })),
+      ).toEqual([
+        {
+          message: "mcp.output_contract_violated",
+          tool: "search_case_law",
+          grade: "defect",
+          reason: "response_invalid",
+        },
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
 
   test("search_case_law returns the same payload in anonymized mode", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
@@ -3034,6 +3107,56 @@ describe("OpenAI-compatible MCP tools", () => {
         (call) => asTestRaw<{ body: { limit: number } }>(call.at(0)).body.limit,
       ),
     ).toEqual([5, 5]);
+  });
+
+  test("search_case_law returns source facet buckets with their count type", async () => {
+    const sourceFacets = [
+      {
+        value: "source-a",
+        label: "Source A",
+        count: 1000,
+        countType: FACET_COUNT_TYPE.AT_LEAST,
+      },
+      {
+        value: "source-b",
+        label: "Source B",
+        count: 2,
+        countType: FACET_COUNT_TYPE.EXACT,
+      },
+    ];
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ body: { query } }: { body: { query: string } }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: {
+          court: [],
+          year: [],
+          decisionType: [],
+          source: sourceFacets,
+          language: [],
+        },
+        hits: [createCaseLawHit("dec-a", "a")],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: query,
+        warnings: [],
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", limit: 10, queries: ["duty of care"] },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    expect(result.isError).not.toBe(true);
+    const payload = asTestRaw<MergedSearchPage>(parseToolPayload(result));
+    expect(payload.facets).toEqual({
+      court: [],
+      year: [],
+      decisionType: [],
+      source: sourceFacets,
+      language: [],
+    });
   });
 
   test("search_case_law resumes each phrasing from its own sub-cursor", async () => {
@@ -5056,7 +5179,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: undefined,
-      documentHydration: DECISION_DOCUMENT_HYDRATION.storedOnly,
+      documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -5587,7 +5710,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: "citations-next",
-      documentHydration: DECISION_DOCUMENT_HYDRATION.storedOnly,
+      documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
     });
   });
 
@@ -5725,8 +5848,9 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       readGatedDecisionMock.mock.calls.filter(
         (call) =>
-          asTestRaw<{ documentHydration: string }>(call.at(0))
-            .documentHydration === DECISION_DOCUMENT_HYDRATION.onDemand,
+          asTestRaw<{ documentHydration: DecisionDocumentHydration }>(
+            call.at(0),
+          ).documentHydration.type === "on-demand",
       ),
     ).toHaveLength(1);
   });
@@ -5829,6 +5953,52 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decision?.textUnavailableReason).toBeUndefined();
   });
 
+  test("read_case_law_decision fetches no publisher document without a permit", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        source: { ...base.source, adapterKey: "sk-courts" },
+        documentPending: true,
+        id: locator.id,
+      }),
+    );
+
+    const payload = asTestRaw<BatchDecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID, ...PENDING_DECISION_IDS] },
+          context: {
+            ...createContext({
+              testDependencies: { readsSharedPublicLawCorpus: () => false },
+            }),
+            thirdPartyOutboundPermit: undefined,
+          },
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
+
+    expect(payload.items.map(({ status }) => status)).toEqual(
+      Array.from({ length: PENDING_DECISION_IDS.length + 1 }, () => "pending"),
+    );
+    // Reading the id on its own would not fetch it either.
+    expect(payload.items.at(0)?.message).toContain("read this decision again");
+    expect(
+      readGatedDecisionMock.mock.calls.map(
+        (call) =>
+          asTestRaw<{ documentHydration: DecisionDocumentHydration }>(
+            call.at(0),
+          ).documentHydration,
+      ),
+    ).toEqual(
+      Array.from(
+        { length: PENDING_DECISION_IDS.length + 1 },
+        () => STORED_ONLY_DOCUMENT_HYDRATION,
+      ),
+    );
+  });
+
   test("read_case_law_decision bounds the publisher fetches one call triggers", async () => {
     const base = createReadDecisionResult();
     readGatedDecisionMock.mockImplementation(
@@ -5836,7 +6006,7 @@ describe("OpenAI-compatible MCP tools", () => {
         documentHydration,
         locator,
       }: {
-        documentHydration: string;
+        documentHydration: DecisionDocumentHydration;
         locator: { kind: "id"; id: string };
       }) => ({
         ...base,
@@ -5847,7 +6017,7 @@ describe("OpenAI-compatible MCP tools", () => {
         // a fetch that finished, so only the entries the budget never reached
         // stay pending.
         documentPending:
-          documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly &&
+          documentHydration.type === "stored-only" &&
           (PENDING_DECISION_IDS as readonly string[]).includes(locator.id),
         id: locator.id,
       }),
@@ -5870,8 +6040,8 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.items.at(4)?.message).toContain("on its own");
     const hydrations = readGatedDecisionMock.mock.calls.filter(
       (call) =>
-        asTestRaw<{ documentHydration: string }>(call.at(0))
-          .documentHydration === DECISION_DOCUMENT_HYDRATION.onDemand,
+        asTestRaw<{ documentHydration: DecisionDocumentHydration }>(call.at(0))
+          .documentHydration.type === "on-demand",
     );
     expect(hydrations).toHaveLength(LIMITS.caseLawDecisionBatchHydrationsMax);
   });

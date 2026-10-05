@@ -637,6 +637,7 @@ describe("full and affected code-check parity", () => {
       path.join(directory, "git"),
       `#!/usr/bin/env bun
 import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(0);
 if (process.argv[2] === "merge-base") {
   process.stderr.write("fatal: injected failure\\n");
   process.exit(128);

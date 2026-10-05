@@ -509,6 +509,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("result-boundary.fixture.ts", [
     "result-boundary/no-throw-outside-boundary",
     "result-boundary/no-try-catch-outside-boundary",
+    "result-boundary/no-rejected-result-error",
   ]),
 ];
 
@@ -1086,6 +1087,7 @@ export default defineConfig({
     // stays flagged.
     "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "no-hand-rolled-sql-case/no-hand-rolled-sql-case": "error",
+    "no-hand-rolled-role-set/no-hand-rolled-role-set": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
@@ -1508,6 +1510,7 @@ export default defineConfig({
     "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
+    "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
@@ -3964,6 +3967,7 @@ export default defineConfig({
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
+              "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -5261,6 +5265,16 @@ export default defineConfig({
       },
     },
     {
+      // better-result boundary lint, part 1b: `Promise.reject(result.error)`
+      // is a throw by another name. The web app has no other site, so the ban
+      // covers all of it rather than only the zero-violation directories; a
+      // TanStack query or mutation function unwraps with `readQueryResult`.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "result-boundary/no-rejected-result-error": "error",
+      },
+    },
+    {
       // better-result boundary lint, part 2: the boundary carve-out.
       //
       // These modules legitimately throw or catch: framework route mounts,
@@ -5276,6 +5290,7 @@ export default defineConfig({
       rules: {
         "result-boundary/no-throw-outside-boundary": "off",
         "result-boundary/no-try-catch-outside-boundary": "off",
+        "result-boundary/no-rejected-result-error": "off",
       },
     },
     {

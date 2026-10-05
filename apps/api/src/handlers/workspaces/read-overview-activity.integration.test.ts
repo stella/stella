@@ -21,6 +21,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -31,8 +32,13 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import exportOverviewActivity from "./export-overview-activity";
+import { toMatterActivityFilters } from "./matter-activity-query";
 import readOverviewActivity from "./read-overview-activity";
 import readOverviewActivityActors from "./read-overview-activity-actors";
+import {
+  readOverviewActivityExport,
+  readOverviewActivityPage,
+} from "./read-overview-activity.query";
 
 setDefaultTimeout(120_000);
 
@@ -207,6 +213,48 @@ const readActivityOfWorkspaceA1 = async (
 };
 
 describe("matter overview activity", () => {
+  test("export completeness is independent of the tenant page size", async () => {
+    const options = {
+      filters: toMatterActivityFilters({}),
+      organizationId: ids.orgA,
+      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      workspaceId: ids.wsA1,
+    };
+    const complete = (
+      await readOverviewActivityExport({ ...options, cap: 100 })
+    ).unwrap();
+    expect(complete.length).toBeGreaterThan(1);
+
+    await withTenantActionSizePolicy(
+      { pageSize: 1, requestBytes: 100_000, responseBytes: 100_000 },
+      async () => {
+        const page = (
+          await readOverviewActivityPage({
+            ...options,
+            cursor: null,
+            limit: 100,
+          })
+        ).unwrap();
+        expect(page.items).toHaveLength(1);
+        expect(page.nextCursor).not.toBeNull();
+
+        const exact = (
+          await readOverviewActivityExport({ ...options, cap: complete.length })
+        ).unwrap();
+        expect(exact).toEqual(complete);
+
+        const cap = complete.length - 1;
+        const overflow = await readOverviewActivityExport({ ...options, cap });
+        expect(overflow.isErr()).toBe(true);
+        if (overflow.isErr()) {
+          expect(overflow.error).toMatchObject({
+            status: 413,
+            message: `The export exceeds ${cap} rows. Narrow the filters and try again.`,
+          });
+        }
+      },
+    );
+  });
   test("reports the matter's own activity", async () => {
     const items = await readActivityOfWorkspaceA1();
 

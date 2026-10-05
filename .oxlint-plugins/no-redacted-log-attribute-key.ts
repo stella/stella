@@ -60,7 +60,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "stage",
   "step",
   "threadId",
-  "toolName",
+  "tool",
   "userFileId",
   "versionId",
   "workspaceId",

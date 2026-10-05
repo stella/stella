@@ -20,11 +20,13 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "3.5.16",
+    "@formatjs/icu-messageformat-parser": "3.5.20",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
+    "@stll/fetch": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/permissions": "workspace:*",
+    "@stll/skills": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:",
     "typescript": "catalog:"

@@ -27,7 +27,9 @@ const scopedDbReturning = (rows: unknown[]): ScopedDb => {
   let call = 0;
   return asTestRaw<ScopedDb>(async () => {
     call += 1;
-    return call === 1 ? rows : [{ id: "user_1", name: "Alice" }];
+    return call === 1
+      ? { rows, timeZone: "UTC" }
+      : [{ id: "user_1", name: "Alice" }];
   });
 };
 
