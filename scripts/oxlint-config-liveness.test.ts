@@ -192,6 +192,7 @@ test(
       scopes.find((scope) => scope.scope === BASE_SCOPE)?.rules ?? {};
     const noOps = baseOffNoOps({
       baseRules,
+      builtinIds: new Set(rules.map((rule) => `${rule.scope}/${rule.value}`)),
       presetState,
       canonical,
       offEntries: readBaseOffEntries(
@@ -259,6 +260,9 @@ const RESTATEMENT_FIXTURE = [
   '    "oxc/no-map-spread": "off",',
   '    "unicorn/prefer-spread": "off", // Reason on the same line.',
   '    "no-plusplus": "off",',
+  "    // A new built-in rule can be deliberately left off.",
+  '    "typescript/no-generated-empty-object-type": "off",',
+  '    "typescript/no-unexplained-new-rule": "off",',
   "    // A reason does not make an off for an unnamed rule live.",
   '    "no-inline-comments": "off",',
   "  },",
@@ -268,6 +272,10 @@ const RESTATEMENT_FIXTURE = [
 const restatementNoOps = (baseRules: Record<string, unknown>) =>
   baseOffNoOps({
     baseRules,
+    builtinIds: new Set([
+      "typescript/no-generated-empty-object-type",
+      "typescript/no-unexplained-new-rule",
+    ]),
     presetState: new Map([
       ["oxc/no-map-spread", false],
       ["unicorn/prefer-spread", false],
@@ -282,7 +290,13 @@ test("reads a reason comment on an off entry's line or the line above", () => {
     { rule: "oxc/no-map-spread", line: 4, reasoned: true },
     { rule: "unicorn/prefer-spread", line: 5, reasoned: true },
     { rule: "no-plusplus", line: 6, reasoned: false },
-    { rule: "no-inline-comments", line: 8, reasoned: true },
+    {
+      rule: "typescript/no-generated-empty-object-type",
+      line: 8,
+      reasoned: true,
+    },
+    { rule: "typescript/no-unexplained-new-rule", line: 9, reasoned: false },
+    { rule: "no-inline-comments", line: 11, reasoned: true },
   ]);
 });
 
@@ -296,6 +310,21 @@ test("accepts a restated preset off only with its reason", () => {
   expect(restatementNoOps({ "no-plusplus": "off" })).toEqual(["no-plusplus"]);
   expect(restatementNoOps({ "no-inline-comments": "off" })).toEqual([
     "no-inline-comments",
+  ]);
+});
+
+test("accepts reasoned off decisions for new built-ins while rejecting unknown rules", () => {
+  expect(
+    restatementNoOps({ "typescript/no-generated-empty-object-type": "off" }),
+  ).toEqual([]);
+  expect(restatementNoOps({ "no-inline-comments": "off" })).toEqual([
+    "no-inline-comments",
+  ]);
+  expect(
+    restatementNoOps({ "typescript/no-unexplained-new-rule": "off" }),
+  ).toEqual(["typescript/no-unexplained-new-rule"]);
+  expect(restatementNoOps({ "typescript/no-unknown-rule": "off" })).toEqual([
+    "typescript/no-unknown-rule",
   ]);
 });
 

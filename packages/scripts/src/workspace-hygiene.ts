@@ -43,7 +43,7 @@ const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
   oxlint: "1.86.0",
   oxlintConfig: "0.7.0",
-  tsgolint: "7.0.2002",
+  tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
 const TYPESCRIPT6_COMPATIBILITY = {
