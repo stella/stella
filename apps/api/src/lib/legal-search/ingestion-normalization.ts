@@ -10,7 +10,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASON,

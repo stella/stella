@@ -10,42 +10,6 @@ import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagno
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
-/**
- * Polish public-procurement rulings from the UZP decision database.
- *
- * orzeczenia.uzp.gov.pl publishes the rulings of the Krajowa Izba Odwoławcza
- * and the court rulings on complaints against them (district courts, and a
- * handful from the administrative courts and the Supreme Court). Three
- * surfaces per ruling, all HTML:
- *
- *   POST /Home/GetResults       the listing: ten rows a page, filtered by an
- *                               issue-date range (`Dt`), sorted by `Srt`
- *   GET  /Home/Details/{id}     the record: labelled fields, the appeals the
- *                               ruling decided and how, provisions, index
- *   GET  /Home/ContentHtml/{id} the document, converted from the original
- *
- * The listing states its own count (`resultCounts`), so a walk knows where a
- * window ends; asked for a page past the end, it serves the last page again
- * rather than an empty one, which is why every walk below stops on the count
- * and never on an empty page.
- *
- * Rows sort by issue date, then by id. The database also holds rulings with
- * no issue date, and a few dated past the present: no month the walk reaches
- * lists them, and the unfiltered ascending listing serves them last, the
- * undated ones in id order, so a later arrival appends. That tail is walked
- * once the months are caught up, and re-read on every parked cycle; the
- * day-sliced reconciliation cannot reach it.
- *
- * Cursor format: `YYYY-MM:offset+tail` — the month being walked and the row
- * offset reached inside it, oldest first, and the rows of the tail read so
- * far. At the present month the month part parks on its count.
- *
- * Overlap with `pl-courts`: SAOS mirrors KIO rulings until 2018 and holds
- * more of them for those years than this database does. The two sources have
- * separate id spaces; {@link plProcurementRulingKeys} is the relationship
- * between their rows, and nothing here merges or deletes either side.
- */
-import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -95,6 +59,42 @@ import {
   legacyQuarantineHtmlText,
   visibleHtmlText,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+/**
+ * Polish public-procurement rulings from the UZP decision database.
+ *
+ * orzeczenia.uzp.gov.pl publishes the rulings of the Krajowa Izba Odwoławcza
+ * and the court rulings on complaints against them (district courts, and a
+ * handful from the administrative courts and the Supreme Court). Three
+ * surfaces per ruling, all HTML:
+ *
+ *   POST /Home/GetResults       the listing: ten rows a page, filtered by an
+ *                               issue-date range (`Dt`), sorted by `Srt`
+ *   GET  /Home/Details/{id}     the record: labelled fields, the appeals the
+ *                               ruling decided and how, provisions, index
+ *   GET  /Home/ContentHtml/{id} the document, converted from the original
+ *
+ * The listing states its own count (`resultCounts`), so a walk knows where a
+ * window ends; asked for a page past the end, it serves the last page again
+ * rather than an empty one, which is why every walk below stops on the count
+ * and never on an empty page.
+ *
+ * Rows sort by issue date, then by id. The database also holds rulings with
+ * no issue date, and a few dated past the present: no month the walk reaches
+ * lists them, and the unfiltered ascending listing serves them last, the
+ * undated ones in id order, so a later arrival appends. That tail is walked
+ * once the months are caught up, and re-read on every parked cycle; the
+ * day-sliced reconciliation cannot reach it.
+ *
+ * Cursor format: `YYYY-MM:offset+tail` — the month being walked and the row
+ * offset reached inside it, oldest first, and the rows of the tail read so
+ * far. At the present month the month part parks on its count.
+ *
+ * Overlap with `pl-courts`: SAOS mirrors KIO rulings until 2018 and holds
+ * more of them for those years than this database does. The two sources have
+ * separate id spaces; {@link plProcurementRulingKeys} is the relationship
+ * between their rows, and nothing here merges or deletes either side.
+ */
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,

@@ -8,14 +8,14 @@ import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
-import {
-  fitsCitationStorageField,
-  assertCitationStorageField,
-} from "@/api/handlers/case-law/citation-storage-bounds";
 import { REVIEWABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
 import type { ReviewablePolarity } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  fitsCitationStorageField,
+  assertCitationStorageField,
+} from "@/api/lib/case-law/citation-storage-bounds";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 

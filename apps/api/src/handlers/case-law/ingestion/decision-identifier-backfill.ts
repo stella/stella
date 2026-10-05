@@ -23,7 +23,6 @@ import {
   effectiveCitationIdentifierValueSql,
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
-import { assertCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
@@ -31,6 +30,7 @@ import {
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
+import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {

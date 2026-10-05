@@ -66,7 +66,6 @@ import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagno
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import { fitsCitationStorageField } from "@/api/handlers/case-law/citation-storage-bounds";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -127,6 +126,7 @@ import type {
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,

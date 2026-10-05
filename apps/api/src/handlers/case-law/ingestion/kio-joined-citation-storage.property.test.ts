@@ -4,7 +4,6 @@ import fc from "fast-check";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { assertProperty } from "@stll/property-testing";
 
-import { CITATION_STORAGE_WIDTHS } from "@/api/handlers/case-law/citation-storage-bounds";
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
 import {
   bareCitationKey,
@@ -13,6 +12,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { citationRowOf } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 
 const joinedDockets = fc
   .uniqueArray(

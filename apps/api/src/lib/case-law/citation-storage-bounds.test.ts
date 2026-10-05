@@ -94,8 +94,8 @@ test("each varchar boundary counts Postgres characters without truncation", () =
     "caseNumber",
     "court",
   ] as const;
-  expect([...fields].toSorted()).toEqual(
-    Object.keys(CITATION_STORAGE_WIDTHS).toSorted(),
+  expect(Object.keys(CITATION_STORAGE_WIDTHS).toSorted()).toEqual(
+    [...fields].toSorted(),
   );
   for (const field of fields) {
     for (const character of ["a", "𐐀"]) {

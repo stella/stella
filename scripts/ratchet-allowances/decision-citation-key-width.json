@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "Citation storage assertions propagate CitationStorageFieldError to transaction callers; sanitized decision width refusals propagate UnpersistableDecisionFieldError through the ingestion Result boundary and failure ledger. Both retain the existing typed refusal contracts."
+}

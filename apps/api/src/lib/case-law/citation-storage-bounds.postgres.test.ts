@@ -12,13 +12,13 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import {
-  CITATION_STORAGE_WIDTHS,
-  CitationStorageFieldError,
-} from "@/api/handlers/case-law/citation-storage-bounds";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { citationRowOf } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  CITATION_STORAGE_WIDTHS,
+  CitationStorageFieldError,
+} from "@/api/lib/case-law/citation-storage-bounds";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
