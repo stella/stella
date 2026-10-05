@@ -49,7 +49,7 @@ export const useReaderProvisionMode = () => {
 
   // Like text size, the stored choice is read after hydration. An owner
   // change reads that owner's choice before their next text render.
-  if (stored?.storage !== storage || stored?.key !== key) {
+  if (stored === null || stored.storage !== storage || stored.key !== key) {
     const read =
       storage === null
         ? Result.ok(READER_PROVISION_MODE.collapsed)
@@ -65,7 +65,7 @@ export const useReaderProvisionMode = () => {
   const readError = stored?.readError ?? null;
   useExternalSyncEffect(() => {
     if (storage === null) {
-      return;
+      return undefined;
     }
     if (readError !== null) {
       analytics.captureError(readError);

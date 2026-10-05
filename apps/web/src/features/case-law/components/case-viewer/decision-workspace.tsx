@@ -19,7 +19,6 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import { useReaderProvisionMode } from "@/components/legal-reader/use-reader-provision-mode";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
@@ -60,6 +59,7 @@ import { useDecisionProvisionAnchors } from "@/features/case-law/components/case
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";

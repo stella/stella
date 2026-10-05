@@ -180,14 +180,16 @@ const OpenCitedProvisionButton = ({
   const t = useTranslations();
   const inspector = useInspectorView();
   return (
-    <Button
-      className="reader-chrome h-6 w-fit px-2"
-      onClick={() => inspector.open(createProvisionViewTab(provision))}
-      size="sm"
-      variant="outline"
-    >
-      {t("statutes.openProvision")}
-    </Button>
+    <span className="reader-chrome">
+      <Button
+        className="w-fit"
+        onClick={() => inspector.open(createProvisionViewTab(provision))}
+        size="xs"
+        variant="outline"
+      >
+        {t("statutes.openProvision")}
+      </Button>
+    </span>
   );
 };
 
@@ -214,9 +216,11 @@ export const CitedProvisionExpansion = ({
       data-reader-chrome=""
       data-slot="provision-card"
     >
-      <BidiText as="span" className="reader-chrome text-sm font-medium">
-        {label}
-      </BidiText>
+      <span className="reader-chrome">
+        <BidiText as="span" className="text-sm font-medium">
+          {label}
+        </BidiText>
+      </span>
       <ProvisionVersionLabel version={version} />
       {wording !== undefined && wording.blocks.length > 0 && (
         <ProvisionWording wording={wording} />

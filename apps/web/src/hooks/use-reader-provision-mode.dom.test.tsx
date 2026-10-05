@@ -8,7 +8,7 @@ const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
 const { useReaderProvisionMode } =
-  await import("@/components/legal-reader/use-reader-provision-mode");
+  await import("@/hooks/use-reader-provision-mode");
 const { READER_PROVISION_MODE_STORAGE_KEY } =
   await import("@/components/legal-reader/reader-provision-mode.logic");
 const { installUserScopedStorage, releaseUserStorage, userStorageKey } =
@@ -110,13 +110,13 @@ describe("remembered provision reading mode", () => {
     );
   });
 
-  test("account changes use separate keys and clear the departing owner's choice", () => {
+  test("account changes use separate keys and clear the departing owner's choice", async () => {
     const client = new QueryClient();
     const uninstall = installUserScopedStorage(client);
     const reader = render(<Reader label="reader" />);
     fireEvent.click(reader.getByRole("button"));
     const visitorKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-    act(() =>
+    await act(() =>
       client.setQueryData(rootKeys.session, { user: { id: "account-a" } }),
     );
     const accountAKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
@@ -127,7 +127,7 @@ describe("remembered provision reading mode", () => {
     );
     fireEvent.click(reader.getByRole("button"));
     expect(localStorage.getItem(accountAKey)).toBe('"expanded"');
-    act(() =>
+    await act(() =>
       client.setQueryData(rootKeys.session, { user: { id: "account-b" } }),
     );
     expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
