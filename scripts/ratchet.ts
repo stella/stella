@@ -70,6 +70,11 @@ import {
   unmanagedTransitionTables,
   statusWriteCalls,
 } from "./status-write-shapes";
+import {
+  countUnsignalledSkips,
+  isExcludedSkipSource,
+  UNSIGNALLED_SKIP_SOURCE_GLOBS,
+} from "./unsignalled-skip";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -2930,6 +2935,17 @@ const RESULT_BOUNDARY_METRICS = [
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
+    scope: "file",
+    id: "unsignalled-skip",
+    description:
+      "data-boundary catch outcomes and failed parse/lookup item skips without observation or typed disposition; empty literal ??/|| fallbacks on valueAtPath/asString/fieldOf/extractId, parse/find/lookup helpers or Map lookups; per-file shrink-only",
+    include: UNSIGNALLED_SKIP_SOURCE_GLOBS,
+    exclude: isExcludedSkipSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: (content, { file }) => countUnsignalledSkips(content, { file }),
+  },
+  {
     scope: "repo",
     id: "schema-introspection-files",
     description:
@@ -4265,7 +4281,7 @@ const checkAllowances = ({
     for (const { file, delta } of increases) {
       if (metric.growth === "shrink-only") {
         errors.push(
-          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances.`,
         );
         continue;
       }
@@ -6110,8 +6126,62 @@ const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const unsignalledSkipSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const skipFixtures = [
+    {
+      name: "nullable computed value skipped",
+      code: "for (const item of items) { const head = sentenceHeadPattern(item.text); if (head === null) { continue; } }",
+      expected: 1,
+    },
+    {
+      name: "empty text extraction fallback",
+      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      expected: 1,
+    },
+    {
+      name: "catch without signal",
+      code: "try { read(); } catch {}",
+      expected: 1,
+    },
+    {
+      name: "catch with telemetry",
+      code: "read().catch(cause => captureException(cause));",
+      expected: 0,
+    },
+    {
+      name: "catch with result",
+      code: "try { read(); } catch { return Result.err(cause); }",
+      expected: 0,
+    },
+  ];
+  const skipMetric = RATCHET_METRICS.find(
+    ({ id }) => id === "unsignalled-skip",
+  );
+  if (
+    skipMetric === undefined ||
+    skipMetric.scope !== "file" ||
+    skipMetric.measurement === "role-sensitive"
+  ) {
+    failures.push("unsignalled-skip requires a file counter");
+  } else {
+    for (const fixture of skipFixtures) {
+      const actual = skipMetric.count(fixture.code, {
+        file: "apps/api/src/shapes.ts",
+      });
+      if (actual !== fixture.expected) {
+        failures.push(
+          `unsignalled-skip ${fixture.name}: counted ${actual}, expected ${fixture.expected}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
+  failures.push(...unsignalledSkipSelfTestFailures());
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
 
   failures.push(...dependencyMetricSelfTestFailures(root));

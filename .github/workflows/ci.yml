@@ -1316,7 +1316,7 @@ jobs:
         # trees use the current registry, including per-file ceilings.
         # The self-test proves counter and gate behavior before the comparison.
         run: |
-          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts scripts/unsignalled-skip.test.ts
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
