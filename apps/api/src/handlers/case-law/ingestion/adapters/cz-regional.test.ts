@@ -489,6 +489,22 @@ describe("the decision type is the publisher's enum in the local language", () =
       ),
     ).toContain("TRESTNÍ PŘÍKAZ");
   });
+
+  test("a Ministry of Justice decision is stored in Czech, not as the enum member", async () => {
+    const built = assembleCzRegionalDecision({
+      item: await itemByDocket(LISTING, APPELLATE_DOCKET),
+      document: readCzRegionalDocument(
+        await documentWithMetadata(APPELLATE_DOCUMENT, {
+          type: "MINISTERY_OF_JUSTICE_DECISION",
+        }),
+      ),
+      chain: null,
+    });
+
+    expect(
+      built.type === "built" && built.decision.decisionType?.toString(),
+    ).toBe("rozhodnutí ministerstva spravedlnosti");
+  });
 });
 
 /**

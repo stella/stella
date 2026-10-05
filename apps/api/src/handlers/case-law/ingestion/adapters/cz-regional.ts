@@ -232,6 +232,9 @@ const COURT_CODE_NONE = "NONE";
  * heading is synthesized from, so the mapping is the whole difference between
  * a document that opens with its own title and one that does not.
  *
+ * `MINISTERY_OF_JUSTICE_DECISION` is spelled as the API spells it: the key is
+ * the publisher's member, so correcting it would stop the entry matching.
+ *
  * Read through {@link mapDecisionType}, which reports a member this map has
  * never seen instead of lowercasing it into the corpus unnoticed.
  */
@@ -239,6 +242,7 @@ const DECISION_TYPE_MAP: Readonly<Record<string, string>> = {
   JUDGEMENT: "rozsudek",
   RESOLUTION: "usnesení",
   ORDER_T: "trestní příkaz",
+  MINISTERY_OF_JUSTICE_DECISION: "rozhodnutí ministerstva spravedlnosti",
 };
 
 const mapDecisionType = (
