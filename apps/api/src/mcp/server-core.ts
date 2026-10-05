@@ -782,6 +782,192 @@ export const createMcpHttpRequestHandler = ({
   recordMcpSessionInitialized,
   resolveMcpSessionContext,
 }: McpServerDependencies) => {
+  type ToolsCallRequestOptions = {
+    toolRequest: CallToolRequest;
+    requestContext: ServerContext;
+    context: McpRequestContext;
+    mode: McpMode;
+    session: McpSession;
+  };
+  const handleToolsCallRequest = async ({
+    toolRequest,
+    requestContext: { mcpReq },
+    context,
+    mode,
+    session,
+  }: ToolsCallRequestOptions) => {
+    const disposition = responseDisposition.getStore();
+    if (disposition !== undefined) {
+      disposition.type = "tool";
+    }
+    const toolName = toolRequest.params.name;
+    const staticTool = listStaticMcpToolDefinitions(mode).find(
+      ({ name }) => name === toolName,
+    );
+    const requiredScopesHint = isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: toolName,
+      featureId: staticTool?.featureId,
+    })
+      ? getMcpToolRequiredScopesHint(toolName, mode)
+      : undefined;
+    const missingHintedScope = requiredScopesHint?.find(
+      (scope) => !session.scopes.includes(scope),
+    );
+    if (
+      missingHintedScope !== undefined &&
+      requiredScopesHint !== undefined
+    ) {
+      return missingScopeResult({
+        grantedScopes: session.scopes,
+        missingScope: missingHintedScope,
+        requiredScopes: requiredScopesHint,
+      });
+    }
+
+    // Resolving a dynamic-gateway tool reads the backing store. A load fault
+    // (`McpGatewayLoadError`) must not collapse into `unknown_tool`: answer a
+    // transient outage with a retryable `internal_error` so the caller retries
+    // instead of treating the tool as gone. The underlying failure is captured
+    // at the load site, so it is not re-captured here.
+    let definition: McpToolDefinition | undefined;
+    try {
+      definition = await getMcpToolDefinition(toolName, context, mode);
+    } catch (error) {
+      // A gateway load fault is already captured at the load site; anything
+      // else is unexpected here and must be captured before it degrades to a
+      // generic retryable result.
+      if (!(error instanceof McpGatewayLoadError)) {
+        captureError(error, {
+          phase: "tools/call",
+          mode,
+          source: "mcp",
+        });
+      }
+      return retryableToolErrorResult(mode, context);
+    }
+    if (!definition) {
+      // Suggest the closest names the caller can actually see (scope-filtered
+      // list), so a typo resolves without leaking tools they lack access to.
+      const suggestions =
+        toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+          ? closestToolNames(
+              toolName,
+              (await listMcpTools(context, mode, session.scopes)).map(
+                (tool) => tool.name,
+              ),
+            )
+          : [];
+      return mcpStructuredErrorResult({
+        code: "unknown_tool",
+        message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
+        hint:
+          suggestions.length > 0
+            ? `No such tool. ${didYouMean(suggestions.map(quoteToolName))} Call tools/list for the full set.`
+            : "No such tool. Call tools/list for the tools available to this session.",
+      });
+    }
+
+    const requiredScopes = requiredScopesForTool(definition);
+    const missingScope = requiredScopes.find(
+      (scope) => !session.scopes.includes(scope),
+    );
+    if (missingScope !== undefined) {
+      return missingScopeResult({
+        grantedScopes: session.scopes,
+        missingScope,
+        requiredScopes,
+      });
+    }
+
+    // Before admission: an unauthorized call must not spend the caller's
+    // action budget, nor be answered with an admission refusal instead.
+    const authorityRefusal = mcpToolAuthorityRefusal({
+      authority: context,
+      definition,
+      toolName,
+      userEmail: context.userEmail,
+    });
+    if (authorityRefusal !== null) {
+      return mcpStructuredErrorResult(authorityRefusal);
+    }
+
+    const resultDisposition = toolResultDisposition(definition.annotations);
+    const readClass = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")
+      ? await resolveMcpReadClass(
+          definition,
+          toolRequest.params.arguments ?? {},
+        )
+      : undefined;
+    const run = async (signal?: AbortSignal) => {
+      signal?.throwIfAborted();
+      const result = await handleMcpToolCall({
+        args: toolRequest.params.arguments ?? {},
+        context,
+        mode,
+        toolName,
+      });
+      return await boundMcpToolResult({
+        result,
+        requestId: mcpReq.id,
+        definition,
+        readClass,
+        resultDisposition,
+        context,
+        toolName,
+        chargeReadBytes,
+        captureError,
+      });
+    };
+    let consumesServices = definition.consumesServices;
+    if (toolName === "invoke_capability") {
+      const classified = await invokedCapabilityConsumesServices(
+        toolRequest.params.arguments ?? {},
+        context,
+      );
+      if (Result.isError(classified)) {
+        return serializeToolResult(classified.error);
+      }
+      consumesServices = classified.value;
+    } else if (toolName === "fetch" && mode !== "law") {
+      consumesServices = compatFetchConsumesServices(
+        toolRequest.params.arguments ?? {},
+      );
+    }
+    const admitted = await admitAction({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      organizationStateDb: context.scopedDb,
+      periodIdentity: mcpActionPeriodIdentity(consumesServices),
+      run,
+    });
+    if (Result.isOk(admitted)) {
+      return admitted.value;
+    }
+    if (ActionAdmissionError.is(admitted.error)) {
+      if (admitted.error.reason === "unavailable") {
+        captureError(admitted.error, {
+          phase: "action-admission",
+          source: "mcp",
+        });
+      }
+      const refusal = actionAdmissionRefusal(admitted.error);
+      return mcpStructuredErrorResult({
+        code: refusal.code,
+        message: refusal.message,
+        hint: refusal.hint,
+        contactUrl: refusal.contactUrl,
+        retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+      });
+    }
+    captureError(admitted.error, {
+      phase: "action-admission",
+      source: "mcp",
+    });
+    return retryableToolErrorResult(mode, context);
+  };
+
   const createMcpServer = async ({
     clientIp,
     mode,
@@ -837,182 +1023,6 @@ export const createMcpHttpRequestHandler = ({
         await readMcpResource(resourceRequest.params.uri, mode, context),
     );
 
-    const handleToolsCallRequest = async (
-      toolRequest: CallToolRequest,
-      { mcpReq }: ServerContext,
-    ) => {
-      const disposition = responseDisposition.getStore();
-      if (disposition !== undefined) {
-        disposition.type = "tool";
-      }
-      const toolName = toolRequest.params.name;
-      const staticTool = listStaticMcpToolDefinitions(mode).find(
-        ({ name }) => name === toolName,
-      );
-      const requiredScopesHint = isMcpDescriptorFeatureEnabled({
-        context,
-        kind: "tools",
-        id: toolName,
-        featureId: staticTool?.featureId,
-      })
-        ? getMcpToolRequiredScopesHint(toolName, mode)
-        : undefined;
-      const missingHintedScope = requiredScopesHint?.find(
-        (scope) => !session.scopes.includes(scope),
-      );
-      if (
-        missingHintedScope !== undefined &&
-        requiredScopesHint !== undefined
-      ) {
-        return missingScopeResult({
-          grantedScopes: session.scopes,
-          missingScope: missingHintedScope,
-          requiredScopes: requiredScopesHint,
-        });
-      }
-
-      // Resolving a dynamic-gateway tool reads the backing store. A load fault
-      // (`McpGatewayLoadError`) must not collapse into `unknown_tool`: answer a
-      // transient outage with a retryable `internal_error` so the caller retries
-      // instead of treating the tool as gone. The underlying failure is captured
-      // at the load site, so it is not re-captured here.
-      let definition: McpToolDefinition | undefined;
-      try {
-        definition = await getMcpToolDefinition(toolName, context, mode);
-      } catch (error) {
-        // A gateway load fault is already captured at the load site; anything
-        // else is unexpected here and must be captured before it degrades to a
-        // generic retryable result.
-        if (!(error instanceof McpGatewayLoadError)) {
-          captureError(error, {
-            phase: "tools/call",
-            mode,
-            source: "mcp",
-          });
-        }
-        return retryableToolErrorResult(mode, context);
-      }
-      if (!definition) {
-        // Suggest the closest names the caller can actually see (scope-filtered
-        // list), so a typo resolves without leaking tools they lack access to.
-        const suggestions =
-          toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
-            ? closestToolNames(
-                toolName,
-                (await listMcpTools(context, mode, session.scopes)).map(
-                  (tool) => tool.name,
-                ),
-              )
-            : [];
-        return mcpStructuredErrorResult({
-          code: "unknown_tool",
-          message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
-          hint:
-            suggestions.length > 0
-              ? `No such tool. ${didYouMean(suggestions.map(quoteToolName))} Call tools/list for the full set.`
-              : "No such tool. Call tools/list for the tools available to this session.",
-        });
-      }
-
-      const requiredScopes = requiredScopesForTool(definition);
-      const missingScope = requiredScopes.find(
-        (scope) => !session.scopes.includes(scope),
-      );
-      if (missingScope !== undefined) {
-        return missingScopeResult({
-          grantedScopes: session.scopes,
-          missingScope,
-          requiredScopes,
-        });
-      }
-
-      // Before admission: an unauthorized call must not spend the caller's
-      // action budget, nor be answered with an admission refusal instead.
-      const authorityRefusal = mcpToolAuthorityRefusal({
-        authority: context,
-        definition,
-        toolName,
-        userEmail: context.userEmail,
-      });
-      if (authorityRefusal !== null) {
-        return mcpStructuredErrorResult(authorityRefusal);
-      }
-
-      const resultDisposition = toolResultDisposition(definition.annotations);
-      const readClass = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")
-        ? await resolveMcpReadClass(
-            definition,
-            toolRequest.params.arguments ?? {},
-          )
-        : undefined;
-      const run = async (signal?: AbortSignal) => {
-        signal?.throwIfAborted();
-        const result = await handleMcpToolCall({
-          args: toolRequest.params.arguments ?? {},
-          context,
-          mode,
-          toolName,
-        });
-        return await boundMcpToolResult({
-          result,
-          requestId: mcpReq.id,
-          definition,
-          readClass,
-          resultDisposition,
-          context,
-          toolName,
-          chargeReadBytes,
-          captureError,
-        });
-      };
-      let consumesServices = definition.consumesServices;
-      if (toolName === "invoke_capability") {
-        const classified = await invokedCapabilityConsumesServices(
-          toolRequest.params.arguments ?? {},
-          context,
-        );
-        if (Result.isError(classified)) {
-          return serializeToolResult(classified.error);
-        }
-        consumesServices = classified.value;
-      } else if (toolName === "fetch" && mode !== "law") {
-        consumesServices = compatFetchConsumesServices(
-          toolRequest.params.arguments ?? {},
-        );
-      }
-      const admitted = await admitAction({
-        organizationId: context.organizationId,
-        userId: context.userId,
-        organizationStateDb: context.scopedDb,
-        periodIdentity: mcpActionPeriodIdentity(consumesServices),
-        run,
-      });
-      if (Result.isOk(admitted)) {
-        return admitted.value;
-      }
-      if (ActionAdmissionError.is(admitted.error)) {
-        if (admitted.error.reason === "unavailable") {
-          captureError(admitted.error, {
-            phase: "action-admission",
-            source: "mcp",
-          });
-        }
-        const refusal = actionAdmissionRefusal(admitted.error);
-        return mcpStructuredErrorResult({
-          code: refusal.code,
-          message: refusal.message,
-          hint: refusal.hint,
-          contactUrl: refusal.contactUrl,
-          retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
-        });
-      }
-      captureError(admitted.error, {
-        phase: "action-admission",
-        source: "mcp",
-      });
-      return retryableToolErrorResult(mode, context);
-    };
-
     server.setRequestHandler(
       "tools/call",
       async (toolRequest, requestContext) =>
@@ -1021,7 +1031,13 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName: toolRequest.params.name,
           run: async () =>
-            await handleToolsCallRequest(toolRequest, requestContext),
+            await handleToolsCallRequest({
+              toolRequest,
+              requestContext,
+              context,
+              mode,
+              session,
+            }),
         }),
     );
 

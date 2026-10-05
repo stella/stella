@@ -9,6 +9,7 @@ import {
 
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { projectMcpRefusal } from "@/api/mcp/error-codes";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import type { InternalToolError } from "@/api/mcp/tool-types";
 
 import {
@@ -58,10 +59,9 @@ describe("registry tool error projection", () => {
         hint: "Correct the matter configuration before running it.",
         retryable: false,
       });
-      const projected = toRegistryChatToolError({
-        type: "structured",
-        ...details,
-      });
+      const projected = toRegistryChatToolError(
+        structuredErrorResult(details).error,
+      );
       expect(projected.kind).toBe("invalid-input");
       expect(details.code).toBe("validation_error");
       expect(details.issues).toEqual([

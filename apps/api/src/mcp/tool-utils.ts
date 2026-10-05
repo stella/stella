@@ -606,8 +606,8 @@ export const structuredErrorResult = ({
     status: "error",
     error:
       code === "internal_error"
-        ? { ...fields, code, [MCP_INTERNAL_TOOL_FAILURE]: true }
-        : { ...fields, code },
+        ? { code, ...fields, [MCP_INTERNAL_TOOL_FAILURE]: true }
+        : { code, ...fields },
   };
 };
 

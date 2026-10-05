@@ -360,27 +360,6 @@ const callGatewayTool = async ({
   return undefined;
 };
 
-export const handleMcpToolCall = async ({
-  args,
-  context,
-  mode = "default",
-  toolName,
-  dependencies,
-}: McpToolCallArgs): Promise<CallToolResult> =>
-  await observeMcpToolCall({
-    context,
-    mode,
-    toolName,
-    run: async () =>
-      await dispatchMcpToolCall({
-        args,
-        context,
-        mode,
-        toolName,
-        ...(dependencies === undefined ? {} : { dependencies }),
-      }),
-  });
-
 const dispatchMcpToolCall = async ({
   args,
   context,
@@ -631,3 +610,24 @@ const internalErrorResult = ({
     ),
   );
 };
+
+export const handleMcpToolCall = async ({
+  args,
+  context,
+  mode = "default",
+  toolName,
+  dependencies,
+}: McpToolCallArgs): Promise<CallToolResult> =>
+  await observeMcpToolCall({
+    context,
+    mode,
+    toolName,
+    run: async () =>
+      await dispatchMcpToolCall({
+        args,
+        context,
+        mode,
+        toolName,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      }),
+  });

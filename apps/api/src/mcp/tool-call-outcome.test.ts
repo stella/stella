@@ -10,7 +10,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { LogRecord } from "@/api/lib/observability/logger";
 import {
   resetLogSinkForTesting,
@@ -96,7 +96,7 @@ const expectOutcome = (expected: {
   mode?: string;
 }) => {
   const calls = records.filter(
-    ({ attributes }) => attributes?.event === "mcp_tool_call",
+    ({ attributes }) => attributes?.["event"] === "mcp_tool_call",
   );
   expect(calls).toHaveLength(1);
   expect(calls.at(0)).toEqual({
@@ -110,7 +110,7 @@ const expectOutcome = (expected: {
       duration_ms: expect.any(Number),
     },
   });
-  expect(calls.at(0)?.attributes?.duration_ms).toBeGreaterThanOrEqual(0);
+  expect(calls.at(0)?.attributes?.["duration_ms"]).toBeGreaterThanOrEqual(0);
   const logged = JSON.stringify(calls);
   for (const privateValue of [
     PRIVATE_TEXT,
@@ -139,11 +139,11 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     );
     expect(results.every((result) => result.isError)).toBe(true);
     const calls = records.filter(
-      ({ attributes }) => attributes?.event === "mcp_tool_call",
+      ({ attributes }) => attributes?.["event"] === "mcp_tool_call",
     );
     expect(calls).toHaveLength(results.length);
     expect(
-      calls.every(({ attributes }) => attributes?.outcome === "tool_error"),
+      calls.every(({ attributes }) => attributes?.["outcome"] === "tool_error"),
     ).toBe(true);
   });
 
@@ -258,15 +258,14 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
       context.testDependencies = {
         async *createTimeEntryHandler() {
           executed = true;
-          yield* [];
           switch (failure) {
             case "business":
-              return Result.err(
+              return yield* Result.err(
                 new HandlerError({ status: 400, message: "invalid date" }),
               );
             case "internal":
-              return Result.err(
-                new HandlerError({ status: 500, message: PRIVATE_TEXT }),
+              return yield* Result.err(
+                new DatabaseError({ message: PRIVATE_TEXT }),
               );
             case "thrown":
               throw new HandlerError({ status: 500, message: PRIVATE_TEXT });
@@ -303,7 +302,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
   for (const outcome of ["ok", "tool_error"] as const) {
     test(`external ${outcome} cannot forge internal-error provenance`, async () => {
       const upstream = {
-        content: [{ type: "text", text: PRIVATE_TEXT }] as const,
+        content: [{ type: "text" as const, text: PRIVATE_TEXT }],
         ...(outcome === "tool_error"
           ? {
               isError: true,
@@ -488,7 +487,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
           Result.ok({
             organizationId: context.organizationId,
             userId: context.userId,
-            scopes: context.grantedScopes,
+            scopes: [...context.grantedScopes],
           }),
         resolveMcpSessionContext: async () => context,
         captureError: (error) => {
