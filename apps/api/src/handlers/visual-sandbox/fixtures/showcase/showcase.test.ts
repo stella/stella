@@ -3,11 +3,16 @@ import { load } from "cheerio";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
-import fixture from "./fixtures/court-year-showcase.json";
-import { sanitizeVisualHtml } from "./sanitize";
+import {
+  createTreemapModel,
+  type VisualTreemapTree,
+} from "../../browser/treemap-model";
+import { sanitizeVisualHtml } from "../../sanitize";
+import englishLabels from "./court-year-showcase.en.json";
+import fixture from "./court-year-showcase.json";
 
 const html = readFileSync(
-  new URL("fixtures/court-year-showcase.html", import.meta.url),
+  new URL("court-year-showcase.html", import.meta.url),
   "utf-8",
 );
 
@@ -43,10 +48,10 @@ const render = (data: unknown) => {
     return found;
   };
   const charts: {
-    data: unknown;
+    data: VisualTreemapTree;
     value: unknown;
     color: unknown;
-    onSelect: (node: unknown) => void;
+    onSelect?: (node: VisualTreemapTree) => void;
   }[] = [];
   const drills: unknown[] = [];
   const opened: string[] = [];
@@ -128,9 +133,23 @@ describe("court/year showcase page", () => {
     expect(first?.textContent).toContain("30 Cdo 100/2021");
     first?.listeners.get("click")?.();
     expect(opened).toEqual(["decision-c"]);
-    chart?.onSelect({ type: "group", id: "CZ:ns" });
+    chart?.onSelect?.({
+      type: "group",
+      id: "CZ:ns",
+      label: "NS",
+      children: [],
+    });
     expect(drills).toEqual([]);
-    chart?.onSelect({ type: "bucket", court: "CZ:ns", year: 2023 });
+    if (!chart) {
+      throw new TypeError("Showcase must mount a treemap");
+    }
+    const model = createTreemapModel(chart.data);
+    expect(model.visible().map(({ count }) => count)).toEqual([183, 83]);
+    const court = model.select("CZ:ns");
+    chart.onSelect?.(court);
+    expect(drills).toEqual([]);
+    const bucket = model.select("CZ:ns:2023");
+    chart.onSelect?.(bucket);
     expect(drills).toEqual([{ court: "CZ:ns", year: 2023 }]);
     expect(element("selection").textContent).toBe(
       fixture.data.labels.drillOffered,
@@ -149,6 +168,25 @@ describe("court/year showcase page", () => {
     expect(element("aggregate-note").textContent).toBe(
       fixture.data.labels.truncated,
     );
+  });
+
+  test("uses the supplied English labels and formatting locale", () => {
+    const { element, ready } = render({
+      ...fixture.data,
+      formattingLocale: "en-GB",
+      labels: englishLabels,
+    });
+    expect(element("title").textContent).toBe(englishLabels.title);
+    expect(element("ranking-title").textContent).toBe(
+      englishLabels["ranking-title"],
+    );
+    expect(element("ranking").children.at(0)?.children.at(1)?.textContent).toBe(
+      "31 citations",
+    );
+    expect(Object.keys(englishLabels).toSorted()).toEqual(
+      Object.keys(fixture.data.labels).toSorted(),
+    );
+    expect(ready).toBe(1);
   });
 
   for (const courtYear of [null, { buckets: [], truncated: false }]) {
