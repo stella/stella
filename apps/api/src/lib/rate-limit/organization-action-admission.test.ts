@@ -900,15 +900,17 @@ describe("the free floor's service budget", () => {
       (kind) => FREE_WITHOUT_OWN_KEY[kind] === "off",
     );
     expect(offKinds.toSorted()).toEqual(
-      [
-        "chat.suggest-thread-title",
-        "chat.suggested-prompts",
-        "chat.thread-recap",
-        "editor.autocomplete",
-        "entities.suggest-placements",
-        "properties.suggest-prompt",
-        "templates.suggest-fields",
-      ].toSorted(),
+      (
+        [
+          "chat.suggest-thread-title",
+          "chat.suggested-prompts",
+          "chat.thread-recap",
+          "editor.autocomplete",
+          "entities.suggest-placements",
+          "properties.suggest-prompt",
+          "templates.suggest-fields",
+        ] satisfies typeof offKinds
+      ).toSorted(),
     );
     for (const actionKind of offKinds) {
       const redis = countingRedis();

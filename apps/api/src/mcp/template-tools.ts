@@ -1375,7 +1375,8 @@ const admitTemplateFillAi = ({
     admitted: AdmittedModelAction,
   ) => Promise<AiFillCollaborators>;
 }): AiFillAdmission<
-  NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | HandlerError<403 | 429 | 503>
 > => {
   const admitModelAction = createModelActionAdmitter({
     organizationId: context.organizationId,
