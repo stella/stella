@@ -32,11 +32,10 @@ relevant() {
       ;;
     migrations)
       case "$file" in
-        apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|\
-        apps/api/src/server.ts|apps/api/drizzle.config.ts|\
+        apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/drizzle.config.ts|\
         scripts/*migrat*|scripts/fixtures/migration*/*|scripts/rehearse-better-auth-constraint-retry.sh|\
-        .squawk.toml|.github/workflows/db-migrations.yml|.github/workflows/release.yml|\
-        scripts/detect-security-workflow-changes.sh|scripts/detect-security-workflow-changes.test.ts)
+        .github/workflows/db-migrations.yml|scripts/detect-security-workflow-changes.sh|\
+        scripts/detect-security-workflow-changes.test.ts)
           return 0 ;;
       esac
       ;;

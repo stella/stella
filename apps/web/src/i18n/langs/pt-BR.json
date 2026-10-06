@@ -3784,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Limpar recentes",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
-    "noRecentSearches": "Ainda não há pesquisas",
+    "noRecent": "Nenhuma atividade recente",
     "noSignals": "Ainda não há sinais",
     "prompt": "O que você procura?",
+    "recent": "Recentes",
+    "recentCasesFilter": "Decisões",
+    "recentSearchFilter": "Pesquisas",
     "recentlyInForce": "Em vigor recentemente",
     "searchLabel": "Pesquisar na base jurídica",
     "searchPlaceholder": "Número do processo, número da norma, ECLI ou palavras-chave",

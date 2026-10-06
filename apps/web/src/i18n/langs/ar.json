@@ -3784,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "مسح السجل الأخير",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
-    "noRecentSearches": "لا توجد عمليات بحث بعد",
+    "noRecent": "لا يوجد نشاط حديث",
     "noSignals": "لا توجد إشارات بعد",
     "prompt": "عمّ تبحث؟",
+    "recent": "الأخيرة",
+    "recentCasesFilter": "الأحكام",
+    "recentSearchFilter": "عمليات البحث",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",

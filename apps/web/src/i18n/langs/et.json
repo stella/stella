@@ -3784,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Kustuta hiljutised",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
-    "noRecentSearches": "Otsinguid veel pole",
+    "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",
     "prompt": "Mida otsite?",
+    "recent": "Hiljutised",
+    "recentCasesFilter": "Kohtulahendid",
+    "recentSearchFilter": "Otsingud",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",

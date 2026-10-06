@@ -3784,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Vymazat nedávné",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
-    "noRecentSearches": "Zatím žádná hledání",
+    "noRecent": "Zatím žádná nedávná aktivita",
     "noSignals": "Zatím žádné signály",
     "prompt": "Co hledáte?",
+    "recent": "Nedávné",
+    "recentCasesFilter": "Rozhodnutí",
+    "recentSearchFilter": "Hledání",
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "searchLabel": "Hledat v právní databázi",
     "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",

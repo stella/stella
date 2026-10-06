@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
+  splitStatuteTitleCitation,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
@@ -51,10 +52,11 @@ import {
 } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { recordLawOpen } from "@/lib/law-search-history";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 
@@ -152,6 +154,37 @@ const StatuteReaderChat = ({
 };
 
 /**
+ * Records the act in the reader's recent law, titled `number/year · title`
+ * when the stored title carries no citation of its own.
+ */
+const useRecordStatuteOpen = ({
+  eli,
+  title,
+}: {
+  eli: string;
+  title: string;
+}) => {
+  const openedPath = useRouterState({
+    select: ({ location }) => location.pathname,
+  });
+  useExternalSyncEffect(() => {
+    const citation = splitStatuteTitleCitation(title).citation;
+    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
+    const year = eliCitation?.at(1);
+    const number = eliCitation?.at(2);
+    recordLawOpen({
+      kind: "statute",
+      id: eli,
+      title:
+        citation !== null || year === undefined || number === undefined
+          ? title
+          : `${number}/${year} · ${title}`,
+      path: openedPath,
+    });
+  }, [title, eli, openedPath]);
+};
+
+/**
  * The public statute reader. It renders whichever consolidation the route
  * resolved; picking another version or another day is a navigation, because
  * every consolidation has its own address.
@@ -175,6 +208,7 @@ export const PublicStatuteViewer = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
+  useRecordStatuteOpen({ eli: work.eli, title: header.title });
   const find = useInspectorFind({
     contentRef,
     enabled: statute !== null && comparison.compare === undefined,

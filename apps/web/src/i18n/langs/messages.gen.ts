@@ -3787,11 +3787,15 @@ type Messages = {
     };
   };
   "lawHome": {
+    "clearRecent": "Clear recent";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
-    "noRecentSearches": "No searches yet";
+    "noRecent": "No recent activity";
     "noSignals": "No signals yet";
     "prompt": "What are you looking for?";
+    "recent": "Recent";
+    "recentCasesFilter": "Cases";
+    "recentSearchFilter": "Searches";
     "recentlyInForce": "Recently in force";
     "searchLabel": "Search the legal database";
     "searchPlaceholder": "Case number, act number, ECLI or keywords";

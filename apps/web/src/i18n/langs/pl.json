@@ -3784,11 +3784,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Wyczyść ostatnie",
     "enteringIntoForce": "Wkrótce wejdzie w życie",
     "inForceFrom": "Obowiązuje od {date}",
-    "noRecentSearches": "Brak wyszukiwań",
+    "noRecent": "Brak ostatniej aktywności",
     "noSignals": "Brak sygnałów",
     "prompt": "Czego szukasz?",
+    "recent": "Ostatnie",
+    "recentCasesFilter": "Orzeczenia",
+    "recentSearchFilter": "Wyszukiwania",
     "recentlyInForce": "Niedawno weszło w życie",
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
