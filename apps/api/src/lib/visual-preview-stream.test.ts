@@ -50,6 +50,86 @@ const stringFields = function* (value: unknown): Generator<string> {
 };
 
 describe("transient preview wire projection", () => {
+  test.each([false, true])(
+    "ordinary events remain identical after a preview=%s",
+    async (afterPreview) => {
+      const messages = uiMessagesToWire([
+        { id: "user", role: "user", content: "Example request" },
+        {
+          id: "assistant",
+          role: "assistant",
+          content: "Example answer",
+          toolCalls: [
+            {
+              id: "ordinary-call",
+              type: "function",
+              function: { name: "example_image", arguments: "{}" },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          toolCallId: "ordinary-call",
+          name: "example_image",
+          content: output,
+          metadata: {
+            tanstack: { result: output, createdAt: "2026-01-01T00:00:00Z" },
+          },
+        },
+      ]);
+      const ordinary = [
+        {
+          timestamp: 1,
+          type: EventType.RUN_STARTED,
+          threadId: "thread",
+          runId: "run",
+        },
+        {
+          timestamp: 2,
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "ordinary-call",
+          toolCallName: "example_image",
+        },
+        ...normalizeStreamChunk({
+          timestamp: 3,
+          type: EventType.TOOL_CALL_END,
+          toolCallId: "ordinary-call",
+          toolName: "example_image",
+          input: {},
+          output,
+          result: output,
+        }),
+        {
+          timestamp: 4,
+          type: EventType.TOOL_CALL_RESULT,
+          toolCallId: "ordinary-call",
+          messageId: "message",
+          content: JSON.stringify(output),
+        },
+        { timestamp: 5, type: EventType.MESSAGES_SNAPSHOT, messages },
+        {
+          timestamp: 6,
+          type: EventType.RUN_FINISHED,
+          threadId: "thread",
+          runId: "run",
+        },
+      ] satisfies PublicStreamChunk[];
+      const previewStart = {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "preview-call",
+        toolCallName: VISUAL_PREVIEW_TOOL_NAME,
+      } satisfies PublicStreamChunk;
+      const chunks = afterPreview ? [previewStart, ...ordinary] : ordinary;
+      const serialized = JSON.stringify(chunks);
+      const projected = await project(chunks);
+      expect(projected).toEqual(chunks);
+      expect(JSON.stringify(projected)).toBe(serialized);
+      for (const [index, chunk] of chunks.entries()) {
+        expect(projected.at(index)).toBe(chunk);
+      }
+    },
+  );
+
   test("rebuilds preview events carrying output and result without mutating the model copy", async () => {
     const chunk = {
       type: EventType.TOOL_CALL_END,
@@ -94,6 +174,7 @@ describe("transient preview wire projection", () => {
       toolCallId: "preview-call",
       toolCallName: VISUAL_PREVIEW_TOOL_NAME,
     } as const;
+    const aliases = { output, result: output };
     const chunk = {
       type: EventType.TOOL_CALL_RESULT,
       toolCallId: "preview-call",
@@ -101,8 +182,7 @@ describe("transient preview wire projection", () => {
       content: JSON.stringify(output),
       timestamp: 2,
       subagentRunId: "preview-run",
-      output,
-      result: output,
+      ...aliases,
       metadata: {
         additional: output,
         tanstack: {
@@ -195,21 +275,26 @@ describe("transient preview wire projection", () => {
             ...message,
             result: output,
             metadata: { tanstack: { result: output, output } },
-            toolCalls: message.toolCalls?.map((call) => ({
-              ...call,
-              result: output,
-              metadata: { result: output },
-              function: { ...call.function, result: output },
-            })),
+            ...(message.toolCalls !== undefined && {
+              toolCalls: message.toolCalls.map((call) => ({
+                ...call,
+                result: output,
+                metadata: { result: output },
+                function: { ...call.function, result: output },
+              })),
+            }),
           };
         });
       expect(JSON.stringify(messages)).toContain("iVBORw0KGgo=");
+      const snapshotAliases = {
+        result: output,
+        metadata: { tanstack: { result: output } },
+      };
       const projected = await project([
         {
           type: EventType.MESSAGES_SNAPSHOT,
           messages,
-          result: output,
-          metadata: { tanstack: { result: output } },
+          ...snapshotAliases,
         },
       ]);
       expect(JSON.stringify(projected)).not.toContain("iVBORw0KGgo=");

@@ -44,7 +44,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     );
   }
   const launched = await Result.tryPromise({
-    try: () => launch({ args: [...PREVIEW_BROWSER_ARGS] }),
+    try: async () => launch({ args: [...PREVIEW_BROWSER_ARGS] }),
     catch: () =>
       new VisualRenderError({ message: "Preview browser unavailable" }),
   });
@@ -100,7 +100,9 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     });
     await context.routeWebSocket(/.*/u, (socket) => {
       blockedRequests += 1;
-      socket.close();
+      void socket
+        .close()
+        .catch(() => recordError("Preview socket cleanup failed"));
     });
     const page = await context.newPage();
     page.setDefaultTimeout(VISUAL_PREVIEW_LIMITS.renderTimeoutMs);
@@ -144,13 +146,13 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
       throw new VisualRenderError({ message: "Preview frame missing" });
     }
     const frameElement = await page.locator("iframe").elementHandle();
-    const frame = await frameElement?.contentFrame();
+    const frame = await frameElement.contentFrame();
     if (!frame) {
       throw new VisualRenderError({ message: "Preview frame unavailable" });
     }
     await frame.waitForURL("about:srcdoc");
     await frame.waitForLoadState("load");
-    const ready = await Result.tryPromise(() =>
+    const ready = await Result.tryPromise(async () =>
       page.waitForFunction(
         () => document.documentElement.dataset["ready"] === "true",
         undefined,
@@ -169,7 +171,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
     }
     const contentHeight = await frame.evaluate(() =>
       Math.max(
-        document.body?.scrollHeight ?? 1,
+        document.body.scrollHeight,
         document.documentElement.scrollHeight,
       ),
     );
@@ -212,7 +214,7 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
   });
   clearTimeout(deadline);
   const closed = await Result.tryPromise({
-    try: () => browser.close(),
+    try: async () => browser.close(),
     catch: () =>
       new VisualRenderError({ message: "Preview browser cleanup failed" }),
   });
