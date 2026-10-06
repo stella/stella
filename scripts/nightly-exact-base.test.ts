@@ -51,12 +51,21 @@ const requiredSet = (jobs: Record<string, unknown>) => {
 const advisoryMoveCommit = "bc81bdb1b1960a654993ad47f3aeb6ddca5f6244";
 
 test("moving the advisory job preserves the exact required CI set", () => {
+  git(["cat-file", "-e", `${advisoryMoveCommit}^{commit}`]);
   const before = readWorkflow(
     git(["show", `${advisoryMoveCommit}^:.github/workflows/ci.yml`]),
   );
   const after = readWorkflow(
     git(["show", `${advisoryMoveCommit}:.github/workflows/ci.yml`]),
   );
+  const nightlyBefore = readWorkflow(
+    git(["show", `${advisoryMoveCommit}^:${nightlyPath}`]),
+  );
+  const nightlyAfter = readWorkflow(
+    git(["show", `${advisoryMoveCommit}:${nightlyPath}`]),
+  );
+  expect(nightlyBefore).not.toHaveProperty("migration-exact-base-upgrade");
+  expect(nightlyAfter).toHaveProperty("migration-exact-base-upgrade");
   expect(git(["show", `${advisoryMoveCommit}:${nightlyPath}`])).toContain(
     "\n  migration-exact-base-upgrade:",
   );

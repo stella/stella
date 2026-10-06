@@ -479,26 +479,20 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  const tokens = conditionTokens(v.parse(v.string(), condition));
-  const original = conditionTokens(v.parse(v.string(), originalCondition));
-  if (tokens === original) {
-    return;
-  }
-  const completionWrapper =
-    /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u;
-  const currentCompletion = completionWrapper.exec(tokens)?.at(1);
-  const baseCompletion = completionWrapper.exec(original)?.at(1);
-  const addedPackageGate = ` && ${PACKAGE_SCOPE}`;
-  // Extend the exact baseline comparison only for the owned package gate.
-  if (baseCompletion !== undefined) {
-    if (currentCompletion === `${baseCompletion}${addedPackageGate}`) {
-      return;
-    }
-    expect(tokens).toBe(original);
-    return;
-  }
-  const fresh = currentCompletion ?? tokens;
-  if (fresh === original || fresh === `${original}${addedPackageGate}`) {
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
+  if (fresh === original || fresh === `${original} && ${PACKAGE_SCOPE}`) {
     return;
   }
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
@@ -808,8 +802,6 @@ test("package scope narrows check legs while retaining baseline trust and comple
     }
     if (completion) {
       for (const invalid of [
-        `${trust} && ${PACKAGE_SCOPE}`,
-        wrap(`inputs.heavy_only != true && (${trust})`),
         wrap(
           `${trust.replace("inputs.heavy_only != true && ", "")} && ${PACKAGE_SCOPE}`,
         ),
@@ -822,27 +814,28 @@ test("package scope narrows check legs while retaining baseline trust and comple
   }
 });
 
-test("completion scope preserves already-owned gates and permits only a new reuse wrapper", () => {
+test("fresh scope compares either completion wrapper while retaining the underlying condition", () => {
   const trusted = "needs.ci-plan.outputs.trusted == 'true'";
   const heavy = `inputs.heavy_only != true && (${trusted})`;
   const completion = (scope: string) =>
     `needs.ci-plan.outputs.run_required != 'false' && (${scope})`;
   for (const scope of [trusted, heavy]) {
-    const base = { if: scope };
-    const current = { if: completion(scope) };
-    expectScope({ current, base });
-    expectScope({ current, base: current });
-    for (const invalid of [
-      scope,
-      trusted,
-      completion("true"),
-      completion(completion(scope)),
-      ...(scope === heavy ? [completion(trusted)] : []),
-      completion(scope).replace("!= 'false'", "== 'false'"),
-    ]) {
-      expect(() =>
-        expectScope({ current: { if: invalid }, base: current }),
-      ).toThrow("toBe");
+    for (const baseScope of [scope, completion(scope)]) {
+      for (const currentScope of [scope, completion(scope)]) {
+        expectScope({ base: { if: baseScope }, current: { if: currentScope } });
+      }
+      for (const invalid of [
+        "true",
+        completion("true"),
+        completion(completion(scope)),
+        completion(scope).replace("!= 'false'", "== 'false'"),
+        completion(`${scope} && needs.ci-plan.outputs.unapproved == 'true'`),
+        ...(scope === heavy ? [trusted, completion(trusted)] : []),
+      ]) {
+        expect(() =>
+          expectScope({ base: { if: baseScope }, current: { if: invalid } }),
+        ).toThrow("Expected:");
+      }
     }
   }
 });

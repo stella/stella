@@ -1686,7 +1686,13 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call" && part.name === "spawn_subagents") {
-      return <SpawnSubagentsCard key={part.id} part={part} />;
+      return (
+        <SpawnSubagentsCard
+          key={part.id}
+          part={part}
+          streamdownComponents={streamdownComponents}
+        />
+      );
     }
 
     if (part.type === "tool-call") {
