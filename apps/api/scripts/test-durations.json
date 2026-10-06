@@ -583,6 +583,10 @@
     "seconds": 0.629006,
     "source": "estimated"
   },
+  "src/handlers/ai-autocomplete/stream.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/ai-config/validate-provider.test.ts": {
     "seconds": 0.191422,
     "source": "estimated"
@@ -5463,6 +5467,10 @@
     "seconds": 5.33138,
     "source": "estimated"
   },
+  "src/lib/errors/application-error-message.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/errors/elysia-error.test.ts": {
     "seconds": 0.07064,
     "source": "estimated"
@@ -7385,6 +7393,10 @@
   },
   "src/lib/sharepoint-disable-purge.test.ts": {
     "seconds": 3.996045,
+    "source": "estimated"
+  },
+  "src/lib/signals/scout.integration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/signup-abuse.test.ts": {
